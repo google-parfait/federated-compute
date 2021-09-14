@@ -239,15 +239,6 @@ struct FlArtifacts {
   std::string checkpoint;
 };
 
-// Loads federated learning assets with the provided filename prefix in a fixed
-// assets directory.
-absl::StatusOr<FlArtifacts> LoadFlArtifactResources(
-    const std::string& artifact_prefix);
-
-// Loads local computation assets.
-bool LoadLcArtifactResources(
-    google::internal::federated::plan::Dataset* dataset);
-
 class MockFlags : public Flags {
  public:
   MOCK_METHOD(int64_t, condition_polling_period_millis, (), (const, override));

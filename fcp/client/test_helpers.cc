@@ -28,35 +28,6 @@ namespace client {
 
 using ::google::internal::federated::plan::Dataset;
 
-char const* const kFlAssetsPath = "fcp/client/assets";
-char const* const kLcExamplesPath =
-    "fcp/client/lc_assets/"
-    "emnist_cnn_personalization_artifacts_test_examples.pb";
-
-namespace {
-bool LoadMessageFromFileAsString_(std::string path, std::string* msg) {
-  std::ifstream checkpoint_istream(path);
-  if (!checkpoint_istream) {
-    return false;
-  }
-  std::stringstream checkpoint_stream;
-  checkpoint_stream << checkpoint_istream.rdbuf();
-  *msg = checkpoint_stream.str();
-  return true;
-}
-
-bool LoadMessageLiteFromFile_(std::string path, google::protobuf::MessageLite* msg) {
-  std::string data;
-  if (!LoadMessageFromFileAsString_(path, &data)) {
-    return false;
-  }
-  if (!msg->ParseFromString(data)) {
-    return false;
-  }
-  return true;
-}
-}  // namespace
-
 SimpleExampleIterator::SimpleExampleIterator(Dataset dataset) {
   for (const Dataset::ClientDataset& client_dataset : dataset.client_data()) {
     FCP_CHECK(client_dataset.selected_example_size() == 0)
@@ -96,40 +67,6 @@ absl::StatusOr<std::string> SimpleExampleIterator::Next() {
     return examples_[index_++];
   }
   return absl::OutOfRangeError("");
-}
-
-absl::StatusOr<FlArtifacts> LoadFlArtifactResources(
-    const std::string& artifact_prefix) {
-  FlArtifacts result;
-  // Load plan
-  auto plan_filepath =
-      absl::StrCat(std::string(kFlAssetsPath), "/", artifact_prefix,
-                   "_federation_client_only_plan.pb");
-  if (!LoadMessageLiteFromFile_(plan_filepath, &result.plan)) {
-    return absl::InternalError("Failed to load ClientOnlyPlan");
-  }
-
-  // Load dataset
-  auto dataset_filepath =
-      absl::StrCat(std::string(kFlAssetsPath), "/", artifact_prefix,
-                   "_federation_proxy_train_examples.pb");
-  if (!LoadMessageLiteFromFile_(dataset_filepath, &result.dataset)) {
-    return absl::InternalError("Failed to load example Dataset");
-  }
-
-  // Load checkpoint
-  auto checkpoint_filepath =
-      absl::StrCat(std::string(kFlAssetsPath), "/", artifact_prefix,
-                   "_federation_test_checkpoint.client.ckp");
-  if (!LoadMessageFromFileAsString_(checkpoint_filepath, &result.checkpoint)) {
-    return absl::InternalError("Failed to load checkpoint");
-  }
-  return result;
-}
-
-bool LoadLcArtifactResources(Dataset* dataset) {
-  auto dataset_filepath = std::string(kLcExamplesPath);
-  return LoadMessageLiteFromFile_(dataset_filepath, dataset);
 }
 
 std::string ExtractSingleString(const tensorflow::Example& example,
