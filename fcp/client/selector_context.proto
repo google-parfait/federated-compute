@@ -1,0 +1,82 @@
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fcp.client;
+
+option java_package = "com.google.intelligence.fcp.client";
+option java_multiple_files = true;
+
+message SelectorContext {
+  QueryTimeComputationProperties computation_properties = 1;
+}
+
+// Properties about the computation exposed to the iterator.
+message QueryTimeComputationProperties {
+  // Session name, if applicable.
+  string session_name = 1;
+
+  // Different kinds of computation types.
+  oneof computation_type {
+    // Local computation type.
+    LocalComputation local_compute = 2;
+
+    // EligibilityEval computation type.
+    EligibilityEvalComputation eligibility_eval = 3;
+
+    // Federated computation type.
+    FederatedComputation federated = 4;
+  }
+}
+
+// On-device, local computation only. No aggregation.
+message LocalComputation {}
+
+// ElgibilityEval computation, no aggregation.
+message EligibilityEvalComputation {
+  // Population name.
+  string population_name = 1;
+}
+
+// Federated computation with server aggregation.
+message FederatedComputation {
+  // Population name.
+  string population_name = 1;
+  // Name of the task that was executed.
+  string task_name = 2;
+
+  // Types of server aggregation.
+  oneof aggregation_type {
+    // Simple aggregation.
+    SimpleAggregation simple_aggregation = 3;
+
+    // Secure Aggregation.
+    SecureAggregation secure_aggregation = 4;
+  }
+}
+
+// Simple aggregation.
+message SimpleAggregation {}
+
+// Secure aggregation.
+message SecureAggregation {
+  // The minimum number of clients' values that must be aggregated together
+  // before the server can gain access to the aggregate,
+  // even transiently (e.g. in RAM).
+  // This isn't needed by Secure Aggregation protocol on the client side but
+  // shared by the server with clients for transparency and/or policy reasons.
+  // See `federated_api.proto`.
+  int32 minimum_clients_in_server_visible_aggregate = 1;
+}

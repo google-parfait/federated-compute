@@ -1,0 +1,314 @@
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fcp.client.opstats;
+
+import "google/protobuf/timestamp.proto";
+import "fcp/protos/federated_api.proto";
+
+// Operational stats per run.
+message OperationalStats {
+  // Population name.
+  string population_name = 1;
+
+  // Session name, if applicable.
+  string session_name = 2;
+
+  // Name of the task that was executed.
+  string task_name = 3;
+
+  // Timestamped training stages and error types.
+  message Event {
+    // Key training stages and error types.
+    enum EventKind {
+      EVENT_KIND_UNRECOGNIZED = 0;
+
+      // An eligibility task checkin attempt started. This does not
+      // indicate whether the eligibility checkin request was actually sent.
+      EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED = 1;
+
+      // An eligibility task checkin response indicated that the client was
+      // rejected because the client was incompatible with the population's
+      // eligibility task plan.
+      EVENT_KIND_ELIGIBILITY_REJECTED = 2;
+
+      // An eligibility task checkin response indicated that eligibility task
+      // plans are not configured.
+      EVENT_KIND_ELIGIBILITY_DISABLED = 3;
+
+      // An eligibility task checkin response returned an eligibility task plan,
+      // and the received plan was parseable.
+      EVENT_KIND_ELIGIBILITY_ENABLED = 4;
+
+      // A plan execution started for an eligibility task.
+      EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED = 5;
+
+      // A plan execution completed successfully for an eligibility task.
+      EVENT_KIND_ELIGIBILITY_COMPUTATION_FINISHED = 6;
+
+      // A checkin attempt started. This does not indicate whether the checkin
+      // request was actually sent.
+      EVENT_KIND_CHECKIN_STARTED = 7;
+
+      // A checkin response indicated that the client was rejected.
+      EVENT_KIND_CHECKIN_REJECTED = 8;
+
+      // A checkin response indicated that the client was accepted for a task,
+      // and the received plan was parseable.
+      EVENT_KIND_CHECKIN_ACCEPTED = 9;
+
+      // A plan execution started for a normal task.
+      EVENT_KIND_COMPUTATION_STARTED = 10;
+
+      // A plan execution completed successfully for a normal task.
+      EVENT_KIND_COMPUTATION_FINISHED = 11;
+
+      // An upload attempt started. This does not indicate whether the upload
+      // was actually sent.
+      // Deprecated: split into EVENT_KIND_RESULT_UPLOAD_STARTED and
+      // EVENT_KIND_FAILURE_UPLOAD_STARTED.
+      EVENT_KIND_UPLOAD_STARTED = 12 [deprecated = true];
+
+      // An upload response indicated that the server successfully received the
+      // client's upload. This does not guarantee that the client's results are
+      // included in a round update.
+      // Deprecated: split into EVENT_KIND_RESULT_UPLOAD_FINISHED and
+      // EVENT_KIND_FAILURE_UPLOAD_FINISHED.
+      EVENT_KIND_UPLOAD_FINISHED = 13 [deprecated = true];
+
+      // The client interrupted training due to unmet training conditions. This
+      // may occur during checkin, training, or upload.
+      // Deprecated: split into EVENT_KIND_{phase}_INTERRUPTED, where phase is
+      // one of ELIGIBILITY_CHECKIN, ELIGIBILITY_COMPUTATION, CHECKIN,
+      // COMPUTATION, RESULT_UPLOAD, FAILURE_UPLOAD.
+      EVENT_KIND_CLIENT_INTERRUPTED = 14 [deprecated = true];
+
+      // The server aborted the client's connection. This may occur during
+      // checkin or upload.
+      // Deprecated: split into EVENT_KIND_{phase}_SERVER_ABORTED, where phase
+      // is one of ELIGIBILITY_CHECKIN, CHECKIN, RESULT_UPLOAD, FAILURE_UPLOAD.
+      EVENT_KIND_SERVER_ABORTED = 15 [deprecated = true];
+
+      // An error occurred that was related to local storage access,
+      // communication with the server, or an invalid plan.
+      // Deprecated: split into EVENT_KIND_{phase}_ERROR_IO,
+      // EVENT_KIND_{phase}_ERROR_INVALID_ARGUMENT and
+      // EVENT_KIND_{phase}_ERROR_INVALID_PAYLOAD, where phase is one of
+      // ELIGIBILITY_CHECKIN, CHECKIN, RESULT_UPLOAD, FAILURE_UPLOAD,
+      // ELIGIBILITY_COMPUTATION, or COMPUTATION.
+      EVENT_KIND_ERROR_IO = 16 [deprecated = true];
+
+      // The TensorFlow library reported an error.
+      // Deprecated: split into EVENT_KIND_{phase}_ERROR_TENSORFLOW, where phase
+      // is one of ELIGIBILITY_COMPUTATION, COMPUTATION.
+      EVENT_KIND_ERROR_TENSORFLOW = 17 [deprecated = true];
+
+      // An error occurred when processing the example selector.
+      // Deprecated: split into EVENT_KIND_{phase}_ERROR_EXAMPLE_ITERATOR, where
+      // phase is one of ELIGIBILITY_EVAL_COMPUTATION, COMPUTATION.
+      EVENT_KIND_ERROR_EXAMPLE_SELECTOR = 18 [deprecated = true];
+
+      // Indicates that training was scheduled but did not start due to runtime
+      // checks (e.g. insufficient battery levels).
+      EVENT_KIND_TRAIN_NOT_STARTED = 19;
+
+      // Client issued an eligibility eval checkin request, but an IO error was
+      // encountered.
+      // Always preceded by EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED.
+      EVENT_KIND_ELIGIBILITY_CHECKIN_ERROR_IO = 20;
+
+      // Client issued an eligibility eval checkin request, but an invalid
+      // payload was received.
+      // Always preceded by EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED.
+      EVENT_KIND_ELIGIBILITY_CHECKIN_ERROR_INVALID_PAYLOAD = 21;
+
+      // Client issued an eligibility eval checkin request, but got interrupted
+      // on the client. Always preceded by
+      // EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED.
+      EVENT_KIND_ELIGIBILITY_CHECKIN_CLIENT_INTERRUPTED = 22;
+
+      // Client issued an eligibility eval checkin request, but server aborted.
+      // Always preceded by EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED.
+      EVENT_KIND_ELIGIBILITY_CHECKIN_SERVER_ABORTED = 23;
+
+      // Client issued a regular checkin request, but got an IO error.
+      // Always preceded by EVENT_KIND_CHECKIN_STARTED.
+      EVENT_KIND_CHECKIN_ERROR_IO = 24;
+
+      // Client issued a regular checkin request, but the server returned an
+      // invalid payload.
+      // Always preceded by EVENT_KIND_CHECKIN_STARTED.
+      EVENT_KIND_CHECKIN_ERROR_INVALID_PAYLOAD = 25;
+
+      // Client issued a regular checin request, but got interrupted on the
+      // client. Always preceded by EVENT_KIND_CHECKIN_STARTED.
+      EVENT_KIND_CHECKIN_CLIENT_INTERRUPTED = 26;
+
+      // Client issued a regular checin request, but got aborted by the server.
+      // Always preceded by EVENT_KIND_CHECKIN_STARTED.
+      EVENT_KIND_CHECKIN_SERVER_ABORTED = 27;
+
+      // Client encountered a TensorFlow error during eligibility eval task
+      // computation.
+      // Always preceded by EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED.
+      EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_TENSORFLOW = 28;
+
+      // Reading from disk failed during eligibility eval task computation.
+      // Always preceded by EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED.
+      EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_IO = 29;
+
+      // Input parameters are invalid for eligibility eval task computation.
+      // Always preceded by EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED.
+      EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_INVALID_ARGUMENT = 30;
+
+      // Client encountered an example selector error during eligibility eval
+      // task computation. Always preceded by
+      // EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED.
+      EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_EXAMPLE_ITERATOR = 31;
+
+      // Eligibility eval computation was interrupted by the client.
+      // Always preceded by EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED.
+      EVENT_KIND_ELIGIBILITY_COMPUTATION_CLIENT_INTERRUPTED = 32;
+
+      // A TensorFlow error was encountered during computation, or the output
+      // from the computation was missing or of an unexpected type. Always
+      // preceded by EVENT_KIND_COMPUTATION_STARTED.
+      EVENT_KIND_COMPUTATION_ERROR_TENSORFLOW = 33;
+
+      // Reading from disk failed during computation.
+      // Always preceded by EVENT_KIND_COMPUTATION_STARTED.
+      EVENT_KIND_COMPUTATION_ERROR_IO = 34;
+
+      // Input parameters are invalid for the given computation.
+      // Always preceded by EVENT_KIND_COMPUTATION_STARTED.
+      EVENT_KIND_COMPUTATION_ERROR_INVALID_ARGUMENT = 35;
+
+      // An error occurred when processing the example selector.
+      // Always preceded by EVENT_KIND_COMPUTATION_STARTED.
+      EVENT_KIND_COMPUTATION_ERROR_EXAMPLE_ITERATOR = 36;
+
+      // Client got interrupted during computation.
+      // Always preceded by EVENT_KIND_COMPUTATION_STARTED.
+      EVENT_KIND_COMPUTATION_CLIENT_INTERRUPTED = 37;
+
+      // Client starts to upload successfully computed results.
+      EVENT_KIND_RESULT_UPLOAD_STARTED = 38;
+
+      // An error occurred during upload.
+      // Always preceded by EVENT_KIND_RESULT_UPLOAD_STARTED.
+      EVENT_KIND_RESULT_UPLOAD_ERROR_IO = 39;
+
+      // Upload was interrupted by the client.
+      // Always preceded by EVENT_KIND_RESULT_UPLOAD_STARTED.
+      EVENT_KIND_RESULT_UPLOAD_CLIENT_INTERRUPTED = 40;
+
+      // Upload was aborted by the server.
+      // Always preceded by EVENT_KIND_RESULT_UPLOAD_STARTED.
+      EVENT_KIND_RESULT_UPLOAD_SERVER_ABORTED = 41;
+
+      // Client uploaded training results to the server
+      // Always preceded by EVENT_KIND_RESULT_UPLOAD_STARTED.
+      EVENT_KIND_RESULT_UPLOAD_FINISHED = 42;
+
+      // Client starts to upload failure report.
+      EVENT_KIND_FAILURE_UPLOAD_STARTED = 43;
+
+      // An error occurred during upload.
+      // Always preceded by EVENT_KIND_FAILURE_UPLOAD_STARTED.
+      EVENT_KIND_FAILURE_UPLOAD_ERROR_IO = 44;
+
+      // Upload was interrupted.
+      // Always preceded by EVENT_KIND_FAILURE_UPLOAD_STARTED.
+      EVENT_KIND_FAILURE_UPLOAD_CLIENT_INTERRUPTED = 45;
+
+      // Upload was interrupted.
+      // Always preceded by EVENT_KIND_FAILURE_UPLOAD_STARTED.
+      EVENT_KIND_FAILURE_UPLOAD_SERVER_ABORTED = 46;
+
+      // Client uploaded failure report to the server
+      // Always preceded by EVENT_KIND_FAILURE_UPLOAD_STARTED.
+      EVENT_KIND_FAILURE_UPLOAD_FINISHED = 47;
+    }
+
+    EventKind event_type = 1;
+
+    // Event time.
+    google.protobuf.Timestamp timestamp = 2;
+  }
+
+  // History of key training stages and errors encountered during a run. The
+  // events are stored in sequential order, with the earliest event first.
+  repeated Event events = 4;
+
+  // Stats about the examples read from a given collection, potentially
+  // aggregated over multiple iterators.
+  message DatasetStats {
+    // Total number of examples read.
+    int64 num_examples_read = 1;
+
+    // Total number of bytes read.
+    int64 num_bytes_read = 2;
+  }
+
+  // Map of dataset stats keyed on the collection URI.
+  map<string, DatasetStats> dataset_stats = 5;
+
+  // If this execution failed with an error, the message of that error.
+  string error_message = 6;
+
+  // The retry window returned by the fl runner.
+  google.internal.federatedml.v2.RetryWindow retry_window = 7;
+
+  // The number of bytes downloaded (uncompressed payload size) from the server
+  // while executing the task thus far.
+  int64 bytes_downloaded = 8;
+
+  // The number of bytes uploaded (uncompressed payload size) to the server
+  // while executing the task thus far.
+  int64 bytes_uploaded = 9;
+
+  // The number of bytes downloaded (payload size via the chunking layer, which
+  // may be compressed) from the server while executing the task thus far.
+  int64 chunking_layer_bytes_downloaded = 10;
+
+  // The number of bytes uploaded (payload size via the chunking layer, which
+  // may be compressed) from the server while executing the task thus far.
+  int64 chunking_layer_bytes_uploaded = 11;
+}
+
+// Top level op stats message.
+message OpStatsSequence {
+  // The OperationalStats messages are stored in sequential order, with the
+  // earliest message first.
+  repeated OperationalStats opstats = 1;
+}
+
+// Selection criteria for op stats data.
+// If this selection criteria not set, all data will be used.
+// If start_time is not set but end_time is set, all examples up to end_time
+// will be used.
+// If end_time is not set, all examples after start_time will be used.
+// If neither start_time nor end_time are set, all examples will be used.
+// If both start_time and end_time are set, the examples within the time range
+// will be used.
+message OpStatsSelectionCriteria {
+  // The lower bound (inclusive) of the last updated time for a OperationalStats
+  // message.
+  google.protobuf.Timestamp start_time = 1;
+  // The upper bound (inclusive) of the last updated time for a OperationalStats
+  // message.
+  google.protobuf.Timestamp end_time = 2;
+}

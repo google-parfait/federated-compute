@@ -1,0 +1,203 @@
+/*
+ * Copyright 2021 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#include "fcp/client/opstats/opstats_example_store.h"
+
+#include "google/protobuf/any.pb.h"
+#include "google/protobuf/util/time_util.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
+#include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/simple_task_environment.h"
+#include "fcp/protos/federated_api.pb.h"
+#include "fcp/protos/opstats.pb.h"
+#include "tensorflow/core/example/example.pb.h"
+#include "tensorflow/core/example/feature.pb.h"
+
+namespace fcp {
+namespace client {
+namespace opstats {
+
+using ::google::internal::federated::plan::ExampleSelector;
+using ::google::protobuf::util::TimeUtil;
+
+namespace {
+
+absl::Time GetLastUpdatedTime(const OperationalStats& op_stats) {
+  if (op_stats.events().empty()) {
+    return absl::InfinitePast();
+  } else {
+    return absl::FromUnixMillis(TimeUtil::TimestampToMilliseconds(
+        op_stats.events().rbegin()->timestamp()));
+  }
+}
+
+tensorflow::Feature CreateFeatureFromString(const std::string& str) {
+  tensorflow::Feature feature;
+  feature.mutable_bytes_list()->add_value(str);
+  return feature;
+}
+
+tensorflow::Feature CreateFeatureFromInt(int64_t value) {
+  tensorflow::Feature feature;
+  feature.mutable_int64_list()->add_value(value);
+  return feature;
+}
+
+tensorflow::Feature CreateFeatureFromStringVector(
+    const std::vector<std::string>& values) {
+  tensorflow::Feature feature;
+  auto* bytes_list = feature.mutable_bytes_list();
+  for (const auto& value : values) {
+    bytes_list->add_value(value);
+  }
+  return feature;
+}
+
+tensorflow::Feature CreateFeatureFromIntVector(
+    const std::vector<int64_t>& values) {
+  tensorflow::Feature feature;
+  auto* int64_list = feature.mutable_int64_list();
+  for (const auto& value : values) {
+    int64_list->add_value(value);
+  }
+  return feature;
+}
+
+std::string CreateExample(const OperationalStats& op_stats) {
+  tensorflow::Example example;
+  auto* feature_map = example.mutable_features()->mutable_feature();
+  (*feature_map)[OpStatsExampleStore::kPopulationName] =
+      CreateFeatureFromString(op_stats.population_name());
+  (*feature_map)[OpStatsExampleStore::kSessionName] =
+      CreateFeatureFromString(op_stats.session_name());
+  (*feature_map)[OpStatsExampleStore::kTaskName] =
+      CreateFeatureFromString(op_stats.task_name());
+
+  // Create events related features.
+  std::vector<int64_t> event_types;
+  std::vector<int64_t> event_time_millis;
+  for (const auto& event : op_stats.events()) {
+    event_types.push_back(event.event_type());
+    event_time_millis.push_back(
+        TimeUtil::TimestampToMilliseconds(event.timestamp()));
+  }
+  (*feature_map)[OpStatsExampleStore::kEventsEventType] =
+      CreateFeatureFromIntVector(event_types);
+  (*feature_map)[OpStatsExampleStore::kEventsTimestampMillis] =
+      CreateFeatureFromIntVector(event_time_millis);
+
+  // Create external dataset stats related features.
+  std::vector<std::string> uris;
+  std::vector<int64_t> num_examples_read;
+  std::vector<int64_t> num_bytes_read;
+  for (const auto& stats : op_stats.dataset_stats()) {
+    uris.push_back(stats.first);
+    num_examples_read.push_back(stats.second.num_examples_read());
+    num_bytes_read.push_back(stats.second.num_bytes_read());
+  }
+  (*feature_map)[OpStatsExampleStore::kDatasetStatsUri] =
+      CreateFeatureFromStringVector(uris);
+  (*feature_map)[OpStatsExampleStore::kDatasetStatsNumExamplesRead] =
+      CreateFeatureFromIntVector(num_examples_read);
+  (*feature_map)[OpStatsExampleStore::kDatasetStatsNumBytesRead] =
+      CreateFeatureFromIntVector(num_bytes_read);
+
+  (*feature_map)[OpStatsExampleStore::kErrorMessage] =
+      CreateFeatureFromString(op_stats.error_message());
+
+  // Create RetryWindow related features.
+  (*feature_map)[OpStatsExampleStore::kRetryWindowDelayMinMillis] =
+      CreateFeatureFromInt(TimeUtil::DurationToMilliseconds(
+          op_stats.retry_window().delay_min()));
+  (*feature_map)[OpStatsExampleStore::kRetryWindowDelayMaxMillis] =
+      CreateFeatureFromInt(TimeUtil::DurationToMilliseconds(
+          op_stats.retry_window().delay_max()));
+
+  (*feature_map)[OpStatsExampleStore::kBytesDownloaded] =
+      CreateFeatureFromInt(op_stats.bytes_downloaded());
+  (*feature_map)[OpStatsExampleStore::kBytesUploaded] =
+      CreateFeatureFromInt(op_stats.bytes_uploaded());
+  (*feature_map)[OpStatsExampleStore::kChunkingLayerBytesDownloaded] =
+      CreateFeatureFromInt(op_stats.chunking_layer_bytes_downloaded());
+  (*feature_map)[OpStatsExampleStore::kChunkingLayerBytesUploaded] =
+      CreateFeatureFromInt(op_stats.chunking_layer_bytes_uploaded());
+
+  return example.SerializeAsString();
+}
+}  // anonymous namespace
+
+absl::StatusOr<std::string> OpStatsExampleIterator::Next() {
+  if (next_ < 0 || next_ >= data_.size()) {
+    return absl::OutOfRangeError("The iterator is out of range.");
+  }
+  return CreateExample(data_[next_++]);
+}
+
+void OpStatsExampleIterator::Close() {
+  next_ = 0;
+  data_.clear();
+}
+
+absl::StatusOr<std::unique_ptr<ExampleIterator>>
+OpStatsExampleStore::CreateExampleIterator(
+    const ExampleSelector& example_selector, OpStatsDb& db,
+    LogManager& log_manager) {
+  if (example_selector.collection_uri() != kOpStatsCollectionUri) {
+    log_manager.LogDiag(ProdDiagCode::OPSTATS_INCORRECT_COLLECTION_URI);
+    return absl::InvalidArgumentError(absl::StrCat(
+        "The collection uri is ", example_selector.collection_uri(),
+        ", which is not the expected uri: ", kOpStatsCollectionUri));
+  }
+
+  absl::Time lower_bound_time = absl::InfinitePast();
+  absl::Time upper_bound_time = absl::InfiniteFuture();
+  if (example_selector.has_criteria()) {
+    OpStatsSelectionCriteria criteria;
+    if (!example_selector.criteria().UnpackTo(&criteria)) {
+      log_manager.LogDiag(ProdDiagCode::OPSTATS_INVALID_SELECTION_CRITERIA);
+      return absl::InvalidArgumentError("Unable to parse selection criteria.");
+    }
+
+    if (criteria.has_start_time()) {
+      lower_bound_time = absl::FromUnixMillis(
+          TimeUtil::TimestampToMilliseconds(criteria.start_time()));
+    }
+    if (criteria.has_end_time()) {
+      upper_bound_time = absl::FromUnixMillis(
+          TimeUtil::TimestampToMilliseconds(criteria.end_time()));
+    }
+    if (lower_bound_time > upper_bound_time) {
+      log_manager.LogDiag(ProdDiagCode::OPSTATS_INVALID_SELECTION_CRITERIA);
+      return absl::InvalidArgumentError(
+          "Invalid selection criteria: start_time is after end_time.");
+    }
+  }
+
+  FCP_ASSIGN_OR_RETURN(OpStatsSequence data, db.Read());
+  std::vector<OperationalStats> selected_data;
+  for (auto it = data.opstats().rbegin(); it != data.opstats().rend(); ++it) {
+    absl::Time last_update_time = GetLastUpdatedTime(*it);
+    if (last_update_time >= lower_bound_time &&
+        last_update_time <= upper_bound_time) {
+      selected_data.push_back(*it);
+    }
+  }
+  return std::make_unique<OpStatsExampleIterator>(std::move(selected_data));
+}
+
+}  // namespace opstats
+}  // namespace client
+}  // namespace fcp
