@@ -61,27 +61,6 @@ cc_grpc_library(
 )
 
 # --------------------------------------------------------------------
-# aggregator.proto
-
-proto_library(
-    name = "aggregator_proto",
-    srcs = ["aggregator.proto"],
-    deps = [
-        ":federated_api_proto",
-    ],
-)
-
-cc_proto_library(
-    name = "aggregator_cc_proto",
-    deps = [":aggregator_proto"],
-)
-
-java_proto_library(
-    name = "aggregator_java_proto",
-    deps = [":aggregator_proto"],
-)
-
-# --------------------------------------------------------------------
 # plan.proto
 
 # Using tf_proto_library to get dependencies to TF protos built correctly.
@@ -137,22 +116,4 @@ proto_library(
 java_proto_library(
     name = "task_eligibility_context_java_proto",
     deps = [":task_eligibility_context_proto"],
-)
-
-# --------------------------------------------------------------------
-# trusted_metrics.proto
-proto_library(
-    name = "trusted_metrics_proto",
-    srcs = ["trusted_metrics.proto"],
-)
-
-cc_proto_library(
-    name = "trusted_metrics_cc_proto",
-    deps = [":trusted_metrics_proto"],
-)
-
-py_proto_library(
-    name = "trusted_metrics_py_pb2",
-    # See https://github.com/protocolbuffers/protobuf/issues/5153
-    srcs = ["trusted_metrics.proto"],
 )
