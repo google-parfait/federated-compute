@@ -190,10 +190,7 @@ FederatedProtocol::FederatedProtocol(
     : FederatedProtocol(
           event_publisher, log_manager, opstats_logger, flags,
           absl::make_unique<GrpcBidiStream>(
-              federated_service_uri, api_key,
-              flags->include_population_in_header()
-                  ? std::string(population_name)
-                  : "",
+              federated_service_uri, api_key, std::string(population_name),
               grpc_channel_deadline_seconds,
               flags->report_chunking_layer_bandwidth(), test_cert_path),
           nullptr, population_name, retry_token, client_version,

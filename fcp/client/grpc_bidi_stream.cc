@@ -53,9 +53,7 @@ GrpcBidiStream::GrpcBidiStream(
       gpr_time_from_seconds(grpc_channel_deadline_seconds, GPR_TIMESPAN));
   client_context_.set_deadline(deadline);
   client_context_.AddMetadata(kApiKeyHeader, api_key);
-  if (!population_name.empty()) {
-    client_context_.AddMetadata(kPopulationNameHeader, population_name);
-  }
+  client_context_.AddMetadata(kPopulationNameHeader, population_name);
   client_reader_writer_ = stub_->Session(&client_context_);
   GrpcChunkedBidiStream<ClientStreamMessage,
                         ServerStreamMessage>::GrpcChunkedBidiStreamOptions

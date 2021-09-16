@@ -154,7 +154,7 @@ TEST_F(GrpcBidiStreamTest, CancellationWithoutBlockingOp) {
   EXPECT_THAT(server_impl_.GetClientMetadata(),
               Contains(Pair(GrpcBidiStream::kApiKeyHeader, "none")));
   EXPECT_THAT(server_impl_.GetClientMetadata(),
-              Not(Contains(Pair(GrpcBidiStream::kPopulationNameHeader, ""))));
+              Contains(Pair(GrpcBidiStream::kPopulationNameHeader, "")));
 
   client_stream_->Close();
   server_impl_.WaitForSessionDone();
