@@ -768,6 +768,15 @@ class SecAggStateTransitionListenerImpl
         new_state, secagg_send_to_server_impl_.last_sent_message_size(),
         last_received_message_size_);
   }
+
+  void Started(ClientState state) override {
+    // TODO(team): Implement this.
+  }
+
+  void Completed(ClientState state) override {
+    // TODO(team): Implement this.
+  }
+
   void set_execution_session_id(int64_t execution_session_id) override {
     secagg_event_publisher_->set_execution_session_id(execution_session_id);
   }

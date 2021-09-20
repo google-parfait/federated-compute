@@ -33,7 +33,14 @@ enum class ClientState : int {
 // Listens for state transition messages.
 class StateTransitionListenerInterface {
  public:
+  // Called on transition to a new state.
   virtual void Transition(ClientState new_state) = 0;
+  // Called just before a state starts computation, excluding any idle or
+  // waiting time.
+  virtual void Started(ClientState state) = 0;
+  // Called just after a state finishes computation, excluding any idle or
+  // waiting time, or sending messages to to the server.
+  virtual void Completed(ClientState state) = 0;
   virtual void set_execution_session_id(int64_t execution_session_id) = 0;
 
   virtual ~StateTransitionListenerInterface() = default;
