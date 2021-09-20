@@ -425,9 +425,10 @@ MATCHER_P3(ReconstructsCorrectly, pairwise_key, self_key, enc_keys, "") {
   // Reconstruct keys to see if they match
   ShamirSecretSharing reconstructor;
   std::string reconstructed_pairwise_key_string =
-      reconstructor.Reconstruct(3, pairwise_shares, EcdhPrivateKey::kSize);
+      reconstructor.Reconstruct(3, pairwise_shares, EcdhPrivateKey::kSize)
+          .value();
   std::string reconstructed_self_key_string =
-      reconstructor.Reconstruct(3, self_shares, AesKey::kSize);
+      reconstructor.Reconstruct(3, self_shares, AesKey::kSize).value();
   EcdhPrivateKey reconstructed_pairwise_key(reinterpret_cast<const uint8_t*>(
       reconstructed_pairwise_key_string.c_str()));
   AesKey reconstructed_self_key(
@@ -550,9 +551,10 @@ MATCHER_P5(ReconstructsCorrectlyWithOwnKeys, pairwise_key, self_key,
   // Reconstruct keys to see if they match
   ShamirSecretSharing reconstructor;
   std::string reconstructed_pairwise_key_string =
-      reconstructor.Reconstruct(3, pairwise_shares, EcdhPrivateKey::kSize);
+      reconstructor.Reconstruct(3, pairwise_shares, EcdhPrivateKey::kSize)
+          .value();
   std::string reconstructed_self_key_string =
-      reconstructor.Reconstruct(3, self_shares, AesKey::kSize);
+      reconstructor.Reconstruct(3, self_shares, AesKey::kSize).value();
   EcdhPrivateKey reconstructed_pairwise_key(reinterpret_cast<const uint8_t*>(
       reconstructed_pairwise_key_string.c_str()));
   AesKey reconstructed_self_key(

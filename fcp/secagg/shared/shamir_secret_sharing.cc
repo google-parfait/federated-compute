@@ -19,8 +19,8 @@
 #include <string>
 #include <vector>
 
+#include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/secagg/shared/math.h"
 #include "openssl/rand.h"
 
@@ -68,7 +68,7 @@ std::vector<ShamirShare> ShamirSecretSharing::Share(
   return shares;
 }
 
-std::string ShamirSecretSharing::Reconstruct(
+StatusOr<std::string> ShamirSecretSharing::Reconstruct(
     int threshold, const std::vector<ShamirShare>& shares, int secret_length) {
   FCP_CHECK(threshold > 1) << "threshold must be at least 2";
   FCP_CHECK(secret_length > 0) << "secret_length must be positive";
@@ -115,10 +115,12 @@ std::string ShamirSecretSharing::Reconstruct(
     }
     x_values.push_back(i + 1);
   }
-  FCP_CHECK(static_cast<int>(x_values.size()) == threshold)
-      << "Only " << x_values.size()
-      << " valid shares were provided, but threshold was specified as "
-      << threshold;
+  if (static_cast<int>(x_values.size()) < threshold) {
+    return FCP_STATUS(FAILED_PRECONDITION)
+           << "Only " << x_values.size()
+           << " valid shares were provided, but threshold was specified as "
+           << threshold;
+  }
 
   // Recover the sharing polynomials using Lagrange polynomial interpolation.
   std::vector<uint32_t> coefficients = LagrangeCoefficients(x_values);

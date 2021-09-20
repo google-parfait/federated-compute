@@ -15,8 +15,10 @@
  * limitations under the License.
  */
 #include "fcp/secagg/shared/shamir_secret_sharing.h"
+
 #include <string>
 #include <vector>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "fcp/secagg/shared/ecdh_keys.h"
@@ -62,9 +64,10 @@ TEST(ShamirSecretSharingTest, ShareAndReconstructIntegrate) {
   int num_shares = 6;
   int threshold = 4;
   shares = shamir.Share(threshold, num_shares, secret);
-  std::string reconstructed =
+  auto reconstructed_or_error =
       shamir.Reconstruct(threshold, shares, secret.size());
-  EXPECT_THAT(reconstructed, Eq(secret));
+  EXPECT_THAT(reconstructed_or_error.ok(), Eq(true));
+  EXPECT_THAT(reconstructed_or_error.value(), Eq(secret));
 }
 TEST(ShamirSecretSharingTest, ShareAndReconstructIntegrateWithMissingShares) {
   ShamirSecretSharing shamir;
@@ -75,9 +78,10 @@ TEST(ShamirSecretSharingTest, ShareAndReconstructIntegrateWithMissingShares) {
   shares = shamir.Share(threshold, num_shares, secret);
   shares[0].data = "";
   shares[2].data = "";
-  std::string reconstructed =
+  auto reconstructed_or_error =
       shamir.Reconstruct(threshold, shares, secret.size());
-  EXPECT_THAT(reconstructed, Eq(secret));
+  EXPECT_THAT(reconstructed_or_error.ok(), Eq(true));
+  EXPECT_THAT(reconstructed_or_error.value(), Eq(secret));
 }
 TEST(ShamirSecretSharingTest, ShareAndReconstructIntegrateWithZeroInSecret) {
   ShamirSecretSharing shamir;
@@ -87,9 +91,10 @@ TEST(ShamirSecretSharingTest, ShareAndReconstructIntegrateWithZeroInSecret) {
   int num_shares = 6;
   int threshold = 4;
   shares = shamir.Share(threshold, num_shares, secret);
-  std::string reconstructed =
+  auto reconstructed_or_error =
       shamir.Reconstruct(threshold, shares, secret.size());
-  EXPECT_THAT(reconstructed, Eq(secret));
+  EXPECT_THAT(reconstructed_or_error.ok(), Eq(true));
+  EXPECT_THAT(reconstructed_or_error.value(), Eq(secret));
 }
 TEST(ShamirSecretSharingTest,
      ShareAndReconstructIntegrateWithHighOrderCharactersInSecret) {
@@ -102,9 +107,10 @@ TEST(ShamirSecretSharingTest,
   int num_shares = 6;
   int threshold = 4;
   shares = shamir.Share(threshold, num_shares, secret);
-  std::string reconstructed =
+  auto reconstructed_or_error =
       shamir.Reconstruct(threshold, shares, secret.size());
-  EXPECT_THAT(reconstructed, Eq(secret));
+  EXPECT_THAT(reconstructed_or_error.ok(), Eq(true));
+  EXPECT_THAT(reconstructed_or_error.value(), Eq(secret));
 }
 TEST(ShamirSecretSharingTest, ShareAndReconstructIntegrateWithKeys) {
   ShamirSecretSharing shamir;
@@ -113,46 +119,50 @@ TEST(ShamirSecretSharingTest, ShareAndReconstructIntegrateWithKeys) {
   int num_shares = 6;
   int threshold = 4;
   shares = shamir.Share(threshold, num_shares, keys.GetPrivateKeyString(3));
-  std::string reconstructed_string =
+  auto reconstructed_string_or_error =
       shamir.Reconstruct(threshold, shares, EcdhPrivateKey::kSize);
-  EcdhPrivateKey reconstructed(
-      reinterpret_cast<const uint8_t*>(reconstructed_string.c_str()));
+  EXPECT_THAT(reconstructed_string_or_error.ok(), Eq(true));
+  EcdhPrivateKey reconstructed(reinterpret_cast<const uint8_t*>(
+      reconstructed_string_or_error.value().c_str()));
   EXPECT_THAT(reconstructed, Eq(keys.GetPrivateKey(3)));
-  EXPECT_THAT(reconstructed_string, Eq(keys.GetPrivateKeyString(3)));
+  EXPECT_THAT(reconstructed_string_or_error.value(),
+              Eq(keys.GetPrivateKeyString(3)));
 }
 TEST(ShamirSecretSharingTest, ReconstructFailsIfThresholdIsInvalid) {
   ShamirSecretSharing shamir;
   std::vector<ShamirShare> shares(5, {"fake"});
-  EXPECT_DEATH(shamir.Reconstruct(1, shares, 16),
+  EXPECT_DEATH(auto secret_or_error = shamir.Reconstruct(1, shares, 16),
                "threshold must be at least 2");
   EXPECT_DEATH(
-      shamir.Reconstruct(6, shares, 16),
+      auto secret_or_error = shamir.Reconstruct(6, shares, 16),
       "A vector of size 5 was provided, but threshold was specified as 6");
 }
 TEST(ShamirSecretSharingTest, ReconstructFailsIfSecretLengthSmall) {
   ShamirSecretSharing shamir;
   std::vector<ShamirShare> shares(5, {"fake"});
-  EXPECT_DEATH(shamir.Reconstruct(2, shares, 0),
+  EXPECT_DEATH(auto secret_or_error = shamir.Reconstruct(2, shares, 0),
                "secret_length must be positive");
 }
 TEST(ShamirSecretSharingTest, ReconstructFailsIfSharesAreInvalid) {
   ShamirSecretSharing shamir;
   std::vector<ShamirShare> shares(5, {"fakefakefakefakefake"});
   shares[0].data = "bad";
-  EXPECT_DEATH(shamir.Reconstruct(5, shares, 16),
+  EXPECT_DEATH(auto secret_or_error = shamir.Reconstruct(5, shares, 16),
                "Share with index 0 is invalid: a share of size 3 was provided "
                "but a multiple of 4 is expected");
   shares[0].data = "baad";
-  EXPECT_DEATH(shamir.Reconstruct(5, shares, 16),
+  EXPECT_DEATH(auto secret_or_error = shamir.Reconstruct(5, shares, 16),
                "Share with index 1 is invalid: all shares must match sizes");
   shares[0].data = "baadbaadbaadbaadbaadbaad";
-  EXPECT_DEATH(shamir.Reconstruct(5, shares, 16),
+  EXPECT_DEATH(auto secret_or_error = shamir.Reconstruct(5, shares, 16),
                "Share with index 0 is invalid: the number of subsecrets is 6 "
                "but between 1 and 5 is expected");
   shares[0].data = "";
-  EXPECT_DEATH(
-      shamir.Reconstruct(5, shares, 16),
-      "Only 4 valid shares were provided, but threshold was specified as 5");
+  auto secret_or_error = shamir.Reconstruct(5, shares, 16);
+  EXPECT_THAT(secret_or_error.ok(), Eq(false));
+  EXPECT_THAT(secret_or_error.status().message(),
+              testing::HasSubstr("Only 4 valid shares were provided, but "
+                                 "threshold was specified as 5"));
 }
 TEST(ShamirSecretSharingTest, ReconstructWorksWithPrecomputedShares) {
   ShamirSecretSharing shamir;
@@ -170,8 +180,9 @@ TEST(ShamirSecretSharingTest, ReconstructWorksWithPrecomputedShares) {
   uint8_t shares4[] = {74, 31, 204, 116, 6, 189, 187, 136};
   shares[4].data = std::string(reinterpret_cast<char*>(shares4), 8);
   ASSERT_THAT(shares[0].data.size(), Eq(8));
-  std::string reconstructed = shamir.Reconstruct(threshold, shares, 4);
-  EXPECT_THAT(reconstructed, Eq(std::string({0, 0, 0, 33})));
+  auto reconstructed_or_error = shamir.Reconstruct(threshold, shares, 4);
+  EXPECT_THAT(reconstructed_or_error.ok(), Eq(true));
+  EXPECT_THAT(reconstructed_or_error.value(), Eq(std::string({0, 0, 0, 33})));
 }
 }  // namespace
 }  // namespace secagg

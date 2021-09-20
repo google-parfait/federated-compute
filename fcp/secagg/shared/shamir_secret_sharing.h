@@ -19,6 +19,8 @@
 
 #include <string>
 #include <vector>
+
+#include "absl/status/statusor.h"
 #include "fcp/secagg/shared/key.h"
 
 namespace fcp {
@@ -77,8 +79,8 @@ class ShamirSecretSharing {
   // Reconstruct is most efficient when consecutive calls to this method use
   // shares with the same indices, because this allows for caching of
   // intermediate values that depend only on the x-value of the Shamir shares.
-  std::string Reconstruct(int threshold, const std::vector<ShamirShare>& shares,
-                          int secret_length);
+  absl::StatusOr<std::string> Reconstruct(
+      int threshold, const std::vector<ShamirShare>& shares, int secret_length);
 
  private:
   // Returns the modular inverse of n mod kPrime, getting the value from a cache

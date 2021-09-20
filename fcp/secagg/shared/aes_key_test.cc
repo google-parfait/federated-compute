@@ -60,7 +60,9 @@ TEST(AesKeyTest, CreateFromSharesHandles32BKeys) {
   AesKey original_key = AesKeyFromString("32 byte AES key for testing only");
   ShamirSecretSharing shamir;
   auto shares = shamir.Share(5, 7, original_key);
-  EXPECT_THAT(AesKey::CreateFromShares(shares, 5), Eq(original_key));
+  auto key_or_error = AesKey::CreateFromShares(shares, 5);
+  EXPECT_THAT(key_or_error.ok(), Eq(true));
+  EXPECT_THAT(key_or_error.value(), Eq(original_key));
 }
 
 TEST(AesKeyTest, CreateFromSharesHandlesShortKeys) {
@@ -79,7 +81,9 @@ TEST(AesKeyTest, CreateFromSharesHandlesShortKeys) {
       key_string_for_sharing = original_key_string;
     }
     auto shares = shamir.Share(5, 7, AesKeyFromString(key_string_for_sharing));
-    EXPECT_THAT(AesKey::CreateFromShares(shares, 5), Eq(original_key))
+    auto key_or_error = AesKey::CreateFromShares(shares, 5);
+    EXPECT_THAT(key_or_error.ok(), Eq(true));
+    EXPECT_THAT(key_or_error.value(), Eq(original_key))
         << i << " bit key fails";
   }
 }
