@@ -81,8 +81,7 @@ absl::StatusOr<tensorflow::ConfigProto> InitializeConfigProtoFromExternalProto(
 }  // namespace
 
 absl::StatusOr<tensorflow::ConfigProto>
-TensorFlowWrapper::InitializeConfigProto(const Any& external_config_proto,
-                                         bool disable_functional_ops_lowering) {
+TensorFlowWrapper::InitializeConfigProto(const Any& external_config_proto) {
   FCP_ASSIGN_OR_RETURN(
       tensorflow::ConfigProto config_proto,
       InitializeConfigProtoFromExternalProto(external_config_proto));
@@ -94,14 +93,13 @@ absl::StatusOr<std::unique_ptr<TensorFlowWrapper>> TensorFlowWrapper::Create(
     const std::string& graph, const Any& config_proto,
     std::function<bool()> should_abort,
     const InterruptibleRunner::TimingConfig& timing_config,
-    LogManager* log_manager, bool disable_functional_ops_lowering) {
+    LogManager* log_manager) {
   // Create a tensorflow::Session.
   tensorflow::Session* session_ptr;
   std::unique_ptr<tensorflow::Session> session;
   tensorflow::SessionOptions session_options;
-  FCP_ASSIGN_OR_RETURN(
-      session_options.config,
-      InitializeConfigProto(config_proto, disable_functional_ops_lowering));
+  FCP_ASSIGN_OR_RETURN(session_options.config,
+                       InitializeConfigProto(config_proto));
 
   tensorflow::Status status =
       tensorflow::NewSession(session_options, &session_ptr);

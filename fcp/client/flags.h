@@ -151,11 +151,6 @@ class Flags {
   // Whether to include bandwidth usage of the chunking layer in logs.
   virtual bool report_chunking_layer_bandwidth() const { return false; }
 
-  // Whether to unconditionally set the
-  // `ConfigProto.experimental.disable_functional_ops_lowering` field in the
-  // config proto to `true`.
-  virtual bool disable_functional_ops_lowering() const { return false; }
-
   // Whether to validate SecAgg modulus parameter.
   virtual bool enable_secagg_modulus_validation() const { return false; }
 };

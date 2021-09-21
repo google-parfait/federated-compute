@@ -288,7 +288,6 @@ cc_library(
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
         "//fcp/protos:plan_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",

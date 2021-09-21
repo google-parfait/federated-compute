@@ -54,8 +54,7 @@ class PlanEngine {
       const google::internal::federated::plan::ClientOnlyPlan& client_plan,
       const std::string& initial_checkpoint_uri,
       const InterruptibleRunner::TimingConfig& timing_config,
-      absl::Time reference_time, bool log_tensorflow_error_messages,
-      bool disable_functional_ops_lowering);
+      absl::Time reference_time, bool log_tensorflow_error_messages);
 
  private:
   // Runs the plan. Returns one of three error codes:

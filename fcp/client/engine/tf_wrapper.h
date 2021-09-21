@@ -46,14 +46,13 @@ class TensorFlowWrapper {
       const std::string& graph, const ::google::protobuf::Any& config_proto,
       std::function<bool()> should_abort,
       const InterruptibleRunner::TimingConfig& timing_config,
-      LogManager* log_manager, bool disable_functional_ops_lowering);
+      LogManager* log_manager);
 
   // Utility method for creating a ConfigProto from an optionally
   // externally provided value, or from hardcoded defaults. This is a separate
   // method to aid with testing.
   static absl::StatusOr<::tensorflow::ConfigProto> InitializeConfigProto(
-      const ::google::protobuf::Any& external_config_proto,
-      bool disable_functional_ops_lowering);
+      const ::google::protobuf::Any& external_config_proto);
 
   ~TensorFlowWrapper();
 

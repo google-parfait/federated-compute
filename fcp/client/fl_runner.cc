@@ -452,8 +452,7 @@ bool RunPlanWithExecutions(
   return plan_engine.RunPlan(
       env.get(), files, log_manager, event_publisher, opstats_logger,
       client_plan, checkpoint_input_filename, timing_config, reference_time,
-      flags->log_tensorflow_error_messages(),
-      flags->disable_functional_ops_lowering());
+      flags->log_tensorflow_error_messages());
 }
 
 // Updates the fields of `FLRunnerResult` that should always be updated after

@@ -37,8 +37,8 @@ TEST(TfWrapperInitializeConfigProtoTest, InvalidConfigProtoWrongTypeUrl) {
   packed_config_proto.PackFrom(config_proto);
   packed_config_proto.set_type_url("invalid");
 
-  absl::StatusOr<ConfigProto> result = TensorFlowWrapper::InitializeConfigProto(
-      packed_config_proto, /*disable_functional_ops_lowering=*/false);
+  absl::StatusOr<ConfigProto> result =
+      TensorFlowWrapper::InitializeConfigProto(packed_config_proto);
 
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
 }
@@ -51,8 +51,8 @@ TEST(TfWrapperInitializeConfigProtoTest, InvalidConfigProtoEmptyTypeUrl) {
   packed_config_proto.PackFrom(config_proto);
   packed_config_proto.clear_type_url();
 
-  absl::StatusOr<ConfigProto> result = TensorFlowWrapper::InitializeConfigProto(
-      packed_config_proto, /*disable_functional_ops_lowering=*/false);
+  absl::StatusOr<ConfigProto> result =
+      TensorFlowWrapper::InitializeConfigProto(packed_config_proto);
 
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
 }
@@ -63,8 +63,8 @@ TEST(TfWrapperInitializeConfigProtoTest, InvalidConfigProtoValue) {
   packed_config_proto.PackFrom(ConfigProto());
   packed_config_proto.set_value("nonparseable");
 
-  absl::StatusOr<ConfigProto> result = TensorFlowWrapper::InitializeConfigProto(
-      packed_config_proto, /*disable_functional_ops_lowering=*/false);
+  absl::StatusOr<ConfigProto> result =
+      TensorFlowWrapper::InitializeConfigProto(packed_config_proto);
 
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
 }
@@ -76,8 +76,8 @@ TEST(TfWrapperInitializeConfigProtoTest, ValidNonEmptyConfigProtoValue) {
   Any packed_config_proto;
   packed_config_proto.PackFrom(config_proto);
 
-  absl::StatusOr<ConfigProto> result = TensorFlowWrapper::InitializeConfigProto(
-      packed_config_proto, /*disable_functional_ops_lowering=*/false);
+  absl::StatusOr<ConfigProto> result =
+      TensorFlowWrapper::InitializeConfigProto(packed_config_proto);
 
   // A non-empty ConfigProto was provided, so it should be used as-is.
   ASSERT_OK(result);
@@ -89,8 +89,8 @@ TEST(TfWrapperInitializeConfigProtoTest, ValidEmptyConfigProtoValue) {
   Any packed_config_proto;
   packed_config_proto.PackFrom(ConfigProto());
 
-  absl::StatusOr<ConfigProto> result = TensorFlowWrapper::InitializeConfigProto(
-      packed_config_proto, /*disable_functional_ops_lowering=*/false);
+  absl::StatusOr<ConfigProto> result =
+      TensorFlowWrapper::InitializeConfigProto(packed_config_proto);
 
   // No external ConfigProto was provided, so the hardcoded defaults should be
   // used.
@@ -109,8 +109,8 @@ TEST(TfWrapperInitializeConfigProtoTest, ValidEmptyPackedConfigProtoValue) {
   // Create an empty Any.
   Any packed_config_proto;
 
-  absl::StatusOr<ConfigProto> result = TensorFlowWrapper::InitializeConfigProto(
-      packed_config_proto, /*disable_functional_ops_lowering=*/false);
+  absl::StatusOr<ConfigProto> result =
+      TensorFlowWrapper::InitializeConfigProto(packed_config_proto);
 
   // No external ConfigProto was provided, so the hardcoded defaults should be
   // used.

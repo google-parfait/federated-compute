@@ -54,8 +54,7 @@ bool PlanEngine::RunPlan(TaskEnvironment* task_environment, Files* files,
                          const std::string& initial_checkpoint_uri,
                          const InterruptibleRunner::TimingConfig& timing_config,
                          absl::Time reference_time,
-                         bool log_tensorflow_error_messages,
-                         bool disable_functional_ops_lowering) {
+                         bool log_tensorflow_error_messages) {
   absl::Time run_plan_start_time = absl::Now();
   log_tensorflow_error_messages_ = log_tensorflow_error_messages;
   if (!PlanIntegrityChecks(client_plan)) {
@@ -77,7 +76,7 @@ bool PlanEngine::RunPlan(TaskEnvironment* task_environment, Files* files,
       // be used.
       ::google::protobuf::Any(),
       [&task_environment]() { return task_environment->ShouldAbort(); },
-      timing_config, log_manager, disable_functional_ops_lowering);
+      timing_config, log_manager);
   if (!tf_wrapper_or.ok()) {
     event_publisher->PublishTensorFlowError(
         /*execution_index=*/0,

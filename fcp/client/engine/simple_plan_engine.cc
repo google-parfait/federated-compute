@@ -120,8 +120,7 @@ PlanResult SimplePlanEngine::RunPlan(
             return task_env_->ShouldAbort(absl::Now(),
                                           timing_config_->polling_period);
           },
-          *timing_config_, log_manager_,
-          flags_->disable_functional_ops_lowering());
+          *timing_config_, log_manager_);
   if (!tf_wrapper_or.ok()) {
     event_publisher_->PublishTensorFlowError(
         /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
