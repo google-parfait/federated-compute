@@ -214,12 +214,9 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
                                        opstats_logger, &timing_config, flags);
   return plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
-      flags->use_tensorflow_config_proto()
-          ? client_plan.tensorflow_config_proto()
-          : ::google::protobuf::Any(),
-      std::move(inputs), output_names, run_plan_start_time, reference_time,
-      log_computation_started, log_computation_finished,
-      eligibility_selector_context);
+      client_plan.tensorflow_config_proto(), std::move(inputs), output_names,
+      run_plan_start_time, reference_time, log_computation_started,
+      log_computation_finished, eligibility_selector_context);
 }
 
 // Validates the output tensors that resulted from executing the plan, and then
@@ -366,11 +363,9 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
                                        opstats_logger, &timing_config, flags);
   auto plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
-      flags->use_tensorflow_config_proto()
-          ? client_plan.tensorflow_config_proto()
-          : ::google::protobuf::Any(),
-      std::move(inputs), *output_names, run_plan_start_time, reference_time,
-      log_computation_started, log_computation_finished, selector_context);
+      client_plan.tensorflow_config_proto(), std::move(inputs), *output_names,
+      run_plan_start_time, reference_time, log_computation_started,
+      log_computation_finished, selector_context);
 
   result.plan_result = std::move(plan_result);
   result.checkpoint_file = *checkpoint_output_filename;

@@ -101,12 +101,9 @@ absl::Status RunPlanWithTensorflowSpec(
                                        opstats_logger, &timing_config, flags);
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
-      flags->use_tensorflow_config_proto()
-          ? client_plan.tensorflow_config_proto()
-          : ::google::protobuf::Any(),
-      std::move(inputs), output_names_unused, run_plan_start_time,
-      reference_time, log_computation_started, log_computation_finished,
-      selector_context);
+      client_plan.tensorflow_config_proto(), std::move(inputs),
+      output_names_unused, run_plan_start_time, reference_time,
+      log_computation_started, log_computation_finished, selector_context);
   switch (plan_result.outcome) {
     case engine::PhaseOutcome::COMPLETED:
       return absl::OkStatus();

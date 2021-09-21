@@ -138,10 +138,6 @@ class Flags {
         static_cast<int32_t>(absl::StatusCode::kUnimplemented)};
   }
 
-  // Whether to use the `ClientOnlyPlan.tensorflow_config_proto` field, if it is
-  // set.
-  virtual bool use_tensorflow_config_proto() const { return false; }
-
   // Whether to include extra task metadata in the CreateIterator function.
   virtual bool enable_selector_context() const { return false; }
 
