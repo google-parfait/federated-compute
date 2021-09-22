@@ -29,7 +29,7 @@ class MockStateTransitionListener : public StateTransitionListenerInterface {
  public:
   MOCK_METHOD(void, Transition, (ClientState state));
   MOCK_METHOD(void, Started, (ClientState state));
-  MOCK_METHOD(void, Completed, (ClientState state));
+  MOCK_METHOD(void, Stopped, (ClientState state));
   MOCK_METHOD(void, set_execution_session_id, (int64_t execution_session_id));
 };
 

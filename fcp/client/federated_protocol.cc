@@ -773,7 +773,7 @@ class SecAggStateTransitionListenerImpl
     // TODO(team): Implement this.
   }
 
-  void Completed(ClientState state) override {
+  void Stopped(ClientState state) override {
     // TODO(team): Implement this.
   }
 

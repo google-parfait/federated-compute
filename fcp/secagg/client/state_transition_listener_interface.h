@@ -31,6 +31,23 @@ enum class ClientState : int {
 };
 
 // Listens for state transition messages.
+//
+// The expected call pattern in the successful case is the following:
+// - Transition(R0_ADVERTISE_KEYS)
+//   - Started(R0_ADVERTISE_KEYS)
+//   - Stopped(R0_ADVERTISE_KEYS)
+// - Transition(R1_SHARE_KEYS)
+//   - Started(R1_SHARE_KEYS)
+//   - Stopped(R1_SHARE_KEYS)
+// - Transition(R2_MASKED_INPUT)
+// ...
+// - Transition(COMPLETED)
+//
+// It is also possible to have more than one pair of Started and Stopped calls
+// for any given state.
+//
+// If the protocol gets aborted at any point, Transition(ABORTED) would be
+// called and any remaining Started and Stopped calls would be skipped.
 class StateTransitionListenerInterface {
  public:
   // Called on transition to a new state.
@@ -38,9 +55,9 @@ class StateTransitionListenerInterface {
   // Called just before a state starts computation, excluding any idle or
   // waiting time.
   virtual void Started(ClientState state) = 0;
-  // Called just after a state finishes computation, excluding any idle or
+  // Called just after a state stops computation, excluding any idle or
   // waiting time, or sending messages to to the server.
-  virtual void Completed(ClientState state) = 0;
+  virtual void Stopped(ClientState state) = 0;
   virtual void set_execution_session_id(int64_t execution_session_id) = 0;
 
   virtual ~StateTransitionListenerInterface() = default;
