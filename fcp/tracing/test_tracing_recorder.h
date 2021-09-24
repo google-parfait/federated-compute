@@ -100,8 +100,6 @@ class TestTracingRecorder
     using const_iterator = std::vector<SpanOrEvent>::const_iterator;
     const_iterator begin() const { return children_.begin(); }
     const_iterator end() const { return children_.end(); }
-    iterator begin() { return children_.begin(); }
-    iterator end() { return children_.end(); }
     const SpanOrEvent& operator[](size_t idx) { return children_.at(idx); }
     bool empty() const { return children_.empty(); }
     size_t size() const { return children_.size(); }

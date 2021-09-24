@@ -245,13 +245,6 @@ ABSL_MUST_USE_RESULT Error TraceError(Arg&&... args) {
   return Error(Error::ConstructorAccess{});
 }
 
-// Writes an error trace under the specified span with the given args.
-template <class FlatBufferTable, class... Arg>
-ABSL_MUST_USE_RESULT Error TraceError(TracingSpanRef span, Arg&&... args) {
-  tracing_internal::AssertIsError<FlatBufferTable>();
-  Trace<FlatBufferTable>(span, args...);
-  return Error(Error::ConstructorAccess{});
-}
 }  // namespace fcp
 
 #endif  // FCP_TRACING_TRACING_SPAN_H_

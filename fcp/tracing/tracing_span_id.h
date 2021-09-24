@@ -49,18 +49,6 @@ inline bool operator<(const TracingSpanId& a, const TracingSpanId& b) {
   return a.value < b.value;
 }
 
-inline bool operator>(const TracingSpanId& a, const TracingSpanId& b) {
-  return a.value > b.value;
-}
-
-inline bool operator<=(const TracingSpanId& a, const TracingSpanId& b) {
-  return a.value <= b.value;
-}
-
-inline bool operator>=(const TracingSpanId& a, const TracingSpanId& b) {
-  return a.value >= b.value;
-}
-
 inline std::ostream& operator<<(std::ostream& s, const TracingSpanId& id) {
   return s << id.value;
 }
