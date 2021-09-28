@@ -294,6 +294,9 @@ message OpStatsSequence {
   // The OperationalStats messages are stored in sequential order, with the
   // earliest message first.
   repeated OperationalStats opstats = 1;
+  // A timestamp that marks when we can start to trust the data in the
+  // OpStatsDb. Any event happens before this time is missing or removed.
+  google.protobuf.Timestamp earliest_trustworthy_time = 2;
 }
 
 // Selection criteria for op stats data.
