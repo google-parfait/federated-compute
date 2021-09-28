@@ -42,7 +42,6 @@ class InputVectorSpecification {
   ABSL_MUST_USE_RESULT inline int length() const { return length_; }
 
   ABSL_MUST_USE_RESULT inline uint64_t modulus() const { return modulus_; }
-  ABSL_MUST_USE_RESULT inline bool has_modulus() const { return modulus_ > 0; }
 
  private:
   const std::string name_;
