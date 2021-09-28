@@ -132,10 +132,6 @@ class TypeRep {
     return data_ == other.data_;
   }
 
-  bool operator!=(TypeRep const& other) const {
-    return data_ != other.data_;
-  }
-
  private:
   template <typename H>
   friend H AbslHashValue(H, TypeRep);
@@ -158,9 +154,7 @@ constexpr TypeRep TypeOf();
 namespace type_internal {
 
 template <typename T>
-struct PrimitiveTypeRepTraits {
-  static constexpr bool present() { return false; }
-};
+struct PrimitiveTypeRepTraits {};
 
 #define DECLARE_PRIM_TYPE(cpp)                            \
   template <>                                             \
