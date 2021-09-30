@@ -84,6 +84,9 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   // created when opstats is enabled.
   bool IsOpStatsEnabled() const override { return true; }
 
+  // Syncs all logged events to storage.
+  absl::Status CommitToStorage() override;
+
  private:
   // Helper for adding a new event of the specified kind to the cumulative
   // message being stored in this class.
@@ -92,6 +95,7 @@ class OpStatsLoggerImpl : public OpStatsLogger {
 
   // Cumulative message storing information about this run.
   OperationalStats stats_ ABSL_GUARDED_BY(mutex_);
+  bool already_committed_ ABSL_GUARDED_BY(mutex_) = false;
   std::unique_ptr<OpStatsDb> db_;
   LogManager* log_manager_;
   absl::Mutex mutex_;

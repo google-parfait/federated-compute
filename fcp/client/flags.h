@@ -149,6 +149,10 @@ class Flags {
 
   // Whether to validate SecAgg modulus parameter.
   virtual bool enable_secagg_modulus_validation() const { return false; }
+
+  // Whether to commit opstats to storage when the upload started event is
+  // logged.
+  virtual bool commit_opstats_on_upload_started() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

@@ -42,17 +42,8 @@ OpStatsLoggerImpl::OpStatsLoggerImpl(std::unique_ptr<OpStatsDb> db,
 }
 
 OpStatsLoggerImpl::~OpStatsLoggerImpl() {
-  absl::MutexLock lock(&mutex_);
-  log_manager_->LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_ATTEMPTED);
-  const absl::Time before_commit_time = absl::Now();
-  auto status =
-      db_->Transform([stats = std::move(stats_)](OpStatsSequence& data) {
-        *data.add_opstats() = stats;
-      });
-  const absl::Time after_commit_time = absl::Now();
-  log_manager_->LogToLongHistogram(
-      HistogramCounters::TRAINING_OPSTATS_COMMIT_LATENCY,
-      absl::ToInt64Milliseconds(after_commit_time - before_commit_time));
+  // We're in the dtor, we don't care about what CommitToStorage returns.
+  auto status = CommitToStorage();
 }
 
 void OpStatsLoggerImpl::AddCheckinAcceptedEventWithTaskName(
@@ -111,6 +102,36 @@ void OpStatsLoggerImpl::AddNewEventToStats(
   auto new_event = stats_.add_events();
   new_event->set_event_type(kind);
   *new_event->mutable_timestamp() = google::protobuf::util::TimeUtil::GetCurrentTime();
+}
+
+absl::Status OpStatsLoggerImpl::CommitToStorage() {
+  absl::MutexLock lock(&mutex_);
+  log_manager_->LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_ATTEMPTED);
+  const absl::Time before_commit_time = absl::Now();
+  auto status = already_committed_
+                    ? db_->Transform([stats = &stats_](OpStatsSequence& data) {
+                        // Check if opstats on disk somehow got cleared between
+                        // the first commit and now, and handle appropriately.
+                        // This can happen e.g. if the ttl for the opstats db
+                        // is incorrectly configured to have a very low ttl,
+                        // causing the entire history to be lost as part of the
+                        // update.
+                        if (data.opstats_size() == 0) {
+                          *data.add_opstats() = *stats;
+                        } else {
+                          *data.mutable_opstats(data.opstats_size() - 1) =
+                              *stats;
+                        }
+                      })
+                    : db_->Transform([stats = &stats_](OpStatsSequence& data) {
+                        *data.add_opstats() = *stats;
+                      });
+  const absl::Time after_commit_time = absl::Now();
+  log_manager_->LogToLongHistogram(
+      HistogramCounters::TRAINING_OPSTATS_COMMIT_LATENCY,
+      absl::ToInt64Milliseconds(after_commit_time - before_commit_time));
+  already_committed_ = true;
+  return status;
 }
 
 }  // namespace opstats

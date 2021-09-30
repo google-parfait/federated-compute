@@ -105,33 +105,39 @@ class OpStatsLoggerImplTest : public testing::Test {
   }
 
   void ExpectOpstatsEnabledEvents(int num_opstats_loggers) {
+    ExpectOpstatsEnabledEvents(num_opstats_loggers, num_opstats_loggers);
+  }
+
+  void ExpectOpstatsEnabledEvents(int num_opstats_loggers,
+                                  int num_opstats_commits) {
     EXPECT_CALL(mock_log_manager_,
                 LogDiag(DebugDiagCode::TRAINING_OPSTATS_ENABLED))
         .Times(num_opstats_loggers);
+    // Logged when the class is initialized.
     EXPECT_CALL(mock_log_manager_,
                 LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_EXPECTED))
         .Times(num_opstats_loggers);
     EXPECT_CALL(mock_log_manager_,
                 LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_ATTEMPTED))
-        .Times(num_opstats_loggers);
+        .Times(num_opstats_commits);
     EXPECT_CALL(
         mock_log_manager_,
         LogToLongHistogram(TRAINING_OPSTATS_COMMIT_LATENCY,
                            /*execution_index=*/0, /*epoch_index=*/0,
                            engine::DataSourceType::DATASET, /*value=*/Ge(0)))
-        .Times(num_opstats_loggers);
+        .Times(num_opstats_commits);
     EXPECT_CALL(
         mock_log_manager_,
         LogToLongHistogram(OPSTATS_DB_SIZE_BYTES, /*execution_index=*/0,
                            /*epoch_index=*/0, engine::DataSourceType::DATASET,
                            /*value=*/Ge(0)))
-        .Times(num_opstats_loggers);
+        .Times(num_opstats_commits);
     EXPECT_CALL(
         mock_log_manager_,
         LogToLongHistogram(OPSTATS_DB_NUM_ENTRIES, /*execution_index=*/0,
                            /*epoch_index=*/0, engine::DataSourceType::DATASET,
                            /*value=*/Ge(0)))
-        .Times(num_opstats_loggers);
+        .Times(num_opstats_commits);
   }
 
   RetryWindow CreateRetryWindow(const std::string& retry_token,
@@ -486,6 +492,110 @@ TEST_F(OpStatsLoggerImplTest, SetRetryWindow) {
 
   EXPECT_EQ(opstats_sequence.opstats_size(), 1);
   EXPECT_THAT(opstats_sequence, EqualsProto(expected));
+}
+
+TEST_F(OpStatsLoggerImplTest, AddEventCommitAddMoreEvents) {
+  auto start_time = TimeUtil::GetCurrentTime();
+  ExpectOpstatsEnabledEvents(
+      /*num_opstats_loggers=*/2, /*num_opstats_commits=*/4);
+
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
+  opstats_logger->AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  opstats_logger.reset();
+
+  auto opstats_logger_no_population =
+      CreateOpStatsLoggerImpl(kSessionName,
+                              /*population_name=*/"");
+  opstats_logger_no_population->AddEvent(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
+  ASSERT_OK(opstats_logger_no_population->CommitToStorage());
+  opstats_logger_no_population->AddEvent(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
+  ASSERT_OK(opstats_logger_no_population->CommitToStorage());
+  opstats_logger_no_population->AddEvent(
+      OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
+  opstats_logger_no_population.reset();
+
+  auto db = PdsBackedOpStatsDb::Create(
+                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
+                mock_flags_.opstats_enforce_singleton())
+                .value();
+  auto data = db->Read();
+  ASSERT_OK(data);
+  auto opstats_sequence = data.value();
+
+  OpStatsSequence expected;
+  // Add the first run
+  auto second_run = expected.add_opstats();
+  second_run->set_session_name(kSessionName);
+  second_run->set_population_name(kPopulationName);
+  second_run->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  // Add the second run
+  second_run = expected.add_opstats();
+  second_run->set_session_name(kSessionName);
+  second_run->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
+  second_run->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
+  second_run->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
+
+  EXPECT_EQ(opstats_sequence.opstats_size(), 2);
+  EXPECT_EQ(opstats_sequence.opstats(1).events_size(), 3);
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected,
+                                          opstats_sequence);
+}
+
+TEST_F(OpStatsLoggerImplTest, MisconfiguredTtlMultipleCommit) {
+  auto start_time = TimeUtil::GetCurrentTime();
+  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
+                             /*num_opstats_commits*/ 3);
+  auto db_zero_ttl = PdsBackedOpStatsDb::Create(
+                         base_dir_, absl::ZeroDuration(), mock_log_manager_,
+                         mock_flags_.opstats_db_size_limit_bytes(),
+                         mock_flags_.opstats_enforce_singleton())
+                         .value();
+  auto opstats_logger = std::make_unique<OpStatsLoggerImpl>(
+      std::move(db_zero_ttl), &mock_log_manager_, kSessionName,
+      kPopulationName);
+
+  opstats_logger->AddEvent(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
+  ASSERT_OK(opstats_logger->CommitToStorage());
+  opstats_logger->AddEvent(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
+  ASSERT_OK(opstats_logger->CommitToStorage());
+  opstats_logger->AddEvent(
+      OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
+  opstats_logger.reset();
+
+  auto db = PdsBackedOpStatsDb::Create(
+                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
+                mock_flags_.opstats_enforce_singleton())
+                .value();
+  auto data = db->Read();
+  ASSERT_OK(data);
+  auto opstats_sequence = data.value();
+
+  // Even though we had corruption in the middle of the run, it should be ok
+  // because we committed the entire history successfully at the end.
+  OpStatsSequence expected;
+  auto expected_stats = expected.add_opstats();
+  expected_stats->set_population_name(kPopulationName);
+  expected_stats->set_session_name(kSessionName);
+  expected_stats->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
+  expected_stats->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
+  expected_stats->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
+  EXPECT_EQ(opstats_sequence.opstats_size(), 1);
+  EXPECT_EQ(opstats_sequence.opstats(0).events_size(), 3);
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected,
+                                          opstats_sequence);
 }
 
 }  // anonymous namespace

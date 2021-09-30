@@ -188,6 +188,7 @@ class MockOpStatsLogger : public ::fcp::client::opstats::OpStatsLogger {
               (override));
   MOCK_METHOD(::fcp::client::opstats::OpStatsDb*, GetOpStatsDb, (), (override));
   MOCK_METHOD(bool, IsOpStatsEnabled, (), (const override));
+  MOCK_METHOD(absl::Status, CommitToStorage, (), (override));
 };
 
 class MockSimpleTaskEnvironment : public SimpleTaskEnvironment {
@@ -271,6 +272,7 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, report_chunking_layer_bandwidth, (), (const, override));
   MOCK_METHOD(bool, enable_secagg_modulus_validation, (), (const, override));
+  MOCK_METHOD(bool, commit_opstats_on_upload_started, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

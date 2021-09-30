@@ -2031,11 +2031,11 @@ TEST_P(FederatedProtocolTest, TestReportSendFails) {
       .WillOnce(Return(absl::AbortedError("foo")));
   {
     InSequence seq;
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
     EXPECT_CALL(
         mock_event_publisher_,
         PublishReportStarted(expected_client_stream_message.ByteSizeLong()));
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
   }
 
   // 4. Test that ReportCompleted() sends the expected message.
@@ -2074,9 +2074,9 @@ TEST_P(FederatedProtocolTest, TestPublishReportSuccess) {
           DoAll(SetArgPointee<0>(response_message), Return(absl::OkStatus())));
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
     EXPECT_CALL(mock_opstats_logger_,
                 AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+    EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
     // Network stats should be updated after the one send and one receive
     // operations.
     EXPECT_CALL(
@@ -2134,11 +2134,11 @@ TEST_P(FederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
       .WillOnce(Return(absl::AbortedError("foo")));
   {
     InSequence seq;
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
     EXPECT_CALL(
         mock_event_publisher_,
         PublishReportStarted(expected_client_stream_message.ByteSizeLong()));
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
   }
 
   // 4. Test that ReportNotCompleted() sends the expected message.
@@ -2146,6 +2146,61 @@ TEST_P(FederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
       engine::PhaseOutcome::ERROR, plan_duration);
   EXPECT_THAT(report_result, IsCode(ABORTED));
   EXPECT_THAT(report_result.message(), HasSubstr("foo"));
+
+  // If we made it to the Report protocol phase, then the client must've been
+  // accepted during the Checkin phase first, and so we should receive the
+  // "accepted" RetryWindow.
+  if (GetParam()) {  // new retry delay behavior
+    ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+  } else {
+    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
+                EqualsProto(GetAcceptedRetryWindow()));
+  }
+}
+
+// This function tests the happy path of ReportCompleted() - results get
+// reported, server replies with a RetryWindow.
+TEST_P(FederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
+  EXPECT_CALL(mock_flags_, commit_opstats_on_upload_started)
+      .WillRepeatedly(Return(true));
+  ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/false));
+
+  // 1. Create input for the Report function.
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", "");
+
+  // 2. Set up mocks.
+  EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
+      .WillOnce(Return(absl::OkStatus()));
+  ServerStreamMessage response_message;
+  response_message.mutable_report_response();
+  EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
+      .WillOnce(
+          DoAll(SetArgPointee<0>(response_message), Return(absl::OkStatus())));
+  {
+    InSequence seq;
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+    EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
+        .WillOnce(Return(absl::OkStatus()));
+    EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
+    // Network stats should be updated after the one send and one receive
+    // operations.
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                        /*chunking_layer_bytes_downloaded=*/0,
+                        /*chunking_layer_bytes_uploaded=*/0))
+        .Times(2);
+    EXPECT_CALL(mock_event_publisher_, PublishReportFinished(_, _, _));
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
+  }
+
+  // 3. Test that ReportCompleted() sends the expected message.
+  auto report_result = federated_protocol_->ReportCompleted(
+      std::move(results), {}, absl::ZeroDuration());
+  EXPECT_OK(report_result);
 
   // If we made it to the Report protocol phase, then the client must've been
   // accepted during the Checkin phase first, and so we should receive the

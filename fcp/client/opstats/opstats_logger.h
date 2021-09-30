@@ -71,6 +71,9 @@ class OpStatsLogger {
   // Whether opstats is enabled.
   virtual bool IsOpStatsEnabled() const { return opstats_enabled_; }
 
+  // Syncs all logged events to storage.
+  virtual absl::Status CommitToStorage() { return absl::OkStatus(); }
+
  private:
   bool opstats_enabled_;
   std::unique_ptr<OpStatsDb> db_;

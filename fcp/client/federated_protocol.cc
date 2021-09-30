@@ -828,8 +828,15 @@ absl::Status FederatedProtocol::ReportInternal(
 
   // 4. Send ReportRequest.
   *report_request_size += client_stream_message.ByteSizeLong();
-  event_publisher_->PublishReportStarted(*report_request_size);
   opstats_logger_->AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
+  if (flags_->commit_opstats_on_upload_started()) {
+    // Commit the run data accumulated thus far to Opstats and fail if something
+    // goes wrong.
+    FCP_RETURN_IF_ERROR(opstats_logger_->CommitToStorage());
+  }
+  // Log the event after we know we've successfully committed the event to
+  // Opstats.
+  event_publisher_->PublishReportStarted(*report_request_size);
 
   // Note that we do not use the FederatedProtocol::Send(...) helper method
   // here, since we are already running within a call to
