@@ -34,11 +34,6 @@ class SecurePrng {
 // pseudo-random numbers in a single call.
 class SecureBatchPrng : public SecurePrng {
  public:
-  // Returns the number of pseudo-random numbers that must be requested togeter
-  // as a single block. Size of buffer filled by RandBuffer() method must
-  // be a multiple of this block size.
-  virtual size_t GetBlockSize() const = 0;
-
   // Get the maximum size of a buffer that can be filled by RandBuffer() in a
   // single call.
   virtual size_t GetMaxBufferSize() const = 0;

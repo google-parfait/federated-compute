@@ -60,11 +60,6 @@ class AesCtrPrng : public SecureBatchPrng {
   // GetMaxBufferSize().
   int RandBuffer(uint8_t* buffer, int buffer_size) override;
 
-  // Returns the number of pseudo-random numbers that must be requested together
-  // as a single block. Size of buffer filled by RandBuffer() method must
-  // be a multiple of this block size.
-  size_t GetBlockSize() const override { return kBlockSize; }
-
   // Get the maximum size of a buffer that can be filled by RandBuffer() in a
   // single call.
   size_t GetMaxBufferSize() const override { return kCacheSize; }
