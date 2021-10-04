@@ -270,7 +270,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_selector_context, (), (const, override));
   MOCK_METHOD(bool, selector_context_include_aggregation, (),
               (const, override));
-  MOCK_METHOD(bool, report_chunking_layer_bandwidth, (), (const, override));
   MOCK_METHOD(bool, enable_secagg_modulus_validation, (), (const, override));
   MOCK_METHOD(bool, commit_opstats_on_upload_started, (), (const, override));
 };

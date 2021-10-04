@@ -144,9 +144,6 @@ class Flags {
   // Whether the extra task metadata includes aggregation details.
   virtual bool selector_context_include_aggregation() const { return false; }
 
-  // Whether to include bandwidth usage of the chunking layer in logs.
-  virtual bool report_chunking_layer_bandwidth() const { return false; }
-
   // Whether to validate SecAgg modulus parameter.
   virtual bool enable_secagg_modulus_validation() const { return false; }
 

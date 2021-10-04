@@ -51,8 +51,7 @@ grpc::Status FakeServer::Session(
   GrpcChunkedBidiStream<ServerStreamMessage, ClientStreamMessage>
       chunked_bidi_stream(
           stream, stream,
-          {chunk_size_for_upload_, max_pending_chunks_, compression_level_,
-           /*report_chunking_layer_bandwidth=*/true});
+          {chunk_size_for_upload_, max_pending_chunks_, compression_level_});
   ClientStreamMessage request;
   ServerStreamMessage response;
   FCP_LOG(INFO) << "Server session started";

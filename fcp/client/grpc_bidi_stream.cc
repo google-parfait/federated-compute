@@ -36,16 +36,14 @@ GrpcBidiStream::GrpcBidiStream(const std::string& target,
                                const std::string& api_key,
                                const std::string& population_name,
                                int64_t grpc_channel_deadline_seconds,
-                               bool report_chunking_layer_bandwidth,
                                std::string cert_path)
     : GrpcBidiStream(GrpcBidiChannel::Create(target, std::move(cert_path)),
-                     api_key, population_name, grpc_channel_deadline_seconds,
-                     report_chunking_layer_bandwidth) {}
+                     api_key, population_name, grpc_channel_deadline_seconds) {}
 
 GrpcBidiStream::GrpcBidiStream(
     const std::shared_ptr<grpc::ChannelInterface>& channel,
     const std::string& api_key, const std::string& population_name,
-    int64_t grpc_channel_deadline_seconds, bool report_chunking_layer_bandwidth)
+    int64_t grpc_channel_deadline_seconds)
     : mu_(), stub_(FederatedTrainingApi::NewStub(channel)) {
   FCP_LOG(INFO) << "Connecting to stub: " << stub_;
   gpr_timespec deadline = gpr_time_add(
@@ -58,7 +56,6 @@ GrpcBidiStream::GrpcBidiStream(
   GrpcChunkedBidiStream<ClientStreamMessage,
                         ServerStreamMessage>::GrpcChunkedBidiStreamOptions
       options;
-  options.report_chunking_layer_bandwidth = report_chunking_layer_bandwidth;
   chunked_bidi_stream_ = absl::make_unique<
       GrpcChunkedBidiStream<ClientStreamMessage, ServerStreamMessage>>(
       client_reader_writer_.get(), client_reader_writer_.get(), options);

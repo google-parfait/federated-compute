@@ -55,8 +55,7 @@ class GrpcBidiStreamTest : public testing::Test {
   void CreateClient(const std::string& population_name = "") {
     client_stream_ = absl::make_unique<GrpcBidiStream>(
         absl::StrCat("dns:///localhost", ":", port_), "none", population_name,
-        /* grpc_channel_deadline_seconds=*/600,
-        /*report_chunking_layer_bandwidth=*/true);
+        /* grpc_channel_deadline_seconds=*/600);
     FCP_LOG(INFO) << "Client created." << std::endl;
   }
 

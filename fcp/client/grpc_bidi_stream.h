@@ -77,7 +77,6 @@ class GrpcBidiStream : public GrpcBidiStreamInterface {
   GrpcBidiStream(const std::string& target, const std::string& api_key,
                  const std::string& population_name,
                  int64_t grpc_channel_deadline_seconds,
-                 bool report_chunking_layer_bandwidth,
                  std::string cert_path = "");
 
   /**
@@ -91,8 +90,7 @@ class GrpcBidiStream : public GrpcBidiStreamInterface {
    */
   GrpcBidiStream(const std::shared_ptr<grpc::ChannelInterface>& channel,
                  const std::string& api_key, const std::string& population_name,
-                 int64_t grpc_channel_deadline_seconds,
-                 bool report_chunking_layer_bandwidth);
+                 int64_t grpc_channel_deadline_seconds);
   ~GrpcBidiStream() override = default;
 
   // GrpcBidiStream is neither copyable nor movable.

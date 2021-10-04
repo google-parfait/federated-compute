@@ -52,7 +52,6 @@ class GrpcChunkedBidiStream {
     int32_t chunk_size_for_upload = -1;
     int32_t max_pending_chunks = -1;
     google::internal::federatedml::v2::CompressionLevel compression_level{};
-    bool report_chunking_layer_bandwidth = false;
   };
   GrpcChunkedBidiStream(
       grpc::internal::WriterInterface<Outgoing>* writer_interface,
@@ -114,7 +113,6 @@ class GrpcChunkedBidiStream {
       return deque.back()->mutable_chunked_transfer();
     }
   } outgoing_;
-  bool report_chunking_layer_bandwidth_;
 };
 
 #define COMMON_USING_DIRECTIVES                                    \
@@ -140,10 +138,7 @@ GrpcChunkedBidiStream<Outgoing, Incoming>::GrpcChunkedBidiStream(
     grpc::internal::WriterInterface<Outgoing>* writer_interface,
     grpc::internal::ReaderInterface<Incoming>* reader_interface,
     GrpcChunkedBidiStreamOptions options)
-    : writer_interface_(writer_interface),
-      reader_interface_(reader_interface),
-      report_chunking_layer_bandwidth_(
-          options.report_chunking_layer_bandwidth) {
+    : writer_interface_(writer_interface), reader_interface_(reader_interface) {
   outgoing_.chunk_size_for_upload = options.chunk_size_for_upload;
   outgoing_.max_pending_chunks = options.max_pending_chunks;
   outgoing_.compression_level = options.compression_level;
@@ -336,9 +331,7 @@ absl::Status GrpcChunkedBidiStream<Outgoing, Incoming>::SendRaw(
     return absl::FailedPreconditionError("Send on closed stream.");
   grpc::WriteOptions write_options;
   if (disable_compression) write_options.set_no_compression();
-  if (report_chunking_layer_bandwidth_) {
-    outgoing_.total_chunking_layer_bytes_sent += message.ByteSizeLong();
-  }
+  outgoing_.total_chunking_layer_bytes_sent += message.ByteSizeLong();
   if (!writer_interface_->Write(message, write_options)) {
     Close();
     return absl::AbortedError("End of stream.");
@@ -464,9 +457,7 @@ absl::Status GrpcChunkedBidiStream<Outgoing, Incoming>::ReceiveRaw(
     Close();
     return absl::AbortedError("End of stream.");
   }
-  if (report_chunking_layer_bandwidth_) {
-    incoming_.total_chunking_layer_bytes_received += message->ByteSizeLong();
-  }
+  incoming_.total_chunking_layer_bytes_received += message->ByteSizeLong();
   return absl::OkStatus();
 }
 
