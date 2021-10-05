@@ -267,7 +267,6 @@ class MockFlags : public Flags {
               (), (const, override));
   MOCK_METHOD(std::vector<int32_t>, federated_training_permanent_error_codes, (),
               (const, override));
-  MOCK_METHOD(bool, enable_selector_context, (), (const, override));
   MOCK_METHOD(bool, selector_context_include_aggregation, (),
               (const, override));
   MOCK_METHOD(bool, enable_secagg_modulus_validation, (), (const, override));

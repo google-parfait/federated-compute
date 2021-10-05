@@ -138,9 +138,6 @@ class Flags {
         static_cast<int32_t>(absl::StatusCode::kUnimplemented)};
   }
 
-  // Whether to include extra task metadata in the CreateIterator function.
-  virtual bool enable_selector_context() const { return false; }
-
   // Whether the extra task metadata includes aggregation details.
   virtual bool selector_context_include_aggregation() const { return false; }
 

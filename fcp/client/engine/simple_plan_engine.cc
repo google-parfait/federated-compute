@@ -185,10 +185,7 @@ SimplePlanEngine::RunPlanInternal(
   HostObjectRegistration host_registration = AddDatasetTokenToInputs(
       [this, selector_context](
           const google::internal::federated::plan::ExampleSelector& selector) {
-        if (flags_->enable_selector_context()) {
           return task_env_->CreateExampleIterator(selector, selector_context);
-        }
-        return task_env_->CreateExampleIterator(selector);
       },
       event_publisher_, log_manager_, opstats_logger_, inputs.get(),
       tensorflow_spec.dataset_token_tensor_name(), &total_example_count,
