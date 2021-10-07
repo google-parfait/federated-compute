@@ -102,34 +102,6 @@ cc_test(
 )
 
 cc_library(
-    name = "parallel_generate",
-    hdrs = [
-        "parallel_generate_sequential_reduce.h",
-        "scheduler_generate_reduce.h",
-    ],
-    deps = [
-        ":base",
-        ":reentrancy_guard",
-        ":scheduler",
-        "@com_google_absl//absl/synchronization",
-    ],
-)
-
-cc_test(
-    name = "parallel_generate_test",
-    srcs = ["scheduler_generate_reduce_test.cc"],
-    copts = FCP_COPTS,
-    deps = [
-        ":base",
-        ":parallel_generate",
-        ":scheduler",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
-    ],
-)
-
-cc_library(
     name = "proxy",
     srcs = [
     ],
