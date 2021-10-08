@@ -42,7 +42,8 @@ class PdsBackedOpStatsDb : public OpStatsDb {
   // is kept since its last update time.
   static absl::StatusOr<std::unique_ptr<OpStatsDb>> Create(
       const std::string& base_dir, absl::Duration ttl, LogManager& log_manager,
-      int64_t max_size_bytes, bool enforce_singleton);
+      int64_t max_size_bytes, bool enforce_singleton,
+      bool record_earliest_trustworthy_time);
 
   ~PdsBackedOpStatsDb() override;
 
@@ -62,13 +63,15 @@ class PdsBackedOpStatsDb : public OpStatsDb {
       std::unique_ptr<protostore::ProtoDataStore<OpStatsSequence>> db,
       std::unique_ptr<protostore::FileStorage> file_storage, absl::Duration ttl,
       LogManager& log_manager, int64_t max_size_bytes,
-      std::function<void()> lock_releaser)
+      std::function<void()> lock_releaser,
+      bool record_earliest_trustworthy_time)
       : ttl_(std::move(ttl)),
         db_(std::move(db)),
         storage_(std::move(file_storage)),
         log_manager_(log_manager),
         max_size_bytes_(max_size_bytes),
-        lock_releaser_(lock_releaser) {}
+        lock_releaser_(lock_releaser),
+        record_earliest_trustworthy_time_(record_earliest_trustworthy_time) {}
 
   const absl::Duration ttl_;
   std::unique_ptr<protostore::ProtoDataStore<OpStatsSequence>> db_
@@ -77,6 +80,7 @@ class PdsBackedOpStatsDb : public OpStatsDb {
   LogManager& log_manager_;
   const int64_t max_size_bytes_;
   std::function<void()> lock_releaser_;
+  bool record_earliest_trustworthy_time_;
   absl::Mutex mutex_;
 };
 

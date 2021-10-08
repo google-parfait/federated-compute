@@ -53,6 +53,8 @@ class OpStatsLoggerImplTest : public testing::Test {
         .WillRepeatedly(Return(1 * 1024 * 1024));
     EXPECT_CALL(mock_flags_, opstats_enforce_singleton())
         .WillRepeatedly(Return(true));
+    EXPECT_CALL(mock_flags_, record_earliest_trustworthy_time_for_opstats())
+        .WillRepeatedly(Return(false));
     base_dir_ = testing::TempDir();
   }
 
@@ -60,7 +62,8 @@ class OpStatsLoggerImplTest : public testing::Test {
     auto db = PdsBackedOpStatsDb::Create(
                   base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                   mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                  mock_flags_.opstats_enforce_singleton())
+                  mock_flags_.opstats_enforce_singleton(),
+                  mock_flags_.record_earliest_trustworthy_time_for_opstats())
                   .value();
     EXPECT_CALL(
         mock_log_manager_,
@@ -81,7 +84,8 @@ class OpStatsLoggerImplTest : public testing::Test {
     auto db = PdsBackedOpStatsDb::Create(
                   base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                   mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                  mock_flags_.opstats_enforce_singleton())
+                  mock_flags_.opstats_enforce_singleton(),
+                  mock_flags_.record_earliest_trustworthy_time_for_opstats())
                   .value();
     return std::make_unique<OpStatsLoggerImpl>(
         std::move(db), &mock_log_manager_, session_name, population_name);
@@ -177,7 +181,8 @@ TEST_F(OpStatsLoggerImplTest, SetTaskName) {
   auto db = PdsBackedOpStatsDb::Create(
                 base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                 mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.opstats_enforce_singleton())
+                mock_flags_.opstats_enforce_singleton(),
+                mock_flags_.record_earliest_trustworthy_time_for_opstats())
                 .value();
   auto data = db->Read();
   ASSERT_OK(data);
@@ -239,7 +244,8 @@ TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
   auto db = PdsBackedOpStatsDb::Create(
                 base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                 mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.opstats_enforce_singleton())
+                mock_flags_.opstats_enforce_singleton(),
+                mock_flags_.record_earliest_trustworthy_time_for_opstats())
                 .value();
   auto data = db->Read();
   ASSERT_OK(data);
@@ -277,7 +283,8 @@ TEST_F(OpStatsLoggerImplTest, AddEvent) {
   auto db = PdsBackedOpStatsDb::Create(
                 base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                 mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.opstats_enforce_singleton())
+                mock_flags_.opstats_enforce_singleton(),
+                mock_flags_.record_earliest_trustworthy_time_for_opstats())
                 .value();
   auto data = db->Read();
   ASSERT_OK(data);
@@ -327,7 +334,8 @@ TEST_F(OpStatsLoggerImplTest, AddEventAfterTtl) {
   auto db = PdsBackedOpStatsDb::Create(
                 base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                 mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.opstats_enforce_singleton())
+                mock_flags_.opstats_enforce_singleton(),
+                mock_flags_.record_earliest_trustworthy_time_for_opstats())
                 .value();
   auto data = db->Read();
   ASSERT_OK(data);
@@ -362,7 +370,8 @@ TEST_F(OpStatsLoggerImplTest, AddEventWithErrorMessage) {
   auto db = PdsBackedOpStatsDb::Create(
                 base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                 mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.opstats_enforce_singleton())
+                mock_flags_.opstats_enforce_singleton(),
+                mock_flags_.record_earliest_trustworthy_time_for_opstats())
                 .value();
   auto data = db->Read();
   ASSERT_OK(data);
@@ -404,7 +413,8 @@ TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
   auto db = PdsBackedOpStatsDb::Create(
                 base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                 mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.opstats_enforce_singleton())
+                mock_flags_.opstats_enforce_singleton(),
+                mock_flags_.record_earliest_trustworthy_time_for_opstats())
                 .value();
   auto data = db->Read();
   ASSERT_OK(data);
@@ -447,7 +457,8 @@ TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
   auto db = PdsBackedOpStatsDb::Create(
                 base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                 mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.opstats_enforce_singleton())
+                mock_flags_.opstats_enforce_singleton(),
+                mock_flags_.record_earliest_trustworthy_time_for_opstats())
                 .value();
   auto data = db->Read();
   ASSERT_OK(data);
@@ -477,7 +488,8 @@ TEST_F(OpStatsLoggerImplTest, SetRetryWindow) {
   auto db = PdsBackedOpStatsDb::Create(
                 base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                 mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.opstats_enforce_singleton())
+                mock_flags_.opstats_enforce_singleton(),
+                mock_flags_.record_earliest_trustworthy_time_for_opstats())
                 .value();
   auto data = db->Read();
   ASSERT_OK(data);
@@ -519,7 +531,8 @@ TEST_F(OpStatsLoggerImplTest, AddEventCommitAddMoreEvents) {
   auto db = PdsBackedOpStatsDb::Create(
                 base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                 mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.opstats_enforce_singleton())
+                mock_flags_.opstats_enforce_singleton(),
+                mock_flags_.record_earliest_trustworthy_time_for_opstats())
                 .value();
   auto data = db->Read();
   ASSERT_OK(data);
@@ -552,11 +565,13 @@ TEST_F(OpStatsLoggerImplTest, MisconfiguredTtlMultipleCommit) {
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 3);
-  auto db_zero_ttl = PdsBackedOpStatsDb::Create(
-                         base_dir_, absl::ZeroDuration(), mock_log_manager_,
-                         mock_flags_.opstats_db_size_limit_bytes(),
-                         mock_flags_.opstats_enforce_singleton())
-                         .value();
+  auto db_zero_ttl =
+      PdsBackedOpStatsDb::Create(
+          base_dir_, absl::ZeroDuration(), mock_log_manager_,
+          mock_flags_.opstats_db_size_limit_bytes(),
+          mock_flags_.opstats_enforce_singleton(),
+          mock_flags_.record_earliest_trustworthy_time_for_opstats())
+          .value();
   auto opstats_logger = std::make_unique<OpStatsLoggerImpl>(
       std::move(db_zero_ttl), &mock_log_manager_, kSessionName,
       kPopulationName);
@@ -574,7 +589,8 @@ TEST_F(OpStatsLoggerImplTest, MisconfiguredTtlMultipleCommit) {
   auto db = PdsBackedOpStatsDb::Create(
                 base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
                 mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.opstats_enforce_singleton())
+                mock_flags_.opstats_enforce_singleton(),
+                mock_flags_.record_earliest_trustworthy_time_for_opstats())
                 .value();
   auto data = db->Read();
   ASSERT_OK(data);

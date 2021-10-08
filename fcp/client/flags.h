@@ -147,6 +147,11 @@ class Flags {
   // Whether to commit opstats to storage when the upload started event is
   // logged.
   virtual bool commit_opstats_on_upload_started() const { return false; }
+
+  // Whether to set "earliest_trustworthy_time" field in OpStatsDb.
+  virtual bool record_earliest_trustworthy_time_for_opstats() const {
+    return false;
+  }
 };
 }  // namespace client
 }  // namespace fcp
