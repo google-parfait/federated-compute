@@ -1121,7 +1121,7 @@ message TEContextServerEligibilityIORouter {
 // or personalization, as handed over to the production system.
 // This will typically be split down into individual pieces for
 // different production parts, e.g. server and client side.
-// NEXT_TAG: 12
+// NEXT_TAG: 13
 message Plan {
   reserved 1, 3;
 
@@ -1149,6 +1149,11 @@ message Plan {
   // 2) We wish to avoid the cost of deserialized and re-serializing large
   // graphs, in the Federated Learning service.
   google.protobuf.Any client_graph_bytes = 8;
+
+  // Optional. The FlatBuffer used for TFLite training.
+  // It contains the same model information as the client_graph_bytes, but with
+  // a different format.
+  google.protobuf.Any client_tflite_graph_bytes = 12;
 
   // A pair of client phase and server phase which are processed in
   // sync. The server execution defines how the results of a client
@@ -1206,9 +1211,15 @@ message Plan {
 // Represents a client part of the plan of federated optimization.
 // This also used to describe a client-only plan for standalone on-device
 // training, known as personalization.
+// NEXT_TAG: 6
 message ClientOnlyPlan {
   // The graph to use for training, in binary form.
   bytes graph = 1;
+
+  // Optional. The flatbuffer used for TFLite training.
+  // Whether "graph" or "tflite_graph" is used for training is up to the client
+  // code to allow for a flag-controlled a/b rollout.
+  google.protobuf.Any tflite_graph = 5;
 
   // The client phase to execute.
   ClientPhase phase = 2;
