@@ -76,15 +76,15 @@ tensorflow::Feature CreateFeatureFromIntVector(
   return feature;
 }
 
-std::string CreateExample(const OperationalStats& op_stats) {
+std::string CreateExample(const OperationalStats& op_stats,
+                          int64_t earliest_trustworthy_time) {
   tensorflow::Example example;
   auto* feature_map = example.mutable_features()->mutable_feature();
-  (*feature_map)[OpStatsExampleStore::kPopulationName] =
+  (*feature_map)[kPopulationName] =
       CreateFeatureFromString(op_stats.population_name());
-  (*feature_map)[OpStatsExampleStore::kSessionName] =
+  (*feature_map)[kSessionName] =
       CreateFeatureFromString(op_stats.session_name());
-  (*feature_map)[OpStatsExampleStore::kTaskName] =
-      CreateFeatureFromString(op_stats.task_name());
+  (*feature_map)[kTaskName] = CreateFeatureFromString(op_stats.task_name());
 
   // Create events related features.
   std::vector<int64_t> event_types;
@@ -94,9 +94,8 @@ std::string CreateExample(const OperationalStats& op_stats) {
     event_time_millis.push_back(
         TimeUtil::TimestampToMilliseconds(event.timestamp()));
   }
-  (*feature_map)[OpStatsExampleStore::kEventsEventType] =
-      CreateFeatureFromIntVector(event_types);
-  (*feature_map)[OpStatsExampleStore::kEventsTimestampMillis] =
+  (*feature_map)[kEventsEventType] = CreateFeatureFromIntVector(event_types);
+  (*feature_map)[kEventsTimestampMillis] =
       CreateFeatureFromIntVector(event_time_millis);
 
   // Create external dataset stats related features.
@@ -108,32 +107,32 @@ std::string CreateExample(const OperationalStats& op_stats) {
     num_examples_read.push_back(stats.second.num_examples_read());
     num_bytes_read.push_back(stats.second.num_bytes_read());
   }
-  (*feature_map)[OpStatsExampleStore::kDatasetStatsUri] =
-      CreateFeatureFromStringVector(uris);
-  (*feature_map)[OpStatsExampleStore::kDatasetStatsNumExamplesRead] =
+  (*feature_map)[kDatasetStatsUri] = CreateFeatureFromStringVector(uris);
+  (*feature_map)[kDatasetStatsNumExamplesRead] =
       CreateFeatureFromIntVector(num_examples_read);
-  (*feature_map)[OpStatsExampleStore::kDatasetStatsNumBytesRead] =
+  (*feature_map)[kDatasetStatsNumBytesRead] =
       CreateFeatureFromIntVector(num_bytes_read);
 
-  (*feature_map)[OpStatsExampleStore::kErrorMessage] =
+  (*feature_map)[kErrorMessage] =
       CreateFeatureFromString(op_stats.error_message());
 
   // Create RetryWindow related features.
-  (*feature_map)[OpStatsExampleStore::kRetryWindowDelayMinMillis] =
-      CreateFeatureFromInt(TimeUtil::DurationToMilliseconds(
-          op_stats.retry_window().delay_min()));
-  (*feature_map)[OpStatsExampleStore::kRetryWindowDelayMaxMillis] =
-      CreateFeatureFromInt(TimeUtil::DurationToMilliseconds(
-          op_stats.retry_window().delay_max()));
+  (*feature_map)[kRetryWindowDelayMinMillis] = CreateFeatureFromInt(
+      TimeUtil::DurationToMilliseconds(op_stats.retry_window().delay_min()));
+  (*feature_map)[kRetryWindowDelayMaxMillis] = CreateFeatureFromInt(
+      TimeUtil::DurationToMilliseconds(op_stats.retry_window().delay_max()));
 
-  (*feature_map)[OpStatsExampleStore::kBytesDownloaded] =
+  (*feature_map)[kBytesDownloaded] =
       CreateFeatureFromInt(op_stats.bytes_downloaded());
-  (*feature_map)[OpStatsExampleStore::kBytesUploaded] =
+  (*feature_map)[kBytesUploaded] =
       CreateFeatureFromInt(op_stats.bytes_uploaded());
-  (*feature_map)[OpStatsExampleStore::kChunkingLayerBytesDownloaded] =
+  (*feature_map)[kChunkingLayerBytesDownloaded] =
       CreateFeatureFromInt(op_stats.chunking_layer_bytes_downloaded());
-  (*feature_map)[OpStatsExampleStore::kChunkingLayerBytesUploaded] =
+  (*feature_map)[kChunkingLayerBytesUploaded] =
       CreateFeatureFromInt(op_stats.chunking_layer_bytes_uploaded());
+
+  (*feature_map)[kEarliestTrustWorthyTimeMillis] =
+      CreateFeatureFromInt(earliest_trustworthy_time);
 
   return example.SerializeAsString();
 }
@@ -143,7 +142,7 @@ absl::StatusOr<std::string> OpStatsExampleIterator::Next() {
   if (next_ < 0 || next_ >= data_.size()) {
     return absl::OutOfRangeError("The iterator is out of range.");
   }
-  return CreateExample(data_[next_++]);
+  return CreateExample(data_[next_++], earliest_trustworthy_time_millis_);
 }
 
 void OpStatsExampleIterator::Close() {
@@ -151,8 +150,7 @@ void OpStatsExampleIterator::Close() {
   data_.clear();
 }
 
-absl::StatusOr<std::unique_ptr<ExampleIterator>>
-OpStatsExampleStore::CreateExampleIterator(
+absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
     const ExampleSelector& example_selector, OpStatsDb& db,
     LogManager& log_manager) {
   if (example_selector.collection_uri() != kOpStatsCollectionUri) {
@@ -195,7 +193,9 @@ OpStatsExampleStore::CreateExampleIterator(
       selected_data.push_back(*it);
     }
   }
-  return std::make_unique<OpStatsExampleIterator>(std::move(selected_data));
+  return std::make_unique<OpStatsExampleIterator>(
+      std::move(selected_data),
+      TimeUtil::TimestampToMilliseconds(data.earliest_trustworthy_time()));
 }
 
 }  // namespace opstats

@@ -29,7 +29,6 @@ namespace engine {
 namespace {
 
 using ::fcp::client::opstats::OperationalStats;
-using ::fcp::client::opstats::OpStatsExampleStore;
 using ::fcp::client::opstats::OpStatsLogger;
 using ::fcp::client::opstats::OpStatsLoggerImpl;
 using ::fcp::client::opstats::PdsBackedOpStatsDb;
@@ -215,14 +214,14 @@ absl::StatusOr<std::unique_ptr<ExampleIterator>> GetExampleIterator(
     std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
         const google::internal::federated::plan::ExampleSelector&)>
         create_example_iterator) {
-  if (selector.collection_uri() == OpStatsExampleStore::kOpStatsCollectionUri) {
+  if (selector.collection_uri() == opstats::kOpStatsCollectionUri) {
     if (!opstats_logger->IsOpStatsEnabled()) {
       log_manager->LogDiag(
           ProdDiagCode::OPSTATS_EXAMPLE_STORE_REQUESTED_NOT_ENABLED);
       return absl::InvalidArgumentError(
           "OpStats example store is not enabled.");
     } else {
-      return OpStatsExampleStore::CreateExampleIterator(
+      return opstats::CreateExampleIterator(
           selector, *opstats_logger->GetOpStatsDb(), *log_manager);
     }
   } else {
