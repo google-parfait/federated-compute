@@ -1264,6 +1264,9 @@ message Measurement {
   // A human-readable name for the measurement. Names are usually
   // camel case by convention, e.g., 'Loss', 'AbsLoss', or 'Accuracy'.
   string name = 2;
+
+  // A serialized `tff.Type` for the measurement.
+  string type = 3;
 }
 
 // Inference Plan
