@@ -82,10 +82,10 @@ constexpr bool fcp_debug = false;
  * Check that the expression generating a status code is OK, otherwise die.
  * Any additional messages can be streamed into the invocation.
  */
-#define FCP_CHECK_STATUS(status)                              \
-  for (auto __check_status = (status);                        \
-       __check_status.code() != StatusCode::kOk;)             \
-  FCP_LOG_IF(FATAL, __check_status.code() != StatusCode::kOk) \
+#define FCP_CHECK_STATUS(status)                                    \
+  for (auto __check_status = (status);                              \
+       __check_status.code() != absl::StatusCode::kOk;)             \
+  FCP_LOG_IF(FATAL, __check_status.code() != absl::StatusCode::kOk) \
       << "status not OK: " << __check_status
 
 // Logging Implementation Details
@@ -248,7 +248,7 @@ inline const Status AsStatus(const StatusOr<T>& status_or) {
 #define FCP_RETURN_IF_ERROR(expr)                            \
   do {                                                       \
     absl::Status __status = ::fcp::internal::AsStatus(expr); \
-    if (__status.code() != StatusCode::kOk) {                \
+    if (__status.code() != absl::StatusCode::kOk) {          \
       return (__status);                                     \
     }                                                        \
   } while (false)
