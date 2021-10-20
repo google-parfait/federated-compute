@@ -269,7 +269,6 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, selector_context_include_aggregation, (),
               (const, override));
-  MOCK_METHOD(bool, enable_secagg_modulus_validation, (), (const, override));
   MOCK_METHOD(bool, commit_opstats_on_upload_started, (), (const, override));
   MOCK_METHOD(bool, record_earliest_trustworthy_time_for_opstats, (),
               (const, override));

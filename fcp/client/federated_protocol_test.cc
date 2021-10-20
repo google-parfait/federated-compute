@@ -312,8 +312,6 @@ class FederatedProtocolTest
 
  protected:
   void SetUp() override {
-    ON_CALL(mock_flags_, enable_secagg_modulus_validation)
-        .WillByDefault(Return(true));
     EXPECT_CALL(mock_flags_, federated_training_use_new_retry_delay_behavior)
         .WillRepeatedly(Return(GetParam()));
     EXPECT_CALL(*mock_grpc_bidi_stream_, ChunkingLayerBytesReceived())

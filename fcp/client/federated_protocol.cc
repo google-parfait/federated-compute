@@ -935,11 +935,9 @@ absl::Status FederatedProtocol::Report(
             // needs.
             modulus = 1ULL << secure_aggregand.output_bitwidth();
           }
-          if (flags_->enable_secagg_modulus_validation()) {
-            if (modulus <= 1 || modulus > SecAggVector::kMaxModulus) {
-              return absl::InternalError(absl::StrCat(
-                  "Invalid SecAgg modulus configuration: ", modulus));
-            }
+          if (modulus <= 1 || modulus > SecAggVector::kMaxModulus) {
+            return absl::InternalError(absl::StrCat(
+                "Invalid SecAgg modulus configuration: ", modulus));
           }
           if (vector.values.empty())
             return absl::InternalError(
@@ -951,14 +949,12 @@ absl::Status FederatedProtocol::Report(
             return absl::InternalError(
                 absl::StrCat("Flattened length: ", flattened_length,
                              " does not match vector size: ", data_length));
-          if (flags_->enable_secagg_modulus_validation()) {
-            for (const auto& v : vector.values) {
-              if (v >= modulus) {
-                return absl::InternalError(absl::StrCat(
-                    "The input SecAgg vector doesn't have the appropriate "
-                    "modulus: element with value ",
-                    v, " found, max value allowed ", (modulus - 1ULL)));
-              }
+          for (const auto& v : vector.values) {
+            if (v >= modulus) {
+              return absl::InternalError(absl::StrCat(
+                  "The input SecAgg vector doesn't have the appropriate "
+                  "modulus: element with value ",
+                  v, " found, max value allowed ", (modulus - 1ULL)));
             }
           }
           input_vector_specification.emplace_back(k, flattened_length, modulus);
