@@ -1039,6 +1039,7 @@ message ServerPhase {
   //
   // Generates a checkpoint to be sent to the client, to be read by
   // `ClientExecution.read_client_init`.
+
   CheckpointOp write_client_init = 2;
 
   // 3. For each intermediate checkpoint:
