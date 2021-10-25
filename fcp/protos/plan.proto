@@ -1266,8 +1266,10 @@ message Measurement {
   // camel case by convention, e.g., 'Loss', 'AbsLoss', or 'Accuracy'.
   string name = 2;
 
+  reserved 3;
+
   // A serialized `tff.Type` for the measurement.
-  string type = 3;
+  bytes tff_type = 4;
 }
 
 // Inference Plan
