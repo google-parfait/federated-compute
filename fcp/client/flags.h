@@ -138,9 +138,6 @@ class Flags {
         static_cast<int32_t>(absl::StatusCode::kUnimplemented)};
   }
 
-  // Whether the extra task metadata includes aggregation details.
-  virtual bool selector_context_include_aggregation() const { return false; }
-
   // Whether to commit opstats to storage when the upload started event is
   // logged.
   virtual bool commit_opstats_on_upload_started() const { return false; }

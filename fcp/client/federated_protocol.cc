@@ -554,11 +554,9 @@ FederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
               "expectedNumberOfClients was less than Plan's "
               "minimumNumberOfParticipants.");
         }
-        if (flags_->selector_context_include_aggregation()) {
-          minimum_clients_in_server_visible_aggregate =
-              secure_aggregation_protocol_execution_info
-                  .minimum_clients_in_server_visible_aggregate();
-        }
+        minimum_clients_in_server_visible_aggregate =
+            secure_aggregation_protocol_execution_info
+                .minimum_clients_in_server_visible_aggregate();
       }
       return CheckinResultPayload{plan, acceptance_info.init_checkpoint(),
                                   task_name,

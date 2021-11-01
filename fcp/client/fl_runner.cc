@@ -781,31 +781,27 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       ->mutable_federated()
       ->set_task_name(acceptance.task_name);
 
-  if (flags->selector_context_include_aggregation()) {
-    const auto& federated_compute_io_router =
-        acceptance.client_only_plan.phase().federated_compute();
-    const bool has_simpleagg_tensors =
-        !federated_compute_io_router.output_filepath_tensor_name().empty();
-    bool all_aggregations_are_secagg = true;
-    for (const auto& aggregation : federated_compute_io_router.aggregations()) {
-      all_aggregations_are_secagg &=
-          aggregation.second.protocol_config_case() ==
-          AggregationConfig::kSecureAggregation;
-    }
-    if (!has_simpleagg_tensors && all_aggregations_are_secagg) {
-      federated_selector_context_with_task_name
+  const auto& federated_compute_io_router =
+      acceptance.client_only_plan.phase().federated_compute();
+  const bool has_simpleagg_tensors =
+      !federated_compute_io_router.output_filepath_tensor_name().empty();
+  bool all_aggregations_are_secagg = true;
+  for (const auto& aggregation : federated_compute_io_router.aggregations()) {
+    all_aggregations_are_secagg &= aggregation.second.protocol_config_case() ==
+                                   AggregationConfig::kSecureAggregation;
+  }
+  if (!has_simpleagg_tensors && all_aggregations_are_secagg) {
+    federated_selector_context_with_task_name.mutable_computation_properties()
+        ->mutable_federated()
+        ->mutable_secure_aggregation()
+        ->set_minimum_clients_in_server_visible_aggregate(
+            acceptance.minimum_clients_in_server_visible_aggregate);
+  } else {
+    // Has an output checkpoint, so some tensors must be simply aggregated.
+    *(federated_selector_context_with_task_name
           .mutable_computation_properties()
           ->mutable_federated()
-          ->mutable_secure_aggregation()
-          ->set_minimum_clients_in_server_visible_aggregate(
-              acceptance.minimum_clients_in_server_visible_aggregate);
-    } else {
-      // Has an output checkpoint, so some tensors must be simply aggregated.
-      *(federated_selector_context_with_task_name
-            .mutable_computation_properties()
-            ->mutable_federated()
-            ->mutable_simple_aggregation()) = SimpleAggregation();
-    }
+          ->mutable_simple_aggregation()) = SimpleAggregation();
   }
 
   RetryWindow report_retry_window;
