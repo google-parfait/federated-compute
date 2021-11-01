@@ -31,20 +31,26 @@ using ::google::internal::federatedml::v2::Checkpoint;
 
 FederatedTaskEnvironment::FederatedTaskEnvironment(
     SimpleTaskEnvironment* env_deps, FederatedProtocol* federated_protocol,
-    LogManager* log_manager, absl::Time reference_time,
-    absl::Duration condition_polling_period)
+    LogManager* log_manager, EventPublisher* event_publisher,
+    opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+    absl::Time reference_time, absl::Duration condition_polling_period)
     : FederatedTaskEnvironment(
-          env_deps, federated_protocol, log_manager, reference_time,
-          []() { return absl::Now(); }, condition_polling_period) {}
+          env_deps, federated_protocol, log_manager, event_publisher,
+          opstats_logger, flags, reference_time, []() { return absl::Now(); },
+          condition_polling_period) {}
 
 FederatedTaskEnvironment::FederatedTaskEnvironment(
     SimpleTaskEnvironment* env_deps, FederatedProtocol* federated_protocol,
-    LogManager* log_manager, absl::Time reference_time,
-    std::function<absl::Time()> get_time_fn,
+    LogManager* log_manager, EventPublisher* event_publisher,
+    opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+    absl::Time reference_time, std::function<absl::Time()> get_time_fn,
     absl::Duration condition_polling_period)
     : env_deps_(env_deps),
       federated_protocol_(federated_protocol),
       log_manager_(log_manager),
+      event_publisher_(event_publisher),
+      opstats_logger_(opstats_logger),
+      flags_(flags),
       reference_time_(reference_time),
       get_time_fn_(get_time_fn),
       condition_polling_period_(condition_polling_period) {}
@@ -59,13 +65,17 @@ FederatedTaskEnvironment::~FederatedTaskEnvironment() {
 absl::Status FederatedTaskEnvironment::Finish(
     PhaseOutcome phase_outcome, absl::Duration plan_duration,
     const std::vector<std::pair<std::string, double>>& stats) {
-  absl::Status report_result = absl::InternalError("");
-  const absl::Time before_report = get_time_fn_();
   if (phase_outcome == engine::INTERRUPTED) {
     // If plan execution got interrupted, we do not report to the server, and do
     // not wait for a reply, but bail fast to get out of the way.
     return absl::OkStatus();
-  } else if (phase_outcome == engine::COMPLETED) {
+  }
+  absl::Status report_result = absl::InternalError("");
+  const absl::Time before_report = get_time_fn_();
+  if (flags_->per_phase_logs()) {
+    FCP_RETURN_IF_ERROR(LogReportStart());
+  }
+  if (phase_outcome == engine::COMPLETED) {
     FCP_ASSIGN_OR_RETURN(auto results, CreateComputationResults());
     report_result = federated_protocol_->ReportCompleted(std::move(results),
                                                          stats, plan_duration);
@@ -75,6 +85,11 @@ absl::Status FederatedTaskEnvironment::Finish(
   }
 
   const absl::Time after_report = get_time_fn_();
+  if (flags_->per_phase_logs() && report_result.ok()) {
+    LogReportFinish(federated_protocol_->report_request_size_bytes(),
+                    federated_protocol_->chunking_layer_bytes_sent(),
+                    after_report - before_report);
+  }
   log_manager_->LogToLongHistogram(
       HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
       0 /*execution_index*/, 0 /*epoch_index*/,
@@ -174,6 +189,26 @@ absl::Status FederatedTaskEnvironment::DeleteStagedFiles() {
 }
 
 bool FederatedTaskEnvironment::ShouldPublishStats() { return false; }
+
+absl::Status FederatedTaskEnvironment::LogReportStart() {
+  event_publisher_->PublishReportStarted(0);
+  opstats_logger_->AddEvent(
+      opstats::OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
+  if (flags_->commit_opstats_on_upload_started()) {
+    return opstats_logger_->CommitToStorage();
+  } else {
+    return absl::OkStatus();
+  }
+}
+
+void FederatedTaskEnvironment::LogReportFinish(int64_t report_request_size,
+                                               int64_t chunking_layers_sent_bytes,
+                                               absl::Duration upload_time) {
+  event_publisher_->PublishReportFinished(
+      report_request_size, chunking_layers_sent_bytes, upload_time);
+  opstats_logger_->AddEvent(
+      opstats::OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
+}
 
 }  // namespace client
 }  // namespace fcp

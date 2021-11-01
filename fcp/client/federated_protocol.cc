@@ -309,9 +309,11 @@ absl::Status FederatedProtocol::SendEligibilityEvalCheckinRequest() {
           /* should_ack_checkin=*/true);
 
   // Log that we are about to check in with the server.
-  event_publisher_->PublishEligibilityEvalCheckin();
-  opstats_logger_->AddEvent(
-      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
+  if (!flags_->per_phase_logs()) {
+    event_publisher_->PublishEligibilityEvalCheckin();
+    opstats_logger_->AddEvent(
+        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
+  }
 
   return Send(&client_stream_message);
 }
@@ -334,9 +336,11 @@ absl::Status FederatedProtocol::SendCheckinRequest(
   }
 
   // Log that we are about to check in with the server.
-  event_publisher_->PublishCheckin();
-  opstats_logger_->AddEvent(
-      OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  if (!flags_->per_phase_logs()) {
+    event_publisher_->PublishCheckin();
+    opstats_logger_->AddEvent(
+        OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  }
 
   return Send(&client_stream_message);
 }
@@ -428,9 +432,12 @@ FederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
       }
       log_manager_->SetModelIdentifier(model_identifier);
       event_publisher_->SetModelIdentifier(model_identifier);
-      event_publisher_->PublishEligibilityEvalPlanReceived(
-          bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-          download_duration);
+
+      if (!flags_->per_phase_logs()) {
+        event_publisher_->PublishEligibilityEvalPlanReceived(
+            bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
+            download_duration);
+      }
 
       ClientOnlyPlan plan;
       if (!plan.ParseFromString(eligibility_eval_payload.plan())) {
@@ -447,28 +454,34 @@ FederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
         return absl::InternalError(
             "Could not parse received eligibility eval plan");
       }
-      opstats_logger_->AddEvent(
-          OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED);
+      if (!flags_->per_phase_logs()) {
+        opstats_logger_->AddEvent(
+            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED);
+      }
       object_state_ = ObjectState::kEligibilityEvalEnabled;
       return CheckinResultPayload{
           plan, eligibility_eval_payload.init_checkpoint(), model_identifier};
     }
     case EligibilityEvalCheckinResponse::kNoEligibilityEvalConfigured: {
       // Nothing to do...
-      event_publisher_->PublishEligibilityEvalNotConfigured(
-          bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-          download_duration);
-      opstats_logger_->AddEvent(
-          OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED);
+      if (!flags_->per_phase_logs()) {
+        event_publisher_->PublishEligibilityEvalNotConfigured(
+            bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
+            download_duration);
+        opstats_logger_->AddEvent(
+            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED);
+      }
       object_state_ = ObjectState::kEligibilityEvalDisabled;
       return EligibilityEvalDisabled{};
     }
     case EligibilityEvalCheckinResponse::kRejectionInfo: {
-      event_publisher_->PublishEligibilityEvalRejected(
-          bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-          download_duration);
-      opstats_logger_->AddEvent(
-          OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
+      if (!flags_->per_phase_logs()) {
+        event_publisher_->PublishEligibilityEvalRejected(
+            bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
+            download_duration);
+        opstats_logger_->AddEvent(
+            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
+      }
       object_state_ = ObjectState::kEligibilityEvalCheckinRejected;
       return Rejection{};
     }
@@ -500,9 +513,11 @@ FederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
           : "";
   log_manager_->SetModelIdentifier(execution_phase_id_);
   event_publisher_->SetModelIdentifier(execution_phase_id_);
-  event_publisher_->PublishCheckinFinished(
-      bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-      download_duration);
+  if (!flags_->per_phase_logs()) {
+    event_publisher_->PublishCheckinFinished(
+        bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
+        download_duration);
+  }
   switch (checkin_response.checkin_result_case()) {
     case CheckinResponse::kAcceptanceInfo: {
       const auto& acceptance_info = checkin_response.acceptance_info();
@@ -521,7 +536,9 @@ FederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
         task_name = phase_id.substr(population_name_.length() + 1,
                                     task_end - population_name_.length() - 1);
       }
-      opstats_logger_->AddCheckinAcceptedEventWithTaskName(task_name);
+      if (!flags_->per_phase_logs()) {
+        opstats_logger_->AddCheckinAcceptedEventWithTaskName(task_name);
+      }
 
       ClientOnlyPlan plan;
       if (!plan.ParseFromString(acceptance_info.plan())) {
@@ -563,9 +580,11 @@ FederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
                                   minimum_clients_in_server_visible_aggregate};
     }
     case CheckinResponse::kRejectionInfo: {
-      event_publisher_->PublishRejected();
-      opstats_logger_->AddEvent(
-          OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
+      if (!flags_->per_phase_logs()) {
+        event_publisher_->PublishRejected();
+        opstats_logger_->AddEvent(
+            OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
+      }
       object_state_ = ObjectState::kCheckinRejected;
       return Rejection{};
     }
@@ -627,14 +646,6 @@ absl::StatusOr<FederatedProtocol::CheckinResult> FederatedProtocol::Checkin(
   // eligibility checkin request yet (which would've received such an ack
   // already).
   bool should_ack_checkin = object_state_ == ObjectState::kInitialized;
-
-  if (object_state_ != ObjectState::kInitialized) {
-    // Clear any eligibility eval model identifier we may have set before this
-    // Checkin(...) call, since that identifier does not apply to the upcoming
-    // checkin request.
-    log_manager_->SetModelIdentifier("");
-    event_publisher_->SetModelIdentifier("");
-  }
 
   object_state_ = ObjectState::kCheckinFailed;
 
@@ -790,7 +801,6 @@ absl::Status FederatedProtocol::ReportInternal(
     std::string tf_checkpoint, engine::PhaseOutcome phase_outcome,
     absl::Duration plan_duration,
     const std::vector<std::pair<std::string, double>>& stats,
-    int64_t* report_request_size,
     ClientToServerWrapperMessage* secagg_commit_message) {
   ClientStreamMessage client_stream_message;
   auto report_request = client_stream_message.mutable_report_request();
@@ -824,16 +834,19 @@ absl::Status FederatedProtocol::ReportInternal(
   report->add_serialized_train_event()->PackFrom(client_execution_stats);
 
   // 4. Send ReportRequest.
-  *report_request_size += client_stream_message.ByteSizeLong();
-  opstats_logger_->AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
-  if (flags_->commit_opstats_on_upload_started()) {
-    // Commit the run data accumulated thus far to Opstats and fail if something
-    // goes wrong.
-    FCP_RETURN_IF_ERROR(opstats_logger_->CommitToStorage());
+  report_request_size_bytes_ += client_stream_message.ByteSizeLong();
+  if (!flags_->per_phase_logs()) {
+    opstats_logger_->AddEvent(
+        OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
+    if (flags_->commit_opstats_on_upload_started()) {
+      // Commit the run data accumulated thus far to Opstats and fail if
+      // something goes wrong.
+      FCP_RETURN_IF_ERROR(opstats_logger_->CommitToStorage());
+    }
+    // Log the event after we know we've successfully committed the event to
+    // Opstats.
+    event_publisher_->PublishReportStarted(report_request_size_bytes_);
   }
-  // Log the event after we know we've successfully committed the event to
-  // Opstats.
-  event_publisher_->PublishReportStarted(*report_request_size);
 
   // Note that we do not use the FederatedProtocol::Send(...) helper method
   // here, since we are already running within a call to
@@ -844,7 +857,7 @@ absl::Status FederatedProtocol::ReportInternal(
         status.code(),
         absl::StrCat("Error sending ReportRequest: ", status.message()));
   }
-  bytes_uploaded_ += *report_request_size;
+  bytes_uploaded_ += report_request_size_bytes_;
   UpdateOpStatsNetworkStats();
 
   return absl::OkStatus();
@@ -855,15 +868,13 @@ absl::Status FederatedProtocol::Report(
     absl::Duration plan_duration,
     const std::vector<std::pair<std::string, double>>& stats) {
   std::string tf_checkpoint;
-  int64_t report_request_size = 0;
 
   // This lambda allows for convenient reporting from within SecAgg's
   // SendToServerInterface::Send().
   std::function<absl::Status(ClientToServerWrapperMessage*)> report_lambda =
       [&](ClientToServerWrapperMessage* secagg_commit_message) -> absl::Status {
     return ReportInternal(std::move(tf_checkpoint), phase_outcome,
-                          plan_duration, stats, &report_request_size,
-                          secagg_commit_message);
+                          plan_duration, stats, secagg_commit_message);
   };
 
   absl::Time start_time = absl::Now();
@@ -1074,13 +1085,14 @@ absl::Status FederatedProtocol::Report(
         "Bad response to ReportRequest; Expected REPORT_RESPONSE but got ",
         server_stream_message.kind_case(), "."));
   }
-
-  absl::Duration upload_time = absl::Now() - start_time;
-  event_publisher_->PublishReportFinished(
-      report_request_size, grpc_bidi_stream_->ChunkingLayerBytesSent(),
-      upload_time);
-  opstats_logger_->AddEvent(
-      OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
+  if (!flags_->per_phase_logs()) {
+    absl::Duration upload_time = absl::Now() - start_time;
+    event_publisher_->PublishReportFinished(
+        report_request_size_bytes_, grpc_bidi_stream_->ChunkingLayerBytesSent(),
+        upload_time);
+    opstats_logger_->AddEvent(
+        OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
+  }
   return absl::OkStatus();
 }
 
@@ -1207,6 +1219,22 @@ void FederatedProtocol::UpdateObjectStateForPermanentError(
           static_cast<int32_t>(status.code()))) {
     object_state_ = permanent_error_object_state;
   }
+}
+
+int64_t FederatedProtocol::chunking_layer_bytes_sent() {
+  return grpc_bidi_stream_->ChunkingLayerBytesSent();
+}
+
+int64_t FederatedProtocol::chunking_layer_bytes_received() {
+  return grpc_bidi_stream_->ChunkingLayerBytesReceived();
+}
+
+int64_t FederatedProtocol::bytes_downloaded() { return bytes_downloaded_; }
+
+int64_t FederatedProtocol::bytes_uploaded() { return bytes_uploaded_; }
+
+int64_t FederatedProtocol::report_request_size_bytes() {
+  return report_request_size_bytes_;
 }
 
 }  // namespace client

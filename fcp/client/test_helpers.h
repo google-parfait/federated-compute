@@ -149,6 +149,11 @@ class MockFederatedProtocol : public FederatedProtocol {
               (engine::PhaseOutcome phase_outcome,
                absl::Duration plan_duration),
               (override));
+  MOCK_METHOD(int64_t, chunking_layer_bytes_sent, (), (override));
+  MOCK_METHOD(int64_t, chunking_layer_bytes_received, (), (override));
+  MOCK_METHOD(int64_t, bytes_downloaded, (), (override));
+  MOCK_METHOD(int64_t, bytes_uploaded, (), (override));
+  MOCK_METHOD(int64_t, report_request_size_bytes, (), (override));
 };
 
 class MockLogManager : public LogManager {
@@ -270,6 +275,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, commit_opstats_on_upload_started, (), (const, override));
   MOCK_METHOD(bool, record_earliest_trustworthy_time_for_opstats, (),
               (const, override));
+  MOCK_METHOD(bool, per_phase_logs, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

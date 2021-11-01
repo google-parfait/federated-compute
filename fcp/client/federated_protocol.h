@@ -271,6 +271,21 @@ class FederatedProtocol {
   // ensure they use the most recent value.
   virtual google::internal::federatedml::v2::RetryWindow GetLatestRetryWindow();
 
+  // Returns the number of bytes downloaded.
+  virtual int64_t bytes_downloaded();
+
+  // Returns the number of bytes uploaded.
+  virtual int64_t bytes_uploaded();
+
+  // Returns the number of bytes received in the chunking layer.
+  virtual int64_t chunking_layer_bytes_received();
+
+  // Returns the number of bytes sent in the chunking layer.
+  virtual int64_t chunking_layer_bytes_sent();
+
+  // Returns the size of the report request in bytes.
+  virtual int64_t report_request_size_bytes();
+
  private:
   // Internal implementation of reporting for use by ReportCompleted() and
   // ReportNotCompleted().
@@ -282,7 +297,6 @@ class FederatedProtocol {
       std::string tf_checkpoint, engine::PhaseOutcome phase_outcome,
       absl::Duration plan_duration,
       const std::vector<std::pair<std::string, double>>& stats,
-      int64_t* report_request_size,
       fcp::secagg::ClientToServerWrapperMessage* secagg_commit_message);
 
   // Helper function to send a ClientStreamMessage. If sending did not succeed,
@@ -400,6 +414,7 @@ class FederatedProtocol {
   absl::flat_hash_set<int32_t> federated_training_permanent_error_codes_;
   int64_t bytes_downloaded_ = 0;
   int64_t bytes_uploaded_ = 0;
+  int64_t report_request_size_bytes_ = 0;
   // TODO(team): Delete these fields after rollout is complete.
   google::internal::federatedml::v2::RetryWindow retry_window_if_accepted_;
   google::internal::federatedml::v2::RetryWindow retry_window_if_rejected_;

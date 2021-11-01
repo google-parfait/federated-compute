@@ -417,7 +417,6 @@ absl::Status ReportTensorflowSpecPlanResult(
         engine::PhaseOutcome::ERROR,
         /*plan_duration=*/absl::Now() - run_plan_start_time);
   }
-
   const absl::Time after_report_time = absl::Now();
   log_manager->LogToLongHistogram(
       HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
@@ -438,7 +437,8 @@ bool RunPlanWithExecutions(
     const absl::Time reference_time) {
   // Create a task environment.
   auto env = absl::make_unique<FederatedTaskEnvironment>(
-      env_deps, federated_protocol, log_manager, reference_time,
+      env_deps, federated_protocol, log_manager, event_publisher,
+      opstats_logger, flags, reference_time,
       absl::Milliseconds(flags->condition_polling_period_millis()));
 
   // Run plan. The task environment will report results back to server via the
@@ -502,8 +502,16 @@ IssueEligibilityEvalCheckinAndRunPlan(
     const absl::Time reference_time, FLRunnerResult& fl_runner_result,
     const SelectorContext& selector_context) {
   absl::Time time_before_eligibility_eval_checkin = absl::Now();
-
-  // Issue the eligibility eval checkin request
+  // Log that we are about to check in with the server.
+  if (flags->per_phase_logs()) {
+    event_publisher->PublishEligibilityEvalCheckin();
+    opstats_logger->AddEvent(
+        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
+  }
+  // Issue the eligibility eval checkin request.
+  // The EligibilityEvalCheckin(...) method will call SetModelIdentifier() with
+  // the name of whatever task it receives, ensuring that subsequent events will
+  // be tagged with that identifier.
   absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
       eligibility_checkin_result = federated_protocol->EligibilityEvalCheckin();
   UpdateRetryWindowAndNetworkStats(*federated_protocol, opstats_logger,
@@ -527,6 +535,14 @@ IssueEligibilityEvalCheckinAndRunPlan(
 
   if (absl::holds_alternative<FederatedProtocol::Rejection>(
           *eligibility_checkin_result)) {
+    if (flags->per_phase_logs()) {
+      event_publisher->PublishEligibilityEvalRejected(
+          federated_protocol->bytes_downloaded(),
+          federated_protocol->chunking_layer_bytes_received(),
+          absl::Now() - time_before_eligibility_eval_checkin);
+      opstats_logger->AddEvent(
+          OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
+    }
     // If the server explicitly rejected our request, then we must abort and
     // we must not proceed to the "checkin" phase below.
     FCP_LOG(INFO) << "Device rejected by server during eligibility eval "
@@ -535,6 +551,14 @@ IssueEligibilityEvalCheckinAndRunPlan(
   } else if (absl::holds_alternative<
                  FederatedProtocol::EligibilityEvalDisabled>(
                  *eligibility_checkin_result)) {
+    if (flags->per_phase_logs()) {
+      event_publisher->PublishEligibilityEvalNotConfigured(
+          federated_protocol->bytes_downloaded(),
+          federated_protocol->chunking_layer_bytes_received(),
+          absl::Now() - time_before_eligibility_eval_checkin);
+      opstats_logger->AddEvent(
+          OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED);
+    }
     // If the server indicates that no eligibility eval task is configured for
     // the population then there is nothing more to do. We simply proceed to
     // the "checkin" phase below without providing it a TaskEligibilityInfo
@@ -546,7 +570,6 @@ IssueEligibilityEvalCheckinAndRunPlan(
   auto eligibility_eval_payload =
       absl::get<FederatedProtocol::CheckinResultPayload>(
           *eligibility_checkin_result);
-
   auto eligibility_selector_context = SelectorContext(selector_context);
   *eligibility_selector_context.mutable_computation_properties()
        ->mutable_eligibility_eval() = EligibilityEvalComputation();
@@ -562,6 +585,15 @@ IssueEligibilityEvalCheckinAndRunPlan(
         OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
     FCP_LOG(ERROR) << message;
     return absl::InternalError("");
+  }
+
+  if (flags->per_phase_logs()) {
+    opstats_logger->AddEvent(
+        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED);
+    event_publisher->PublishEligibilityEvalPlanReceived(
+        federated_protocol->bytes_downloaded(),
+        federated_protocol->chunking_layer_bytes_received(),
+        absl::Now() - time_before_eligibility_eval_checkin);
   }
 
   absl::Time run_plan_start_time = absl::Now();
@@ -733,6 +765,20 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   task_eligibility_info = std::move(*eligibility_eval_result);
 
   absl::Time time_before_checkin = absl::Now();
+  // Clear the model identifier before check-in, to ensure that the any prior
+  // eligibility eval task name isn't used any longer.
+  event_publisher->SetModelIdentifier("");
+  log_manager->SetModelIdentifier("");
+  if (flags->per_phase_logs()) {
+    // Log that we are about to check in with the server.
+    event_publisher->PublishCheckin();
+    opstats_logger->AddEvent(
+        OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  }
+
+  // The Checkin(...) method will call SetModelIdentifier() with the name of
+  // whatever task it receives, ensuring that subsequent events will be tagged
+  // with that identifier.
   absl::StatusOr<FederatedProtocol::CheckinResult> checkin_result =
       federated_protocol->Checkin(task_eligibility_info);
   UpdateRetryWindowAndNetworkStats(*federated_protocol, opstats_logger,
@@ -757,6 +803,11 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   // Server rejected us? Return the fl_runner_results as-is.
   if (absl::holds_alternative<FederatedProtocol::Rejection>(*checkin_result)) {
+    if (flags->per_phase_logs()) {
+      event_publisher->PublishRejected();
+      opstats_logger->AddEvent(
+          OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
+    }
     FCP_LOG(INFO) << "Device rejected by server during checkin; aborting";
     return fl_runner_result;
   }
@@ -773,6 +824,13 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
     FCP_LOG(ERROR) << message;
     return fl_runner_result;
+  }
+  if (flags->per_phase_logs()) {
+    event_publisher->PublishCheckinFinished(
+        federated_protocol->bytes_downloaded(),
+        federated_protocol->chunking_layer_bytes_received(),
+        absl::Now() - time_before_checkin);
+    opstats_logger->AddCheckinAcceptedEventWithTaskName(acceptance.task_name);
   }
 
   SelectorContext federated_selector_context_with_task_name =
@@ -813,6 +871,18 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
             flags, acceptance.client_only_plan, *checkpoint_input_filename,
             timing_config, run_plan_start_time, reference_time,
             federated_selector_context_with_task_name);
+
+    absl::Time upload_start = absl::Now();
+    if (flags->per_phase_logs()) {
+      opstats_logger->AddEvent(
+          OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
+      if (flags->commit_opstats_on_upload_started()) {
+        // Commit the run data accumulated thus far to Opstats and fail if
+        // something goes wrong.
+        FCP_RETURN_IF_ERROR(opstats_logger->CommitToStorage());
+      }
+      event_publisher->PublishReportStarted(0);
+    }
     auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
     absl::Status report_result = ReportTensorflowSpecPlanResult(
         event_publisher, log_manager, federated_protocol, opstats_logger,
@@ -825,11 +895,22 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       event_publisher->PublishIoError(0, message);
       engine::LogOpStatsNetworkErrors(opstats_logger, report_result, message);
       FCP_LOG(INFO) << message;
-    } else if (outcome == engine::COMPLETED) {
-      // Only if training succeeded *and* reporting succeeded do we consider the
-      // device to have contributed successfully.
-      fl_runner_result.set_contribution_result(FLRunnerResult::SUCCESS);
+    } else {
+      if (flags->per_phase_logs()) {
+        event_publisher->PublishReportFinished(
+            federated_protocol->report_request_size_bytes(),
+            federated_protocol->chunking_layer_bytes_sent(),
+            absl::Now() - upload_start);
+        opstats_logger->AddEvent(
+            OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
+      }
+      if (outcome == engine::COMPLETED) {
+        // Only if training succeeded *and* reporting succeeded do we consider
+        // the device to have contributed successfully.
+        fl_runner_result.set_contribution_result(FLRunnerResult::SUCCESS);
+      }
     }
+
   } else {
     if (RunPlanWithExecutions(
             env_deps, event_publisher, files, log_manager, opstats_logger,

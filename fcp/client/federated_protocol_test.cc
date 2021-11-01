@@ -301,9 +301,10 @@ void ExpectRejectedRetryWindow(const RetryWindow& retry_window) {
 }
 
 class FederatedProtocolTest
-    // The parameter indicates whether the new behavior w.r.t. retry delays
-    // should be enabled.
-    : public testing::TestWithParam<bool> {
+    // The first parameter indicates whether the new behavior w.r.t. retry
+    // delays should be enabled.  The second parameter indicates whether the new
+    // per phase logging should be enabled.
+    : public testing::TestWithParam<std::tuple<bool, bool>> {
  public:
   FederatedProtocolTest() {
     // The gRPC stream should always be closed at the end of all tests.
@@ -312,13 +313,17 @@ class FederatedProtocolTest
 
  protected:
   void SetUp() override {
+    use_new_retry_delay_behavior_ = std::get<0>(GetParam());
+    use_per_phase_logging_ = std::get<1>(GetParam());
     EXPECT_CALL(mock_flags_, federated_training_use_new_retry_delay_behavior)
-        .WillRepeatedly(Return(GetParam()));
+        .WillRepeatedly(Return(use_new_retry_delay_behavior_));
+    EXPECT_CALL(mock_flags_, per_phase_logs)
+        .WillRepeatedly(Return(use_per_phase_logging_));
     EXPECT_CALL(*mock_grpc_bidi_stream_, ChunkingLayerBytesReceived())
         .WillRepeatedly(Return(0));
     EXPECT_CALL(*mock_grpc_bidi_stream_, ChunkingLayerBytesSent())
         .WillRepeatedly(Return(0));
-    if (GetParam()) {
+    if (use_new_retry_delay_behavior_) {
       EXPECT_CALL(mock_flags_,
                   federated_training_transient_errors_retry_delay_secs)
           .WillRepeatedly(Return(kTransientErrorsRetryPeriodSecs));
@@ -389,11 +394,12 @@ class FederatedProtocolTest
 
     {
       InSequence seq;
-      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(
-              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+      if (!use_per_phase_logging_) {
+        EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+        EXPECT_CALL(mock_opstats_logger_,
+                    AddEvent(OperationalStats::Event::
+                                 EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+      }
       // Network stats should be updated after the one send and two receive
       // operations.
       EXPECT_CALL(
@@ -409,11 +415,13 @@ class FederatedProtocolTest
           .Times(2);
       EXPECT_CALL(mock_event_publisher_,
                   SetModelIdentifier(expected_execution_id));
-      EXPECT_CALL(mock_event_publisher_,
-                  PublishEligibilityEvalPlanReceived(_, _, _));
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED));
+      if (!use_per_phase_logging_) {
+        EXPECT_CALL(mock_event_publisher_,
+                    PublishEligibilityEvalPlanReceived(_, _, _));
+        EXPECT_CALL(
+            mock_opstats_logger_,
+            AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED));
+      }
     }
 
     return federated_protocol_->EligibilityEvalCheckin().status();
@@ -453,10 +461,12 @@ class FederatedProtocolTest
 
     {
       InSequence seq;
-      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+      if (!use_per_phase_logging_) {
+        EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+        EXPECT_CALL(
+            mock_opstats_logger_,
+            AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+      }
       // Network stats should be updated after the one send and two receive
       // operations.
       EXPECT_CALL(
@@ -471,9 +481,11 @@ class FederatedProtocolTest
                           /*chunking_layer_bytes_uploaded=*/0))
           .Times(2);
       EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
-      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-      EXPECT_CALL(mock_opstats_logger_,
-                  AddCheckinAcceptedEventWithTaskName(kTaskName));
+      if (!use_per_phase_logging_) {
+        EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
+        EXPECT_CALL(mock_opstats_logger_,
+                    AddCheckinAcceptedEventWithTaskName(kTaskName));
+      }
     }
 
     return federated_protocol_->Checkin(task_eligibility_info).status();
@@ -493,6 +505,8 @@ class FederatedProtocolTest
 
   // The class under test.
   std::unique_ptr<FederatedProtocol> federated_protocol_;
+  bool use_new_retry_delay_behavior_;
+  bool use_per_phase_logging_;
 };
 
 // We create a number of instances of the test suite: one set of instances with
@@ -500,16 +514,36 @@ class FederatedProtocolTest
 // tests should pass in both configurations, while a handful use GTEST_SKIP() to
 // only run conditionally for the specific configuration they're testing.
 
-INSTANTIATE_TEST_SUITE_P(NewVsOldRetryBehavior, FederatedProtocolTest,
-                         testing::Values(false, true));
+INSTANTIATE_TEST_SUITE_P(
+    NewVsOldBehavior, FederatedProtocolTest,
+    testing::Combine(testing::Values(false, true),
+                     testing::Values(false, true)),
+    [](const testing::TestParamInfo<FederatedProtocolTest::ParamType>& info) {
+      std::string name = absl::StrCat(
+          std::get<0>(info.param) ? "New_retry_delay_" : "Legacy_retry_delay_",
+          std::get<1>(info.param) ? "Per_phase_logging" : "Legacy_logging");
+      absl::c_replace_if(
+          name, [](char c) { return !std::isalnum(c); }, '_');
+      return name;
+    });
 
 using FederatedProtocolDeathTest = FederatedProtocolTest;
-INSTANTIATE_TEST_SUITE_P(NewVsOldRetryBehavior, FederatedProtocolDeathTest,
-                         testing::Values(false, true));
+INSTANTIATE_TEST_SUITE_P(
+    NewVsOldBehavior, FederatedProtocolDeathTest,
+    testing::Combine(testing::Values(false, true),
+                     testing::Values(false, true)),
+    [](const testing::TestParamInfo<FederatedProtocolTest::ParamType>& info) {
+      std::string name = absl::StrCat(
+          std::get<0>(info.param) ? "New_retry_delay_" : "Legacy_retry_delay_",
+          std::get<1>(info.param) ? "Per_phase_logging" : "Legacy_logging");
+      absl::c_replace_if(
+          name, [](char c) { return !std::isalnum(c); }, '_');
+      return name;
+    });
 
 TEST_P(FederatedProtocolTest,
        TestTransientErrorRetryWindowDifferentAcrossDifferentInstances) {
-  if (!GetParam()) {  // new retry delay behavior
+  if (!use_new_retry_delay_behavior_) {
     GTEST_SKIP() << "This test does not apply if the new retry behavior is not "
                     "turned on";
   }
@@ -554,11 +588,13 @@ TEST_P(FederatedProtocolTest,
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(
+              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    }
   }
 
   auto eligibility_checkin_result =
@@ -566,7 +602,7 @@ TEST_P(FederatedProtocolTest,
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(UNAVAILABLE));
   EXPECT_THAT(eligibility_checkin_result.status().message(), "foo");
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     // No RetryWindows were received from the server, so we expect to get a
     // RetryWindow generated based on the transient errors retry delay flag.
     ExpectTransientErrorRetryWindow(
@@ -589,11 +625,13 @@ TEST_P(FederatedProtocolTest,
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(
+              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    }
   }
 
   auto eligibility_checkin_result =
@@ -601,7 +639,7 @@ TEST_P(FederatedProtocolTest,
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(eligibility_checkin_result.status().message(), "foo");
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     // No RetryWindows were received from the server, so we expect to get a
     // RetryWindow generated based on the *permanent* errors retry delay flag,
     // since NOT_FOUND is marked as a permanent error in the flags.
@@ -642,11 +680,13 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinSendInterrupted) {
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(
+              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    }
     EXPECT_CALL(mock_log_manager_,
                 LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_GRPC));
   }
@@ -655,7 +695,7 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinSendInterrupted) {
       federated_protocol_->EligibilityEvalCheckin();
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(CANCELLED));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     // No RetryWindows were received from the server, so we expect to get a
     // RetryWindow generated based on the transient errors retry delay flag.
     ExpectTransientErrorRetryWindow(
@@ -685,11 +725,13 @@ TEST_P(FederatedProtocolTest,
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(
+              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and one receive
     // operations.
     EXPECT_CALL(
@@ -713,7 +755,7 @@ TEST_P(FederatedProtocolTest,
       federated_protocol_->EligibilityEvalCheckin();
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(UNIMPLEMENTED));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     // No RetryWindows were received from the server, so we expect to get a
     // RetryWindow generated based on the *permanent* errors retry delay flag,
     // since UNIMPLEMENTED is marked as a permanent error in the flags.
@@ -742,11 +784,13 @@ TEST_P(FederatedProtocolTest,
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(
+              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send operation but not
     // after the unsucessful read operation.
     EXPECT_CALL(
@@ -761,7 +805,7 @@ TEST_P(FederatedProtocolTest,
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(ABORTED));
   EXPECT_THAT(eligibility_checkin_result.status().message(), expected_message);
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     // No RetryWindows were received from the server, so we expect to get a
     // RetryWindow generated based on the transient errors retry delay flag.
     ExpectTransientErrorRetryWindow(
@@ -795,11 +839,13 @@ TEST_P(FederatedProtocolTest,
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(
+              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and one successful
     // receive operations.
     EXPECT_CALL(
@@ -819,7 +865,7 @@ TEST_P(FederatedProtocolTest,
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(ABORTED));
   EXPECT_THAT(eligibility_checkin_result.status().message(), expected_message);
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -844,11 +890,13 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(
+              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -862,10 +910,13 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
                         /*chunking_layer_bytes_downloaded=*/0,
                         /*chunking_layer_bytes_uploaded=*/0))
         .Times(2);
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalRejected(_, _, _));
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_,
+                  PublishEligibilityEvalRejected(_, _, _));
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED));
+    }
   }
 
   auto eligibility_checkin_result =
@@ -874,7 +925,7 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
   ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(*eligibility_checkin_result,
               VariantWith<FederatedProtocol::Rejection>(_));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -899,11 +950,13 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(
+              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -917,11 +970,13 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
                         /*chunking_layer_bytes_downloaded=*/0,
                         /*chunking_layer_bytes_uploaded=*/0))
         .Times(2);
-    EXPECT_CALL(mock_event_publisher_,
-                PublishEligibilityEvalNotConfigured(_, _, _));
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_,
+                  PublishEligibilityEvalNotConfigured(_, _, _));
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED));
+    }
   }
 
   auto eligibility_checkin_result =
@@ -930,7 +985,7 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
   ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(*eligibility_checkin_result,
               VariantWith<FederatedProtocol::EligibilityEvalDisabled>(_));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -964,11 +1019,13 @@ TEST_P(FederatedProtocolTest,
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(
+              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -992,8 +1049,10 @@ TEST_P(FederatedProtocolTest,
                         /*chunking_layer_bytes_uploaded=*/0));
     EXPECT_CALL(mock_event_publisher_,
                 SetModelIdentifier(expected_execution_id));
-    EXPECT_CALL(mock_event_publisher_,
-                PublishEligibilityEvalPlanReceived(_, _, _));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_,
+                  PublishEligibilityEvalPlanReceived(_, _, _));
+    }
     EXPECT_CALL(
         mock_log_manager_,
         LogDiag(
@@ -1005,7 +1064,7 @@ TEST_P(FederatedProtocolTest,
       federated_protocol_->EligibilityEvalCheckin();
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(INTERNAL));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -1037,11 +1096,13 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(
+              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -1065,11 +1126,13 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
                         /*chunking_layer_bytes_uploaded=*/0));
     EXPECT_CALL(mock_event_publisher_,
                 SetModelIdentifier(expected_execution_id));
-    EXPECT_CALL(mock_event_publisher_,
-                PublishEligibilityEvalPlanReceived(_, _, _));
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_,
+                  PublishEligibilityEvalPlanReceived(_, _, _));
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED));
+    }
   }
 
   auto eligibility_checkin_result =
@@ -1079,7 +1142,7 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   EXPECT_THAT(*eligibility_checkin_result,
               VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
                   EqualsProto(expected_plan), expected_checkpoint, _, _)));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -1090,7 +1153,7 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
 // Tests that the protocol correctly sanitizes any invalid values it may have
 // received from the server.
 TEST_P(FederatedProtocolTest, TestNegativeMinMaxRetryDelayValueSanitization) {
-  if (!GetParam()) {  // new retry delay behavior
+  if (!use_new_retry_delay_behavior_) {
     GTEST_SKIP() << "This test does not apply if the new retry behavior is not "
                     "turned on";
   }
@@ -1121,7 +1184,7 @@ TEST_P(FederatedProtocolTest, TestNegativeMinMaxRetryDelayValueSanitization) {
 // Tests that the protocol correctly sanitizes any invalid values it may have
 // received from the server.
 TEST_P(FederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
-  if (!GetParam()) {  // new retry delay behavior
+  if (!use_new_retry_delay_behavior_) {
     GTEST_SKIP() << "This test does not apply if the new retry behavior is not "
                     "turned on";
   }
@@ -1165,17 +1228,20 @@ TEST_P(FederatedProtocolTest, TestCheckinSendFailsTransientError) {
 
   {
     InSequence seq;
-    // We expect a PublishCheckin() but no PublishCheckinFinished() event, since
-    // the checkin fails.
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      // We expect a PublishCheckin() but no PublishCheckinFinished() event,
+      // since the checkin fails.
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
   }
 
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
   EXPECT_THAT(checkin_result.status(), IsCode(UNAVAILABLE));
   EXPECT_THAT(checkin_result.status().message(), "foo");
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     // No RetryWindows were received from the server, so we expect to get a
     // RetryWindow generated based on the transient errors retry delay flag.
     ExpectTransientErrorRetryWindow(
@@ -1197,17 +1263,20 @@ TEST_P(FederatedProtocolTest, TestCheckinSendFailsPermanentError) {
 
   {
     InSequence seq;
-    // We expect a PublishCheckin() but no PublishCheckinFinished() event, since
-    // the checkin fails.
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      // We expect a PublishCheckin() but no PublishCheckinFinished() event,
+      // since the checkin fails.
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
   }
 
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
   EXPECT_THAT(checkin_result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(checkin_result.status().message(), "foo");
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     // No RetryWindows were received from the server, so we expect to get a
     // RetryWindow generated based on the *permanent* errors retry delay flag,
     // since NOT_FOUND is marked as a permanent error in the flags.
@@ -1247,18 +1316,21 @@ TEST_P(FederatedProtocolTest, TestCheckinSendInterrupted) {
 
   {
     InSequence seq;
-    // We expect a PublishCheckin() but no PublishCheckinFinished() event, since
-    // the checkin is aborted.
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      // We expect a PublishCheckin() but no PublishCheckinFinished() event,
+      // since the checkin is aborted.
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     EXPECT_CALL(mock_log_manager_,
                 LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_GRPC));
   }
 
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
   EXPECT_THAT(checkin_result.status(), IsCode(CANCELLED));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     // No RetryWindows were received from the server, so we expect to get a
     // RetryWindow generated based on the transient errors retry delay flag.
     ExpectTransientErrorRetryWindow(
@@ -1285,11 +1357,14 @@ TEST_P(FederatedProtocolTest, TestCheckinMissingCheckinRequestAck) {
 
   {
     InSequence seq;
-    // We expect a PublishCheckin() but no PublishCheckinFinished() event, since
-    // the checkin never actually finishes.
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      // We expect a PublishCheckin() but no PublishCheckinFinished() event,
+      // since the checkin never actually finishes.
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and one receive
     // operations.
     EXPECT_CALL(
@@ -1312,7 +1387,7 @@ TEST_P(FederatedProtocolTest, TestCheckinMissingCheckinRequestAck) {
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
 
   EXPECT_THAT(checkin_result.status(), IsCode(UNIMPLEMENTED));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     // No RetryWindows were received from the server, so we expect to get a
     // RetryWindow generated based on the *permanent* errors retry delay flag,
     // since UNIMPLEMENTED is marked a permanent error in the flags.
@@ -1339,11 +1414,14 @@ TEST_P(FederatedProtocolTest, TestCheckinWaitForCheckinRequestAckFails) {
 
   {
     InSequence seq;
-    // We expect a PublishCheckin() but no PublishCheckinFinished() event, since
-    // the checkin is aborted.
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      // We expect a PublishCheckin() but no PublishCheckinFinished() event,
+      // since the checkin is aborted.
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send operation.
     EXPECT_CALL(
         mock_opstats_logger_,
@@ -1356,7 +1434,7 @@ TEST_P(FederatedProtocolTest, TestCheckinWaitForCheckinRequestAckFails) {
 
   EXPECT_THAT(checkin_result.status(), IsCode(ABORTED));
   EXPECT_THAT(checkin_result.status().message(), expected_message);
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     // No RetryWindows were received from the server, so we expect to get a
     // RetryWindow generated based on the transient errors retry delay flag.
     ExpectTransientErrorRetryWindow(
@@ -1395,11 +1473,14 @@ TEST_P(FederatedProtocolTest, TestCheckinWaitForCheckinResponseFails) {
 
   {
     InSequence seq;
-    // We expect a PublishCheckin() but no PublishCheckinFinished() event, since
-    // the checkin never actually finishes.
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      // We expect a PublishCheckin() but no PublishCheckinFinished() event,
+      // since the checkin never actually finishes.
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and one successful
     // receive operations.
     EXPECT_CALL(
@@ -1460,15 +1541,14 @@ TEST_P(FederatedProtocolTest,
 
   {
     InSequence seq;
-    // We expect the SetModelIdentifier method to be called before checkin,
-    // since the prior eligibility eval task identifier must be cleared.
-    EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
-    EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
-    // We expect a PublishCheckin() but no PublishCheckinFinished() event, since
-    // the checkin never actually finishes.
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      // We expect a PublishCheckin() but no PublishCheckinFinished() event,
+      // since the checkin never actually finishes.
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send operation. Note that
     // the eligibility eval checkin already ran.
     EXPECT_CALL(
@@ -1482,7 +1562,7 @@ TEST_P(FederatedProtocolTest,
 
   EXPECT_THAT(checkin_result.status(), IsCode(ABORTED));
   EXPECT_THAT(checkin_result.status().message(), expected_message);
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -1505,9 +1585,12 @@ TEST_P(FederatedProtocolTest, TestCheckinRejection) {
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -1531,17 +1614,20 @@ TEST_P(FederatedProtocolTest, TestCheckinRejection) {
                         /*chunking_layer_bytes_uploaded=*/0));
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
-    EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-    EXPECT_CALL(mock_event_publisher_, PublishRejected());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
+      EXPECT_CALL(mock_event_publisher_, PublishRejected());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
+    }
   }
 
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -1573,13 +1659,12 @@ TEST_P(FederatedProtocolTest,
 
   {
     InSequence seq;
-    // We expect the SetModelIdentifier method to be called before checkin,
-    // since the prior eligibility eval task identifier must be cleared.
-    EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
-    EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and one receive
     // operations. Note that the eligibility eval checkin already ran.
     EXPECT_CALL(
@@ -1588,12 +1673,16 @@ TEST_P(FederatedProtocolTest,
                         /*chunking_layer_bytes_downloaded=*/0,
                         /*chunking_layer_bytes_uploaded=*/0))
         .Times(2);
+
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
-    EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-    EXPECT_CALL(mock_event_publisher_, PublishRejected());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
+      EXPECT_CALL(mock_event_publisher_, PublishRejected());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
+    }
   }
 
   // Issue the regular checkin.
@@ -1601,7 +1690,7 @@ TEST_P(FederatedProtocolTest,
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -1634,9 +1723,12 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptWithInvalidPlan) {
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -1660,9 +1752,11 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptWithInvalidPlan) {
                         /*chunking_layer_bytes_uploaded=*/0));
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(kExecutionPhaseId));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
-    EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-    EXPECT_CALL(mock_opstats_logger_,
-                AddCheckinAcceptedEventWithTaskName(kTaskName));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
+      EXPECT_CALL(mock_opstats_logger_,
+                  AddCheckinAcceptedEventWithTaskName(kTaskName));
+    }
     EXPECT_CALL(
         mock_log_manager_,
         LogDiag(ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN));
@@ -1671,7 +1765,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptWithInvalidPlan) {
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
 
   EXPECT_THAT(checkin_result.status(), IsCode(INTERNAL));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -1697,9 +1791,12 @@ TEST_P(FederatedProtocolTest, TestCheckinAccept) {
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -1723,9 +1820,11 @@ TEST_P(FederatedProtocolTest, TestCheckinAccept) {
                         /*chunking_layer_bytes_uploaded=*/0));
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(kExecutionPhaseId));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
-    EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-    EXPECT_CALL(mock_opstats_logger_,
-                AddCheckinAcceptedEventWithTaskName(kTaskName));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
+      EXPECT_CALL(mock_opstats_logger_,
+                  AddCheckinAcceptedEventWithTaskName(kTaskName));
+    }
   }
 
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
@@ -1735,7 +1834,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAccept) {
       *checkin_result,
       VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
           EqualsProto(expected_plan), expected_checkpoint, kTaskName, _)));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -1768,9 +1867,12 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptLogChunkingLayerBandwidth) {
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -1798,11 +1900,13 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptLogChunkingLayerBandwidth) {
                         Eq(chunking_layer_bytes_uploaded)));
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(kExecutionPhaseId));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
-    EXPECT_CALL(
-        mock_event_publisher_,
-        PublishCheckinFinished(_, Eq(chunking_layer_bytes_downloaded), _));
-    EXPECT_CALL(mock_opstats_logger_,
-                AddCheckinAcceptedEventWithTaskName(kTaskName));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(
+          mock_event_publisher_,
+          PublishCheckinFinished(_, Eq(chunking_layer_bytes_downloaded), _));
+      EXPECT_CALL(mock_opstats_logger_,
+                  AddCheckinAcceptedEventWithTaskName(kTaskName));
+    }
   }
 
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
@@ -1812,7 +1916,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptLogChunkingLayerBandwidth) {
       *checkin_result,
       VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
           EqualsProto(expected_plan), expected_checkpoint, kTaskName, _)));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -1848,13 +1952,12 @@ TEST_P(FederatedProtocolTest,
 
   {
     InSequence seq;
-    // We expect the SetModelIdentifier method to be called before checkin,
-    // since the prior eligibility eval task identifier must be cleared.
-    EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
-    EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and one receive
     // operations. Note that the eligibility eval checkin already ran.
     EXPECT_CALL(
@@ -1865,9 +1968,11 @@ TEST_P(FederatedProtocolTest,
         .Times(2);
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(kExecutionPhaseId));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
-    EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-    EXPECT_CALL(mock_opstats_logger_,
-                AddCheckinAcceptedEventWithTaskName(kTaskName));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
+      EXPECT_CALL(mock_opstats_logger_,
+                  AddCheckinAcceptedEventWithTaskName(kTaskName));
+    }
   }
 
   // Issue the regular checkin.
@@ -1878,7 +1983,7 @@ TEST_P(FederatedProtocolTest,
       *checkin_result,
       VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
           EqualsProto(expected_plan), expected_checkpoint, kTaskName, _)));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -1905,9 +2010,12 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptUnparseableExecutionPhaseId) {
 
   {
     InSequence seq;
-    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    }
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -1932,11 +2040,15 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptUnparseableExecutionPhaseId) {
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(unparseable_phase_id));
     EXPECT_CALL(mock_event_publisher_,
                 SetModelIdentifier(unparseable_phase_id));
-    EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
+    }
     EXPECT_CALL(mock_log_manager_,
                 LogDiag(ProdDiagCode::OPSTATS_TASK_NAME_EXTRACTION_FAILED));
-    EXPECT_CALL(mock_opstats_logger_,
-                AddCheckinAcceptedEventWithTaskName(unparseable_phase_id));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_opstats_logger_,
+                  AddCheckinAcceptedEventWithTaskName(unparseable_phase_id));
+    }
   }
 
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
@@ -1945,7 +2057,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptUnparseableExecutionPhaseId) {
   EXPECT_THAT(*checkin_result,
               VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
                   EqualsProto(expected_plan), expected_checkpoint, _, _)));
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -2029,11 +2141,13 @@ TEST_P(FederatedProtocolTest, TestReportSendFails) {
       .WillOnce(Return(absl::AbortedError("foo")));
   {
     InSequence seq;
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
-    EXPECT_CALL(
-        mock_event_publisher_,
-        PublishReportStarted(expected_client_stream_message.ByteSizeLong()));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_opstats_logger_,
+                  AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+      EXPECT_CALL(
+          mock_event_publisher_,
+          PublishReportStarted(expected_client_stream_message.ByteSizeLong()));
+    }
   }
 
   // 4. Test that ReportCompleted() sends the expected message.
@@ -2045,7 +2159,7 @@ TEST_P(FederatedProtocolTest, TestReportSendFails) {
   // If we made it to the Report protocol phase, then the client must've been
   // accepted during the Checkin phase first, and so we should receive the
   // "accepted" RetryWindow.
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {
     ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -2072,9 +2186,11 @@ TEST_P(FederatedProtocolTest, TestPublishReportSuccess) {
           DoAll(SetArgPointee<0>(response_message), Return(absl::OkStatus())));
   {
     InSequence seq;
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
-    EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_opstats_logger_,
+                  AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+      EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
+    }
     // Network stats should be updated after the one send and one receive
     // operations.
     EXPECT_CALL(
@@ -2083,9 +2199,12 @@ TEST_P(FederatedProtocolTest, TestPublishReportSuccess) {
                         /*chunking_layer_bytes_downloaded=*/0,
                         /*chunking_layer_bytes_uploaded=*/0))
         .Times(2);
-    EXPECT_CALL(mock_event_publisher_, PublishReportFinished(_, _, _));
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishReportFinished(_, _, _));
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
+    }
   }
 
   // 3. Test that ReportCompleted() sends the expected message.
@@ -2096,7 +2215,7 @@ TEST_P(FederatedProtocolTest, TestPublishReportSuccess) {
   // If we made it to the Report protocol phase, then the client must've been
   // accepted during the Checkin phase first, and so we should receive the
   // "accepted" RetryWindow.
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -2132,11 +2251,13 @@ TEST_P(FederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
       .WillOnce(Return(absl::AbortedError("foo")));
   {
     InSequence seq;
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
-    EXPECT_CALL(
-        mock_event_publisher_,
-        PublishReportStarted(expected_client_stream_message.ByteSizeLong()));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_opstats_logger_,
+                  AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+      EXPECT_CALL(
+          mock_event_publisher_,
+          PublishReportStarted(expected_client_stream_message.ByteSizeLong()));
+    }
   }
 
   // 4. Test that ReportNotCompleted() sends the expected message.
@@ -2148,7 +2269,7 @@ TEST_P(FederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
   // If we made it to the Report protocol phase, then the client must've been
   // accepted during the Checkin phase first, and so we should receive the
   // "accepted" RetryWindow.
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
@@ -2177,11 +2298,13 @@ TEST_P(FederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
           DoAll(SetArgPointee<0>(response_message), Return(absl::OkStatus())));
   {
     InSequence seq;
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
-    EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
-        .WillOnce(Return(absl::OkStatus()));
-    EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_opstats_logger_,
+                  AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+      EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
+          .WillOnce(Return(absl::OkStatus()));
+      EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
+    }
     // Network stats should be updated after the one send and one receive
     // operations.
     EXPECT_CALL(
@@ -2190,9 +2313,12 @@ TEST_P(FederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
                         /*chunking_layer_bytes_downloaded=*/0,
                         /*chunking_layer_bytes_uploaded=*/0))
         .Times(2);
-    EXPECT_CALL(mock_event_publisher_, PublishReportFinished(_, _, _));
-    EXPECT_CALL(mock_opstats_logger_,
-                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_, PublishReportFinished(_, _, _));
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
+    }
   }
 
   // 3. Test that ReportCompleted() sends the expected message.
@@ -2203,7 +2329,7 @@ TEST_P(FederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
   // If we made it to the Report protocol phase, then the client must've been
   // accepted during the Checkin phase first, and so we should receive the
   // "accepted" RetryWindow.
-  if (GetParam()) {  // new retry delay behavior
+  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
     ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
   } else {
     EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
