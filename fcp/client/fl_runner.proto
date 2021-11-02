@@ -33,8 +33,7 @@ message FLRunnerResult {
   // A RetryWindow returned to the caller for consideration in scheduling future
   // runs of this task.
   // TODO(team): Replace this type with a new type that only contains a
-  // single concrete retry period value rather than a (min,max) range, once
-  // the federated_training_use_new_retry_delay_behavior flag is rolled out.
+  // single concrete retry period value rather than a (min,max) range.
   google.internal.federatedml.v2.RetryWindow retry_window = 4;
   // An enum that summarizes whether the client has contributed to an FL/FA
   // round.

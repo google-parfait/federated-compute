@@ -418,9 +418,6 @@ class FederatedProtocol {
   // TODO(team): Delete these fields after rollout is complete.
   google::internal::federatedml::v2::RetryWindow retry_window_if_accepted_;
   google::internal::federatedml::v2::RetryWindow retry_window_if_rejected_;
-  // We store this flag value as a class member field, to ensure its value
-  // cannot change across the life of this instance.
-  const bool federated_training_use_new_retry_delay_behavior_;
   // Represents 2 absolute retry timestamps and their corresponding retry
   // tokens, to use when the device is rejected or accepted. The retry
   // timestamps will have been generated based on the retry windows specified in
@@ -431,8 +428,7 @@ class FederatedProtocol {
     RetryTimeAndToken retry_info_if_accepted;
   };
   // Represents the information received via the CheckinRequestAck message.
-  // This field will have an absent value until that message has been received,
-  // or when the federated_training_use_new_retry_delay_behavior_ flag is false.
+  // This field will have an absent value until that message has been received.
   absl::optional<CheckinRequestAckInfo> checkin_request_ack_info_;
   // The identifier of the task that was received in a CheckinResponse. Note
   // that this does not refer to the identifier of the eligbility eval task that

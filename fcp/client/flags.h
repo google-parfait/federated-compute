@@ -70,19 +70,6 @@ class Flags {
   // use the same underlying file.
   virtual bool opstats_enforce_singleton() const { return false; }
 
-  // This flag controls 2 changes:
-  // - Whether we should should calculate a specific retry delay to use, and
-  //   return it as RetryWindow result where `delay_min` and `delay_max` fields
-  //   are set to the same value, or whether we should let the caller calculate
-  //   the specific retry delay to use using a range specified by non-equal
-  //   `delay_min` and `delay_max` fields.
-  // - Whether to use the `federated_training_transient_errors_retry_delay_secs`
-  //   and `federated_training_permanent_errors_retry_delay_secs` and related
-  //   flags below.
-  virtual bool federated_training_use_new_retry_delay_behavior() const {
-    return true;
-  }
-
   // The retry delay to use when encountering a transient error during a
   // training run before having received a RetryWindow from the server.
   virtual int64_t federated_training_transient_errors_retry_delay_secs() const {

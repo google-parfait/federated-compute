@@ -313,37 +313,30 @@ class FederatedProtocolTest
 
  protected:
   void SetUp() override {
-    use_new_retry_delay_behavior_ = std::get<0>(GetParam());
-    use_per_phase_logging_ = std::get<1>(GetParam());
-    EXPECT_CALL(mock_flags_, federated_training_use_new_retry_delay_behavior)
-        .WillRepeatedly(Return(use_new_retry_delay_behavior_));
+    use_per_phase_logging_ = std::get<0>(GetParam());
     EXPECT_CALL(mock_flags_, per_phase_logs)
         .WillRepeatedly(Return(use_per_phase_logging_));
     EXPECT_CALL(*mock_grpc_bidi_stream_, ChunkingLayerBytesReceived())
         .WillRepeatedly(Return(0));
     EXPECT_CALL(*mock_grpc_bidi_stream_, ChunkingLayerBytesSent())
         .WillRepeatedly(Return(0));
-    if (use_new_retry_delay_behavior_) {
-      EXPECT_CALL(mock_flags_,
-                  federated_training_transient_errors_retry_delay_secs)
-          .WillRepeatedly(Return(kTransientErrorsRetryPeriodSecs));
-      EXPECT_CALL(
-          mock_flags_,
-          federated_training_transient_errors_retry_delay_jitter_percent)
-          .WillRepeatedly(Return(kTransientErrorsRetryDelayJitterPercent));
-      EXPECT_CALL(mock_flags_,
-                  federated_training_permanent_errors_retry_delay_secs)
-          .WillRepeatedly(Return(kPermanentErrorsRetryPeriodSecs));
-      EXPECT_CALL(
-          mock_flags_,
-          federated_training_permanent_errors_retry_delay_jitter_percent)
-          .WillRepeatedly(Return(kPermanentErrorsRetryDelayJitterPercent));
-      EXPECT_CALL(mock_flags_, federated_training_permanent_error_codes)
-          .WillRepeatedly(Return(std::vector<int32_t>{
-              static_cast<int32_t>(absl::StatusCode::kNotFound),
-              static_cast<int32_t>(absl::StatusCode::kInvalidArgument),
-              static_cast<int32_t>(absl::StatusCode::kUnimplemented)}));
-    }
+    EXPECT_CALL(mock_flags_,
+                federated_training_transient_errors_retry_delay_secs)
+        .WillRepeatedly(Return(kTransientErrorsRetryPeriodSecs));
+    EXPECT_CALL(mock_flags_,
+                federated_training_transient_errors_retry_delay_jitter_percent)
+        .WillRepeatedly(Return(kTransientErrorsRetryDelayJitterPercent));
+    EXPECT_CALL(mock_flags_,
+                federated_training_permanent_errors_retry_delay_secs)
+        .WillRepeatedly(Return(kPermanentErrorsRetryPeriodSecs));
+    EXPECT_CALL(mock_flags_,
+                federated_training_permanent_errors_retry_delay_jitter_percent)
+        .WillRepeatedly(Return(kPermanentErrorsRetryDelayJitterPercent));
+    EXPECT_CALL(mock_flags_, federated_training_permanent_error_codes)
+        .WillRepeatedly(Return(std::vector<int32_t>{
+            static_cast<int32_t>(absl::StatusCode::kNotFound),
+            static_cast<int32_t>(absl::StatusCode::kInvalidArgument),
+            static_cast<int32_t>(absl::StatusCode::kUnimplemented)}));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -543,10 +536,6 @@ INSTANTIATE_TEST_SUITE_P(
 
 TEST_P(FederatedProtocolTest,
        TestTransientErrorRetryWindowDifferentAcrossDifferentInstances) {
-  if (!use_new_retry_delay_behavior_) {
-    GTEST_SKIP() << "This test does not apply if the new retry behavior is not "
-                    "turned on";
-  }
   const RetryWindow& retry_window1 =
       federated_protocol_->GetLatestRetryWindow();
   ExpectTransientErrorRetryWindow(retry_window1);
@@ -602,17 +591,9 @@ TEST_P(FederatedProtocolTest,
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(UNAVAILABLE));
   EXPECT_THAT(eligibility_checkin_result.status().message(), "foo");
-  if (use_new_retry_delay_behavior_) {
-    // No RetryWindows were received from the server, so we expect to get a
-    // RetryWindow generated based on the transient errors retry delay flag.
-    ExpectTransientErrorRetryWindow(
-        federated_protocol_->GetLatestRetryWindow());
-  } else {
-    // No RetryWindows were received from the server, so we expect the latest
-    // one to be the default instance.
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(RetryWindow()));
-  }
+  // No RetryWindows were received from the server, so we expect to get a
+  // RetryWindow generated based on the transient errors retry delay flag.
+  ExpectTransientErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest,
@@ -639,18 +620,10 @@ TEST_P(FederatedProtocolTest,
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(eligibility_checkin_result.status().message(), "foo");
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    // No RetryWindows were received from the server, so we expect to get a
-    // RetryWindow generated based on the *permanent* errors retry delay flag,
-    // since NOT_FOUND is marked as a permanent error in the flags.
-    ExpectPermanentErrorRetryWindow(
-        federated_protocol_->GetLatestRetryWindow());
-  } else {
-    // No RetryWindows were received from the server, so we expect the latest
-    // one to be the default instance.
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(RetryWindow()));
-  }
+  // No RetryWindows were received from the server, so we expect to get a
+  // RetryWindow generated based on the *permanent* errors retry delay flag,
+  // since NOT_FOUND is marked as a permanent error in the flags.
+  ExpectPermanentErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 // Tests the case where the blocking Send() call in EligibilityEvalCheckin is
@@ -695,17 +668,9 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinSendInterrupted) {
       federated_protocol_->EligibilityEvalCheckin();
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(CANCELLED));
-  if (use_new_retry_delay_behavior_) {
-    // No RetryWindows were received from the server, so we expect to get a
-    // RetryWindow generated based on the transient errors retry delay flag.
-    ExpectTransientErrorRetryWindow(
-        federated_protocol_->GetLatestRetryWindow());
-  } else {
-    // No RetryWindows were received from the server, so we expect the latest
-    // one to be the default instance.
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(RetryWindow()));
-  }
+  // No RetryWindows were received from the server, so we expect to get a
+  // RetryWindow generated based on the transient errors retry delay flag.
+  ExpectTransientErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 // If a CheckinRequestAck is requested in the ProtocolOptionsRequest but not
@@ -755,18 +720,10 @@ TEST_P(FederatedProtocolTest,
       federated_protocol_->EligibilityEvalCheckin();
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(UNIMPLEMENTED));
-  if (use_new_retry_delay_behavior_) {
-    // No RetryWindows were received from the server, so we expect to get a
-    // RetryWindow generated based on the *permanent* errors retry delay flag,
-    // since UNIMPLEMENTED is marked as a permanent error in the flags.
-    ExpectPermanentErrorRetryWindow(
-        federated_protocol_->GetLatestRetryWindow());
-  } else {
-    // No RetryWindows were received from the server, so we expect the latest
-    // one to be the default instance.
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(RetryWindow()));
-  }
+  // No RetryWindows were received from the server, so we expect to get a
+  // RetryWindow generated based on the *permanent* errors retry delay flag,
+  // since UNIMPLEMENTED is marked as a permanent error in the flags.
+  ExpectPermanentErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest,
@@ -805,17 +762,9 @@ TEST_P(FederatedProtocolTest,
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(ABORTED));
   EXPECT_THAT(eligibility_checkin_result.status().message(), expected_message);
-  if (use_new_retry_delay_behavior_) {
-    // No RetryWindows were received from the server, so we expect to get a
-    // RetryWindow generated based on the transient errors retry delay flag.
-    ExpectTransientErrorRetryWindow(
-        federated_protocol_->GetLatestRetryWindow());
-  } else {
-    // No RetryWindows were received from the server, so we expect the latest
-    // one to be the default instance.
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(RetryWindow()));
-  }
+  // No RetryWindows were received from the server, so we expect to get a
+  // RetryWindow generated based on the transient errors retry delay flag.
+  ExpectTransientErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest,
@@ -865,12 +814,7 @@ TEST_P(FederatedProtocolTest,
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(ABORTED));
   EXPECT_THAT(eligibility_checkin_result.status().message(), expected_message);
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
@@ -925,12 +869,7 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
   ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(*eligibility_checkin_result,
               VariantWith<FederatedProtocol::Rejection>(_));
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
@@ -985,12 +924,7 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
   ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(*eligibility_checkin_result,
               VariantWith<FederatedProtocol::EligibilityEvalDisabled>(_));
-  if (use_new_retry_delay_behavior_) {
-    ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest,
@@ -1064,12 +998,7 @@ TEST_P(FederatedProtocolTest,
       federated_protocol_->EligibilityEvalCheckin();
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(INTERNAL));
-  if (use_new_retry_delay_behavior_) {
-    ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
@@ -1142,22 +1071,12 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   EXPECT_THAT(*eligibility_checkin_result,
               VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
                   EqualsProto(expected_plan), expected_checkpoint, _, _)));
-  if (use_new_retry_delay_behavior_) {
-    ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 // Tests that the protocol correctly sanitizes any invalid values it may have
 // received from the server.
 TEST_P(FederatedProtocolTest, TestNegativeMinMaxRetryDelayValueSanitization) {
-  if (!use_new_retry_delay_behavior_) {
-    GTEST_SKIP() << "This test does not apply if the new retry behavior is not "
-                    "turned on";
-  }
-
   google::internal::federatedml::v2::RetryWindow retry_window;
   retry_window.mutable_delay_min()->set_seconds(-1);
   retry_window.mutable_delay_max()->set_seconds(-2);
@@ -1184,11 +1103,6 @@ TEST_P(FederatedProtocolTest, TestNegativeMinMaxRetryDelayValueSanitization) {
 // Tests that the protocol correctly sanitizes any invalid values it may have
 // received from the server.
 TEST_P(FederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
-  if (!use_new_retry_delay_behavior_) {
-    GTEST_SKIP() << "This test does not apply if the new retry behavior is not "
-                    "turned on";
-  }
-
   google::internal::federatedml::v2::RetryWindow retry_window;
   retry_window.mutable_delay_min()->set_seconds(1234);
   retry_window.mutable_delay_max()->set_seconds(1233);  // less than delay_min
@@ -1241,17 +1155,9 @@ TEST_P(FederatedProtocolTest, TestCheckinSendFailsTransientError) {
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
   EXPECT_THAT(checkin_result.status(), IsCode(UNAVAILABLE));
   EXPECT_THAT(checkin_result.status().message(), "foo");
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    // No RetryWindows were received from the server, so we expect to get a
-    // RetryWindow generated based on the transient errors retry delay flag.
-    ExpectTransientErrorRetryWindow(
-        federated_protocol_->GetLatestRetryWindow());
-  } else {
-    // No RetryWindows were received from the server, so we expect the latest
-    // one to be the default instance.
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(RetryWindow()));
-  }
+  // No RetryWindows were received from the server, so we expect to get a
+  // RetryWindow generated based on the transient errors retry delay flag.
+  ExpectTransientErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestCheckinSendFailsPermanentError) {
@@ -1276,18 +1182,10 @@ TEST_P(FederatedProtocolTest, TestCheckinSendFailsPermanentError) {
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
   EXPECT_THAT(checkin_result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(checkin_result.status().message(), "foo");
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    // No RetryWindows were received from the server, so we expect to get a
-    // RetryWindow generated based on the *permanent* errors retry delay flag,
-    // since NOT_FOUND is marked as a permanent error in the flags.
-    ExpectPermanentErrorRetryWindow(
-        federated_protocol_->GetLatestRetryWindow());
-  } else {
-    // No RetryWindows were received from the server, so we expect the latest
-    // one to be the default instance.
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(RetryWindow()));
-  }
+  // No RetryWindows were received from the server, so we expect to get a
+  // RetryWindow generated based on the *permanent* errors retry delay flag,
+  // since NOT_FOUND is marked as a permanent error in the flags.
+  ExpectPermanentErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 // Tests the case where the blocking Send() call in Checkin is interrupted.
@@ -1330,17 +1228,9 @@ TEST_P(FederatedProtocolTest, TestCheckinSendInterrupted) {
 
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
   EXPECT_THAT(checkin_result.status(), IsCode(CANCELLED));
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    // No RetryWindows were received from the server, so we expect to get a
-    // RetryWindow generated based on the transient errors retry delay flag.
-    ExpectTransientErrorRetryWindow(
-        federated_protocol_->GetLatestRetryWindow());
-  } else {
-    // No RetryWindows were received from the server, so we expect the latest
-    // one to be the default instance.
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(RetryWindow()));
-  }
+  // No RetryWindows were received from the server, so we expect to get a
+  // RetryWindow generated based on the transient errors retry delay flag.
+  ExpectTransientErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 // If a CheckinRequestAck is requested in the ProtocolOptionsRequest but not
@@ -1387,18 +1277,10 @@ TEST_P(FederatedProtocolTest, TestCheckinMissingCheckinRequestAck) {
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
 
   EXPECT_THAT(checkin_result.status(), IsCode(UNIMPLEMENTED));
-  if (use_new_retry_delay_behavior_) {
-    // No RetryWindows were received from the server, so we expect to get a
-    // RetryWindow generated based on the *permanent* errors retry delay flag,
-    // since UNIMPLEMENTED is marked a permanent error in the flags.
-    ExpectPermanentErrorRetryWindow(
-        federated_protocol_->GetLatestRetryWindow());
-  } else {
-    // No RetryWindows were received from the server, so we expect the latest
-    // one to be the default instance.
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(RetryWindow()));
-  }
+  // No RetryWindows were received from the server, so we expect to get a
+  // RetryWindow generated based on the *permanent* errors retry delay flag,
+  // since UNIMPLEMENTED is marked a permanent error in the flags.
+  ExpectPermanentErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestCheckinWaitForCheckinRequestAckFails) {
@@ -1434,17 +1316,9 @@ TEST_P(FederatedProtocolTest, TestCheckinWaitForCheckinRequestAckFails) {
 
   EXPECT_THAT(checkin_result.status(), IsCode(ABORTED));
   EXPECT_THAT(checkin_result.status().message(), expected_message);
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    // No RetryWindows were received from the server, so we expect to get a
-    // RetryWindow generated based on the transient errors retry delay flag.
-    ExpectTransientErrorRetryWindow(
-        federated_protocol_->GetLatestRetryWindow());
-  } else {
-    // No RetryWindows were received from the server, so we expect the latest
-    // one to be the default instance.
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(RetryWindow()));
-  }
+  // No RetryWindows were received from the server, so we expect to get a
+  // RetryWindow generated based on the transient errors retry delay flag.
+  ExpectTransientErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 // Tests the case where the server sends an immediate CheckinRequestAck, but
@@ -1562,12 +1436,7 @@ TEST_P(FederatedProtocolTest,
 
   EXPECT_THAT(checkin_result.status(), IsCode(ABORTED));
   EXPECT_THAT(checkin_result.status().message(), expected_message);
-  if (use_new_retry_delay_behavior_) {
-    ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestCheckinRejection) {
@@ -1627,12 +1496,7 @@ TEST_P(FederatedProtocolTest, TestCheckinRejection) {
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest,
@@ -1690,12 +1554,7 @@ TEST_P(FederatedProtocolTest,
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestCheckinAcceptWithInvalidPlan) {
@@ -1765,12 +1624,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptWithInvalidPlan) {
   auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
 
   EXPECT_THAT(checkin_result.status(), IsCode(INTERNAL));
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestCheckinAccept) {
@@ -1834,12 +1688,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAccept) {
       *checkin_result,
       VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
           EqualsProto(expected_plan), expected_checkpoint, kTaskName, _)));
-  if (use_new_retry_delay_behavior_) {
-    ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestCheckinAcceptLogChunkingLayerBandwidth) {
@@ -1916,12 +1765,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptLogChunkingLayerBandwidth) {
       *checkin_result,
       VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
           EqualsProto(expected_plan), expected_checkpoint, kTaskName, _)));
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest,
@@ -1983,12 +1827,7 @@ TEST_P(FederatedProtocolTest,
       *checkin_result,
       VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
           EqualsProto(expected_plan), expected_checkpoint, kTaskName, _)));
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestCheckinAcceptUnparseableExecutionPhaseId) {
@@ -2057,12 +1896,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptUnparseableExecutionPhaseId) {
   EXPECT_THAT(*checkin_result,
               VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
                   EqualsProto(expected_plan), expected_checkpoint, _, _)));
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(expected_retry_window));
-  }
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_P(FederatedProtocolTest, TestReportWithSecAggReachesSecAggClientStart) {
@@ -2159,12 +1993,7 @@ TEST_P(FederatedProtocolTest, TestReportSendFails) {
   // If we made it to the Report protocol phase, then the client must've been
   // accepted during the Checkin phase first, and so we should receive the
   // "accepted" RetryWindow.
-  if (use_new_retry_delay_behavior_) {
-    ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(GetAcceptedRetryWindow()));
-  }
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 // This function tests the happy path of ReportCompleted() - results get
@@ -2215,12 +2044,7 @@ TEST_P(FederatedProtocolTest, TestPublishReportSuccess) {
   // If we made it to the Report protocol phase, then the client must've been
   // accepted during the Checkin phase first, and so we should receive the
   // "accepted" RetryWindow.
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(GetAcceptedRetryWindow()));
-  }
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 // This function tests the Send code path when PhaseOutcome indicates an
@@ -2269,12 +2093,7 @@ TEST_P(FederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
   // If we made it to the Report protocol phase, then the client must've been
   // accepted during the Checkin phase first, and so we should receive the
   // "accepted" RetryWindow.
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(GetAcceptedRetryWindow()));
-  }
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 // This function tests the happy path of ReportCompleted() - results get
@@ -2329,12 +2148,7 @@ TEST_P(FederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
   // If we made it to the Report protocol phase, then the client must've been
   // accepted during the Checkin phase first, and so we should receive the
   // "accepted" RetryWindow.
-  if (use_new_retry_delay_behavior_) {  // new retry delay behavior
-    ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-  } else {
-    EXPECT_THAT(federated_protocol_->GetLatestRetryWindow(),
-                EqualsProto(GetAcceptedRetryWindow()));
-  }
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 }  // anonymous namespace

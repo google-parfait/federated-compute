@@ -216,9 +216,7 @@ FederatedProtocol::FederatedProtocol(
       retry_token_(retry_token),
       client_version_(client_version),
       attestation_measurement_(attestation_measurement),
-      bit_gen_(std::move(bit_gen)),
-      federated_training_use_new_retry_delay_behavior_(
-          flags_->federated_training_use_new_retry_delay_behavior()) {
+      bit_gen_(std::move(bit_gen)) {
   interruptible_runner_ = absl::make_unique<InterruptibleRunner>(
       log_manager, should_abort, timing_config,
       InterruptibleRunner::DiagnosticsConfig{
@@ -229,23 +227,16 @@ FederatedProtocol::FederatedProtocol(
               BACKGROUND_TRAINING_INTERRUPT_GRPC_EXTENDED_COMPLETED,
           .interrupt_timeout_extended = ProdDiagCode::
               BACKGROUND_TRAINING_INTERRUPT_GRPC_EXTENDED_TIMED_OUT});
-  if (flags->federated_training_use_new_retry_delay_behavior()) {
-    // Note that if this flag is false then the
-    // federated_training_permanent_error_codes_ set will be empty, which
-    // effectively prevents us from ever entering the newly added permanent
-    // error ObjectStates.
-    //
-    // Note that we could cast the provided error codes to absl::StatusCode
-    // values here. However, that means we'd have to handle the case when
-    // invalid integers that don't map to a StatusCode enum are provided in the
-    // flag here. Instead, we cast absl::StatusCodes to int32_t each time we
-    // compare them with the flag-provided list of codes, which means we never
-    // have to worry about invalid flag values.
-    const std::vector<int32_t>& error_codes =
-        flags->federated_training_permanent_error_codes();
-    federated_training_permanent_error_codes_ =
-        absl::flat_hash_set<int32_t>(error_codes.begin(), error_codes.end());
-  }
+  // Note that we could cast the provided error codes to absl::StatusCode
+  // values here. However, that means we'd have to handle the case when
+  // invalid integers that don't map to a StatusCode enum are provided in the
+  // flag here. Instead, we cast absl::StatusCodes to int32_t each time we
+  // compare them with the flag-provided list of codes, which means we never
+  // have to worry about invalid flag values.
+  const std::vector<int32_t>& error_codes =
+      flags->federated_training_permanent_error_codes();
+  federated_training_permanent_error_codes_ =
+      absl::flat_hash_set<int32_t>(error_codes.begin(), error_codes.end());
 }
 
 FederatedProtocol::~FederatedProtocol() { grpc_bidi_stream_->Close(); }
@@ -375,28 +366,26 @@ absl::Status FederatedProtocol::ReceiveCheckinRequestAck() {
   }
   retry_window_if_rejected_ = checkin_request_ack.retry_window_if_rejected();
   retry_window_if_accepted_ = checkin_request_ack.retry_window_if_accepted();
-  if (federated_training_use_new_retry_delay_behavior_) {
-    // If the flag is on, then upon receiving the server's RetryWindows we
-    // immediately choose a concrete target timestamp to retry at. This ensures
-    // that a) clients of this class don't have to implement the logic to select
-    // a timestamp from a min/max range themselves, b) we tell clients of this
-    // class to come back at exactly a point in time the server intended us to
-    // come at (i.e. "now + server_specified_retry_period", and not a point in
-    // time that is partly determined by how long the remaining protocol
-    // interactions (e.g. training and results upload) will take (i.e. "now +
-    // duration_of_remaining_protocol_interactions +
-    // server_specified_retry_period").
-    checkin_request_ack_info_ = CheckinRequestAckInfo{
-        .retry_info_if_rejected =
-            RetryTimeAndToken{
-                PickRetryTimeFromWindow(
-                    checkin_request_ack.retry_window_if_rejected(), bit_gen_),
-                checkin_request_ack.retry_window_if_rejected().retry_token()},
-        .retry_info_if_accepted = RetryTimeAndToken{
-            PickRetryTimeFromWindow(
-                checkin_request_ack.retry_window_if_accepted(), bit_gen_),
-            checkin_request_ack.retry_window_if_accepted().retry_token()}};
-  }
+  // Upon receiving the server's RetryWindows we immediately choose a concrete
+  // target timestamp to retry at. This ensures that a) clients of this class
+  // don't have to implement the logic to select a timestamp from a min/max
+  // range themselves, b) we tell clients of this class to come back at exactly
+  // a point in time the server intended us to come at (i.e. "now +
+  // server_specified_retry_period", and not a point in time that is partly
+  // determined by how long the remaining protocol interactions (e.g. training
+  // and results upload) will take (i.e. "now +
+  // duration_of_remaining_protocol_interactions +
+  // server_specified_retry_period").
+  checkin_request_ack_info_ = CheckinRequestAckInfo{
+      .retry_info_if_rejected =
+          RetryTimeAndToken{
+              PickRetryTimeFromWindow(
+                  checkin_request_ack.retry_window_if_rejected(), bit_gen_),
+              checkin_request_ack.retry_window_if_rejected().retry_token()},
+      .retry_info_if_accepted = RetryTimeAndToken{
+          PickRetryTimeFromWindow(
+              checkin_request_ack.retry_window_if_accepted(), bit_gen_),
+          checkin_request_ack.retry_window_if_accepted().retry_token()}};
   return absl::OkStatus();
 }
 
@@ -1108,9 +1097,6 @@ RetryWindow FederatedProtocol::GetLatestRetryWindow() {
       // 'accepted' RetryWindow unconditionally (unless a permanent error is
       // encountered). This includes cases where the checkin is accepted, but
       // the report request results in a (transient) error.
-      if (!federated_training_use_new_retry_delay_behavior_) {
-        return retry_window_if_accepted_;
-      }
       FCP_CHECK(checkin_request_ack_info_.has_value());
       return GenerateRetryWindowFromRetryTimeAndToken(
           checkin_request_ack_info_->retry_info_if_accepted);
@@ -1118,25 +1104,12 @@ RetryWindow FederatedProtocol::GetLatestRetryWindow() {
     case ObjectState::kEligibilityEvalDisabled:
     case ObjectState::kEligibilityEvalEnabled:
     case ObjectState::kCheckinRejected:
-      if (!federated_training_use_new_retry_delay_behavior_) {
-        return retry_window_if_rejected_;
-      }
       FCP_CHECK(checkin_request_ack_info_.has_value());
       return GenerateRetryWindowFromRetryTimeAndToken(
           checkin_request_ack_info_->retry_info_if_rejected);
     case ObjectState::kInitialized:
     case ObjectState::kEligibilityEvalCheckinFailed:
     case ObjectState::kCheckinFailed:
-      if (!federated_training_use_new_retry_delay_behavior_) {
-        // Note: if state is kInitialized then we will not yet have received any
-        // RetryWindows from the server. This can also be (but isn't always) the
-        // case with kEligibilityEvalCheckinFailed and kCheckinFailed. However,
-        // in these cases retry_window_if_rejected_ will still be initialized to
-        // the default RetryWindow instance, which is the right value to return
-        // in that case (as long as the
-        // federated_training_use_new_retry_delay_behavior_ flag is false).
-        return retry_window_if_rejected_;
-      }
       // If the flag is true, then we use the previously chosen absolute retry
       // time instead (if available).
       if (checkin_request_ack_info_.has_value()) {
@@ -1157,13 +1130,6 @@ RetryWindow FederatedProtocol::GetLatestRetryWindow() {
     case ObjectState::kEligibilityEvalCheckinFailedPermanentError:
     case ObjectState::kCheckinFailedPermanentError:
     case ObjectState::kReportFailedPermanentError:
-      if (!federated_training_use_new_retry_delay_behavior_) {
-        // If the above flag is off, then we don't expect to ever enter these
-        // 'permanent' error states. However, for extra safety while the flag
-        // rolls out we do handle them just like the other 'rejected' states.
-        // This is closest to the pre-flag behavior.
-        return retry_window_if_rejected_;
-      }
       // If we encountered a permanent error during the eligibility eval or
       // regular checkins, then we use the Flags-configured 'permanent error'
       // retry period. Note that we do so regardless of whether the server had,

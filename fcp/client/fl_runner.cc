@@ -649,28 +649,6 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           flags->tf_execution_teardown_extended_period_millis()),
   };
 
-  bool flag = flags->federated_training_use_new_retry_delay_behavior();
-  if (!flag) {
-    // TODO(team): Remove this block once the above flag has rolled out,
-    // since it's been moved into the other RunFederatedComputation function
-    // below.
-
-    // Check if the device conditions allow for checking in with the server and
-    // running a federated computation. If not, return a default RetryWindow.
-    bool should_abort =
-        env_deps->ShouldAbort(absl::Now(), timing_config.polling_period);
-    if (should_abort) {
-      std::string message =
-          "Device conditions not satisfied, aborting federated computation";
-      FCP_LOG(INFO) << message;
-      opstats_logger->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, message);
-      *fl_runner_result.mutable_retry_window() = RetryWindow();
-      fl_runner_result.set_contribution_result(FLRunnerResult::FAIL);
-      return fl_runner_result;
-    }
-  }
-
   auto should_abort_protocol_callback = [&env_deps, &timing_config]() -> bool {
     // Return the Status if failed, or the negated value if successful.
     return env_deps->ShouldAbort(absl::Now(), timing_config.polling_period);
@@ -727,28 +705,26 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // received a RetryWindow from the server.
   FLRunnerResult fl_runner_result;
   fl_runner_result.set_contribution_result(FLRunnerResult::FAIL);
-  if (flags->federated_training_use_new_retry_delay_behavior()) {
-    // Before we even check whether we should abort right away, update the retry
-    // window. That way we will use the most appropriate retry window we have
-    // available (an implementation detail of FederatedProtocol, but generally a
-    // 'transient error' retry window based on the provided flag values) in case
-    // we do need to abort.
-    UpdateRetryWindowAndNetworkStats(*federated_protocol, opstats_logger,
-                                     fl_runner_result);
+  // Before we even check whether we should abort right away, update the retry
+  // window. That way we will use the most appropriate retry window we have
+  // available (an implementation detail of FederatedProtocol, but generally a
+  // 'transient error' retry window based on the provided flag values) in case
+  // we do need to abort.
+  UpdateRetryWindowAndNetworkStats(*federated_protocol, opstats_logger,
+                                   fl_runner_result);
 
-    // Check if the device conditions allow for checking in with the server
-    // and running a federated computation. If not, bail early with the
-    // transient error retry window.
-    bool should_abort =
-        env_deps->ShouldAbort(absl::Now(), timing_config.polling_period);
-    if (should_abort) {
-      std::string message =
-          "Device conditions not satisfied, aborting federated computation";
-      FCP_LOG(INFO) << message;
-      opstats_logger->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, message);
-      return fl_runner_result;
-    }
+  // Check if the device conditions allow for checking in with the server
+  // and running a federated computation. If not, bail early with the
+  // transient error retry window.
+  bool should_abort =
+      env_deps->ShouldAbort(absl::Now(), timing_config.polling_period);
+  if (should_abort) {
+    std::string message =
+        "Device conditions not satisfied, aborting federated computation";
+    FCP_LOG(INFO) << message;
+    opstats_logger->AddEventWithErrorMessage(
+        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, message);
+    return fl_runner_result;
   }
 
   absl::optional<TaskEligibilityInfo> task_eligibility_info = absl::nullopt;
