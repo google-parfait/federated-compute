@@ -133,6 +133,9 @@ class Flags {
   virtual bool record_earliest_trustworthy_time_for_opstats() const {
     return false;
   }
+
+  // Whether use TFLite for training.
+  virtual bool use_tflite_training() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
