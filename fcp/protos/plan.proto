@@ -1154,7 +1154,7 @@ message Plan {
   // Optional. The FlatBuffer used for TFLite training.
   // It contains the same model information as the client_graph_bytes, but with
   // a different format.
-  google.protobuf.Any client_tflite_graph_bytes = 12;
+  bytes client_tflite_graph_bytes = 12;
 
   // A pair of client phase and server phase which are processed in
   // sync. The server execution defines how the results of a client
@@ -1220,7 +1220,7 @@ message ClientOnlyPlan {
   // Optional. The flatbuffer used for TFLite training.
   // Whether "graph" or "tflite_graph" is used for training is up to the client
   // code to allow for a flag-controlled a/b rollout.
-  google.protobuf.Any tflite_graph = 5;
+  bytes tflite_graph = 5;
 
   // The client phase to execute.
   ClientPhase phase = 2;
