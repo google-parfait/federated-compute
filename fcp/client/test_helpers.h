@@ -122,23 +122,17 @@ class MockEventPublisher : public EventPublisher {
 
 class MockFederatedProtocol : public FederatedProtocol {
  public:
-  // Even though we're mocking the FederatedProtocol class, we are doing so by
-  // extending it, which means we must call the real class's constructor and
-  // hence we must pass an actual Flags instance to that real constructor to
-  // avoid it crashing.
-  explicit MockFederatedProtocol(const Flags* flags)
-      : FederatedProtocol(
-            /*event_publisher=*/nullptr, /*log_manager=*/nullptr,
-            /*opstats_logger=*/nullptr, flags,
-            /*federated_service_uri=*/"",
-            /*api_key=*/"", /*test_cert_path=*/"", /*population_name=*/"",
-            /*retry_token=*/"", /*client_version=*/"",
-            /*attestation_measurement=*/"",
-            /*should_abort=*/[]() { return false; },
-            InterruptibleRunner::TimingConfig{absl::InfiniteDuration(),
-                                              absl::InfiniteDuration(),
-                                              absl::InfiniteDuration()},
-            /*grpc_channel_deadline_seconds=*/600) {}
+  explicit MockFederatedProtocol() {}
+  MOCK_METHOD(absl::StatusOr<EligibilityEvalCheckinResult>,
+              EligibilityEvalCheckin, (), (override));
+  MOCK_METHOD(absl::StatusOr<CheckinResult>, Checkin,
+              (const absl::optional<
+                  ::google::internal::federatedml::v2::TaskEligibilityInfo>&
+                   task_eligibility_info),
+              (override));
+  MOCK_METHOD(::google::internal::federatedml::v2::RetryWindow,
+              GetLatestRetryWindow, (), (override));
+
   MOCK_METHOD(absl::Status, ReportCompleted,
               (ComputationResults results,
                (const std::vector<std::pair<std::string, double>>& stats),

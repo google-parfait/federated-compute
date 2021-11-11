@@ -36,6 +36,7 @@
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/fl_runner_internal.pb.h"
 #include "fcp/client/flags.h"
+#include "fcp/client/grpc_federated_protocol.h"
 #include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
@@ -678,7 +679,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   *eligibility_selector_context.mutable_computation_properties()
        ->mutable_eligibility_eval() = eligibility_eval_computation;
 
-  FederatedProtocol federated_protocol(
+  GrpcFederatedProtocol federated_protocol(
       event_publisher, log_manager, opstats_logger.get(), flags,
       federated_service_uri, api_key, test_cert_path, population_name,
       retry_token, client_version, attestation_measurement,

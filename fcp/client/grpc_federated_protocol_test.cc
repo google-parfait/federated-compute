@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "fcp/client/federated_protocol.h"
+#include "fcp/client/grpc_federated_protocol.h"
 
 #include <memory>
 
 #include "google/protobuf/text_format.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/time/time.h"
@@ -29,6 +30,7 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/grpc_bidi_stream.h"
+#include "fcp/client/interruptible_runner.h"
 #include "fcp/client/task_environment.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -300,13 +302,13 @@ void ExpectRejectedRetryWindow(const RetryWindow& retry_window) {
   EXPECT_THAT(retry_window.delay_max(), EqualsProto(retry_window.delay_min()));
 }
 
-class FederatedProtocolTest
+class GrpcFederatedProtocolTest
     // The first parameter indicates whether the new behavior w.r.t. retry
     // delays should be enabled.  The second parameter indicates whether the new
     // per phase logging should be enabled.
     : public testing::TestWithParam<std::tuple<bool, bool>> {
  public:
-  FederatedProtocolTest() {
+  GrpcFederatedProtocolTest() {
     // The gRPC stream should always be closed at the end of all tests.
     EXPECT_CALL(*mock_grpc_bidi_stream_, Close());
   }
@@ -340,17 +342,17 @@ class FederatedProtocolTest
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
-    // before the FederatedProtocol constructor is called. Using std::unique_ptr
-    // conveniently allows us to assign the field a new value after construction
-    // (which we could not do if the field's type was FederatedProtocol, since
-    // it doesn't have copy or move constructors).
-    federated_protocol_ = absl::make_unique<FederatedProtocol>(
+    // before the GrpcFederatedProtocol constructor is called. Using
+    // std::unique_ptr conveniently allows us to assign the field a new value
+    // after construction (which we could not do if the field's type was
+    // GrpcFederatedProtocol, since it doesn't have copy or move constructors).
+    federated_protocol_ = absl::make_unique<GrpcFederatedProtocol>(
         &mock_event_publisher_, &mock_log_manager_, &mock_opstats_logger_,
         &mock_flags_,
         // We want to inject mocks stored in unique_ptrs to the
         // class-under-test, hence we transfer ownership via WrapUnique. To
         // write expectations for the mock, we retain the raw pointer to it,
-        // which will be valid until FederatedProtocol's d'tor is called.
+        // which will be valid until GrpcFederatedProtocol's d'tor is called.
         absl::WrapUnique(mock_grpc_bidi_stream_),
         absl::WrapUnique(mock_secagg_client_), kPopulationName, kRetryToken,
         kClientVersion, kAttestationMeasurement,
@@ -497,7 +499,7 @@ class FederatedProtocolTest
   NiceMock<MockFunction<bool()>> mock_should_abort_;
 
   // The class under test.
-  std::unique_ptr<FederatedProtocol> federated_protocol_;
+  std::unique_ptr<GrpcFederatedProtocol> federated_protocol_;
   bool use_new_retry_delay_behavior_;
   bool use_per_phase_logging_;
 };
@@ -508,10 +510,11 @@ class FederatedProtocolTest
 // only run conditionally for the specific configuration they're testing.
 
 INSTANTIATE_TEST_SUITE_P(
-    NewVsOldBehavior, FederatedProtocolTest,
+    NewVsOldBehavior, GrpcFederatedProtocolTest,
     testing::Combine(testing::Values(false, true),
                      testing::Values(false, true)),
-    [](const testing::TestParamInfo<FederatedProtocolTest::ParamType>& info) {
+    [](const testing::TestParamInfo<GrpcFederatedProtocolTest::ParamType>&
+           info) {
       std::string name = absl::StrCat(
           std::get<0>(info.param) ? "New_retry_delay_" : "Legacy_retry_delay_",
           std::get<1>(info.param) ? "Per_phase_logging" : "Legacy_logging");
@@ -520,12 +523,13 @@ INSTANTIATE_TEST_SUITE_P(
       return name;
     });
 
-using FederatedProtocolDeathTest = FederatedProtocolTest;
+using GrpcFederatedProtocolDeathTest = GrpcFederatedProtocolTest;
 INSTANTIATE_TEST_SUITE_P(
-    NewVsOldBehavior, FederatedProtocolDeathTest,
+    NewVsOldBehavior, GrpcFederatedProtocolDeathTest,
     testing::Combine(testing::Values(false, true),
                      testing::Values(false, true)),
-    [](const testing::TestParamInfo<FederatedProtocolTest::ParamType>& info) {
+    [](const testing::TestParamInfo<GrpcFederatedProtocolTest::ParamType>&
+           info) {
       std::string name = absl::StrCat(
           std::get<0>(info.param) ? "New_retry_delay_" : "Legacy_retry_delay_",
           std::get<1>(info.param) ? "Per_phase_logging" : "Legacy_logging");
@@ -534,7 +538,7 @@ INSTANTIATE_TEST_SUITE_P(
       return name;
     });
 
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestTransientErrorRetryWindowDifferentAcrossDifferentInstances) {
   const RetryWindow& retry_window1 =
       federated_protocol_->GetLatestRetryWindow();
@@ -545,11 +549,11 @@ TEST_P(FederatedProtocolTest,
   EXPECT_CALL(*mock_grpc_bidi_stream_, Close());
   mock_secagg_client_ = new StrictMock<MockSecAggClient>();
 
-  // Create a new FederatedProtocol instance. It should not produce the same
+  // Create a new GrpcFederatedProtocol instance. It should not produce the same
   // retry window value as the one we just got. This is a simple correctness
   // check to ensure that the value is at least randomly generated (and that we
   // don't accidentally use the random number generator incorrectly).
-  federated_protocol_ = absl::make_unique<FederatedProtocol>(
+  federated_protocol_ = absl::make_unique<GrpcFederatedProtocol>(
       &mock_event_publisher_, &mock_log_manager_, &mock_opstats_logger_,
       &mock_flags_, absl::WrapUnique(mock_grpc_bidi_stream_),
       absl::WrapUnique(mock_secagg_client_), kPopulationName, kRetryToken,
@@ -567,7 +571,7 @@ TEST_P(FederatedProtocolTest,
   EXPECT_THAT(retry_window1, Not(EqualsProto(retry_window2)));
 }
 
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestEligibilityEvalCheckinSendFailsTransientError) {
   // Make the gRPC stream return an UNAVAILABLE error when the
   // EligibilityEvalCheckin(...) code tries to send its first message. This
@@ -596,7 +600,7 @@ TEST_P(FederatedProtocolTest,
   ExpectTransientErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestEligibilityEvalCheckinSendFailsPermanentError) {
   // Make the gRPC stream return an NOT_FOUND error when the
   // EligibilityEvalCheckin(...) code tries to send its first message. This
@@ -628,7 +632,7 @@ TEST_P(FederatedProtocolTest,
 
 // Tests the case where the blocking Send() call in EligibilityEvalCheckin is
 // interrupted.
-TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinSendInterrupted) {
+TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinSendInterrupted) {
   absl::BlockingCounter counter_should_abort(1);
 
   // Make Send() block until the counter is decremented.
@@ -675,7 +679,7 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinSendInterrupted) {
 
 // If a CheckinRequestAck is requested in the ProtocolOptionsRequest but not
 // received, UNIMPLEMENTED should be returned.
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestEligibilityEvalCheckinMissingCheckinRequestAck) {
   // We immediately return an EligibilityEvalCheckinResponse, rather than
   // returning a CheckinRequestAck first.
@@ -726,7 +730,7 @@ TEST_P(FederatedProtocolTest,
   ExpectPermanentErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestEligibilityEvalCheckinWaitForCheckinRequestAckFails) {
   EXPECT_CALL(
       *mock_grpc_bidi_stream_,
@@ -767,7 +771,7 @@ TEST_P(FederatedProtocolTest,
   ExpectTransientErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestEligibilityEvalCheckinWaitForCheckinResponseFails) {
   EXPECT_CALL(
       *mock_grpc_bidi_stream_,
@@ -817,7 +821,7 @@ TEST_P(FederatedProtocolTest,
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
+TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
   EXPECT_CALL(
       *mock_grpc_bidi_stream_,
       Send(Pointee(EqualsProto(GetExpectedEligibilityEvalCheckinRequest()))))
@@ -872,7 +876,7 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
+TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
   EXPECT_CALL(
       *mock_grpc_bidi_stream_,
       Send(Pointee(EqualsProto(GetExpectedEligibilityEvalCheckinRequest()))))
@@ -927,7 +931,7 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestEligibilityEvalCheckinEnabledWithInvalidPlan) {
   EXPECT_CALL(
       *mock_grpc_bidi_stream_,
@@ -1001,7 +1005,7 @@ TEST_P(FederatedProtocolTest,
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
+TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   EXPECT_CALL(
       *mock_grpc_bidi_stream_,
       Send(Pointee(EqualsProto(GetExpectedEligibilityEvalCheckinRequest()))))
@@ -1076,7 +1080,8 @@ TEST_P(FederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
 
 // Tests that the protocol correctly sanitizes any invalid values it may have
 // received from the server.
-TEST_P(FederatedProtocolTest, TestNegativeMinMaxRetryDelayValueSanitization) {
+TEST_P(GrpcFederatedProtocolTest,
+       TestNegativeMinMaxRetryDelayValueSanitization) {
   google::internal::federatedml::v2::RetryWindow retry_window;
   retry_window.mutable_delay_min()->set_seconds(-1);
   retry_window.mutable_delay_max()->set_seconds(-2);
@@ -1102,7 +1107,7 @@ TEST_P(FederatedProtocolTest, TestNegativeMinMaxRetryDelayValueSanitization) {
 
 // Tests that the protocol correctly sanitizes any invalid values it may have
 // received from the server.
-TEST_P(FederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
+TEST_P(GrpcFederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
   google::internal::federatedml::v2::RetryWindow retry_window;
   retry_window.mutable_delay_min()->set_seconds(1234);
   retry_window.mutable_delay_max()->set_seconds(1233);  // less than delay_min
@@ -1122,7 +1127,7 @@ TEST_P(FederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
               DoubleNear(1234.0, 0.01));
 }
 
-TEST_P(FederatedProtocolDeathTest, TestCheckinMissingTaskEligibilityInfo) {
+TEST_P(GrpcFederatedProtocolDeathTest, TestCheckinMissingTaskEligibilityInfo) {
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(GetAcceptedRetryWindow(),
                                                 GetRejectedRetryWindow()));
 
@@ -1133,7 +1138,7 @@ TEST_P(FederatedProtocolDeathTest, TestCheckinMissingTaskEligibilityInfo) {
                _);
 }
 
-TEST_P(FederatedProtocolTest, TestCheckinSendFailsTransientError) {
+TEST_P(GrpcFederatedProtocolTest, TestCheckinSendFailsTransientError) {
   // Make the gRPC stream return an UNAVAILABLE error when the Checkin(...) code
   // tries to send its first message. This should result in the error being
   // returned as the result.
@@ -1160,7 +1165,7 @@ TEST_P(FederatedProtocolTest, TestCheckinSendFailsTransientError) {
   ExpectTransientErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestCheckinSendFailsPermanentError) {
+TEST_P(GrpcFederatedProtocolTest, TestCheckinSendFailsPermanentError) {
   // Make the gRPC stream return an NOT_FOUND error when the Checkin(...) code
   // tries to send its first message. This should result in the error being
   // returned as the result.
@@ -1189,7 +1194,7 @@ TEST_P(FederatedProtocolTest, TestCheckinSendFailsPermanentError) {
 }
 
 // Tests the case where the blocking Send() call in Checkin is interrupted.
-TEST_P(FederatedProtocolTest, TestCheckinSendInterrupted) {
+TEST_P(GrpcFederatedProtocolTest, TestCheckinSendInterrupted) {
   absl::BlockingCounter counter_should_abort(1);
 
   // Make Send() block until the counter is decremented.
@@ -1235,7 +1240,7 @@ TEST_P(FederatedProtocolTest, TestCheckinSendInterrupted) {
 
 // If a CheckinRequestAck is requested in the ProtocolOptionsRequest but not
 // received, UNIMPLEMENTED should be returned.
-TEST_P(FederatedProtocolTest, TestCheckinMissingCheckinRequestAck) {
+TEST_P(GrpcFederatedProtocolTest, TestCheckinMissingCheckinRequestAck) {
   // We immediately return a CheckinResponse, rather than returning a
   // CheckinRequestAck first.
   EXPECT_CALL(*mock_grpc_bidi_stream_,
@@ -1283,7 +1288,7 @@ TEST_P(FederatedProtocolTest, TestCheckinMissingCheckinRequestAck) {
   ExpectPermanentErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestCheckinWaitForCheckinRequestAckFails) {
+TEST_P(GrpcFederatedProtocolTest, TestCheckinWaitForCheckinRequestAckFails) {
   EXPECT_CALL(*mock_grpc_bidi_stream_,
               Send(Pointee(EqualsProto(GetExpectedCheckinRequest()))))
       .WillOnce(Return(absl::OkStatus()));
@@ -1328,7 +1333,7 @@ TEST_P(FederatedProtocolTest, TestCheckinWaitForCheckinRequestAckFails) {
 // should return the rejected retry window provided in the CheckinRequestAck,
 // and the method itself should return the protocol error. The caller is
 // expected to log the protocol error and use the RetryWindow in this case.
-TEST_P(FederatedProtocolTest, TestCheckinWaitForCheckinResponseFails) {
+TEST_P(GrpcFederatedProtocolTest, TestCheckinWaitForCheckinResponseFails) {
   EXPECT_CALL(*mock_grpc_bidi_stream_,
               Send(Pointee(EqualsProto(GetExpectedCheckinRequest()))))
       .WillOnce(Return(absl::OkStatus()));
@@ -1388,7 +1393,7 @@ TEST_P(FederatedProtocolTest, TestCheckinWaitForCheckinResponseFails) {
 // to the initial eligibility eval checkin and the method itself should
 // return the protocol error. The caller is expected to log the protocol error
 // and use the RetryWindow in this case.
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestCheckinWaitForCheckinResponseFailsWithEligibilityEval) {
   // Issue an eligibility eval checkin first.
   // Failed checkins that have received an ack already should return the
@@ -1439,7 +1444,7 @@ TEST_P(FederatedProtocolTest,
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestCheckinRejection) {
+TEST_P(GrpcFederatedProtocolTest, TestCheckinRejection) {
   EXPECT_CALL(*mock_grpc_bidi_stream_,
               Send(Pointee(EqualsProto(GetExpectedCheckinRequest()))))
       .WillOnce(Return(absl::OkStatus()));
@@ -1499,7 +1504,7 @@ TEST_P(FederatedProtocolTest, TestCheckinRejection) {
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestCheckinRejectionWithPriorEligibilityEvalCheckin) {
   // Issue an eligibility eval checkin first.
   // The final Checkin(...) method should return the rejected RetryWindow, since
@@ -1557,7 +1562,7 @@ TEST_P(FederatedProtocolTest,
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestCheckinAcceptWithInvalidPlan) {
+TEST_P(GrpcFederatedProtocolTest, TestCheckinAcceptWithInvalidPlan) {
   ServerStreamMessage response_message;
   auto acceptance_info =
       response_message.mutable_checkin_response()->mutable_acceptance_info();
@@ -1627,7 +1632,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptWithInvalidPlan) {
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestCheckinAccept) {
+TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
   EXPECT_CALL(*mock_grpc_bidi_stream_,
               Send(Pointee(EqualsProto(GetExpectedCheckinRequest()))))
       .WillOnce(Return(absl::OkStatus()));
@@ -1691,7 +1696,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAccept) {
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestCheckinAcceptLogChunkingLayerBandwidth) {
+TEST_P(GrpcFederatedProtocolTest, TestCheckinAcceptLogChunkingLayerBandwidth) {
   EXPECT_CALL(*mock_grpc_bidi_stream_,
               Send(Pointee(EqualsProto(GetExpectedCheckinRequest()))))
       .WillOnce(Return(absl::OkStatus()));
@@ -1768,7 +1773,7 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptLogChunkingLayerBandwidth) {
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestCheckinAcceptWithPriorEligibilityEvalCheckin) {
   // Issue an eligibility eval checkin first.
   // The eventual Checkin call is expected to return the accepted retry window
@@ -1830,7 +1835,8 @@ TEST_P(FederatedProtocolTest,
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestCheckinAcceptUnparseableExecutionPhaseId) {
+TEST_P(GrpcFederatedProtocolTest,
+       TestCheckinAcceptUnparseableExecutionPhaseId) {
   EXPECT_CALL(*mock_grpc_bidi_stream_,
               Send(Pointee(EqualsProto(GetExpectedCheckinRequest()))))
       .WillOnce(Return(absl::OkStatus()));
@@ -1899,7 +1905,8 @@ TEST_P(FederatedProtocolTest, TestCheckinAcceptUnparseableExecutionPhaseId) {
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(FederatedProtocolTest, TestReportWithSecAggReachesSecAggClientStart) {
+TEST_P(GrpcFederatedProtocolTest,
+       TestReportWithSecAggReachesSecAggClientStart) {
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/true));
 
   // Create a SecAgg like Checkpoint - a combination of a TF checkpoint, and
@@ -1921,7 +1928,7 @@ TEST_P(FederatedProtocolTest, TestReportWithSecAggReachesSecAggClientStart) {
   EXPECT_THAT(report_result.message(), "foo");
 }
 
-TEST_P(FederatedProtocolTest,
+TEST_P(GrpcFederatedProtocolTest,
        TestReportWithSecAggWithoutTFCheckpointReachesSecAggClientStart) {
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/true));
 
@@ -1940,7 +1947,7 @@ TEST_P(FederatedProtocolTest,
 
 // This function tests the Report(...) method's Send code path, ensuring the
 // right events are logged / and the right data is transmitted to the server.
-TEST_P(FederatedProtocolTest, TestReportSendFails) {
+TEST_P(GrpcFederatedProtocolTest, TestReportSendFails) {
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/false));
 
   // 1. Create input for the Report function.
@@ -1998,7 +2005,7 @@ TEST_P(FederatedProtocolTest, TestReportSendFails) {
 
 // This function tests the happy path of ReportCompleted() - results get
 // reported, server replies with a RetryWindow.
-TEST_P(FederatedProtocolTest, TestPublishReportSuccess) {
+TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccess) {
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/false));
 
   // 1. Create input for the Report function.
@@ -2050,7 +2057,7 @@ TEST_P(FederatedProtocolTest, TestPublishReportSuccess) {
 // This function tests the Send code path when PhaseOutcome indicates an
 // error. / In that case, no checkpoint, and only the duration stat, should be
 // uploaded.
-TEST_P(FederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
+TEST_P(GrpcFederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/false));
 
   // 1. Create input for the Report function.
@@ -2098,7 +2105,7 @@ TEST_P(FederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
 
 // This function tests the happy path of ReportCompleted() - results get
 // reported, server replies with a RetryWindow.
-TEST_P(FederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
+TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
   EXPECT_CALL(mock_flags_, commit_opstats_on_upload_started)
       .WillRepeatedly(Return(true));
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/false));

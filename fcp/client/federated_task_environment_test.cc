@@ -45,7 +45,7 @@ static constexpr absl::Time kReferenceTime = absl::InfinitePast();
 // be enabled.
 class FederatedTaskEnvironmentTest : public testing::TestWithParam<bool> {
  public:
-  FederatedTaskEnvironmentTest() : mock_federated_protocol_(&mock_flags_) {}
+  FederatedTaskEnvironmentTest() {}
 
  protected:
   void SetUp() override {

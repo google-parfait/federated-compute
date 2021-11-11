@@ -138,12 +138,29 @@ cc_library(
 
 cc_library(
     name = "federated_protocol",
-    srcs = ["federated_protocol.cc"],
     hdrs = [
         "federated_protocol.h",
     ],
     deps = [
+        "//fcp/client/engine:engine_cc_proto",
+        "//fcp/protos:federated_api_cc_proto",
+        "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/container:node_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:optional",
+    ],
+)
+
+cc_library(
+    name = "grpc_federated_protocol",
+    srcs = ["grpc_federated_protocol.cc"],
+    hdrs = [
+        "grpc_federated_protocol.h",
+    ],
+    deps = [
         ":diag_codes_cc_proto",
+        ":federated_protocol",
         ":fl_runner_cc_proto",
         ":grpc_bidi_stream",
         ":interfaces",
@@ -170,17 +187,19 @@ cc_library(
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
         "@com_google_absl//absl/types:variant",
+        "@com_google_protobuf//:cc_wkt_protos",
     ],
 )
 
 cc_test(
-    name = "federated_protocol_test",
-    srcs = ["federated_protocol_test.cc"],
+    name = "grpc_federated_protocol_test",
+    srcs = ["grpc_federated_protocol_test.cc"],
     deps = [
         ":diag_codes_cc_proto",
-        ":federated_protocol",
         ":grpc_bidi_stream",
+        ":grpc_federated_protocol",
         ":interfaces",
+        ":interruptible_runner",
         ":test_helpers",
         "//fcp/base",
         "//fcp/client/engine:engine_cc_proto",
@@ -191,6 +210,7 @@ cc_test(
         "//fcp/secagg/testing:client_mocks",
         "//fcp/secagg/testing:common_mocks",
         "//fcp/testing",
+        "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
@@ -239,6 +259,7 @@ cc_library(
         ":simple_task_environment",
         "//fcp/base",
         "//fcp/client/engine:engine_cc_proto",
+        "//fcp/client/opstats:opstats_logger",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -274,6 +295,7 @@ cc_library(
         ":federated_task_environment",
         ":fl_runner_cc_proto",
         ":fl_runner_internal_cc_proto",
+        ":grpc_federated_protocol",
         ":histogram_counters_cc_proto",
         ":interfaces",
         ":interruptible_runner",

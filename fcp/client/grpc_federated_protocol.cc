@@ -13,11 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "fcp/client/federated_protocol.h"
+#include "fcp/client/grpc_federated_protocol.h"
 
 #include <algorithm>
 #include <memory>
 
+#include "google/protobuf/duration.pb.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -29,11 +30,13 @@
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
+#include "fcp/client/federated_protocol.h"
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/grpc_bidi_stream.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -177,7 +180,7 @@ absl::Time PickRetryTimeFromWindow(RetryWindow retry_window,
 }
 }  // anonymous namespace
 
-FederatedProtocol::FederatedProtocol(
+GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
     const std::string& federated_service_uri, const std::string& api_key,
@@ -187,7 +190,7 @@ FederatedProtocol::FederatedProtocol(
     std::function<bool()> should_abort,
     const InterruptibleRunner::TimingConfig& timing_config,
     const int64_t grpc_channel_deadline_seconds)
-    : FederatedProtocol(
+    : GrpcFederatedProtocol(
           event_publisher, log_manager, opstats_logger, flags,
           absl::make_unique<GrpcBidiStream>(
               federated_service_uri, api_key, std::string(population_name),
@@ -196,7 +199,7 @@ FederatedProtocol::FederatedProtocol(
           attestation_measurement, should_abort, absl::BitGen(),
           timing_config) {}
 
-FederatedProtocol::FederatedProtocol(
+GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
     OpStatsLogger* opstats_logger, const Flags* flags,
     std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream,
@@ -239,9 +242,9 @@ FederatedProtocol::FederatedProtocol(
       absl::flat_hash_set<int32_t>(error_codes.begin(), error_codes.end());
 }
 
-FederatedProtocol::~FederatedProtocol() { grpc_bidi_stream_->Close(); }
+GrpcFederatedProtocol::~GrpcFederatedProtocol() { grpc_bidi_stream_->Close(); }
 
-absl::Status FederatedProtocol::Send(
+absl::Status GrpcFederatedProtocol::Send(
     google::internal::federatedml::v2::ClientStreamMessage*
         client_stream_message) {
   FCP_RETURN_IF_ERROR(interruptible_runner_->Run(
@@ -254,7 +257,7 @@ absl::Status FederatedProtocol::Send(
   return absl::OkStatus();
 }
 
-absl::Status FederatedProtocol::Receive(
+absl::Status GrpcFederatedProtocol::Receive(
     google::internal::federatedml::v2::ServerStreamMessage*
         server_stream_message) {
   FCP_RETURN_IF_ERROR(interruptible_runner_->Run(
@@ -267,7 +270,7 @@ absl::Status FederatedProtocol::Receive(
   return absl::OkStatus();
 }
 
-ProtocolOptionsRequest FederatedProtocol::CreateProtocolOptionsRequest(
+ProtocolOptionsRequest GrpcFederatedProtocol::CreateProtocolOptionsRequest(
     bool should_ack_checkin) const {
   ProtocolOptionsRequest request;
   request.set_should_ack_checkin(should_ack_checkin);
@@ -286,7 +289,7 @@ ProtocolOptionsRequest FederatedProtocol::CreateProtocolOptionsRequest(
   return request;
 }
 
-absl::Status FederatedProtocol::SendEligibilityEvalCheckinRequest() {
+absl::Status GrpcFederatedProtocol::SendEligibilityEvalCheckinRequest() {
   ClientStreamMessage client_stream_message;
   EligibilityEvalCheckinRequest* eligibility_checkin_request =
       client_stream_message.mutable_eligibility_eval_checkin_request();
@@ -309,7 +312,7 @@ absl::Status FederatedProtocol::SendEligibilityEvalCheckinRequest() {
   return Send(&client_stream_message);
 }
 
-absl::Status FederatedProtocol::SendCheckinRequest(
+absl::Status GrpcFederatedProtocol::SendCheckinRequest(
     const absl::optional<TaskEligibilityInfo>& task_eligibility_info,
     bool should_ack_checkin) {
   ClientStreamMessage client_stream_message;
@@ -336,7 +339,7 @@ absl::Status FederatedProtocol::SendCheckinRequest(
   return Send(&client_stream_message);
 }
 
-absl::Status FederatedProtocol::ReceiveCheckinRequestAck() {
+absl::Status GrpcFederatedProtocol::ReceiveCheckinRequestAck() {
   // Wait for a CheckinRequestAck.
   ServerStreamMessage server_stream_message;
   absl::Status receive_status = Receive(&server_stream_message);
@@ -390,7 +393,7 @@ absl::Status FederatedProtocol::ReceiveCheckinRequestAck() {
 }
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
-FederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
+GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
     absl::Time start_time) {
   ServerStreamMessage server_stream_message;
   FCP_RETURN_IF_ERROR(Receive(&server_stream_message));
@@ -481,7 +484,7 @@ FederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
 }
 
 absl::StatusOr<FederatedProtocol::CheckinResult>
-FederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
+GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
   ServerStreamMessage server_stream_message;
   absl::Status receive_status = Receive(&server_stream_message);
   FCP_RETURN_IF_ERROR(receive_status);
@@ -583,7 +586,7 @@ FederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
 }
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
-FederatedProtocol::EligibilityEvalCheckin() {
+GrpcFederatedProtocol::EligibilityEvalCheckin() {
   FCP_CHECK(object_state_ == ObjectState::kInitialized)
       << "Invalid call sequence";
   object_state_ = ObjectState::kEligibilityEvalCheckinFailed;
@@ -612,7 +615,7 @@ FederatedProtocol::EligibilityEvalCheckin() {
   return response;
 }
 
-absl::StatusOr<FederatedProtocol::CheckinResult> FederatedProtocol::Checkin(
+absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
     const absl::optional<TaskEligibilityInfo>& task_eligibility_info) {
   // Checkin(...) must either be the very first method called on this object, or
   // it must follow an earlier call to EligibilityEvalCheckin() that resulted in
@@ -663,7 +666,7 @@ absl::StatusOr<FederatedProtocol::CheckinResult> FederatedProtocol::Checkin(
   return response;
 }
 
-absl::Status FederatedProtocol::ReportCompleted(
+absl::Status GrpcFederatedProtocol::ReportCompleted(
     ComputationResults results,
     const std::vector<std::pair<std::string, double>>& stats,
     absl::Duration plan_duration) {
@@ -679,7 +682,7 @@ absl::Status FederatedProtocol::ReportCompleted(
   return response;
 }
 
-absl::Status FederatedProtocol::ReportNotCompleted(
+absl::Status GrpcFederatedProtocol::ReportNotCompleted(
     engine::PhaseOutcome phase_outcome, absl::Duration plan_duration) {
   FCP_LOG(WARNING) << "Reporting outcome: " << static_cast<int>(phase_outcome);
   FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)
@@ -786,7 +789,7 @@ class SecAggStateTransitionListenerImpl
   ClientState state_ = ClientState::INITIAL;
 };
 
-absl::Status FederatedProtocol::ReportInternal(
+absl::Status GrpcFederatedProtocol::ReportInternal(
     std::string tf_checkpoint, engine::PhaseOutcome phase_outcome,
     absl::Duration plan_duration,
     const std::vector<std::pair<std::string, double>>& stats,
@@ -837,7 +840,7 @@ absl::Status FederatedProtocol::ReportInternal(
     event_publisher_->PublishReportStarted(report_request_size_bytes_);
   }
 
-  // Note that we do not use the FederatedProtocol::Send(...) helper method
+  // Note that we do not use the GrpcFederatedProtocol::Send(...) helper method
   // here, since we are already running within a call to
   // InterruptibleRunner::Run.
   const auto status = this->grpc_bidi_stream_->Send(&client_stream_message);
@@ -852,7 +855,7 @@ absl::Status FederatedProtocol::ReportInternal(
   return absl::OkStatus();
 }
 
-absl::Status FederatedProtocol::Report(
+absl::Status GrpcFederatedProtocol::Report(
     ComputationResults results, engine::PhaseOutcome phase_outcome,
     absl::Duration plan_duration,
     const std::vector<std::pair<std::string, double>>& stats) {
@@ -978,7 +981,7 @@ absl::Status FederatedProtocol::Report(
           FCP_RETURN_IF_ERROR(secagg_client_->SetInput(std::move(input_map)));
           while (!secagg_client_->IsCompletedSuccessfully()) {
             ServerStreamMessage server_stream_message;
-            // Note that we do not use the FederatedProtocol::Receive(...)
+            // Note that we do not use the GrpcFederatedProtocol::Receive(...)
             // helper method here, since we are already running within a call to
             // InterruptibleRunner::Run.
             absl::Status receive_status =
@@ -1085,7 +1088,7 @@ absl::Status FederatedProtocol::Report(
   return absl::OkStatus();
 }
 
-RetryWindow FederatedProtocol::GetLatestRetryWindow() {
+RetryWindow GrpcFederatedProtocol::GetLatestRetryWindow() {
   // We explicitly enumerate all possible states here rather than using
   // "default", to ensure that when new states are added later on, the author
   // is forced to update this method and consider which is the correct
@@ -1150,8 +1153,8 @@ RetryWindow FederatedProtocol::GetLatestRetryWindow() {
 // Converts the given RetryTimeAndToken to a zero-width RetryWindow (where
 // delay_min and delay_max are set to the same value), by converting the target
 // retry time to a delay relative to the current timestamp.
-RetryWindow FederatedProtocol::GenerateRetryWindowFromRetryTimeAndToken(
-    const FederatedProtocol::RetryTimeAndToken& retry_info) {
+RetryWindow GrpcFederatedProtocol::GenerateRetryWindowFromRetryTimeAndToken(
+    const GrpcFederatedProtocol::RetryTimeAndToken& retry_info) {
   // Convert the target retry time back to a duration, based on the current
   // time. I.e. if at 09:50AM the CheckinRequestAck was received and the chosen
   // target retry time was 11:00AM, and if it is now 09:55AM, then the
@@ -1171,35 +1174,35 @@ RetryWindow FederatedProtocol::GenerateRetryWindowFromRetryTimeAndToken(
   return retry_window;
 }
 
-void FederatedProtocol::UpdateOpStatsNetworkStats() {
+void GrpcFederatedProtocol::UpdateOpStatsNetworkStats() {
   opstats_logger_->SetNetworkStats(
       bytes_downloaded_, bytes_uploaded_,
       grpc_bidi_stream_->ChunkingLayerBytesReceived(),
       grpc_bidi_stream_->ChunkingLayerBytesSent());
 }
 
-void FederatedProtocol::UpdateObjectStateForPermanentError(
+void GrpcFederatedProtocol::UpdateObjectStateForPermanentError(
     absl::Status status,
-    FederatedProtocol::ObjectState permanent_error_object_state) {
+    GrpcFederatedProtocol::ObjectState permanent_error_object_state) {
   if (federated_training_permanent_error_codes_.contains(
           static_cast<int32_t>(status.code()))) {
     object_state_ = permanent_error_object_state;
   }
 }
 
-int64_t FederatedProtocol::chunking_layer_bytes_sent() {
+int64_t GrpcFederatedProtocol::chunking_layer_bytes_sent() {
   return grpc_bidi_stream_->ChunkingLayerBytesSent();
 }
 
-int64_t FederatedProtocol::chunking_layer_bytes_received() {
+int64_t GrpcFederatedProtocol::chunking_layer_bytes_received() {
   return grpc_bidi_stream_->ChunkingLayerBytesReceived();
 }
 
-int64_t FederatedProtocol::bytes_downloaded() { return bytes_downloaded_; }
+int64_t GrpcFederatedProtocol::bytes_downloaded() { return bytes_downloaded_; }
 
-int64_t FederatedProtocol::bytes_uploaded() { return bytes_uploaded_; }
+int64_t GrpcFederatedProtocol::bytes_uploaded() { return bytes_uploaded_; }
 
-int64_t FederatedProtocol::report_request_size_bytes() {
+int64_t GrpcFederatedProtocol::report_request_size_bytes() {
   return report_request_size_bytes_;
 }
 

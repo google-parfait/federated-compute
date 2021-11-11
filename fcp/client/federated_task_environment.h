@@ -26,7 +26,11 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/engine.pb.h"
+#include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
+#include "fcp/client/flags.h"
+#include "fcp/client/log_manager.h"
+#include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/task_environment.h"
 
