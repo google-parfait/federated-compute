@@ -26,6 +26,7 @@
 #include "fcp/client/engine/simple_plan_engine.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/protos/plan.pb.h"
+#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
