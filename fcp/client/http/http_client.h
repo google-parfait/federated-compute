@@ -33,10 +33,10 @@ using Header = std::pair<std::string, std::string>;
 // the same name are allowed (see RFC2616 section 4.2).
 using HeaderList = std::vector<Header>;
 
-class Request;          // forward declaration
-class RequestCallback;  // forward declaration
-class RequestHandle;    // forward declaration
-class Response;         // forward declaration
+class HttpRequest;          // forward declaration
+class HttpRequestCallback;  // forward declaration
+class HttpRequestHandle;    // forward declaration
+class HttpResponse;         // forward declaration
 
 // An interface that allows the callers to make HTTP requests and receive their
 // responses.
@@ -60,48 +60,50 @@ class HttpClient {
   virtual ~HttpClient() = default;
 
   // Enqueues an HTTP request, without starting it yet. To start the request the
-  // `RequestHandle` must be passed to `PerformRequests`. Each `RequestHandle`
-  // must be passed to at most one `PerformRequests` call.
+  // `HttpRequestHandle` must be passed to `PerformRequests`. Each
+  // `HttpRequestHandle` must be passed to at most one `PerformRequests` call.
   //
-  // The `HttpClient` implementation assumes ownership of the `Request` object,
-  // and the implementation must delete the object when the `RequestHandle` is
-  // deleted.
-  virtual std::unique_ptr<RequestHandle> EnqueueRequest(
-      std::unique_ptr<Request> request) = 0;
+  // The `HttpClient` implementation assumes ownership of the `HttpRequest`
+  // object, and the implementation must delete the object when the
+  // `HttpRequestHandle` is deleted.
+  virtual std::unique_ptr<HttpRequestHandle> EnqueueRequest(
+      std::unique_ptr<HttpRequest> request) = 0;
 
   // Performs the given requests. Results will be returned to each
-  // corresponding`RequestCallback` while this method is blocked. This method
-  // must block until all requests have finished or have been cancelled, and
-  // until all corresponding request callbacks have returned.
+  // corresponding `HttpRequestCallback` while this method is blocked. This
+  // method must block until all requests have finished or have been cancelled,
+  // and until all corresponding request callbacks have returned.
   //
   // By decoupling the enqueueing and starting of (groups of) requests,
   // implementations may be able to handle concurrent requests more optimally
   // (e.g. by issuing them over a shared HTTP connection). Having separate
-  // per-request `RequestHandle` objects also makes it easier to support
+  // per-request `HttpRequestHandle` objects also makes it easier to support
   // canceling specific requests, releasing resources for specific requests,
   // accessing stats for specific requests, etc.
   //
-  // The `RequestHandle` and `RequestCallback` instances must outlive the call
-  // to `PerformRequests`, but may be deleted any time after this call has
-  // returned.
+  // The `HttpRequestHandle` and `HttpRequestCallback` instances must outlive
+  // the call to `PerformRequests`, but may be deleted any time after this call
+  // has returned.
   //
-  // Returns an `INVALID_ARGUMENT` error if a `RequestHandle` was previously
+  // Returns an `INVALID_ARGUMENT` error if a `HttpRequestHandle` was previously
   // already passed to another `PerformRequests` call.
   virtual absl::Status PerformRequests(
-      std::vector<std::pair<RequestHandle*, RequestCallback*>> requests) = 0;
+      std::vector<std::pair<HttpRequestHandle*, HttpRequestCallback*>>
+          requests) = 0;
 };
 
 // An HTTP request for a single resource. Implemented by the caller of
 // `HttpClient`.
 //
 // Once instances are passed to `EnqueueRequest`, their lifetime is managed by
-// the `HttpClient` implementation. Implementations must tie the `Request`
-// instance lifetime to the lifetime of the `RequestHandle` they return (i.e.
-// they should delete the `Request` from the `RequestHandle` destructor).
+// the `HttpClient` implementation. Implementations must tie the `HttpRequest`
+// instance lifetime to the lifetime of the `HttpRequestHandle` they return
+// (i.e. they should delete the `HttpRequest` from the `HttpRequestHandle`
+// destructor).
 //
 // Methods of this class may get called from any thread (and subsequent calls
 // are not required to all happen on the same thread).
-class Request {
+class HttpRequest {
  public:
   // Note: the request methods imply a set of standard request properties such
   // as cacheability, safety, and idempotency:
@@ -119,9 +121,9 @@ class Request {
   // will own the responsibility for retrying requests.
   enum class Method { kGet, kPost, kPut, kPatch, kHead };
 
-  // Must not be called until any corresponding `RequestHandle` has been
+  // Must not be called until any corresponding `HttpRequestHandle` has been
   // deleted.
-  virtual ~Request() = default;
+  virtual ~HttpRequest() = default;
 
   // The URI to request. Will always have an "https://" scheme (but this may be
   // extended in the future).
@@ -132,17 +134,17 @@ class Request {
 
   // Extra request headers to include with this request, in addition to any
   // headers specified by the `HttpClient` implementation.
-  virtual const HeaderList& extra_request_headers() const = 0;
+  virtual const HeaderList& extra_headers() const = 0;
 
   // Returns true if the request has a request body (which can be read using
   // `ReadBody`). If the request body payload size is known ahead of time, then
-  // the "Content-Length" header will be set in `extra_request_headers()`. If it
-  // isn't known yet then the `HttpClient` implementation should use the
+  // the "Content-Length" header will be set in `extra_headers()`. If it isn't
+  // known yet then the `HttpClient` implementation should use the
   // "Transfer-Encoding: chunked" encoding to transmit the request body to the
   // server in chunks.
-  virtual bool HasRequestBody() const = 0;
+  virtual bool HasBody() const = 0;
 
-  // Requests that up to `requested` bytes of the request body be read into
+  // HttpRequests that up to `requested` bytes of the request body be read into
   // `buffer`, and that the actual amount of bytes read is returned. The caller
   // retains ownership of the buffer.
   //
@@ -158,20 +160,20 @@ class Request {
   virtual absl::StatusOr<int64_t> ReadBody(char* buffer, int64_t requested) = 0;
 };
 
-// A handle to a pending `Request`, allowing a caller of `HttpClient` to access
-// stats for the request or to cancel ongoing requests. Implemented by the
-// `HttpClient` implementer.
+// A handle to a pending `HttpRequest`, allowing a caller of `HttpClient` to
+// access stats for the request or to cancel ongoing requests. Implemented by
+// the `HttpClient` implementer.
 //
 // The lifetimes of instances of this class are owned by the caller of
 // `HttpClient`.
 //
 // Methods of this class may get called from any thread (and subsequent calls
 // are not required to all happen on the same thread).
-class RequestHandle {
+class HttpRequestHandle {
  public:
   // When this is called, `HttpClient` implementations should delete all their
-  // owned resources as well as the associated `Request`.
-  virtual ~RequestHandle() = default;
+  // owned resources as well as the associated `HttpRequest`.
+  virtual ~HttpRequestHandle() = default;
 
   // The total amount of data sent/received over the network for this request up
   // to this point. These numbers should reflect as close as possible the amount
@@ -209,24 +211,24 @@ class RequestHandle {
   // corresponding `PerformRequests()` call has completed, and not before.
   //
   // If a `PerformRequests` call is ongoing for this handle, then the
-  // corresponding `RequestCallback` instance may still receive further method
-  // invocations after this call returns (e.g. because an invocation may already
-  // have been in flight).
+  // corresponding `HttpRequestCallback` instance may still receive further
+  // method invocations after this call returns (e.g. because an invocation may
+  // already have been in flight).
   //
   // If a `PerformRequests` call is ongoing for this handle, and if the
-  // `RequestCallback::OnResponseStarted` method was not called yet, then the
-  // `RequestCallback::OnResponseError` method must be called with status
-  // `CANCELLED`.
+  // `HttpRequestCallback::OnResponseStarted` method was not called yet, then
+  // the `HttpRequestCallback::OnResponseError` method must be called with
+  // status `CANCELLED`.
   //
   // Otherwise, if a `PerformRequests` call is ongoing for this handle, and if
-  // the `RequestCallback::OnResponseCompleted` method was not called yet, then
-  // the `RequestCallback::OnResponseBodyError` method must be called with
-  // status `CANCELLED`.
+  // the `HttpRequestCallback::OnResponseCompleted` method was not called yet,
+  // then the `HttpRequestCallback::OnResponseBodyError` method must be called
+  // with status `CANCELLED`.
   virtual void Cancel() = 0;
 };
 
 // The callback interface that `HttpClient` implementations must use to deliver
-// the response to a `Request`. Implemented by the caller of `HttpClient`.
+// the response to a `HttpRequest`. Implemented by the caller of `HttpClient`.
 //
 // The lifetimes of instances of this class are owned by the caller of
 // `HttpClient`. Instances must remain alive for at least as long as their
@@ -236,17 +238,17 @@ class RequestHandle {
 // are not required to all happen on the same thread), but only a single method
 // should ever be called at the same time (i.e. implementations likely should
 // use external synchronization).
-class RequestCallback {
+class HttpRequestCallback {
  public:
-  virtual ~RequestCallback() = default;
+  virtual ~HttpRequestCallback() = default;
 
   // Called when the final HTTP response headers have been received (i.e. after
   // any redirects have been followed but before the response body may have been
-  // received fully) for the given `Request`. The response data can be accessed
-  // via the given `Response`, which will remain alive for the lifetime of the
-  // corresponding `RequestHandle`.
+  // received fully) for the given `HttpRequest`. The response data can be
+  // accessed via the given `HttpResponse`, which will remain alive for the
+  // lifetime of the corresponding `HttpRequestHandle`.
   //
-  // Note that all the data in the `Response` object should reflect the
+  // Note that all the data in the `HttpResponse` object should reflect the
   // last/final response (i.e. it shouldn't reflect any already-followed
   // redirects).
   //
@@ -257,13 +259,13 @@ class RequestCallback {
   // Note that responses with an HTTP status code other than 200 ("OK") may
   // still have response bodies, and implementations must deliver these via the
   // `OnResponseBody` callback, just as they should for a successful response.
-  virtual void OnResponseStarted(const Request& request,
-                                 Response& response) = 0;
+  virtual void OnResponseStarted(const HttpRequest& request,
+                                 const HttpResponse& response) = 0;
 
   // Called when the request encountered an error or timed out, before receiving
   // the response headers completely. No further methods must be called on this
-  // `RequestCallback` instance for the given `Request` after this method is
-  // called.
+  // `HttpRequestCallback` instance for the given `HttpRequest` after this
+  // method is called.
   //
   // If the implementation is able to discern that the error may have been
   // transient, they should return `UNAVAILABLE`.
@@ -276,26 +278,26 @@ class RequestCallback {
   // implementations are discouraged from imposing such timeouts), then this
   // should be `DEADLINE_EXCEEDED`.
   //
-  // If the `RequestHandle::Cancel` method was called before
-  // `OnResponseStarted` was called for the given `Request`, then this method
-  // will be called with a `CANCELLED` status.
-  virtual void OnResponseError(const Request& request,
+  // If the `HttpRequestHandle::Cancel` method was called before
+  // `OnResponseStarted` was called for the given `HttpRequest`, then this
+  // method will be called with a `CANCELLED` status.
+  virtual void OnResponseError(const HttpRequest& request,
                                const absl::Status& error) = 0;
 
   // Called (possibly multiple times per request) when a block of response data
   // is available in `data`. This method must only be called after
-  // `OnResponseStarted` was called for the given `Request`.
+  // `OnResponseStarted` was called for the given `HttpRequest`.
   //
   // Callees must process the data ASAP, as delaying this for too long may
   // prevent additional data from arriving on the network stream.
-  virtual absl::Status OnResponseBody(const Request& request,
-                                      Response& response,
+  virtual absl::Status OnResponseBody(const HttpRequest& request,
+                                      const HttpResponse& response,
                                       absl::string_view data) = 0;
 
   // Called when the request encountered an error or timed out while receiving
   // the response body (i.e. after `OnResponseStarted` was called). No further
-  // methods must be called on this `RequestCallback` instance for the given
-  // `Request` after this method is called.
+  // methods must be called on this `HttpRequestCallback` instance for the given
+  // `HttpRequest` after this method is called.
   //
   // If the implementation is able to discern that the error may have been
   // transient, they should return `UNAVAILABLE`.
@@ -304,33 +306,35 @@ class RequestCallback {
   // implementations are discouraged from imposing such timeouts), then this
   // should be `DEADLINE_EXCEEDED`.
   //
-  // If the `RequestHandle::Cancel` method was called before
-  // `OnResponseCompleted` was called for the given `Request`, then this method
-  // will be called with a `CANCELLED` status.
-  virtual void OnResponseBodyError(const Request& request, Response& response,
+  // If the `HttpRequestHandle::Cancel` method was called before
+  // `OnResponseCompleted` was called for the given `HttpRequest`, then this
+  // method will be called with a `CANCELLED` status.
+  virtual void OnResponseBodyError(const HttpRequest& request,
+                                   const HttpResponse& response,
                                    const absl::Status& error) = 0;
 
   // Called when the request has completed successfully (i.e. the response
   // headers were delivered, and if there was a response body then it was also
   // delivered successfully). Must not be called if one of the error callbacks
-  // was already called for the given `Request`, and no further methods must be
-  // called on this `RequestCallback` instance for the given `Request` after
-  // this method is called.
-  virtual void OnResponseCompleted(const Request& request,
-                                   Response& response) = 0;
+  // was already called for the given `HttpRequest`, and no further methods must
+  // be called on this `HttpRequestCallback` instance for the given
+  // `HttpRequest` after this method is called.
+  virtual void OnResponseCompleted(const HttpRequest& request,
+                                   const HttpResponse& response) = 0;
 };
 
-// A response to a given `Request`. Implemented by the `HttpClient` implementer.
+// A response to a given `HttpRequest`. Implemented by the `HttpClient`
+// implementer.
 //
 // The lifetimes of instances of this class are managed by the `HttpClient`
 // implementer. Instances of this class must remain alive for at least long as
-// the corresponding `RequestHandle` is alive.
+// the corresponding `HttpRequestHandle` is alive.
 //
 // Note that all the data in this object should be for the last/final response.
 // I.e. any responses corresponding to redirects should not be reflected here.
-class Response {
+class HttpResponse {
  public:
-  virtual ~Response() = default;
+  virtual ~HttpResponse() = default;
 
   // The response code returned by the server (e.g. 200).
   virtual int code() const = 0;
