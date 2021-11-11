@@ -313,8 +313,7 @@ absl::Status GrpcFederatedProtocol::SendEligibilityEvalCheckinRequest() {
 }
 
 absl::Status GrpcFederatedProtocol::SendCheckinRequest(
-    const absl::optional<TaskEligibilityInfo>& task_eligibility_info,
-    bool should_ack_checkin) {
+    const absl::optional<TaskEligibilityInfo>& task_eligibility_info) {
   ClientStreamMessage client_stream_message;
   CheckinRequest* checkin_request =
       client_stream_message.mutable_checkin_request();
@@ -323,7 +322,7 @@ absl::Status GrpcFederatedProtocol::SendCheckinRequest(
   checkin_request->set_client_version(client_version_);
   checkin_request->set_attestation_measurement(attestation_measurement_);
   *checkin_request->mutable_protocol_options_request() =
-      CreateProtocolOptionsRequest(should_ack_checkin);
+      CreateProtocolOptionsRequest(/* should_ack_checkin=*/false);
 
   if (task_eligibility_info.has_value()) {
     *checkin_request->mutable_task_eligibility_info() = *task_eligibility_info;
@@ -617,11 +616,9 @@ GrpcFederatedProtocol::EligibilityEvalCheckin() {
 
 absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
     const absl::optional<TaskEligibilityInfo>& task_eligibility_info) {
-  // Checkin(...) must either be the very first method called on this object, or
-  // it must follow an earlier call to EligibilityEvalCheckin() that resulted in
-  // a non-Rejection response from the server.
-  FCP_CHECK(object_state_ == ObjectState::kInitialized ||
-            object_state_ == ObjectState::kEligibilityEvalDisabled ||
+  // Checkin(...) must follow an earlier call to EligibilityEvalCheckin() that
+  // resulted in a non-Rejection response from the server.
+  FCP_CHECK(object_state_ == ObjectState::kEligibilityEvalDisabled ||
             object_state_ == ObjectState::kEligibilityEvalEnabled)
       << "Checkin(...) called despite failed/rejected earlier "
          "EligibilityEvalCheckin";
@@ -634,29 +631,16 @@ absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
         << "Received TaskEligibilityInfo despite not receiving a prior "
            "EligibilityEvalCheckin payload";
   }
-  // We should only request another CheckinRequestAck if we didn't issue an
-  // eligibility checkin request yet (which would've received such an ack
-  // already).
-  bool should_ack_checkin = object_state_ == ObjectState::kInitialized;
 
   object_state_ = ObjectState::kCheckinFailed;
 
   absl::Time start_time = absl::Now();
   // Send a CheckinRequest.
-  absl::Status request_status =
-      SendCheckinRequest(task_eligibility_info, should_ack_checkin);
+  absl::Status request_status = SendCheckinRequest(task_eligibility_info);
   // See note about how we handle 'permanent' errors at the top of this file.
   UpdateObjectStateForPermanentError(request_status,
                                      ObjectState::kCheckinFailedPermanentError);
   FCP_RETURN_IF_ERROR(request_status);
-
-  if (should_ack_checkin) {
-    // Receive a CheckinRequestAck, if we requested one.
-    absl::Status ack_status = ReceiveCheckinRequestAck();
-    UpdateObjectStateForPermanentError(
-        ack_status, ObjectState::kCheckinFailedPermanentError);
-    FCP_RETURN_IF_ERROR(ack_status);
-  }
 
   // Receive + handle a CheckinResponse message, and update the object state
   // based on the received response.

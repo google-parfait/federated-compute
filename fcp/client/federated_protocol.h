@@ -82,9 +82,8 @@ class ComputationResults
 // interaction. Instances are generally stateful, and therefore cannot be
 // reused (each session should use a dedicated instance).
 //
-// The protocol consists of 3 phases (one of which is optional), which must
-// occur in the following order:
-// 1. A call to `EligibilityEvalCheckin()`, which is optional.
+// The protocol consists of 3 phases, which must occur in the following order:
+// 1. A call to `EligibilityEvalCheckin()`.
 // 2. A call to `Checkin(...)`, only if the client wasn't rejected by the server
 //    in the previous phase.
 // 3. A call to `ReportCompleted(...)` or `ReportNotCompleted(...)`, only if the

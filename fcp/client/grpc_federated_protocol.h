@@ -147,8 +147,7 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   absl::Status SendCheckinRequest(
       const absl::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&
-          task_eligibility_info,
-      bool should_ack_checkin);
+          task_eligibility_info);
 
   // Helper to receive + process a CheckinRequestAck message.
   absl::Status ReceiveCheckinRequestAck();
