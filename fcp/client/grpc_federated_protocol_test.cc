@@ -306,7 +306,7 @@ class GrpcFederatedProtocolTest
     // The first parameter indicates whether the new behavior w.r.t. retry
     // delays should be enabled.  The second parameter indicates whether the new
     // per phase logging should be enabled.
-    : public testing::TestWithParam<std::tuple<bool, bool>> {
+    : public testing::TestWithParam<bool> {
  public:
   GrpcFederatedProtocolTest() {
     // The gRPC stream should always be closed at the end of all tests.
@@ -315,7 +315,7 @@ class GrpcFederatedProtocolTest
 
  protected:
   void SetUp() override {
-    use_per_phase_logging_ = std::get<0>(GetParam());
+    use_per_phase_logging_ = GetParam();
     EXPECT_CALL(mock_flags_, per_phase_logs)
         .WillRepeatedly(Return(use_per_phase_logging_));
     EXPECT_CALL(*mock_grpc_bidi_stream_, ChunkingLayerBytesReceived())
@@ -500,24 +500,14 @@ class GrpcFederatedProtocolTest
 
   // The class under test.
   std::unique_ptr<GrpcFederatedProtocol> federated_protocol_;
-  bool use_new_retry_delay_behavior_;
   bool use_per_phase_logging_;
 };
 
-// We create a number of instances of the test suite: one set of instances with
-// the new retry delay behavior flag disabled, and once with it enabled. Most
-// tests should pass in both configurations, while a handful use GTEST_SKIP() to
-// only run conditionally for the specific configuration they're testing.
-
 INSTANTIATE_TEST_SUITE_P(
-    NewVsOldBehavior, GrpcFederatedProtocolTest,
-    testing::Combine(testing::Values(false, true),
-                     testing::Values(false, true)),
+    NewVsOldBehavior, GrpcFederatedProtocolTest, testing::Values(false, true),
     [](const testing::TestParamInfo<GrpcFederatedProtocolTest::ParamType>&
            info) {
-      std::string name = absl::StrCat(
-          std::get<0>(info.param) ? "New_retry_delay_" : "Legacy_retry_delay_",
-          std::get<1>(info.param) ? "Per_phase_logging" : "Legacy_logging");
+      std::string name = info.param ? "Per_phase_logging" : "Legacy_logging";
       absl::c_replace_if(
           name, [](char c) { return !std::isalnum(c); }, '_');
       return name;
@@ -526,13 +516,10 @@ INSTANTIATE_TEST_SUITE_P(
 using GrpcFederatedProtocolDeathTest = GrpcFederatedProtocolTest;
 INSTANTIATE_TEST_SUITE_P(
     NewVsOldBehavior, GrpcFederatedProtocolDeathTest,
-    testing::Combine(testing::Values(false, true),
-                     testing::Values(false, true)),
+    testing::Values(false, true),
     [](const testing::TestParamInfo<GrpcFederatedProtocolTest::ParamType>&
            info) {
-      std::string name = absl::StrCat(
-          std::get<0>(info.param) ? "New_retry_delay_" : "Legacy_retry_delay_",
-          std::get<1>(info.param) ? "Per_phase_logging" : "Legacy_logging");
+      std::string name = info.param ? "Per_phase_logging" : "Legacy_logging";
       absl::c_replace_if(
           name, [](char c) { return !std::isalnum(c); }, '_');
       return name;
