@@ -123,6 +123,31 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "tflite_utils",
+    srcs = ["tflite_utils.cc"],
+    hdrs = ["tflite_utils.h"],
+    deps = [
+        "//fcp/base",
+        "@com_google_absl//absl/status:statusor",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/lite:string_util",
+        "@org_tensorflow//tensorflow/lite/c:common",
+    ],
+)
+
+cc_test(
+    name = "tflite_utils_test",
+    srcs = ["tflite_utils_test.cc"],
+    deps = [
+        ":tflite_utils",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/lite:string_util",
+    ],
+)
+
 # Runtime protos. Those do not typically get serialized.
 tf_proto_library(
     name = "engine_proto",
