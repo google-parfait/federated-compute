@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -52,9 +53,77 @@ class HttpResponse;         // forward declaration
 // parallel, rather than having the 2nd call block until the 1st call is
 // completed).
 //
-// TODO(team): Submit additional documentation on the various
-// requirements HttpClient implementations must adhere to, but that aren't
-// listed here yet (details on protocol, TLS validation, compression, etc.).
+// Besides the requirements documented further below, the following high-level
+// behavior is required of any `HttpClient` implementation:
+// - Underlying protocols:
+//   * Implementations must support at least HTTP/1.1 over TLS 1.2.
+//   * Implementations are also allowed to serve requests using HTTP/2, QUIC or
+//     other newer protocols.
+//   * Implementations must support both IPv4 and IPv6 (but they are allowed to
+//     fall back to IPv4).
+// - Certificate validation:
+//   * Implementations are responsible for TLS certificate validation and for
+//     maintaining an up-to-date set of root certificates as well as an
+//     up-to-date HTTP/TLS implementation.
+//   * Implementations should not include user-added CAs, and should consider
+//     restricting the set of CAs further to only those needed for connecting to
+//     the expected endpoints.
+// - Cookies:
+//   * Implementations must not supply any cookies in requests (beyond those
+//     that may be specified in the `HttpRequest::headers()` method).
+//   * Implementations must not store any cookies returned by the server.
+//   * Instead, they must return any server-specified "Set-Cookie" response
+//     header via `HttpResponse::headers()`.
+// - Redirects:
+//   *  Implementations must follow HTTP redirects responses, up to an
+//      implementation-defined maximum.
+//   *  In such cases the response headers & body returned via the interfaces
+//      below should be those of the final response.
+//   *  See `HttpRequestCallback` docs below for more details.
+// - Caching:
+//   *  Implementations should not implement a cache as it is expected that
+//      naive HTTP-level caching will not be effective (and since a cache may
+//      ultimately be implemented over this interface, in the Federated Compute
+//      library itself).
+//   *  If implementations do implement one, however, they are expected to abide
+//      by the standard HTTP caching rules (see the `HttpRequest::Method` docs
+//      for more details).
+// - Response body decompression & decoding:
+//   *  If no "Accept-Encoding" request header is explicitly specified in
+//      `HttpRequest::headers()`, then implementations must advertise an
+//      "Accept-Encoding: gzip,deflate" request header themselves, and must
+//      transparently decompress any compressed server responses before
+//      returning the data via these interfaces. Implementations are also
+//      allowed to advertise/support additional encoding methods.
+//   *  In such cases where no "Accept-Encoding" header is specified,
+//      implementations must remove the "Content-Encoding" and
+//      "Content-Length" headers from headers returned via
+//      `HttpResponse::headers()` (since those wouldn't reflect the payload
+//      delivered via this interface).
+//   *  However, if an "Accept-Encoding" request header *is* explicitly
+//      specified, then implementations must use that header verbatim and they
+//      must not decompress the response (even if they natively support the
+//      compression method), and they must leave the "Content-Encoding" and
+//      "Content-Length" headers intact.
+//   *  This ensures that the caller of this interface can take full control of
+//      the decompression and/or choose to store decompressed payloads on disk
+//      if it so chooses.
+//   *  Implementations must transparently decode server responses served with
+//      "Transfer-Encoding: gzip", "deflate", or "chunked". In such cases they
+//      must remove the "Transfer-Encoding" response header.
+// - Request body compression & encoding:
+//   *  If implementations receive a "Content-Encoding" request header, this
+//      means that the request body stream they receive has already been
+//      compressed. The implementation must leave the header and request body
+//      intact in such cases (i.e. not re-compress it).
+//   *  If implementations receive a "Content-Length" request header, they must
+//      use it verbatim and they should then assume that the request body will
+//      be of exactly that size.
+//   *  If they do not receive such a header then they must use the
+//      "Transfer-encoding: chunked" mechanism to transmit the request body
+//      (i.e. they shouldn't specify a "Content-Length" header and they should
+//      transmit the body in chunks), or use an equivalent method of streaming
+//      the data (such as HTTP/2's data streaming).
 class HttpClient {
  public:
   virtual ~HttpClient() = default;
@@ -66,6 +135,7 @@ class HttpClient {
   // The `HttpClient` implementation assumes ownership of the `HttpRequest`
   // object, and the implementation must delete the object when the
   // `HttpRequestHandle` is deleted.
+  ABSL_MUST_USE_RESULT
   virtual std::unique_ptr<HttpRequestHandle> EnqueueRequest(
       std::unique_ptr<HttpRequest> request) = 0;
 
@@ -134,6 +204,9 @@ class HttpRequest {
 
   // Extra request headers to include with this request, in addition to any
   // headers specified by the `HttpClient` implementation.
+  //
+  // See the `HttpClient` comment for the expected behavior w.r.t. a few
+  // specific headers.
   virtual const HeaderList& extra_headers() const = 0;
 
   // Returns true if the request has a request body (which can be read using
@@ -141,7 +214,9 @@ class HttpRequest {
   // the "Content-Length" header will be set in `extra_headers()`. If it isn't
   // known yet then the `HttpClient` implementation should use the
   // "Transfer-Encoding: chunked" encoding to transmit the request body to the
-  // server in chunks.
+  // server in chunks (or use an equivalent method of streaming the data, e.g.
+  // if the connection uses HTTP/2). See the `HttpClient` comment for more
+  // details.
   virtual bool HasBody() const = 0;
 
   // HttpRequests that up to `requested` bytes of the request body be read into
@@ -259,8 +334,13 @@ class HttpRequestCallback {
   // Note that responses with an HTTP status code other than 200 ("OK") may
   // still have response bodies, and implementations must deliver these via the
   // `OnResponseBody` callback, just as they should for a successful response.
-  virtual void OnResponseStarted(const HttpRequest& request,
-                                 const HttpResponse& response) = 0;
+  //
+  // If this method returns an error then the `HttpClient` implementation should
+  // consider the `HttpRequest` canceled. No further methods must be called on
+  // this `HttpRequestCallback` instance for the given `HttpRequest` after in
+  // this case.
+  virtual absl::Status OnResponseStarted(const HttpRequest& request,
+                                         const HttpResponse& response) = 0;
 
   // Called when the request encountered an error or timed out, before receiving
   // the response headers completely. No further methods must be called on this
@@ -290,6 +370,11 @@ class HttpRequestCallback {
   //
   // Callees must process the data ASAP, as delaying this for too long may
   // prevent additional data from arriving on the network stream.
+  //
+  // If this method returns an error then the `HttpClient` implementation should
+  // consider the `HttpRequest` canceled. No further methods must be called on
+  // this `HttpRequestCallback` instance for the given `HttpRequest` after in
+  // this case.
   virtual absl::Status OnResponseBody(const HttpRequest& request,
                                       const HttpResponse& response,
                                       absl::string_view data) = 0;
@@ -342,10 +427,14 @@ class HttpResponse {
   // The response headers. Implementations are allowed to either coalesce
   // repeated headers using commas (as per RFC2616 section 4.2), or to return
   // them as separate entries.
+  //
+  // See `HttpClient` comment for the expected behavior w.r.t. a few specific
+  // headers.
   virtual const HeaderList& headers() const = 0;
 };
-};  // namespace http
-};  // namespace client
-};  // namespace fcp
+
+}  // namespace http
+}  // namespace client
+}  // namespace fcp
 
 #endif  // FCP_CLIENT_HTTP_HTTP_CLIENT_H_
