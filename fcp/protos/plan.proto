@@ -924,6 +924,18 @@ message ExampleSelector {
   google.protobuf.Any resumption_token = 3;
 }
 
+// Selector for slices to fetch as part of a `federated_select` operation.
+message SlicesSelector {
+  // The string ID under which the slices are served.
+  //
+  // This value must have been returned by a previous call to the `serve_slices`
+  // op run during the `write_client_init` operation.
+  string served_at_id = 1;
+
+  // The indices of slices to fetch.
+  repeated int32 keys = 2;
+}
+
 // Server Phase
 // ============
 
