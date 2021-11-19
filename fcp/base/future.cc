@@ -13,14 +13,3 @@
 // limitations under the License.
 
 #include "fcp/base/future.h"
-
-namespace fcp {
-namespace thread {
-
-Future<Unit> ScheduleFuture(Scheduler* scheduler, std::function<void()> func) {
-  std::function<Unit()> lifted_func = LiftVoidReturn(std::move(func));
-  return ScheduleFuture(scheduler, std::move(lifted_func));
-}
-
-}  // namespace thread
-}  // namespace fcp

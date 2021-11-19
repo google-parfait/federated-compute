@@ -220,12 +220,6 @@ Future<T> ScheduleFuture(Scheduler* scheduler, std::function<T()> func) {
   return std::move(p.future);
 }
 
-/**
- * Convenience overload of ScheduleFuture for void functions (just lifts to
- * Unit).
- */
-Future<Unit> ScheduleFuture(Scheduler* scheduler, std::function<void()> func);
-
 namespace future_internal {
 
 template <typename T>
