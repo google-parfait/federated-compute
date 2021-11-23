@@ -24,6 +24,7 @@
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/engine/common.h"
 #include "fcp/client/engine/tf_wrapper.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/flags.h"
@@ -38,25 +39,6 @@
 namespace fcp {
 namespace client {
 namespace engine {
-
-// The result of a call to `SimplePlanEngine::RunPlan`.
-struct PlanResult {
-  explicit PlanResult(engine::PhaseOutcome outcome) : outcome(outcome) {}
-
-  // The outcome of the plan execution.
-  engine::PhaseOutcome outcome;
-  // Only set if `outcome` is `COMPLETE`, otherwise this is empty.
-  std::vector<tensorflow::Tensor> output_tensors;
-  // Only set if `outcome` is `COMPLETE`, otherwise this is empty.
-  std::vector<std::string> output_names;
-
-  PlanResult(PlanResult&&) = default;
-  PlanResult& operator=(PlanResult&&) = default;
-
-  // Disallow copy and assign.
-  PlanResult(const PlanResult&) = delete;
-  PlanResult& operator=(const PlanResult&) = delete;
-};
 
 // A class used to "run" (interpret) a TensorflowSpec-based plan. Each instance
 // should generally only be used once to run a plan.

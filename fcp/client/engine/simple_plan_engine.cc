@@ -31,53 +31,6 @@ using ::fcp::client::opstats::OperationalStats;
 using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::TensorflowSpec;
 
-namespace {
-
-absl::Status ValidateTensorflowSpec(
-    const TensorflowSpec& tensorflow_spec,
-    const std::vector<std::pair<std::string, tensorflow::Tensor>>& inputs,
-    const std::vector<std::string>& output_names) {
-  // Check that all inputs have corresponding TensorSpecProtos.
-  absl::flat_hash_set<std::string> expected_input_tensor_names_set;
-  for (const std::pair<std::string, tensorflow::Tensor>& input : inputs) {
-    expected_input_tensor_names_set.insert(input.first);
-  }
-  if (expected_input_tensor_names_set.size() !=
-      tensorflow_spec.input_tensor_specs_size()) {
-    return absl::InvalidArgumentError(
-        "Unexpected number of input_tensor_specs");
-  }
-
-  for (const tensorflow::TensorSpecProto& it :
-       tensorflow_spec.input_tensor_specs()) {
-    if (!expected_input_tensor_names_set.count(it.name())) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Missing expected TensorSpecProto for input ", it.name()));
-    }
-  }
-  // Check that all outputs have corresponding TensorSpecProtos.
-  absl::flat_hash_set<std::string> expected_output_tensor_names_set(
-      output_names.begin(), output_names.end());
-  if (expected_output_tensor_names_set.size() !=
-      tensorflow_spec.output_tensor_specs_size()) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Unexpected number of output_tensor_specs: ",
-                     expected_output_tensor_names_set.size(), " vs. ",
-                     tensorflow_spec.output_tensor_specs_size()));
-  }
-  for (const tensorflow::TensorSpecProto& it :
-       tensorflow_spec.output_tensor_specs()) {
-    if (!expected_output_tensor_names_set.count(it.name())) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Missing expected TensorSpecProto for output ", it.name()));
-    }
-  }
-
-  return absl::OkStatus();
-}
-
-}  // namespace
-
 SimplePlanEngine::SimplePlanEngine(
     SimpleTaskEnvironment* task_env, LogManager* log_manager,
     EventPublisher* event_publisher, OpStatsLogger* opstats_logger,
@@ -99,8 +52,13 @@ PlanResult SimplePlanEngine::RunPlan(
     std::function<void()> log_computation_started,
     std::function<void()> log_computation_finished,
     const SelectorContext& selector_context) {
-  absl::Status validity_checks =
-      ValidateTensorflowSpec(tensorflow_spec, *inputs, output_names);
+  // Check that all inputs have corresponding TensorSpecProtos.
+  absl::flat_hash_set<std::string> expected_input_tensor_names_set;
+  for (const std::pair<std::string, tensorflow::Tensor>& input : *inputs) {
+    expected_input_tensor_names_set.insert(input.first);
+  }
+  absl::Status validity_checks = ValidateTensorflowSpec(
+      tensorflow_spec, expected_input_tensor_names_set, output_names);
   if (!validity_checks.ok()) {
     FCP_LOG(ERROR) << validity_checks.message();
     log_manager_->LogDiag(

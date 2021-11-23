@@ -208,6 +208,29 @@ HostObjectRegistration AddDatasetTokenToInputs(
   return host_registration;
 }
 
+HostObjectRegistration AddDatasetTokenToInputsForTfLite(
+    std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
+        const google::internal::federated::plan::ExampleSelector&)>
+        create_example_iterator,
+    EventPublisher* event_publisher, LogManager* log_manager,
+    OpStatsLogger* opstats_logger,
+    absl::flat_hash_map<std::string, std::string>* inputs,
+    const std::string& dataset_token_tensor_name,
+    std::atomic<int>* total_example_count,
+    std::atomic<int64_t>* total_example_size_bytes) {
+  // Registers the TrainingDatasetProvider with the global
+  // ExternalDatasetProviderRegistry.
+  auto host_registration = fcp::ExternalDatasetProviderRegistry::Register(
+      std::make_shared<TrainingDatasetProvider>(
+          create_example_iterator, event_publisher, log_manager, opstats_logger,
+          total_example_count, total_example_size_bytes));
+  // Adds the token returned from registering the provider to the map of inputs.
+  // TfLite will use that token via the ExternalDatasetOp to create
+  // datasets and iterators.
+  (*inputs)[dataset_token_tensor_name] = host_registration.token().ToString();
+  return host_registration;
+}
+
 absl::StatusOr<std::unique_ptr<ExampleIterator>> GetExampleIterator(
     const ExampleSelector& selector, LogManager* log_manager,
     OpStatsLogger* opstats_logger,

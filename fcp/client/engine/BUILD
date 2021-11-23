@@ -38,6 +38,7 @@ cc_library(
     visibility = default_visibility + [
     ],
     deps = [
+        ":common",
         ":engine_cc_proto",
         ":plan_engine_helpers",
         ":tf_wrapper",
@@ -145,6 +146,20 @@ cc_test(
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/lite:string_util",
+    ],
+)
+
+cc_library(
+    name = "common",
+    srcs = ["common.cc"],
+    hdrs = ["common.h"],
+    deps = [
+        ":engine_cc_proto",
+        "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
     ],
 )
 

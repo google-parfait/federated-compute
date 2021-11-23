@@ -233,7 +233,7 @@ class SimpleExampleIterator : public ExampleIterator {
   int index_ = 0;
 };
 
-struct FlArtifacts {
+struct ComputationArtifacts {
   google::internal::federated::plan::ClientOnlyPlan plan;
   google::internal::federated::plan::Dataset dataset;
   std::string checkpoint;

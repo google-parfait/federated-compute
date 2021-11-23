@@ -85,6 +85,21 @@ HostObjectRegistration AddDatasetTokenToInputs(
     std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes);
 
+// Sets up an ExternalDatasetProvider that is registered with the global
+// HostObjectRegistry. Adds a std::string representing the HostObjectRegistration
+// token to the map of input tensor name and values with the provided
+// dataset_token_tensor_name key.
+HostObjectRegistration AddDatasetTokenToInputsForTfLite(
+    std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
+        const google::internal::federated::plan::ExampleSelector&)>
+        create_example_iterator,
+    EventPublisher* event_publisher, LogManager* log_manager,
+    ::fcp::client::opstats::OpStatsLogger* opstats_logger,
+    absl::flat_hash_map<std::string, std::string>* inputs,
+    const std::string& dataset_token_tensor_name,
+    std::atomic<int>* total_example_count,
+    std::atomic<int64_t>* total_example_size_bytes);
+
 // Helper for constructing the appropriate example iterator (opstats data or
 // user data) based on the provided selector.
 absl::StatusOr<std::unique_ptr<ExampleIterator>> GetExampleIterator(
