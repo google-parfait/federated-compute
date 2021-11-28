@@ -15,6 +15,10 @@
  */
 #include "fcp/client/engine/tf_wrapper.h"
 
+#include <functional>
+#include <string>
+#include <utility>
+
 #include "google/protobuf/any.pb.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"

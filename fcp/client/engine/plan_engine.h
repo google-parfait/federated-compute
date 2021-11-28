@@ -17,6 +17,8 @@
 #define FCP_CLIENT_ENGINE_PLAN_ENGINE_H_
 
 #include <cstddef>
+#include <string>
+#include <utility>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"

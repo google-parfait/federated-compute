@@ -15,6 +15,8 @@
  */
 #include "fcp/client/engine/tflite_utils.h"
 
+#include <string>
+
 #include "gtest/gtest.h"
 #include "fcp/testing/testing.h"
 #include "tensorflow/lite/string_util.h"

@@ -16,6 +16,10 @@
 #ifndef FCP_CLIENT_ENGINE_TF_WRAPPER_H_
 #define FCP_CLIENT_ENGINE_TF_WRAPPER_H_
 
+#include <functional>
+#include <string>
+#include <utility>
+
 #include "google/protobuf/any.pb.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"

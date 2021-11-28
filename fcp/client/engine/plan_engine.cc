@@ -16,6 +16,8 @@
 #include "fcp/client/engine/plan_engine.h"
 
 #include <fstream>
+#include <string>
+#include <utility>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"

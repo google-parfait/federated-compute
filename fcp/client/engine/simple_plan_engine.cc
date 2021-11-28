@@ -15,6 +15,10 @@
  */
 #include "fcp/client/engine/simple_plan_engine.h"
 
+#include <functional>
+#include <string>
+#include <utility>
+
 #include "google/protobuf/any.pb.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"

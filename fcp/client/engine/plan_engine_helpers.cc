@@ -15,6 +15,10 @@
  */
 #include "fcp/client/engine/plan_engine_helpers.h"
 
+#include <functional>
+#include <string>
+#include <utility>
+
 #include "absl/status/statusor.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/opstats/opstats_example_store.h"

@@ -16,6 +16,9 @@
 #ifndef FCP_CLIENT_ENGINE_PLAN_ENGINE_HELPERS_H_
 #define FCP_CLIENT_ENGINE_PLAN_ENGINE_HELPERS_H_
 
+#include <functional>
+#include <string>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/base/monitoring.h"

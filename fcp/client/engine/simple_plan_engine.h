@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_ENGINE_SIMPLE_PLAN_ENGINE_H_
 #define FCP_CLIENT_ENGINE_SIMPLE_PLAN_ENGINE_H_
 
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
