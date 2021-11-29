@@ -349,15 +349,16 @@ void SecAggUnpackedVector::Add(const SecAggVector& other) {
   FCP_CHECK(modulus() == other.modulus());
   SecAggVector::Decoder decoder(other);
   for (auto& v : *this) {
-    v = AddMod(v, decoder.ReadValue(), modulus());
+    v = AddModOpt(v, decoder.ReadValue(), modulus());
   }
 }
 
 void SecAggUnpackedVectorMap::Add(const SecAggVectorMap& other) {
   FCP_CHECK(size() == other.size());
-  for (auto& entry : *this) {
-    FCP_CHECK(other.contains(entry.first));
-    entry.second.Add(other.at(entry.first));
+  for (auto& [name, vector] : *this) {
+    auto it = other.find(name);
+    FCP_CHECK(it != other.end());
+    vector.Add(it->second);
   }
 }
 
