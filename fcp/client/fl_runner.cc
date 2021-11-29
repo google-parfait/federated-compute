@@ -194,10 +194,7 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
 
   const FederatedComputeEligibilityIORouter& io_router =
       client_plan.phase().federated_compute_eligibility();
-  // Construct input tensors and output tensor names based on the values in the
-  // FederatedComputeEligibilityIORouter message.
-  auto inputs = ConstructInputsForEligibilityEvalPlan(
-      io_router, checkpoint_input_filename);
+
   std::vector<std::string> output_names = {
       io_router.task_eligibility_info_tensor_name()};
 
@@ -210,6 +207,10 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
         OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_FINISHED);
   };
 
+  // Construct input tensors and output tensor names based on the values in the
+  // FederatedComputeEligibilityIORouter message.
+  auto inputs = ConstructInputsForEligibilityEvalPlan(
+      io_router, checkpoint_input_filename);
   // Run plan and get a set of output tensors back.
   engine::SimplePlanEngine plan_engine(env_deps, log_manager, event_publisher,
                                        opstats_logger, &timing_config, flags);
@@ -360,9 +361,11 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   };
 
   // Run plan and get a set of output tensors back.
+  engine::PlanResult plan_result(engine::PhaseOutcome::ERROR);
+
   engine::SimplePlanEngine plan_engine(env_deps, log_manager, event_publisher,
                                        opstats_logger, &timing_config, flags);
-  auto plan_result = plan_engine.RunPlan(
+  plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs), *output_names,
       run_plan_start_time, reference_time, log_computation_started,
@@ -370,6 +373,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
 
   result.plan_result = std::move(plan_result);
   result.checkpoint_file = *checkpoint_output_filename;
+
   return result;
 }
 

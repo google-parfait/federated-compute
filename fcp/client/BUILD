@@ -282,6 +282,14 @@ cc_test(
     ],
 )
 
+OPTIONAL_DEPS = select({
+    "//conditions:default": [],
+})
+
+OPTIONAL_DEFINES = select({
+    "//conditions:default": [],
+})
+
 cc_library(
     name = "fl_runner",
     srcs = ["fl_runner.cc"],
@@ -289,18 +297,24 @@ cc_library(
         "fl_runner.h",
     ],
     copts = FCP_COPTS,
+    defines = OPTIONAL_DEFINES,
     visibility = ["//fcp:public_api_visibility"],
     deps = [
         ":federated_protocol",
-        ":federated_task_environment",
-        ":fl_runner_cc_proto",
-        ":fl_runner_internal_cc_proto",
         ":grpc_federated_protocol",
+        ":federated_task_environment",
+        ":fl_runner_internal_cc_proto",
+        ":fl_runner_cc_proto",
         ":histogram_counters_cc_proto",
         ":interfaces",
         ":interruptible_runner",
-        ":selector_context_cc_proto",
         ":simple_task_environment",
+        ":selector_context_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/types:variant",
         "//fcp/base",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/client/engine:plan_engine",
@@ -309,14 +323,9 @@ cc_library(
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
         "//fcp/protos:plan_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:optional",
-        "@com_google_absl//absl/types:variant",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
-    ],
+    ] + OPTIONAL_DEPS,
 )
 
 cc_library(
@@ -326,22 +335,23 @@ cc_library(
         "lc_runner.h",
     ],
     copts = FCP_COPTS,
+    defines = OPTIONAL_DEFINES,
     visibility = ["//fcp:public_api_visibility"],
     deps = [
         ":interfaces",
         ":selector_context_cc_proto",
         ":simple_task_environment",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
         "//fcp/base",
         "//fcp/client/engine:plan_engine",
         "//fcp/client/engine:plan_engine_helpers",
         "//fcp/client/opstats:opstats_logger",
         "//fcp/protos:plan_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/time",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
-    ],
+    ] + OPTIONAL_DEPS,
 )
 
 cc_library(

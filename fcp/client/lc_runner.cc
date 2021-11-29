@@ -24,6 +24,7 @@
 #include "fcp/base/platform.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/simple_plan_engine.h"
+
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -54,6 +55,21 @@ ConstructInputsForTensorflowSpecPlan(const LocalComputeIORouter& local_compute,
   inputs->push_back({local_compute.output_dir_tensor_name(), output_dirpath});
   return inputs;
 }
+
+absl::Status ConvertPhaseOutcomeToStatus(engine::PhaseOutcome outcome) {
+  switch (outcome) {
+    case engine::PhaseOutcome::COMPLETED:
+      return absl::OkStatus();
+    case engine::PhaseOutcome::ERROR:
+      return absl::InternalError("");
+    case engine::PhaseOutcome::INTERRUPTED:
+      return absl::CancelledError("");
+    default:
+      FCP_LOG(FATAL) << "Unexpected phase outcome.";
+      return absl::UnknownError("");
+  }
+}
+
 absl::Status RunPlanWithTensorflowSpec(
     SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
@@ -82,10 +98,6 @@ absl::Status RunPlanWithTensorflowSpec(
         OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
     return absl::InvalidArgumentError("");
   }
-  // Construct input tensors based on the values in the LocalComputeIORouter
-  // message.
-  auto inputs = ConstructInputsForTensorflowSpecPlan(
-      client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
 
   auto log_computation_started = [opstats_logger]() {
     opstats_logger->AddEvent(
@@ -98,24 +110,20 @@ absl::Status RunPlanWithTensorflowSpec(
 
   // Run plan
   std::vector<std::string> output_names_unused;
+  engine::PlanResult plan_result(engine::PhaseOutcome::PHASE_OUTCOME_UNDEFINED);
+
+  // Construct input tensors based on the values in the LocalComputeIORouter
+  // message.
+  auto inputs = ConstructInputsForTensorflowSpecPlan(
+      client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
   engine::SimplePlanEngine plan_engine(env_deps, log_manager, event_publisher,
                                        opstats_logger, &timing_config, flags);
-  engine::PlanResult plan_result = plan_engine.RunPlan(
+  plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs),
       output_names_unused, run_plan_start_time, reference_time,
       log_computation_started, log_computation_finished, selector_context);
-  switch (plan_result.outcome) {
-    case engine::PhaseOutcome::COMPLETED:
-      return absl::OkStatus();
-    case engine::PhaseOutcome::ERROR:
-      return absl::InternalError("");
-    case engine::PhaseOutcome::INTERRUPTED:
-      return absl::CancelledError("");
-    default:
-      FCP_CHECK(false) << "Unexpected phase outcome.";
-      return absl::UnknownError("");
-  }
+  return ConvertPhaseOutcomeToStatus(plan_result.outcome);
 }
 }  // anonymous namespace
 

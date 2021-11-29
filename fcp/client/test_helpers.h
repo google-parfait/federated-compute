@@ -268,6 +268,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, record_earliest_trustworthy_time_for_opstats, (),
               (const, override));
   MOCK_METHOD(bool, per_phase_logs, (), (const, override));
+  MOCK_METHOD(bool, use_tflite_training, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
