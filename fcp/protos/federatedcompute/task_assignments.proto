@@ -1,0 +1,136 @@
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.internal.federatedcompute.v1;
+
+import "google/api/annotations.proto";
+import "google/longrunning/operations.proto";
+import "fcp/protos/federatedcompute/common.proto";
+
+option java_package = "com.google.internal.federatedcompute.v1";
+option java_multiple_files = true;
+
+service TaskAssignments {
+  // A request sent by the device to check if it should participate in the
+  // current phase. Clients should use the same ForwardingInfo as used in this
+  // request to construct the URI to poll the operation service to check for
+  // task assignment completion. When the task assignment is complete, the
+  // result of the operation will either contain an error or the resulting
+  // `StartTaskAssignmentResponse` in the response.
+  //
+  // If the client no longer needs a task assignment because it is interrupted
+  // or drops out, the client should make a best effort to call CancelOperation.
+  rpc StartTaskAssignment(StartTaskAssignmentRequest)
+      returns (google.longrunning.Operation) {
+    option (google.api.http) = {
+      post: "/v1/populations/{population_name}/taskassignments/{session_id}:start"
+      body: "*"
+    };
+    option (google.longrunning.operation_info) = {
+      response_type: "StartTaskAssignmentResponse"
+      metadata_type: "StartTaskAssignmentMetadata"
+    };
+  }
+}
+
+message StartTaskAssignmentRequest {
+  // The name of the population this client belongs to.
+  //
+  // Note that http clients set this value in the request URL instead of the
+  // request body.
+  string population_name = 1
+      ;
+
+  // The session id returned by the server.
+  //
+  // Note that http clients set this value in the request URL instead of the
+  // request body.
+  string session_id = 2
+      ;
+
+  // The attestation measurement providing evidence of integrity for this
+  // client. The measurement is bound to the population_name and session_id
+  // values in this request.
+  //
+  // Note that this must be the same as the value of this field in the previous
+  // `EligibilityEvalTaskRequest`, since this request is considered part of the
+  // same logical protocol session as the previous `EligibilityEvalTaskRequest`.
+  AttestationMeasurement attestation_measurement = 3;
+
+  ClientVersion client_version = 4;
+
+  // The client computes this message using the task returned by a previous
+  // `RequestEligibilityEvalTask` call.
+  //
+  // If this field is set, it describes to the server which tasks the client is
+  // (in)eligible. The server must take this information into account when
+  // deciding task to serve in response to this request.
+  //
+  // If this field is unset, it may indicate that the client previously received
+  // an `EligibilityEvalTask` without an `EligibilityEvalPayload` message (i.e.
+  // the population did not have an eligibility-computing task configured at the
+  // time of the request). It may also indicate a client for which the
+  // eligibility-computing task feature has been disabled, or an old client that
+  // does not support this feature yet.
+  //
+  // If this field is unset but the population has an eligibility-computing task
+  // configured, then the server must reject this client, since the server has
+  // no way to determine which tasks the client is (in)eligible for.
+  //
+  // If this field is unset and the population does not have an
+  // eligibility-computing task configured, then the server may serve this
+  // client any task.
+  //
+  TaskEligibilityInfo task_eligibility_info = 5;
+}
+
+message StartTaskAssignmentMetadata {}
+
+message StartTaskAssignmentResponse {
+  // One of two outcomes, depending on server's decision on participation of the
+  // client.
+  oneof result {
+    // If the client joined the phase with this call, information how
+    // to proceed.
+    TaskAssignment task_assignment = 1;
+
+    // If the client was not accepted, information how to proceed.
+    RejectionInfo rejection_info = 2;
+  }
+}
+
+// When client (device) is accepted for the current phase, this
+// data structure carries information necessary to begin task execution.
+message TaskAssignment {
+  // Information to construct the URI to use for providing a result report after
+  // task execution.
+  ForwardingInfo forwarding_info = 1;
+
+  // Unique identifier for the client's protocol session.
+  string client_session_id = 5;
+
+  // The opaque id of the phase the client has joined. This is a string
+  // generated by the server and used by the client for logging purposes.
+  // This id MUST NOT contain any information that could be used to identify
+  // a specific device.
+  string aggregation_session_id = 2;
+
+  // The checkpoint from which to start execution.
+  Resource init_checkpoint = 3;
+
+  // The plan to be used for execution.
+  Resource plan = 4;
+}

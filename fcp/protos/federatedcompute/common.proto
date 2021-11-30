@@ -1,0 +1,121 @@
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.internal.federatedcompute.v1;
+
+import "google/protobuf/duration.proto";
+
+option java_package = "com.google.internal.federatedcompute.v1";
+option java_multiple_files = true;
+option java_outer_classname = "FederatedComputeApi";
+
+// Information that tells the client where to send the request for the next
+// protocol phase (the immediately following phase only, not any additional
+// subsequent phases). For example, this may point to the frontend to which
+// a StartTaskAssignmentRequest should be sent, but it should not then be used
+// for uploading aggregation results. A ForwardingInfo will always be returned
+// to the client unless the client was not selected to continue with the
+// protocol.
+message ForwardingInfo {
+  // A URI prefix for the next service to send the request for the next protocol
+  // phase to. For example, an EligibilityEvalTaskResponse's ForwardingInfo may
+  // contain a URI prefix like "https://federatedcompute-pa.googleapis.com/.
+  string target_uri_prefix = 1;
+  // Request headers that should be included with the next request for the next
+  // protocol phase. Note that these headers should only be applied to protocol
+  // requests, but not to any Resource fetch requests.
+  map<string, string> extra_request_headers = 2;
+}
+
+// The attestation measurement providing evidence of integrity for a client.
+// TODO(team): Determine source of attestation.
+message AttestationMeasurement {}
+
+message ClientVersion {
+  // Version code identifying the client release.
+  string version_code = 1;
+}
+
+// Describes to the server which tasks a client is eligible for.
+message TaskEligibilityInfo {
+  // A semantic version describing how the set of eligibility descriptors should
+  // be interpreted. This fields enables assigning different semantics for how
+  // the server should interpret the descriptors, without having to change the
+  // wire format (e.g. different ways of interpreting `TaskWeight.weight`).
+  int64 version = 1;
+
+  // A list of task weights, which the server may use when assigning the client
+  // a task in response to the current request.
+  //
+  // If none of the `TaskWeight` messages match a given task, then the client
+  // must be considered ineligible for that task, and the server must not serve
+  // the client that task.
+  //
+  // Therefore, if a `TaskEligibilityInfo` message is provided but this field is
+  // empty then the client should be considered ineligible for all tasks in the
+  // population (although in practice the client will stop the protocol in that
+  // case, rather than issue a `StartTaskAssignmentRequest` with an empty list
+  // of weights).
+  repeated TaskWeight task_weights = 2;
+}
+
+// Describes a weight that should be assigned to a specific task.
+message TaskWeight {
+  // Name of the task this weight applies to.
+  string task_name = 1;
+
+  // The weight that should be applied to the specified task.
+  //
+  // Must be >0.
+  //
+  // This weight may (or may not) be used by the server to implement some form
+  // of task or client prioritization.
+  float weight = 2;
+}
+
+message Resource {
+  // A resource can either be downloaded via a URI, or has its data inlined in
+  // in this message itself.
+  oneof resource {
+    // The URI the resource can be downloaded from. Note that
+    // `ForwardingInfo.target_uri_prefix` field generally don't apply to these
+    // URIs.
+    string uri = 1;
+
+    // The inlined data for the resource.
+    bytes data = 2;
+  }
+}
+
+// Currently empty message which is sent when client (device) is rejected for
+// participation and is not assigned a task.
+message RejectionInfo {}
+
+// A suggestion to the client when to retry the connection to the service next
+// time
+message RetryWindow {
+  // The suggested minimal duration after which the client should
+  // retry. If the client retries earlier, it is likely it will be rejected
+  // again.
+  google.protobuf.Duration delay_min = 1;
+
+  // Required. The suggested maximal duration after which the client should
+  // retry, provided scheduling conditions allow. The client is supposed to make
+  // a best effort to callback in the min..max window, and should avoid
+  // calling before min. If the client calls after max, the likelihood to be
+  // rejected again is higher.
+  google.protobuf.Duration delay_max = 2;
+}

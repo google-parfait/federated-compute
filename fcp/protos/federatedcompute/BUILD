@@ -1,0 +1,52 @@
+# Copyright 2021 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+default_visibility = [
+    "//fcp:internal",
+    "//fcp:public_api_visibility",
+]
+
+package(
+    default_visibility = default_visibility,
+    licenses = ["notice"],  # Apache 2.0
+)
+
+# --------------------------------------------------------------------
+
+# The api protos.
+proto_library(
+    name = "federated_compute_proto",
+    srcs = [
+        "aggregation_reports.proto",
+        "common.proto",
+        "eligibility_eval_tasks.proto",
+        "task_assignments.proto",
+    ],
+    deps = [
+        "@com_google_googleapis//google/api:annotations_proto",
+        "@com_google_googleapis//google/longrunning:operations_proto",
+        "@com_google_googleapis//google/rpc:code_proto",
+        "@com_google_protobuf//:duration_proto",
+    ],
+)
+
+java_proto_library(
+    name = "federated_compute_java_proto",
+    deps = [":federated_compute_proto"],
+)
+
+cc_proto_library(
+    name = "federated_compute_cc_proto",
+    deps = [":federated_compute_proto"],
+)
