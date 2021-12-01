@@ -14,9 +14,9 @@
 
 #include "fcp/tracing/text_tracing_recorder_impl.h"
 
+#include <memory>
 #include <ostream>
 
-#include "absl/memory/memory.h"
 #include "absl/time/clock.h"
 #include "fcp/tracing/text_tracing_span_impl.h"
 #include "flatbuffers/minireflect.h"
@@ -29,12 +29,12 @@ TextTracingRecorderImpl::TextTracingRecorderImpl(const std::string& filename,
                                                  absl::TimeZone time_zone)
     : fstream_(filename), time_zone_(time_zone) {
   stream_ = &fstream_.value();
-  root_span_ = absl::make_unique<TextTracingSpanImpl>(this);
+  root_span_ = std::make_unique<TextTracingSpanImpl>(this);
 }
 
 TextTracingRecorderImpl::TextTracingRecorderImpl(absl::TimeZone time_zone)
     : stream_(&std::cerr), time_zone_(time_zone) {
-  root_span_ = absl::make_unique<TextTracingSpanImpl>(this);
+  root_span_ = std::make_unique<TextTracingSpanImpl>(this);
 }
 
 // TODO(team): Ensure traces from different threads are not interleaved.
@@ -88,7 +88,7 @@ std::unique_ptr<TracingSpanImpl> TextTracingRecorderImpl::CreateChildSpan(
   // std::shared_ptr<TracingRecorderImpl> and we have to (safely) cast it here:
   auto shared_this =
       std::static_pointer_cast<TextTracingRecorderImpl>(shared_from_this());
-  return absl::make_unique<TextTracingSpanImpl>(
+  return std::make_unique<TextTracingSpanImpl>(
       shared_this, std::move(buf), traits, TracingSpanId::NextUniqueId(),
       parent_span_id);
 }

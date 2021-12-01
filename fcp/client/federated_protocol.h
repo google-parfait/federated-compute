@@ -18,6 +18,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -26,7 +27,6 @@
 #include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/types/optional.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -58,16 +58,15 @@ struct QuantizedTensor {
   QuantizedTensor& operator=(QuantizedTensor&&) = default;
 };
 // This is equivalent to using ComputationResults =
-//    std::map<std::string, absl::variant<TFCheckpoint, QuantizedTensor>>;
+//    std::map<std::string, std::variant<TFCheckpoint, QuantizedTensor>>;
 // except copy construction and assignment are explicitly prohibited and move
 // semantics is enforced.
 class ComputationResults
     : public absl::node_hash_map<std::string,
-                                 absl::variant<TFCheckpoint, QuantizedTensor>> {
+                                 std::variant<TFCheckpoint, QuantizedTensor>> {
  public:
-  using Base =
-      absl::node_hash_map<std::string,
-                          absl::variant<TFCheckpoint, QuantizedTensor>>;
+  using Base = absl::node_hash_map<std::string,
+                                   std::variant<TFCheckpoint, QuantizedTensor>>;
   using Base::Base;
   using Base::operator=;
   ComputationResults(const ComputationResults&) = delete;
@@ -120,7 +119,7 @@ class FederatedProtocol {
   // 3. a Rejection if the server rejected this device. In this case the caller
   //    should end its protocol interaction.
   using EligibilityEvalCheckinResult =
-      absl::variant<CheckinResultPayload, EligibilityEvalDisabled, Rejection>;
+      std::variant<CheckinResultPayload, EligibilityEvalDisabled, Rejection>;
 
   // Checks in with a federated server to receive the population's eligibility
   // eval task. This method is optional and may be called 0 or 1 times. If it is
@@ -146,7 +145,7 @@ class FederatedProtocol {
   // Checkin() returns either
   // 1. a CheckinResultPayload struct, or
   // 2. a Rejection struct if the server rejected this device.
-  using CheckinResult = absl::variant<CheckinResultPayload, Rejection>;
+  using CheckinResult = std::variant<CheckinResultPayload, Rejection>;
 
   // Checks in with a federated server. Must only be called once. If the
   // `EligibilityEvalCheckin()` method was previously called, then this method
@@ -181,7 +180,7 @@ class FederatedProtocol {
   // TODO(team): Replace this reference to protocol-specific
   // TaskEligibilityInfo proto with a protocol-agnostic struct.
   virtual absl::StatusOr<CheckinResult> Checkin(
-      const absl::optional<
+      const std::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&
           task_eligibility_info) = 0;
 

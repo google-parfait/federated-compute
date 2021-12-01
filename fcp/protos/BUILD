@@ -95,7 +95,7 @@ proto_library(
     name = "opstats_proto",
     srcs = ["opstats.proto"],
     deps = [
-        "//fcp/protos:federated_api_proto",
+        ":federated_api_proto",
         "@com_google_protobuf//:timestamp_proto",
     ],
 )

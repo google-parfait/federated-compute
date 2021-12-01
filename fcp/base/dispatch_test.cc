@@ -16,9 +16,9 @@
 
 #include "fcp/base/dispatch.h"
 
+#include <variant>
 #include <vector>
 
-#include "absl/types/variant.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -27,7 +27,7 @@ namespace fcp {
 using ::testing::Eq;
 using ::testing::VariantWith;
 
-using ExampleGeneric = absl::variant<Unit, int, bool>;
+using ExampleGeneric = std::variant<Unit, int, bool>;
 
 struct ExampleGenericRepr {
   using GenericType = ExampleGeneric;

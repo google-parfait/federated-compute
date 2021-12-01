@@ -56,10 +56,10 @@ TEST(SecAggClientTest, ConstructedWithCorrectState) {
   SecAggClient client(
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
-      input_vector_specs, absl::make_unique<FakePrng>(),
+      input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(client.IsAborted(), Eq(false));
   EXPECT_THAT(client.IsCompletedSuccessfully(), Eq(false));
@@ -75,11 +75,11 @@ TEST(SecAggClientTest, StartCausesStateTransition) {
   SecAggClient client(
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
-      input_vector_specs, absl::make_unique<FakePrng>(),
+      input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
 
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   // Message correctness is checked in the tests for the Round 0 classes.
   EXPECT_CALL(*sender, Send(::testing::_));
@@ -104,11 +104,11 @@ TEST(SecAggClientTest, ReceiveMessageReturnValuesAreCorrect) {
   SecAggClient client(
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
-      input_vector_specs, absl::make_unique<FakePrng>(),
+      input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
 
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   // Get the client into a state where it can receive a message.
   ClientToServerWrapperMessage round_0_client_message;
@@ -160,11 +160,11 @@ TEST(SecAggClientTest, AbortMovesToCorrectStateAndSendsMessageToServer) {
   SecAggClient client(
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
-      input_vector_specs, absl::make_unique<FakePrng>(),
+      input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
 
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   std::string error_string =
       "Abort upon external request for reason <Abort reason>.";
@@ -189,11 +189,11 @@ TEST(SecAggClientTest,
   SecAggClient client(
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
-      input_vector_specs, absl::make_unique<FakePrng>(),
+      input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
 
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   std::string error_string =
       "Abort upon external request for reason <unknown reason>.";
@@ -217,11 +217,11 @@ TEST(SecAggClientTest, ErrorMessageRaisesErrorStatusIfNotAborted) {
   SecAggClient client(
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
-      input_vector_specs, absl::make_unique<FakePrng>(),
+      input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
 
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(client.ErrorMessage().ok(), Eq(false));
 }
@@ -236,19 +236,19 @@ TEST(SecAggClientTest, SetInputChangesStateOnlyOnce) {
   SecAggClient client(
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
-      input_vector_specs, absl::make_unique<FakePrng>(),
+      input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
 
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({5, 8, 22, 30}, 32));
 
   Status result = client.SetInput(std::move(input_map));
   EXPECT_THAT(result.code(), Eq(OK));
 
-  auto input_map2 = absl::make_unique<SecAggVectorMap>();
+  auto input_map2 = std::make_unique<SecAggVectorMap>();
   input_map2->emplace("test", SecAggVector({5, 8, 22, 30}, 32));
   result = client.SetInput(std::move(input_map));
   EXPECT_THAT(result.code(), Eq(FAILED_PRECONDITION));

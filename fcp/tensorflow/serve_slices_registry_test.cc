@@ -34,12 +34,12 @@ using MockServeSlicesCallback = ::testing::MockFunction<std::string(
 
 TEST(ServeSlicesRegistryTest, CanRegisterGetAndUnregisterCallback) {
   MockServeSlicesCallback mock_callback;
-  absl::optional<RandomToken> id = std::nullopt;
+  std::optional<RandomToken> id = std::nullopt;
   {
     HostObjectRegistration registration =
         register_serve_slices_callback(mock_callback.AsStdFunction());
     id = registration.token();
-    absl::optional<std::shared_ptr<ServeSlicesCallback>> returned_callback =
+    std::optional<std::shared_ptr<ServeSlicesCallback>> returned_callback =
         get_serve_slices_callback(*id);
     ASSERT_TRUE(returned_callback.has_value());
 
@@ -65,7 +65,7 @@ TEST(ServeSlicesRegistryTest, CanRegisterMultipleDifferentCallbacks) {
   // Get and invoke all callbacks.
   for (int8_t i = 0; i < num_callbacks; i++) {
     RandomToken id = callback_tokens[i].token();
-    absl::optional<std::shared_ptr<ServeSlicesCallback>> returned_callback =
+    std::optional<std::shared_ptr<ServeSlicesCallback>> returned_callback =
         get_serve_slices_callback(id);
     ASSERT_TRUE(returned_callback.has_value());
 

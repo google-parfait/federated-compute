@@ -16,10 +16,10 @@
 
 #include "fcp/secagg/client/secagg_client_r0_advertise_keys_input_not_set_state.h"
 
+#include <memory>
 #include <string>
 
 #include "absl/container/node_hash_map.h"
-#include "absl/memory/memory.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
 #include "fcp/secagg/client/secagg_client_completed_state.h"
@@ -72,7 +72,7 @@ SecAggClientR0AdvertiseKeysInputNotSetState::Start() {
   public_keys->set_noise_pk(prng_key_agreement->PublicKey().AsString());
 
   sender_->Send(&message);
-  return {absl::make_unique<SecAggClientR1ShareKeysInputNotSetState>(
+  return {std::make_unique<SecAggClientR1ShareKeysInputNotSetState>(
       max_clients_expected_, minimum_surviving_clients_for_reconstruction_,
       std::move(enc_key_agreement), std::move(input_vector_specs_),
       std::move(prng_), std::move(prng_key_agreement), std::move(sender_),
@@ -85,10 +85,10 @@ SecAggClientR0AdvertiseKeysInputNotSetState::HandleMessage(
   // Handle abort messages only.
   if (message.has_abort()) {
     if (message.abort().early_success()) {
-      return {absl::make_unique<SecAggClientCompletedState>(
+      return {std::make_unique<SecAggClientCompletedState>(
           std::move(sender_), std::move(transition_listener_))};
     } else {
-      return {absl::make_unique<SecAggClientAbortedState>(
+      return {std::make_unique<SecAggClientAbortedState>(
           "Aborting because of abort message from the server.",
           std::move(sender_), std::move(transition_listener_))};
     }
@@ -107,7 +107,7 @@ SecAggClientR0AdvertiseKeysInputNotSetState::SetInput(
               "InputVectorSpecification.";
   }
 
-  return {absl::make_unique<SecAggClientR0AdvertiseKeysInputSetState>(
+  return {std::make_unique<SecAggClientR0AdvertiseKeysInputSetState>(
       max_clients_expected_, minimum_surviving_clients_for_reconstruction_,
       std::move(input_map), std::move(input_vector_specs_), std::move(prng_),
       std::move(sender_), std::move(transition_listener_),

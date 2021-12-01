@@ -16,12 +16,12 @@
 
 #include "fcp/secagg/client/secagg_client_r1_share_keys_input_not_set_state.h"
 
+#include <memory>
 #include <string>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/node_hash_map.h"
-#include "absl/memory/memory.h"
 #include "fcp/secagg/client/other_client_state.h"
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_input_set_state.h"
@@ -50,7 +50,7 @@ using ::testing::Pointee;
 
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest, IsAbortedReturnsFalse) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -59,11 +59,11 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest, IsAbortedReturnsFalse) {
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r1_state.IsAborted(), Eq(false));
 }
@@ -71,7 +71,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest, IsAbortedReturnsFalse) {
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      IsCompletedSuccessfullyReturnsFalse) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -80,18 +80,18 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r1_state.IsCompletedSuccessfully(), Eq(false));
 }
 
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest, StartRaisesErrorStatus) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -100,11 +100,11 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest, StartRaisesErrorStatus) {
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r1_state.Start().ok(), Eq(false));
 }
@@ -112,7 +112,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest, StartRaisesErrorStatus) {
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      SetInputTransitionsToInputSetStateWithoutNotifyingServer) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -121,13 +121,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({5, 8, 22, 30}, 32)));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
@@ -140,7 +140,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      SetInputRaisesErrorStatusIfVectorIsWrongSize) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -149,13 +149,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   // This vector has too many elements.
   input_map->insert(
       std::make_pair("test", SecAggVector({5, 8, 22, 30, 7}, 32)));
@@ -169,7 +169,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      SetInputRaisesErrorStatusIfInputVectorIsTooLargeForBitWidth) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -178,13 +178,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   // This vector's bit_width does not match the specified modulus of 32.
   input_map->insert(std::make_pair("test", SecAggVector({5, 8, 22, 30}, 64)));
 
@@ -197,7 +197,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      SetInputRaisesErrorStatusIfInputVectorHasWrongName) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -206,13 +206,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   // This vector has the wrong name.
   input_map->insert(
       std::make_pair("incorret", SecAggVector({5, 8, 22, 30}, 32)));
@@ -226,7 +226,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      SetInputRaisesErrorStatusIfInputHasTooManyVectors) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -235,13 +235,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({5, 8, 22, 30}, 32)));
   // This vector is extra.
   input_map->insert(std::make_pair("test2", SecAggVector({4, 7, 21, 29}, 32)));
@@ -255,7 +255,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      SetInputRaisesErrorStatusIfInputHasTooFewVectors) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   // Expects two vectors.
   input_vector_specs->push_back(InputVectorSpecification("test2", 4, 32));
@@ -266,13 +266,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({5, 8, 22, 30}, 32)));
   // Missing second vector.
 
@@ -285,7 +285,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      ErrorMessageRaisesErrorStatus) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -294,11 +294,11 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r1_state.ErrorMessage().ok(), Eq(false));
 }
@@ -306,7 +306,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      AbortReturnsValidAbortStateAndNotifiesServer) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -315,11 +315,11 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   std::string error_string =
       "Abort upon external request for reason <Abort reason>.";
@@ -337,7 +337,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      AbortFailureMessageCausesAbortWithoutNotifyingServer) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -346,11 +346,11 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
   ServerToClientWrapperMessage abort_message;
@@ -367,7 +367,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
      EarlySuccessMessageCausesTransitionToCompletedState) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -376,11 +376,11 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
   ServerToClientWrapperMessage abort_message;
@@ -443,7 +443,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   // alive.
   EcdhPregeneratedTestKeys ecdh_keys;
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -454,13 +454,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(3),
                                                     ecdh_keys.GetPublicKey(3))
                     .value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   // Make a copy of the encryption keys for testing
   std::vector<AesKey> enc_keys;
@@ -571,7 +571,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   // Client 3 has died in this round.
   EcdhPregeneratedTestKeys ecdh_keys;
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -582,13 +582,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(3),
                                                     ecdh_keys.GetPublicKey(3))
                     .value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   // Make a copy of the encryption keys for testing
   std::vector<AesKey> enc_keys;
@@ -652,7 +652,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   // abort.
   EcdhPregeneratedTestKeys ecdh_keys;
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -663,13 +663,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(3),
                                                     ecdh_keys.GetPublicKey(3))
                     .value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   ServerToClientWrapperMessage message;
   for (int i = 0; i < 2; ++i) {  // exclude clients 2 and 3.
@@ -704,7 +704,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   // cause an abort.
   EcdhPregeneratedTestKeys ecdh_keys;
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -715,13 +715,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(3),
                                                     ecdh_keys.GetPublicKey(3))
                     .value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   ServerToClientWrapperMessage message;
   for (int i = 0; i < 3; ++i) {  // handle client 3 separately
@@ -756,7 +756,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   // abort.
   EcdhPregeneratedTestKeys ecdh_keys;
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -767,13 +767,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(3),
                                                     ecdh_keys.GetPublicKey(3))
                     .value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   ServerToClientWrapperMessage message;
   for (int i = 0; i < 3; ++i) {  // handle client 3 separately
@@ -808,7 +808,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   // cause an abort.
   EcdhPregeneratedTestKeys ecdh_keys;
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -819,13 +819,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(3),
                                                     ecdh_keys.GetPublicKey(3))
                     .value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   ServerToClientWrapperMessage message;
   for (int i = 0; i < 4; ++i) {
@@ -854,7 +854,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   // clients. However, the server sends only 2 keys. This should cause an abort.
   EcdhPregeneratedTestKeys ecdh_keys;
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -865,13 +865,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(3),
                                                     ecdh_keys.GetPublicKey(3))
                     .value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   ServerToClientWrapperMessage message;
   for (int i = 0; i < 2; ++i) {  // exclude clients 2 and 3
@@ -900,7 +900,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   // server's message. This should cause an abort.
   EcdhPregeneratedTestKeys ecdh_keys;
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -911,13 +911,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(3),
                                                     ecdh_keys.GetPublicKey(3))
                     .value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   ServerToClientWrapperMessage message;
   for (int i = 0; i < 4; ++i) {
@@ -952,7 +952,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   // message. This should cause an abort.
   EcdhPregeneratedTestKeys ecdh_keys;
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -963,13 +963,13 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
-      std::move(input_vector_specs), absl::make_unique<FakePrng>(),
+      std::move(input_vector_specs), std::make_unique<FakePrng>(),
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(3),
                                                     ecdh_keys.GetPublicKey(3))
                     .value()),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   ServerToClientWrapperMessage message;
   for (int i = 0; i < 3; ++i) {  // handle client 3 separately

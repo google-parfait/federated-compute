@@ -17,11 +17,11 @@
 #include "fcp/base/scheduler.h"
 
 #include <array>
+#include <memory>
 #include <queue>
 #include <thread>  // NOLINT(build/c++11)
 #include <vector>
 
-#include "absl/memory/memory.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/synchronization/mutex.h"
 
@@ -193,11 +193,11 @@ class ThreadPoolScheduler : public Scheduler {
 }  // namespace
 
 std::unique_ptr<Worker> Scheduler::CreateWorker() {
-  return absl::make_unique<WorkerImpl>(this);
+  return std::make_unique<WorkerImpl>(this);
 }
 
 std::unique_ptr<Scheduler> CreateThreadPoolScheduler(std::size_t thread_count) {
-  return absl::make_unique<ThreadPoolScheduler>(thread_count);
+  return std::make_unique<ThreadPoolScheduler>(thread_count);
 }
 
 }  // namespace fcp

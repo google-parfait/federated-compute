@@ -56,7 +56,7 @@ GrpcBidiStream::GrpcBidiStream(
   GrpcChunkedBidiStream<ClientStreamMessage,
                         ServerStreamMessage>::GrpcChunkedBidiStreamOptions
       options;
-  chunked_bidi_stream_ = absl::make_unique<
+  chunked_bidi_stream_ = std::make_unique<
       GrpcChunkedBidiStream<ClientStreamMessage, ServerStreamMessage>>(
       client_reader_writer_.get(), client_reader_writer_.get(), options);
   if (!channel) Close();

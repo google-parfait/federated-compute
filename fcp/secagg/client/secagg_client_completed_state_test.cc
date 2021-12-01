@@ -96,7 +96,7 @@ TEST(SecAggClientCompletedStateTest, SetInputRaisesErrorStatus) {
       std::unique_ptr<SendToServerInterface>{sender},
       std::unique_ptr<MockStateTransitionListener>{transition_listener});
   EXPECT_THAT(
-      completed_state.SetInput(absl::make_unique<SecAggVectorMap>()).ok(),
+      completed_state.SetInput(std::make_unique<SecAggVectorMap>()).ok(),
       Eq(false));
 }
 

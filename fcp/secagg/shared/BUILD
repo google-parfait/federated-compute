@@ -66,7 +66,6 @@ cc_library(
         "@com_google_absl//absl/base:endian",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:node_hash_map",
-        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/numeric:bits",
         "@com_google_absl//absl/numeric:int128",
         "@com_google_absl//absl/status:statusor",
@@ -250,7 +249,6 @@ cc_binary(
     copts = FCP_COPTS,
     deps = [
         ":shared",
-        "@com_google_absl//absl/memory",
         "@com_google_benchmark//:benchmark_main",
     ],
 )

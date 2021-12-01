@@ -17,10 +17,10 @@
 #include "fcp/base/result.h"
 
 #include <memory>
+#include <variant>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/types/variant.h"
 #include "fcp/base/tracing_schema.h"
 #include "fcp/base/unique_value.h"
 #include "fcp/testing/result_matchers.h"
@@ -158,9 +158,9 @@ TEST(ResultTest, TryExpressionWithValue) {
 }
 
 Result<bool> Example_OneTryExpression_UnparenthesizedCommas(
-    Result<absl::variant<int, bool, Unit>> r) {
-  absl::variant<int, bool> v = FCP_TRY(r.Then(ExpectOneOf<int, bool>()));
-  if (absl::holds_alternative<int>(v)) {
+    Result<std::variant<int, bool, Unit>> r) {
+  std::variant<int, bool> v = FCP_TRY(r.Then(ExpectOneOf<int, bool>()));
+  if (std::holds_alternative<int>(v)) {
     return absl::get<int>(v) > 0;
   } else {
     return absl::get<bool>(v);
@@ -168,7 +168,7 @@ Result<bool> Example_OneTryExpression_UnparenthesizedCommas(
 }
 
 TEST(ResultTest, TryExpressionWithValue_UnparenthesizedCommas) {
-  using V = absl::variant<int, bool, Unit>;
+  using V = std::variant<int, bool, Unit>;
   EXPECT_THAT(Example_OneTryExpression_UnparenthesizedCommas(V(-1)),
               HasValue(false));
   EXPECT_THAT(Example_OneTryExpression_UnparenthesizedCommas(V(1)),
@@ -236,21 +236,21 @@ TEST(ResultTest, ExpectFalse) {
 }
 
 TEST(ResultTest, ExpectHasValue) {
-  using V = absl::optional<int>;
+  using V = std::optional<int>;
   EXPECT_THAT(Result<V>(123).Then(ExpectHasValue()), HasValue(123));
   EXPECT_THAT(Result<V>(V{}).Then(ExpectHasValue()), IsError());
   EXPECT_THAT(Result<V>(TraceTestError()).Then(ExpectHasValue()), IsError());
 }
 
 TEST(ResultTest, ExpectIsEmpty) {
-  using V = absl::optional<int>;
+  using V = std::optional<int>;
   EXPECT_THAT(Result<V>(123).Then(ExpectIsEmpty()), IsError());
   EXPECT_THAT(Result<V>(V{}).Then(ExpectIsEmpty()), HasValue(Unit{}));
   EXPECT_THAT(Result<V>(TraceTestError()).Then(ExpectIsEmpty()), IsError());
 }
 
 TEST(ResultTest, ExpectIs) {
-  using V = absl::variant<int, char>;
+  using V = std::variant<int, char>;
   EXPECT_THAT(Result<V>(123).Then(ExpectIs<int>()), HasValue(123));
   EXPECT_THAT(Result<V>('a').Then(ExpectIs<char>()), HasValue('a'));
   EXPECT_THAT(Result<V>('b').Then(ExpectIs<int>()), IsError());
@@ -259,7 +259,7 @@ TEST(ResultTest, ExpectIs) {
 }
 
 TEST(ResultTest, ExpectOneOf) {
-  using V = absl::variant<int, char, bool>;
+  using V = std::variant<int, char, bool>;
   EXPECT_THAT(Result<V>(123).Then(ExpectOneOf<int>()),
               HasValue(VariantWith<int>(123)));
   EXPECT_THAT(Result<V>(123).Then(ExpectOneOf<bool>()), IsError());

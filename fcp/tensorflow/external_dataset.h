@@ -79,7 +79,7 @@ class ExternalDataset {
    */
   template <typename F>
   static std::unique_ptr<ExternalDataset> FromFunction(F f) {
-    return absl::make_unique<external_dataset_internal::DatasetFromFunction<F>>(
+    return std::make_unique<external_dataset_internal::DatasetFromFunction<F>>(
         std::move(f));
   }
 };

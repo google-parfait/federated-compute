@@ -51,7 +51,7 @@ template <typename T>
 void CheckOutput(TfSession* sess, const std::string& output_op,
                  Tensor expected) {
   Result<std::unique_ptr<TfSession::NamedTensorMap>> outputs =
-      sess->GetOutputs(absl::make_unique<std::vector<std::string>>(
+      sess->GetOutputs(std::make_unique<std::vector<std::string>>(
           std::initializer_list<std::string>{output_op}));
   EXPECT_THAT(outputs, Not(IsError()));
   ExpectTensorEqual<T>((*outputs.GetValueOrDie())[output_op], expected);
@@ -65,7 +65,7 @@ TEST(TfSessionTest, InitializeWithEmptyGraph) {
   // Running an empty operation is a no-op.
   EXPECT_THAT(sess.RunOp(""), Not(IsError()));
   // Getting an empty list of outputs is a no-op.
-  EXPECT_THAT(sess.GetOutputs(absl::make_unique<std::vector<std::string>>()),
+  EXPECT_THAT(sess.GetOutputs(std::make_unique<std::vector<std::string>>()),
               Not(IsError()));
   // There are no ops registered in the GraphDef, so trying to run an op won't
   // work.

@@ -37,11 +37,11 @@ absl::Status InterruptibleRunner::WaitUntilDone(
   // Wait until call is done, checking periodically whether we need to abort.
   while (true) {
     if (run_future.Wait(timing_config_.polling_period)) {
-      absl::optional<absl::Status> future_result = std::move(run_future).Take();
-      // absl::nullopt indicates the underlying promise was abandoned. To my
+      std::optional<absl::Status> future_result = std::move(run_future).Take();
+      // std::nullopt indicates the underlying promise was abandoned. To my
       // best knowledge this always indicates a programming error and hence
       // should result in a crash.
-      FCP_CHECK(future_result != absl::nullopt);
+      FCP_CHECK(future_result != std::nullopt);
       return future_result.value();
     }
 
@@ -62,7 +62,7 @@ absl::Status InterruptibleRunner::Abort(
   // Wait for at most the graceful shutdown period.
   if (run_future.Wait(timing_config_.graceful_shutdown_period)) {
     log_manager_->LogDiag(diagnostics_config_.interrupted);
-    FCP_CHECK(std::move(run_future).Take() != absl::nullopt);
+    FCP_CHECK(std::move(run_future).Take() != std::nullopt);
     return absl::CancelledError("cancelled after graceful wait");
   }
 
@@ -72,7 +72,7 @@ absl::Status InterruptibleRunner::Abort(
   log_manager_->LogDiag(diagnostics_config_.interrupt_timeout);
   if (run_future.Wait(timing_config_.extended_shutdown_period)) {
     log_manager_->LogDiag(diagnostics_config_.interrupted_extended);
-    FCP_CHECK(std::move(run_future).Take() != absl::nullopt);
+    FCP_CHECK(std::move(run_future).Take() != std::nullopt);
     return absl::CancelledError("cancelled after extended wait");
   }
 

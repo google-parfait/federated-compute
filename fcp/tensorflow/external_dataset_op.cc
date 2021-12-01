@@ -61,7 +61,7 @@ class ExternalDatasetOp : public tensorflow::data::DatasetOpKernel {
                    tensorflow::data::ParseScalarArgument<tensorflow::tstring>(
                        ctx, "selector", &selector_str));
 
-    absl::optional<std::shared_ptr<ExternalDatasetProvider>> maybe_provider =
+    std::optional<std::shared_ptr<ExternalDatasetProvider>> maybe_provider =
         ExternalDatasetProviderRegistry::TryLookup(token);
     OP_REQUIRES(ctx, maybe_provider.has_value(),
                 tensorflow::errors::InvalidArgument(

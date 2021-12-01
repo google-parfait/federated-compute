@@ -25,7 +25,7 @@
 //
 // Example:
 //
-//   using V = absl::variant<X, Y, Z>;
+//   using V = std::variant<X, Y, Z>;
 //   V v = ...;
 //   ...
 //   int i = Match(v,
@@ -52,10 +52,10 @@
 #ifndef FCP_BASE_MATCH_H_
 #define FCP_BASE_MATCH_H_
 
+#include <optional>
 #include <type_traits>
+#include <variant>
 
-#include "absl/types/variant.h"
-#include "absl/types/optional.h"
 #include "fcp/base/meta.h"
 
 namespace fcp {
@@ -164,13 +164,13 @@ class VariantMatcherImpl {
 template <typename T, typename Enable = void>
 struct MatchTraits {
   static_assert(FailIfReached<T>(),
-                "Only variant-like (e.g. absl::variant<...> types can be "
+                "Only variant-like (e.g. std::variant<...> types can be "
                 "matched. See MatchTraits.");
 };
 
 template <typename... AltTypes>
-struct MatchTraits<absl::variant<AltTypes...>> {
-  using ValueType = absl::variant<AltTypes...>;
+struct MatchTraits<std::variant<AltTypes...>> {
+  using ValueType = std::variant<AltTypes...>;
 
   template <typename VisitFn>
   static constexpr auto Visit(ValueType const& v, VisitFn&& fn) {
@@ -191,33 +191,33 @@ struct MatchTraits<absl::variant<AltTypes...>> {
 };
 
 template <typename T>
-struct MatchTraits<absl::optional<T>> {
-  using ValueType = absl::optional<T>;
+struct MatchTraits<std::optional<T>> {
+  using ValueType = std::optional<T>;
 
-  static constexpr auto Wrap(absl::optional<T>* o)
-      -> absl::variant<T*, absl::nullopt_t> {
+  static constexpr auto Wrap(std::optional<T>* o)
+      -> std::variant<T*, std::nullopt_t> {
     if (o->has_value()) {
       return &**o;
     } else {
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 
-  static constexpr auto Wrap(absl::optional<T> const& o)
-      -> absl::variant<std::reference_wrapper<T const>, absl::nullopt_t> {
+  static constexpr auto Wrap(std::optional<T> const& o)
+      -> std::variant<std::reference_wrapper<T const>, std::nullopt_t> {
     if (o.has_value()) {
       return std::ref(*o);
     } else {
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 
-  static constexpr auto Wrap(absl::optional<T>&& o)
-      -> absl::variant<T, absl::nullopt_t> {
+  static constexpr auto Wrap(std::optional<T>&& o)
+      -> std::variant<T, std::nullopt_t> {
     if (o.has_value()) {
       return *std::move(o);
     } else {
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 

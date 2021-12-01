@@ -126,7 +126,7 @@ class MockFederatedProtocol : public FederatedProtocol {
   MOCK_METHOD(absl::StatusOr<EligibilityEvalCheckinResult>,
               EligibilityEvalCheckin, (), (override));
   MOCK_METHOD(absl::StatusOr<CheckinResult>, Checkin,
-              (const absl::optional<
+              (const std::optional<
                   ::google::internal::federatedml::v2::TaskEligibilityInfo>&
                    task_eligibility_info),
               (override));

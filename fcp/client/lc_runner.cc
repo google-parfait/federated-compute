@@ -45,7 +45,7 @@ std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
 ConstructInputsForTensorflowSpecPlan(const LocalComputeIORouter& local_compute,
                                      const std::string& input_dir_uri,
                                      const std::string& output_dir_uri) {
-  auto inputs = absl::make_unique<
+  auto inputs = std::make_unique<
       std::vector<std::pair<std::string, tensorflow::Tensor>>>();
   tensorflow::Tensor input_dirpath(tensorflow::DT_STRING, {});
   input_dirpath.scalar<tensorflow::tstring>()() = input_dir_uri;

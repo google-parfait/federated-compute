@@ -68,10 +68,8 @@ cc_library(
         "//fcp/base:error",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:optional",
         "@flatbuffers",
     ],
 )
@@ -99,7 +97,6 @@ cc_library(
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/synchronization",
         "@flatbuffers",
     ],
@@ -117,7 +114,6 @@ cc_library(
     deps = [
         ":tracing",
         "//fcp/base",
-        "@com_google_absl//absl/types:optional",
         "@com_google_protobuf//:protobuf",
         "@flatbuffers",
     ],

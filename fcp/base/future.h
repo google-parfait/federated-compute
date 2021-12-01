@@ -21,7 +21,7 @@
  * These serve the same purpose as std::future and std::promise, but with a few
  * differences:
  *  - They do not represent exceptions (i.e. std::promise::set_exception).
- *    Consider representing failure conditions with StatusOr or absl::variant
+ *    Consider representing failure conditions with StatusOr or std::variant
  *  - They do not throw future-related exceptions (e.g. std::future::get throws
  *    if the promise was 'abandoned'; this one indicates that with a value).
  *  - There is no integration with std::async etc.
@@ -37,12 +37,12 @@
 #define FCP_BASE_FUTURE_H_
 
 #include <memory>
+#include <optional>
 #include <tuple>
+#include <variant>
 
 #include "absl/base/macros.h"
 #include "absl/synchronization/notification.h"
-#include "absl/types/optional.h"
-#include "absl/types/variant.h"
 #include "fcp/base/meta.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/move_to_lambda.h"
@@ -80,22 +80,22 @@ struct Maker {
 //
 // States: NotSet, Set, Taken
 // Transitions:
-//   NotSet -> Set: When a value is provided (absl::nullopt indicates an
+//   NotSet -> Set: When a value is provided (std::nullopt indicates an
 //                  abandoned promise). *Before* ready_ is signalled.
 //   Set -> Taken: When a future takes a value. *After* ready_ is signalled.
 template <typename T>
 class FutureState {
  public:
   bool Wait(absl::Duration timeout) const;
-  absl::optional<T> Take();
-  void Set(absl::optional<T> val);
+  std::optional<T> Take();
+  void Set(std::optional<T> val);
 
  private:
   enum class State { kNotSet, kSet, kTaken };
 
   absl::Notification ready_;
   State state_ = State::kNotSet;
-  absl::optional<T> value_;
+  std::optional<T> value_;
 };
 
 // A Future and Promise share a single FutureState. That is, FutureState
@@ -111,7 +111,7 @@ using FutureStateRef = UniqueValue<std::shared_ptr<FutureState<T>>>;
  * Promise).
  *
  * If the paired Promise is 'abandoned' (destructed without having a value set),
- * then the Future's value is absl::nullopt.
+ * then the Future's value is std::nullopt.
  */
 template <typename T>
 class Future {
@@ -126,10 +126,10 @@ class Future {
    *   std::move(f).Take()
    *
    * If the paired promise is 'abandoned' (destructed before a real value is
-   * provided), the value is absl::nullopt.
+   * provided), the value is std::nullopt.
    */
   ABSL_MUST_USE_RESULT
-  absl::optional<T> Take() && {
+  std::optional<T> Take() && {
     future_internal::FutureStateRef<T> state = std::move(state_);
     FCP_CHECK(state.has_value());
     return (*state)->Take();
@@ -161,7 +161,7 @@ class Future {
  * Allows providing a value to satisfy a paired Future.
  *
  * If this Promise is 'abandoned' (destructed without having a value set),
- * then the Future gets the value absl::nullopt.
+ * then the Future gets the value std::nullopt.
  */
 template <typename T>
 class Promise {
@@ -172,7 +172,7 @@ class Promise {
   ~Promise() {
     if (state_.has_value()) {
       // Abandoned
-      (*state_)->Set(absl::nullopt);
+      (*state_)->Set(std::nullopt);
     }
   }
 
@@ -238,7 +238,7 @@ bool FutureState<T>::Wait(absl::Duration timeout) const {
 }
 
 template <typename T>
-void FutureState<T>::Set(absl::optional<T> val) {
+void FutureState<T>::Set(std::optional<T> val) {
   FCP_CHECK(!ready_.HasBeenNotified())
       << "Attempted to set a FutureState which has already been notified";
   // Not notified => value_ has *not* been set, and the Promise has exclusive
@@ -262,7 +262,7 @@ void FutureState<T>::Set(absl::optional<T> val) {
 }
 
 template <typename T>
-absl::optional<T> FutureState<T>::Take() {
+std::optional<T> FutureState<T>::Take() {
   ready_.WaitForNotification();
   // Notified => value_ has been set, and exclusive access has been transferred
   // from the Promise to the Future (no atomics or locks needed below).

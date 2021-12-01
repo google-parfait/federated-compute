@@ -103,7 +103,7 @@ TEST(SecAggClientAbortedStateTest, SetInputRaisesErrorStatus) {
   SecAggClientAbortedState aborted_state(
       test_reason, std::unique_ptr<SendToServerInterface>{sender},
       std::unique_ptr<StateTransitionListenerInterface>{transition_listener});
-  EXPECT_THAT(aborted_state.SetInput(absl::make_unique<SecAggVectorMap>()).ok(),
+  EXPECT_THAT(aborted_state.SetInput(std::make_unique<SecAggVectorMap>()).ok(),
               Eq(false));
 }
 

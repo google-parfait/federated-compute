@@ -78,7 +78,6 @@ cc_library(
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interfaces",
         "//fcp/client:interruptible_runner",
-        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",

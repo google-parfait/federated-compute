@@ -17,12 +17,11 @@
 #include "fcp/base/match.h"
 
 #include <memory>
+#include <optional>
+#include <variant>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/memory/memory.h"
-#include "absl/types/optional.h"
-#include "absl/types/variant.h"
 #include "fcp/base/result.h"
 #include "fcp/testing/result_matchers.h"
 #include "fcp/testing/testing.h"
@@ -46,10 +45,10 @@ struct Z {
   int z;
 };
 
-using V = absl::variant<X, Y, Z>;
+using V = std::variant<X, Y, Z>;
 
 using VMoveOnly =
-    absl::variant<std::unique_ptr<X>, std::unique_ptr<Y>, std::unique_ptr<Z>>;
+    std::variant<std::unique_ptr<X>, std::unique_ptr<Y>, std::unique_ptr<Z>>;
 
 TEST(MatchTest, AllDefault) {
   constexpr auto matcher =
@@ -124,11 +123,11 @@ TEST(MatchTest, Exhaustive_MatchInsteadOfMatcher) {
 
 TEST(MatchTest, CoerceViaExplicitReturnType) {
   constexpr auto do_match = [](V const& v) {
-    return Match<absl::optional<int>>(
+    return Match<std::optional<int>>(
         v,  //
         [](X const& x) { return 10 + x.x; },
         [](Z const& z) { return 20 + z.z; },
-        [](Y const& y) { return absl::nullopt; });
+        [](Y const& y) { return std::nullopt; });
   };
 
   static_assert(*do_match(X{1}) == 11);
@@ -142,9 +141,9 @@ TEST(MatchTest, MoveOnly_Borrow_Exhaustive) {
       [](std::unique_ptr<Z> const& z) { return 20 + z->z; },
       [](std::unique_ptr<Y> const& y) { return 30 + y->y; });
 
-  VMoveOnly v_x = absl::make_unique<X>(X{1});
-  VMoveOnly v_z = absl::make_unique<Z>(Z{2});
-  VMoveOnly v_y = absl::make_unique<Y>(Y{3});
+  VMoveOnly v_x = std::make_unique<X>(X{1});
+  VMoveOnly v_z = std::make_unique<Z>(Z{2});
+  VMoveOnly v_y = std::make_unique<Y>(Y{3});
 
   EXPECT_THAT(matcher.Match(v_x), Eq(11));
   EXPECT_THAT(matcher.Match(v_z), Eq(22));
@@ -157,44 +156,44 @@ TEST(MatchTest, MoveOnly_Consume_Exhaustive) {
       [](std::unique_ptr<Z> z) { return 20 + z->z; },
       [](std::unique_ptr<Y> y) { return 30 + y->y; });
 
-  VMoveOnly v_x = absl::make_unique<X>(X{1});
-  VMoveOnly v_z = absl::make_unique<Z>(Z{2});
-  VMoveOnly v_y = absl::make_unique<Y>(Y{3});
+  VMoveOnly v_x = std::make_unique<X>(X{1});
+  VMoveOnly v_z = std::make_unique<Z>(Z{2});
+  VMoveOnly v_y = std::make_unique<Y>(Y{3});
 
   EXPECT_THAT(matcher.Match(std::move(v_x)), Eq(11));
   EXPECT_THAT(matcher.Match(std::move(v_z)), Eq(22));
   EXPECT_THAT(matcher.Match(std::move(v_y)), Eq(33));
 }
 
-// absl::optional is handled with a special MatchTraits implementation.
-// The corresponding absl::variant has to be synthesized on the fly, so that
+// std::optional is handled with a special MatchTraits implementation.
+// The corresponding std::variant has to be synthesized on the fly, so that
 // implementation is trickier than usual.
 
 TEST(MatchTest, Optional_Ref) {
-  using O = absl::optional<std::unique_ptr<X>>;
+  using O = std::optional<std::unique_ptr<X>>;
   constexpr auto matcher =
       MakeMatcher<O>([](std::unique_ptr<X> const& x) { return x->x; },
-                     [](absl::nullopt_t) { return 0; });
+                     [](std::nullopt_t) { return 0; });
 
-  O const engaged = absl::make_unique<X>(X{123});
-  O const empty = absl::nullopt;
+  O const engaged = std::make_unique<X>(X{123});
+  O const empty = std::nullopt;
 
   EXPECT_THAT(matcher.Match(engaged), Eq(123));
   EXPECT_THAT(matcher.Match(empty), Eq(0));
 }
 
 TEST(MatchTest, Optional_Pointer) {
-  using O = absl::optional<std::unique_ptr<X>>;
+  using O = std::optional<std::unique_ptr<X>>;
   constexpr auto matcher = MakeMatcher<O>(
       [](std::unique_ptr<X>* x) {
         int v = (*x)->x;
         x->reset();
         return v;
       },
-      [](absl::nullopt_t) { return 0; });
+      [](std::nullopt_t) { return 0; });
 
-  O engaged = absl::make_unique<X>(X{123});
-  O empty = absl::nullopt;
+  O engaged = std::make_unique<X>(X{123});
+  O empty = std::nullopt;
 
   EXPECT_THAT(matcher.Match(&engaged), Eq(123));
   EXPECT_THAT(engaged, Optional(Eq(nullptr)));
@@ -202,13 +201,13 @@ TEST(MatchTest, Optional_Pointer) {
 }
 
 TEST(MatchTest, Optional_Consume) {
-  using O = absl::optional<std::unique_ptr<X>>;
+  using O = std::optional<std::unique_ptr<X>>;
   constexpr auto matcher =
       MakeMatcher<O>([](std::unique_ptr<X> x) { return x->x; },
-                     [](absl::nullopt_t) { return 0; });
+                     [](std::nullopt_t) { return 0; });
 
-  EXPECT_THAT(matcher.Match(O{absl::make_unique<X>(X{123})}), Eq(123));
-  EXPECT_THAT(matcher.Match(O{absl::nullopt}), Eq(0));
+  EXPECT_THAT(matcher.Match(O{std::make_unique<X>(X{123})}), Eq(123));
+  EXPECT_THAT(matcher.Match(O{std::nullopt}), Eq(0));
 }
 
 // Result<T> uses the extensibility mechanism provided by MatchTrait
@@ -222,7 +221,7 @@ TEST(MatchTest, Result_Ref) {
       MakeMatcher<R>([](std::unique_ptr<X> const& x) { return x->x; },
                      [](Error) { return 0; });
 
-  R const val = absl::make_unique<X>(X{123});
+  R const val = std::make_unique<X>(X{123});
   R const err = TraceTestError();
 
   EXPECT_THAT(matcher.Match(val), Eq(123));
@@ -239,7 +238,7 @@ TEST(MatchTest, Result_Pointer) {
       },
       [](Error*) { return 0; });
 
-  R val = absl::make_unique<X>(X{123});
+  R val = std::make_unique<X>(X{123});
   R err = TraceTestError();
 
   EXPECT_THAT(matcher.Match(&val), Eq(123));
@@ -252,7 +251,7 @@ TEST(MatchTest, Result_Consume) {
   constexpr auto matcher = MakeMatcher<R>(
       [](std::unique_ptr<X> x) { return x->x; }, [](Error) { return 0; });
 
-  EXPECT_THAT(matcher.Match(R(absl::make_unique<X>(X{123}))), Eq(123));
+  EXPECT_THAT(matcher.Match(R(std::make_unique<X>(X{123}))), Eq(123));
   EXPECT_THAT(matcher.Match(R(TraceTestError())), Eq(0));
 }
 

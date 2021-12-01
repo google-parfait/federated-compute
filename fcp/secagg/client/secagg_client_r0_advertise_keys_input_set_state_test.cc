@@ -24,7 +24,6 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/node_hash_map.h"
-#include "absl/memory/memory.h"
 #include "fcp/secagg/client/secagg_client_state.h"
 #include "fcp/secagg/shared/aes_ctr_prng_factory.h"
 #include "fcp/secagg/shared/ecdh_key_agreement.h"
@@ -45,10 +44,10 @@ using ::testing::Eq;
 using ::testing::Pointee;
 
 TEST(SecaggClientR0AdvertiseKeysInputSetStateTest, IsAbortedReturnsFalse) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({2, 4, 6, 8}, 32));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -57,20 +56,20 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest, IsAbortedReturnsFalse) {
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<FakePrng>(),
+      std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r0_state.IsAborted(), Eq(false));
 }
 
 TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
      IsCompletedSuccessfullyReturnsFalse) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({2, 4, 6, 8}, 32));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -79,10 +78,10 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<FakePrng>(),
+      std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r0_state.IsCompletedSuccessfully(), Eq(false));
 }
@@ -98,10 +97,10 @@ MATCHER(IsValidAdvertiseKeysMessage, "") {
 
 TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
      StartSendsCorrectMessageAndTransitionsState) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({2, 4, 6, 8}, 32));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -110,10 +109,10 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<FakePrng>(),
+      std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_CALL(*sender, Send(IsValidAdvertiseKeysMessage())).Times(1);
 
@@ -124,12 +123,12 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
 
 TEST(SecaggClientR0AdvertiseKeysInputSetStateTest, SetInputRaisesErrorStatus) {
   std::vector<uint64_t> vec = {2, 4, 6, 8};
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector(vec, 32));
-  auto copy_of_input_map = absl::make_unique<SecAggVectorMap>();
+  auto copy_of_input_map = std::make_unique<SecAggVectorMap>();
   copy_of_input_map->emplace("test", SecAggVector(vec, 32));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -138,20 +137,20 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest, SetInputRaisesErrorStatus) {
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<FakePrng>(),
+      std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r0_state.SetInput(std::move(copy_of_input_map)).ok(), Eq(false));
 }
 
 TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
      ErrorMessageRaisesErrorStatus) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({2, 4, 6, 8}, 32));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -160,20 +159,20 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<FakePrng>(),
+      std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r0_state.ErrorMessage().ok(), Eq(false));
 }
 
 TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
      AbortReturnsValidAbortStateAndNotifiesServer) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({2, 4, 6, 8}, 32));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -182,10 +181,10 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<FakePrng>(),
+      std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   std::string error_string =
       "Abort upon external request for reason <Abort reason>.";
@@ -202,10 +201,10 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
 
 TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
      AbortFailureMessageCausesAbortWithoutNotifyingServer) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({2, 4, 6, 8}, 32));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -214,10 +213,10 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<FakePrng>(),
+      std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
   ServerToClientWrapperMessage abort_message;
@@ -233,10 +232,10 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
 
 TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
      EarlySuccessMessageCausesTransitionToCompletedState) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({2, 4, 6, 8}, 32));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -245,10 +244,10 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<FakePrng>(),
+      std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
   ServerToClientWrapperMessage abort_message;
@@ -262,10 +261,10 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
 
 TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
      HandleNonAbortMessageRaisesError) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({2, 4, 6, 8}, 32));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -274,10 +273,10 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
       4,  // max_clients_expected
       3,  // minimum_surviving_clients_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<FakePrng>(),
+      std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<AesCtrPrngFactory>());
 
   ServerToClientWrapperMessage message;
   message.mutable_share_keys_request()->add_pairs_of_public_keys();

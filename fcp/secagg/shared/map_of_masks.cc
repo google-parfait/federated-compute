@@ -194,7 +194,7 @@ inline std::unique_ptr<SecAggVectorMap> MapOfMasksImpl(
     AsyncAbort* async_abort) {
   FCP_CHECK(prng_factory.SupportsBatchMode());
 
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   std::unique_ptr<EVP_MD_CTX, void (*)(EVP_MD_CTX*)> mdctx(EVP_MD_CTX_create(),
                                                            EVP_MD_CTX_destroy);
   FCP_CHECK(mdctx.get());
@@ -346,7 +346,7 @@ SecAggVector AddVectors(const SecAggVector& a, const SecAggVector& b) {
 
 std::unique_ptr<SecAggVectorMap> AddMaps(const SecAggVectorMap& a,
                                          const SecAggVectorMap& b) {
-  auto result = absl::make_unique<SecAggVectorMap>();
+  auto result = std::make_unique<SecAggVectorMap>();
   for (const auto& item : a) {
     result->emplace(item.first, AddVectors(item.second, b.at(item.first)));
   }

@@ -16,11 +16,11 @@
 #include "fcp/client/engine/tf_wrapper.h"
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 
 #include "google/protobuf/any.pb.h"
-#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/client/diag_codes.pb.h"
@@ -126,7 +126,7 @@ absl::StatusOr<std::unique_ptr<TensorFlowWrapper>> TensorFlowWrapper::Create(
 
   // Create an InterruptibleRunner to execute TF calls in a background thread,
   // allowing us to abort them if need be.
-  auto interruptible_runner = absl::make_unique<InterruptibleRunner>(
+  auto interruptible_runner = std::make_unique<InterruptibleRunner>(
       log_manager, should_abort, timing_config,
       InterruptibleRunner::DiagnosticsConfig{
           .interrupted =

@@ -47,7 +47,7 @@ SecAggClientAliveBaseState::AbortAndNotifyServer(const std::string& reason) {
   ClientToServerWrapperMessage message_to_server;
   message_to_server.mutable_abort()->set_diagnostic_info(reason);
   sender_->Send(&message_to_server);
-  return absl::make_unique<SecAggClientAbortedState>(
+  return std::make_unique<SecAggClientAbortedState>(
       reason, std::move(sender_), std::move(transition_listener_));
 }
 }  // namespace secagg

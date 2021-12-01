@@ -20,7 +20,6 @@
 #include <string>
 
 #include "absl/container/node_hash_map.h"
-#include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/other_client_state.h"
@@ -88,10 +87,10 @@ SecAggClientR2MaskedInputCollInputNotSetState::HandleMessage(
   // Handle abort messages or masked input requests only.
   if (message.has_abort()) {
     if (message.abort().early_success()) {
-      return {absl::make_unique<SecAggClientCompletedState>(
+      return {std::make_unique<SecAggClientCompletedState>(
           std::move(sender_), std::move(transition_listener_))};
     } else {
-      return {absl::make_unique<SecAggClientAbortedState>(
+      return {std::make_unique<SecAggClientAbortedState>(
           "Aborting because of abort message from the server.",
           std::move(sender_), std::move(transition_listener_))};
     }
@@ -102,8 +101,8 @@ SecAggClientR2MaskedInputCollInputNotSetState::HandleMessage(
 
   const MaskedInputCollectionRequest& request = message.masked_input_request();
   std::string error_message;
-  auto pairwise_key_shares = absl::make_unique<std::vector<ShamirShare> >();
-  auto self_key_shares = absl::make_unique<std::vector<ShamirShare> >();
+  auto pairwise_key_shares = std::make_unique<std::vector<ShamirShare> >();
+  auto self_key_shares = std::make_unique<std::vector<ShamirShare> >();
 
   std::unique_ptr<SecAggVectorMap> map_of_masks =
       HandleMaskedInputCollectionRequest(
@@ -118,7 +117,7 @@ SecAggClientR2MaskedInputCollInputNotSetState::HandleMessage(
     return AbortAndNotifyServer(error_message);
   }
 
-  return {absl::make_unique<SecAggClientR2MaskedInputCollWaitingForInputState>(
+  return {std::make_unique<SecAggClientR2MaskedInputCollWaitingForInputState>(
       client_id_, minimum_surviving_clients_for_reconstruction_,
       number_of_alive_clients_, number_of_clients_,
       std::move(input_vector_specs_), std::move(map_of_masks),
@@ -136,7 +135,7 @@ SecAggClientR2MaskedInputCollInputNotSetState::SetInput(
               "InputVectorSpecification.";
   }
 
-  return {absl::make_unique<SecAggClientR2MaskedInputCollInputSetState>(
+  return {std::make_unique<SecAggClientR2MaskedInputCollInputSetState>(
       client_id_, minimum_surviving_clients_for_reconstruction_,
       number_of_alive_clients_, number_of_clients_, std::move(input_map),
       std::move(input_vector_specs_), std::move(other_client_states_),

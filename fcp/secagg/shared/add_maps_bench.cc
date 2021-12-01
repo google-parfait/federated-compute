@@ -17,7 +17,6 @@
 #include <memory>
 #include <vector>
 
-#include "absl/memory/memory.h"
 #include "fcp/secagg/shared/map_of_masks.h"
 #include "fcp/secagg/shared/secagg_vector.h"
 
@@ -54,7 +53,7 @@ std::unique_ptr<SecAggVectorMap> MakeMap(int64_t bit_width, int64_t size,
     v = (v + step) % modulus;
   }
 
-  auto map = absl::make_unique<SecAggVectorMap>();
+  auto map = std::make_unique<SecAggVectorMap>();
   map->emplace("test", SecAggVector(vec, modulus));
   return map;
 }

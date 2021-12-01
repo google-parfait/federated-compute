@@ -16,8 +16,8 @@
 #define FCP_TRACING_TEXT_TRACING_SPAN_IMPL_H_
 
 #include <atomic>
+#include <optional>
 
-#include "absl/types/optional.h"
 #include "fcp/tracing/text_tracing_recorder_impl.h"
 #include "fcp/tracing/tracing_span_impl.h"
 #include "flatbuffers/flatbuffers.h"

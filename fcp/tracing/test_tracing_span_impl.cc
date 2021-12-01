@@ -14,7 +14,7 @@
 
 #include "fcp/tracing/test_tracing_span_impl.h"
 
-#include "absl/memory/memory.h"
+#include <memory>
 
 namespace fcp {
 namespace tracing_internal {

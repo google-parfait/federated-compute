@@ -19,11 +19,11 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
-#include "absl/types/optional.h"
 
 namespace fcp {
 

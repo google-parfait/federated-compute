@@ -280,7 +280,7 @@ class PlanEngine {
 
   const google::internal::federatedml::v2::RetryWindow default_retry_window_;
   std::unique_ptr<TensorFlowWrapper> tf_wrapper_;
-  absl::optional<StagedResult> staged_result_;
+  std::optional<StagedResult> staged_result_;
   std::vector<std::pair<std::string, double>> all_published_stats_;
   bool log_tensorflow_error_messages_;
 };

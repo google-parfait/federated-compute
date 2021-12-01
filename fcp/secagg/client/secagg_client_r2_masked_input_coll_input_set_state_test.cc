@@ -16,12 +16,12 @@
 
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_input_set_state.h"
 
+#include <memory>
 #include <string>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/node_hash_map.h"
-#include "absl/memory/memory.h"
 #include "fcp/secagg/client/other_client_state.h"
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_base_state.h"
@@ -58,10 +58,10 @@ AesKey MakeAesKey(const std::string& key) {
 SessionId session_id = {"session id number, 32 bytes long."};
 
 TEST(SecAggClientR2MaskedInputCollInputSetStateTest, IsAbortedReturnsFalse) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({2, 4, 6, 8}, 32)));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -72,28 +72,28 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest, IsAbortedReturnsFalse) {
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("test 32 byte AES encryption key.")),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("other test 32 byte AES prng key.")),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r2_state.IsAborted(), Eq(false));
 }
 
 TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
      IsCompletedSuccessfullyReturnsFalse) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({2, 4, 6, 8}, 32)));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -104,27 +104,27 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("test 32 byte AES encryption key.")),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("other test 32 byte AES prng key.")),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r2_state.IsCompletedSuccessfully(), Eq(false));
 }
 
 TEST(SecAggClientR2MaskedInputCollInputSetStateTest, StartRaisesErrorStatus) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({2, 4, 6, 8}, 32)));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -135,28 +135,28 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest, StartRaisesErrorStatus) {
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("test 32 byte AES encryption key.")),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("other test 32 byte AES prng key.")),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r2_state.Start().ok(), Eq(false));
 }
 
 TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
      SetInputRaisesErrorStatus) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({2, 4, 6, 8}, 32)));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -167,29 +167,29 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("test 32 byte AES encryption key.")),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("other test 32 byte AES prng key.")),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
-  EXPECT_THAT(r2_state.SetInput(absl::make_unique<SecAggVectorMap>()).ok(),
+  EXPECT_THAT(r2_state.SetInput(std::make_unique<SecAggVectorMap>()).ok(),
               Eq(false));
 }
 
 TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
      ErrorMessageRaisesErrorStatus) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({2, 4, 6, 8}, 32)));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -200,28 +200,28 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("test 32 byte AES encryption key.")),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("other test 32 byte AES prng key.")),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_THAT(r2_state.ErrorMessage().ok(), Eq(false));
 }
 
 TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
      AbortReturnsValidAbortStateAndNotifiesServer) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({2, 4, 6, 8}, 32)));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -232,18 +232,18 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("test 32 byte AES encryption key.")),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("other test 32 byte AES prng key.")),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
   std::string error_string =
       "Abort upon external request for reason <Abort reason>.";
@@ -260,10 +260,10 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
 
 TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
      AbortFailureMessageCausesAbortWithoutNotifyingServer) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({2, 4, 6, 8}, 32)));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -274,18 +274,18 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("test 32 byte AES encryption key.")),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("other test 32 byte AES prng key.")),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
   ServerToClientWrapperMessage abort_message;
@@ -301,10 +301,10 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
 
 TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
      EarlySuccessMessageCausesTransitionToCompletedState) {
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({2, 4, 6, 8}, 32)));
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -315,18 +315,18 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_map), std::move(input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("test 32 byte AES encryption key.")),
-      absl::make_unique<std::vector<AesKey> >(
+      std::make_unique<std::vector<AesKey> >(
           6, MakeAesKey("other test 32 byte AES prng key.")),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
   ServerToClientWrapperMessage abort_message;
@@ -342,7 +342,7 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
      MaskedInputCollectionRequestIsHandledCorrectlyWhenNoClientsDie) {
   // In this test, the client under test is id 1, and there are 4 clients, all
   // alive.
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({2, 4, 6, 8}, 32));
   std::vector<InputVectorSpecification> input_vector_specs;
   input_vector_specs.push_back(InputVectorSpecification("test", 4, 32));
@@ -364,18 +364,18 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
       4,  // number_of_alive_clients
       4,  // number_of_clients
       std::move(input_map),
-      absl::make_unique<std::vector<InputVectorSpecification> >(
+      std::make_unique<std::vector<InputVectorSpecification> >(
           input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           4, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(enc_keys),
-      absl::make_unique<std::vector<AesKey> >(other_client_prng_keys),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<std::vector<AesKey> >(enc_keys),
+      std::make_unique<std::vector<AesKey> >(other_client_prng_keys),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
   // These are strings because they're for putting into protocol buffers.
   std::vector<std::string> expected_self_key_shares = {
@@ -437,7 +437,7 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
      MaskedInputCollectionRequestIsHandledCorrectlyWithDeadClient) {
   // In this test, the client under test is id 1, and there are 4 clients.
   // Client 3 has died in this round.
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({2, 4, 6, 8}, 32)));
   std::vector<InputVectorSpecification> input_vector_specs;
   input_vector_specs.push_back(InputVectorSpecification("test", 4, 32));
@@ -459,18 +459,18 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
       4,  // number_of_alive_clients
       4,  // number_of_clients
       std::move(input_map),
-      absl::make_unique<std::vector<InputVectorSpecification> >(
+      std::make_unique<std::vector<InputVectorSpecification> >(
           input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           4, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(enc_keys),
-      absl::make_unique<std::vector<AesKey> >(other_client_prng_keys),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<std::vector<AesKey> >(enc_keys),
+      std::make_unique<std::vector<AesKey> >(other_client_prng_keys),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
   std::vector<std::string> expected_self_key_shares = {
       "shared self prng key for client #000", "",
@@ -532,7 +532,7 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
   // In this test, the client under test is id 1, and there are 4 clients.
   // Clients 3 and 4 died, and we need 3 clients to continue, so we should
   // abort.
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->insert(std::make_pair("test", SecAggVector({2, 4, 6, 8}, 32)));
   std::vector<InputVectorSpecification> input_vector_specs;
   input_vector_specs.push_back(InputVectorSpecification("test", 4, 32));
@@ -554,18 +554,18 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
       4,  // number_of_alive_clients
       4,  // number_of_clients
       std::move(input_map),
-      absl::make_unique<std::vector<InputVectorSpecification> >(
+      std::make_unique<std::vector<InputVectorSpecification> >(
           input_vector_specs),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           4, OtherClientState::kAlive),
-      absl::make_unique<std::vector<AesKey> >(enc_keys),
-      absl::make_unique<std::vector<AesKey> >(other_client_prng_keys),
-      absl::make_unique<ShamirShare>(),
-      absl::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
+      std::make_unique<std::vector<AesKey> >(enc_keys),
+      std::make_unique<std::vector<AesKey> >(other_client_prng_keys),
+      std::make_unique<ShamirShare>(),
+      std::make_unique<AesKey>(MakeAesKey("test 32 byte AES self prng key. ")),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
-      absl::make_unique<SessionId>(session_id),
-      absl::make_unique<AesCtrPrngFactory>());
+      std::make_unique<SessionId>(session_id),
+      std::make_unique<AesCtrPrngFactory>());
 
   std::vector<std::string> expected_self_key_shares = {
       "shared self prng key for client #000", "",

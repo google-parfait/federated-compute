@@ -446,10 +446,10 @@ TEST(SecAggUnpackedVectorTest, VerifyMoveAssignment) {
 }
 
 TEST(SecAggUnpackedVectorTest, AddSecAggVectorMap) {
-  auto unpacked_map = absl::make_unique<SecAggUnpackedVectorMap>();
+  auto unpacked_map = std::make_unique<SecAggUnpackedVectorMap>();
   unpacked_map->emplace("foobar", SecAggUnpackedVector({0, 10, 20, 30}, 32));
 
-  auto packed_map = absl::make_unique<SecAggVectorMap>();
+  auto packed_map = std::make_unique<SecAggVectorMap>();
   packed_map->emplace("foobar", SecAggVector({5, 5, 5, 5}, 32));
 
   unpacked_map->Add(*packed_map);

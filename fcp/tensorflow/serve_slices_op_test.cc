@@ -153,7 +153,7 @@ TEST_F(ServeSlicesOpTest, SessionRunCallsBackIntoCPP) {
 }
 
 TEST_F(ServeSlicesOpTest, SessionRunFailsOnMissingCallback) {
-  absl::optional<RandomToken> callback_token;
+  std::optional<RandomToken> callback_token;
   {
     MockServeSlicesCallback mock_callback;
     HostObjectRegistration callback_registration =

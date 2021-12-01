@@ -18,6 +18,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -26,12 +27,10 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/container/node_hash_map.h"
-#include "absl/memory/memory.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
-#include "absl/types/optional.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
@@ -84,7 +83,7 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   EligibilityEvalCheckin() override;
 
   absl::StatusOr<::fcp::client::FederatedProtocol::CheckinResult> Checkin(
-      const absl::optional<
+      const std::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&
           task_eligibility_info) override;
 
@@ -145,7 +144,7 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
 
   // Helper function to compose and send a CheckinRequest to the server.
   absl::Status SendCheckinRequest(
-      const absl::optional<
+      const std::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&
           task_eligibility_info);
 
@@ -251,7 +250,7 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   };
   // Represents the information received via the CheckinRequestAck message.
   // This field will have an absent value until that message has been received.
-  absl::optional<CheckinRequestAckInfo> checkin_request_ack_info_;
+  std::optional<CheckinRequestAckInfo> checkin_request_ack_info_;
   // The identifier of the task that was received in a CheckinResponse. Note
   // that this does not refer to the identifier of the eligbility eval task that
   // may have been received in an EligibilityEvalCheckinResponse.

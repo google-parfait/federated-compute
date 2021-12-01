@@ -136,7 +136,7 @@ TEST(UniqueValueTest, Emplace) {
   ValueBox box_a{};
   ValueBox box_b{};
   {
-    UniqueValue<TracedValue> v{absl::nullopt};
+    UniqueValue<TracedValue> v{std::nullopt};
     v.Emplace(123);
     v->AttachToBox(&box_a);
     EXPECT_THAT(box_a.destructed, Eq(false));

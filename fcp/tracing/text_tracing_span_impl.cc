@@ -15,8 +15,8 @@
 #include "fcp/tracing/text_tracing_span_impl.h"
 
 #include <iostream>
+#include <memory>
 
-#include "absl/memory/memory.h"
 #include "flatbuffers/minireflect.h"
 
 namespace fcp {

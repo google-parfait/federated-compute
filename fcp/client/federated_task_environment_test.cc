@@ -17,10 +17,10 @@
 
 #include <functional>
 #include <memory>
+#include <variant>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/types/variant.h"
 #include "fcp/base/platform.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -49,7 +49,7 @@ class FederatedTaskEnvironmentTest : public testing::TestWithParam<bool> {
 
  protected:
   void SetUp() override {
-    task_env_ = absl::make_unique<FederatedTaskEnvironment>(
+    task_env_ = std::make_unique<FederatedTaskEnvironment>(
         &mock_simple_task_environment_, &mock_federated_protocol_,
         &mock_log_manager_, &mock_event_publisher_, &mock_opstats_logger_,
         &mock_flags_, kReferenceTime, absl::ZeroDuration());
@@ -81,7 +81,7 @@ TEST_P(FederatedTaskEnvironmentTest, TestShouldAbort) {
     GTEST_SKIP();
   }
   absl::Time now = absl::Now();
-  auto task_env = absl::make_unique<FederatedTaskEnvironment>(
+  auto task_env = std::make_unique<FederatedTaskEnvironment>(
       &mock_simple_task_environment_, &mock_federated_protocol_,
       &mock_log_manager_, &mock_event_publisher_, &mock_opstats_logger_,
       &mock_flags_, kReferenceTime,
@@ -144,12 +144,12 @@ MATCHER_P(EqualsComputationResult, expected, "") {
   for (const auto& [k, v] : expected.get()) {
     if (arg.count(k) != 1) return false;
     const auto& arg_v = arg.at(k);
-    if (absl::holds_alternative<TFCheckpoint>(arg_v)) {
-      if (!absl::holds_alternative<TFCheckpoint>(v)) return false;
+    if (std::holds_alternative<TFCheckpoint>(arg_v)) {
+      if (!std::holds_alternative<TFCheckpoint>(v)) return false;
       if (absl::get<TFCheckpoint>(v) != absl::get<TFCheckpoint>(arg_v))
         return false;
-    } else if (absl::holds_alternative<QuantizedTensor>(arg_v)) {
-      if (!absl::holds_alternative<QuantizedTensor>(v)) return false;
+    } else if (std::holds_alternative<QuantizedTensor>(arg_v)) {
+      if (!std::holds_alternative<QuantizedTensor>(v)) return false;
       const auto& v_q = absl::get<QuantizedTensor>(v);
       const auto& arg_q = absl::get<QuantizedTensor>(arg_v);
       if (v_q.values != arg_q.values) return false;

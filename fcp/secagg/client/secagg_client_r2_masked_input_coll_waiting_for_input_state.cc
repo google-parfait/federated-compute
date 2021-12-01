@@ -16,10 +16,10 @@
 
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_waiting_for_input_state.h"
 
+#include <memory>
 #include <string>
 
 #include "absl/container/node_hash_map.h"
-#include "absl/memory/memory.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/other_client_state.h"
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
@@ -76,10 +76,10 @@ SecAggClientR2MaskedInputCollWaitingForInputState::HandleMessage(
   // Handle abort messages only.
   if (message.has_abort()) {
     if (message.abort().early_success()) {
-      return {absl::make_unique<SecAggClientCompletedState>(
+      return {std::make_unique<SecAggClientCompletedState>(
           std::move(sender_), std::move(transition_listener_))};
     } else {
-      return {absl::make_unique<SecAggClientAbortedState>(
+      return {std::make_unique<SecAggClientAbortedState>(
           "Aborting because of abort message from the server.",
           std::move(sender_), std::move(transition_listener_))};
     }
@@ -102,7 +102,7 @@ SecAggClientR2MaskedInputCollWaitingForInputState::SetInput(
 
   SendMaskedInput(std::move(input_map), std::move(map_of_masks_));
 
-  return {absl::make_unique<SecAggClientR3UnmaskingState>(
+  return {std::make_unique<SecAggClientR3UnmaskingState>(
       client_id_, number_of_alive_clients_,
       minimum_surviving_clients_for_reconstruction_, number_of_clients_,
       std::move(other_client_states_), std::move(pairwise_key_shares_),

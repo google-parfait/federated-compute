@@ -16,9 +16,9 @@
 
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_input_set_state.h"
 
+#include <memory>
 #include <string>
 
-#include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/other_client_state.h"
@@ -87,10 +87,10 @@ SecAggClientR2MaskedInputCollInputSetState::HandleMessage(
   // Handle abort messages or masked input requests only.
   if (message.has_abort()) {
     if (message.abort().early_success()) {
-      return {absl::make_unique<SecAggClientCompletedState>(
+      return {std::make_unique<SecAggClientCompletedState>(
           std::move(sender_), std::move(transition_listener_))};
     } else {
-      return {absl::make_unique<SecAggClientAbortedState>(
+      return {std::make_unique<SecAggClientAbortedState>(
           "Aborting because of abort message from the server.",
           std::move(sender_), std::move(transition_listener_))};
     }
@@ -101,8 +101,8 @@ SecAggClientR2MaskedInputCollInputSetState::HandleMessage(
 
   const MaskedInputCollectionRequest& request = message.masked_input_request();
   std::string error_message;
-  auto pairwise_key_shares = absl::make_unique<std::vector<ShamirShare> >();
-  auto self_key_shares = absl::make_unique<std::vector<ShamirShare> >();
+  auto pairwise_key_shares = std::make_unique<std::vector<ShamirShare> >();
+  auto self_key_shares = std::make_unique<std::vector<ShamirShare> >();
 
   std::unique_ptr<SecAggVectorMap> map_of_masks =
       HandleMaskedInputCollectionRequest(
@@ -119,7 +119,7 @@ SecAggClientR2MaskedInputCollInputSetState::HandleMessage(
 
   SendMaskedInput(std::move(input_map_), std::move(map_of_masks));
 
-  return {absl::make_unique<SecAggClientR3UnmaskingState>(
+  return {std::make_unique<SecAggClientR3UnmaskingState>(
       client_id_, number_of_alive_clients_,
       minimum_surviving_clients_for_reconstruction_, number_of_clients_,
       std::move(other_client_states_), std::move(pairwise_key_shares),

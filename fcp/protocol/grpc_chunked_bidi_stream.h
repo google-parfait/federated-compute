@@ -26,7 +26,6 @@
 #include "google/protobuf/io/gzip_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "absl/base/attributes.h"
-#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/protos/federated_api.grpc.pb.h"
@@ -109,7 +108,7 @@ class GrpcChunkedBidiStream {
     int64_t total_chunking_layer_bytes_sent = 0;
 
     google::internal::federatedml::v2::ChunkedTransferMessage* Add() {
-      deque.push_back(absl::make_unique<Outgoing>());
+      deque.push_back(std::make_unique<Outgoing>());
       return deque.back()->mutable_chunked_transfer();
     }
   } outgoing_;

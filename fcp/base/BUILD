@@ -96,8 +96,6 @@ cc_test(
     deps = [
         ":meta",
         "@com_google_googletest//:gtest_main",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/types:optional",
     ],
 )
 
@@ -177,7 +175,6 @@ cc_test(
     deps = [
         ":dispatch",
         "@com_google_googletest//:gtest_main",
-        "@com_google_absl//absl/types:variant",
     ],
 )
 
@@ -254,8 +251,6 @@ cc_library(
         ":unique_value",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/types:optional",
-        "@com_google_absl//absl/types:variant",
     ],
 )
 
@@ -313,7 +308,6 @@ cc_library(
     copts = FCP_COPTS,
     deps = [
         ":base",
-        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/synchronization",
     ],
 )
@@ -356,7 +350,6 @@ cc_library(
         "unique_value.h",
     ],
     copts = FCP_COPTS,
-    deps = ["@com_google_absl//absl/types:optional"],
 )
 
 cc_test(
@@ -394,8 +387,6 @@ cc_library(
         ":source_location",
         ":tracing_schema",
         "//fcp/tracing",
-        "@com_google_absl//absl/types:optional",
-        "@com_google_absl//absl/types:variant",
     ],
 )
 
@@ -424,7 +415,6 @@ cc_test(
         "//fcp/testing:result_matchers",
         "//fcp/tracing:test_tracing_recorder",
         "@com_google_googletest//:gtest_main",
-        "@com_google_absl//absl/types:variant",
     ],
 )
 
@@ -460,11 +450,7 @@ cc_library(
         "match.h",
     ],
     copts = FCP_COPTS,
-    deps = [
-        ":meta",
-        "@com_google_absl//absl/types:optional",
-        "@com_google_absl//absl/types:variant",
-    ],
+    deps = [":meta"],
 )
 
 cc_test(
@@ -479,9 +465,6 @@ cc_test(
         "//fcp/testing",
         "//fcp/testing:result_matchers",
         "@com_google_googletest//:gtest_main",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/types:optional",
-        "@com_google_absl//absl/types:variant",
     ],
 )
 
@@ -514,7 +497,6 @@ cc_library(
         ":base",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:optional",
     ],
 )
 

@@ -16,10 +16,10 @@
 
 #include "fcp/base/meta.h"
 
+#include <memory>
+#include <optional>
 #include <type_traits>
 #include <vector>
-#include "absl/memory/memory.h"
-#include "absl/types/optional.h"
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -164,15 +164,15 @@ struct UntypedVal {
 };
 
 struct CastValByTag {
-  template<typename T>
-  using TargetType = absl::optional<TypedVal<T>>;
+  template <typename T>
+  using TargetType = std::optional<TypedVal<T>>;
 
   template <typename T>
   TargetType<T> Cast(UntypedVal const& val) const {
     if (val.tag == T::tag()) {
       return TypedVal<T>{val.value};
     } else {
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 };
@@ -218,7 +218,7 @@ TEST(MetaTest, CastContainerElements_OneFails) {
   // Second element does not have the tag for Y.
   auto actual = CastContainerElements<X, Y, X>(v, CastValByTag{});
   auto expected = std::make_tuple(absl::make_optional(TypedVal<X>{123}),
-                                  absl::optional<TypedVal<Y>>(absl::nullopt),
+                                  std::optional<TypedVal<Y>>(std::nullopt),
                                   absl::make_optional(TypedVal<X>{789}));
 
   EXPECT_THAT(actual, Eq(expected));
@@ -344,7 +344,7 @@ TEST(MetaTest, LiftVoidReturn_Mutable) {
 
 TEST(MetaTest, LiftVoidReturn_MutableAndMoveOnly) {
   int r = -1;
-  auto f = [&r, counter = absl::make_unique<int>(0)]() mutable {
+  auto f = [&r, counter = std::make_unique<int>(0)]() mutable {
     (*counter)++;
     r = *counter;
   };

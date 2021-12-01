@@ -63,10 +63,10 @@ SecAggClientR1ShareKeysInputSetState::HandleMessage(
   // Handle abort messages or share keys requests only.
   if (message.has_abort()) {
     if (message.abort().early_success()) {
-      return {absl::make_unique<SecAggClientCompletedState>(
+      return {std::make_unique<SecAggClientCompletedState>(
           std::move(sender_), std::move(transition_listener_))};
     } else {
-      return {absl::make_unique<SecAggClientAbortedState>(
+      return {std::make_unique<SecAggClientAbortedState>(
           "Aborting because of abort message from the server.",
           std::move(sender_), std::move(transition_listener_))};
     }
@@ -78,18 +78,17 @@ SecAggClientR1ShareKeysInputSetState::HandleMessage(
   uint32_t number_of_alive_clients;
   uint32_t number_of_clients;
   std::string error_message;
-  auto other_client_enc_keys = absl::make_unique<std::vector<AesKey> >();
-  auto other_client_prng_keys = absl::make_unique<std::vector<AesKey> >();
-  auto other_client_states =
-      absl::make_unique<std::vector<OtherClientState> >();
-  auto own_self_key_share = absl::make_unique<ShamirShare>();
-  auto session_id = absl::make_unique<SessionId>();
+  auto other_client_enc_keys = std::make_unique<std::vector<AesKey> >();
+  auto other_client_prng_keys = std::make_unique<std::vector<AesKey> >();
+  auto other_client_states = std::make_unique<std::vector<OtherClientState> >();
+  auto own_self_key_share = std::make_unique<ShamirShare>();
+  auto session_id = std::make_unique<SessionId>();
 
   uint8_t self_prng_key_buffer[AesKey::kSize];
   for (uint8_t& i : self_prng_key_buffer) {
     i = prng_->Rand8();
   }
-  auto self_prng_key = absl::make_unique<AesKey>(self_prng_key_buffer);
+  auto self_prng_key = std::make_unique<AesKey>(self_prng_key_buffer);
 
   bool success = HandleShareKeysRequest(
       message.share_keys_request(), *enc_key_agreement_, max_clients_expected_,
@@ -113,7 +112,7 @@ SecAggClientR1ShareKeysInputSetState::HandleMessage(
   }
 
   *own_self_key_share = self_prng_key_shares_[client_id];
-  return {absl::make_unique<SecAggClientR2MaskedInputCollInputSetState>(
+  return {std::make_unique<SecAggClientR2MaskedInputCollInputSetState>(
       client_id, minimum_surviving_clients_for_reconstruction_,
       number_of_alive_clients, number_of_clients, std::move(input_map_),
       std::move(input_vector_specs_), std::move(other_client_states),

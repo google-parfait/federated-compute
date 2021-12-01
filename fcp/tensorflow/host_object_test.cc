@@ -43,9 +43,9 @@ class WidgetImpl : public WidgetInterface {
 };
 
 TEST(HostObjectTest, LookupFailure) {
-  absl::optional<std::shared_ptr<WidgetInterface>> p =
+  std::optional<std::shared_ptr<WidgetInterface>> p =
       HostObjectRegistry<WidgetInterface>::TryLookup(RandomToken::Generate());
-  EXPECT_THAT(p, Eq(absl::nullopt));
+  EXPECT_THAT(p, Eq(std::nullopt));
 }
 
 TEST(HostObjectTest, LookupSuccess) {
@@ -53,7 +53,7 @@ TEST(HostObjectTest, LookupSuccess) {
   HostObjectRegistration reg =
       HostObjectRegistry<WidgetInterface>::Register(obj);
 
-  absl::optional<std::shared_ptr<WidgetInterface>> p =
+  std::optional<std::shared_ptr<WidgetInterface>> p =
       HostObjectRegistry<WidgetInterface>::TryLookup(reg.token());
   EXPECT_TRUE(p.has_value());
 
@@ -65,16 +65,16 @@ TEST(HostObjectTest, LookupSuccess) {
 TEST(HostObjectTest, Unregister) {
   std::shared_ptr<WidgetImpl> obj = std::make_shared<WidgetImpl>();
 
-  absl::optional<RandomToken> token;
+  std::optional<RandomToken> token;
   {
     HostObjectRegistration reg =
         HostObjectRegistry<WidgetInterface>::Register(obj);
     token = reg.token();
   }
 
-  absl::optional<std::shared_ptr<WidgetInterface>> p =
+  std::optional<std::shared_ptr<WidgetInterface>> p =
       HostObjectRegistry<WidgetInterface>::TryLookup(*token);
-  EXPECT_THAT(p, Eq(absl::nullopt));
+  EXPECT_THAT(p, Eq(std::nullopt));
 }
 
 }  // namespace fcp

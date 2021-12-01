@@ -224,7 +224,7 @@ class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
         << ":\n\turi: " << example_selector.collection_uri()
         << "\n\ttype: " << example_selector.criteria().type_url();
     return absl::StatusOr<std::unique_ptr<ExampleIterator>>(
-        absl::make_unique<EmptyExampleIterator>(num_examples_));
+        std::make_unique<EmptyExampleIterator>(num_examples_));
   }
 
  private:

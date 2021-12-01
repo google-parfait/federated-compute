@@ -17,15 +17,14 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
+#include <variant>
 
 #include "google/protobuf/duration.pb.h"
-#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
-#include "absl/types/optional.h"
 #include "absl/types/span.h"
-#include "absl/types/variant.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -192,7 +191,7 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
     const int64_t grpc_channel_deadline_seconds)
     : GrpcFederatedProtocol(
           event_publisher, log_manager, opstats_logger, flags,
-          absl::make_unique<GrpcBidiStream>(
+          std::make_unique<GrpcBidiStream>(
               federated_service_uri, api_key, std::string(population_name),
               grpc_channel_deadline_seconds, test_cert_path),
           nullptr, population_name, retry_token, client_version,
@@ -220,7 +219,7 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
       client_version_(client_version),
       attestation_measurement_(attestation_measurement),
       bit_gen_(std::move(bit_gen)) {
-  interruptible_runner_ = absl::make_unique<InterruptibleRunner>(
+  interruptible_runner_ = std::make_unique<InterruptibleRunner>(
       log_manager, should_abort, timing_config,
       InterruptibleRunner::DiagnosticsConfig{
           .interrupted = ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_GRPC,
@@ -313,7 +312,7 @@ absl::Status GrpcFederatedProtocol::SendEligibilityEvalCheckinRequest() {
 }
 
 absl::Status GrpcFederatedProtocol::SendCheckinRequest(
-    const absl::optional<TaskEligibilityInfo>& task_eligibility_info) {
+    const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
   ClientStreamMessage client_stream_message;
   CheckinRequest* checkin_request =
       client_stream_message.mutable_checkin_request();
@@ -615,7 +614,7 @@ GrpcFederatedProtocol::EligibilityEvalCheckin() {
 }
 
 absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
-    const absl::optional<TaskEligibilityInfo>& task_eligibility_info) {
+    const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
   // Checkin(...) must follow an earlier call to EligibilityEvalCheckin() that
   // resulted in a non-Rejection response from the server.
   FCP_CHECK(object_state_ == ObjectState::kEligibilityEvalDisabled ||
@@ -878,10 +877,10 @@ absl::Status GrpcFederatedProtocol::Report(
     }
 
     SecAggSendToServerImpl* send_to_server_impl_raw_ptr = nullptr;
-    auto input_map = absl::make_unique<SecAggVectorMap>();
+    auto input_map = std::make_unique<SecAggVectorMap>();
     auto send_to_server_impl_unique_ptr =
-        absl::make_unique<SecAggSendToServerImpl>(grpc_bidi_stream_.get(),
-                                                  report_lambda);
+        std::make_unique<SecAggSendToServerImpl>(grpc_bidi_stream_.get(),
+                                                 report_lambda);
     send_to_server_impl_raw_ptr = send_to_server_impl_unique_ptr.get();
     size_t last_received_message_size = 0;
     auto secagg_event_publisher = event_publisher_->secagg_event_publisher();
@@ -889,15 +888,15 @@ absl::Status GrpcFederatedProtocol::Report(
         << "An implementation of "
         << "SecAggEventPublisher must be provided.";
     auto secagg_state_transition_listener =
-        absl::make_unique<SecAggStateTransitionListenerImpl>(
+        std::make_unique<SecAggStateTransitionListenerImpl>(
             secagg_event_publisher, log_manager_, *send_to_server_impl_raw_ptr,
             last_received_message_size);
     if (!secagg_client_) {  // non-test code.
       std::vector<InputVectorSpecification> input_vector_specification;
       for (auto& [k, v] : results) {
-        if (absl::holds_alternative<TFCheckpoint>(v)) {
+        if (std::holds_alternative<TFCheckpoint>(v)) {
           tf_checkpoint = absl::get<TFCheckpoint>(std::move(v));
-        } else if (absl::holds_alternative<QuantizedTensor>(v)) {
+        } else if (std::holds_alternative<QuantizedTensor>(v)) {
           auto execution_info = side_channels_.find(k);
           if (execution_info == side_channels_.end())
             return absl::InternalError(
@@ -953,10 +952,10 @@ absl::Status GrpcFederatedProtocol::Report(
           secure_aggregation_protocol_execution_info
               .minimum_surviving_clients_for_reconstruction(),
           std::move(input_vector_specification),
-          absl::make_unique<CryptoRandPrng>(),
+          std::make_unique<CryptoRandPrng>(),
           std::move(send_to_server_impl_unique_ptr),
           std::move(secagg_state_transition_listener),
-          absl::make_unique<AesCtrPrngFactory>());
+          std::make_unique<AesCtrPrngFactory>());
     }
     FCP_RETURN_IF_ERROR(interruptible_runner_->Run(
         [this, &input_map, &last_received_message_size,
@@ -1028,7 +1027,7 @@ absl::Status GrpcFederatedProtocol::Report(
     // Report without secure aggregation.
     FCP_LOG(INFO) << "Reporting via Simple Aggregation";
     if (results.size() != 1 ||
-        !absl::holds_alternative<TFCheckpoint>(results.begin()->second)) {
+        !std::holds_alternative<TFCheckpoint>(results.begin()->second)) {
       return absl::InternalError(
           "Simple Aggregation aggregands have unexpected format.");
     }

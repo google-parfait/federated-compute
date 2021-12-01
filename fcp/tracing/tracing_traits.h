@@ -19,7 +19,6 @@
 #include <string>
 
 #include "absl/base/attributes.h"
-#include "absl/memory/memory.h"
 #include "fcp/tracing/tracing_severity.h"
 #include "fcp/tracing/tracing_tag.h"
 #include "flatbuffers/flatbuffers.h"
@@ -81,7 +80,7 @@ struct TracingTraitsRegistrar {
   TracingTraitsRegistrar() {
     TracingTraitsBase::Register(
         TracingTraits<FlatBufferTable>::kTag,
-        absl::make_unique<TracingTraits<FlatBufferTable>>());
+        std::make_unique<TracingTraits<FlatBufferTable>>());
   }
 };
 

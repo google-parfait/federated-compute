@@ -164,7 +164,7 @@ class ServeSlicesOp : public tensorflow::OpKernel {
                    get_scalar_input(context, "select_fn_target_tensor_name",
                                     &select_fn_target_tensor_name));
 
-    absl::optional<std::shared_ptr<ServeSlicesCallback>> callback =
+    std::optional<std::shared_ptr<ServeSlicesCallback>> callback =
         get_serve_slices_callback(callback_token);
     OP_REQUIRES(context, callback.has_value(),
                 tensorflow::errors::InvalidArgument(

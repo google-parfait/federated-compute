@@ -17,8 +17,8 @@
 #ifndef FCP_BASE_UNIQUE_VALUE_H_
 #define FCP_BASE_UNIQUE_VALUE_H_
 
+#include <optional>
 #include <utility>
-#include "absl/types/optional.h"
 
 namespace fcp {
 
@@ -29,8 +29,8 @@ namespace fcp {
  * allocation and pointer indirection (recall a moved-from std::unique_ptr is
  * reset to nullptr).
  *
- * Instead, UniqueValue is represented just like absl::optional - but
- * has_value() == false once moved-from. absl::optional does *not* reset when
+ * Instead, UniqueValue is represented just like std::optional - but
+ * has_value() == false once moved-from. std::optional does *not* reset when
  * moved from (even if the wrapped type is move-only); that's consistent, but
  * not especially desirable.
  *
@@ -40,7 +40,7 @@ namespace fcp {
 template <typename T>
 class UniqueValue {
  public:
-  constexpr explicit UniqueValue(absl::nullopt_t) : value_() {}
+  constexpr explicit UniqueValue(std::nullopt_t) : value_() {}
   constexpr explicit UniqueValue(T val) : value_(std::move(val)) {}
 
   UniqueValue(UniqueValue const&) = delete;
@@ -86,7 +86,7 @@ class UniqueValue {
 
   /**
    * Replaces current value with a newly constructed one given constructor
-   * arguments for T (like absl::optional::emplace).
+   * arguments for T (like std::optional::emplace).
    */
   template <class... _Args>
   T& Emplace(_Args&&... __args) {
@@ -100,7 +100,7 @@ class UniqueValue {
   void Reset() { value_.reset(); }
 
  private:
-  absl::optional<T> value_;
+  std::optional<T> value_;
 };
 
 // Deduction guide allowing one to write UniqueValue(x) without an explicit
@@ -111,7 +111,7 @@ UniqueValue(T val) -> UniqueValue<T>;
 
 /**
  * Makes a UniqueValue<T> given constructor arguments for T
- * (like absl::make_unique).
+ * (like std::make_unique).
  */
 template <typename T, typename... Args>
 constexpr UniqueValue<T> MakeUniqueValue(Args&&... args) {

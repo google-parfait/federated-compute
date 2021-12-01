@@ -89,7 +89,7 @@ inline HostObjectRegistration register_serve_slices_callback(
 }
 
 // Returns the callback registered with the given `token` if one exists.
-inline absl::optional<std::shared_ptr<ServeSlicesCallback>>
+inline std::optional<std::shared_ptr<ServeSlicesCallback>>
 get_serve_slices_callback(RandomToken token) {
   return HostObjectRegistry<ServeSlicesCallback>::TryLookup(token);
 }

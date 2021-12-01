@@ -75,8 +75,8 @@ class TestTracingRecorder
                     flatbuffers::DetachedBuffer data)
         : parent_id(parent_id), id(id), data(std::move(data)) {}
     explicit Record(TracingSpanId id, flatbuffers::DetachedBuffer data)
-        : parent_id(absl::nullopt), id(id), data(std::move(data)) {}
-    absl::optional<TracingSpanId> parent_id;
+        : parent_id(std::nullopt), id(id), data(std::move(data)) {}
+    std::optional<TracingSpanId> parent_id;
     TracingSpanId id;
     flatbuffers::DetachedBuffer data;
   };

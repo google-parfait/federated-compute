@@ -16,13 +16,13 @@
 
 #include "fcp/secagg/client/secagg_client_r3_unmasking_state.h"
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/memory/memory.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
 #include "fcp/secagg/client/secagg_client_completed_state.h"
@@ -49,9 +49,9 @@ TEST(SecAggClientR3UnmaskingStateTest, IsAbortedReturnsFalse) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR3UnmaskingState r3_state(
-      0, 4, 4, 4, absl::make_unique<std::vector<OtherClientState> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
+      0, 4, 4, 4, std::make_unique<std::vector<OtherClientState> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
   EXPECT_THAT(r3_state.IsAborted(), Eq(false));
@@ -62,9 +62,9 @@ TEST(SecAggClientR3UnmaskingStateTest, IsCompletedSuccessfullyReturnsFalse) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR3UnmaskingState r3_state(
-      0, 4, 4, 4, absl::make_unique<std::vector<OtherClientState> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
+      0, 4, 4, 4, std::make_unique<std::vector<OtherClientState> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
   EXPECT_THAT(r3_state.IsCompletedSuccessfully(), Eq(false));
@@ -75,9 +75,9 @@ TEST(SecAggClientR3UnmaskingStateTest, StartRaisesErrorStatus) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR3UnmaskingState r3_state(
-      0, 4, 4, 4, absl::make_unique<std::vector<OtherClientState> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
+      0, 4, 4, 4, std::make_unique<std::vector<OtherClientState> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
   EXPECT_THAT(r3_state.Start().ok(), Eq(false));
@@ -88,12 +88,12 @@ TEST(SecAggClientR3UnmaskingStateTest, SetInputRaisesErrorStatus) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR3UnmaskingState r3_state(
-      0, 4, 4, 4, absl::make_unique<std::vector<OtherClientState> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
+      0, 4, 4, 4, std::make_unique<std::vector<OtherClientState> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
-  EXPECT_THAT(r3_state.SetInput(absl::make_unique<SecAggVectorMap>()).ok(),
+  EXPECT_THAT(r3_state.SetInput(std::make_unique<SecAggVectorMap>()).ok(),
               Eq(false));
 }
 
@@ -102,9 +102,9 @@ TEST(SecAggClientR3UnmaskingStateTest, ErrorMessageRaisesErrorStatus) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR3UnmaskingState r3_state(
-      0, 4, 4, 4, absl::make_unique<std::vector<OtherClientState> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
+      0, 4, 4, 4, std::make_unique<std::vector<OtherClientState> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
   EXPECT_THAT(r3_state.ErrorMessage().ok(), Eq(false));
@@ -124,9 +124,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
   SecAggClientR3UnmaskingState r3_state(
-      0, 4, 4, 4, absl::make_unique<std::vector<OtherClientState> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
-      absl::make_unique<std::vector<ShamirShare> >(4),
+      0, 4, 4, 4, std::make_unique<std::vector<OtherClientState> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
+      std::make_unique<std::vector<ShamirShare> >(4),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
   StatusOr<std::unique_ptr<SecAggClientState> > new_state =
@@ -146,10 +146,10 @@ TEST(SecAggClientR3UnmaskingStateTest,
       6,  // number_of_alive_clients
       4,  // minimum_surviving_clients_for_reconstruction
       6,  // number_of_clients
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -175,10 +175,10 @@ TEST(SecAggClientR3UnmaskingStateTest,
       6,  // number_of_alive_clients
       4,  // minimum_surviving_clients_for_reconstruction
       6,  // number_of_clients
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -204,10 +204,10 @@ TEST(SecAggClientR3UnmaskingStateTest,
       6,  // number_of_alive_clients
       4,  // minimum_surviving_clients_for_reconstruction
       6,  // number_of_clients
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -244,9 +244,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
       5,  // number_of_alive_clients
       4,  // minimum_surviving_clients_for_reconstruction
       6,  // number_of_clients
-      absl::make_unique<std::vector<OtherClientState> >(other_clients_states),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<OtherClientState> >(other_clients_states),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -294,9 +294,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
       5,  // number_of_alive_clients
       4,  // minimum_surviving_clients_for_reconstruction
       6,  // number_of_clients
-      absl::make_unique<std::vector<OtherClientState> >(other_clients_states),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<OtherClientState> >(other_clients_states),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -333,10 +333,10 @@ TEST(SecAggClientR3UnmaskingStateTest,
       6,  // number_of_alive_clients
       4,  // minimum_surviving_clients_for_reconstruction
       6,  // number_of_clients
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -371,10 +371,10 @@ TEST(SecAggClientR3UnmaskingStateTest,
       6,  // number_of_alive_clients
       4,  // minimum_surviving_clients_for_reconstruction
       6,  // number_of_clients
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -413,9 +413,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
       5,  // number_of_alive_clients
       4,  // minimum_surviving_clients_for_reconstruction
       6,  // number_of_clients
-      absl::make_unique<std::vector<OtherClientState> >(other_clients_states),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<OtherClientState> >(other_clients_states),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -450,10 +450,10 @@ TEST(SecAggClientR3UnmaskingStateTest,
       6,  // number_of_alive_clients
       4,  // minimum_surviving_clients_for_reconstruction
       6,  // number_of_clients
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 

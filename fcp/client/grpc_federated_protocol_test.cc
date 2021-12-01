@@ -108,10 +108,10 @@ class MockSecAggClient : public SecAggClient {
       : SecAggClient(2,  // max_clients_expected
                      2,  // minimum_surviving_clients_for_reconstruction
                      {InputVectorSpecification("placeholder", 4, 32)},
-                     absl::make_unique<FakePrng>(),
-                     absl::make_unique<MockSendToServerInterface>(),
-                     absl::make_unique<NiceMock<MockStateTransitionListener>>(),
-                     absl::make_unique<AesCtrPrngFactory>()) {}
+                     std::make_unique<FakePrng>(),
+                     std::make_unique<MockSendToServerInterface>(),
+                     std::make_unique<NiceMock<MockStateTransitionListener>>(),
+                     std::make_unique<AesCtrPrngFactory>()) {}
   MOCK_METHOD(absl::Status, Start, (), (override));
 };
 
@@ -285,8 +285,8 @@ ClientStreamMessage GetExpectedEligibilityEvalCheckinRequest() {
 // This returns the CheckinRequest gRPC proto we expect each Checkin(...) call
 // to result in.
 ClientStreamMessage GetExpectedCheckinRequest(
-    const absl::optional<TaskEligibilityInfo>& task_eligibility_info =
-        absl::nullopt) {
+    const std::optional<TaskEligibilityInfo>& task_eligibility_info =
+        std::nullopt) {
   ClientStreamMessage expected_message;
   CheckinRequest* checkin_request = expected_message.mutable_checkin_request();
   checkin_request->set_population_name(kPopulationName);
@@ -350,7 +350,7 @@ class GrpcFederatedProtocolTest
     // std::unique_ptr conveniently allows us to assign the field a new value
     // after construction (which we could not do if the field's type was
     // GrpcFederatedProtocol, since it doesn't have copy or move constructors).
-    federated_protocol_ = absl::make_unique<GrpcFederatedProtocol>(
+    federated_protocol_ = std::make_unique<GrpcFederatedProtocol>(
         &mock_event_publisher_, &mock_log_manager_, &mock_opstats_logger_,
         &mock_flags_,
         // We want to inject mocks stored in unique_ptrs to the
@@ -448,7 +448,7 @@ class GrpcFederatedProtocolTest
   // ASSERT_OK.
   absl::Status RunSuccessfulCheckin(
       bool use_secure_aggregation,
-      const absl::optional<TaskEligibilityInfo>& task_eligibility_info =
+      const std::optional<TaskEligibilityInfo>& task_eligibility_info =
           GetFakeTaskEligibilityInfo()) {
     EXPECT_CALL(*mock_grpc_bidi_stream_,
                 Send(Pointee(EqualsProto(
@@ -547,7 +547,7 @@ TEST_P(GrpcFederatedProtocolTest,
   // retry window value as the one we just got. This is a simple correctness
   // check to ensure that the value is at least randomly generated (and that we
   // don't accidentally use the random number generator incorrectly).
-  federated_protocol_ = absl::make_unique<GrpcFederatedProtocol>(
+  federated_protocol_ = std::make_unique<GrpcFederatedProtocol>(
       &mock_event_publisher_, &mock_log_manager_, &mock_opstats_logger_,
       &mock_flags_, absl::WrapUnique(mock_grpc_bidi_stream_),
       absl::WrapUnique(mock_secagg_client_), kPopulationName, kRetryToken,
@@ -1110,7 +1110,7 @@ TEST_P(GrpcFederatedProtocolDeathTest, TestCheckinMissingTaskEligibilityInfo) {
   // A Checkin(...) request with a missing TaskEligibilityInfo should now fail,
   // as the protocol requires us to provide one based on the plan includes in
   // the eligibility eval checkin response payload.
-  ASSERT_DEATH({ auto unused = federated_protocol_->Checkin(absl::nullopt); },
+  ASSERT_DEATH({ auto unused = federated_protocol_->Checkin(std::nullopt); },
                _);
 }
 
@@ -1289,7 +1289,7 @@ TEST_P(GrpcFederatedProtocolTest,
   // Expect a checkin request for the next call to Checkin(...).
   EXPECT_CALL(*mock_grpc_bidi_stream_,
               Send(Pointee(EqualsProto(GetExpectedCheckinRequest(
-                  /*task_eligibility_info=*/absl::nullopt)))))
+                  /*task_eligibility_info=*/std::nullopt)))))
       .WillOnce(Return(absl::OkStatus()));
   EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
       .WillOnce(DoAll(SetArgPointee<0>(GetFakeRejectedCheckinResponse()),
@@ -1325,7 +1325,7 @@ TEST_P(GrpcFederatedProtocolTest,
 
   // Issue the regular checkin, without a TaskEligibilityInfo (since we didn't
   // receive an eligibility eval task to run during eligibility eval checkin).
-  auto checkin_result = federated_protocol_->Checkin(absl::nullopt);
+  auto checkin_result = federated_protocol_->Checkin(std::nullopt);
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));

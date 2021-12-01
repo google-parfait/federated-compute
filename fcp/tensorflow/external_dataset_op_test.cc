@@ -203,7 +203,7 @@ class TestDatasetProvider
                         : std::numeric_limits<int64_t>::max();
     auto examples = examples_;
     return ExternalDataset::FromFunction([examples, lower, upper]() {
-      return absl::make_unique<TestDatasetIterator>(examples, lower, upper);
+      return std::make_unique<TestDatasetIterator>(examples, lower, upper);
     });
   }
 
@@ -224,7 +224,7 @@ class FailingIteratorDatasetProvider
   absl::StatusOr<std::unique_ptr<ExternalDataset>> MakeDataset(
       TestSelector selector) final {
     return ExternalDataset::FromFunction(
-        []() { return absl::make_unique<FailingIterator>(); });
+        []() { return std::make_unique<FailingIterator>(); });
   }
 };
 

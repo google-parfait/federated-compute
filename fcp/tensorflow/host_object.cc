@@ -22,7 +22,7 @@ namespace fcp {
 
 namespace host_object_internal {
 
-absl::optional<std::shared_ptr<void>> HostObjectRegistryImpl::TryLookup(
+std::optional<std::shared_ptr<void>> HostObjectRegistryImpl::TryLookup(
     RandomToken token) {
   std::shared_ptr<void> p = nullptr;
 
@@ -35,7 +35,7 @@ absl::optional<std::shared_ptr<void>> HostObjectRegistryImpl::TryLookup(
   }
 
   if (p == nullptr) {
-    return absl::nullopt;
+    return std::nullopt;
   } else {
     return p;
   }

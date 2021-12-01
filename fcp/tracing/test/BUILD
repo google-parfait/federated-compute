@@ -65,7 +65,6 @@ cc_test(
         ":test_api_message_cc_proto",
         "//fcp/tracing:tracing_context_utils",
         "@com_google_googletest//:gtest_main",
-        "@com_google_absl//absl/types:optional",
     ],
 )
 

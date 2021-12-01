@@ -16,9 +16,9 @@
 
 #include "fcp/secagg/shared/ecdh_key_agreement.h"
 
+#include <memory>
 #include <string>
 
-#include "absl/memory/memory.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/shared/aes_key.h"
 #include "fcp/secagg/shared/ecdh_keys.h"
@@ -41,7 +41,7 @@ EcdhKeyAgreement::CreateFromRandomKeys() {
   EC_KEY* key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
   EC_KEY_generate_key(key);
   if (EC_KEY_check_key(key)) {
-    return absl::make_unique<EcdhKeyAgreement>(key);
+    return std::make_unique<EcdhKeyAgreement>(key);
   } else {
     return FCP_STATUS(INTERNAL);
   }
@@ -62,7 +62,7 @@ EcdhKeyAgreement::CreateFromPrivateKey(const EcdhPrivateKey& private_key) {
   if (!EC_KEY_set_private_key(key, private_key_bn.get())) {
     return FCP_STATUS(INVALID_ARGUMENT) << "Invalid private key.";
   }
-  return absl::make_unique<EcdhKeyAgreement>(key);
+  return std::make_unique<EcdhKeyAgreement>(key);
 }
 
 StatusOr<std::unique_ptr<EcdhKeyAgreement>> EcdhKeyAgreement::CreateFromKeypair(

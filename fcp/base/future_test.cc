@@ -59,13 +59,13 @@ using UV = UniqueValue<Unit>;
 static_assert(!std::is_copy_constructible<UV>::value,
               "Expected to be move-only");
 
-absl::optional<V> TakeV(Future<UV> future) {
-  absl::optional<UV> maybe_uv = std::move(future).Take();
+std::optional<V> TakeV(Future<UV> future) {
+  std::optional<UV> maybe_uv = std::move(future).Take();
   if (maybe_uv.has_value()) {
     UniqueValue<Unit> uv = *std::move(maybe_uv);
     return uv.has_value() ? V::kValid : V::kInvalid;
   } else {
-    return absl::nullopt;
+    return std::nullopt;
   }
 }
 
@@ -163,7 +163,7 @@ TEST(FutureTest, AbandonWhileProbablyTaking) {
   };
 
   auto future_fn = [](Future<UV> future) {
-    EXPECT_THAT(std::move(future).Take(), Eq(absl::nullopt));
+    EXPECT_THAT(std::move(future).Take(), Eq(std::nullopt));
   };
 
   RunThreadsWithFuture(std::move(promise_fn), std::move(future_fn));

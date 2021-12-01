@@ -14,9 +14,10 @@
 
 #include "fcp/tracing/tracing_context_utils.h"
 
+#include <optional>
+
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/message.h"
-#include "absl/types/optional.h"
 #include "fcp/base/monitoring.h"
 #include "flatbuffers/flatbuffers.h"
 

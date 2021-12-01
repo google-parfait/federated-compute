@@ -17,12 +17,12 @@
 
 #include <fstream>
 #include <map>
+#include <optional>
+#include <variant>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
-#include "absl/types/optional.h"
-#include "absl/types/variant.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -160,7 +160,7 @@ std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
 ConstructInputsForEligibilityEvalPlan(
     const FederatedComputeEligibilityIORouter& io_router,
     const std::string& checkpoint_input_filename) {
-  auto inputs = absl::make_unique<
+  auto inputs = std::make_unique<
       std::vector<std::pair<std::string, tensorflow::Tensor>>>();
   if (!io_router.input_filepath_tensor_name().empty()) {
     tensorflow::Tensor input_filepath(tensorflow::DT_STRING, {});
@@ -260,7 +260,7 @@ ConstructInputsForTensorflowSpecPlan(
     const FederatedComputeIORouter& io_router,
     const std::string& checkpoint_input_filename,
     const std::string& checkpoint_output_filename) {
-  auto inputs = absl::make_unique<
+  auto inputs = std::make_unique<
       std::vector<std::pair<std::string, tensorflow::Tensor>>>();
   if (!io_router.input_filepath_tensor_name().empty()) {
     tensorflow::Tensor input_filepath(tensorflow::DT_STRING, {});
@@ -441,7 +441,7 @@ bool RunPlanWithExecutions(
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time) {
   // Create a task environment.
-  auto env = absl::make_unique<FederatedTaskEnvironment>(
+  auto env = std::make_unique<FederatedTaskEnvironment>(
       env_deps, federated_protocol, log_manager, event_publisher,
       opstats_logger, flags, reference_time,
       absl::Milliseconds(flags->condition_polling_period_millis()));
@@ -493,12 +493,12 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
 // Returns:
 // - the TaskEligibilityInfo produced by the eligibility eval task, if the
 //   server provided an eligibility eval task to run.
-// - an absl::nullopt if the server indicated that there is no eligibility eval
+// - an std::nullopt if the server indicated that there is no eligibility eval
 //   task configured for the population.
 // - an INTERNAL error if the server rejects the client or another error occurs
 //   that should abort the training run. The error will already have been logged
 //   appropriately.
-absl::StatusOr<absl::optional<TaskEligibilityInfo>>
+absl::StatusOr<std::optional<TaskEligibilityInfo>>
 IssueEligibilityEvalCheckinAndRunPlan(
     SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
     Files* files, LogManager* log_manager, OpStatsLogger* opstats_logger,
@@ -538,7 +538,7 @@ IssueEligibilityEvalCheckinAndRunPlan(
     return absl::InternalError("");
   }
 
-  if (absl::holds_alternative<FederatedProtocol::Rejection>(
+  if (std::holds_alternative<FederatedProtocol::Rejection>(
           *eligibility_checkin_result)) {
     if (flags->per_phase_logs()) {
       event_publisher->PublishEligibilityEvalRejected(
@@ -553,8 +553,7 @@ IssueEligibilityEvalCheckinAndRunPlan(
     FCP_LOG(INFO) << "Device rejected by server during eligibility eval "
                      "checkin; aborting";
     return absl::InternalError("");
-  } else if (absl::holds_alternative<
-                 FederatedProtocol::EligibilityEvalDisabled>(
+  } else if (std::holds_alternative<FederatedProtocol::EligibilityEvalDisabled>(
                  *eligibility_checkin_result)) {
     if (flags->per_phase_logs()) {
       event_publisher->PublishEligibilityEvalNotConfigured(
@@ -568,7 +567,7 @@ IssueEligibilityEvalCheckinAndRunPlan(
     // the population then there is nothing more to do. We simply proceed to
     // the "checkin" phase below without providing it a TaskEligibilityInfo
     // proto.
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Run the eligibility eval task if the server returned one.
@@ -732,10 +731,10 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return fl_runner_result;
   }
 
-  absl::optional<TaskEligibilityInfo> task_eligibility_info = absl::nullopt;
+  std::optional<TaskEligibilityInfo> task_eligibility_info = std::nullopt;
   // Note that this method will update fl_runner_result's fields with values
   // received over the course of the eligibility eval protocol interaction.
-  absl::StatusOr<absl::optional<TaskEligibilityInfo>> eligibility_eval_result =
+  absl::StatusOr<std::optional<TaskEligibilityInfo>> eligibility_eval_result =
       IssueEligibilityEvalCheckinAndRunPlan(
           env_deps, event_publisher, files, log_manager, opstats_logger, flags,
           federated_protocol, timing_config, reference_time, fl_runner_result,
@@ -783,7 +782,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   }
 
   // Server rejected us? Return the fl_runner_results as-is.
-  if (absl::holds_alternative<FederatedProtocol::Rejection>(*checkin_result)) {
+  if (std::holds_alternative<FederatedProtocol::Rejection>(*checkin_result)) {
     if (flags->per_phase_logs()) {
       event_publisher->PublishRejected();
       opstats_logger->AddEvent(

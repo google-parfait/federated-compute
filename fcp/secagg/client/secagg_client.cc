@@ -21,7 +21,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "absl/memory/memory.h"
 #include "absl/synchronization/mutex.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/secagg_client_r0_advertise_keys_input_not_set_state.h"
@@ -50,9 +49,9 @@ SecAggClient::SecAggClient(
       abort_signal_(nullptr),
       async_abort_(abort_signal_for_test ? abort_signal_for_test
                                          : &abort_signal_),
-      state_(absl::make_unique<SecAggClientR0AdvertiseKeysInputNotSetState>(
+      state_(std::make_unique<SecAggClientR0AdvertiseKeysInputNotSetState>(
           max_clients_expected, minimum_surviving_clients_for_reconstruction,
-          absl::make_unique<std::vector<InputVectorSpecification> >(
+          std::make_unique<std::vector<InputVectorSpecification> >(
               std::move(input_vector_specs)),
           std::move(prng), std::move(sender), std::move(transition_listener),
           std::move(prng_factory), &async_abort_)) {}

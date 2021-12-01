@@ -18,11 +18,11 @@
 #define FCP_TENSORFLOW_HOST_OBJECT_H_
 
 #include <memory>
+#include <optional>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/synchronization/mutex.h"
-#include "absl/types/optional.h"
 #include "fcp/base/random_token.h"
 #include "fcp/base/unique_value.h"
 
@@ -67,7 +67,7 @@ namespace host_object_internal {
  */
 class HostObjectRegistryImpl {
  public:
-  absl::optional<std::shared_ptr<void>> TryLookup(RandomToken token);
+  std::optional<std::shared_ptr<void>> TryLookup(RandomToken token);
   void Register(RandomToken token, std::shared_ptr<void> p);
   void Unregister(RandomToken token);
  private:
@@ -133,16 +133,16 @@ class HostObjectRegistry {
   }
 
   /**
-   * Looks up a host object. Returns absl::nullopt if nothing is currently
+   * Looks up a host object. Returns std::nullopt if nothing is currently
    * registered for the provided token (and interface T).
    */
-  static absl::optional<std::shared_ptr<T>> TryLookup(RandomToken token) {
-    absl::optional<std::shared_ptr<void>> maybe_p = GetImpl()->TryLookup(token);
+  static std::optional<std::shared_ptr<T>> TryLookup(RandomToken token) {
+    std::optional<std::shared_ptr<void>> maybe_p = GetImpl()->TryLookup(token);
     if (maybe_p.has_value()) {
       std::shared_ptr<void> p = *std::move(maybe_p);
       return std::static_pointer_cast<T>(std::move(p));
     } else {
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 

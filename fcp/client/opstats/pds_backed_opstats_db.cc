@@ -90,7 +90,7 @@ void ReleaseFileLock(const std::string& db_path, int fd) {
 
 std::unique_ptr<OpStatsSequence> CreateEmptyData(
     bool record_earliest_trustworthy_time) {
-  auto empty_data = absl::make_unique<OpStatsSequence>();
+  auto empty_data = std::make_unique<OpStatsSequence>();
   if (record_earliest_trustworthy_time) {
     *(empty_data->mutable_earliest_trustworthy_time()) =
         google::protobuf::util::TimeUtil::GetCurrentTime();
@@ -231,14 +231,14 @@ absl::StatusOr<std::unique_ptr<OpStatsDb>> PdsBackedOpStatsDb::Create(
   }
   path /= kDbFileName;
   std::function<void()> lock_releaser;
-  auto file_storage = absl::make_unique<protostore::FileStorage>();
+  auto file_storage = std::make_unique<protostore::FileStorage>();
   std::unique_ptr<protostore::ProtoDataStore<OpStatsSequence>> pds;
   bool should_initiate;
   if (enforce_singleton) {
     std::string db_path = path.generic_string();
     FCP_ASSIGN_OR_RETURN(int fd, AcquireFileLock(db_path, log_manager));
     lock_releaser = [db_path, fd]() { ReleaseFileLock(db_path, fd); };
-    pds = absl::make_unique<protostore::ProtoDataStore<OpStatsSequence>>(
+    pds = std::make_unique<protostore::ProtoDataStore<OpStatsSequence>>(
         *file_storage, db_path);
     absl::StatusOr<int64_t> file_size = file_storage->GetFileSize(path);
     if (!file_size.ok()) {
@@ -251,7 +251,7 @@ absl::StatusOr<std::unique_ptr<OpStatsDb>> PdsBackedOpStatsDb::Create(
   } else {
     // Lock releaser is no-op because we didn't acquire the lock in this branch.
     lock_releaser = []() {};
-    pds = absl::make_unique<protostore::ProtoDataStore<OpStatsSequence>>(
+    pds = std::make_unique<protostore::ProtoDataStore<OpStatsSequence>>(
         *file_storage, path.generic_string());
     // If the underlying file doesn't exist, it means this is the first time we
     // create the database.
@@ -308,7 +308,7 @@ absl::Status PdsBackedOpStatsDb::Transform(
         GetEarliestTrustWorthyTime(data.opstats());
   }
   absl::Status status =
-      db_->Write(absl::make_unique<OpStatsSequence>(std::move(data)));
+      db_->Write(std::make_unique<OpStatsSequence>(std::move(data)));
   if (!status.ok()) {
     log_manager_.LogDiag(ProdDiagCode::OPSTATS_WRITE_FAILED);
   }

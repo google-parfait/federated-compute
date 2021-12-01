@@ -17,10 +17,10 @@
 #ifndef FCP_BASE_RESULT_H_
 #define FCP_BASE_RESULT_H_
 
+#include <optional>
 #include <type_traits>
+#include <variant>
 
-#include "absl/types/optional.h"
-#include "absl/types/variant.h"
 #include "fcp/base/error.h"
 #include "fcp/base/meta.h"
 #include "fcp/base/source_location.h"
@@ -77,7 +77,7 @@ class ABSL_MUST_USE_RESULT Result {
   using ValueType = T;
 
   // These make Result<> usable as an argument to Match() (see match.h).
-  using VariantType = absl::variant<Error, T>;
+  using VariantType = std::variant<Error, T>;
   constexpr VariantType& variant() & { return val_; }
   constexpr VariantType const& variant() const& { return val_; }
   constexpr VariantType&& variant() && { return std::move(val_); }
@@ -89,13 +89,13 @@ class ABSL_MUST_USE_RESULT Result {
   Result(Error e) : val_(e) {}  // NOLINT
 
   constexpr bool is_error() const {
-    return absl::holds_alternative<Error>(val_);
+    return std::holds_alternative<Error>(val_);
   }
 
   // Returns a *reference* to the contained value.
   // Requires (CHECK): !is_error()
   constexpr T const& GetValueOrDie() const& {
-    FCP_CHECK(absl::holds_alternative<T>(val_));
+    FCP_CHECK(std::holds_alternative<T>(val_));
     return absl::get<T>(val_);
   }
 
@@ -111,14 +111,14 @@ class ABSL_MUST_USE_RESULT Result {
   //
   // Requires (CHECK): !is_error()
   constexpr T GetValueOrDie() && {
-    FCP_CHECK(absl::holds_alternative<T>(val_));
+    FCP_CHECK(std::holds_alternative<T>(val_));
     return absl::get<T>(std::move(val_));
   }
 
   // Returns the contained error.
   // Requires (CHECK): is_error()
   Error GetErrorOrDie() const {
-    FCP_CHECK(absl::holds_alternative<Error>(val_));
+    FCP_CHECK(std::holds_alternative<Error>(val_));
     return absl::get<Error>(val_);
   }
 
@@ -192,7 +192,7 @@ class ABSL_MUST_USE_RESULT Result {
     }
   }
 
-  absl::variant<Error, T> val_;
+  std::variant<Error, T> val_;
 };
 
 // This is a deduction guide so that one can write Result(t) for a value t,
@@ -247,7 +247,7 @@ class ExpectBase {
   SourceLocation loc_;
 };
 
-// Returns Result<T> if the current result has absl::variant that holds a
+// Returns Result<T> if the current result has std::variant that holds a
 // value of type T; otherwise returns an error Result.
 template <typename T>
 struct ExpectIs : public ExpectBase {
@@ -256,8 +256,8 @@ struct ExpectIs : public ExpectBase {
       : ExpectBase(loc) {}
 
   template <typename... Us>
-  constexpr Result<T> operator()(absl::variant<Us...> v) const {
-    if (absl::holds_alternative<T>(v)) {
+  constexpr Result<T> operator()(std::variant<Us...> v) const {
+    if (std::holds_alternative<T>(v)) {
       return absl::get<T>(std::move(v));
     } else {
       return TraceExpectError("ExpectIs");
@@ -265,8 +265,8 @@ struct ExpectIs : public ExpectBase {
   }
 };
 
-// Returns Result<absl::variant<Us...>> if the current result has
-// absl::variant that holds a value of one of the types from Us... typelist;
+// Returns Result<std::variant<Us...>> if the current result has
+// std::variant that holds a value of one of the types from Us... typelist;
 // otherwise returns an error Result. This operation is valid only when the
 // set of expected types Us... is a subset of the set of types Ts... in the
 // current result.
@@ -277,15 +277,15 @@ struct ExpectOneOf : public ExpectBase {
       : ExpectBase(loc) {}
 
   template <typename... Us>
-  constexpr Result<absl::variant<Ts...>> operator()(
-      absl::variant<Us...> v) const {
+  constexpr Result<std::variant<Ts...>> operator()(
+      std::variant<Us...> v) const {
     static_assert(IsSubsetOf<Pack<Ts...>, Pack<Us...>>::value);
 
     // TODO(team): This should be expressible with Match
     return absl::visit(
-        [this](auto arg) -> Result<absl::variant<Ts...>> {
+        [this](auto arg) -> Result<std::variant<Ts...>> {
           if constexpr (IsTypeOneOf<std::decay_t<decltype(arg)>, Ts...>()) {
-            return absl::variant<Ts...>(std::move(arg));
+            return std::variant<Ts...>(std::move(arg));
           } else {
             return TraceExpectError("ExpectOneOf<>");
           }
@@ -328,7 +328,7 @@ struct ExpectFalse : public ExpectBase {
   }
 };
 
-// Returns Result<T> if the current result has absl::optional<T> has a value;
+// Returns Result<T> if the current result has std::optional<T> has a value;
 // otherwise returns an error Result.
 struct ExpectHasValue : public ExpectBase {
   using ExpectBase::ExpectBase;
@@ -337,7 +337,7 @@ struct ExpectHasValue : public ExpectBase {
       : ExpectBase(loc) {}
 
   template <typename T>
-  constexpr Result<T> operator()(absl::optional<T> v) const {
+  constexpr Result<T> operator()(std::optional<T> v) const {
     if (v.has_value()) {
       return *std::move(v);
     } else {
@@ -346,7 +346,7 @@ struct ExpectHasValue : public ExpectBase {
   }
 };
 
-// Returns Result<Unit> if the current result has an empty absl::optional;
+// Returns Result<Unit> if the current result has an empty std::optional;
 // otherwise returns an error Result.
 struct ExpectIsEmpty : public ExpectBase {
   using ExpectBase::ExpectBase;
@@ -355,7 +355,7 @@ struct ExpectIsEmpty : public ExpectBase {
       : ExpectBase(loc) {}
 
   template <typename T>
-  constexpr Result<Unit> operator()(absl::optional<T> v) const {
+  constexpr Result<Unit> operator()(std::optional<T> v) const {
     if (!v.has_value()) {
       return Unit{};
     } else {

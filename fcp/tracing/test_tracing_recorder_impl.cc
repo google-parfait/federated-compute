@@ -16,7 +16,6 @@
 
 #include <memory>
 
-#include "absl/memory/memory.h"
 #include "fcp/tracing/test_tracing_span_impl.h"
 
 namespace fcp {
@@ -57,7 +56,7 @@ std::unique_ptr<TracingSpanImpl> TestTracingRecorderImpl::CreateChildSpan(
   // std::shared_ptr<TracingRecorderImpl> and we have to (safely) cast it here:
   auto shared_this =
       std::static_pointer_cast<TestTracingRecorderImpl>(shared_from_this());
-  return absl::make_unique<TestTracingSpanImpl>(shared_this, new_id);
+  return std::make_unique<TestTracingSpanImpl>(shared_this, new_id);
 }
 
 TestTracingRecorderImpl::~TestTracingRecorderImpl() {}

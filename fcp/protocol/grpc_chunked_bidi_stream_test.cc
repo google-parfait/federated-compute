@@ -138,9 +138,9 @@ class GrpcChunkedMessageStreamTest
                              grpc::InsecureServerCredentials(), &port_);
     builder.RegisterService(&server_impl_);
     grpc_server_ = builder.BuildAndStart();
-    client_stream_ = absl::make_unique<GrpcBidiStream>(
-        addr_uri(), "none", "",
-        /*grpc_channel_deadline_seconds=*/600);
+    client_stream_ =
+        std::make_unique<GrpcBidiStream>(addr_uri(), "none", "",
+                                         /*grpc_channel_deadline_seconds=*/600);
     EXPECT_THAT(PerformInitialCheckin(client_stream_.get()), IsOk());
 
     request_.mutable_report_request()->mutable_report()->set_update_checkpoint(

@@ -162,9 +162,9 @@ class TrainingDatasetProvider
                   OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
                   std::string(example_iterator_or.status().message()));
             }
-            return absl::make_unique<EmptyDatasetIterator>();
+            return std::make_unique<EmptyDatasetIterator>();
           }
-          return absl::make_unique<DatasetIterator>(
+          return std::make_unique<DatasetIterator>(
               std::move(example_iterator_or.value()), event_publisher,
               opstats_logger, total_example_count, total_example_size_bytes,
               selector.collection_uri());

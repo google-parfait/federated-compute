@@ -16,9 +16,9 @@
 
 #include "fcp/secagg/client/secagg_client_r3_unmasking_state.h"
 
+#include <memory>
 #include <string>
 
-#include "absl/memory/memory.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/other_client_state.h"
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
@@ -66,10 +66,10 @@ SecAggClientR3UnmaskingState::HandleMessage(
   // Handle abort messages or unmasking requests only.
   if (message.has_abort()) {
     if (message.abort().early_success()) {
-      return {absl::make_unique<SecAggClientCompletedState>(
+      return {std::make_unique<SecAggClientCompletedState>(
           std::move(sender_), std::move(transition_listener_))};
     } else {
-      return {absl::make_unique<SecAggClientAbortedState>(
+      return {std::make_unique<SecAggClientAbortedState>(
           "Aborting because of abort message from the server.",
           std::move(sender_), std::move(transition_listener_))};
     }
@@ -154,7 +154,7 @@ SecAggClientR3UnmaskingState::HandleMessage(
 
   // Send this final message to the server, then enter Completed state.
   sender_->Send(&message_to_server);
-  return {absl::make_unique<SecAggClientCompletedState>(
+  return {std::make_unique<SecAggClientCompletedState>(
       std::move(sender_), std::move(transition_listener_))};
 }
 

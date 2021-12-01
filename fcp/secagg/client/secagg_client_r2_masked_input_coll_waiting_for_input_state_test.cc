@@ -16,12 +16,12 @@
 
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_waiting_for_input_state.h"
 
+#include <memory>
 #include <string>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/node_hash_map.h"
-#include "absl/memory/memory.h"
 #include "fcp/secagg/client/other_client_state.h"
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_base_state.h"
@@ -50,9 +50,9 @@ static const ShamirShare test_self_share = {"test self share"};
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      IsAbortedReturnsFalse) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({1, 2, 3, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -63,10 +63,10 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -76,9 +76,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      IsCompletedSuccessfullyReturnsFalse) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({1, 2, 3, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -89,10 +89,10 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -102,9 +102,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      StartRaisesErrorStatus) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({1, 2, 3, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -115,10 +115,10 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -128,9 +128,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      ErrorMessageRaisesErrorStatus) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({1, 2, 3, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -141,10 +141,10 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -154,9 +154,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      AbortReturnsValidAbortStateAndNotifiesServer) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({1, 2, 3, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -167,10 +167,10 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -190,9 +190,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      AbortFailureMessageCausesAbortWithoutNotifyingServer) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({1, 2, 3, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -203,10 +203,10 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -225,9 +225,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      EarlySuccessMessageCausesTransitionToCompletedState) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({1, 2, 3, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -238,10 +238,10 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       6,  // number_of_alive_clients
       6,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
@@ -260,9 +260,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
   // In this test, the client under test is id 1, and there are 4 clients, all
   // alive.
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({28, 8, 10, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -273,14 +273,14 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       4,  // number_of_alive_clients
       4,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({5, 8, 22, 30}, 32));
 
   std::vector<uint64_t> sum_vec = {1, 16, 0, 2};
@@ -303,9 +303,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      SetInputRaisesErrorStatusIfInputVectorIsWrongSize) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({28, 8, 10, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -316,14 +316,14 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       4,  // number_of_alive_clients
       4,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   // This vector has too many elements.
   input_map->emplace("test", SecAggVector({5, 8, 22, 30, 7}, 32));
 
@@ -337,9 +337,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      SetInputRaisesErrorStatusIfInputVectorIsTooLargeForBitWidth) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({28, 8, 10, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -350,14 +350,14 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       4,  // number_of_alive_clients
       4,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   // This vector's bit_width does not match the specified modulus of 32.
   input_map->emplace("test", SecAggVector({5, 8, 22, 40}, 64));
 
@@ -373,9 +373,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
   // In this test, the client under test is id 1, and there are 4 clients, all
   // alive.
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({28, 8, 10, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -386,14 +386,14 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       4,  // number_of_alive_clients
       4,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   // This vector has the wrong name.
   input_map->emplace("incorrect", SecAggVector({5, 8, 22, 30}, 32));
 
@@ -407,9 +407,9 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      SetInputRaisesErrorStatusIfInputHasTooManyVectors) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({28, 8, 10, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -420,14 +420,14 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       4,  // number_of_alive_clients
       4,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({5, 8, 22, 30}, 32));
   // This vector is extra.
   input_map->emplace("test2", SecAggVector({4, 7, 21, 29}, 32));
@@ -442,11 +442,11 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
      SetInputRaisesErrorStatusIfInputHasTooFewVectors) {
   auto input_vector_specs =
-      absl::make_unique<std::vector<InputVectorSpecification> >();
+      std::make_unique<std::vector<InputVectorSpecification> >();
   input_vector_specs->push_back(InputVectorSpecification("test", 4, 32));
   // Expects two vectors.
   input_vector_specs->push_back(InputVectorSpecification("test2", 4, 32));
-  auto map_of_masks = absl::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<SecAggVectorMap>();
   map_of_masks->emplace("test", SecAggVector({28, 8, 10, 4}, 32));
   MockSendToServerInterface* sender = new MockSendToServerInterface();
   MockStateTransitionListener* transition_listener =
@@ -457,14 +457,14 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
       4,  // number_of_alive_clients
       4,  // number_of_clients
       std::move(input_vector_specs), std::move(map_of_masks),
-      absl::make_unique<std::vector<OtherClientState> >(
+      std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
-      absl::make_unique<std::vector<ShamirShare> >(6, test_self_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
+      std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
 
-  auto input_map = absl::make_unique<SecAggVectorMap>();
+  auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({5, 8, 22, 30}, 32));
   // Missing second vector.
 

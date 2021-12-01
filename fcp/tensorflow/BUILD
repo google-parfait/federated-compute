@@ -94,7 +94,6 @@ cc_library(
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/types:optional",
     ],
 )
 
@@ -152,9 +151,6 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/cc:cc_ops",
         "@org_tensorflow//tensorflow/cc:scope",
-        "@org_tensorflow//tensorflow/core:core_cpu",
-        "@org_tensorflow//tensorflow/core:framework",
-        "@org_tensorflow//tensorflow/core:lib",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@org_tensorflow//tensorflow/core:tensorflow",
         "@org_tensorflow//tensorflow/core:testlib",

@@ -15,11 +15,11 @@
 #include "fcp/tracing/tracing_context_utils.h"
 
 #include <iostream>
+#include <optional>
 #include <ostream>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/types/optional.h"
 #include "fcp/tracing/test/test_api_message.pb.h"
 
 namespace fcp {

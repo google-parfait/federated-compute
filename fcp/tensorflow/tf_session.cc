@@ -92,7 +92,7 @@ Result<Unit> TfSession::RunOp(const NamedTensorList& inputs,
 Result<std::unique_ptr<TfSession::NamedTensorMap>> TfSession::GetOutputs(
     std::unique_ptr<std::vector<std::string>> output_names) {
   FCP_TRY(Ready());
-  auto outputs = absl::make_unique<TfSession::NamedTensorMap>();
+  auto outputs = std::make_unique<TfSession::NamedTensorMap>();
   if (output_names->empty()) {
     return std::move(outputs);
   }

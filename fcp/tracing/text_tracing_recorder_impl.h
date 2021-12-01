@@ -19,10 +19,10 @@
 
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <vector>
 
 #include "absl/time/time.h"
-#include "absl/types/optional.h"
 #include "fcp/tracing/tracing_recorder.h"
 #include "fcp/tracing/tracing_recorder_impl.h"
 
@@ -75,7 +75,7 @@ class TextTracingRecorderImpl : public TracingRecorderImpl {
   // present because this class must own the filestream, since an instance of
   // this class can be shared by many tracing spans, some of which may outlive
   // the function that originally created the root tracing span.
-  absl::optional<std::ofstream> fstream_;
+  std::optional<std::ofstream> fstream_;
 
   // Pointer to an output stream to which tracing events are written.
   std::ostream* stream_;

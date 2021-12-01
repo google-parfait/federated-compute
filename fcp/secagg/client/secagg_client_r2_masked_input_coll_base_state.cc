@@ -16,10 +16,10 @@
 
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_base_state.h"
 
+#include <memory>
 #include <string>
 
 #include "absl/container/node_hash_map.h"
-#include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/other_client_state.h"
