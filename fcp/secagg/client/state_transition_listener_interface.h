@@ -17,6 +17,8 @@
 #ifndef FCP_SECAGG_CLIENT_STATE_TRANSITION_LISTENER_INTERFACE_H_
 #define FCP_SECAGG_CLIENT_STATE_TRANSITION_LISTENER_INTERFACE_H_
 
+#include <cstdint>
+
 namespace fcp {
 namespace secagg {
 

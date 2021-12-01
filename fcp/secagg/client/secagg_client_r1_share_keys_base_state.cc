@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/client/secagg_client_r1_share_keys_base_state.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 

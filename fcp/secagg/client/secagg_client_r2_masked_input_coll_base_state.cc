@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_base_state.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -58,7 +59,8 @@ SecAggClientR2MaskedInputCollBaseState::HandleMaskedInputCollectionRequest(
     const MaskedInputCollectionRequest& request, uint32_t client_id,
     const std::vector<InputVectorSpecification>& input_vector_specs,
     uint32_t minimum_surviving_clients_for_reconstruction,
-    uint32_t number_of_clients, const std::vector<AesKey>& other_client_enc_keys,
+    uint32_t number_of_clients,
+    const std::vector<AesKey>& other_client_enc_keys,
     const std::vector<AesKey>& other_client_prng_keys,
     const ShamirShare& own_self_key_share, const AesKey& self_prng_key,
     const SessionId& session_id, const AesPrngFactory& prng_factory,
@@ -179,7 +181,8 @@ SecAggVector AddSecAggVectors(SecAggVector v1, SecAggVector v2) {
   {
     // Keep vec2 scoped so that it is destroyed as soon as it is no longer used
     // and before creating the SecAggVector instance below.
-    std::vector<uint64_t> vec2 = SecAggVector(std::move(v2)).GetAsUint64Vector();
+    std::vector<uint64_t> vec2 =
+        SecAggVector(std::move(v2)).GetAsUint64Vector();
 
     // Add the two vectors in place assigning the values back into vec1.
     FCP_CHECK(vec1.size() == vec2.size());

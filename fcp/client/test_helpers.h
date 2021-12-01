@@ -56,20 +56,24 @@ class MockEventPublisher : public EventPublisher {
  public:
   MOCK_METHOD(void, PublishEligibilityEvalCheckin, (), (override));
   MOCK_METHOD(void, PublishEligibilityEvalPlanReceived,
-              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_downloaded,
+              (int64_t bytes_downloaded,
+               int64_t chunking_layer_bytes_downloaded,
                absl::Duration download_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalNotConfigured,
-              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_downloaded,
+              (int64_t bytes_downloaded,
+               int64_t chunking_layer_bytes_downloaded,
                absl::Duration download_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalRejected,
-              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_downloaded,
+              (int64_t bytes_downloaded,
+               int64_t chunking_layer_bytes_downloaded,
                absl::Duration download_duration),
               (override));
   MOCK_METHOD(void, PublishCheckin, (), (override));
   MOCK_METHOD(void, PublishCheckinFinished,
-              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_downloaded,
+              (int64_t bytes_downloaded,
+               int64_t chunking_layer_bytes_downloaded,
                absl::Duration download_duration),
               (override));
   MOCK_METHOD(void, PublishRejected, (), (override));
@@ -262,8 +266,8 @@ class MockFlags : public Flags {
   MOCK_METHOD(float,
               federated_training_permanent_errors_retry_delay_jitter_percent,
               (), (const, override));
-  MOCK_METHOD(std::vector<int32_t>, federated_training_permanent_error_codes, (),
-              (const, override));
+  MOCK_METHOD(std::vector<int32_t>, federated_training_permanent_error_codes,
+              (), (const, override));
   MOCK_METHOD(bool, commit_opstats_on_upload_started, (), (const, override));
   MOCK_METHOD(bool, record_earliest_trustworthy_time_for_opstats, (),
               (const, override));

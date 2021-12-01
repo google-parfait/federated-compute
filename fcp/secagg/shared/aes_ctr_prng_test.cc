@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/shared/aes_ctr_prng.h"
 
+#include <cstdint>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -150,19 +151,19 @@ TEST(AesCtrPrngTest, GeneratesExpectedValues) {
   static constexpr uint8_t zeroes[kBlockSize] = {0};
 
   // These are processed separately in the class
-  uint8_t expected_uint8[kBlockSize];
-  uint8_t expected_uint64[kBlockSize];
+  uint8_t expected_uint8_t[kBlockSize];
+  uint8_t expected_uint64_t[kBlockSize];
 
   // Obtain the ciphertext incrementally to verify identical output of versions
   // using a different block size.
   int len;
   for (auto i = 0; i < kBlockSize; i += 16) {
-    ASSERT_THAT(EVP_EncryptUpdate(ctx, &expected_uint8[i], &len, zeroes, 16),
+    ASSERT_THAT(EVP_EncryptUpdate(ctx, &expected_uint8_t[i], &len, zeroes, 16),
                 Ne(0));
     ASSERT_THAT(len, 16);
   }
   for (auto i = 0; i < kBlockSize; i += 16) {
-    ASSERT_THAT(EVP_EncryptUpdate(ctx, &expected_uint64[i], &len, zeroes, 16),
+    ASSERT_THAT(EVP_EncryptUpdate(ctx, &expected_uint64_t[i], &len, zeroes, 16),
                 Ne(0));
     ASSERT_THAT(len, 16);
   }
@@ -170,14 +171,15 @@ TEST(AesCtrPrngTest, GeneratesExpectedValues) {
   AesCtrPrngFactory factory;
   std::unique_ptr<SecurePrng> prng = factory.MakePrng(seed);
 
-  for (int i = 0; i < sizeof(expected_uint8); i++) {
-    EXPECT_THAT(prng->Rand8(), Eq(expected_uint8[i]));
+  for (int i = 0; i < sizeof(expected_uint8_t); i++) {
+    EXPECT_THAT(prng->Rand8(), Eq(expected_uint8_t[i]));
   }
-  for (int i = 0; i < sizeof(expected_uint64) / sizeof(uint64_t); i++) {
+  for (int i = 0; i < sizeof(expected_uint64_t) / sizeof(uint64_t); i++) {
     uint64_t value = 0;
     for (int j = 0; j < sizeof(uint64_t); j++) {
-      value |= static_cast<uint64_t>(expected_uint64[i * sizeof(uint64_t) + j])
-               << (8 * j);
+      value |=
+          static_cast<uint64_t>(expected_uint64_t[i * sizeof(uint64_t) + j])
+          << (8 * j);
     }
     EXPECT_THAT(prng->Rand64(), Eq(value));
   }

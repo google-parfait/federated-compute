@@ -18,6 +18,7 @@
 #define FCP_SECAGG_SHARED_CRYPTO_RAND_PRNG_H_
 
 #include <cstdint>
+
 #include "fcp/secagg/shared/prng.h"
 
 namespace fcp {

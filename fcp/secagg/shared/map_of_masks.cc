@@ -17,6 +17,7 @@
 #include "fcp/secagg/shared/map_of_masks.h"
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <vector>
 

@@ -160,7 +160,8 @@ TEST(AesGcmEncryptionTest, DecryptionDiesOnShortKey) {
   std::string bad_key_input = "short 17 byte key";
   EXPECT_DEATH(
       aes.Decrypt(
-             AesKey(reinterpret_cast<const uint8_t*>(bad_key_input.c_str()), 17),
+             AesKey(reinterpret_cast<const uint8_t*>(bad_key_input.c_str()),
+                    17),
              ciphertext)
           .IgnoreError(),
       "Decrypt called with key of 17 bytes, but 32 bytes are required.");

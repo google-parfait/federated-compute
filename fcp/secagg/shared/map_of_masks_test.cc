@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/shared/map_of_masks.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -39,25 +40,25 @@ using ::testing::Lt;
 using ::testing::Ne;
 
 const std::array<uint64_t, 20> kArbitraryModuli{5,
-                                              39,
-                                              485,
-                                              2400,
-                                              14901,
-                                              51813,
-                                              532021,
-                                              13916946,
-                                              39549497,
-                                              548811945,
-                                              590549014,
-                                              48296031686,
-                                              156712951284,
-                                              2636861836189,
-                                              14673852658160,
-                                              92971495438615,
-                                              304436005557271,
-                                              14046234330484262,
-                                              38067457113486645,
-                                              175631339105057682};
+                                                39,
+                                                485,
+                                                2400,
+                                                14901,
+                                                51813,
+                                                532021,
+                                                13916946,
+                                                39549497,
+                                                548811945,
+                                                590549014,
+                                                48296031686,
+                                                156712951284,
+                                                2636861836189,
+                                                14673852658160,
+                                                92971495438615,
+                                                304436005557271,
+                                                14046234330484262,
+                                                38067457113486645,
+                                                175631339105057682};
 
 TEST(AddMapsTest, AddMapsGetsRightSum_PowerOfTwo) {
   std::vector<uint64_t> vec_a{25, 50, 75, 100, 150};
@@ -217,7 +218,8 @@ TEST_P(MapOfMasksTest, ReturnsNonZeroIfOneKeySpecified_PowerOfTwo) {
 
 TEST_P(MapOfMasksTest, MapWithOneKeyDiffersFromMapWithTwoKeys_PowerOfTwo) {
   std::vector<AesKey> prng_keys_to_add;
-  uint8_t key[AesKey::kSize];  // This key is reusable because AesKey makes a copy
+  uint8_t
+      key[AesKey::kSize];  // This key is reusable because AesKey makes a copy
   memset(key, 'A', AesKey::kSize);
   prng_keys_to_add.push_back(AesKey(key));
   std::vector<AesKey> prng_keys_to_subtract;
@@ -304,7 +306,7 @@ TEST_P(MapOfMasksTest, PrngMaskGeneratesCorrectBitwidthMasks_PowerOfTwo) {
 
   // Check a variety of bit_widths
   std::vector<uint64_t> moduli{1ULL << 1, 1ULL << 4, 1ULL << 20, 1ULL << 24,
-                             SecAggVector::kMaxModulus};
+                               SecAggVector::kMaxModulus};
   for (uint64_t i : moduli) {
     vector_specs.push_back(
         InputVectorSpecification(absl::StrCat("test", i), 50, i));
@@ -369,7 +371,8 @@ TEST_P(MapOfMasksTest, ReturnsNonZeroIfOneKeySpecified_ArbitraryModuli) {
 TEST_P(MapOfMasksTest, MapWithOneKeyDiffersFromMapWithTwoKeys_ArbitraryModuli) {
   uint64_t modulus = 2636861836189;
   std::vector<AesKey> prng_keys_to_add;
-  uint8_t key[AesKey::kSize];  // This key is reusable because AesKey makes a copy
+  uint8_t
+      key[AesKey::kSize];  // This key is reusable because AesKey makes a copy
   memset(key, 'A', AesKey::kSize);
   prng_keys_to_add.push_back(AesKey(key));
   std::vector<AesKey> prng_keys_to_subtract;

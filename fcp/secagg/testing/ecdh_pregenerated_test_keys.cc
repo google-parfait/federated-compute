@@ -127,12 +127,12 @@ EcdhPregeneratedTestKeys::EcdhPregeneratedTestKeys() {
   for (int i = 0; i < kNumTestEcdhKeys; ++i) {
     private_keys_.push_back(EcdhPrivateKey(
         reinterpret_cast<const uint8_t*>(private_key_strings_[i])));
-    public_keys_.push_back(
-        EcdhPublicKey(reinterpret_cast<const uint8_t*>(public_key_strings_[i])));
+    public_keys_.push_back(EcdhPublicKey(
+        reinterpret_cast<const uint8_t*>(public_key_strings_[i])));
     // Move pointer ahead 26 bytes to skip header
     uncompressed_public_keys_.push_back(EcdhPublicKey(
         reinterpret_cast<const uint8_t*>(uncompressed_public_key_strings_[i] +
-                                       26),
+                                         26),
         EcdhPublicKey::kUncompressed));
   }
 }

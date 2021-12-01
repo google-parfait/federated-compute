@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_GRPC_FEDERATED_PROTOCOL_H_
 #define FCP_CLIENT_GRPC_FEDERATED_PROTOCOL_H_
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>

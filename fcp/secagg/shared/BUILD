@@ -134,7 +134,7 @@ cc_test(
     srcs = ["ecdh_key_agreement_test.cc"],
     copts = FCP_COPTS,
     deps = [
-        "//fcp/secagg/shared",
+        ":shared",
         "//fcp/secagg/testing:common_mocks",
         "@com_google_googletest//:gtest_main",
     ],
@@ -234,7 +234,7 @@ cc_test(
     ],
     copts = FCP_COPTS,
     deps = [
-        "//fcp/secagg/shared",
+        ":shared",
         "//fcp/secagg/testing:common_mocks",
         "@com_google_googletest//:gtest_main",
     ],

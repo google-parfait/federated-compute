@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cstdint>
 #include <vector>
 
 #include "absl/numeric/bits.h"

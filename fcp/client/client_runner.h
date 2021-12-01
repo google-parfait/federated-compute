@@ -23,6 +23,7 @@
 #include <sys/types.h>
 
 #include <array>
+#include <cstdint>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -106,7 +107,8 @@ class LoggingEventPublisher : public EventPublisher {
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
 
-  void PublishEligibilityEvalRejected(int64_t, int64_t, absl::Duration) override {
+  void PublishEligibilityEvalRejected(int64_t, int64_t,
+                                      absl::Duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
 

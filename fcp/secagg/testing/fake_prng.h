@@ -17,6 +17,8 @@
 #ifndef FCP_SECAGG_TESTING_FAKE_PRNG_H_
 #define FCP_SECAGG_TESTING_FAKE_PRNG_H_
 
+#include <cstdint>
+
 #include "fcp/secagg/shared/prng.h"
 
 namespace fcp {

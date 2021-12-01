@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_FLAGS_H_
 #define FCP_CLIENT_FLAGS_H_
 
+#include <cstdint>
 #include <string>
 
 #include "absl/status/status.h"
@@ -64,7 +65,9 @@ class Flags {
   virtual int64_t opstats_ttl_days() const { return 30; }
 
   // The maximum size of the data stored by OpStatsDb.
-  virtual int64_t opstats_db_size_limit_bytes() const { return 1 * 1024 * 1024; }
+  virtual int64_t opstats_db_size_limit_bytes() const {
+    return 1 * 1024 * 1024;
+  }
 
   // If true, the user won't be able to create two instances of OpStatsDb which
   // use the same underlying file.
@@ -104,7 +107,8 @@ class Flags {
   }
 
   // The list of error codes that should be considered 'permanent'.
-  virtual std::vector<int32_t> federated_training_permanent_error_codes() const {
+  virtual std::vector<int32_t> federated_training_permanent_error_codes()
+      const {
     return {
         // The server returns NOT_FOUND if the client checks in with an unknown
         // population name. While this can be resolved without any client

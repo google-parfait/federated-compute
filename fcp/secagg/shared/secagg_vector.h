@@ -17,6 +17,7 @@
 #ifndef FCP_SECAGG_SHARED_SECAGG_VECTOR_H_
 #define FCP_SECAGG_SHARED_SECAGG_VECTOR_H_
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -229,7 +230,8 @@ class SecAggUnpackedVector : public std::vector<uint64_t> {
   explicit SecAggUnpackedVector(size_t size, uint64_t modulus)
       : vector(size), modulus_(modulus) {}
 
-  explicit SecAggUnpackedVector(std::vector<uint64_t> elements, uint64_t modulus)
+  explicit SecAggUnpackedVector(std::vector<uint64_t> elements,
+                                uint64_t modulus)
       : vector(std::move(elements)), modulus_(modulus) {}
 
   ABSL_MUST_USE_RESULT inline uint64_t modulus() const { return modulus_; }

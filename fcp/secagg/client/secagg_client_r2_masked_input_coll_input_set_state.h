@@ -17,6 +17,7 @@
 #ifndef FCP_SECAGG_CLIENT_SECAGG_CLIENT_R2_MASKED_INPUT_COLL_INPUT_SET_STATE_H_
 #define FCP_SECAGG_CLIENT_SECAGG_CLIENT_R2_MASKED_INPUT_COLL_INPUT_SET_STATE_H_
 
+#include <cstdint>
 #include <memory>
 #include <set>
 #include <string>

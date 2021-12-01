@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/shared/secagg_vector.h"
 
+#include <cstdint>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -31,25 +32,25 @@ using ::testing::Eq;
 using SecAggVectorTest = ::testing::TestWithParam<bool>;
 
 static std::array<uint64_t, 20> kArbitraryModuli{5,
-                                               39,
-                                               485,
-                                               2400,
-                                               14901,
-                                               51813,
-                                               532021,
-                                               13916946,
-                                               39549497,
-                                               548811945,
-                                               590549014,
-                                               48296031686,
-                                               156712951284,
-                                               2636861836189,
-                                               14673852658160,
-                                               92971495438615,
-                                               304436005557271,
-                                               14046234330484262,
-                                               38067457113486645,
-                                               175631339105057682};
+                                                 39,
+                                                 485,
+                                                 2400,
+                                                 14901,
+                                                 51813,
+                                                 532021,
+                                                 13916946,
+                                                 39549497,
+                                                 548811945,
+                                                 590549014,
+                                                 48296031686,
+                                                 156712951284,
+                                                 2636861836189,
+                                                 14673852658160,
+                                                 92971495438615,
+                                                 304436005557271,
+                                                 14046234330484262,
+                                                 38067457113486645,
+                                                 175631339105057682};
 
 TEST_P(SecAggVectorTest, GettersReturnAppropriateValuesOnConstructedVector) {
   std::vector<uint64_t> raw_vector = {4, 5};
@@ -321,11 +322,12 @@ TEST_P(SecAggVectorTest, PackedVectorUnpacksToSameValuesExhaustive_PowerOf2) {
 TEST_P(SecAggVectorTest, PackedVectorUnpacksToSameValuesExhaustive_Arbitrary) {
   for (auto modulus : kArbitraryModuli) {
     for (auto j = 0; j < 1024; ++j) {
-      for (uint64_t val : {static_cast<uint64_t>(0UL), static_cast<uint64_t>(1UL),
-                         static_cast<uint64_t>((modulus >> 1) - 1),
-                         static_cast<uint64_t>(modulus >> 1),
-                         static_cast<uint64_t>((modulus >> 1) + 1),
-                         static_cast<uint64_t>(modulus - 1)}) {
+      for (uint64_t val :
+           {static_cast<uint64_t>(0UL), static_cast<uint64_t>(1UL),
+            static_cast<uint64_t>((modulus >> 1) - 1),
+            static_cast<uint64_t>(modulus >> 1),
+            static_cast<uint64_t>((modulus >> 1) + 1),
+            static_cast<uint64_t>(modulus - 1)}) {
         std::vector<uint64_t> raw_vector(j, val);
         SecAggVector vector(raw_vector, modulus, GetParam());
         const auto& packed_bytes = vector.GetAsPackedBytes();

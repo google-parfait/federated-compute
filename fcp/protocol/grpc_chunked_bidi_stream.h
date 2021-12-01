@@ -467,7 +467,8 @@ void GrpcChunkedBidiStream<Outgoing, Incoming>::Close() {
 }
 
 template <typename Outgoing, typename Incoming>
-int64_t GrpcChunkedBidiStream<Outgoing, Incoming>::ChunkingLayerBytesReceived() {
+int64_t
+GrpcChunkedBidiStream<Outgoing, Incoming>::ChunkingLayerBytesReceived() {
   return incoming_.total_chunking_layer_bytes_received;
 }
 

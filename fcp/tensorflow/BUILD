@@ -302,7 +302,6 @@ cc_library(
     copts = FCP_TF_COPTS,
     visibility = ["//visibility:public"],
     deps = [
-        "//fcp/base",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:lib",
     ],

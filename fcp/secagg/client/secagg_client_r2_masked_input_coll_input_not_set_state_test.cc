@@ -14,6 +14,7 @@
 
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_input_not_set_state.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 

@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_LOG_MANAGER_H_
 #define FCP_CLIENT_LOG_MANAGER_H_
 
+#include <cstdint>
 #include <string>
 
 #include "fcp/client/diag_codes.pb.h"

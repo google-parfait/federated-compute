@@ -85,10 +85,10 @@ using ChunkingParameters =
     std::tuple<int32_t, /* chunk_size_for_upload */
                int32_t, /* max_pending_chunks */
                google::internal::federatedml::v2::CompressionLevel,
-               int32_t,  /* request size */
-               size_t, /* request count */
-               int32_t,  /* reply size */
-               size_t  /* replies per request */
+               int32_t, /* request size */
+               size_t,  /* request count */
+               int32_t, /* reply size */
+               size_t   /* replies per request */
                >;
 
 class ByteVerifyingFakeServer : public FakeServer {

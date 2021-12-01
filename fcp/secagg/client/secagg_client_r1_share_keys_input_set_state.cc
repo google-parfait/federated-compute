@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/client/secagg_client_r1_share_keys_input_set_state.h"
 
+#include <cstdint>
 #include <string>
 
 #include "fcp/base/monitoring.h"

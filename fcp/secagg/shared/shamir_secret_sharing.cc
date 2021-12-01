@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/shared/shamir_secret_sharing.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 

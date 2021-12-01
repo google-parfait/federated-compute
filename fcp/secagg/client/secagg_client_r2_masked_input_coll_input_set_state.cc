@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/client/secagg_client_r2_masked_input_coll_input_set_state.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -43,7 +44,8 @@ namespace secagg {
 
 SecAggClientR2MaskedInputCollInputSetState::
     SecAggClientR2MaskedInputCollInputSetState(
-        uint32_t client_id, uint32_t minimum_surviving_clients_for_reconstruction,
+        uint32_t client_id,
+        uint32_t minimum_surviving_clients_for_reconstruction,
         uint32_t number_of_alive_clients, uint32_t number_of_clients,
         std::unique_ptr<SecAggVectorMap> input_map,
         std::unique_ptr<std::vector<InputVectorSpecification> >

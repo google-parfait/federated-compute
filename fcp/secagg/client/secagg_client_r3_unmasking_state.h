@@ -17,6 +17,7 @@
 #ifndef FCP_SECAGG_CLIENT_SECAGG_CLIENT_R3_UNMASKING_STATE_H_
 #define FCP_SECAGG_CLIENT_SECAGG_CLIENT_R3_UNMASKING_STATE_H_
 
+#include <cstdint>
 #include <memory>
 #include <set>
 #include <string>

@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/client/secagg_client_r0_advertise_keys_input_not_set_state.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 

@@ -17,6 +17,7 @@
 #ifndef FCP_SECAGG_SHARED_SHAMIR_SECRET_SHARING_H_
 #define FCP_SECAGG_SHARED_SHAMIR_SECRET_SHARING_H_
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -121,7 +122,7 @@ class ShamirSecretSharing {
   // Returns the evaluation of x on the specified polynomial.
   // polynomial[i] is the i-degree coefficient of the polynomial.
   uint32_t EvaluatePolynomial(const std::vector<uint32_t>& polynomial,
-                            uint32_t x) const;
+                              uint32_t x) const;
 
   // Caches previously computed modular inverses.
   // inverses_[i] = (i+1)^-1 mod kPrime

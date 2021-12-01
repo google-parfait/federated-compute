@@ -17,6 +17,7 @@
 #ifndef FCP_SECAGG_CLIENT_SECAGG_CLIENT_R1_SHARE_KEYS_INPUT_SET_STATE_H_
 #define FCP_SECAGG_CLIENT_SECAGG_CLIENT_R1_SHARE_KEYS_INPUT_SET_STATE_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>

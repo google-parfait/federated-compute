@@ -725,8 +725,8 @@ absl::Status PlanEngine::RunTensorFlow(
     const std::string& feed_name, const std::vector<std::string>& batch,
     const std::string& target_node_name, bool* execution_aborted,
     EventPublisher* event_publisher, OpStatsLogger* opstats_logger,
-    int execution_index, int epoch_index, int example_index, int64_t example_size,
-    absl::Time start) {
+    int execution_index, int epoch_index, int example_index,
+    int64_t example_size, absl::Time start) {
   tensorflow::Tensor string_batch_tensor(tensorflow::DT_STRING,
                                          {static_cast<int64_t>(batch.size())});
   for (int i = 0; i < batch.size(); i++) {
@@ -743,8 +743,8 @@ absl::Status PlanEngine::RunStats(
     const std::vector<std::string>& fetch_names,
     absl::flat_hash_map<std::string, double>* output_values,
     EventPublisher* event_publisher, OpStatsLogger* opstats_logger,
-    int execution_index, int epoch_index, int example_index, int64_t example_size,
-    absl::Time start) {
+    int execution_index, int epoch_index, int example_index,
+    int64_t example_size, absl::Time start) {
   std::vector<tensorflow::Tensor> output_tensors;
   std::vector<std::string> sanitized_fetch_names;
   sanitized_fetch_names.reserve(fetch_names.size());
@@ -885,8 +885,8 @@ absl::Status PlanEngine::LoadOrSaveState(
     const std::string& filename_tensor_name, const std::string& checkpoint_path,
     const std::string& save_or_restore_op, const std::string& after_op,
     EventPublisher* event_publisher, OpStatsLogger* opstats_logger,
-    int execution_index, int epoch_index, int example_index, int64_t example_size,
-    absl::Time start) {
+    int execution_index, int epoch_index, int example_index,
+    int64_t example_size, absl::Time start) {
   FCP_ENGINE_RETURN_IF_ERROR(
       RunTensorFlow(before_op, event_publisher, opstats_logger, execution_index,
                     epoch_index, example_index, example_size, start));

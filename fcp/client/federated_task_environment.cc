@@ -201,9 +201,9 @@ absl::Status FederatedTaskEnvironment::LogReportStart() {
   }
 }
 
-void FederatedTaskEnvironment::LogReportFinish(int64_t report_request_size,
-                                               int64_t chunking_layers_sent_bytes,
-                                               absl::Duration upload_time) {
+void FederatedTaskEnvironment::LogReportFinish(
+    int64_t report_request_size, int64_t chunking_layers_sent_bytes,
+    absl::Duration upload_time) {
   event_publisher_->PublishReportFinished(
       report_request_size, chunking_layers_sent_bytes, upload_time);
   opstats_logger_->AddEvent(

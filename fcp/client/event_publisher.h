@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_EVENT_PUBLISHER_H_
 #define FCP_CLIENT_EVENT_PUBLISHER_H_
 
+#include <cstdint>
 #include <string>
 
 #include "absl/container/flat_hash_map.h"

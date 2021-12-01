@@ -35,7 +35,8 @@ class FakeEventPublisher : public EventPublisher {
   void PublishEligibilityEvalNotConfigured(int64_t, int64_t,
                                            absl::Duration) override {}
 
-  void PublishEligibilityEvalRejected(int64_t, int64_t, absl::Duration) override {}
+  void PublishEligibilityEvalRejected(int64_t, int64_t,
+                                      absl::Duration) override {}
 
   void PublishCheckin() override {}
 

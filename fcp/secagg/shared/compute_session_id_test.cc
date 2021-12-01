@@ -85,9 +85,10 @@ TEST(ComputeSessionIdTest, OutputMatchesHardCodedValues) {
       "\301\352p\251\vR\217I");
 
   SessionId expected;
-  uint8_t precomputed[32] = {120, 175, 110, 210, 30, 111, 197, 231, 253, 35, 163,
-                           25,  159, 204, 80,  79, 173, 180, 27,  166, 83, 53,
-                           85,  161, 228, 232, 97, 20,  242, 62,  142, 114};
+  uint8_t precomputed[32] = {120, 175, 110, 210, 30,  111, 197, 231,
+                             253, 35,  163, 25,  159, 204, 80,  79,
+                             173, 180, 27,  166, 83,  53,  85,  161,
+                             228, 232, 97,  20,  242, 62,  142, 114};
   expected.data = std::string(reinterpret_cast<const char*>(precomputed), 32);
   SessionId session_id = ComputeSessionId(request1);
   EXPECT_THAT(session_id.data, Eq(expected.data));

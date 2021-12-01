@@ -17,6 +17,7 @@
 #ifndef FCP_SECAGG_SHARED_INPUT_VECTOR_SPECIFICATION_H_
 #define FCP_SECAGG_SHARED_INPUT_VECTOR_SPECIFICATION_H_
 
+#include <cstdint>
 #include <string>
 
 #include "absl/base/attributes.h"
@@ -33,7 +34,8 @@ namespace secagg {
 //    degree.
 class InputVectorSpecification {
  public:
-  InputVectorSpecification(const std::string& name, int length, uint64_t modulus);
+  InputVectorSpecification(const std::string& name, int length,
+                           uint64_t modulus);
 
   virtual ~InputVectorSpecification() = default;
 
