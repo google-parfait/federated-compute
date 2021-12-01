@@ -16,7 +16,10 @@
 #ifndef FCP_CLIENT_HTTP_HTTP_CLIENT_H_
 #define FCP_CLIENT_HTTP_HTTP_CLIENT_H_
 
+#include <cstdint>
 #include <memory>
+#include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -28,6 +31,15 @@
 namespace fcp {
 namespace client {
 namespace http {
+
+inline static constexpr char kHttpsScheme[] = "https://";
+inline static constexpr char kAcceptEncodingHdr[] = "Accept-Encoding";
+inline static constexpr char kContentLengthHdr[] = "Content-Length";
+inline static constexpr char kContentEncodingHdr[] = "Content-Encoding";
+inline static constexpr char kTransferEncodingHdr[] = "Transfer-Encoding";
+// The "Transfer-Encoding" header value when the header is present but indicates
+// that no encoding was actually applied.
+inline static constexpr char kIdentityEncodingHdrValue[] = "identity";
 
 using Header = std::pair<std::string, std::string>;
 // This is a vector of pairs and not a map since multiple request headers with
@@ -176,11 +188,8 @@ class HttpClient {
 class HttpRequest {
  public:
   // Note: the request methods imply a set of standard request properties such
-  // as cacheability, safety, and idempotency:
-  // - GET: cacheable, idempotent, safe (readonly).
-  // - POST: non-cacheable, non-idempotent, non-safe.
-  // - PUT: non-cacheable, idempotent, non-safe.
-  // See for example https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods.
+  // as cacheability, safety, and idempotency. See
+  // https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods.
   //
   // The caller of `HttpClient` may implement its own caching layer in the
   // future, so implementations are not expected to cache cacheable requests
@@ -189,7 +198,7 @@ class HttpRequest {
   // Implementations should not automatically retry requests, even if the
   // request method implies it is safe or idempotent. The caller of `HttpClient`
   // will own the responsibility for retrying requests.
-  enum class Method { kGet, kPost, kPut, kPatch, kHead };
+  enum class Method { kHead, kGet, kPost, kPut, kPatch, kDelete };
 
   // Must not be called until any corresponding `HttpRequestHandle` has been
   // deleted.
@@ -432,6 +441,39 @@ class HttpResponse {
   // headers.
   virtual const HeaderList& headers() const = 0;
 };
+
+// A non-exhaustive enumeration of common HTTP response codes.
+// Note this is purposely *not* an "enum class", to allow easy comparisons
+// against the int codes returned by `HttpResponse`.
+enum HttpResponseCode {
+  kHttpOk = 200,
+  kHttpBadRequest = 400,
+  kHttpUnauthorized = 401,
+  kHttpForbidden = 403,
+  kHttpNotFound = 404,
+  kHttpConflict = 409,
+  kHttpTooManyRequests = 429,
+  kHttpClientClosedRequest = 499,
+  kHttpInternalServerError = 500,
+  kHttpNotImplemented = 501,
+  kHttpServiceUnavailable = 503,
+  kHttpGatewayTimeout = 504,
+};
+
+// Utility methods.
+
+// Converts an HTTP response code into an `absl::Status` (incl. an error message
+// with the original HTTP code).
+absl::Status ConvertHttpCodeToStatus(int code);
+
+// Finds the header value for header with name `needle` in a list of headers
+// (incl. normalizing the header names to lowercase before doing any
+// comparisons). Note that this returns the first matching header value (rather
+// than coalescing repeated header values as per RFC2616 section 4.2), so it
+// must only be used for headers for which only a single value is expected.
+// Returns an empty optional if no header value was found.
+std::optional<std::string> FindHeader(const HeaderList& headers,
+                                      absl::string_view needle);
 
 }  // namespace http
 }  // namespace client

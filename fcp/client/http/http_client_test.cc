@@ -1,0 +1,178 @@
+/*
+ * Copyright 2021 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#include "fcp/client/http/http_client.h"
+
+#include <optional>
+#include <string>
+
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "absl/status/status.h"
+#include "fcp/base/monitoring.h"
+#include "fcp/testing/testing.h"
+
+namespace fcp::client::http {
+namespace {
+
+using ::fcp::IsCode;
+using ::testing::HasSubstr;
+using ::testing::Optional;
+using ::testing::StrEq;
+
+TEST(ConvertHttpCodeToStatusTest, ConvertsKnownCodesCorrectly) {
+  EXPECT_OK(ConvertHttpCodeToStatus(kHttpOk));
+  EXPECT_THAT(ConvertHttpCodeToStatus(kHttpBadRequest),
+              IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(ConvertHttpCodeToStatus(kHttpForbidden),
+              IsCode(PERMISSION_DENIED));
+  EXPECT_THAT(ConvertHttpCodeToStatus(kHttpNotFound), IsCode(NOT_FOUND));
+  EXPECT_THAT(ConvertHttpCodeToStatus(kHttpConflict), IsCode(ABORTED));
+  EXPECT_THAT(ConvertHttpCodeToStatus(kHttpTooManyRequests),
+              IsCode(RESOURCE_EXHAUSTED));
+  EXPECT_THAT(ConvertHttpCodeToStatus(kHttpClientClosedRequest),
+              IsCode(CANCELLED));
+  EXPECT_THAT(ConvertHttpCodeToStatus(kHttpGatewayTimeout),
+              IsCode(DEADLINE_EXCEEDED));
+  EXPECT_THAT(ConvertHttpCodeToStatus(kHttpNotImplemented),
+              IsCode(UNIMPLEMENTED));
+  EXPECT_THAT(ConvertHttpCodeToStatus(kHttpServiceUnavailable),
+              IsCode(UNAVAILABLE));
+  EXPECT_THAT(ConvertHttpCodeToStatus(kHttpUnauthorized),
+              IsCode(UNAUTHENTICATED));
+}
+
+TEST(ConvertHttpCodeToStatusTest, ConvertsUnknown200CodesToOk) {
+  EXPECT_OK(ConvertHttpCodeToStatus(201));
+  EXPECT_OK(ConvertHttpCodeToStatus(210));
+  EXPECT_OK(ConvertHttpCodeToStatus(299));
+}
+
+TEST(ConvertHttpCodeToStatusTest, ConvertsUnknown400CodesToFailedPrecondition) {
+  // Note: 400, 401, and 499 are known errors codes that map to other values. We
+  // hence test a few other values in the 400 range that aren't "known".
+  EXPECT_THAT(ConvertHttpCodeToStatus(402), IsCode(FAILED_PRECONDITION));
+  EXPECT_THAT(ConvertHttpCodeToStatus(405), IsCode(FAILED_PRECONDITION));
+  EXPECT_THAT(ConvertHttpCodeToStatus(410), IsCode(FAILED_PRECONDITION));
+  EXPECT_THAT(ConvertHttpCodeToStatus(498), IsCode(FAILED_PRECONDITION));
+}
+
+TEST(ConvertHttpCodeToStatusTest, ConvertsUnknown500CodesToInternal) {
+  // note: 501 is a known error code that maps to other values. We hence test
+  // 502 instead.
+  EXPECT_THAT(ConvertHttpCodeToStatus(500), IsCode(INTERNAL));
+  EXPECT_THAT(ConvertHttpCodeToStatus(502), IsCode(INTERNAL));
+  EXPECT_THAT(ConvertHttpCodeToStatus(510), IsCode(INTERNAL));
+  EXPECT_THAT(ConvertHttpCodeToStatus(599), IsCode(INTERNAL));
+}
+
+TEST(ConvertHttpCodeToStatusTest, ConvertsUnknownAllOtherCodesToUnknown) {
+  EXPECT_THAT(ConvertHttpCodeToStatus(300), IsCode(UNKNOWN));
+  EXPECT_THAT(ConvertHttpCodeToStatus(301), IsCode(UNKNOWN));
+  EXPECT_THAT(ConvertHttpCodeToStatus(310), IsCode(UNKNOWN));
+  EXPECT_THAT(ConvertHttpCodeToStatus(399), IsCode(UNKNOWN));
+  EXPECT_THAT(ConvertHttpCodeToStatus(0), IsCode(UNKNOWN));
+  EXPECT_THAT(ConvertHttpCodeToStatus(1), IsCode(UNKNOWN));
+  EXPECT_THAT(ConvertHttpCodeToStatus(10), IsCode(UNKNOWN));
+  EXPECT_THAT(ConvertHttpCodeToStatus(99), IsCode(UNKNOWN));
+  EXPECT_THAT(ConvertHttpCodeToStatus(600), IsCode(UNKNOWN));
+}
+
+// Test to ensure that when we map an 'unknown' HTTP response to its fallback
+// catch-all StatusCode, we keep the original error code in the error message
+// (to aid in debugging).
+TEST(ConvertHttpCodeToStatusTest, IncludesOriginalErrorCodeInMessage) {
+  EXPECT_THAT(ConvertHttpCodeToStatus(400).message(), HasSubstr("code: 400"));
+  EXPECT_THAT(ConvertHttpCodeToStatus(402).message(), HasSubstr("code: 402"));
+  EXPECT_THAT(ConvertHttpCodeToStatus(502).message(), HasSubstr("code: 502"));
+  EXPECT_THAT(ConvertHttpCodeToStatus(503).message(), HasSubstr("code: 503"));
+  EXPECT_THAT(ConvertHttpCodeToStatus(300).message(), HasSubstr("code: 300"));
+}
+
+TEST(FindHeaderTest, DoesNotFindMissingHeader) {
+  EXPECT_EQ(FindHeader({}, "Header-One"), std::nullopt);
+  EXPECT_EQ(FindHeader({{"Header-Two", "bar"}}, "Header-One"), std::nullopt);
+  EXPECT_EQ(FindHeader({{"Header-Two", "bar"}, {"Header-Three", "baz"}},
+                       "Header-One"),
+            std::nullopt);
+}
+TEST(FindHeaderTest, EmptyNeedleDoesNotFindAnyHeader) {
+  EXPECT_EQ(FindHeader({}, ""), std::nullopt);
+  EXPECT_EQ(FindHeader({{"Header-Two", "bar"}}, ""), std::nullopt);
+}
+
+TEST(FindHeaderTest, FindsHeaderInList) {
+  EXPECT_THAT(FindHeader({{"Header-One", "foo"},
+                          {"Header-Two", "bar"},
+                          {"Header-Three", "baz"}},
+                         "Header-Two"),
+              Optional(StrEq("bar")));
+
+  EXPECT_THAT(FindHeader({{"Header-Two", "BAR"},
+                          {"Header-One", "foo"},
+                          {"Header-Three", "baz"}},
+                         "Header-Two"),
+              Optional(StrEq("BAR")));
+
+  EXPECT_THAT(FindHeader({{"Header-One", "foo"},
+                          {"Header-Three", "baz"},
+                          {"Header-Two", "BaR"}},
+                         "Header-Two"),
+              Optional(StrEq("BaR")));
+
+  EXPECT_THAT(FindHeader({{"Header-Two", "bar"}}, "Header-Two"),
+              Optional(StrEq("bar")));
+}
+
+TEST(FindHeaderTest, FindsHeaderInListDespiteMixedCase) {
+  // In each of these scenarios, the fact that the list or needle are not the
+  // same case should not affect the result.
+  EXPECT_THAT(FindHeader({{"Header-One", "foo"},
+                          {"header-two", "bar"},
+                          {"Header-Three", "baz"}},
+                         "Header-Two"),
+              Optional(StrEq("bar")));
+
+  EXPECT_THAT(FindHeader({{"Header-One", "foo"},
+                          {"Header-Two", "bar"},
+                          {"Header-Three", "baz"}},
+                         "header-two"),
+              Optional(StrEq("bar")));
+}
+
+TEST(FindHeaderTest, ReturnsFirstMatch) {
+  // In each of these scenarios, the first matching header value should be
+  // returned.
+  EXPECT_THAT(
+      FindHeader(
+          {{"Header-One", "foo"}, {"Header-Two", "bar"}, {"Header-Two", "baz"}},
+          "Header-Two"),
+      Optional(StrEq("bar")));
+
+  EXPECT_THAT(
+      FindHeader(
+          {{"Header-One", "foo"}, {"Header-Two", "bar"}, {"Header-Two", "baz"}},
+          "Header-Two"),
+      Optional(StrEq("bar")));
+
+  EXPECT_THAT(
+      FindHeader(
+          {{"Header-One", "foo"}, {"header-two", "bar"}, {"HEADER-TWO", "baz"}},
+          "HEADER-TWO"),
+      Optional(StrEq("bar")));
+}
+
+}  // namespace
+}  // namespace fcp::client::http

@@ -101,10 +101,7 @@ enum ProdDiagCode {
   /** Successfully interrupted GRPC on a separate thread. */
   BACKGROUND_TRAINING_INTERRUPT_GRPC = 34;
 
-  /**
-   * TensorFlow session was interrupted but timed out waiting for execution to
-   * complete.
-   */
+  /** GRPC was interrupted but timed out waiting for execution to complete. */
   BACKGROUND_TRAINING_INTERRUPT_GRPC_TIMED_OUT = 33;
 
   /** GRPC was interrupted and finished after the grace period. */
@@ -115,6 +112,23 @@ enum ProdDiagCode {
    * extended period.
    */
   BACKGROUND_TRAINING_INTERRUPT_GRPC_EXTENDED_TIMED_OUT = 31;
+
+  /** Successfully interrupted HTTP on a separate thread. */
+  BACKGROUND_TRAINING_INTERRUPT_HTTP = 24;
+
+  /**
+   * HTTP was interrupted but timed out waiting for execution to complete.
+   */
+  BACKGROUND_TRAINING_INTERRUPT_HTTP_TIMED_OUT = 23;
+
+  /** HTTP was interrupted and finished after the grace period. */
+  BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED = 22;
+
+  /**
+   * HTTP was interrupted but timed out waiting for execution to complete in the
+   * extended period.
+   */
+  BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT = 21;
 
   /**
    * A generic SecAgg client error.

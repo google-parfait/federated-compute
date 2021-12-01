@@ -96,7 +96,7 @@ message Resource {
     string uri = 1;
 
     // The inlined data for the resource.
-    bytes data = 2;
+    bytes data = 2 [ctype = CORD];
   }
 }
 
