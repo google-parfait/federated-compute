@@ -32,10 +32,17 @@ TEST(TfLiteUtilsTest, TestConvertFloat32Tensor) {
   tflite_tensor.allocation_type = kTfLiteDynamic;
   tflite_tensor.sparsity = nullptr;
   tflite_tensor.dims_signature = nullptr;
+
+  TfLiteQuantization quant;
+  quant.type = kTfLiteNoQuantization;
+  quant.params = nullptr;
+  tflite_tensor.quantization = quant;
+
   TfLiteIntArray* dims = TfLiteIntArrayCreate(2);
   dims->data[0] = 1;
   dims->data[1] = 3;
   tflite_tensor.dims = dims;
+
   float data_arr[] = {1.1, 0.456, 0.322};
   std::vector<float_t> data(std::begin(data_arr), std::end(data_arr));
   size_t num_bytes = data.size() * sizeof(float_t);
@@ -43,11 +50,10 @@ TEST(TfLiteUtilsTest, TestConvertFloat32Tensor) {
   memcpy(tflite_tensor.data.raw, data.data(), num_bytes);
   tflite_tensor.bytes = num_bytes;
 
-  auto tf_tensor_or = CreateTfTensorFromTfLiteTensor(&tflite_tensor);
-  EXPECT_TRUE(tf_tensor_or.ok());
-  tensorflow::Tensor tf_tensor = tf_tensor_or.value();
-  EXPECT_EQ(tf_tensor.NumElements(), 3);
-  auto* tf_data = static_cast<float_t*>(tf_tensor.data());
+  auto tf_tensor = CreateTfTensorFromTfLiteTensor(&tflite_tensor);
+  ASSERT_OK(tf_tensor);
+  EXPECT_EQ(tf_tensor->NumElements(), 3);
+  auto* tf_data = static_cast<float_t*>(tf_tensor->data());
   for (float weight : data_arr) {
     EXPECT_EQ(*tf_data, weight);
     tf_data++;
@@ -63,10 +69,18 @@ TEST(TfLiteUtilsTest, TestConvertStringTensor) {
   tflite_tensor.sparsity = nullptr;
   tflite_tensor.data.raw = nullptr;
   tflite_tensor.dims_signature = nullptr;
+  tflite_tensor.allocation_type = kTfLiteArenaRw;
+
+  TfLiteQuantization quant;
+  quant.type = kTfLiteNoQuantization;
+  quant.params = nullptr;
+  tflite_tensor.quantization = quant;
+
   TfLiteIntArray* dims = TfLiteIntArrayCreate(2);
   dims->data[0] = 1;
   dims->data[1] = 2;
   tflite_tensor.dims = dims;
+
   std::string data_arr[] = {std::string("a_str\0ing", 9), "b_string"};
   tflite::DynamicBuffer buf;
   for (const auto& value : data_arr) {
@@ -74,11 +88,10 @@ TEST(TfLiteUtilsTest, TestConvertStringTensor) {
   }
   buf.WriteToTensor(&tflite_tensor, nullptr);
 
-  auto tf_tensor_or = CreateTfTensorFromTfLiteTensor(&tflite_tensor);
-  EXPECT_TRUE(tf_tensor_or.ok());
-  tensorflow::Tensor tf_tensor = tf_tensor_or.value();
-  EXPECT_EQ(tf_tensor.NumElements(), 2);
-  auto* tf_data = static_cast<tensorflow::tstring*>(tf_tensor.data());
+  auto tf_tensor = CreateTfTensorFromTfLiteTensor(&tflite_tensor);
+  ASSERT_OK(tf_tensor);
+  EXPECT_EQ(tf_tensor->NumElements(), 2);
+  auto* tf_data = static_cast<tensorflow::tstring*>(tf_tensor->data());
   for (const auto& str : data_arr) {
     EXPECT_EQ(*tf_data, str);
     tf_data++;
