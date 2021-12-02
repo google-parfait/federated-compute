@@ -16,6 +16,8 @@
 #ifndef FCP_CLIENT_OPSTATS_OPSTATS_DB_H_
 #define FCP_CLIENT_OPSTATS_OPSTATS_DB_H_
 
+#include <functional>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/protos/opstats.pb.h"

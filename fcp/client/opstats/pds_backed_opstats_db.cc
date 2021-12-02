@@ -18,6 +18,9 @@
 #include <sys/file.h>
 
 #include <filesystem>
+#include <functional>
+#include <string>
+#include <utility>
 
 #include "google/protobuf/util/time_util.h"
 #include "absl/strings/str_cat.h"

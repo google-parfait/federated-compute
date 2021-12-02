@@ -15,6 +15,9 @@
  */
 #include "fcp/client/opstats/opstats_example_store.h"
 
+#include <string>
+#include <utility>
+
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"

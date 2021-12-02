@@ -17,7 +17,10 @@
 #include "fcp/client/opstats/pds_backed_opstats_db.h"
 
 #include <filesystem>
+#include <functional>
+#include <string>
 #include <thread>  // NOLINT(build/c++11)
+#include <utility>
 
 #include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"

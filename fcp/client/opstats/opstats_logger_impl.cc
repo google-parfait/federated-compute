@@ -15,6 +15,9 @@
  */
 #include "fcp/client/opstats/opstats_logger_impl.h"
 
+#include <string>
+#include <utility>
+
 #include "google/protobuf/util/time_util.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"

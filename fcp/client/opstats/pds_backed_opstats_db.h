@@ -16,6 +16,10 @@
 #ifndef FCP_CLIENT_OPSTATS_PDS_BACKED_OPSTATS_DB_H_
 #define FCP_CLIENT_OPSTATS_PDS_BACKED_OPSTATS_DB_H_
 
+#include <functional>
+#include <string>
+#include <utility>
+
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"

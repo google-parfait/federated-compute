@@ -17,6 +17,8 @@
 #include "fcp/client/opstats/opstats_logger_impl.h"
 
 #include <filesystem>
+#include <string>
+#include <utility>
 
 #include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"
