@@ -15,6 +15,7 @@
  */
 #include "fcp/client/opstats/pds_backed_opstats_db.h"
 
+#include <fcntl.h>
 #include <sys/file.h>
 
 #include <filesystem>
