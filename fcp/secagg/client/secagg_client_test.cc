@@ -17,6 +17,8 @@
 #include "fcp/secagg/client/secagg_client.h"
 
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
