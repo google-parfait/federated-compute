@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <deque>
 #include <memory>
+#include <string>
 
 #include "google/protobuf/io/gzip_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
