@@ -70,7 +70,7 @@ absl::StatusOr<T> ReadFile(absl::string_view file_name) {
     return absl::InternalError(
         absl::StrCat("error reading file ", file_name_str));
   }
-  return T(buffer.str());
+  return static_cast<T>(buffer.str());
 }
 
 }  // namespace internal
