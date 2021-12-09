@@ -57,8 +57,6 @@ class FederatedTaskEnvironmentTest : public testing::TestWithParam<bool> {
 
     ON_CALL(mock_flags_, per_phase_logs())
         .WillByDefault(Return(use_per_phase_logs_));
-    ON_CALL(mock_flags_, commit_opstats_on_upload_started())
-        .WillByDefault(Return(true));
   }
 
   StrictMock<MockSimpleTaskEnvironment> mock_simple_task_environment_;

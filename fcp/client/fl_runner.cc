@@ -856,11 +856,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     if (flags->per_phase_logs()) {
       opstats_logger->AddEvent(
           OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
-      if (flags->commit_opstats_on_upload_started()) {
-        // Commit the run data accumulated thus far to Opstats and fail if
-        // something goes wrong.
-        FCP_RETURN_IF_ERROR(opstats_logger->CommitToStorage());
-      }
+      // Commit the run data accumulated thus far to Opstats and fail if
+      // something goes wrong.
+      FCP_RETURN_IF_ERROR(opstats_logger->CommitToStorage());
       event_publisher->PublishReportStarted(0);
     }
     auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;

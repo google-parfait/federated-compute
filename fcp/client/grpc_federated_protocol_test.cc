@@ -1604,6 +1604,8 @@ TEST_P(GrpcFederatedProtocolTest, TestReportSendFails) {
     if (!use_per_phase_logging_) {
       EXPECT_CALL(mock_opstats_logger_,
                   AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+      EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
+          .WillOnce(Return(absl::OkStatus()));
       EXPECT_CALL(
           mock_event_publisher_,
           PublishReportStarted(expected_client_stream_message.ByteSizeLong()));
@@ -1646,6 +1648,8 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccess) {
     if (!use_per_phase_logging_) {
       EXPECT_CALL(mock_opstats_logger_,
                   AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+      EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
+          .WillOnce(Return(absl::OkStatus()));
       EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
     }
     // Network stats should be updated after the one send and one receive
@@ -1708,6 +1712,8 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
     if (!use_per_phase_logging_) {
       EXPECT_CALL(mock_opstats_logger_,
                   AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+      EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
+          .WillOnce(Return(absl::OkStatus()));
       EXPECT_CALL(
           mock_event_publisher_,
           PublishReportStarted(expected_client_stream_message.ByteSizeLong()));
@@ -1729,8 +1735,6 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
 // This function tests the happy path of ReportCompleted() - results get
 // reported, server replies with a RetryWindow.
 TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
-  EXPECT_CALL(mock_flags_, commit_opstats_on_upload_started)
-      .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first, followed by a successful checkin.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/false));

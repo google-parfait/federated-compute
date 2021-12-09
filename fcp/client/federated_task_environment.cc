@@ -194,11 +194,7 @@ absl::Status FederatedTaskEnvironment::LogReportStart() {
   event_publisher_->PublishReportStarted(0);
   opstats_logger_->AddEvent(
       opstats::OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
-  if (flags_->commit_opstats_on_upload_started()) {
-    return opstats_logger_->CommitToStorage();
-  } else {
-    return absl::OkStatus();
-  }
+  return opstats_logger_->CommitToStorage();
 }
 
 void FederatedTaskEnvironment::LogReportFinish(
