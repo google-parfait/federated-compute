@@ -332,7 +332,10 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   absl::StatusOr<std::string> checkpoint_output_filename =
       files->CreateTempFile("output", ".ckp");
   if (!checkpoint_output_filename.ok()) {
-    std::string message = "Could not create temporary output checkpoint file";
+    auto status = checkpoint_output_filename.status();
+    auto message = absl::StrCat(
+        "Could not create temporary output checkpoint file: code: ",
+        status.code(), ", message: ", status.message());
     event_publisher->PublishIoError(0, message);
     opstats_logger->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
@@ -399,10 +402,11 @@ absl::Status ReportTensorflowSpecPlanResult(
         CreateComputationResults(tensorflow_spec,
                                  std::move(plan_result_and_checkpoint_file));
     if (!computation_results_or.ok()) {
-      std::string message =
+      auto status = computation_results_or.status();
+      auto message = absl::StrCat(
           "Unable to create computation results from TensorflowSpec-based plan "
-          "outputs. " +
-          std::string(computation_results_or.status().message());
+          "outputs. code: ",
+          status.code(), ", message: ", status.message());
       event_publisher->PublishTensorFlowError(
           /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
           message);
@@ -529,8 +533,9 @@ IssueEligibilityEvalCheckinAndRunPlan(
                                 time_before_eligibility_eval_checkin));
 
   if (!eligibility_checkin_result.ok()) {
-    auto message = absl::StrCat("Error during eligibility eval checkin: ",
-                                eligibility_checkin_result.status().message());
+    auto status = eligibility_checkin_result.status();
+    auto message = absl::StrCat("Error during eligibility eval checkin: code: ",
+                                status.code(), ", message: ", status.message());
     event_publisher->PublishIoError(0, message);
     engine::LogOpStatsNetworkErrors(
         opstats_logger, eligibility_checkin_result.status(), message);
@@ -581,9 +586,10 @@ IssueEligibilityEvalCheckinAndRunPlan(
   absl::StatusOr<std::string> checkpoint_input_filename =
       CreateInputCheckpointFile(files, eligibility_eval_payload.checkpoint);
   if (!checkpoint_input_filename.ok()) {
+    auto status = checkpoint_input_filename.status();
     auto message = absl::StrCat(
-        "Failed to create eligibility eval checkpoint input file: ",
-        checkpoint_input_filename.status().message());
+        "Failed to create eligibility eval checkpoint input file: code: ",
+        status.code(), ", message: ", status.message());
     event_publisher->PublishIoError(0, message);
     opstats_logger->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
@@ -615,8 +621,9 @@ IssueEligibilityEvalCheckinAndRunPlan(
   absl::StatusOr<TaskEligibilityInfo> parsed_output =
       ParseEligibilityEvalPlanOutput(plan_result.output_tensors);
   if (!parsed_output.ok()) {
-    auto message = absl::StrCat("Invalid eligibility eval plan output: ",
-                                parsed_output.status().message());
+    auto status = parsed_output.status();
+    auto message = absl::StrCat("Invalid eligibility eval plan output: code: ",
+                                status.code(), ", message: ", status.message());
     event_publisher->PublishTensorFlowError(
         /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
         message);
@@ -772,8 +779,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       engine::DataSourceType::TRAINING_DATA_SOURCE_UNDEFINED,
       absl::ToInt64Milliseconds(absl::Now() - time_before_checkin));
   if (!checkin_result.ok()) {
-    auto message = absl::StrCat("Error during checkin: ",
-                                checkin_result.status().message());
+    auto status = checkin_result.status();
+    auto message = absl::StrCat("Error during checkin: code: ", status.code(),
+                                ", message: ", status.message());
     event_publisher->PublishIoError(0, message);
     engine::LogOpStatsNetworkErrors(opstats_logger, checkin_result.status(),
                                     message);
@@ -797,8 +805,10 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   absl::StatusOr<std::string> checkpoint_input_filename =
       CreateInputCheckpointFile(files, acceptance.checkpoint);
   if (!checkpoint_input_filename.ok()) {
-    auto message = absl::StrCat("Failed to create checkpoint input file: ",
-                                checkpoint_input_filename.status().message());
+    auto status = checkpoint_input_filename.status();
+    auto message = absl::StrCat(
+        "Failed to create checkpoint input file: code: ", status.code(),
+        ", message: ", status.message());
     event_publisher->PublishIoError(0, message);
     opstats_logger->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
@@ -869,7 +879,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         reference_time);
     if (!report_result.ok()) {
       // If the report to the server failed, log an error.
-      auto message = absl::StrCat("Error finishing: ", report_result.message());
+      auto message =
+          absl::StrCat("Error reporting results: code: ", report_result.code(),
+                       ", message: ", report_result.message());
       event_publisher->PublishIoError(0, message);
       engine::LogOpStatsNetworkErrors(opstats_logger, report_result, message);
       FCP_LOG(INFO) << message;
