@@ -183,23 +183,24 @@ absl::Status InMemoryHttpRequestCallback::OnResponseStarted(
   absl::WriterMutexLock _(&mutex_);
   response_code_ = response.code();
 
-  // We don't expect the response body to be "Content-Encoding" encoded, because
-  // the `HttpClient` is supposed to transparently handle the decoding for us
-  // (unless we specified a "Accept-Encoding" header in the request,
-  // which would indicate that we wanted to handle the response decoding).
   std::optional<std::string> content_encoding_header =
       FindHeader(response.headers(), kContentEncodingHdr);
-  if (content_encoding_header.has_value() &&
-      !FindHeader(request.extra_headers(), kAcceptEncodingHdr).has_value()) {
-    // Note: technically, we should only receive Content-Encoding values that
-    // match the Accept-Encoding values provided in the request headers. The
-    // check above isn't quite that strict, but that's probably fine (since such
-    // issues should be rare, and can be handled farther up the stack).
-    status_ = absl::InvalidArgumentError(
-        absl::StrCat("Unexpected header: ", kContentEncodingHdr));
-    return status_;
+  if (content_encoding_header.has_value()) {
+    // We don't expect the response body to be "Content-Encoding" encoded,
+    // because the `HttpClient` is supposed to transparently handle the decoding
+    // for us (unless we specified a "Accept-Encoding" header in the request,
+    // which would indicate that we wanted to handle the response decoding).
+    if (!FindHeader(request.extra_headers(), kAcceptEncodingHdr).has_value()) {
+      // Note: technically, we should only receive Content-Encoding values that
+      // match the Accept-Encoding values provided in the request headers. The
+      // check above isn't quite that strict, but that's probably fine (since
+      // such issues should be rare, and can be handled farther up the stack).
+      status_ = absl::InvalidArgumentError(
+          absl::StrCat("Unexpected header: ", kContentEncodingHdr));
+      return status_;
+    }
+    content_encoding_ = *content_encoding_header;
   }
-  content_encoding_ = *content_encoding_header;
 
   // Similarly, we should under no circumstances receive a non-identity
   // Transfer-Encoding header, since the `HttpClient` is unconditionally
