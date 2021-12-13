@@ -18,6 +18,7 @@
 #include "fcp/secagg/client/secagg_client_alive_base_state.h"
 
 #include <string>
+#include <utility>
 
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
 #include "fcp/secagg/client/secagg_client_state.h"

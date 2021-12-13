@@ -17,6 +17,7 @@
 #include "fcp/secagg/client/secagg_client_completed_state.h"
 
 #include <string>
+#include <utility>
 
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/secagg_client_state.h"

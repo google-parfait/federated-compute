@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "fcp/secagg/client/other_client_state.h"
