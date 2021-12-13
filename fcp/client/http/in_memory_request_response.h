@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FCP_CLIENT_HTTP_IN_MEMORY_REQUEST_RESPONSE_H
-#define FCP_CLIENT_HTTP_IN_MEMORY_REQUEST_RESPONSE_H
+#ifndef FCP_CLIENT_HTTP_IN_MEMORY_REQUEST_RESPONSE_H_
+#define FCP_CLIENT_HTTP_IN_MEMORY_REQUEST_RESPONSE_H_
 
 #include <cstdint>
 #include <memory>
@@ -191,4 +191,4 @@ FetchResourcesInMemory(HttpClient& http_client,
 };  // namespace client
 };  // namespace fcp
 
-#endif  // FCP_CLIENT_HTTP_IN_MEMORY_REQUEST_RESPONSE_H
+#endif  // FCP_CLIENT_HTTP_IN_MEMORY_REQUEST_RESPONSE_H_
