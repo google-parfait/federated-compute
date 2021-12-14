@@ -17,6 +17,8 @@
 #ifndef FCP_TENSORFLOW_TESTING_TF_HELPER_H_
 #define FCP_TENSORFLOW_TESTING_TF_HELPER_H_
 
+#include <string>
+
 #include "gtest/gtest.h"
 #include "absl/strings/cord.h"
 #include "fcp/base/result.h"
