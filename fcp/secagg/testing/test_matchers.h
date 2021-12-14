@@ -17,6 +17,7 @@
 #ifndef FCP_SECAGG_TESTING_TEST_MATCHERS_H_
 #define FCP_SECAGG_TESTING_TEST_MATCHERS_H_
 
+#include <string>
 #include <utility>
 #include <vector>
 

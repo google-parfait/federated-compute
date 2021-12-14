@@ -17,6 +17,7 @@
 #ifndef FCP_SECAGG_TESTING_ECDH_PREGENERATED_TEST_KEYS_H_
 #define FCP_SECAGG_TESTING_ECDH_PREGENERATED_TEST_KEYS_H_
 
+#include <string>
 #include <vector>
 
 #include "fcp/secagg/shared/ecdh_keys.h"

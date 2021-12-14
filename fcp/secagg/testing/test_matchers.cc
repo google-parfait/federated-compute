@@ -16,6 +16,8 @@
 
 #include "fcp/secagg/testing/test_matchers.h"
 
+#include <string>
+
 namespace fcp {
 namespace secagg {
 namespace testing {
