@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"

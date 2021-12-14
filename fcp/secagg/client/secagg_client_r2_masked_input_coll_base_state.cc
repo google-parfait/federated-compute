@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "absl/container/node_hash_map.h"
 #include "absl/strings/str_cat.h"
