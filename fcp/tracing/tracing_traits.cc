@@ -14,6 +14,7 @@
 
 #include "fcp/tracing/tracing_traits.h"
 
+#include <string>
 #include <utility>
 
 #include "absl/base/attributes.h"

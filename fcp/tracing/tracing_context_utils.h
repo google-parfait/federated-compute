@@ -15,6 +15,8 @@
 #ifndef FCP_TRACING_TRACING_CONTEXT_UTILS_H_
 #define FCP_TRACING_TRACING_CONTEXT_UTILS_H_
 
+#include <string>
+
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/message.h"
 #include "fcp/base/monitoring.h"
