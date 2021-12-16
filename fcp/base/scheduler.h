@@ -25,6 +25,7 @@
  * tasks and futures.
  */
 
+#include <functional>
 #include <memory>
 
 #include "fcp/base/monitoring.h"

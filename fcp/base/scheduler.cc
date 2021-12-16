@@ -17,9 +17,11 @@
 #include "fcp/base/scheduler.h"
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <queue>
 #include <thread>  // NOLINT(build/c++11)
+#include <utility>
 #include <vector>
 
 #include "absl/synchronization/blocking_counter.h"

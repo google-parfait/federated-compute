@@ -16,9 +16,11 @@
 
 #include "fcp/base/future.h"
 
+#include <functional>
 #include <memory>
 #include <thread>  // NOLINT(build/c++11)
 #include <type_traits>
+#include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"

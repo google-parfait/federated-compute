@@ -18,8 +18,11 @@
 #define FCP_BASE_RANDOM_TOKEN_H_
 
 #include <stdint.h>
-#include <utility>
+
 #include <array>
+#include <string>
+#include <utility>
+
 #include "absl/types/span.h"
 
 namespace fcp {

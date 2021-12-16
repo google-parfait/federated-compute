@@ -26,6 +26,7 @@
 #endif
 
 #include <cstring>
+#include <string>
 
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"

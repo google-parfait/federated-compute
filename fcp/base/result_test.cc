@@ -17,6 +17,7 @@
 #include "fcp/base/result.h"
 
 #include <memory>
+#include <utility>
 #include <variant>
 
 #include "gmock/gmock.h"

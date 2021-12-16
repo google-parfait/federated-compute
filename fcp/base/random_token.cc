@@ -18,6 +18,8 @@
 
 #include <string.h>
 
+#include <string>
+
 #include "absl/strings/escaping.h"
 #include "fcp/base/monitoring.h"
 #include "openssl/rand.h"
