@@ -14,6 +14,7 @@
 
 // TODO(team): switch to re2 library
 #include <regex>  // NOLINT
+#include <string>
 
 #include "gtest/gtest.h"
 #include "absl/flags/flag.h"
