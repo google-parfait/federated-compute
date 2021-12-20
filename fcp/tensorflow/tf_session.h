@@ -18,6 +18,7 @@
 #define FCP_TENSORFLOW_TF_SESSION_H_
 
 #include <filesystem>
+#include <string>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/cord.h"

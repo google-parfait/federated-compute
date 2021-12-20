@@ -19,6 +19,8 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <string>
+#include <utility>
 
 #include "absl/strings/cord.h"
 #include "fcp/base/platform.h"

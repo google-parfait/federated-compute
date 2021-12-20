@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <string>
+
 #include "google/protobuf/any.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/common_shape_fns.h"

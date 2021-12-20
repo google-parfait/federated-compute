@@ -16,6 +16,8 @@
 
 #include "fcp/tensorflow/tf_session.h"
 
+#include <string>
+
 #include "gtest/gtest.h"
 #include "fcp/base/tracing_schema.h"
 #include "fcp/protos/plan.pb.h"

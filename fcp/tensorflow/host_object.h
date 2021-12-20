@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"

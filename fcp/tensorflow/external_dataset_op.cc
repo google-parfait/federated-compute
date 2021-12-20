@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <string>
+#include <utility>
+
 #include "absl/strings/str_format.h"
 #include "fcp/base/random_token.h"
 #include "fcp/tensorflow/external_dataset.h"

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <string>
+
 #include "fcp/protos/federated_api.pb.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/dataset.h"

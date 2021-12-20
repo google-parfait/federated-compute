@@ -16,6 +16,8 @@
 
 #include "fcp/tensorflow/host_object.h"
 
+#include <utility>
+
 #include "fcp/base/monitoring.h"
 
 namespace fcp {

@@ -29,6 +29,8 @@
 #include <fcntl.h>
 #include <stdint.h>
 
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "google/protobuf/io/zero_copy_stream.h"
