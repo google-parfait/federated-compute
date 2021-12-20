@@ -17,6 +17,8 @@
 
 #include <atomic>
 #include <optional>
+#include <string>
+#include <utility>
 
 #include "fcp/tracing/text_tracing_recorder_impl.h"
 #include "fcp/tracing/tracing_span_impl.h"

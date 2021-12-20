@@ -16,6 +16,8 @@
 
 #include <memory>
 #include <ostream>
+#include <string>
+#include <utility>
 
 #include "absl/time/clock.h"
 #include "fcp/tracing/text_tracing_span_impl.h"

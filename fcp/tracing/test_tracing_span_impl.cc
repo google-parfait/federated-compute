@@ -15,6 +15,7 @@
 #include "fcp/tracing/test_tracing_span_impl.h"
 
 #include <memory>
+#include <utility>
 
 namespace fcp {
 namespace tracing_internal {

@@ -16,6 +16,8 @@
 #define FCP_TRACING_TEST_TRACING_RECORDER_H_
 
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"

@@ -16,6 +16,8 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
+#include <utility>
 
 #include "fcp/tracing/test_tracing_recorder_impl.h"
 #include "fcp/tracing/tracing_severity.h"

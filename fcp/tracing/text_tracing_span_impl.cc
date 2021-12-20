@@ -16,6 +16,7 @@
 
 #include <iostream>
 #include <memory>
+#include <utility>
 
 #include "flatbuffers/minireflect.h"
 

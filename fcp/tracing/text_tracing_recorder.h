@@ -16,6 +16,7 @@
 #define FCP_TRACING_TEXT_TRACING_RECORDER_H_
 
 #include <fstream>
+#include <string>
 
 #include "fcp/tracing/text_tracing_recorder_impl.h"
 #include "fcp/tracing/tracing_recorder.h"
