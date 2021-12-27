@@ -18,6 +18,8 @@
 #include <fstream>
 #include <map>
 #include <optional>
+#include <string>
+#include <utility>
 #include <variant>
 
 #include "absl/status/status.h"

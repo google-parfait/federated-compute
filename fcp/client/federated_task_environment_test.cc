@@ -17,6 +17,7 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 #include <variant>
 
 #include "gmock/gmock.h"

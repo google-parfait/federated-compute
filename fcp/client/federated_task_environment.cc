@@ -16,7 +16,10 @@
 #include "fcp/client/federated_task_environment.h"
 
 #include <fstream>
+#include <functional>
 #include <memory>
+#include <string>
+#include <utility>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"

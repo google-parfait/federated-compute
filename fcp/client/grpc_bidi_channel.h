@@ -25,6 +25,7 @@
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <string>
 
 #include "absl/base/attributes.h"
 #include "absl/strings/match.h"

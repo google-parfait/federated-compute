@@ -15,6 +15,9 @@
  */
 #include "fcp/client/interruptible_runner.h"
 
+#include <functional>
+#include <utility>
+
 #include "absl/status/status.h"
 
 namespace fcp {

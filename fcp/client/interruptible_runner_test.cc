@@ -15,6 +15,8 @@
  */
 #include "fcp/client/interruptible_runner.h"
 
+#include <functional>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"

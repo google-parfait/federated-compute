@@ -16,8 +16,11 @@
 #include "fcp/client/grpc_federated_protocol.h"
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <string>
+#include <utility>
 #include <variant>
 
 #include "google/protobuf/duration.pb.h"

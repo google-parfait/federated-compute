@@ -17,6 +17,8 @@
 #include "fcp/client/grpc_bidi_stream.h"
 
 #include <memory>
+#include <string>
+#include <utility>
 
 #include "absl/status/status.h"
 #include "fcp/base/status_converters.h"

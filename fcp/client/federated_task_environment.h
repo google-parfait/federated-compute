@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_FEDERATED_TASK_ENVIRONMENT_H_
 #define FCP_CLIENT_FEDERATED_TASK_ENVIRONMENT_H_
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>

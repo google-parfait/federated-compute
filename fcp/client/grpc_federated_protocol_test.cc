@@ -16,6 +16,8 @@
 #include "fcp/client/grpc_federated_protocol.h"
 
 #include <memory>
+#include <string>
+#include <utility>
 
 #include "google/protobuf/text_format.h"
 #include "gmock/gmock.h"
