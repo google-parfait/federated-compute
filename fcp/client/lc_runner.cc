@@ -16,6 +16,8 @@
 #include "fcp/client/lc_runner.h"
 
 #include <map>
+#include <string>
+#include <utility>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
