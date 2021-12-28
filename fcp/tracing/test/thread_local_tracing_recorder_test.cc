@@ -14,6 +14,7 @@
 
 #include <fstream>
 #include <memory>
+#include <string>
 
 #include "gtest/gtest.h"
 #include "absl/strings/str_cat.h"

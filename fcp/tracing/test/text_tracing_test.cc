@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <fstream>
+#include <string>
 
 #include "gtest/gtest.h"
 #include "absl/strings/str_cat.h"
