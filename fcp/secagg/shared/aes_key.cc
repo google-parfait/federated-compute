@@ -14,6 +14,8 @@
 
 #include "fcp/secagg/shared/aes_key.h"
 
+#include <string>
+
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/shared/shamir_secret_sharing.h"
 

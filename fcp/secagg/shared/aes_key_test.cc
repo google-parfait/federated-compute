@@ -14,6 +14,8 @@
 
 #include "fcp/secagg/shared/aes_key.h"
 
+#include <string>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/strings/str_cat.h"

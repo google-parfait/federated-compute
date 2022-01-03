@@ -16,9 +16,12 @@
 
 #include "fcp/secagg/shared/map_of_masks.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/numeric/bits.h"

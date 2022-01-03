@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/shared/aes_ctr_prng.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 

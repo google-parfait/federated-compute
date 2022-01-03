@@ -16,6 +16,8 @@
 
 #include "fcp/secagg/shared/input_vector_specification.h"
 
+#include <string>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "fcp/secagg/shared/secagg_vector.h"
