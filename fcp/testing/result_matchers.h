@@ -17,6 +17,8 @@
 #ifndef FCP_TESTING_RESULT_MATCHERS_H_
 #define FCP_TESTING_RESULT_MATCHERS_H_
 
+#include <string>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "fcp/base/error.h"
