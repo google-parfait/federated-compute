@@ -28,7 +28,7 @@ option java_multiple_files = true;
 option java_outer_classname = "FederatedProto";
 
 // `FederatedTrainingApi` provides the protocol between a device and
-// cloud servers for federated optimization.
+// cloud servers for federated computations.
 //
 // This API works as follows:
 //
@@ -37,28 +37,19 @@ option java_outer_classname = "FederatedProto";
 //    application together with additional information like a specific
 //    flavor within this application.
 //
-// 2. Periodically, clients call the `Checkin` method to indicate they
-//    are interested in participating in an *execution phase*.  The
-//    request specifies the population as well as an optional id of a
-//    previous phase; both pieces of information are rendered
-//    in the URL and might be used for routing.
+// 2. Periodically, clients issue an `EligibilityEvalCheckinRequest` to indicate
+//    they are interested in participating in a computation, followed by a
+//    `CheckinRequest` to actually be assigned one of the available
+//    computations they are compatible with. These requests specify the
+//    population for which the requests are issued.
 //
-// 3. The server decides whether the client shall participate in the
-//    execution phase, and if so, returns an id for the phase as well
-//    as a checkpoint to start execution from and a plan how to perform
-//    execution. The server may also respond with specific instructions
-//    to the client that he should call again at a later point; this
-//    allows him to first collect clients interested in participation
-//    and then make a choice using e.g. reservoir sampling.
+// 3. The server decides whether the client shall participate in a computation,
+//    and if so returns the data (a computation description and a checkpoint)
+//    needed for the client to start executing the computation.
 //
-// 4. If the client is selected, it performs local execution, which is
-//    expected to take several minutes up to an hour. When done, the
-//    client calls the `Report` method, specifying both population and
-//    phase id, and the updated checkpoint.
-//
-// NOTE: the rpcs below describe the HTTP binding only in a comment;
-// the actual bindings are taken from the api service config. This is
-// to avoid dependencies from the api service config at runtime.
+// 4. If the client is selected, it performs local execution. When done, the
+//    client issues a `ReportRequest`, specifying both population and phase id,
+//    and the updated checkpoint.
 service FederatedTrainingApi {
   // Initiates client-server communication session (bidirectional stream).
   rpc Session(stream ClientStreamMessage) returns (stream ServerStreamMessage) {
@@ -516,7 +507,7 @@ message ReportRequest {
   // The id of the execution phase this client participates in.
   string execution_phase_id = 2;
 
-  // The report. Rendered in the body of an HTTP request.
+  // The report.
   Report report = 3;
 }
 
