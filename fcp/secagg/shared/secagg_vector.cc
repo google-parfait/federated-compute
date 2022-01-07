@@ -362,5 +362,23 @@ void SecAggUnpackedVectorMap::Add(const SecAggVectorMap& other) {
   }
 }
 
+std::unique_ptr<SecAggUnpackedVectorMap> SecAggUnpackedVectorMap::AddMaps(
+    const SecAggUnpackedVectorMap& a, const SecAggUnpackedVectorMap& b) {
+  auto result = absl::make_unique<SecAggUnpackedVectorMap>();
+  for (const auto& entry : a) {
+    auto name = entry.first;
+    auto length = entry.second.num_elements();
+    auto modulus = entry.second.modulus();
+    const auto& a_at_name = entry.second;
+    const auto& b_at_name = b.at(name);
+    SecAggUnpackedVector result_vector(length, modulus);
+    for (int j = 0; j < length; ++j) {
+      result_vector[j] = AddModOpt(a_at_name[j], b_at_name[j], modulus);
+    }
+    result->emplace(name, std::move(result_vector));
+  }
+  return result;
+}
+
 }  // namespace secagg
 }  // namespace fcp

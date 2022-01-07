@@ -18,6 +18,7 @@
 #define FCP_SECAGG_SHARED_SECAGG_VECTOR_H_
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -241,6 +242,14 @@ class SecAggUnpackedVector : public std::vector<uint64_t> {
   SecAggUnpackedVector(const SecAggUnpackedVector&) = delete;
   SecAggUnpackedVector& operator=(const SecAggUnpackedVector&) = delete;
 
+  explicit SecAggUnpackedVector(const SecAggVector& other)
+      : vector(other.num_elements()), modulus_(other.modulus()) {
+    SecAggVector::Decoder decoder(other);
+    for (auto& v : *this) {
+      v = decoder.ReadValue();
+    }
+  }
+
   // Enable move semantics.
   SecAggUnpackedVector(SecAggUnpackedVector&& other)
       : vector(std::move(other)), modulus_(other.modulus_) {
@@ -278,10 +287,21 @@ class SecAggUnpackedVectorMap
   SecAggUnpackedVectorMap(const SecAggUnpackedVectorMap&) = delete;
   SecAggUnpackedVectorMap& operator=(const SecAggUnpackedVectorMap&) = delete;
 
-  // Combines this map with another (packed) map by addomg all vectors in this
+  explicit SecAggUnpackedVectorMap(const SecAggVectorMap& other) {
+    for (auto& [name, vector] : other) {
+      this->emplace(name, SecAggUnpackedVector(vector));
+    }
+  }
+
+  // Combines this map with another (packed) map by adding all vectors in this
   // map to corresponding vectors in the other map.
   // It is assumed that names of vectors match in both maps.
   void Add(const SecAggVectorMap& other);
+
+  // Analogous to the above, as a static method. Also assumes that names of
+  // vectors match in both maps.
+  static std::unique_ptr<SecAggUnpackedVectorMap> AddMaps(
+      const SecAggUnpackedVectorMap& a, const SecAggUnpackedVectorMap& b);
 };
 
 }  // namespace secagg

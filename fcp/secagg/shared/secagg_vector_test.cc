@@ -438,6 +438,15 @@ TEST(SecAggUnpackedVectorTest, VerifyMoveConstructor) {
   EXPECT_THAT(vector2[2], Eq(3));
 }
 
+TEST(SecAggUnpackedVectorTest, VerifyConstructorFromSecAggVector) {
+  std::vector<uint64_t> raw_vector = {1, 2, 3};
+  SecAggVector vector(raw_vector, 32);
+  SecAggUnpackedVector vector2(vector);
+  EXPECT_THAT(vector2.num_elements(), Eq(3));
+  EXPECT_THAT(vector2.modulus(), Eq(32));
+  EXPECT_THAT(vector2[2], Eq(3));
+}
+
 TEST(SecAggUnpackedVectorTest, VerifyMoveAssignment) {
   SecAggUnpackedVector vector({1, 2, 3}, 32);
   SecAggUnpackedVector vector2 = std::move(vector);
@@ -457,6 +466,17 @@ TEST(SecAggUnpackedVectorTest, AddSecAggVectorMap) {
   unpacked_map->Add(*packed_map);
   EXPECT_THAT(unpacked_map->size(), Eq(1));
   EXPECT_THAT(unpacked_map->at("foobar"), ElementsAreArray({5, 15, 25, 3}));
+}
+
+TEST(SecAggUnpackedVectorTest, AddUnpackedSecAggVectorMaps) {
+  SecAggUnpackedVectorMap unpacked_map_1, unpacked_map_2;
+  unpacked_map_1.emplace("foobar", SecAggUnpackedVector({0, 10, 20, 30}, 32));
+  unpacked_map_2.emplace("foobar", SecAggUnpackedVector({5, 5, 5, 5}, 32));
+
+  auto result =
+      SecAggUnpackedVectorMap::AddMaps(unpacked_map_1, unpacked_map_2);
+  EXPECT_THAT(result->size(), Eq(1));
+  EXPECT_THAT(result->at("foobar"), ElementsAreArray({5, 15, 25, 3}));
 }
 
 }  // namespace
