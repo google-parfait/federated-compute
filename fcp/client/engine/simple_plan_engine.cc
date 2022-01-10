@@ -86,9 +86,10 @@ PlanResult SimplePlanEngine::RunPlan(
   if (!tf_wrapper_or.ok()) {
     event_publisher_->PublishTensorFlowError(
         /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
-        flags_->log_tensorflow_error_messages()
-            ? tf_wrapper_or.status().message()
-            : "");
+        absl::StrCat("code: ", tf_wrapper_or.status().code(), ", error: ",
+                     flags_->log_tensorflow_error_messages()
+                         ? tf_wrapper_or.status().message()
+                         : ""));
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
         std::string(tf_wrapper_or.status().message()));
@@ -205,7 +206,9 @@ SimplePlanEngine::RunTensorFlowInternal(
     case absl::StatusCode::kInvalidArgument:
       event_publisher_->PublishTensorFlowError(
           /*execution_index=*/0, /*epoch_index=*/0, total_example_count->load(),
-          flags_->log_tensorflow_error_messages() ? status.message() : "");
+          absl::StrCat(
+              "code: ", status.code(), ", error: ",
+              flags_->log_tensorflow_error_messages() ? status.message() : ""));
       opstats_logger_->AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
           std::string(status.message()));
