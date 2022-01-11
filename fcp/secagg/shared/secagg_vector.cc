@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/strings/string_view.h"

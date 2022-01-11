@@ -40,7 +40,7 @@ class HasValueMatcher {
       : matcher_(std::move(matcher)) {}
 
   template <typename TargetType>
-  operator testing::Matcher<TargetType>() const {
+  operator testing::Matcher<TargetType>() const {  // NOLINT
     using D = std::remove_cv_t<std::remove_reference_t<TargetType>>;
     static_assert(result_internal::ResultTraits<D>::is_result());
     using V = typename result_internal::ResultTraits<D>::ValueType;

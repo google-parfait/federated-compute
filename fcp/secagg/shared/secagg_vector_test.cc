@@ -17,6 +17,7 @@
 #include "fcp/secagg/shared/secagg_vector.h"
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
