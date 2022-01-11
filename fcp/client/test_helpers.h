@@ -272,6 +272,7 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, per_phase_logs, (), (const, override));
   MOCK_METHOD(bool, use_tflite_training, (), (const, override));
+  MOCK_METHOD(bool, disable_legacy_plan_support, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

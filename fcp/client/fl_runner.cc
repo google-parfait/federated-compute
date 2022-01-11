@@ -904,7 +904,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     }
 
   } else {
-    if (RunPlanWithExecutions(
+    if (!flags->disable_legacy_plan_support() &&
+        RunPlanWithExecutions(
             env_deps, event_publisher, files, log_manager, opstats_logger,
             flags, federated_protocol, acceptance.client_only_plan,
             *checkpoint_input_filename, timing_config, reference_time)) {

@@ -136,6 +136,8 @@ class Flags {
 
   // Whether use TFLite for training.
   virtual bool use_tflite_training() const { return false; }
+  // Whether to support legacy plan without TensorflowSpec.
+  virtual bool disable_legacy_plan_support() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
