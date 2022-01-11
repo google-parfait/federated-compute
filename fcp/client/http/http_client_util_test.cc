@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "fcp/client/http/http_client.h"
+#include "fcp/client/http/http_client_util.h"
 
 #include <optional>
 #include <string>
@@ -172,6 +172,45 @@ TEST(FindHeaderTest, ReturnsFirstMatch) {
           {{"Header-One", "foo"}, {"header-two", "bar"}, {"HEADER-TWO", "baz"}},
           "HEADER-TWO"),
       Optional(StrEq("bar")));
+}
+
+TEST(JoinBaseUriWithSuffixTest, ReturnsJoinedUri) {
+  // No trailing slash in base URI.
+  auto result = JoinBaseUriWithSuffix("https://foo", "/bar");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq("https://foo/bar"));
+
+  // Trailing slash in base URI.
+  result = JoinBaseUriWithSuffix("https://foo/", "/bar");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq("https://foo/bar"));
+
+  // Additional URI components are correctly merged.
+  result = JoinBaseUriWithSuffix("https://foo:123", "/bar/baz");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq("https://foo:123/bar/baz"));
+
+  result = JoinBaseUriWithSuffix("https://foo:123/", "/bar/baz");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq("https://foo:123/bar/baz"));
+
+  // Empty suffixes should be allowed.
+  result = JoinBaseUriWithSuffix("https://foo", "");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq("https://foo/"));
+
+  // Trailing slash in base URI.
+  result = JoinBaseUriWithSuffix("https://foo/", "");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq("https://foo/"));
+}
+
+TEST(JoinBaseUriWithSuffixTest, NoLeadingSlashInSuffixFails) {
+  // No leading slash in the URI suffix, should result in error.
+  auto result = JoinBaseUriWithSuffix("https://foo", "bar");
+  EXPECT_THAT(result.status(), IsCode(INVALID_ARGUMENT));
+  result = JoinBaseUriWithSuffix("https://foo/", "bar");
+  EXPECT_THAT(result.status(), IsCode(INVALID_ARGUMENT));
 }
 
 }  // namespace

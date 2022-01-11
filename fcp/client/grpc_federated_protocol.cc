@@ -33,6 +33,7 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
+#include "fcp/client/federated_protocol_util.h"
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/grpc_bidi_stream.h"
@@ -108,7 +109,7 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 //   didn't already return a CheckinRequestAck. If it did return such an ack,
 //   then one of the retry windows in that message will be used instead.
 //
-// Finally, note that for simplicity sake we generally check whether a
+// Finally, note that for simplicity's sake we generally check whether a
 // permanent error was received at the level of this class's public method,
 // rather than deeper down in each of our helper methods that actually call
 // directly into the gRPC stack. This keeps our state-managing code simpler, but
@@ -116,71 +117,6 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 // permanent error code locally (i.e. without it being sent by the server), it
 // will be treated as if the server sent it and the permanent error retry period
 // will be used. We consider this a reasonable tradeoff.
-
-namespace {
-
-// Takes the given minimum and maximum delays, and uniformly randomly
-// chooses a delay in that range.
-absl::Duration PickRetryDelayFromRange(absl::Duration min_delay,
-                                       absl::Duration max_delay,
-                                       absl::BitGen& bit_gen) {
-  // Sanitize inputs (ensure min_delay is >= 0, and max_delay is >= min_delay).
-  min_delay =
-      min_delay >= absl::ZeroDuration() ? min_delay : absl::ZeroDuration();
-  max_delay = max_delay >= min_delay ? max_delay : min_delay;
-
-  // Pick a value.
-  absl::Duration window_width = max_delay - min_delay;
-  double random = absl::Uniform(bit_gen, 0, 1.0);
-  return min_delay + (window_width * random);
-}
-
-// Converts an absl::Duration to a google::protobuf::Duration.
-// Note that we assume the duration's we deal with here are representable by
-// both formats.
-google::protobuf::Duration ConvertAbslToProtoDuration(
-    absl::Duration absl_duration) {
-  google::protobuf::Duration proto_duration;
-  proto_duration.set_seconds(int32_t(
-      absl::IDivDuration(absl_duration, absl::Seconds(1), &absl_duration)));
-  proto_duration.set_nanos(int32_t(
-      absl::IDivDuration(absl_duration, absl::Nanoseconds(1), &absl_duration)));
-  return proto_duration;
-}
-
-// Picks a retry delay and encodes it as a zero-width RetryWindow (where
-// delay_min and delay_max are set to the same value), from a given target delay
-// and a configured amount of jitter.
-RetryWindow GenerateRetryWindowFromTargetDelay(absl::Duration target_delay,
-                                               double jitter_percent,
-                                               absl::BitGen& bit_gen) {
-  // Sanitize the jitter_percent input, ensuring it's within [0.0 and 1.0]
-  jitter_percent = std::min(1.0, std::max(0.0, jitter_percent));
-  // Pick a retry delay from the target range.
-  absl::Duration retry_delay =
-      PickRetryDelayFromRange(target_delay * (1.0 - jitter_percent),
-                              target_delay * (1.0 + jitter_percent), bit_gen);
-  // Generate a RetryWindow with delay_min and delay_max both set to the same
-  // value.
-  RetryWindow result;
-  *result.mutable_delay_min() = *result.mutable_delay_max() =
-      ConvertAbslToProtoDuration(retry_delay);
-  return result;
-}
-
-// Picks an absolute retry time by picking a retry delay from the range
-// specified by the RetryWindow, and then adding it to the current timestamp.
-absl::Time PickRetryTimeFromWindow(RetryWindow retry_window,
-                                   absl::BitGen& bit_gen) {
-  return absl::Now() +
-         PickRetryDelayFromRange(
-             absl::Seconds(retry_window.delay_min().seconds()) +
-                 absl::Nanoseconds(retry_window.delay_min().nanos()),
-             absl::Seconds(retry_window.delay_max().seconds()) +
-                 absl::Nanoseconds(retry_window.delay_max().nanos()),
-             bit_gen);
-}
-}  // anonymous namespace
 
 GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
@@ -237,7 +173,9 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
   // invalid integers that don't map to a StatusCode enum are provided in the
   // flag here. Instead, we cast absl::StatusCodes to int32_t each time we
   // compare them with the flag-provided list of codes, which means we never
-  // have to worry about invalid flag values.
+  // have to worry about invalid flag values (besides the fact that invalid
+  // values will be silently ignored, which could make it harder to realize when
+  // flag is misconfigured).
   const std::vector<int32_t>& error_codes =
       flags->federated_training_permanent_error_codes();
   federated_training_permanent_error_codes_ =
@@ -368,8 +306,6 @@ absl::Status GrpcFederatedProtocol::ReceiveCheckinRequestAck() {
     return absl::UnimplementedError(
         "Received CheckinRequestAck message with missing retry windows");
   }
-  retry_window_if_rejected_ = checkin_request_ack.retry_window_if_rejected();
-  retry_window_if_accepted_ = checkin_request_ack.retry_window_if_accepted();
   // Upon receiving the server's RetryWindows we immediately choose a concrete
   // target timestamp to retry at. This ensures that a) clients of this class
   // don't have to implement the logic to select a timestamp from a min/max
@@ -383,12 +319,16 @@ absl::Status GrpcFederatedProtocol::ReceiveCheckinRequestAck() {
   checkin_request_ack_info_ = CheckinRequestAckInfo{
       .retry_info_if_rejected =
           RetryTimeAndToken{
-              PickRetryTimeFromWindow(
-                  checkin_request_ack.retry_window_if_rejected(), bit_gen_),
+              PickRetryTimeFromRange(
+                  checkin_request_ack.retry_window_if_rejected().delay_min(),
+                  checkin_request_ack.retry_window_if_rejected().delay_max(),
+                  bit_gen_),
               checkin_request_ack.retry_window_if_rejected().retry_token()},
       .retry_info_if_accepted = RetryTimeAndToken{
-          PickRetryTimeFromWindow(
-              checkin_request_ack.retry_window_if_accepted(), bit_gen_),
+          PickRetryTimeFromRange(
+              checkin_request_ack.retry_window_if_accepted().delay_min(),
+              checkin_request_ack.retry_window_if_accepted().delay_max(),
+              bit_gen_),
           checkin_request_ack.retry_window_if_accepted().retry_token()}};
   return absl::OkStatus();
 }
@@ -597,20 +537,20 @@ GrpcFederatedProtocol::EligibilityEvalCheckin() {
   // Send an EligibilityEvalCheckinRequest.
   absl::Status request_status = SendEligibilityEvalCheckinRequest();
   // See note about how we handle 'permanent' errors at the top of this file.
-  UpdateObjectStateForPermanentError(
+  UpdateObjectStateIfPermanentError(
       request_status, ObjectState::kEligibilityEvalCheckinFailedPermanentError);
   FCP_RETURN_IF_ERROR(request_status);
 
   // Receive a CheckinRequestAck.
   absl::Status ack_status = ReceiveCheckinRequestAck();
-  UpdateObjectStateForPermanentError(
+  UpdateObjectStateIfPermanentError(
       ack_status, ObjectState::kEligibilityEvalCheckinFailedPermanentError);
   FCP_RETURN_IF_ERROR(ack_status);
 
   // Receive + handle an EligibilityEvalCheckinResponse message, and update the
   // object state based on the received response.
   auto response = ReceiveEligibilityEvalCheckinResponse(start_time);
-  UpdateObjectStateForPermanentError(
+  UpdateObjectStateIfPermanentError(
       response.status(),
       ObjectState::kEligibilityEvalCheckinFailedPermanentError);
   return response;
@@ -619,7 +559,7 @@ GrpcFederatedProtocol::EligibilityEvalCheckin() {
 absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
     const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
   // Checkin(...) must follow an earlier call to EligibilityEvalCheckin() that
-  // resulted in a non-Rejection response from the server.
+  // resulted in a CheckinResultPayload or an EligibilityEvalDisabled result.
   FCP_CHECK(object_state_ == ObjectState::kEligibilityEvalDisabled ||
             object_state_ == ObjectState::kEligibilityEvalEnabled)
       << "Checkin(...) called despite failed/rejected earlier "
@@ -640,15 +580,15 @@ absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
   // Send a CheckinRequest.
   absl::Status request_status = SendCheckinRequest(task_eligibility_info);
   // See note about how we handle 'permanent' errors at the top of this file.
-  UpdateObjectStateForPermanentError(request_status,
-                                     ObjectState::kCheckinFailedPermanentError);
+  UpdateObjectStateIfPermanentError(request_status,
+                                    ObjectState::kCheckinFailedPermanentError);
   FCP_RETURN_IF_ERROR(request_status);
 
   // Receive + handle a CheckinResponse message, and update the object state
   // based on the received response.
   auto response = ReceiveCheckinResponse(start_time);
-  UpdateObjectStateForPermanentError(response.status(),
-                                     ObjectState::kCheckinFailedPermanentError);
+  UpdateObjectStateIfPermanentError(response.status(),
+                                    ObjectState::kCheckinFailedPermanentError);
   return response;
 }
 
@@ -663,8 +603,8 @@ absl::Status GrpcFederatedProtocol::ReportCompleted(
   auto response =
       Report(std::move(results), engine::COMPLETED, plan_duration, stats);
   // See note about how we handle 'permanent' errors at the top of this file.
-  UpdateObjectStateForPermanentError(response,
-                                     ObjectState::kReportFailedPermanentError);
+  UpdateObjectStateIfPermanentError(response,
+                                    ObjectState::kReportFailedPermanentError);
   return response;
 }
 
@@ -678,8 +618,8 @@ absl::Status GrpcFederatedProtocol::ReportNotCompleted(
   results.emplace("tensorflow_checkpoint", "");
   auto response = Report(std::move(results), phase_outcome, plan_duration, {});
   // See note about how we handle 'permanent' errors at the top of this file.
-  UpdateObjectStateForPermanentError(response,
-                                     ObjectState::kReportFailedPermanentError);
+  UpdateObjectStateIfPermanentError(response,
+                                    ObjectState::kReportFailedPermanentError);
   return response;
 }
 
@@ -1139,22 +1079,11 @@ RetryWindow GrpcFederatedProtocol::GetLatestRetryWindow() {
 // retry time to a delay relative to the current timestamp.
 RetryWindow GrpcFederatedProtocol::GenerateRetryWindowFromRetryTimeAndToken(
     const GrpcFederatedProtocol::RetryTimeAndToken& retry_info) {
-  // Convert the target retry time back to a duration, based on the current
-  // time. I.e. if at 09:50AM the CheckinRequestAck was received and the chosen
-  // target retry time was 11:00AM, and if it is now 09:55AM, then the
-  // calculated duration will be 1 hour and 5 minutes.
-  absl::Duration retry_delay = retry_info.retry_time - absl::Now();
-  // If the target retry time has already passed, then use a zero-length
-  // duration.
-  retry_delay =
-      retry_delay >= absl::ZeroDuration() ? retry_delay : absl::ZeroDuration();
-
   // Generate a RetryWindow with delay_min and delay_max both set to the same
   // value.
-  RetryWindow retry_window;
+  RetryWindow retry_window =
+      GenerateRetryWindowFromRetryTime(retry_info.retry_time);
   retry_window.set_retry_token(retry_info.retry_token);
-  *retry_window.mutable_delay_min() = *retry_window.mutable_delay_max() =
-      ConvertAbslToProtoDuration(retry_delay);
   return retry_window;
 }
 
@@ -1165,7 +1094,7 @@ void GrpcFederatedProtocol::UpdateOpStatsNetworkStats() {
       grpc_bidi_stream_->ChunkingLayerBytesSent());
 }
 
-void GrpcFederatedProtocol::UpdateObjectStateForPermanentError(
+void GrpcFederatedProtocol::UpdateObjectStateIfPermanentError(
     absl::Status status,
     GrpcFederatedProtocol::ObjectState permanent_error_object_state) {
   if (federated_training_permanent_error_codes_.contains(

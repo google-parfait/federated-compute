@@ -21,7 +21,6 @@ package(
 
 cc_library(
     name = "http_client",
-    srcs = ["http_client.cc"],
     hdrs = ["http_client.h"],
     visibility = ["//fcp:public_api_visibility"],
     deps = [
@@ -32,11 +31,23 @@ cc_library(
     ],
 )
 
-cc_test(
-    name = "http_client_test",
-    srcs = ["http_client_test.cc"],
+cc_library(
+    name = "http_client_util",
+    srcs = ["http_client_util.cc"],
+    hdrs = ["http_client_util.h"],
     deps = [
         ":http_client",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "http_client_util_test",
+    srcs = ["http_client_util_test.cc"],
+    deps = [
+        ":http_client_util",
         "//fcp/base",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
@@ -50,6 +61,7 @@ cc_library(
     hdrs = ["in_memory_request_response.h"],
     deps = [
         ":http_client",
+        ":http_client_util",
         "//fcp/base",
         "//fcp/client:interruptible_runner",
         "@com_google_absl//absl/base:core_headers",
@@ -66,6 +78,7 @@ cc_test(
     srcs = ["in_memory_request_response_test.cc"],
     deps = [
         ":http_client",
+        ":http_client_util",
         ":in_memory_request_response",
         ":test_helpers",
         "//fcp/base",
@@ -83,12 +96,75 @@ cc_test(
 )
 
 cc_library(
+    name = "http_federated_protocol",
+    srcs = ["http_federated_protocol.cc"],
+    hdrs = [
+        "http_federated_protocol.h",
+    ],
+    deps = [
+        ":http_client",
+        ":http_client_util",
+        ":in_memory_request_response",
+        "//fcp/base",
+        "//fcp/client:diag_codes_cc_proto",
+        "//fcp/client:federated_protocol",
+        "//fcp/client:federated_protocol_util",
+        "//fcp/client:fl_runner_cc_proto",
+        "//fcp/client:interfaces",
+        "//fcp/client:interruptible_runner",
+        "//fcp/client:selector_context_cc_proto",
+        "//fcp/client/engine:engine_cc_proto",
+        "//fcp/protos:federated_api_cc_proto",
+        "//fcp/protos:plan_cc_proto",
+        "//fcp/protos/federatedcompute:federated_compute_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "http_federated_protocol_test",
+    srcs = ["http_federated_protocol_test.cc"],
+    deps = [
+        ":http_client",
+        ":http_federated_protocol",
+        ":test_helpers",
+        "//fcp/base",
+        "//fcp/client:diag_codes_cc_proto",
+        "//fcp/client:federated_protocol",
+        "//fcp/client:interfaces",
+        "//fcp/client:interruptible_runner",
+        "//fcp/client:test_helpers",
+        "//fcp/client/engine:engine_cc_proto",
+        "//fcp/protos:federated_api_cc_proto",
+        "//fcp/protos:plan_cc_proto",
+        "//fcp/protos/federatedcompute:federated_compute_cc_proto",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@com_google_protobuf//:cc_wkt_protos",
+    ],
+)
+
+cc_library(
     name = "test_helpers",
     testonly = 1,
     srcs = ["test_helpers.cc"],
     hdrs = ["test_helpers.h"],
     deps = [
         ":http_client",
+        ":http_client_util",
         "//fcp/base",
         "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/base:core_headers",

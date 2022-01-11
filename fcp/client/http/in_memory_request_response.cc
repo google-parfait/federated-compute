@@ -35,6 +35,7 @@
 #include "absl/synchronization/mutex.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/http/http_client.h"
+#include "fcp/client/http/http_client_util.h"
 #include "fcp/client/interruptible_runner.h"
 
 namespace fcp {

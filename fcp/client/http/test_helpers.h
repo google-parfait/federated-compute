@@ -18,12 +18,12 @@
 
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -92,8 +92,24 @@ class MockableHttpClient : public HttpClient {
     cancellation_listener_ = listener;
   }
 
+  // Returns the (fake) number of bytes that the mock client has received. This
+  // number will match the sum of all `HttpRequestHandle`'s
+  // `TotalReceivedBytes()` methods after they were processed by the mock
+  // client.
+  virtual int64_t TotalReceivedBytes() { return received_bytes_; }
+
+  // Returns the (fake) number of bytes that the mock client has sent. This
+  // number will match the sum of all `HttpRequestHandle`'s `TotalSentBytes()`
+  // methods after they were processed by the mock client.
+  virtual int64_t TotalSentBytes() { return sent_bytes_; }
+
  private:
   std::function<void()> cancellation_listener_;
+
+  // A running (fake) tally of the number of bytes that have been
+  // downloaded/uploaded so far.
+  int64_t received_bytes_;
+  int64_t sent_bytes_;
 };
 
 // A convenient to use mock HttpClient implementation.
@@ -104,6 +120,13 @@ class MockHttpClient : public MockableHttpClient {
   MOCK_METHOD(absl::StatusOr<FakeHttpResponse>, PerformSingleRequest,
               (SimpleHttpRequest request), (override));
 };
+
+::testing::Matcher<MockableHttpClient::SimpleHttpRequest>
+SimpleHttpRequestMatcher(
+    const ::testing::Matcher<std::string>& uri_matcher,
+    const ::testing::Matcher<HttpRequest::Method>& method_matcher,
+    const ::testing::Matcher<HeaderList>& headers_matcher,
+    const ::testing::Matcher<std::string>& body_matcher);
 
 }  // namespace http
 }  // namespace client

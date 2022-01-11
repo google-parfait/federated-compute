@@ -31,8 +31,18 @@ option java_outer_classname = "FederatedComputeApi";
 // protocol.
 message ForwardingInfo {
   // A URI prefix for the next service to send the request for the next protocol
-  // phase to. For example, an EligibilityEvalTaskResponse's ForwardingInfo may
-  // contain a URI prefix like "https://federatedcompute-pa.googleapis.com/.
+  // phase to.
+  //
+  // The URI prefix must always start with "https://".
+  //
+  // The URI prefix may end with a trailing '/', but is not required to. During
+  // the construction of the next protocol request, a slash will always be
+  // inserted by the client between this prefix and the request's URI suffix.
+  //
+  // For example, if some protocol response's ForwardingInfo contains the prefix
+  // "https://foo.bar.com" or "https://foo.bar.com/", and if the subsequent
+  // protocol request's URI suffix is "/baz", then the subsequent request's full
+  // URI would be "https://foo.bar.com/baz".
   string target_uri_prefix = 1;
   // Request headers that should be included with the next request for the next
   // protocol phase. Note that these headers should only be applied to protocol
@@ -96,7 +106,8 @@ message Resource {
     string uri = 1;
 
     // The inlined data for the resource.
-    bytes data = 2 [ctype = CORD];
+    bytes data = 2
+        ;
   }
 }
 

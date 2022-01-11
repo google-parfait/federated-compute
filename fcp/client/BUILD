@@ -138,9 +138,7 @@ cc_library(
 
 cc_library(
     name = "federated_protocol",
-    hdrs = [
-        "federated_protocol.h",
-    ],
+    hdrs = ["federated_protocol.h"],
     deps = [
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/protos:federated_api_cc_proto",
@@ -148,6 +146,18 @@ cc_library(
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_library(
+    name = "federated_protocol_util",
+    srcs = ["federated_protocol_util.cc"],
+    hdrs = ["federated_protocol_util.h"],
+    deps = [
+        "//fcp/protos:federated_api_cc_proto",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/time",
+        "@com_google_protobuf//:cc_wkt_protos",
     ],
 )
 
@@ -160,6 +170,7 @@ cc_library(
     deps = [
         ":diag_codes_cc_proto",
         ":federated_protocol",
+        ":federated_protocol_util",
         ":fl_runner_cc_proto",
         ":grpc_bidi_stream",
         ":interfaces",

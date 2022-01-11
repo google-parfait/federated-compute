@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "fcp/client/http/http_client.h"
+#include "fcp/client/http/http_client_util.h"
 
 #include <algorithm>
 #include <optional>
@@ -21,9 +21,12 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/strip.h"
+#include "fcp/client/http/http_client.h"
 
 namespace fcp {
 namespace client {
@@ -98,6 +101,18 @@ std::optional<std::string> FindHeader(const HeaderList& headers,
     return std::nullopt;
   }
   return std::get<1>(*header_entry);
+}
+
+absl::StatusOr<std::string> JoinBaseUriWithSuffix(
+    absl::string_view base_uri, absl::string_view uri_suffix) {
+  if (!uri_suffix.empty() && uri_suffix[0] != '/') {
+    return absl::InvalidArgumentError(
+        "uri_suffix be empty or must have a leading '/'");
+  }
+  // Construct the full URI by joining the base URI we should use with the given
+  // suffix, ensuring that there's always a single '/' in between the two parts.
+  return absl::StrCat(absl::StripSuffix(base_uri, "/"), "/",
+                      absl::StripPrefix(uri_suffix, "/"));
 }
 
 }  // namespace http

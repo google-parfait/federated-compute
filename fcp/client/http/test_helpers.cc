@@ -23,6 +23,8 @@
 #include <utility>
 #include <vector>
 
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
@@ -30,10 +32,15 @@
 #include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/http/http_client.h"
+#include "fcp/client/http/http_client_util.h"
 
 namespace fcp {
 namespace client {
 namespace http {
+
+using ::testing::AllOf;
+using ::testing::Field;
+using ::testing::Matcher;
 
 namespace {
 
@@ -146,7 +153,9 @@ absl::Status MockableHttpClient::PerformRequests(
     // Mock some 'sent bytes data'. Users of this class shouldn't rely on the
     // exact value (just as they can't expect to predict how much data a real
     // `HttpClient` would send).
-    handle->SetSentBytes(request->uri().size() + request_body.size());
+    int64_t fake_sent_bytes = request->uri().size() + request_body.size();
+    handle->SetSentBytes(fake_sent_bytes);
+    sent_bytes_ += fake_sent_bytes;
 
     if (!response.ok()) {
       return absl::Status(
@@ -169,7 +178,9 @@ absl::Status MockableHttpClient::PerformRequests(
     // Mock some 'received bytes data'. We add 100 bytes to ensure that even
     // responses with empty response bodies do increase the counter, because
     // generally headers will always be received.
-    handle->SetReceivedBytes(100 + response->body().size());
+    int64_t fake_received_bytes = 100 + response->body().size();
+    handle->SetReceivedBytes(fake_received_bytes);
+    received_bytes_ += fake_received_bytes;
 
     FCP_LOG(INFO) << "MockableHttpClient: Delivering response body for: "
                   << request->uri();
@@ -186,6 +197,21 @@ absl::Status MockableHttpClient::PerformRequests(
     callback->OnResponseCompleted(*request, *response);
   }
   return absl::OkStatus();
+}
+
+Matcher<MockableHttpClient::SimpleHttpRequest> SimpleHttpRequestMatcher(
+    const Matcher<std::string>& uri_matcher,
+    const Matcher<HttpRequest::Method>& method_matcher,
+    const Matcher<HeaderList>& headers_matcher,
+    const Matcher<std::string>& body_matcher) {
+  return AllOf(
+      Field("uri", &MockableHttpClient::SimpleHttpRequest::uri, uri_matcher),
+      Field("method", &MockableHttpClient::SimpleHttpRequest::method,
+            method_matcher),
+      Field("headers", &MockableHttpClient::SimpleHttpRequest::headers,
+            headers_matcher),
+      Field("body", &MockableHttpClient::SimpleHttpRequest::body,
+            body_matcher));
 }
 
 }  // namespace http

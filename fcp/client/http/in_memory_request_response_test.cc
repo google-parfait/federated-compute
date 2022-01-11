@@ -32,6 +32,7 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/http/http_client.h"
+#include "fcp/client/http/http_client_util.h"
 #include "fcp/client/http/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/test_helpers.h"

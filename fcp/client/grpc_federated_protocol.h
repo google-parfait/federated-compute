@@ -172,49 +172,9 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   google::internal::federatedml::v2::RetryWindow
   GenerateRetryWindowFromRetryTimeAndToken(const RetryTimeAndToken& retry_info);
 
-  enum class ObjectState {
-    // The initial object state.
-    kInitialized,
-    // EligibilityEvalCheckin() was called but it failed with a 'transient'
-    // error (e.g. an UNAVAILABLE network error, although the set of transient
-    // errors is flag-defined).
-    kEligibilityEvalCheckinFailed,
-    // EligibilityEvalCheckin() was called but it failed with a 'permanent'
-    // error (e.g. a NOT_FOUND network error, although the set of permanent
-    // errors is flag-defined).
-    kEligibilityEvalCheckinFailedPermanentError,
-    // EligibilityEvalCheckin() was called, and the server rejected the client.
-    kEligibilityEvalCheckinRejected,
-    // EligibilityEvalCheckin() was called, and the server did not return an
-    // eligibility eval payload.
-    kEligibilityEvalDisabled,
-    // EligibilityEvalCheckin() was called, and the server did return an
-    // eligibility eval payload, which must then be run to produce a
-    // TaskEligibilityInfo value.
-    kEligibilityEvalEnabled,
-    // Checkin(...) was called but it failed with a 'transient' error.
-    kCheckinFailed,
-    // Checkin(...) was called but it failed with a 'permanent' error.
-    kCheckinFailedPermanentError,
-    // Checkin(...) was called, and the server rejected the client.
-    kCheckinRejected,
-    // Checkin(...) was called, and the server accepted the client and returned
-    // a payload, which must then be run to produce a report.
-    kCheckinAccepted,
-    // Report(...) was called.
-    kReportCalled,
-    // Report(...) was called and it resulted in a 'permanent' error.
-    //
-    // Note: there is no kReportFailed (corresponding to 'transient' errors,
-    // like the other phases have), because by the time the report phase is
-    // reached, a set of RetryWindows is guaranteed to have been received from
-    // the server.
-    kReportFailedPermanentError
-  };
-
   // Helper that moves to the given object state if the given status represents
   // a permanent error.
-  void UpdateObjectStateForPermanentError(
+  void UpdateObjectStateIfPermanentError(
       absl::Status status, ObjectState permanent_error_object_state);
 
   ObjectState object_state_;
@@ -237,9 +197,6 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   int64_t bytes_downloaded_ = 0;
   int64_t bytes_uploaded_ = 0;
   int64_t report_request_size_bytes_ = 0;
-  // TODO(team): Delete these fields after rollout is complete.
-  google::internal::federatedml::v2::RetryWindow retry_window_if_accepted_;
-  google::internal::federatedml::v2::RetryWindow retry_window_if_rejected_;
   // Represents 2 absolute retry timestamps and their corresponding retry
   // tokens, to use when the device is rejected or accepted. The retry
   // timestamps will have been generated based on the retry windows specified in

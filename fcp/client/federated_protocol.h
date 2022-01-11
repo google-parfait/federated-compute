@@ -250,6 +250,51 @@ class FederatedProtocol {
 
   // Returns the size of the report request in bytes.
   virtual int64_t report_request_size_bytes() = 0;
+
+ protected:
+  // A list of states representing the sequence of calls we expect to receive
+  // via this interface, as well as their possible outcomes. Implementations of
+  // this class are likely to share these coarse-grained states, and use them to
+  // determine which values to return from `GetLatestRetryWindow()`.
+  enum class ObjectState {
+    // The initial object state.
+    kInitialized,
+    // EligibilityEvalCheckin() was called but it failed with a 'transient'
+    // error (e.g. an UNAVAILABLE network error, although the set of transient
+    // errors is flag-defined).
+    kEligibilityEvalCheckinFailed,
+    // EligibilityEvalCheckin() was called but it failed with a 'permanent'
+    // error (e.g. a NOT_FOUND network error, although the set of permanent
+    // errors is flag-defined).
+    kEligibilityEvalCheckinFailedPermanentError,
+    // EligibilityEvalCheckin() was called, and the server rejected the client.
+    kEligibilityEvalCheckinRejected,
+    // EligibilityEvalCheckin() was called, and the server did not return an
+    // eligibility eval payload.
+    kEligibilityEvalDisabled,
+    // EligibilityEvalCheckin() was called, and the server did return an
+    // eligibility eval payload, which must then be run to produce a
+    // TaskEligibilityInfo value.
+    kEligibilityEvalEnabled,
+    // Checkin(...) was called but it failed with a 'transient' error.
+    kCheckinFailed,
+    // Checkin(...) was called but it failed with a 'permanent' error.
+    kCheckinFailedPermanentError,
+    // Checkin(...) was called, and the server rejected the client.
+    kCheckinRejected,
+    // Checkin(...) was called, and the server accepted the client and returned
+    // a payload, which must then be run to produce a report.
+    kCheckinAccepted,
+    // Report(...) was called.
+    kReportCalled,
+    // Report(...) was called and it resulted in a 'permanent' error.
+    //
+    // Note: there is no kReportFailed (corresponding to 'transient' errors,
+    // like the other phases have), because by the time the report phase is
+    // reached, a set of RetryWindows is guaranteed to have been received from
+    // the server.
+    kReportFailedPermanentError
+  };
 };
 
 }  // namespace client
