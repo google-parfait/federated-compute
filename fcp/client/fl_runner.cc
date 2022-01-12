@@ -581,9 +581,6 @@ IssueEligibilityEvalCheckinAndRunPlan(
   auto eligibility_eval_payload =
       absl::get<FederatedProtocol::CheckinResultPayload>(
           *eligibility_checkin_result);
-  auto eligibility_selector_context = SelectorContext(selector_context);
-  *eligibility_selector_context.mutable_computation_properties()
-       ->mutable_eligibility_eval() = EligibilityEvalComputation();
 
   absl::StatusOr<std::string> checkpoint_input_filename =
       CreateInputCheckpointFile(files, eligibility_eval_payload.checkpoint);
