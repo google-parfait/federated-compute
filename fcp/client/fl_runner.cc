@@ -634,6 +634,97 @@ IssueEligibilityEvalCheckinAndRunPlan(
   return std::move(*parsed_output);
 }
 
+struct CheckinResult {
+  std::string task_name;
+  ClientOnlyPlan client_only_plan;
+  int32_t minimum_clients_in_server_visible_aggregate;
+  std::string checkpoint_input_filename;
+};
+absl::StatusOr<CheckinResult> IssueCheckin(
+    EventPublisher* event_publisher, OpStatsLogger* opstats_logger,
+    LogManager* log_manager, const Flags* flags, Files* files,
+    FederatedProtocol* federated_protocol,
+    std::optional<TaskEligibilityInfo> task_eligibility_info,
+    absl::Time reference_time, FLRunnerResult& fl_runner_result) {
+  absl::Time time_before_checkin = absl::Now();
+  // Clear the model identifier before check-in, to ensure that the any prior
+  // eligibility eval task name isn't used any longer.
+  event_publisher->SetModelIdentifier("");
+  log_manager->SetModelIdentifier("");
+  if (flags->per_phase_logs()) {
+    // Log that we are about to check in with the server.
+    event_publisher->PublishCheckin();
+    opstats_logger->AddEvent(
+        OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  }
+
+  // The Checkin(...) method will call SetModelIdentifier() with the name of
+  // whatever task it receives, ensuring that subsequent events will be tagged
+  // with that identifier.
+  absl::StatusOr<FederatedProtocol::CheckinResult> checkin_result =
+      federated_protocol->Checkin(task_eligibility_info);
+  UpdateRetryWindowAndNetworkStats(*federated_protocol, opstats_logger,
+                                   fl_runner_result);
+  log_manager->LogToLongHistogram(
+      HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, 0, 0,
+      engine::DataSourceType::TRAINING_DATA_SOURCE_UNDEFINED,
+      absl::ToInt64Milliseconds(absl::Now() - reference_time));
+  log_manager->LogToLongHistogram(
+      HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, 0, 0,
+      engine::DataSourceType::TRAINING_DATA_SOURCE_UNDEFINED,
+      absl::ToInt64Milliseconds(absl::Now() - time_before_checkin));
+  if (!checkin_result.ok()) {
+    auto status = checkin_result.status();
+    auto message = absl::StrCat("Error during checkin: code: ", status.code(),
+                                ", message: ", status.message());
+    event_publisher->PublishIoError(0, message);
+    engine::LogOpStatsNetworkErrors(opstats_logger, checkin_result.status(),
+                                    message);
+    FCP_LOG(INFO) << message;
+    return status;
+  }
+
+  // Server rejected us? Return the fl_runner_results as-is.
+  if (std::holds_alternative<FederatedProtocol::Rejection>(*checkin_result)) {
+    if (flags->per_phase_logs()) {
+      event_publisher->PublishRejected();
+      opstats_logger->AddEvent(
+          OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
+    }
+    FCP_LOG(INFO) << "Device rejected by server during checkin; aborting";
+    return absl::InternalError("Device rejected by server.");
+  }
+
+  auto acceptance =
+      absl::get<FederatedProtocol::CheckinResultPayload>(*checkin_result);
+  absl::StatusOr<std::string> checkpoint_input_filename =
+      CreateInputCheckpointFile(files, acceptance.checkpoint);
+  if (!checkpoint_input_filename.ok()) {
+    auto status = checkpoint_input_filename.status();
+    auto message = absl::StrCat(
+        "Failed to create checkpoint input file: code: ", status.code(),
+        ", message: ", status.message());
+    event_publisher->PublishIoError(0, message);
+    opstats_logger->AddEventWithErrorMessage(
+        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
+    FCP_LOG(ERROR) << message;
+    return status;
+  }
+  if (flags->per_phase_logs()) {
+    event_publisher->PublishCheckinFinished(
+        federated_protocol->bytes_downloaded(),
+        federated_protocol->chunking_layer_bytes_received(),
+        absl::Now() - time_before_checkin);
+    opstats_logger->AddCheckinAcceptedEventWithTaskName(acceptance.task_name);
+  }
+  return CheckinResult{
+      .task_name = std::move(acceptance.task_name),
+      .client_only_plan = std::move(acceptance.client_only_plan),
+      .minimum_clients_in_server_visible_aggregate =
+          acceptance.minimum_clients_in_server_visible_aggregate,
+      .checkpoint_input_filename = std::move(*checkpoint_input_filename)};
+}
+
 }  // namespace
 
 absl::StatusOr<FLRunnerResult> RunFederatedComputation(
@@ -737,7 +828,6 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return fl_runner_result;
   }
 
-  std::optional<TaskEligibilityInfo> task_eligibility_info = std::nullopt;
   // Note that this method will update fl_runner_result's fields with values
   // received over the course of the eligibility eval protocol interaction.
   absl::StatusOr<std::optional<TaskEligibilityInfo>> eligibility_eval_result =
@@ -748,88 +838,23 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   if (!eligibility_eval_result.ok()) {
     return fl_runner_result;
   }
-  task_eligibility_info = std::move(*eligibility_eval_result);
 
-  absl::Time time_before_checkin = absl::Now();
-  // Clear the model identifier before check-in, to ensure that the any prior
-  // eligibility eval task name isn't used any longer.
-  event_publisher->SetModelIdentifier("");
-  log_manager->SetModelIdentifier("");
-  if (flags->per_phase_logs()) {
-    // Log that we are about to check in with the server.
-    event_publisher->PublishCheckin();
-    opstats_logger->AddEvent(
-        OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
-  }
-
-  // The Checkin(...) method will call SetModelIdentifier() with the name of
-  // whatever task it receives, ensuring that subsequent events will be tagged
-  // with that identifier.
-  absl::StatusOr<FederatedProtocol::CheckinResult> checkin_result =
-      federated_protocol->Checkin(task_eligibility_info);
-  UpdateRetryWindowAndNetworkStats(*federated_protocol, opstats_logger,
-                                   fl_runner_result);
-  log_manager->LogToLongHistogram(
-      HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, 0, 0,
-      engine::DataSourceType::TRAINING_DATA_SOURCE_UNDEFINED,
-      absl::ToInt64Milliseconds(absl::Now() - reference_time));
-  log_manager->LogToLongHistogram(
-      HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, 0, 0,
-      engine::DataSourceType::TRAINING_DATA_SOURCE_UNDEFINED,
-      absl::ToInt64Milliseconds(absl::Now() - time_before_checkin));
+  auto checkin_result =
+      IssueCheckin(event_publisher, opstats_logger, log_manager, flags, files,
+                   federated_protocol, std::move(*eligibility_eval_result),
+                   reference_time, fl_runner_result);
   if (!checkin_result.ok()) {
-    auto status = checkin_result.status();
-    auto message = absl::StrCat("Error during checkin: code: ", status.code(),
-                                ", message: ", status.message());
-    event_publisher->PublishIoError(0, message);
-    engine::LogOpStatsNetworkErrors(opstats_logger, checkin_result.status(),
-                                    message);
-    FCP_LOG(INFO) << message;
     return fl_runner_result;
-  }
-
-  // Server rejected us? Return the fl_runner_results as-is.
-  if (std::holds_alternative<FederatedProtocol::Rejection>(*checkin_result)) {
-    if (flags->per_phase_logs()) {
-      event_publisher->PublishRejected();
-      opstats_logger->AddEvent(
-          OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
-    }
-    FCP_LOG(INFO) << "Device rejected by server during checkin; aborting";
-    return fl_runner_result;
-  }
-
-  auto acceptance =
-      absl::get<FederatedProtocol::CheckinResultPayload>(*checkin_result);
-  absl::StatusOr<std::string> checkpoint_input_filename =
-      CreateInputCheckpointFile(files, acceptance.checkpoint);
-  if (!checkpoint_input_filename.ok()) {
-    auto status = checkpoint_input_filename.status();
-    auto message = absl::StrCat(
-        "Failed to create checkpoint input file: code: ", status.code(),
-        ", message: ", status.message());
-    event_publisher->PublishIoError(0, message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    FCP_LOG(ERROR) << message;
-    return fl_runner_result;
-  }
-  if (flags->per_phase_logs()) {
-    event_publisher->PublishCheckinFinished(
-        federated_protocol->bytes_downloaded(),
-        federated_protocol->chunking_layer_bytes_received(),
-        absl::Now() - time_before_checkin);
-    opstats_logger->AddCheckinAcceptedEventWithTaskName(acceptance.task_name);
   }
 
   SelectorContext federated_selector_context_with_task_name =
       federated_selector_context;
   federated_selector_context_with_task_name.mutable_computation_properties()
       ->mutable_federated()
-      ->set_task_name(acceptance.task_name);
+      ->set_task_name(checkin_result->task_name);
 
   const auto& federated_compute_io_router =
-      acceptance.client_only_plan.phase().federated_compute();
+      checkin_result->client_only_plan.phase().federated_compute();
   const bool has_simpleagg_tensors =
       !federated_compute_io_router.output_filepath_tensor_name().empty();
   bool all_aggregations_are_secagg = true;
@@ -842,7 +867,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         ->mutable_federated()
         ->mutable_secure_aggregation()
         ->set_minimum_clients_in_server_visible_aggregate(
-            acceptance.minimum_clients_in_server_visible_aggregate);
+            checkin_result->minimum_clients_in_server_visible_aggregate);
   } else {
     // Has an output checkpoint, so some tensors must be simply aggregated.
     *(federated_selector_context_with_task_name
@@ -852,13 +877,14 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   }
 
   RetryWindow report_retry_window;
-  if (acceptance.client_only_plan.phase().has_tensorflow_spec()) {
+  if (checkin_result->client_only_plan.phase().has_tensorflow_spec()) {
     absl::Time run_plan_start_time = absl::Now();
     PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
         RunPlanWithTensorflowSpec(
             env_deps, event_publisher, files, log_manager, opstats_logger,
-            flags, acceptance.client_only_plan, *checkpoint_input_filename,
-            timing_config, run_plan_start_time, reference_time,
+            flags, checkin_result->client_only_plan,
+            checkin_result->checkpoint_input_filename, timing_config,
+            run_plan_start_time, reference_time,
             federated_selector_context_with_task_name);
 
     absl::Time upload_start = absl::Now();
@@ -873,7 +899,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
     absl::Status report_result = ReportTensorflowSpecPlanResult(
         event_publisher, log_manager, federated_protocol, opstats_logger,
-        acceptance.client_only_plan.phase().tensorflow_spec(),
+        checkin_result->client_only_plan.phase().tensorflow_spec(),
         std::move(plan_result_and_checkpoint_file), run_plan_start_time,
         reference_time);
     if (!report_result.ok()) {
@@ -902,10 +928,11 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   } else {
     if (!flags->disable_legacy_plan_support() &&
-        RunPlanWithExecutions(
-            env_deps, event_publisher, files, log_manager, opstats_logger,
-            flags, federated_protocol, acceptance.client_only_plan,
-            *checkpoint_input_filename, timing_config, reference_time)) {
+        RunPlanWithExecutions(env_deps, event_publisher, files, log_manager,
+                              opstats_logger, flags, federated_protocol,
+                              checkin_result->client_only_plan,
+                              checkin_result->checkpoint_input_filename,
+                              timing_config, reference_time)) {
       // Only if RunPlanWithExecutions returns true, indicating that both
       // training *and* reporting succeeded, do we consider the device to have
       // contributed successfully.
