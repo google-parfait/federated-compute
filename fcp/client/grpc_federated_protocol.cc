@@ -1088,10 +1088,12 @@ RetryWindow GrpcFederatedProtocol::GenerateRetryWindowFromRetryTimeAndToken(
 }
 
 void GrpcFederatedProtocol::UpdateOpStatsNetworkStats() {
-  opstats_logger_->SetNetworkStats(
-      bytes_downloaded_, bytes_uploaded_,
-      grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-      grpc_bidi_stream_->ChunkingLayerBytesSent());
+  if (!flags_->per_phase_logs()) {
+    opstats_logger_->SetNetworkStats(
+        bytes_downloaded_, bytes_uploaded_,
+        grpc_bidi_stream_->ChunkingLayerBytesReceived(),
+        grpc_bidi_stream_->ChunkingLayerBytesSent());
+  }
 }
 
 void GrpcFederatedProtocol::UpdateObjectStateIfPermanentError(

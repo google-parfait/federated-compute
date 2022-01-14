@@ -36,6 +36,7 @@ using ::google::internal::federated::plan::ExampleSelector;
 using ::google::internal::federatedml::v2::Checkpoint;
 using ::testing::_;
 using ::testing::ByMove;
+using ::testing::DoAll;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::StrictMock;
@@ -166,10 +167,11 @@ MATCHER_P(EqualsComputationResult, expected, "") {
 TEST_P(FederatedTaskEnvironmentTest, TestFinishWithoutPublish) {
   ComputationResults empty_result;
   empty_result.emplace("tensorflow_checkpoint", "");
-  EXPECT_CALL(mock_federated_protocol_,
-              ReportCompleted(EqualsComputationResult(std::cref(empty_result)),
-                              std::vector<std::pair<std::string, double>>{},
-                              absl::InfiniteDuration()))
+  EXPECT_CALL(
+      mock_federated_protocol_,
+      MockReportCompleted(EqualsComputationResult(std::cref(empty_result)),
+                          std::vector<std::pair<std::string, double>>{},
+                          absl::InfiniteDuration()))
       .WillOnce(Return(absl::UnimplementedError("")));
   EXPECT_CALL(mock_log_manager_,
               LogToLongHistogram(
@@ -223,9 +225,9 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublish) {
               fcp::IsCode(OK));
 
   EXPECT_CALL(mock_federated_protocol_,
-              ReportCompleted(EqualsComputationResult(std::cref(result)),
-                              std::vector<std::pair<std::string, double>>{},
-                              absl::InfiniteDuration()))
+              MockReportCompleted(EqualsComputationResult(std::cref(result)),
+                                  std::vector<std::pair<std::string, double>>{},
+                                  absl::InfiniteDuration()))
       .WillOnce(Return(absl::OkStatus()));
   EXPECT_CALL(mock_log_manager_,
               LogToLongHistogram(
@@ -239,6 +241,7 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublish) {
                   testing::Ge(0)));
   EXPECT_THAT(task_env_->PublishParameters(tf_file, secagg_file),
               fcp::IsCode(OK));
+
   if (use_per_phase_logs_) {
     EXPECT_CALL(mock_event_publisher_, PublishReportStarted(0));
     EXPECT_CALL(
@@ -246,11 +249,17 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublish) {
         AddEvent(opstats::OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
     EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
         .WillOnce(Return(absl::OkStatus()));
-    EXPECT_CALL(mock_federated_protocol_, report_request_size_bytes())
-        .WillOnce(Return(1024));
-    EXPECT_CALL(mock_federated_protocol_, chunking_layer_bytes_sent())
-        .WillOnce(Return(512));
-    EXPECT_CALL(mock_event_publisher_, PublishReportFinished(1024, 512, _));
+    // Ensure PublishReportFinished is called with the protocol's up-to-date
+    // values.
+    EXPECT_CALL(mock_event_publisher_, PublishReportFinished(_, _, _))
+        .WillOnce(DoAll([&](int64_t report_request_size_bytes,
+                            int64_t chunking_layer_bytes_sent,
+                            absl::Duration plan_duration) {
+          EXPECT_EQ(report_request_size_bytes,
+                    mock_federated_protocol_.report_request_size_bytes());
+          EXPECT_EQ(chunking_layer_bytes_sent,
+                    mock_federated_protocol_.chunking_layer_bytes_sent());
+        }));
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(opstats::OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
@@ -283,9 +292,9 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublishWithError) {
       kTFCheckpointContent);
   (*checkpoint.mutable_aggregands())["tensorflow_checkpoint"] = tf_aggregand;
 
-  EXPECT_CALL(
-      mock_federated_protocol_,
-      ReportNotCompleted(engine::PhaseOutcome::ERROR, absl::InfiniteDuration()))
+  EXPECT_CALL(mock_federated_protocol_,
+              MockReportNotCompleted(engine::PhaseOutcome::ERROR,
+                                     absl::InfiniteDuration()))
       .WillOnce(Return(absl::OkStatus()));
   EXPECT_CALL(mock_log_manager_,
               LogToLongHistogram(
@@ -304,11 +313,15 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublishWithError) {
         AddEvent(opstats::OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
     EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
         .WillOnce(Return(absl::OkStatus()));
-    EXPECT_CALL(mock_federated_protocol_, report_request_size_bytes())
-        .WillOnce(Return(1024));
-    EXPECT_CALL(mock_federated_protocol_, chunking_layer_bytes_sent())
-        .WillOnce(Return(512));
-    EXPECT_CALL(mock_event_publisher_, PublishReportFinished(1024, 512, _));
+    // Ensure PublishReportFinished is called with the protocol's up-to-date
+    // values.
+    EXPECT_CALL(mock_event_publisher_,
+                PublishReportFinished(
+                    MockFederatedProtocol::kPostReportNotCompletedStats
+                        .report_request_size_bytes,
+                    MockFederatedProtocol::kPostReportNotCompletedStats
+                        .chunking_bytes_sent,
+                    _));
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(opstats::OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));

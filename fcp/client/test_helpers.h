@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "google/protobuf/duration.pb.h"
 #include "gmock/gmock.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -124,34 +125,158 @@ class MockEventPublisher : public EventPublisher {
   ::testing::NiceMock<MockSecAggEventPublisher> secagg_event_publisher_;
 };
 
+// A mock FederatedProtocol implementation, which keeps track of the stages in
+// the protocol and returns a different set of network stats and RetryWindow for
+// each stage, making it easier to write accurate assertions in unit tests.
 class MockFederatedProtocol : public FederatedProtocol {
  public:
+  struct NetworkStats {
+    int64_t bytes_downloaded = 0;
+    int64_t bytes_uploaded = 0;
+    int64_t chunking_bytes_received = 0;
+    int64_t chunking_bytes_sent = 0;
+    int64_t report_request_size_bytes = 0;
+  };
+  constexpr static NetworkStats kPostEligibilityCheckinStats = {
+      .bytes_downloaded = 100,
+      .bytes_uploaded = 200,
+      .chunking_bytes_received = 300,
+      .chunking_bytes_sent = 400,
+      .report_request_size_bytes = 0};
+  constexpr static NetworkStats kPostCheckinStats = {
+      .bytes_downloaded = 1000,
+      .bytes_uploaded = 2000,
+      .chunking_bytes_received = 3000,
+      .chunking_bytes_sent = 4000,
+      .report_request_size_bytes = 0};
+  constexpr static NetworkStats kPostReportCompletedStats = {
+      .bytes_downloaded = 10000,
+      .bytes_uploaded = 20000,
+      .chunking_bytes_received = 30000,
+      .chunking_bytes_sent = 40000,
+      .report_request_size_bytes = 555};
+  constexpr static NetworkStats kPostReportNotCompletedStats = {
+      .bytes_downloaded = 9999,
+      .bytes_uploaded = 19999,
+      .chunking_bytes_received = 29999,
+      .chunking_bytes_sent = 39999,
+      .report_request_size_bytes = 111};
+
+  static google::internal::federatedml::v2::RetryWindow
+  GetInitialRetryWindow() {
+    google::internal::federatedml::v2::RetryWindow retry_window;
+    retry_window.mutable_delay_min()->set_seconds(0L);
+    retry_window.mutable_delay_max()->set_seconds(1L);
+    *retry_window.mutable_retry_token() = "INITIAL";
+    return retry_window;
+  }
+
+  static google::internal::federatedml::v2::RetryWindow
+  GetPostEligibilityCheckinRetryWindow() {
+    google::internal::federatedml::v2::RetryWindow retry_window;
+    retry_window.mutable_delay_min()->set_seconds(100L);
+    retry_window.mutable_delay_max()->set_seconds(101L);
+    *retry_window.mutable_retry_token() = "POST_ELIGIBILITY";
+    return retry_window;
+  }
+
+  static google::internal::federatedml::v2::RetryWindow
+  GetPostCheckinRetryWindow() {
+    google::internal::federatedml::v2::RetryWindow retry_window;
+    retry_window.mutable_delay_min()->set_seconds(200L);
+    retry_window.mutable_delay_max()->set_seconds(201L);
+    *retry_window.mutable_retry_token() = "POST_CHECKIN";
+    return retry_window;
+  }
+
+  static google::internal::federatedml::v2::RetryWindow
+  GetPostReportCompletedRetryWindow() {
+    google::internal::federatedml::v2::RetryWindow retry_window;
+    retry_window.mutable_delay_min()->set_seconds(300L);
+    retry_window.mutable_delay_max()->set_seconds(301L);
+    *retry_window.mutable_retry_token() = "POST_REPORT_COMPLETED";
+    return retry_window;
+  }
+
+  static google::internal::federatedml::v2::RetryWindow
+  GetPostReportNotCompletedRetryWindow() {
+    google::internal::federatedml::v2::RetryWindow retry_window;
+    retry_window.mutable_delay_min()->set_seconds(400L);
+    retry_window.mutable_delay_max()->set_seconds(401L);
+    *retry_window.mutable_retry_token() = "POST_REPORT_NOT_COMPLETED";
+    return retry_window;
+  }
+
   explicit MockFederatedProtocol() {}
+
+  // We override the real FederatedProtocol methods so that we can intercept the
+  // progression of protocol stages, and expose dedicate gMock-overridable m
+  // thods for use in tests.
+  absl::StatusOr<EligibilityEvalCheckinResult> EligibilityEvalCheckin() final {
+    network_stats_ = kPostEligibilityCheckinStats;
+    retry_window_ = GetPostEligibilityCheckinRetryWindow();
+    return MockEligibilityEvalCheckin();
+  };
   MOCK_METHOD(absl::StatusOr<EligibilityEvalCheckinResult>,
-              EligibilityEvalCheckin, (), (override));
-  MOCK_METHOD(absl::StatusOr<CheckinResult>, Checkin,
+              MockEligibilityEvalCheckin, ());
+
+  absl::StatusOr<CheckinResult> Checkin(
+      const std::optional<
+          ::google::internal::federatedml::v2::TaskEligibilityInfo>&
+          task_eligibility_info) final {
+    network_stats_ = kPostCheckinStats;
+    retry_window_ = GetPostCheckinRetryWindow();
+    return MockCheckin(task_eligibility_info);
+  };
+  MOCK_METHOD(absl::StatusOr<CheckinResult>, MockCheckin,
               (const std::optional<
                   ::google::internal::federatedml::v2::TaskEligibilityInfo>&
-                   task_eligibility_info),
-              (override));
-  MOCK_METHOD(::google::internal::federatedml::v2::RetryWindow,
-              GetLatestRetryWindow, (), (override));
+                   task_eligibility_info));
 
-  MOCK_METHOD(absl::Status, ReportCompleted,
+  absl::Status ReportCompleted(
+      ComputationResults results,
+      const std::vector<std::pair<std::string, double>>& stats,
+      absl::Duration plan_duration) final {
+    network_stats_ = kPostReportCompletedStats;
+    retry_window_ = GetPostReportCompletedRetryWindow();
+    return MockReportCompleted(std::move(results), stats, plan_duration);
+  };
+  MOCK_METHOD(absl::Status, MockReportCompleted,
               (ComputationResults results,
                (const std::vector<std::pair<std::string, double>>& stats),
-               absl::Duration plan_duration),
-              (override));
+               absl::Duration plan_duration));
 
-  MOCK_METHOD(absl::Status, ReportNotCompleted,
+  absl::Status ReportNotCompleted(engine::PhaseOutcome phase_outcome,
+                                  absl::Duration plan_duration) final {
+    network_stats_ = kPostReportNotCompletedStats;
+    retry_window_ = GetPostReportNotCompletedRetryWindow();
+    return MockReportNotCompleted(phase_outcome, plan_duration);
+  };
+  MOCK_METHOD(absl::Status, MockReportNotCompleted,
               (engine::PhaseOutcome phase_outcome,
-               absl::Duration plan_duration),
-              (override));
-  MOCK_METHOD(int64_t, chunking_layer_bytes_sent, (), (override));
-  MOCK_METHOD(int64_t, chunking_layer_bytes_received, (), (override));
-  MOCK_METHOD(int64_t, bytes_downloaded, (), (override));
-  MOCK_METHOD(int64_t, bytes_uploaded, (), (override));
-  MOCK_METHOD(int64_t, report_request_size_bytes, (), (override));
+               absl::Duration plan_duration));
+
+  ::google::internal::federatedml::v2::RetryWindow GetLatestRetryWindow()
+      final {
+    return retry_window_;
+  }
+
+  int64_t chunking_layer_bytes_sent() final {
+    return network_stats_.chunking_bytes_sent;
+  }
+  int64_t chunking_layer_bytes_received() final {
+    return network_stats_.chunking_bytes_received;
+  }
+  int64_t bytes_downloaded() final { return network_stats_.bytes_downloaded; };
+  int64_t bytes_uploaded() final { return network_stats_.bytes_uploaded; };
+  int64_t report_request_size_bytes() final {
+    return network_stats_.report_request_size_bytes;
+  };
+
+ private:
+  NetworkStats network_stats_;
+  ::google::internal::federatedml::v2::RetryWindow retry_window_ =
+      GetInitialRetryWindow();
 };
 
 class MockLogManager : public LogManager {

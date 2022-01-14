@@ -464,12 +464,22 @@ bool RunPlanWithExecutions(
 // Updates the fields of `FLRunnerResult` that should always be updated after
 // each interaction with the `FederatedProtocol` object.
 void UpdateRetryWindowAndNetworkStats(FederatedProtocol& federated_protocol,
+                                      const Flags& flags,
                                       OpStatsLogger* opstats_logger,
                                       FLRunnerResult& fl_runner_result) {
   // Update the result's retry window to the most recent one.
   auto retry_window = federated_protocol.GetLatestRetryWindow();
   *fl_runner_result.mutable_retry_window() = retry_window;
   opstats_logger->SetRetryWindow(retry_window);
+
+  if (flags.per_phase_logs()) {
+    // Update the network stats.
+    opstats_logger->SetNetworkStats(
+        federated_protocol.bytes_downloaded(),
+        federated_protocol.bytes_uploaded(),
+        federated_protocol.chunking_layer_bytes_received(),
+        federated_protocol.chunking_layer_bytes_sent());
+  }
 }
 
 // Writes the given checkpoint data to a newly created temporary file.
@@ -525,7 +535,7 @@ IssueEligibilityEvalCheckinAndRunPlan(
   // be tagged with that identifier.
   absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
       eligibility_checkin_result = federated_protocol->EligibilityEvalCheckin();
-  UpdateRetryWindowAndNetworkStats(*federated_protocol, opstats_logger,
+  UpdateRetryWindowAndNetworkStats(*federated_protocol, *flags, opstats_logger,
                                    fl_runner_result);
 
   log_manager->LogToLongHistogram(
@@ -663,7 +673,7 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   // with that identifier.
   absl::StatusOr<FederatedProtocol::CheckinResult> checkin_result =
       federated_protocol->Checkin(task_eligibility_info);
-  UpdateRetryWindowAndNetworkStats(*federated_protocol, opstats_logger,
+  UpdateRetryWindowAndNetworkStats(*federated_protocol, *flags, opstats_logger,
                                    fl_runner_result);
   log_manager->LogToLongHistogram(
       HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, 0, 0,
@@ -811,7 +821,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // available (an implementation detail of FederatedProtocol, but generally a
   // 'transient error' retry window based on the provided flag values) in case
   // we do need to abort.
-  UpdateRetryWindowAndNetworkStats(*federated_protocol, opstats_logger,
+  UpdateRetryWindowAndNetworkStats(*federated_protocol, *flags, opstats_logger,
                                    fl_runner_result);
 
   // Check if the device conditions allow for checking in with the server
@@ -942,7 +952,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   // Update the FLRunnerResult fields one more time to account for the "Report"
   // protocol interaction.
-  UpdateRetryWindowAndNetworkStats(*federated_protocol, opstats_logger,
+  UpdateRetryWindowAndNetworkStats(*federated_protocol, *flags, opstats_logger,
                                    fl_runner_result);
 
   return fl_runner_result;

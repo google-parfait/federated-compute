@@ -404,20 +404,23 @@ class GrpcFederatedProtocolTest
         EXPECT_CALL(mock_opstats_logger_,
                     AddEvent(OperationalStats::Event::
                                  EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+        // Network stats should be updated after the one send and two receive
+        // operations.
+        EXPECT_CALL(
+            mock_opstats_logger_,
+            SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
+                            /*chunking_layer_bytes_downloaded=*/0,
+                            /*chunking_layer_bytes_uploaded=*/0));
+        EXPECT_CALL(
+            mock_opstats_logger_,
+            SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/
+                            Gt(0),
+                            /*chunking_layer_bytes_downloaded=*/
+                            0,
+                            /*chunking_layer_bytes_uploaded=*/
+                            0))
+            .Times(2);
       }
-      // Network stats should be updated after the one send and two receive
-      // operations.
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
-                          /*chunking_layer_bytes_downloaded=*/0,
-                          /*chunking_layer_bytes_uploaded=*/0));
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                          /*chunking_layer_bytes_downloaded=*/0,
-                          /*chunking_layer_bytes_uploaded=*/0))
-          .Times(2);
       if (eligibility_eval_enabled) {
         EXPECT_CALL(mock_event_publisher_,
                     SetModelIdentifier(expected_execution_id));
@@ -474,16 +477,16 @@ class GrpcFederatedProtocolTest
         EXPECT_CALL(
             mock_opstats_logger_,
             AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
-      }
 
-      // Network stats should be updated after the one send and one receive
-      // operations. Note that the eligibility eval checkin already ran.
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                          /*chunking_layer_bytes_downloaded=*/0,
-                          /*chunking_layer_bytes_uploaded=*/0))
-          .Times(2);
+        // Network stats should be updated after the one send and one receive
+        // operations. Note that the eligibility eval checkin already ran.
+        EXPECT_CALL(mock_opstats_logger_,
+                    SetNetworkStats(/*bytes_downloaded=*/Gt(0),
+                                    /*bytes_uploaded=*/Gt(0),
+                                    /*chunking_layer_bytes_downloaded=*/0,
+                                    /*chunking_layer_bytes_uploaded=*/0))
+            .Times(2);
+      }
       EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
       if (!use_per_phase_logging_) {
         EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
@@ -694,19 +697,19 @@ TEST_P(GrpcFederatedProtocolTest,
           mock_opstats_logger_,
           AddEvent(
               OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+      // Network stats should be updated after the one send and one receive
+      // operations.
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0));
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0));
     }
-    // Network stats should be updated after the one send and one receive
-    // operations.
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0));
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0));
     EXPECT_CALL(
         mock_log_manager_,
         LogDiag(
@@ -743,14 +746,14 @@ TEST_P(GrpcFederatedProtocolTest,
           mock_opstats_logger_,
           AddEvent(
               OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+      // Network stats should be updated after the one send operation but not
+      // after the unsucessful read operation.
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0));
     }
-    // Network stats should be updated after the one send operation but not
-    // after the unsucessful read operation.
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0));
   }
 
   auto eligibility_checkin_result =
@@ -778,15 +781,13 @@ TEST_P(GrpcFederatedProtocolTest,
       // EligibilityEvalCheckinResponse).
       .WillOnce(Return(absl::AbortedError(expected_message)));
 
-  {
+  if (!use_per_phase_logging_) {
     InSequence seq;
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(
-              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        AddEvent(
+            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
     // Network stats should be updated after the one send and one successful
     // receive operations.
     EXPECT_CALL(
@@ -820,15 +821,13 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
           DoAll(SetArgPointee<0>(GetFakeRejectedEligibilityCheckinResponse()),
                 Return(absl::OkStatus())));
 
-  {
+  if (!use_per_phase_logging_) {
     InSequence seq;
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(
-              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        AddEvent(
+            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -842,13 +841,10 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
                         /*chunking_layer_bytes_downloaded=*/0,
                         /*chunking_layer_bytes_uploaded=*/0))
         .Times(2);
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_,
-                  PublishEligibilityEvalRejected(_, _, _));
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED));
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalRejected(_, _, _));
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED));
   }
 
   auto eligibility_checkin_result =
@@ -871,15 +867,13 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
           DoAll(SetArgPointee<0>(GetFakeDisabledEligibilityCheckinResponse()),
                 Return(absl::OkStatus())));
 
-  {
+  if (!use_per_phase_logging_) {
     InSequence seq;
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(
-              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        AddEvent(
+            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
     // Network stats should be updated after the one send and two receive
     // operations.
     EXPECT_CALL(
@@ -893,13 +887,11 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
                         /*chunking_layer_bytes_downloaded=*/0,
                         /*chunking_layer_bytes_uploaded=*/0))
         .Times(2);
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_,
-                  PublishEligibilityEvalNotConfigured(_, _, _));
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED));
-    }
+    EXPECT_CALL(mock_event_publisher_,
+                PublishEligibilityEvalNotConfigured(_, _, _));
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED));
   }
 
   auto eligibility_checkin_result =
@@ -938,28 +930,30 @@ TEST_P(GrpcFederatedProtocolTest,
           mock_opstats_logger_,
           AddEvent(
               OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+      // Network stats should be updated after the one send and two receive
+      // operations.
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0));
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0));
     }
-    // Network stats should be updated after the one send and two receive
-    // operations.
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0));
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0));
     EXPECT_CALL(
         mock_log_manager_,
         LogDiag(
             ProdDiagCode::BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_RECEIVED));
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0));
+    }
     EXPECT_CALL(mock_event_publisher_,
                 SetModelIdentifier(expected_execution_id));
     if (!use_per_phase_logging_) {
@@ -1011,28 +1005,30 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
           mock_opstats_logger_,
           AddEvent(
               OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
+      // Network stats should be updated after the one send and two receive
+      // operations.
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0));
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0));
     }
-    // Network stats should be updated after the one send and two receive
-    // operations.
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0));
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0));
     EXPECT_CALL(
         mock_log_manager_,
         LogDiag(
             ProdDiagCode::BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_RECEIVED));
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0));
+    if (!use_per_phase_logging_) {
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0));
+    }
     EXPECT_CALL(mock_event_publisher_,
                 SetModelIdentifier(expected_execution_id));
     if (!use_per_phase_logging_) {
@@ -1249,15 +1245,15 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
       EXPECT_CALL(
           mock_opstats_logger_,
           AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+      // Network stats should be updated after the one send and one receive
+      // operations. Note that the eligibility eval checkin already ran.
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0))
+          .Times(2);
     }
-    // Network stats should be updated after the one send and one receive
-    // operations. Note that the eligibility eval checkin already ran.
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0))
-        .Times(2);
 
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
@@ -1304,15 +1300,15 @@ TEST_P(GrpcFederatedProtocolTest,
       EXPECT_CALL(
           mock_opstats_logger_,
           AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+      // Network stats should be updated after the one send and one receive
+      // operations. Note that the eligibility eval checkin already ran.
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0))
+          .Times(2);
     }
-    // Network stats should be updated after the one send and one receive
-    // operations. Note that the eligibility eval checkin already ran.
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0))
-        .Times(2);
 
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
@@ -1359,15 +1355,15 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAcceptWithInvalidPlan) {
       EXPECT_CALL(
           mock_opstats_logger_,
           AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+      // Network stats should be updated after the one send and one receive
+      // operations. Note that the eligibility eval checkin already ran.
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0))
+          .Times(2);
     }
-    // Network stats should be updated after the one send and one receive
-    // operations. Note that the eligibility eval checkin already ran.
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0))
-        .Times(2);
 
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(kExecutionPhaseId));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
@@ -1428,15 +1424,15 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
       EXPECT_CALL(
           mock_opstats_logger_,
           AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+      // Network stats should be updated after the one send and one receive
+      // operations. Note that the eligibility eval checkin already ran.
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                          Eq(chunking_layer_bytes_downloaded),
+                          Eq(chunking_layer_bytes_uploaded)))
+          .Times(2);
     }
-    // Network stats should be updated after the one send and one receive
-    // operations. Note that the eligibility eval checkin already ran.
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                        Eq(chunking_layer_bytes_downloaded),
-                        Eq(chunking_layer_bytes_uploaded)))
-        .Times(2);
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(kExecutionPhaseId));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
     if (!use_per_phase_logging_) {
@@ -1486,15 +1482,15 @@ TEST_P(GrpcFederatedProtocolTest,
       EXPECT_CALL(
           mock_opstats_logger_,
           AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+      // Network stats should be updated after the one send and one receive
+      // operations. Note that the eligibility eval checkin already ran.
+      EXPECT_CALL(
+          mock_opstats_logger_,
+          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                          /*chunking_layer_bytes_downloaded=*/0,
+                          /*chunking_layer_bytes_uploaded=*/0))
+          .Times(2);
     }
-    // Network stats should be updated after the one send and one receive
-    // operations. Note that the eligibility eval checkin already ran.
-    EXPECT_CALL(
-        mock_opstats_logger_,
-        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                        /*chunking_layer_bytes_downloaded=*/0,
-                        /*chunking_layer_bytes_uploaded=*/0))
-        .Times(2);
 
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(unparseable_phase_id));
     EXPECT_CALL(mock_event_publisher_,
@@ -1645,15 +1641,13 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccess) {
   EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
       .WillOnce(
           DoAll(SetArgPointee<0>(response_message), Return(absl::OkStatus())));
-  {
+  if (!use_per_phase_logging_) {
     InSequence seq;
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_opstats_logger_,
-                  AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
-      EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
-          .WillOnce(Return(absl::OkStatus()));
-      EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
-    }
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+    EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
+        .WillOnce(Return(absl::OkStatus()));
+    EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
     // Network stats should be updated after the one send and one receive
     // operations.
     EXPECT_CALL(
@@ -1662,12 +1656,9 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccess) {
                         /*chunking_layer_bytes_downloaded=*/0,
                         /*chunking_layer_bytes_uploaded=*/0))
         .Times(2);
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishReportFinished(_, _, _));
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishReportFinished(_, _, _));
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
   }
 
   // 3. Test that ReportCompleted() sends the expected message.
@@ -1753,15 +1744,13 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
   EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
       .WillOnce(
           DoAll(SetArgPointee<0>(response_message), Return(absl::OkStatus())));
-  {
+  if (!use_per_phase_logging_) {
     InSequence seq;
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_opstats_logger_,
-                  AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
-      EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
-          .WillOnce(Return(absl::OkStatus()));
-      EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
-    }
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
+    EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
+        .WillOnce(Return(absl::OkStatus()));
+    EXPECT_CALL(mock_event_publisher_, PublishReportStarted(_));
     // Network stats should be updated after the one send and one receive
     // operations.
     EXPECT_CALL(
@@ -1770,12 +1759,9 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
                         /*chunking_layer_bytes_downloaded=*/0,
                         /*chunking_layer_bytes_uploaded=*/0))
         .Times(2);
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishReportFinished(_, _, _));
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishReportFinished(_, _, _));
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
   }
 
   // 3. Test that ReportCompleted() sends the expected message.
