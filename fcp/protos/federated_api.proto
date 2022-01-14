@@ -447,6 +447,17 @@ message SideChannelProtocolExecutionInfo {
   SecureAggregationProtocolExecutionInfo secure_aggregation = 1;
 }
 
+// When client (device) supports HTTP download of resources, this message
+// is used to carry information about each individual downloadable resource.
+message UriResource {
+  // Resource URI e.g. fully qualified URL.
+  string uri = 1;
+
+  // TODO(team): other metadata such as uncompressed resource size and
+  // CRC/hash. This will be useful for the client to validate the download
+  // and/or to enable the resource caching.
+}
+
 // When client (device) is accepted for the current phase, this
 // data structure carries information necessary to begin training.
 message AcceptanceInfo {
@@ -456,14 +467,24 @@ message AcceptanceInfo {
   // a specific device.
   string execution_phase_id = 1;
 
-  // A blob representing the checkpoint to start execution from.
-  bytes init_checkpoint = 2;
+  oneof init_checkpoint_type {
+    // A blob representing the checkpoint to start execution from.
+    bytes init_checkpoint = 2;
 
-  // A blob representing the plan to be used for execution.
-  // Note: This field should be unset when included in a JoinResponse from the
-  // aggregator to the selector, and then set by the selector before sending
-  // on to the client.
-  bytes plan = 3;
+    // A URI and other metadata of the checkpoint to start execution from.
+    UriResource init_checkpoint_resource = 8;
+  }
+
+  // Note: Plan fields below should be unset when included in a JoinResponse
+  // from the aggregator to the selector, and then set by the selector before
+  // sending on to the client.
+  oneof plan_type {
+    // A blob representing the plan to be used for execution.
+    bytes plan = 3;
+
+    // A URI and other metadata of the plan to be used for execution.
+    UriResource plan_resource = 9;
+  }
 
   // Maps client version to plan bytes.
   // Note: This field should only be set when included in a JoinResponse from
@@ -611,7 +632,7 @@ message Checkpoint {
 // Protocol options sent from client to server inside
 // `EligibilityEvalCheckinRequest` and `CheckinRequest`.
 message ProtocolOptionsRequest {
-  // True if client supports chunked blob transfer protocol
+  // True if client supports chunked blob transfer protocol.
   bool supports_chunked_blob_transfer = 1;
 
   // Compression levels supported by this client
@@ -630,6 +651,9 @@ message ProtocolOptionsRequest {
   // to true), then this field will not be set to true for the subsequent
   // `CheckinRequest`.
   bool should_ack_checkin = 4;
+
+  // True if client supports download of resources via HTTP.
+  bool supports_http_download = 5;
 }
 
 // Protocol options sent from server to client inside
