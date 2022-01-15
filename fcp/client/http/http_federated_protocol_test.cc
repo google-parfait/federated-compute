@@ -35,7 +35,6 @@
 #include "fcp/base/platform.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
-#include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/test_helpers.h"
@@ -53,7 +52,6 @@ namespace {
 
 using ::fcp::EqualsProto;
 using ::fcp::IsCode;
-using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTask;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
@@ -67,6 +65,7 @@ using ::testing::DescribeMatcher;
 using ::testing::DoubleEq;
 using ::testing::DoubleNear;
 using ::testing::ExplainMatchResult;
+using ::testing::Field;
 using ::testing::FieldsAre;
 using ::testing::Ge;
 using ::testing::HasSubstr;
@@ -83,6 +82,7 @@ constexpr char kApiKey[] = "TEST_APIKEY";
 constexpr char kPopulationName[] = "TESTPOPULATION";
 constexpr char kEligibilityEvalExecutionId[] =
     "TESTPOPULATION/ELIGIBILITY_EXECUTION_ID";
+constexpr char kPlan[] = "CLIENT_ONLY_PLAN";
 constexpr char kInitCheckpoint[] = "INIT_CHECKPOINT";
 constexpr char kRetryToken[] = "OLD_RETRY_TOKEN";
 constexpr char kClientVersion[] = "CLIENT_VERSION";
@@ -159,12 +159,6 @@ void ExpectRejectedRetryWindow(
   EXPECT_THAT(retry_window.delay_max(), EqualsProto(retry_window.delay_min()));
 }
 
-ClientOnlyPlan GetFakePlan() {
-  ClientOnlyPlan plan;
-  plan.set_graph("im_a_tf_graph");
-  return plan;
-}
-
 EligibilityEvalTaskResponse GetFakeEnabledEligibilityEvalTaskResponse(
     const Resource& plan, const Resource& checkpoint,
     const std::string& execution_id,
@@ -238,10 +232,10 @@ class HttpFederatedProtocolTest : public testing::Test {
     // after construction (which we could not do if the field's type was
     // HttpFederatedProtocol, since it doesn't have copy or move constructors).
     federated_protocol_ = std::make_unique<HttpFederatedProtocol>(
-        &mock_event_publisher_, &mock_log_manager_, &mock_flags_,
-        &mock_http_client_, kEntryPointUri, kApiKey, kPopulationName,
-        kRetryToken, kClientVersion, kAttestationMeasurement,
-        mock_should_abort_.AsStdFunction(), absl::BitGen(),
+        &mock_log_manager_, &mock_flags_, &mock_http_client_, kEntryPointUri,
+        kApiKey, kPopulationName, kRetryToken, kClientVersion,
+        kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
+        absl::BitGen(),
         InterruptibleRunner::TimingConfig{
             .polling_period = absl::ZeroDuration(),
             .graceful_shutdown_period = absl::InfiniteDuration(),
@@ -262,7 +256,6 @@ class HttpFederatedProtocolTest : public testing::Test {
 
   StrictMock<MockHttpClient> mock_http_client_;
 
-  StrictMock<MockEventPublisher> mock_event_publisher_;
   NiceMock<MockLogManager> mock_log_manager_;
   NiceMock<MockFlags> mock_flags_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
@@ -285,10 +278,10 @@ TEST_F(HttpFederatedProtocolTest,
   // check to ensure that the value is at least randomly generated (and that we
   // don't accidentally use the random number generator incorrectly).
   federated_protocol_ = std::make_unique<HttpFederatedProtocol>(
-      &mock_event_publisher_, &mock_log_manager_, &mock_flags_,
-      &mock_http_client_, kEntryPointUri, kApiKey, kPopulationName, kRetryToken,
-      kClientVersion, kAttestationMeasurement,
-      mock_should_abort_.AsStdFunction(), absl::BitGen(),
+      &mock_log_manager_, &mock_flags_, &mock_http_client_, kEntryPointUri,
+      kApiKey, kPopulationName, kRetryToken, kClientVersion,
+      kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
+      absl::BitGen(),
       InterruptibleRunner::TimingConfig{
           .polling_period = absl::ZeroDuration(),
           .graceful_shutdown_period = absl::InfiniteDuration(),
@@ -311,10 +304,10 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalCheckinRequestUnsupportedPopulationName) {
   federated_protocol_ = std::make_unique<HttpFederatedProtocol>(
-      &mock_event_publisher_, &mock_log_manager_, &mock_flags_,
-      &mock_http_client_, kEntryPointUri, kApiKey, "UNSUPPORTED_POPULATION",
-      kRetryToken, kClientVersion, kAttestationMeasurement,
-      mock_should_abort_.AsStdFunction(), absl::BitGen(),
+      &mock_log_manager_, &mock_flags_, &mock_http_client_, kEntryPointUri,
+      kApiKey, "UNSUPPORTED_POPULATION", kRetryToken, kClientVersion,
+      kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
+      absl::BitGen(),
       InterruptibleRunner::TimingConfig{
           .polling_period = absl::ZeroDuration(),
           .graceful_shutdown_period = absl::InfiniteDuration(),
@@ -454,43 +447,10 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_F(HttpFederatedProtocolTest,
-       TestEligibilityEvalCheckinEnabledWithInvalidPlan) {
-  // We return a fake response with invalid plan data inline.
-  Resource plan_resource;
-  plan_resource.set_data("does_not_parse");
-  std::string expected_execution_id = kEligibilityEvalExecutionId;
-  EligibilityEvalTaskResponse eval_task_response =
-      GetFakeEnabledEligibilityEvalTaskResponse(plan_resource, Resource(),
-                                                expected_execution_id);
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(
-          FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
-
-  EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(expected_execution_id));
-
-  // A diag code should be logged to indicate the invalid plan was encountered.
-  EXPECT_CALL(
-      mock_log_manager_,
-      LogDiag(
-          ProdDiagCode::
-              BACKGROUND_TRAINING_ELIGIBILITY_EVAL_FAILED_CANNOT_PARSE_PLAN));
-
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
-
-  EXPECT_THAT(eligibility_checkin_result.status(), IsCode(INTERNAL));
-  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-}
-
 TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   // We return a fake response which requires fetching the plan via HTTP, but
   // which has the checkpoint data available inline.
-  ClientOnlyPlan expected_plan = GetFakePlan();
+  std::string expected_plan = kPlan;
   std::string plan_uri = "https://fake.uri/plan";
   Resource plan_resource;
   plan_resource.set_uri(plan_uri);
@@ -514,18 +474,20 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   plan_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(
-          Return(FakeHttpResponse(200, {}, expected_plan.SerializeAsString())));
-
-  EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(expected_execution_id));
+      .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
 
   ASSERT_OK(eligibility_checkin_result);
-  EXPECT_THAT(*eligibility_checkin_result,
-              VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
-                  EqualsProto(expected_plan), expected_checkpoint, _, _)));
+  EXPECT_THAT(
+      *eligibility_checkin_result,
+      VariantWith<FederatedProtocol::EligibilityEvalTask>(FieldsAre(
+          AllOf(Field(&FederatedProtocol::PlanAndCheckpointPayloads::plan,
+                      expected_plan),
+                Field(&FederatedProtocol::PlanAndCheckpointPayloads::checkpoint,
+                      expected_checkpoint)),
+          expected_execution_id)));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -559,8 +521,6 @@ TEST_F(HttpFederatedProtocolTest,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   plan_uri, HttpRequest::Method::kGet, _, "")))
       .WillOnce(Return(FakeHttpResponse(404, {}, "")));
-
-  EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(expected_execution_id));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
@@ -609,8 +569,6 @@ TEST_F(HttpFederatedProtocolTest,
                   plan_uri, HttpRequest::Method::kGet, _, "")))
       .WillOnce(Return(FakeHttpResponse(200, {}, "")));
 
-  EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(expected_execution_id));
-
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
 
@@ -653,8 +611,6 @@ TEST_F(HttpFederatedProtocolTest,
       .WillOnce(Return(
           FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
 
-  EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(_));
-
   ASSERT_OK(federated_protocol_->EligibilityEvalCheckin());
 
   const google::internal::federatedml::v2::RetryWindow& actual_retry_window =
@@ -688,8 +644,6 @@ TEST_F(HttpFederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
           HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(
           FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
-
-  EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(_));
 
   ASSERT_OK(federated_protocol_->EligibilityEvalCheckin());
 
@@ -773,8 +727,6 @@ TEST_F(HttpFederatedProtocolDeathTest,
   EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
                                      _, HttpRequest::Method::kGet, _, "")))
       .WillRepeatedly(Return(FakeHttpResponse(503, {}, "")));
-
-  EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(_));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();

@@ -16,9 +16,12 @@
 #ifndef FCP_CLIENT_FEDERATED_PROTOCOL_UTIL_H_
 #define FCP_CLIENT_FEDERATED_PROTOCOL_UTIL_H_
 
+#include <string>
+
 #include "google/protobuf/duration.pb.h"
 #include "absl/random/random.h"
 #include "absl/time/time.h"
+#include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
 
 namespace fcp {
@@ -46,6 +49,15 @@ GenerateRetryWindowFromTargetDelay(absl::Duration target_delay,
 ::google::internal::federatedml::v2::RetryWindow
 GenerateRetryWindowFromRetryTime(absl::Time retry_time);
 
+// Extracts a task name from an aggregation session ID (in the HTTP protocol) or
+// a phase ID (in the gRPC protocol), both of which are expected to adhere to
+// the following format: "population_name/task_name#round_id.shard_id".
+//
+// Returns the `session_id` std::string unmodified if it does not match that format.
+// A diag code will be logged to the `LogManager` in this case.
+std::string ExtractTaskNameFromAggregationSessionId(
+    const std::string& session_id, const std::string& population_name,
+    fcp::client::LogManager& log_manager);
 }  // namespace client
 }  // namespace fcp
 

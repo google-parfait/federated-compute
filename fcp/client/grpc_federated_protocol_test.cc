@@ -56,7 +56,6 @@ using ::fcp::secagg::InputVectorSpecification;
 using ::fcp::secagg::MockSendToServerInterface;
 using ::fcp::secagg::MockStateTransitionListener;
 using ::fcp::secagg::SecAggClient;
-using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federatedml::v2::AcceptanceInfo;
 using ::google::internal::federatedml::v2::CheckinRequest;
 using ::google::internal::federatedml::v2::ClientStreamMessage;
@@ -72,6 +71,7 @@ using ::testing::DoAll;
 using ::testing::DoubleEq;
 using ::testing::DoubleNear;
 using ::testing::Eq;
+using ::testing::Field;
 using ::testing::FieldsAre;
 using ::testing::Ge;
 using ::testing::Gt;
@@ -81,6 +81,7 @@ using ::testing::Lt;
 using ::testing::MockFunction;
 using ::testing::NiceMock;
 using ::testing::Not;
+using ::testing::Optional;
 using ::testing::Pointee;
 using ::testing::Return;
 using ::testing::SetArgPointee;
@@ -90,10 +91,13 @@ using ::testing::VariantWith;
 constexpr char kPopulationName[] = "TEST/POPULATION";
 constexpr char kTaskName[] = "TEST_TASK";
 constexpr char kExecutionPhaseId[] = "TEST/POPULATION/TEST_TASK#1234.ab35";
+constexpr char kPlan[] = "CLIENT_ONLY_PLAN";
 constexpr char kInitCheckpoint[] = "INIT_CHECKPOINT";
 constexpr char kRetryToken[] = "OLD_RETRY_TOKEN";
 constexpr char kClientVersion[] = "CLIENT_VERSION";
 constexpr char kAttestationMeasurement[] = "ATTESTATION_MEASUREMENT";
+constexpr int kSecAggExpectedNumberOfClients = 10;
+constexpr int kSecAggMinClientsInServerVisibleAggregate = 4;
 
 class MockGrpcBidiStream : public GrpcBidiStreamInterface {
  public:
@@ -184,12 +188,6 @@ void ExpectRejectedRetryWindow(const RetryWindow& retry_window) {
   EXPECT_THAT(retry_window.delay_max(), EqualsProto(retry_window.delay_min()));
 }
 
-ClientOnlyPlan GetFakePlan() {
-  ClientOnlyPlan plan;
-  plan.set_graph("im_a_tf_graph");
-  return plan;
-}
-
 ServerStreamMessage GetFakeCheckinRequestAck(
     const RetryWindow& accepted_retry_window = GetAcceptedRetryWindow(),
     const RetryWindow& rejected_retry_window = GetRejectedRetryWindow()) {
@@ -202,13 +200,13 @@ ServerStreamMessage GetFakeCheckinRequestAck(
 }
 
 ServerStreamMessage GetFakeEnabledEligibilityCheckinResponse(
-    const ClientOnlyPlan& plan, const std::string& init_checkpoint,
+    const std::string& plan, const std::string& init_checkpoint,
     const std::string& execution_id) {
   ServerStreamMessage checkin_response_message;
   EligibilityEvalPayload* eval_payload =
       checkin_response_message.mutable_eligibility_eval_checkin_response()
           ->mutable_eligibility_eval_payload();
-  eval_payload->set_plan(plan.SerializeAsString());
+  eval_payload->set_plan(plan);
   eval_payload->set_init_checkpoint(init_checkpoint);
   eval_payload->set_execution_id(execution_id);
   return checkin_response_message;
@@ -244,19 +242,22 @@ ServerStreamMessage GetFakeRejectedCheckinResponse() {
 }
 
 ServerStreamMessage GetFakeAcceptedCheckinResponse(
-    const ClientOnlyPlan& plan, const std::string& init_checkpoint,
-    const std::string& phase_id, bool use_secure_aggregation = true) {
+    const std::string& plan, const std::string& init_checkpoint,
+    const std::string& phase_id, bool use_secure_aggregation) {
   ServerStreamMessage checkin_response_message;
   AcceptanceInfo* acceptance_info =
       checkin_response_message.mutable_checkin_response()
           ->mutable_acceptance_info();
-  acceptance_info->set_plan(plan.SerializeAsString());
+  acceptance_info->set_plan(plan);
   acceptance_info->set_execution_phase_id(phase_id);
   acceptance_info->set_init_checkpoint(init_checkpoint);
   if (use_secure_aggregation) {
-    acceptance_info->mutable_side_channel_protocol_execution_info()
-        ->mutable_secure_aggregation()
-        ->set_expected_number_of_clients(1);
+    auto sec_agg =
+        acceptance_info->mutable_side_channel_protocol_execution_info()
+            ->mutable_secure_aggregation();
+    sec_agg->set_expected_number_of_clients(kSecAggExpectedNumberOfClients);
+    sec_agg->set_minimum_clients_in_server_visible_aggregate(
+        kSecAggMinClientsInServerVisibleAggregate);
     checkin_response_message.mutable_checkin_response()
         ->mutable_protocol_options_response()
         ->mutable_side_channels()
@@ -389,13 +390,13 @@ class GrpcFederatedProtocolTest
         .WillOnce(DoAll(SetArgPointee<0>(GetFakeCheckinRequestAck(
                             accepted_retry_window, rejected_retry_window)),
                         Return(absl::OkStatus())))
-        .WillOnce(DoAll(
-            SetArgPointee<0>(
-                eligibility_eval_enabled
-                    ? GetFakeEnabledEligibilityCheckinResponse(
-                          GetFakePlan(), kInitCheckpoint, expected_execution_id)
-                    : GetFakeDisabledEligibilityCheckinResponse()),
-            Return(absl::OkStatus())));
+        .WillOnce(
+            DoAll(SetArgPointee<0>(
+                      eligibility_eval_enabled
+                          ? GetFakeEnabledEligibilityCheckinResponse(
+                                kPlan, kInitCheckpoint, expected_execution_id)
+                          : GetFakeDisabledEligibilityCheckinResponse()),
+                  Return(absl::OkStatus())));
 
     {
       InSequence seq;
@@ -420,13 +421,9 @@ class GrpcFederatedProtocolTest
                             /*chunking_layer_bytes_uploaded=*/
                             0))
             .Times(2);
-      }
-      if (eligibility_eval_enabled) {
-        EXPECT_CALL(mock_event_publisher_,
-                    SetModelIdentifier(expected_execution_id));
-      }
-      if (!use_per_phase_logging_) {
         if (eligibility_eval_enabled) {
+          EXPECT_CALL(mock_event_publisher_,
+                      SetModelIdentifier(expected_execution_id));
           EXPECT_CALL(mock_event_publisher_,
                       PublishEligibilityEvalPlanReceived(_, _, _));
         } else {
@@ -451,7 +448,7 @@ class GrpcFederatedProtocolTest
   // prior, successful execution of Checkin().
   // It returns a absl::Status, which the caller should verify is OK using
   // ASSERT_OK.
-  absl::Status RunSuccessfulCheckin(
+  absl::StatusOr<FederatedProtocol::CheckinResult> RunSuccessfulCheckin(
       bool use_secure_aggregation,
       const std::optional<TaskEligibilityInfo>& task_eligibility_info =
           GetFakeTaskEligibilityInfo()) {
@@ -464,7 +461,7 @@ class GrpcFederatedProtocolTest
       InSequence seq;
       EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
           .WillOnce(DoAll(SetArgPointee<0>(GetFakeAcceptedCheckinResponse(
-                              GetFakePlan(), kInitCheckpoint, kExecutionPhaseId,
+                              kPlan, kInitCheckpoint, kExecutionPhaseId,
                               use_secure_aggregation)),
                           Return(absl::OkStatus())))
           .RetiresOnSaturation();
@@ -486,16 +483,15 @@ class GrpcFederatedProtocolTest
                                     /*chunking_layer_bytes_downloaded=*/0,
                                     /*chunking_layer_bytes_uploaded=*/0))
             .Times(2);
-      }
-      EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
-      if (!use_per_phase_logging_) {
+        EXPECT_CALL(mock_event_publisher_,
+                    SetModelIdentifier(kExecutionPhaseId));
         EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
         EXPECT_CALL(mock_opstats_logger_,
                     AddCheckinAcceptedEventWithTaskName(kTaskName));
       }
     }
 
-    return federated_protocol_->Checkin(task_eligibility_info).status();
+    return federated_protocol_->Checkin(task_eligibility_info);
   }
 
   // See note in the constructor for why these are pointers.
@@ -903,77 +899,6 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_P(GrpcFederatedProtocolTest,
-       TestEligibilityEvalCheckinEnabledWithInvalidPlan) {
-  EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
-      .WillOnce(Return(absl::OkStatus()));
-
-  ServerStreamMessage response_message;
-  EligibilityEvalPayload* eligibility_eval_payload =
-      response_message.mutable_eligibility_eval_checkin_response()
-          ->mutable_eligibility_eval_payload();
-  eligibility_eval_payload->set_plan("does_not_parse");
-  eligibility_eval_payload->set_init_checkpoint("");
-  std::string expected_execution_id = "ELIGIBILITY_EVAL_EXECUTION_ID";
-  eligibility_eval_payload->set_execution_id(expected_execution_id);
-  EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
-      .WillOnce(DoAll(SetArgPointee<0>(GetFakeCheckinRequestAck()),
-                      Return(absl::OkStatus())))
-      .WillOnce(
-          DoAll(SetArgPointee<0>(response_message), Return(absl::OkStatus())));
-
-  {
-    InSequence seq;
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(
-              OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
-      // Network stats should be updated after the one send and two receive
-      // operations.
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          SetNetworkStats(/*bytes_downloaded=*/0, /*bytes_uploaded=*/Gt(0),
-                          /*chunking_layer_bytes_downloaded=*/0,
-                          /*chunking_layer_bytes_uploaded=*/0));
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                          /*chunking_layer_bytes_downloaded=*/0,
-                          /*chunking_layer_bytes_uploaded=*/0));
-    }
-    EXPECT_CALL(
-        mock_log_manager_,
-        LogDiag(
-            ProdDiagCode::BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_RECEIVED));
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                          /*chunking_layer_bytes_downloaded=*/0,
-                          /*chunking_layer_bytes_uploaded=*/0));
-    }
-    EXPECT_CALL(mock_event_publisher_,
-                SetModelIdentifier(expected_execution_id));
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_,
-                  PublishEligibilityEvalPlanReceived(_, _, _));
-    }
-    EXPECT_CALL(
-        mock_log_manager_,
-        LogDiag(
-            ProdDiagCode::
-                BACKGROUND_TRAINING_ELIGIBILITY_EVAL_FAILED_CANNOT_PARSE_PLAN));
-  }
-
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
-
-  EXPECT_THAT(eligibility_checkin_result.status(), IsCode(INTERNAL));
-  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-}
-
 TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   // Note that in this particular test we check that the eligibility eval
   // checkin request is as expected (in all prior tests we just use the '_'
@@ -986,7 +911,7 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   // The EligibilityEvalCheckin(...) method should return the rejected
   // RetryWindow, since after merely completing an eligibility eval checkin the
   // client hasn't actually been accepted to a specific task yet.
-  ClientOnlyPlan expected_plan = ClientOnlyPlan::default_instance();
+  std::string expected_plan = kPlan;
   std::string expected_checkpoint = kInitCheckpoint;
   std::string expected_execution_id = "ELIGIBILITY_EVAL_EXECUTION_ID";
   EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
@@ -1028,10 +953,8 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
           SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
                           /*chunking_layer_bytes_downloaded=*/0,
                           /*chunking_layer_bytes_uploaded=*/0));
-    }
-    EXPECT_CALL(mock_event_publisher_,
-                SetModelIdentifier(expected_execution_id));
-    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_event_publisher_,
+                  SetModelIdentifier(expected_execution_id));
       EXPECT_CALL(mock_event_publisher_,
                   PublishEligibilityEvalPlanReceived(_, _, _));
       EXPECT_CALL(
@@ -1045,8 +968,9 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
 
   ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(*eligibility_checkin_result,
-              VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
-                  EqualsProto(expected_plan), expected_checkpoint, _, _)));
+              VariantWith<FederatedProtocol::EligibilityEvalTask>(
+                  FieldsAre(FieldsAre(expected_plan, expected_checkpoint),
+                            expected_execution_id)));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -1238,32 +1162,26 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
       .WillOnce(DoAll(SetArgPointee<0>(GetFakeRejectedCheckinResponse()),
                       Return(absl::OkStatus())));
 
-  {
+  if (!use_per_phase_logging_) {
     InSequence seq;
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
-      // Network stats should be updated after the one send and one receive
-      // operations. Note that the eligibility eval checkin already ran.
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                          /*chunking_layer_bytes_downloaded=*/0,
-                          /*chunking_layer_bytes_uploaded=*/0))
-          .Times(2);
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    // Network stats should be updated after the one send and one receive
+    // operations. Note that the eligibility eval checkin already ran.
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                        /*chunking_layer_bytes_downloaded=*/0,
+                        /*chunking_layer_bytes_uploaded=*/0))
+        .Times(2);
 
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-      EXPECT_CALL(mock_event_publisher_, PublishRejected());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
+    EXPECT_CALL(mock_event_publisher_, PublishRejected());
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
   }
 
   // Issue the regular checkin.
@@ -1293,32 +1211,26 @@ TEST_P(GrpcFederatedProtocolTest,
       .WillOnce(DoAll(SetArgPointee<0>(GetFakeRejectedCheckinResponse()),
                       Return(absl::OkStatus())));
 
-  {
+  if (!use_per_phase_logging_) {
     InSequence seq;
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
-      // Network stats should be updated after the one send and one receive
-      // operations. Note that the eligibility eval checkin already ran.
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                          /*chunking_layer_bytes_downloaded=*/0,
-                          /*chunking_layer_bytes_uploaded=*/0))
-          .Times(2);
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    // Network stats should be updated after the one send and one receive
+    // operations. Note that the eligibility eval checkin already ran.
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                        /*chunking_layer_bytes_downloaded=*/0,
+                        /*chunking_layer_bytes_uploaded=*/0))
+        .Times(2);
 
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-      EXPECT_CALL(mock_event_publisher_, PublishRejected());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
+    EXPECT_CALL(mock_event_publisher_, PublishRejected());
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
   }
 
   // Issue the regular checkin, without a TaskEligibilityInfo (since we didn't
@@ -1327,63 +1239,6 @@ TEST_P(GrpcFederatedProtocolTest,
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
-  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-}
-
-TEST_P(GrpcFederatedProtocolTest, TestCheckinAcceptWithInvalidPlan) {
-  // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-
-  ServerStreamMessage response_message;
-  auto acceptance_info =
-      response_message.mutable_checkin_response()->mutable_acceptance_info();
-  acceptance_info->set_plan("does_not_parse");
-  acceptance_info->set_execution_phase_id(kExecutionPhaseId);
-  acceptance_info->set_init_checkpoint("");
-
-  EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
-      .WillOnce(Return(absl::OkStatus()));
-
-  EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
-      .WillOnce(
-          DoAll(SetArgPointee<0>(response_message), Return(absl::OkStatus())));
-
-  {
-    InSequence seq;
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
-      // Network stats should be updated after the one send and one receive
-      // operations. Note that the eligibility eval checkin already ran.
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                          /*chunking_layer_bytes_downloaded=*/0,
-                          /*chunking_layer_bytes_uploaded=*/0))
-          .Times(2);
-    }
-
-    EXPECT_CALL(mock_log_manager_, SetModelIdentifier(kExecutionPhaseId));
-    EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-      EXPECT_CALL(mock_opstats_logger_,
-                  AddCheckinAcceptedEventWithTaskName(kTaskName));
-    }
-    EXPECT_CALL(
-        mock_log_manager_,
-        LogDiag(ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN));
-  }
-
-  auto checkin_result =
-      federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
-
-  EXPECT_THAT(checkin_result.status(), IsCode(INTERNAL));
-  // Issue an eligibility eval checkin first.
-  // The eventual Checkin call is expected to return the accepted retry window
-  // return in the CheckinRequestAck response to this eligibility eval request.
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -1409,13 +1264,13 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
                   GetExpectedCheckinRequest(expected_eligibility_info)))))
       .WillOnce(Return(absl::OkStatus()));
 
-  ClientOnlyPlan expected_plan = GetFakePlan();
+  std::string expected_plan = kPlan;
   std::string expected_checkpoint = kInitCheckpoint;
   EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
-      .WillOnce(
-          DoAll(SetArgPointee<0>(GetFakeAcceptedCheckinResponse(
-                    expected_plan, expected_checkpoint, kExecutionPhaseId)),
-                Return(absl::OkStatus())));
+      .WillOnce(DoAll(SetArgPointee<0>(GetFakeAcceptedCheckinResponse(
+                          expected_plan, expected_checkpoint, kExecutionPhaseId,
+                          /* use_secure_aggregation=*/true)),
+                      Return(absl::OkStatus())));
 
   {
     InSequence seq;
@@ -1432,10 +1287,8 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
                           Eq(chunking_layer_bytes_downloaded),
                           Eq(chunking_layer_bytes_uploaded)))
           .Times(2);
-    }
-    EXPECT_CALL(mock_log_manager_, SetModelIdentifier(kExecutionPhaseId));
-    EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
-    if (!use_per_phase_logging_) {
+      EXPECT_CALL(mock_log_manager_, SetModelIdentifier(kExecutionPhaseId));
+      EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(kExecutionPhaseId));
       EXPECT_CALL(
           mock_event_publisher_,
           PublishCheckinFinished(_, Eq(chunking_layer_bytes_downloaded), _));
@@ -1450,15 +1303,38 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(
       *checkin_result,
-      VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
-          EqualsProto(expected_plan), expected_checkpoint, kTaskName, _)));
+      VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
+          FieldsAre(expected_plan, expected_checkpoint), kExecutionPhaseId,
+          Optional(AllOf(
+              Field(&FederatedProtocol::SecAggInfo::expected_number_of_clients,
+                    kSecAggExpectedNumberOfClients),
+              Field(&FederatedProtocol::SecAggInfo::
+                        minimum_clients_in_server_visible_aggregate,
+                    kSecAggMinClientsInServerVisibleAggregate))))));
   // The Checkin call is expected to return the accepted retry window from the
   // CheckinRequestAck response to the first eligibility eval request.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
+TEST_P(GrpcFederatedProtocolTest, TestCheckinAcceptNonSecAgg) {
+  // Issue an eligibility eval checkin first, followed by a successful checkin
+  // returning a task that doesn't use SecAgg.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  auto checkin_result = RunSuccessfulCheckin(/*use_secure_aggregation=*/false);
+  ASSERT_OK(checkin_result.status());
+  EXPECT_THAT(*checkin_result,
+              VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
+                  FieldsAre(kPlan, kInitCheckpoint), kExecutionPhaseId,
+                  // There should be no SecAggInfo in the result.
+                  Eq(std::nullopt))));
+}
+
 TEST_P(GrpcFederatedProtocolTest,
        TestCheckinAcceptUnparseableExecutionPhaseId) {
+  if (use_per_phase_logging_) {
+    GTEST_SKIP() << "This test only applies if to legacy logging behavior";
+    return;
+  }
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
 
@@ -1466,44 +1342,38 @@ TEST_P(GrpcFederatedProtocolTest,
   EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
       .WillOnce(Return(absl::OkStatus()));
 
-  const ClientOnlyPlan expected_plan = GetFakePlan();
+  const std::string expected_plan = kPlan;
   const std::string expected_checkpoint = kInitCheckpoint;
   const std::string unparseable_phase_id = "unparseable_phase_id";
   EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
       .WillOnce(
           DoAll(SetArgPointee<0>(GetFakeAcceptedCheckinResponse(
-                    expected_plan, expected_checkpoint, unparseable_phase_id)),
+                    expected_plan, expected_checkpoint, unparseable_phase_id,
+                    /* use_secure_aggregation=*/true)),
                 Return(absl::OkStatus())));
 
   {
     InSequence seq;
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishCheckin());
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
-      // Network stats should be updated after the one send and one receive
-      // operations. Note that the eligibility eval checkin already ran.
-      EXPECT_CALL(
-          mock_opstats_logger_,
-          SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
-                          /*chunking_layer_bytes_downloaded=*/0,
-                          /*chunking_layer_bytes_uploaded=*/0))
-          .Times(2);
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
+    // Network stats should be updated after the one send and one receive
+    // operations. Note that the eligibility eval checkin already ran.
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        SetNetworkStats(/*bytes_downloaded=*/Gt(0), /*bytes_uploaded=*/Gt(0),
+                        /*chunking_layer_bytes_downloaded=*/0,
+                        /*chunking_layer_bytes_uploaded=*/0))
+        .Times(2);
 
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(unparseable_phase_id));
     EXPECT_CALL(mock_event_publisher_,
                 SetModelIdentifier(unparseable_phase_id));
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-    }
+    EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
     EXPECT_CALL(mock_log_manager_,
                 LogDiag(ProdDiagCode::OPSTATS_TASK_NAME_EXTRACTION_FAILED));
-    if (!use_per_phase_logging_) {
-      EXPECT_CALL(mock_opstats_logger_,
-                  AddCheckinAcceptedEventWithTaskName(unparseable_phase_id));
-    }
+    EXPECT_CALL(mock_opstats_logger_,
+                AddCheckinAcceptedEventWithTaskName(unparseable_phase_id));
   }
 
   auto checkin_result =
@@ -1511,8 +1381,8 @@ TEST_P(GrpcFederatedProtocolTest,
 
   ASSERT_OK(checkin_result);
   EXPECT_THAT(*checkin_result,
-              VariantWith<FederatedProtocol::CheckinResultPayload>(FieldsAre(
-                  EqualsProto(expected_plan), expected_checkpoint, _, _)));
+              VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
+                  FieldsAre(expected_plan, expected_checkpoint), _, _)));
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 

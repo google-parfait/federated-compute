@@ -37,7 +37,6 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
-#include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/federated_protocol_util.h"
 #include "fcp/client/fl_runner.pb.h"
@@ -141,16 +140,13 @@ absl::StatusOr<UriOrInlineData> ConvertResourceToUriOrInlineData(
 }  // namespace
 
 HttpFederatedProtocol::HttpFederatedProtocol(
-    EventPublisher* event_publisher, LogManager* log_manager,
-    const Flags* flags, HttpClient* http_client,
+    LogManager* log_manager, const Flags* flags, HttpClient* http_client,
     absl::string_view entry_point_uri, absl::string_view api_key,
     absl::string_view population_name, absl::string_view retry_token,
     absl::string_view client_version, absl::string_view attestation_measurement,
     std::function<bool()> should_abort, absl::BitGen bit_gen,
     const InterruptibleRunner::TimingConfig& timing_config)
     : object_state_(ObjectState::kInitialized),
-      event_publisher_(event_publisher),
-      log_manager_(log_manager),
       flags_(flags),
       http_client_(http_client),
       next_request_base_uri_(entry_point_uri),
@@ -311,11 +307,20 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
 
   switch (response_proto.result_case()) {
     case EligibilityEvalTaskResponse::kEligibilityEvalTask: {
-      FCP_ASSIGN_OR_RETURN(auto result,
-                           FetchEligibilityEvalTaskResources(
-                               response_proto.eligibility_eval_task()));
+      const auto& task = response_proto.eligibility_eval_task();
+
+      // Fetch the task resources, returning any errors that may be encountered
+      // in the process.
+      FCP_ASSIGN_OR_RETURN(
+          auto result,
+          FetchTaskResources(
+              {.plan = task.plan(), .checkpoint = task.init_checkpoint()}));
+
       object_state_ = ObjectState::kEligibilityEvalEnabled;
-      return result;
+      return EligibilityEvalTask{
+          .payloads = {.plan = std::move(result.plan),
+                       .checkpoint = std::move(result.checkpoint)},
+          .execution_id = task.execution_id()};
     }
     case EligibilityEvalTaskResponse::kNoEligibilityEvalConfigured: {
       // Nothing to do...
@@ -328,68 +333,47 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
   }
 }
 
-absl::StatusOr<fcp::client::FederatedProtocol::CheckinResultPayload>
-HttpFederatedProtocol::FetchEligibilityEvalTaskResources(
-    const EligibilityEvalTask& task) {
-  const std::string& execution_id = task.execution_id();
-  log_manager_->SetModelIdentifier(execution_id);
-  event_publisher_->SetModelIdentifier(execution_id);
-
+absl::StatusOr<HttpFederatedProtocol::PlanAndCheckpointPayloads>
+HttpFederatedProtocol::FetchTaskResources(
+    HttpFederatedProtocol::TaskResources task_resources) {
+  FCP_ASSIGN_OR_RETURN(UriOrInlineData plan_uri_or_data,
+                       ConvertResourceToUriOrInlineData(task_resources.plan));
   FCP_ASSIGN_OR_RETURN(
       UriOrInlineData checkpoint_uri_or_data,
-      ConvertResourceToUriOrInlineData(task.init_checkpoint()));
-  FCP_ASSIGN_OR_RETURN(UriOrInlineData plan_uri_or_data,
-                       ConvertResourceToUriOrInlineData(task.plan()));
+      ConvertResourceToUriOrInlineData(task_resources.checkpoint));
 
-  // Fetch the init checkpoint and plan resources if they need to be fetched
+  // Fetch the plan and init checkpoint resources if they need to be fetched
   // (using the inline data instead if available).
   absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
       resource_responses =
           FetchResourcesInMemory(*http_client_, *interruptible_runner_,
-                                 {checkpoint_uri_or_data, plan_uri_or_data},
+                                 {plan_uri_or_data, checkpoint_uri_or_data},
                                  &bytes_downloaded_, &bytes_uploaded_);
   FCP_RETURN_IF_ERROR(resource_responses);
-  auto& checkpoint_data_response = (*resource_responses)[0];
-  auto& plan_data_response = (*resource_responses)[1];
+  auto& plan_data_response = (*resource_responses)[0];
+  auto& checkpoint_data_response = (*resource_responses)[1];
 
-  // Note: we forward any error during the fetching of the checkpoint/plan
-  // resources to the caller, which means that these error codes will be checked
-  // against the set of 'permanent' error codes, just like the errors in
-  // response to the protocol request are.
+  // Note: we forward any error during the fetching of the plan/checkpoint
+  // resources resources to the caller, which means that these error codes will
+  // be checked against the set of 'permanent' error codes, just like the errors
+  // in response to the protocol request are.
+  if (!plan_data_response.ok()) {
+    return absl::Status(plan_data_response.status().code(),
+                        absl::StrCat("plan fetch failed: ",
+                                     plan_data_response.status().ToString()));
+  }
   if (!checkpoint_data_response.ok()) {
     return absl::Status(
         checkpoint_data_response.status().code(),
         absl::StrCat("checkpoint fetch failed: ",
                      checkpoint_data_response.status().ToString()));
   }
-  if (!plan_data_response.ok()) {
-    return absl::Status(plan_data_response.status().code(),
-                        absl::StrCat("plan fetch failed: ",
-                                     plan_data_response.status().ToString()));
-  }
 
-  // TODO(team): Consider moving this logic into fl_runner so both
-  // FederatedProtocol implementations don't have to re-implement it.
-  ClientOnlyPlan plan;
-    if (!plan.ParseFromString(std::string(plan_data_response->body))) {
-    log_manager_->LogDiag(
-        ProdDiagCode::
-            BACKGROUND_TRAINING_ELIGIBILITY_EVAL_FAILED_CANNOT_PARSE_PLAN);
-    // We use InternalError here, rather than the perhaps more appropriate
-    // InvalidArgumentError, because we want to distinguish this rare, and
-    // likely transient/temporary issue (e.g. a memory corruption, or an invalid
-    // payload that is temporarily being served by the server), from other error
-    // cases where the server indicates an InvalidArgumentError to the client
-    // (which would indicate a more serious, and likely more permanent bug in
-    // the client-side protocol implementation).
-    return absl::InternalError(
-        "Could not parse received eligibility eval plan");
-  }
-  // TODO(team): This copies the checkpoint data, which could be large.
-  // Since that data is already an absl::Cord, consider changing this method's
-  // return type to absl::Cord to avoid the copy.
-  return CheckinResultPayload{plan, std::string(checkpoint_data_response->body),
-                              execution_id};
+  // TODO(team): This copies the plan & checkpoint data, which could be
+  // large. Since that data is already an absl::Cord, consider changing this
+  // method's return type to use absl::Cord to avoid the copy.
+  return PlanAndCheckpointPayloads{std::string(plan_data_response->body),
+                                   std::string(checkpoint_data_response->body)};
 }
 
 absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(

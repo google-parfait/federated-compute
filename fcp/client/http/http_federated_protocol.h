@@ -32,7 +32,6 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/engine.pb.h"
-#include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/flags.h"
@@ -55,8 +54,7 @@ namespace http {
 class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
  public:
   HttpFederatedProtocol(
-      EventPublisher* event_publisher, LogManager* log_manager,
-      const Flags* flags, HttpClient* http_client,
+      LogManager* log_manager, const Flags* flags, HttpClient* http_client,
       absl::string_view entry_point_uri, absl::string_view api_key,
       absl::string_view population_name, absl::string_view retry_token,
       absl::string_view client_version,
@@ -118,12 +116,15 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   HandleEligibilityEvalTaskResponse(
       absl::StatusOr<InMemoryHttpResponse> http_response);
 
+  struct TaskResources {
+    const ::google::internal::federatedcompute::v1::Resource& plan;
+    const ::google::internal::federatedcompute::v1::Resource& checkpoint;
+  };
+
   // Helper function for fetching the checkpoint/plan resources for an
-  // eligibility eval task.
-  absl::StatusOr<fcp::client::FederatedProtocol::CheckinResultPayload>
-  FetchEligibilityEvalTaskResources(
-      const ::google::internal::federatedcompute::v1::EligibilityEvalTask&
-          task);
+  // eligibility eval task or regular task.
+  absl::StatusOr<PlanAndCheckpointPayloads> FetchTaskResources(
+      TaskResources task_resources);
 
   // Helper that moves to the given object state if the given status represents
   // a permanent error.
@@ -131,8 +132,6 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::Status status, ObjectState permanent_error_object_state);
 
   ObjectState object_state_;
-  EventPublisher* const event_publisher_;
-  LogManager* const log_manager_;
   const Flags* const flags_;
   HttpClient* const http_client_;
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;

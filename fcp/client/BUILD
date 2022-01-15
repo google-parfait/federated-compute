@@ -154,10 +154,23 @@ cc_library(
     srcs = ["federated_protocol_util.cc"],
     hdrs = ["federated_protocol_util.h"],
     deps = [
+        ":diag_codes_cc_proto",
+        ":interfaces",
         "//fcp/protos:federated_api_cc_proto",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/time",
         "@com_google_protobuf//:cc_wkt_protos",
+    ],
+)
+
+cc_test(
+    name = "federated_protocol_util_test",
+    srcs = ["federated_protocol_util_test.cc"],
+    deps = [
+        ":diag_codes_cc_proto",
+        ":federated_protocol_util",
+        ":test_helpers",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -306,6 +319,7 @@ cc_library(
     visibility = ["//fcp:public_api_visibility"],
     deps = [
         ":federated_protocol",
+        ":federated_protocol_util",
         ":grpc_federated_protocol",
         ":federated_task_environment",
         ":fl_runner_internal_cc_proto",

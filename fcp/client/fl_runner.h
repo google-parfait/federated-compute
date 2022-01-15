@@ -91,9 +91,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time reference_time,
-    const SelectorContext& eligibility_selector_context,
-    const SelectorContext& federated_selector_context);
+    const absl::Time reference_time, const std::string& session_name,
+    const std::string& population_name);
 
 // This is exposed for use in compatibility tests only. Prod code should call
 // RunFederatedComputation.

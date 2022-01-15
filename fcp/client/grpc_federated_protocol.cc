@@ -355,45 +355,23 @@ GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
     case EligibilityEvalCheckinResponse::kEligibilityEvalPayload: {
       const EligibilityEvalPayload& eligibility_eval_payload =
           eligibility_checkin_response.eligibility_eval_payload();
-      std::string model_identifier = eligibility_eval_payload.execution_id();
-      // If the server didn't yet actually populate the execution_id field, then
-      // we still set a placeholder value to ensure we can distinguish events
-      // for the eligibility eval task from events for regular tasks.
-      if (model_identifier.empty()) {
-        model_identifier = absl::StrCat(population_name_,
-                                        "/eligibility_eval_task_placeholder");
-      }
-      log_manager_->SetModelIdentifier(model_identifier);
-      event_publisher_->SetModelIdentifier(model_identifier);
+      std::string execution_id = eligibility_eval_payload.execution_id();
 
       if (!flags_->per_phase_logs()) {
+        log_manager_->SetModelIdentifier(execution_id);
+        event_publisher_->SetModelIdentifier(execution_id);
         event_publisher_->PublishEligibilityEvalPlanReceived(
             bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
             download_duration);
-      }
-
-      ClientOnlyPlan plan;
-      if (!plan.ParseFromString(eligibility_eval_payload.plan())) {
-        log_manager_->LogDiag(
-            ProdDiagCode::
-                BACKGROUND_TRAINING_ELIGIBILITY_EVAL_FAILED_CANNOT_PARSE_PLAN);
-        // We use InternalError here, rather than the perhaps more appropriate
-        // InvalidArgumentError, because we want to distinguish this rare, and
-        // likely transient/temporary issue (e.g. a memory corruption, or an
-        // invalid payload that is temporarily being served by the server), from
-        // other error cases where the server indicates an InvalidArgumentError
-        // to the client (which would indicate a more serious, and likely more
-        // permanent bug in the client-side protocol implementation).
-        return absl::InternalError(
-            "Could not parse received eligibility eval plan");
-      }
-      if (!flags_->per_phase_logs()) {
         opstats_logger_->AddEvent(
             OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED);
       }
       object_state_ = ObjectState::kEligibilityEvalEnabled;
-      return CheckinResultPayload{
-          plan, eligibility_eval_payload.init_checkpoint(), model_identifier};
+      return EligibilityEvalTask{
+          .payloads = {.plan = eligibility_eval_payload.plan(),
+                       .checkpoint =
+                           eligibility_eval_payload.init_checkpoint()},
+          .execution_id = execution_id};
     }
     case EligibilityEvalCheckinResponse::kNoEligibilityEvalConfigured: {
       // Nothing to do...
@@ -444,9 +422,9 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
       checkin_response.has_acceptance_info()
           ? checkin_response.acceptance_info().execution_phase_id()
           : "";
-  log_manager_->SetModelIdentifier(execution_phase_id_);
-  event_publisher_->SetModelIdentifier(execution_phase_id_);
   if (!flags_->per_phase_logs()) {
+    log_manager_->SetModelIdentifier(execution_phase_id_);
+    event_publisher_->SetModelIdentifier(execution_phase_id_);
     event_publisher_->PublishCheckinFinished(
         bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
         download_duration);
@@ -455,33 +433,14 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
     case CheckinResponse::kAcceptanceInfo: {
       const auto& acceptance_info = checkin_response.acceptance_info();
 
-      // Record the task name in the opstats db. The phase id has the format
-      // "population_name/task_name#round_id.shard_id"
-      const auto& phase_id = acceptance_info.execution_phase_id();
-      auto population_start = phase_id.find(population_name_ + "/");
-      auto task_end = phase_id.find('#');
-      std::string task_name = phase_id;
-      if (population_start != 0 || task_end == std::string::npos ||
-          task_end <= population_name_.length() + 1) {
-        log_manager_->LogDiag(
-            ProdDiagCode::OPSTATS_TASK_NAME_EXTRACTION_FAILED);
-      } else {
-        task_name = phase_id.substr(population_name_.length() + 1,
-                                    task_end - population_name_.length() - 1);
-      }
       if (!flags_->per_phase_logs()) {
+        // Record the task name in the opstats db.
+        std::string task_name = ExtractTaskNameFromAggregationSessionId(
+            acceptance_info.execution_phase_id(), population_name_,
+            *log_manager_);
         opstats_logger_->AddCheckinAcceptedEventWithTaskName(task_name);
       }
 
-      ClientOnlyPlan plan;
-      if (!plan.ParseFromString(acceptance_info.plan())) {
-        log_manager_->LogDiag(
-            ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN);
-        // See note about using InternalError instead of InvalidArgumentError
-        // the ReceiveEligibilityEvalCheckinResponse(...) method above.
-        return absl::InternalError("Could not parse received plan");
-      }
-      object_state_ = ObjectState::kCheckinAccepted;
       for (const auto& [k, v] : acceptance_info.side_channels())
         side_channels_[k] = v;
       side_channel_protocol_execution_info_ =
@@ -489,28 +448,23 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
       side_channel_protocol_options_response_ =
           checkin_response.protocol_options_response().side_channels();
 
-      int32_t minimum_clients_in_server_visible_aggregate = 0;
-
+      std::optional<SecAggInfo> sec_agg_info = std::nullopt;
       if (side_channel_protocol_execution_info_.has_secure_aggregation()) {
-        auto secure_aggregation_protocol_execution_info =
-            side_channel_protocol_execution_info_.secure_aggregation();
-        auto expected_number_of_clients =
-            secure_aggregation_protocol_execution_info
-                .expected_number_of_clients();
-        auto minimum_number_of_participants =
-            plan.phase().minimum_number_of_participants();
-        if (expected_number_of_clients < minimum_number_of_participants) {
-          return absl::InternalError(
-              "expectedNumberOfClients was less than Plan's "
-              "minimumNumberOfParticipants.");
-        }
-        minimum_clients_in_server_visible_aggregate =
-            secure_aggregation_protocol_execution_info
-                .minimum_clients_in_server_visible_aggregate();
+        sec_agg_info = SecAggInfo{
+            .expected_number_of_clients =
+                side_channel_protocol_execution_info_.secure_aggregation()
+                    .expected_number_of_clients(),
+            .minimum_clients_in_server_visible_aggregate =
+                side_channel_protocol_execution_info_.secure_aggregation()
+                    .minimum_clients_in_server_visible_aggregate()};
       }
-      return CheckinResultPayload{plan, acceptance_info.init_checkpoint(),
-                                  task_name,
-                                  minimum_clients_in_server_visible_aggregate};
+
+      object_state_ = ObjectState::kCheckinAccepted;
+      return TaskAssignment{
+          .payloads = {.plan = acceptance_info.plan(),
+                       .checkpoint = acceptance_info.init_checkpoint()},
+          .aggregation_session_id = acceptance_info.execution_phase_id(),
+          .sec_agg_info = sec_agg_info};
     }
     case CheckinResponse::kRejectionInfo: {
       if (!flags_->per_phase_logs()) {

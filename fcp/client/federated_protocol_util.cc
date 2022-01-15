@@ -16,11 +16,14 @@
 #include "fcp/client/federated_protocol_util.h"
 
 #include <algorithm>
+#include <string>
 
 #include "google/protobuf/duration.pb.h"
 #include "absl/random/random.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
 
 namespace fcp {
@@ -58,8 +61,6 @@ absl::Duration PickRetryDelayFromRange(absl::Duration min_delay,
 
 }  // namespace
 
-// Picks an absolute retry time by picking a retry delay from the range
-// specified by the RetryWindow, and then adding it to the current timestamp.
 absl::Time PickRetryTimeFromRange(const ::google::protobuf::Duration& min_delay,
                                   const ::google::protobuf::Duration& max_delay,
                                   absl::BitGen& bit_gen) {
@@ -71,9 +72,6 @@ absl::Time PickRetryTimeFromRange(const ::google::protobuf::Duration& min_delay,
                                  bit_gen);
 }
 
-// Picks a retry delay and encodes it as a zero-width RetryWindow (where
-// delay_min and delay_max are set to the same value), from a given target delay
-// and a configured amount of jitter.
 ::google::internal::federatedml::v2::RetryWindow
 GenerateRetryWindowFromTargetDelay(absl::Duration target_delay,
                                    double jitter_percent,
@@ -90,9 +88,6 @@ GenerateRetryWindowFromTargetDelay(absl::Duration target_delay,
   return result;
 }
 
-// Converts the given absl::Time to a zero-width RetryWindow (where
-// delay_min and delay_max are set to the same value), by converting the target
-// retry time to a delay relative to the current timestamp.
 ::google::internal::federatedml::v2::RetryWindow
 GenerateRetryWindowFromRetryTime(absl::Time retry_time) {
   // Convert the target retry time back to a duration, based on the current
@@ -110,6 +105,21 @@ GenerateRetryWindowFromRetryTime(absl::Time retry_time) {
   *retry_window.mutable_delay_min() = *retry_window.mutable_delay_max() =
       ConvertAbslToProtoDuration(retry_delay);
   return retry_window;
+}
+
+std::string ExtractTaskNameFromAggregationSessionId(
+    const std::string& session_id, const std::string& population_name,
+    LogManager& log_manager) {
+  auto population_start = session_id.find(population_name + "/");
+  auto task_end = session_id.find('#');
+  if (population_start != 0 || task_end == std::string::npos ||
+      task_end <= population_name.length() + 1) {
+    log_manager.LogDiag(ProdDiagCode::OPSTATS_TASK_NAME_EXTRACTION_FAILED);
+    return session_id;
+  } else {
+    return session_id.substr(population_name.length() + 1,
+                             task_end - population_name.length() - 1);
+  }
 }
 
 }  // namespace client

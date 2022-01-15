@@ -92,15 +92,16 @@ class FederatedProtocol {
  public:
   virtual ~FederatedProtocol() = default;
 
-  // A computation payload consisting of a plan, checkpoint, and other relevant
-  // metadata.
-  struct CheckinResultPayload {
-    google::internal::federated::plan::ClientOnlyPlan client_only_plan;
+  // The unparsed plan and checkpoint payload which make up a computation.
+  struct PlanAndCheckpointPayloads {
+    std::string plan;
     std::string checkpoint;
-    std::string task_name;
-    // Secagg metadata, see SecureAggregationProtocolExecutionInfo in
-    // federated_api.proto.
-    int32_t minimum_clients_in_server_visible_aggregate;
+  };
+
+  // An eligibility task, consisting of task payloads and an execution ID.
+  struct EligibilityEvalTask {
+    PlanAndCheckpointPayloads payloads;
+    std::string execution_id;
   };
   // A rejection of a client by the server.
   struct Rejection {};
@@ -108,19 +109,19 @@ class FederatedProtocol {
   // for the population.
   struct EligibilityEvalDisabled {};
   // EligibilityEvalCheckin() returns either
-  // 1. a CheckinResultPayload struct representing an eligibility eval task, if
-  // the
-  //    population is configured with such a task. In this case the caller
-  //    should execute the task and pass the resulting `TaskEligibilityInfo`
-  //    value to the `Checkin(...)` method.
-  // 2. an EligibilityEvalDisabled struct if the population doesn't have an
+  // 1. an `EligibilityEvalTask` struct holding the payloads for an eligibility
+  //    eval task, if the population is configured with such a task. In this
+  //    case the caller should execute the task and pass the resulting
+  //    `TaskEligibilityInfo` value to the `Checkin(...)` method.
+  // 2. an `EligibilityEvalDisabled` struct if the population doesn't have an
   //    eligibility eval task configured. In this case the caller should
   //    continue the protocol by calling the `Checkin(...)` method without
   //    providing a `TaskEligibilityInfo` value.
-  // 3. a Rejection if the server rejected this device. In this case the caller
+  // 3. a `Rejection` if the server rejected this device. In this case the
+  // caller
   //    should end its protocol interaction.
   using EligibilityEvalCheckinResult =
-      std::variant<CheckinResultPayload, EligibilityEvalDisabled, Rejection>;
+      std::variant<EligibilityEvalTask, EligibilityEvalDisabled, Rejection>;
 
   // Checks in with a federated server to receive the population's eligibility
   // eval task. This method is optional and may be called 0 or 1 times. If it is
@@ -143,10 +144,24 @@ class FederatedProtocol {
   virtual absl::StatusOr<EligibilityEvalCheckinResult>
   EligibilityEvalCheckin() = 0;
 
+  // SecAgg metadata, e.g. see SecureAggregationProtocolExecutionInfo in
+  // federated_api.proto.
+  struct SecAggInfo {
+    int32_t expected_number_of_clients;
+    int32_t minimum_clients_in_server_visible_aggregate;
+  };
+
+  // A task assignment, consisting of task payloads, a session identifier, and
+  // SecAgg-related metadata.
+  struct TaskAssignment {
+    PlanAndCheckpointPayloads payloads;
+    std::string aggregation_session_id;
+    std::optional<SecAggInfo> sec_agg_info;
+  };
   // Checkin() returns either
-  // 1. a CheckinResultPayload struct, or
-  // 2. a Rejection struct if the server rejected this device.
-  using CheckinResult = std::variant<CheckinResultPayload, Rejection>;
+  // 1. a `TaskAssignment` struct if the client was assigned a task to run, or
+  // 2. a `Rejection` struct if the server rejected this device.
+  using CheckinResult = std::variant<TaskAssignment, Rejection>;
 
   // Checks in with a federated server. Must only be called once. If the
   // `EligibilityEvalCheckin()` method was previously called, then this method
@@ -162,10 +177,7 @@ class FederatedProtocol {
   // `task_eligibility_info` parameter should be left empty.
   //
   // Returns:
-  // - On success, a CheckinResult that either contains
-  //   - a ClientOnlyPlan & initial checkpoint for a federated computation,
-  //     if the device is accepted for participation.
-  //   - a Rejection, if the device is rejected.
+  // - On success, a `CheckinResult`.
   // - On error:
   //   - ABORTED when one of the I/O operations got aborted by the server.
   //   - CANCELLED when one of the I/O operations was interrupted by the client
