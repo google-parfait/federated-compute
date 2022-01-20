@@ -362,12 +362,6 @@ class SimpleExampleIterator : public ExampleIterator {
   int index_ = 0;
 };
 
-struct ComputationArtifacts {
-  google::internal::federated::plan::ClientOnlyPlan plan;
-  google::internal::federated::plan::Dataset dataset;
-  std::string checkpoint;
-};
-
 class MockFlags : public Flags {
  public:
   MOCK_METHOD(int64_t, condition_polling_period_millis, (), (const, override));
