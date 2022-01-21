@@ -17,6 +17,7 @@ syntax = "proto3";
 package google.internal.federatedcompute.v1;
 
 import "google/api/annotations.proto";
+import "google/rpc/code.proto";
 import "fcp/protos/federatedcompute/common.proto";
 
 option java_package = "com.google.internal.federatedcompute.v1";
@@ -34,6 +35,20 @@ service EligibilityEvalTasks {
       returns (EligibilityEvalTaskResponse) {
     option (google.api.http) = {
       post: "/v1/eligibilityevaltasks/{population_name}:request"
+      body: "*"
+    };
+  }
+
+  // A request sent by the device to report the result of running the
+  // EligibilityEval task provided by `EligibilityEvalTaskResponse`.
+  //
+  // A result with a status code other than Code.OK indicates client session
+  // termination. The client may not send any future requests with the given
+  // session_id.
+  rpc ReportEligibilityEvalTaskResult(ReportEligibilityEvalTaskResultRequest)
+      returns (ReportEligibilityEvalTaskResultResponse) {
+    option (google.api.http) = {
+      post: "/v1/populations/{population_name}/eligibilityevaltasks/{session_id}:reportresult"
       body: "*"
     };
   }
@@ -120,3 +135,27 @@ message EligibilityEvalTask {
 // Currently-empty message describing the case where a population does not have
 // an eligibility-computing task configured.
 message NoEligibilityEvalConfigured {}
+
+message ReportEligibilityEvalTaskResultRequest {
+  // The name of the population this client belongs to.
+  //
+  // Note that http clients set this value in the request URL instead of the
+  // request body.
+  string population_name = 1
+      ;
+
+  // The session id returned by the server.
+  //
+  // Note that http clients set this value in the request URL instead of the
+  // request body.
+  string session_id = 2
+      ;
+
+  // Status code reported by client.
+  // Code.OK indicates that client execution completed successfully. Any other
+  // code indicates unsuccessful execution and termination of the protocol
+  // session.
+  google.rpc.Code status_code = 3;
+}
+
+message ReportEligibilityEvalTaskResultResponse {}
