@@ -18,6 +18,7 @@ package google.internal.federatedcompute.v1;
 
 import "google/api/annotations.proto";
 import "google/longrunning/operations.proto";
+import "fcp/protos/federated_api.proto";
 import "fcp/protos/federatedcompute/common.proto";
 
 option java_package = "com.google.internal.federatedcompute.v1";
@@ -25,11 +26,11 @@ option java_multiple_files = true;
 
 service TaskAssignments {
   // A request sent by the device to check if it should participate in the
-  // current phase. Clients should use the same ForwardingInfo as used in this
-  // request to construct the URI to poll the operation service to check for
-  // task assignment completion. When the task assignment is complete, the
-  // result of the operation will either contain an error or the resulting
-  // `StartTaskAssignmentResponse` in the response.
+  // current phase. Clients should use the same `ForwardingInfo` (incl. the
+  // headers) as used in this request to construct the URI to poll the operation
+  // service to check for task assignment completion. When the task assignment
+  // is complete, the result of the operation will either contain an error or
+  // the resulting `StartTaskAssignmentResponse` in the response.
   //
   // If the client no longer needs a task assignment because it is interrupted
   // or drops out, the client should make a best effort to call CancelOperation.
@@ -94,7 +95,7 @@ message StartTaskAssignmentRequest {
   // eligibility-computing task configured, then the server may serve this
   // client any task.
   //
-  TaskEligibilityInfo task_eligibility_info = 5;
+  google.internal.federatedml.v2.TaskEligibilityInfo task_eligibility_info = 5;
 }
 
 message StartTaskAssignmentMetadata {}

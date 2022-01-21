@@ -34,6 +34,7 @@ proto_library(
         "task_assignments.proto",
     ],
     deps = [
+        "//fcp/protos:federated_api_proto",
         "@com_google_googleapis//google/api:annotations_proto",
         "@com_google_googleapis//google/longrunning:operations_proto",
         "@com_google_googleapis//google/rpc:code_proto",
