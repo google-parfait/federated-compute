@@ -72,7 +72,7 @@ PlanResult SimplePlanEngine::RunPlan(
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_IO,
         std::string(validity_checks.message()));
-    return PlanResult(PhaseOutcome::ERROR);
+    return PlanResult(PlanOutcome::kInvalidArgument);
   }
 
   absl::StatusOr<std::unique_ptr<TensorFlowWrapper>> tf_wrapper_or =
@@ -93,7 +93,7 @@ PlanResult SimplePlanEngine::RunPlan(
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
         std::string(tf_wrapper_or.status().message()));
-    return PlanResult(PhaseOutcome::ERROR);
+    return PlanResult(PlanOutcome::kTensorflowError);
   }
 
   std::unique_ptr<TensorFlowWrapper> tf_wrapper =
@@ -111,20 +111,20 @@ PlanResult SimplePlanEngine::RunPlan(
 
   switch (tf_result.status().code()) {
     case absl::StatusCode::kOk: {
-      PlanResult plan_result(PhaseOutcome::COMPLETED);
+      PlanResult plan_result(PlanOutcome::kSuccess);
       plan_result.output_names = output_names;
       plan_result.output_tensors = std::move(tf_result).value();
       return plan_result;
     }
     case absl::StatusCode::kCancelled:
-      return PlanResult(PhaseOutcome::INTERRUPTED);
+      return PlanResult(PlanOutcome::kInterrupted);
     case absl::StatusCode::kInvalidArgument:
-      return PlanResult(PhaseOutcome::ERROR);
+      return PlanResult(PlanOutcome::kTensorflowError);
     default:
       FCP_LOG(FATAL) << "unexpected status code: " << tf_result.status().code();
   }
   // Unreachable, but clang doesn't get it.
-  return PlanResult(PhaseOutcome::ERROR);
+  return PlanResult(PlanOutcome::kTensorflowError);
 }
 
 absl::StatusOr<std::vector<tensorflow::Tensor>>

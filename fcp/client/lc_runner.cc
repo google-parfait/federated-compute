@@ -58,20 +58,6 @@ ConstructInputsForTensorflowSpecPlan(const LocalComputeIORouter& local_compute,
   return inputs;
 }
 
-absl::Status ConvertPhaseOutcomeToStatus(engine::PhaseOutcome outcome) {
-  switch (outcome) {
-    case engine::PhaseOutcome::COMPLETED:
-      return absl::OkStatus();
-    case engine::PhaseOutcome::ERROR:
-      return absl::InternalError("");
-    case engine::PhaseOutcome::INTERRUPTED:
-      return absl::CancelledError("");
-    default:
-      FCP_LOG(FATAL) << "Unexpected phase outcome.";
-      return absl::UnknownError("");
-  }
-}
-
 absl::Status RunPlanWithTensorflowSpec(
     SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
@@ -112,7 +98,7 @@ absl::Status RunPlanWithTensorflowSpec(
 
   // Run plan
   std::vector<std::string> output_names_unused;
-  engine::PlanResult plan_result(engine::PhaseOutcome::PHASE_OUTCOME_UNDEFINED);
+  engine::PlanResult plan_result(engine::PlanOutcome::kTensorflowError);
 
   // Construct input tensors based on the values in the LocalComputeIORouter
   // message.
@@ -125,7 +111,7 @@ absl::Status RunPlanWithTensorflowSpec(
       client_plan.tensorflow_config_proto(), std::move(inputs),
       output_names_unused, run_plan_start_time, reference_time,
       log_computation_started, log_computation_finished, selector_context);
-  return ConvertPhaseOutcomeToStatus(plan_result.outcome);
+  return ConvertPlanOutcomeToStatus(plan_result.outcome);
 }
 }  // anonymous namespace
 

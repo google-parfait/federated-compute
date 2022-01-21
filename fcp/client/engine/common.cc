@@ -64,6 +64,30 @@ absl::Status ValidateTensorflowSpec(
   return absl::OkStatus();
 }
 
+PhaseOutcome ConvertPlanOutcomeToPhaseOutcome(PlanOutcome plan_outcome) {
+  switch (plan_outcome) {
+    case PlanOutcome::kSuccess:
+      return PhaseOutcome::COMPLETED;
+    case PlanOutcome::kInterrupted:
+      return PhaseOutcome::INTERRUPTED;
+    case PlanOutcome::kTensorflowError:
+    case PlanOutcome::kInvalidArgument:
+      return PhaseOutcome::ERROR;
+  }
+}
+
+absl::Status ConvertPlanOutcomeToStatus(engine::PlanOutcome outcome) {
+  switch (outcome) {
+    case engine::PlanOutcome::kSuccess:
+      return absl::OkStatus();
+    case engine::PlanOutcome::kTensorflowError:
+    case engine::PlanOutcome::kInvalidArgument:
+      return absl::InternalError("");
+    case engine::PlanOutcome::kInterrupted:
+      return absl::CancelledError("");
+  }
+}
+
 }  // namespace engine
 }  // namespace client
 }  // namespace fcp

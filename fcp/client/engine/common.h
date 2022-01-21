@@ -29,13 +29,23 @@ namespace fcp {
 namespace client {
 namespace engine {
 
+enum class PlanOutcome {
+  kSuccess,
+  // A TensorFlow error occurred.
+  kTensorflowError,
+  // Computation was interrupted.
+  kInterrupted,
+  // The input parameters are invalid.
+  kInvalidArgument,
+};
+
 // The result of a call to `SimplePlanEngine::RunPlan` or
 // `TfLitePlanEngine::RunPlan`.
 struct PlanResult {
-  explicit PlanResult(engine::PhaseOutcome outcome) : outcome(outcome) {}
+  explicit PlanResult(PlanOutcome outcome) : outcome(outcome) {}
 
   // The outcome of the plan execution.
-  engine::PhaseOutcome outcome;
+  PlanOutcome outcome;
   // Only set if `outcome` is `COMPLETE`, otherwise this is empty.
   std::vector<tensorflow::Tensor> output_tensors;
   // Only set if `outcome` is `COMPLETE`, otherwise this is empty.
@@ -54,6 +64,11 @@ absl::Status ValidateTensorflowSpec(
     const google::internal::federated::plan::TensorflowSpec& tensorflow_spec,
     const absl::flat_hash_set<std::string>& expected_input_tensor_names_set,
     const std::vector<std::string>& output_names);
+
+PhaseOutcome ConvertPlanOutcomeToPhaseOutcome(PlanOutcome plan_outcome);
+
+absl::Status ConvertPlanOutcomeToStatus(engine::PlanOutcome outcome);
+
 }  // namespace engine
 }  // namespace client
 }  // namespace fcp

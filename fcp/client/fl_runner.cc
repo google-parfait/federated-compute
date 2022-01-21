@@ -192,7 +192,7 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
     event_publisher->PublishIoError(0, message);
     opstats_logger->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    return engine::PlanResult(engine::PhaseOutcome::ERROR);
+    return engine::PlanResult(engine::PlanOutcome::kInvalidArgument);
   }
 
   const FederatedComputeEligibilityIORouter& io_router =
@@ -314,7 +314,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
     const absl::Time run_plan_start_time, const absl::Time reference_time,
     const SelectorContext& selector_context) {
   PlanResultAndCheckpointFile result(
-      (engine::PlanResult(engine::PhaseOutcome::ERROR)));
+      (engine::PlanResult(engine::PlanOutcome::kTensorflowError)));
 
   // Check that this is a TensorflowSpec-based plan for federated computation.
   FCP_CHECK(client_plan.phase().has_tensorflow_spec());
@@ -367,11 +367,10 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   };
 
   // Run plan and get a set of output tensors back.
-  engine::PlanResult plan_result(engine::PhaseOutcome::ERROR);
 
   engine::SimplePlanEngine plan_engine(env_deps, log_manager, event_publisher,
                                        opstats_logger, &timing_config, flags);
-  plan_result = plan_engine.RunPlan(
+  engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs), *output_names,
       run_plan_start_time, reference_time, log_computation_started,
@@ -384,8 +383,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
 }
 
 absl::Status ReportTensorflowSpecPlanResult(
-    EventPublisher* event_publisher, LogManager* log_manager,
-    FederatedProtocol* federated_protocol, OpStatsLogger* opstats_logger,
+    LogManager* log_manager, FederatedProtocol* federated_protocol,
     absl::StatusOr<ComputationResults> computation_results,
     absl::Time run_plan_start_time, absl::Time reference_time) {
   const absl::Time before_report_time = absl::Now();
@@ -621,7 +619,7 @@ IssueEligibilityEvalCheckinAndRunPlan(
       env_deps, event_publisher, log_manager, opstats_logger, flags, plan,
       *checkpoint_input_filename, timing_config, run_plan_start_time,
       reference_time, selector_context);
-  if (plan_result.outcome != engine::PhaseOutcome::COMPLETED) {
+  if (plan_result.outcome != engine::PlanOutcome::kSuccess) {
     // If eligibility eval plan execution failed then we can't proceed to
     // the checkin phase, since we'll have no TaskEligibilityInfo to
     // provide. All we can do is abort and reschedule. An error will already
@@ -946,13 +944,13 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
                                   federated_selector_context_with_task_name);
 
     auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
-    if (outcome == engine::INTERRUPTED) {
+    if (outcome == engine::PlanOutcome::kInterrupted) {
       // If plan execution got interrupted, we do not report to the server, and
       // do not wait for a reply, but bail fast to get out of the way.
       return fl_runner_result;
     }
     absl::StatusOr<ComputationResults> computation_results;
-    if (outcome == engine::COMPLETED) {
+    if (outcome == engine::PlanOutcome::kSuccess) {
       computation_results = CreateComputationResults(
           checkin_result->plan.phase().tensorflow_spec(),
           std::move(plan_result_and_checkpoint_file));
@@ -979,8 +977,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       event_publisher->PublishReportStarted(0);
     }
     absl::Status report_result = ReportTensorflowSpecPlanResult(
-        event_publisher, log_manager, federated_protocol, opstats_logger,
-        std::move(computation_results), run_plan_start_time, reference_time);
+        log_manager, federated_protocol, std::move(computation_results),
+        run_plan_start_time, reference_time);
     if (!report_result.ok()) {
       // If the report to the server failed, log an error.
       auto message =
@@ -998,7 +996,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         opstats_logger->AddEvent(
             OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
       }
-      if (outcome == engine::COMPLETED) {
+      if (outcome == engine::PlanOutcome::kSuccess) {
         // Only if training succeeded *and* reporting succeeded do we consider
         // the device to have contributed successfully.
         fl_runner_result.set_contribution_result(FLRunnerResult::SUCCESS);
@@ -1036,7 +1034,7 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     const absl::Time run_plan_start_time, const absl::Time reference_time) {
   FLRunnerTensorflowSpecResult result;
   result.set_outcome(engine::PhaseOutcome::ERROR);
-  engine::PlanResult plan_result(engine::PhaseOutcome::ERROR);
+  engine::PlanResult plan_result(engine::PlanOutcome::kTensorflowError);
   auto opstats_logger =
       engine::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
                                   /*session_name=*/"", /*population_name=*/"");
@@ -1068,8 +1066,9 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   }
 
   // Copy output tensors into the result proto.
-  result.set_outcome(plan_result.outcome);
-  if (plan_result.outcome == engine::COMPLETED) {
+  result.set_outcome(
+      engine::ConvertPlanOutcomeToPhaseOutcome(plan_result.outcome));
+  if (plan_result.outcome == engine::PlanOutcome::kSuccess) {
     for (int i = 0; i < plan_result.output_names.size(); i++) {
       tensorflow::TensorProto output_tensor_proto;
       plan_result.output_tensors[i].AsProtoField(&output_tensor_proto);
