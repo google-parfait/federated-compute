@@ -39,6 +39,9 @@ message QueryTimeComputationProperties {
     // Federated computation type.
     FederatedComputation federated = 4;
   }
+
+  // A unique ID identifying the computation run.
+  int64 run_id = 5;
 }
 
 // On-device, local computation only. No aggregation.
