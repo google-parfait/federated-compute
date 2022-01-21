@@ -79,9 +79,10 @@ using ::testing::VariantWith;
 
 constexpr char kEntryPointUri[] = "https://initial.uri/";
 constexpr char kApiKey[] = "TEST_APIKEY";
-constexpr char kPopulationName[] = "TESTPOPULATION";
-constexpr char kEligibilityEvalExecutionId[] =
-    "TESTPOPULATION/ELIGIBILITY_EXECUTION_ID";
+// Note that we include a '/' character in the population name, which allows us
+// to verify that it is correctly URL-encoded into "%2F".
+constexpr char kPopulationName[] = "TEST/POPULATION";
+constexpr char kEligibilityEvalExecutionId[] = "ELIGIBILITY_EXECUTION_ID";
 constexpr char kPlan[] = "CLIENT_ONLY_PLAN";
 constexpr char kInitCheckpoint[] = "INIT_CHECKPOINT";
 constexpr char kRetryToken[] = "OLD_RETRY_TOKEN";
@@ -294,41 +295,16 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_THAT(retry_window1, Not(EqualsProto(retry_window2)));
 }
 
-// Temporary test to ensure that non-alphanumeric population names are
-// correctly rejected, for the time being, since we don't have any support for
-// URL escaping yet.
-//
-// TODO(team): Replace this test with one that verifies that the
-// population name is properly URL escaped, once we have support for URL
-// escaping.
-TEST_F(HttpFederatedProtocolTest,
-       TestEligibilityEvalCheckinRequestUnsupportedPopulationName) {
-  federated_protocol_ = std::make_unique<HttpFederatedProtocol>(
-      &mock_log_manager_, &mock_flags_, &mock_http_client_, kEntryPointUri,
-      kApiKey, "UNSUPPORTED_POPULATION", kRetryToken, kClientVersion,
-      kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
-      absl::BitGen(),
-      InterruptibleRunner::TimingConfig{
-          .polling_period = absl::ZeroDuration(),
-          .graceful_shutdown_period = absl::InfiniteDuration(),
-          .extended_shutdown_period = absl::InfiniteDuration()});
-
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
-
-  EXPECT_THAT(eligibility_checkin_result.status(), IsCode(UNIMPLEMENTED));
-}
-
 TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalCheckinRequestFailsTransientError) {
   // Make the HTTP client return a 503 Service Unavailable error when the
   // EligibilityEvalCheckin(...) code issues the control protocol's HTTP
   // request. This should result in the error being returned as the result.
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(FakeHttpResponse(503, {}, "")));
 
   auto eligibility_checkin_result =
@@ -345,11 +321,11 @@ TEST_F(HttpFederatedProtocolTest,
   // Make the HTTP client return a 404 Not Found error when the
   // EligibilityEvalCheckin(...) code issues the control protocol's HTTP
   // request. This should result in the error being returned as the result.
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(FakeHttpResponse(404, {}, "")));
 
   auto eligibility_checkin_result =
@@ -374,11 +350,11 @@ TEST_F(HttpFederatedProtocolTest,
       [&counter_should_abort]() { counter_should_abort.DecrementCount(); });
 
   // Make HttpClient::PerformRequests() block until the counter is decremented.
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _, _)))
       .WillOnce([&request_issued, &counter_should_abort](
                     MockableHttpClient::SimpleHttpRequest ignored) {
         request_issued.Notify();
@@ -406,13 +382,13 @@ TEST_F(HttpFederatedProtocolTest,
 }
 
 TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _,
-          EligibilityEvalTaskRequestMatcher(
-              EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _,
+                  EligibilityEvalTaskRequestMatcher(
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
           200, {},
           GetFakeRejectedEligibilityEvalTaskResponse().SerializeAsString())));
@@ -427,13 +403,13 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
 }
 
 TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _,
-          EligibilityEvalTaskRequestMatcher(
-              EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _,
+                  EligibilityEvalTaskRequestMatcher(
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
           200, {},
           GetFakeDisabledEligibilityEvalTaskResponse().SerializeAsString())));
@@ -461,13 +437,13 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
           plan_resource, checkpoint_resource, expected_execution_id);
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _,
-          EligibilityEvalTaskRequestMatcher(
-              EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _,
+                  EligibilityEvalTaskRequestMatcher(
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(
           FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
 
@@ -503,11 +479,11 @@ TEST_F(HttpFederatedProtocolTest,
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
           plan_resource, checkpoint_resource, expected_execution_id);
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(
           FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
 
@@ -550,11 +526,11 @@ TEST_F(HttpFederatedProtocolTest,
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
           plan_resource, checkpoint_resource, expected_execution_id);
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(
           FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
 
@@ -603,11 +579,11 @@ TEST_F(HttpFederatedProtocolTest,
       GetFakeEnabledEligibilityEvalTaskResponse(Resource(), Resource(),
                                                 kEligibilityEvalExecutionId,
                                                 retry_window, retry_window);
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(
           FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
 
@@ -637,11 +613,11 @@ TEST_F(HttpFederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
       GetFakeEnabledEligibilityEvalTaskResponse(Resource(), Resource(),
                                                 kEligibilityEvalExecutionId,
                                                 retry_window, retry_window);
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(
           FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
 
@@ -666,11 +642,11 @@ TEST_F(HttpFederatedProtocolDeathTest,
   // Make the HTTP client return a 503 Service Unavailable error when the
   // EligibilityEvalCheckin(...) code issues the protocol HTTP request.
   // This should result in the error being returned as the result.
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(FakeHttpResponse(503, {}, "")));
 
   auto eligibility_checkin_result =
@@ -686,13 +662,13 @@ TEST_F(HttpFederatedProtocolDeathTest,
 
 TEST_F(HttpFederatedProtocolDeathTest,
        TestCheckinAfterEligibilityEvalCheckinRejection) {
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _,
-          EligibilityEvalTaskRequestMatcher(
-              EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _,
+                  EligibilityEvalTaskRequestMatcher(
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
           200, {},
           GetFakeRejectedEligibilityEvalTaskResponse().SerializeAsString())));
@@ -715,11 +691,11 @@ TEST_F(HttpFederatedProtocolDeathTest,
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
           plan_resource, checkpoint_resource, kEligibilityEvalExecutionId);
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://initial.uri/v1/eligibilityevaltasks/TESTPOPULATION:request",
-          HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request",
+                  HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(
           FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
 

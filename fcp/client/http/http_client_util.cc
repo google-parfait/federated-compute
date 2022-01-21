@@ -16,6 +16,7 @@
 #include "fcp/client/http/http_client_util.h"
 
 #include <algorithm>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -24,6 +25,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "fcp/client/http/http_client.h"
@@ -73,6 +75,26 @@ absl::StatusCode ConvertHttpCodeToStatusCode(int code) {
   }
 }
 
+absl::StatusOr<std::string> PercentEncode(
+    absl::string_view input, std::function<bool(char c)> unencoded_chars) {
+  std::string result;
+  for (unsigned char c : input) {
+    // We limit URIs only to ASCII characters.
+    if (!absl::ascii_isascii(c)) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Encountered unsupported char during URI encoding: ", c));
+    }
+    // The following characters are *not* percent-encoded.
+    if (unencoded_chars(c)) {
+      result.push_back(c);
+      continue;
+    }
+    // Any other character is percent-encoded.
+    result.append(absl::StrFormat("%%%X", c));
+  }
+  return result;
+}
+
 }  // namespace
 
 absl::Status ConvertHttpCodeToStatus(int code) {
@@ -113,6 +135,22 @@ absl::StatusOr<std::string> JoinBaseUriWithSuffix(
   // suffix, ensuring that there's always a single '/' in between the two parts.
   return absl::StrCat(absl::StripSuffix(base_uri, "/"), "/",
                       absl::StripPrefix(uri_suffix, "/"));
+}
+
+absl::StatusOr<std::string> EncodeUriSinglePathSegment(
+    absl::string_view input) {
+  return PercentEncode(input, [](char c) {
+    return absl::ascii_isalnum(c) || c == '-' || c == '_' || c == '.' ||
+           c == '~';
+  });
+}
+
+absl::StatusOr<std::string> EncodeUriMultiplePathSegments(
+    absl::string_view input) {
+  return PercentEncode(input, [](char c) {
+    return absl::ascii_isalnum(c) || c == '-' || c == '_' || c == '.' ||
+           c == '~' || c == '/';
+  });
 }
 
 }  // namespace http

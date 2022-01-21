@@ -213,5 +213,60 @@ TEST(JoinBaseUriWithSuffixTest, NoLeadingSlashInSuffixFails) {
   EXPECT_THAT(result.status(), IsCode(INVALID_ARGUMENT));
 }
 
+TEST(EncodeUriTest, UnencodedCharsShouldRemainUnencoded) {
+  std::string unencoded_single_path_segment_chars =
+      "-_.~0123456789abcxyzABCXYZ";
+  auto result = EncodeUriSinglePathSegment(unencoded_single_path_segment_chars);
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq(unencoded_single_path_segment_chars));
+
+  std::string unencoded_multi_path_segment_chars =
+      "-_.~/01234567899abcxyzABCXYZ";
+  result = EncodeUriMultiplePathSegments(unencoded_multi_path_segment_chars);
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq(unencoded_multi_path_segment_chars));
+}
+
+TEST(EncodeUriTest, OtherCharsShouldBeEncoded) {
+  auto result = EncodeUriSinglePathSegment("#?+%/");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq("%23%3F%2B%25%2F"));
+
+  // For the "multiple path segments" version the slash should remain unencoded.
+  result = EncodeUriMultiplePathSegments("#?+%/");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq("%23%3F%2B%25/"));
+
+  // Non-encodable characters before/in between/after the encodable characters
+  // should remain unencoded.
+  result = EncodeUriSinglePathSegment("abc#?123+%/XYZ");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq("abc%23%3F123%2B%25%2FXYZ"));
+
+  result = EncodeUriMultiplePathSegments("abc#?123+%/XYZ");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq("abc%23%3F123%2B%25/XYZ"));
+}
+
+TEST(EncodeUriTest, EmptyStringShouldReturnEmptyString) {
+  auto result = EncodeUriSinglePathSegment("");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq(""));
+
+  // For the "multiple path segments" version the slash should remain unencoded.
+  result = EncodeUriMultiplePathSegments("");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, StrEq(""));
+}
+
+TEST(EncodeUriTest, NonAsciiStringShouldReturnError) {
+  auto result = EncodeUriSinglePathSegment("€");
+  EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
+
+  // For the "multiple path segments" version the slash should remain unencoded.
+  result = EncodeUriMultiplePathSegments("€");
+  EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
+}
+
 }  // namespace
 }  // namespace fcp::client::http

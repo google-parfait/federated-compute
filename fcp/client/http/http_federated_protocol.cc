@@ -106,10 +106,10 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 
 namespace {
 
-// The URI suffix for the RequestEligibilityEvalTask protocol request.
+// The URI suffix for a RequestEligibilityEvalTask protocol request.
 //
-// Arguments:
-//   $0: the population name (which must be URL-escaped).
+// Arguments (which must be encoded using `EncodeUriSinglePathSegment`):
+//   $0: the `EligibilityEvalTaskRequest.population_name` request field.
 constexpr absl::string_view kRequestEligibilityEvalTaskUriSuffix =
     "/v1/eligibilityevaltasks/$0:request";
 
@@ -231,21 +231,17 @@ HttpFederatedProtocol::EligibilityEvalCheckin() {
 
 absl::StatusOr<InMemoryHttpResponse>
 HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
-  // Create and serialize the request body.
+  // Create and serialize the request body. Note that the `population_name`
+  // field is set in the URI instead of in this request proto message.
   EligibilityEvalTaskRequest request;
   request.mutable_client_version()->set_version_code(client_version_);
   // TODO(team): Populate an attestation_measurement value here.
 
-  // For now we don't support URL escaping, so we limit supported
-  // population_names to alphanumeric characters.
-  // TODO(team): Replace with URL escaping.
-  if (std::any_of(population_name_.begin(), population_name_.end(),
-                  std::not_fn(absl::ascii_isalnum))) {
-    return absl::UnimplementedError("population_name must be alphanumeric");
-  }
+  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                       EncodeUriSinglePathSegment(population_name_));
   // Construct the URI suffix.
-  std::string uri_suffix =
-      absl::Substitute(kRequestEligibilityEvalTaskUriSuffix, population_name_);
+  std::string uri_suffix = absl::Substitute(
+      kRequestEligibilityEvalTaskUriSuffix, encoded_population_name);
 
   // Issue the request.
   return PerformProtocolRequest(uri_suffix, request.SerializeAsString());

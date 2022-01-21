@@ -86,6 +86,27 @@ std::optional<std::string> FindHeader(const HeaderList& headers,
 absl::StatusOr<std::string> JoinBaseUriWithSuffix(absl::string_view base_uri,
                                                   absl::string_view uri_suffix);
 
+// URI-encodes the input, for use a *single path segment* in a URI. This means
+// that '/' characters *are* escaped.
+//
+// See "exactly one path segment" in the "Path template syntax" section in
+// https://github.com/googleapis/googleapis/blob/master/google/api/http.proto.
+//
+// Note that only ASCII strings are accepted (others will return
+// `INVALID_ARGUMENT`). This is stricter than the http.proto spec requires.
+absl::StatusOr<std::string> EncodeUriSinglePathSegment(absl::string_view input);
+
+// URI-encodes the input, for use as *multiple path segments* in a URI. This
+// means that '/' characters *are not* escaped.
+//
+// See "multiple path segments" in the "Path template syntax" section in
+// https://github.com/googleapis/googleapis/blob/master/google/api/http.proto.
+//
+// Note that only ASCII strings are accepted (others will return
+// `INVALID_ARGUMENT`). This is stricter than the http.proto spec requires.
+absl::StatusOr<std::string> EncodeUriMultiplePathSegments(
+    absl::string_view input);
+
 }  // namespace http
 }  // namespace client
 }  // namespace fcp
