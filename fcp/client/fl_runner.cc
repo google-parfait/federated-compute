@@ -386,44 +386,15 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
 absl::Status ReportTensorflowSpecPlanResult(
     EventPublisher* event_publisher, LogManager* log_manager,
     FederatedProtocol* federated_protocol, OpStatsLogger* opstats_logger,
-    const TensorflowSpec& tensorflow_spec,
-    PlanResultAndCheckpointFile plan_result_and_checkpoint_file,
+    absl::StatusOr<ComputationResults> computation_results,
     absl::Time run_plan_start_time, absl::Time reference_time) {
-  engine::PhaseOutcome outcome =
-      plan_result_and_checkpoint_file.plan_result.outcome;
   const absl::Time before_report_time = absl::Now();
   absl::Status result = absl::InternalError("");
-  if (outcome == engine::INTERRUPTED) {
-    // If plan execution got interrupted, we do not report to the server, and
-    // do not wait for a reply, but bail fast to get out of the way. We use
-    // OK rather than ABORTED to ensure that the result isn't handled as if an
-    // additional, new network error occurred. Instead, by using OK, we simply
-    // act as if the reporting succeeded.
-    result = absl::OkStatus();
-  } else if (outcome == engine::COMPLETED) {
-    absl::StatusOr<ComputationResults> computation_results_or =
-        CreateComputationResults(tensorflow_spec,
-                                 std::move(plan_result_and_checkpoint_file));
-    if (!computation_results_or.ok()) {
-      auto status = computation_results_or.status();
-      auto message = absl::StrCat(
-          "Unable to create computation results from TensorflowSpec-based plan "
-          "outputs. code: ",
-          status.code(), ", message: ", status.message());
-      event_publisher->PublishTensorFlowError(
-          /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
-          message);
-      opstats_logger->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW, message);
-      result = federated_protocol->ReportNotCompleted(
-          engine::PhaseOutcome::ERROR,
-          /*plan_duration=*/absl::Now() - run_plan_start_time);
-    } else {
-      result = federated_protocol->ReportCompleted(
-          std::move(computation_results_or).value(),
-          /*stats=*/std::vector<std::pair<std::string, double>>(),
-          /*plan_duration=*/absl::Now() - run_plan_start_time);
-    }
+  if (computation_results.ok()) {
+    result = federated_protocol->ReportCompleted(
+        std::move(*computation_results),
+        /*stats=*/std::vector<std::pair<std::string, double>>(),
+        /*plan_duration=*/absl::Now() - run_plan_start_time);
   } else {
     result = federated_protocol->ReportNotCompleted(
         engine::PhaseOutcome::ERROR,
@@ -974,6 +945,30 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
                                   reference_time,
                                   federated_selector_context_with_task_name);
 
+    auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
+    if (outcome == engine::INTERRUPTED) {
+      // If plan execution got interrupted, we do not report to the server, and
+      // do not wait for a reply, but bail fast to get out of the way.
+      return fl_runner_result;
+    }
+    absl::StatusOr<ComputationResults> computation_results;
+    if (outcome == engine::COMPLETED) {
+      computation_results = CreateComputationResults(
+          checkin_result->plan.phase().tensorflow_spec(),
+          std::move(plan_result_and_checkpoint_file));
+      if (!computation_results.ok()) {
+        auto status = computation_results.status();
+        auto message = absl::StrCat(
+            "Unable to create computation results from TensorflowSpec-based "
+            "plan outputs. code: ",
+            status.code(), ", message: ", status.message());
+        event_publisher->PublishTensorFlowError(
+            /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
+            message);
+        opstats_logger->AddEventWithErrorMessage(
+            OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW, message);
+      }
+    }
     absl::Time upload_start = absl::Now();
     if (flags->per_phase_logs()) {
       opstats_logger->AddEvent(
@@ -983,12 +978,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       FCP_RETURN_IF_ERROR(opstats_logger->CommitToStorage());
       event_publisher->PublishReportStarted(0);
     }
-    auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
     absl::Status report_result = ReportTensorflowSpecPlanResult(
         event_publisher, log_manager, federated_protocol, opstats_logger,
-        checkin_result->plan.phase().tensorflow_spec(),
-        std::move(plan_result_and_checkpoint_file), run_plan_start_time,
-        reference_time);
+        std::move(computation_results), run_plan_start_time, reference_time);
     if (!report_result.ok()) {
       // If the report to the server failed, log an error.
       auto message =
