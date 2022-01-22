@@ -118,7 +118,7 @@ message StartTaskAssignmentResponse {
 message TaskAssignment {
   // Information to construct the URI to use for providing a result report after
   // task execution.
-  ForwardingInfo forwarding_info = 1;
+  ForwardingInfo aggregation_report_forwarding_info = 1;
 
   // Unique identifier for the client's protocol session.
   string client_session_id = 5;

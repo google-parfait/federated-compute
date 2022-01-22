@@ -171,7 +171,8 @@ EligibilityEvalTaskResponse GetFakeEnabledEligibilityEvalTaskResponse(
   *eval_task->mutable_init_checkpoint() = checkpoint;
   eval_task->set_execution_id(execution_id);
   response.set_session_id("todo_session");
-  ForwardingInfo* forwarding_info = response.mutable_forwarding_info();
+  ForwardingInfo* forwarding_info =
+      response.mutable_task_assignment_forwarding_info();
   forwarding_info->set_target_uri_prefix("todo_target_uri");
   *response.mutable_retry_window_if_accepted() = accepted_retry_window;
   *response.mutable_retry_window_if_rejected() = rejected_retry_window;
@@ -181,7 +182,8 @@ EligibilityEvalTaskResponse GetFakeEnabledEligibilityEvalTaskResponse(
 EligibilityEvalTaskResponse GetFakeDisabledEligibilityEvalTaskResponse() {
   EligibilityEvalTaskResponse response;
   response.mutable_no_eligibility_eval_configured();
-  ForwardingInfo* forwarding_info = response.mutable_forwarding_info();
+  ForwardingInfo* forwarding_info =
+      response.mutable_task_assignment_forwarding_info();
   forwarding_info->set_target_uri_prefix("todo_target_uri");
   *response.mutable_retry_window_if_accepted() = GetAcceptedRetryWindow();
   *response.mutable_retry_window_if_rejected() = GetRejectedRetryWindow();

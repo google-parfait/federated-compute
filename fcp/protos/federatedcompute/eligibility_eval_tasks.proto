@@ -78,7 +78,11 @@ message EligibilityEvalTaskResponse {
   // Information to construct the URI to use when calling StartTaskAssignment.
   // This will not be populated if the result below contains a RejectionInfo
   // message since the client should not call StartTaskAssignment in that case.
-  ForwardingInfo forwarding_info = 1;
+  //
+  // Note that this forwarding info does not apply to
+  // `ReportEligibilityEvalTaskResult` which should instead be sent to the same
+  // endpoint as `RequestEligibilityEvalTask`.
+  ForwardingInfo task_assignment_forwarding_info = 1;
 
   // Unique identifier for the protocol session. This field will not be set if
   // the result below contains a RejectionInfo.

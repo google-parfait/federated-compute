@@ -79,7 +79,7 @@ message StartAggregationDataUploadRequest {
 message StartAggregationDataUploadResponse {
   // Information to construct the URI to use for uploading the aggregation
   // result.
-  ForwardingInfo forwarding_info = 1;
+  ForwardingInfo aggregation_upload_forwarding_info = 1;
 
   // Resource name to which the aggregation result should be uploaded.
   // Clients should use this field as well as the

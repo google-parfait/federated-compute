@@ -293,12 +293,16 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
   session_id_ = response_proto.session_id();
 
   // Extract the base URI and headers to use for the subsequent request.
-  if (response_proto.forwarding_info().target_uri_prefix().empty()) {
+  if (response_proto.task_assignment_forwarding_info()
+          .target_uri_prefix()
+          .empty()) {
     return absl::UnimplementedError(
         "Missing `ForwardingInfo.target_uri_prefix`");
   }
-  next_request_base_uri_ = response_proto.forwarding_info().target_uri_prefix();
-  auto new_headers = response_proto.forwarding_info().extra_request_headers();
+  next_request_base_uri_ =
+      response_proto.task_assignment_forwarding_info().target_uri_prefix();
+  auto new_headers =
+      response_proto.task_assignment_forwarding_info().extra_request_headers();
   next_request_headers_ = HeaderList(new_headers.begin(), new_headers.end());
 
   switch (response_proto.result_case()) {
