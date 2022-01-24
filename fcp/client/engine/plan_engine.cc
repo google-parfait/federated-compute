@@ -41,7 +41,6 @@ using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::CheckpointOp;
 using ::google::internal::federated::plan::ClientExecution;
 using ::google::internal::federated::plan::ClientOnlyPlan;
-using ::google::internal::federated::plan::ExampleSelector;
 using ::google::internal::federatedml::v2::Checkpoint;
 
 static constexpr char kResultCheckpointPrefix[] = "result";
