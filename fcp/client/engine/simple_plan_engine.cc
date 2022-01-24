@@ -98,10 +98,12 @@ PlanResult SimplePlanEngine::RunPlan(
 
   std::unique_ptr<TensorFlowWrapper> tf_wrapper =
       std::move(tf_wrapper_or.value());
-  auto tf_result = RunPlanInternal(tf_wrapper.get(), tensorflow_spec,
-                                   std::move(inputs), output_names,
-                                   run_plan_start_time, log_computation_started,
-                                   log_computation_finished, selector_context);
+  std::atomic<int> total_example_count = 0;
+  std::atomic<int64_t> total_example_size_bytes = 0;
+  auto tf_result = RunPlanInternal(
+      tf_wrapper.get(), tensorflow_spec, std::move(inputs), output_names,
+      run_plan_start_time, log_computation_started, log_computation_finished,
+      selector_context, &total_example_count, &total_example_size_bytes);
   FCP_CHECK(tf_wrapper->CloseAndRelease().ok());
 
   // Log timing info.
@@ -114,6 +116,8 @@ PlanResult SimplePlanEngine::RunPlan(
       PlanResult plan_result(PlanOutcome::kSuccess);
       plan_result.output_names = output_names;
       plan_result.output_tensors = std::move(tf_result).value();
+      plan_result.total_example_count = total_example_count;
+      plan_result.total_example_size_bytes = total_example_size_bytes;
       return plan_result;
     }
     case absl::StatusCode::kCancelled:
@@ -137,10 +141,10 @@ SimplePlanEngine::RunPlanInternal(
     absl::Time run_plan_start_time,
     std::function<void()> log_computation_started,
     std::function<void()> log_computation_finished,
-    const SelectorContext& selector_context) {
+    const SelectorContext& selector_context,
+    std::atomic<int>* total_example_count,
+    std::atomic<int64_t>* total_example_size_bytes) {
   // Populate input tensor vector
-  std::atomic<int> total_example_count = 0;
-  std::atomic<int64_t> total_example_size_bytes = 0;
   // AddDatasetTokenToInputs first registers a DatasetProvider with the global
   // ExternalDatasetProviderRegistry and then returns a HostObjectRegistration
   // object. Hold onto the HostObjectRegistration object since it de-registers
@@ -148,11 +152,11 @@ SimplePlanEngine::RunPlanInternal(
   HostObjectRegistration host_registration = AddDatasetTokenToInputs(
       [this, selector_context](
           const google::internal::federated::plan::ExampleSelector& selector) {
-          return task_env_->CreateExampleIterator(selector, selector_context);
+        return task_env_->CreateExampleIterator(selector, selector_context);
       },
       event_publisher_, log_manager_, opstats_logger_, inputs.get(),
-      tensorflow_spec.dataset_token_tensor_name(), &total_example_count,
-      &total_example_size_bytes);
+      tensorflow_spec.dataset_token_tensor_name(), total_example_count,
+      total_example_size_bytes);
 
   std::vector<std::string> target_names;
   for (const std::string& target_node_name :
@@ -168,18 +172,17 @@ SimplePlanEngine::RunPlanInternal(
   FCP_ASSIGN_OR_RETURN(
       auto result,
       RunTensorFlowInternal(tf_wrapper, *inputs, output_names, target_names,
-                            &total_example_count, &total_example_size_bytes,
+                            total_example_count, total_example_size_bytes,
                             call_start_time));
 
   event_publisher_->PublishPlanCompleted(
-      total_example_count, total_example_size_bytes, run_plan_start_time);
+      *total_example_count, *total_example_size_bytes, run_plan_start_time);
   log_computation_finished();
   log_manager_->LogToLongHistogram(
       HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
-      total_example_size_bytes);
+      *total_example_size_bytes);
   log_manager_->LogToLongHistogram(
-      HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT, total_example_count);
-
+      HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT, *total_example_count);
   return result;
 }
 

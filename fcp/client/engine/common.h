@@ -50,6 +50,8 @@ struct PlanResult {
   std::vector<tensorflow::Tensor> output_tensors;
   // Only set if `outcome` is `COMPLETE`, otherwise this is empty.
   std::vector<std::string> output_names;
+  int total_example_count = 0;
+  int64_t total_example_size_bytes = 0;
 
   PlanResult(PlanResult&&) = default;
   PlanResult& operator=(PlanResult&&) = default;

@@ -74,7 +74,9 @@ class SimplePlanEngine {
       absl::Time run_plan_start_time,
       std::function<void()> log_computation_started,
       std::function<void()> log_computation_finished,
-      const SelectorContext& selector_context);
+      const SelectorContext& selector_context,
+      std::atomic<int>* total_example_count,
+      std::atomic<int64_t>* total_example_size_bytes);
 
   // Invokes TensorFlowWrapper, and takes care of logging TensorFlow errors and
   // external interruptions via event_publisher.
