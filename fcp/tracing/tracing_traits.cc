@@ -14,6 +14,7 @@
 
 #include "fcp/tracing/tracing_traits.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 

@@ -18,6 +18,7 @@
 #include <stdint.h>
 
 #include <iosfwd>
+#include <ostream>
 #include <string>
 
 #include "absl/base/attributes.h"

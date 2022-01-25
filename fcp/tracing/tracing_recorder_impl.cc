@@ -14,6 +14,8 @@
 
 #include "fcp/tracing/tracing_recorder_impl.h"
 
+#include <memory>
+
 #include "absl/synchronization/mutex.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/tracing/text_tracing_recorder_impl.h"
