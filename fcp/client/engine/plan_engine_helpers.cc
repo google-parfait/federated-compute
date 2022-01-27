@@ -115,12 +115,16 @@ class DatasetIterator : public ExternalDatasetIterator {
   absl::Mutex iterator_lock_;
 };
 
-class EmptyDatasetIterator : public ExternalDatasetIterator {
+/** An iterator that forwards the failing status from the external dataset to
+ * TensorFlow. */
+class FailingDatasetIterator : public ExternalDatasetIterator {
  public:
-  EmptyDatasetIterator() {}
-  absl::StatusOr<std::string> GetNext() final {
-    return absl::OutOfRangeError("");
-  }
+  explicit FailingDatasetIterator(absl::Status status) : status_(status) {}
+
+  absl::StatusOr<std::string> GetNext() final { return status_; }
+
+ private:
+  const absl::Status status_;
 };
 
 class TrainingDatasetProvider
@@ -162,7 +166,8 @@ class TrainingDatasetProvider
                   OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
                   std::string(example_iterator_or.status().message()));
             }
-            return std::make_unique<EmptyDatasetIterator>();
+            return std::make_unique<FailingDatasetIterator>(
+                example_iterator_or.status());
           }
           return std::make_unique<DatasetIterator>(
               std::move(example_iterator_or.value()), event_publisher,
