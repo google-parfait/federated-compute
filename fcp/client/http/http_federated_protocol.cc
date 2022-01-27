@@ -24,6 +24,9 @@
 #include <utility>
 #include <vector>
 
+#include "google/longrunning/operations.pb.h"
+#include "google/protobuf/any.pb.h"
+#include "google/rpc/status.pb.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -50,6 +53,7 @@
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
+#include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp {
@@ -63,8 +67,12 @@ using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTask;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
+using ::google::internal::federatedcompute::v1::ForwardingInfo;
 using ::google::internal::federatedcompute::v1::Resource;
+using ::google::internal::federatedcompute::v1::StartTaskAssignmentRequest;
+using ::google::internal::federatedcompute::v1::StartTaskAssignmentResponse;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
+using ::google::longrunning::Operation;
 
 // A note on error handling:
 //
@@ -113,12 +121,27 @@ namespace {
 constexpr absl::string_view kRequestEligibilityEvalTaskUriSuffix =
     "/v1/eligibilityevaltasks/$0:request";
 
+// The URI suffix for a StartTaskAssignment protocol request.
+//
+// Arguments (which must be encoded using `EncodeUriSinglePathSegment`):
+//   $0: the `StartTaskAssignmentRequest.population_name` request field.
+//   $1: the `StartTaskAssignmentRequest.session_id` request field.
+constexpr absl::string_view kStartTaskAssignmentUriSuffix =
+    "/v1/populations/$0/taskassignments/$1:start";
+
+// The URI suffix for a GetOperation protocol request.
+//
+// Arguments (which must be encoded using `EncodeUriMultiplePathSegments`):
+//   $0: the `GetOperationRequest.name` request field, which must start with
+//       "operations/".
+constexpr absl::string_view kGetOperationUriSuffix = "/v1/$0";
+
 // Convert a Resource proto into a UriOrInlineData object. Returns an
 // `INVALID_ARGUMENT` error if the given `Resource` has the `uri` field set to
 // an empty value, or an `UNIMPLEMENTED` error if the `Resource` has an unknown
 // field set.
 absl::StatusOr<UriOrInlineData> ConvertResourceToUriOrInlineData(
-    Resource resource) {
+    const Resource& resource) {
   switch (resource.resource_case()) {
     case Resource::ResourceCase::kUri:
       if (resource.uri().empty()) {
@@ -137,8 +160,178 @@ absl::StatusOr<UriOrInlineData> ConvertResourceToUriOrInlineData(
   }
 }
 
+// Converts a `::google::rpc::Status` error code into an `absl::StatusCode`
+// (there is a 1:1 mapping).
+absl::StatusCode ConvertRpcCodeToStatusCode(int code) {
+  switch (code) {
+    case static_cast<int>(absl::StatusCode::kOk):
+      return absl::StatusCode::kOk;
+    case static_cast<int>(absl::StatusCode::kCancelled):
+      return absl::StatusCode::kCancelled;
+    case static_cast<int>(absl::StatusCode::kUnknown):
+      return absl::StatusCode::kUnknown;
+    case static_cast<int>(absl::StatusCode::kInvalidArgument):
+      return absl::StatusCode::kInvalidArgument;
+    case static_cast<int>(absl::StatusCode::kDeadlineExceeded):
+      return absl::StatusCode::kDeadlineExceeded;
+    case static_cast<int>(absl::StatusCode::kNotFound):
+      return absl::StatusCode::kNotFound;
+    case static_cast<int>(absl::StatusCode::kAlreadyExists):
+      return absl::StatusCode::kAlreadyExists;
+    case static_cast<int>(absl::StatusCode::kPermissionDenied):
+      return absl::StatusCode::kPermissionDenied;
+    case static_cast<int>(absl::StatusCode::kResourceExhausted):
+      return absl::StatusCode::kResourceExhausted;
+    case static_cast<int>(absl::StatusCode::kFailedPrecondition):
+      return absl::StatusCode::kFailedPrecondition;
+    case static_cast<int>(absl::StatusCode::kAborted):
+      return absl::StatusCode::kAborted;
+    case static_cast<int>(absl::StatusCode::kOutOfRange):
+      return absl::StatusCode::kOutOfRange;
+    case static_cast<int>(absl::StatusCode::kUnimplemented):
+      return absl::StatusCode::kUnimplemented;
+    case static_cast<int>(absl::StatusCode::kInternal):
+      return absl::StatusCode::kInternal;
+    case static_cast<int>(absl::StatusCode::kUnavailable):
+      return absl::StatusCode::kUnavailable;
+    case static_cast<int>(absl::StatusCode::kDataLoss):
+      return absl::StatusCode::kDataLoss;
+    case static_cast<int>(absl::StatusCode::kUnauthenticated):
+      return absl::StatusCode::kUnauthenticated;
+    default:
+      // This should never be reached, since there should be a 1:1 mapping
+      // between Absl and Google RPC status codes.
+      return absl::StatusCode::kUnknown;
+  }
+}
+
 }  // namespace
 
+absl::Status ConvertRpcStatusToAbslStatus(::google::rpc::Status rpc_status) {
+  return absl::Status(ConvertRpcCodeToStatusCode(rpc_status.code()),
+                      rpc_status.message());
+}
+
+ProtocolRequestHelper::ProtocolRequestHelper(
+    HttpClient* http_client, InterruptibleRunner* interruptible_runner,
+    int64_t* bytes_downloaded, int64_t* bytes_uploaded,
+    absl::string_view entry_point_uri)
+    : http_client_(*http_client),
+      interruptible_runner_(*interruptible_runner),
+      bytes_downloaded_(*bytes_downloaded),
+      bytes_uploaded_(*bytes_uploaded),
+      next_request_base_uri_(entry_point_uri) {}
+
+absl::StatusOr<InMemoryHttpResponse>
+ProtocolRequestHelper::PerformProtocolRequest(absl::string_view uri_suffix,
+                                              HttpRequest::Method method,
+                                              std::string request_body) {
+  return PerformProtocolRequest(uri_suffix, method, request_body,
+                                interruptible_runner_);
+}
+
+absl::StatusOr<InMemoryHttpResponse>
+ProtocolRequestHelper::PerformProtocolRequest(
+    absl::string_view uri_suffix, HttpRequest::Method method,
+    std::string request_body, InterruptibleRunner& interruptible_runner) {
+  absl::StatusOr<std::string> uri =
+      JoinBaseUriWithSuffix(next_request_base_uri_, uri_suffix);
+  FCP_CHECK_STATUS(uri.status());
+
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<http::HttpRequest> request,
+      InMemoryHttpRequest::Create(*uri, method, next_request_headers_,
+                                  std::move(request_body)));
+
+  // Check whether issuing the request failed as a whole (generally indicating
+  // a programming error).
+  FCP_ASSIGN_OR_RETURN(
+      InMemoryHttpResponse result,
+      PerformRequestInMemory(http_client_, interruptible_runner,
+                             std::move(request), &bytes_downloaded_,
+                             &bytes_uploaded_));
+  if (!result.content_encoding.empty()) {
+    // Note that the `HttpClient` API contract ensures that if we don't specify
+    // an Accept-Encoding request header, then the response should be delivered
+    // to us without any Content-Encoding applied to it. Hence, if we somehow do
+    // still see a Content-Encoding response header then the `HttpClient`
+    // implementation isn't adhering to its part of the API contract.
+    return absl::UnavailableError(
+        "HTTP response unexpectedly has a Content-Encoding");
+  }
+  return result;
+}
+
+absl::Status ProtocolRequestHelper::ProcessForwardingInfo(
+    const ForwardingInfo& forwarding_info) {
+  // Extract the base URI and headers to use for the subsequent request.
+  if (forwarding_info.target_uri_prefix().empty()) {
+    return absl::InvalidArgumentError(
+        "Missing `ForwardingInfo.target_uri_prefix`");
+  }
+  next_request_base_uri_ = forwarding_info.target_uri_prefix();
+  const auto& new_headers = forwarding_info.extra_request_headers();
+  next_request_headers_ = HeaderList(new_headers.begin(), new_headers.end());
+  return absl::OkStatus();
+}
+
+absl::StatusOr<::google::longrunning::Operation>
+ProtocolRequestHelper::PollOperationResponseUntilDone(
+    absl::StatusOr<InMemoryHttpResponse> http_response) {
+  // There are three cases that lead to this method returning:
+  // - The HTTP response indicates an error.
+  // - The HTTP response cannot be parsed into an Operation proto.
+  // - The response `Operation.done` field is true.
+  //
+  // In all other cases we continue to poll the Operation via a subsequent
+  // GetOperationRequest.
+  Operation response_operation_proto;
+  while (true) {
+    // If the HTTP response indicates an error then return that error.
+    FCP_RETURN_IF_ERROR(http_response);
+
+    // Parse the response.
+      if
+      (!response_operation_proto.ParseFromString(std::string(http_response->body)))
+      {
+      return absl::InvalidArgumentError("could not parse Operation proto");
+    }
+
+    // If the Operation is done then return it.
+    if (response_operation_proto.done()) {
+      return std::move(response_operation_proto);
+    }
+
+    if (!absl::StartsWith(response_operation_proto.name(), "operations/")) {
+      return absl::InvalidArgumentError(
+          "cannot poll an Operation with an invalid name");
+    }
+
+    // TODO(team): Add a minimum amount of time between each request,
+    // and/or use Operation.metadata to allow server to steer the client's retry
+    // delays.
+
+    // The response Operation indicates that the result isn't ready yet. Poll
+    // again.
+    http_response = PerformGetOperationRequest(response_operation_proto.name());
+  }
+}
+
+absl::StatusOr<InMemoryHttpResponse>
+ProtocolRequestHelper::PerformGetOperationRequest(std::string operation_name) {
+  FCP_ASSIGN_OR_RETURN(std::string encoded_operation_name,
+                       EncodeUriMultiplePathSegments(operation_name));
+
+  // Construct the URI suffix.
+  std::string uri_suffix =
+      absl::Substitute(kGetOperationUriSuffix, encoded_operation_name);
+
+  // Issue the request. Note that the request body is empty, because its only
+  // field (`name`) is included in the URI instead. Also note that
+  // `PerformProtocolRequest` will attach the `next_request_headers_` to this
+  // request.
+  return PerformProtocolRequest(uri_suffix, HttpRequest::Method::kGet, "");
+}
 HttpFederatedProtocol::HttpFederatedProtocol(
     LogManager* log_manager, const Flags* flags, HttpClient* http_client,
     absl::string_view entry_point_uri, absl::string_view api_key,
@@ -149,23 +342,25 @@ HttpFederatedProtocol::HttpFederatedProtocol(
     : object_state_(ObjectState::kInitialized),
       flags_(flags),
       http_client_(http_client),
-      next_request_base_uri_(entry_point_uri),
+      interruptible_runner_(std::make_unique<InterruptibleRunner>(
+          log_manager, should_abort, timing_config,
+          InterruptibleRunner::DiagnosticsConfig{
+              .interrupted = ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP,
+              .interrupt_timeout =
+                  ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP_TIMED_OUT,
+              .interrupted_extended = ProdDiagCode::
+                  BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
+              .interrupt_timeout_extended = ProdDiagCode::
+                  BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT})),
+      protocol_request_helper_(http_client, interruptible_runner_.get(),
+                               &bytes_downloaded_, &bytes_uploaded_,
+                               entry_point_uri),
       api_key_(api_key),
       population_name_(population_name),
       retry_token_(retry_token),
       client_version_(client_version),
       attestation_measurement_(attestation_measurement),
       bit_gen_(std::move(bit_gen)) {
-  interruptible_runner_ = std::make_unique<InterruptibleRunner>(
-      log_manager, should_abort, timing_config,
-      InterruptibleRunner::DiagnosticsConfig{
-          .interrupted = ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP,
-          .interrupt_timeout =
-              ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP_TIMED_OUT,
-          .interrupted_extended = ProdDiagCode::
-              BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
-          .interrupt_timeout_extended = ProdDiagCode::
-              BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT});
   // Note that we could cast the provided error codes to absl::StatusCode
   // values here. However, that means we'd have to handle the case when
   // invalid integers that don't map to a StatusCode enum are provided in the
@@ -180,37 +375,6 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       absl::flat_hash_set<int32_t>(error_codes.begin(), error_codes.end());
   // TODO(team): Validate initial URI has https:// scheme, and a trailing
   // slash, either here or in fl_runner.cc.
-}
-
-absl::StatusOr<InMemoryHttpResponse>
-HttpFederatedProtocol::PerformProtocolRequest(absl::string_view uri_suffix,
-                                              std::string request_body) {
-  absl::StatusOr<std::string> uri =
-      JoinBaseUriWithSuffix(next_request_base_uri_, uri_suffix);
-  FCP_CHECK_STATUS(uri.status());
-
-  FCP_ASSIGN_OR_RETURN(std::unique_ptr<http::HttpRequest> request,
-                       InMemoryHttpRequest::Create(
-                           *uri, HttpRequest::Method::kPost,
-                           next_request_headers_, std::move(request_body)));
-
-  // Check whether issuing the request failed as a whole (generally indicating
-  // a programming error).
-  FCP_ASSIGN_OR_RETURN(
-      InMemoryHttpResponse result,
-      PerformRequestInMemory(*http_client_, *interruptible_runner_,
-                             std::move(request), &bytes_downloaded_,
-                             &bytes_uploaded_));
-  if (!result.content_encoding.empty()) {
-    // Note that the `HttpClient` API contract ensures that if we don't specify
-    // an Accept-Encoding request header, then the response should be delivered
-    // to us without any Content-Encoding applied to it. Hence, if we somehow do
-    // still see a Content-Encoding response header then the `HttpClient`
-    // implementation isn't adhering to its part of the API contract.
-    return absl::UnavailableError(
-        "HTTP response unexpectedly has a Content-Encoding");
-  }
-  return result;
 }
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
@@ -244,7 +408,8 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
       kRequestEligibilityEvalTaskUriSuffix, encoded_population_name);
 
   // Issue the request.
-  return PerformProtocolRequest(uri_suffix, request.SerializeAsString());
+  return protocol_request_helper_.PerformProtocolRequest(
+      uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString());
 }
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
@@ -292,18 +457,8 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
 
   session_id_ = response_proto.session_id();
 
-  // Extract the base URI and headers to use for the subsequent request.
-  if (response_proto.task_assignment_forwarding_info()
-          .target_uri_prefix()
-          .empty()) {
-    return absl::UnimplementedError(
-        "Missing `ForwardingInfo.target_uri_prefix`");
-  }
-  next_request_base_uri_ =
-      response_proto.task_assignment_forwarding_info().target_uri_prefix();
-  auto new_headers =
-      response_proto.task_assignment_forwarding_info().extra_request_headers();
-  next_request_headers_ = HeaderList(new_headers.begin(), new_headers.end());
+  FCP_RETURN_IF_ERROR(protocol_request_helper_.ProcessForwardingInfo(
+      response_proto.task_assignment_forwarding_info()));
 
   switch (response_proto.result_case()) {
     case EligibilityEvalTaskResponse::kEligibilityEvalTask: {
@@ -333,49 +488,6 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
   }
 }
 
-absl::StatusOr<HttpFederatedProtocol::PlanAndCheckpointPayloads>
-HttpFederatedProtocol::FetchTaskResources(
-    HttpFederatedProtocol::TaskResources task_resources) {
-  FCP_ASSIGN_OR_RETURN(UriOrInlineData plan_uri_or_data,
-                       ConvertResourceToUriOrInlineData(task_resources.plan));
-  FCP_ASSIGN_OR_RETURN(
-      UriOrInlineData checkpoint_uri_or_data,
-      ConvertResourceToUriOrInlineData(task_resources.checkpoint));
-
-  // Fetch the plan and init checkpoint resources if they need to be fetched
-  // (using the inline data instead if available).
-  absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
-      resource_responses =
-          FetchResourcesInMemory(*http_client_, *interruptible_runner_,
-                                 {plan_uri_or_data, checkpoint_uri_or_data},
-                                 &bytes_downloaded_, &bytes_uploaded_);
-  FCP_RETURN_IF_ERROR(resource_responses);
-  auto& plan_data_response = (*resource_responses)[0];
-  auto& checkpoint_data_response = (*resource_responses)[1];
-
-  // Note: we forward any error during the fetching of the plan/checkpoint
-  // resources resources to the caller, which means that these error codes will
-  // be checked against the set of 'permanent' error codes, just like the errors
-  // in response to the protocol request are.
-  if (!plan_data_response.ok()) {
-    return absl::Status(plan_data_response.status().code(),
-                        absl::StrCat("plan fetch failed: ",
-                                     plan_data_response.status().ToString()));
-  }
-  if (!checkpoint_data_response.ok()) {
-    return absl::Status(
-        checkpoint_data_response.status().code(),
-        absl::StrCat("checkpoint fetch failed: ",
-                     checkpoint_data_response.status().ToString()));
-  }
-
-  // TODO(team): This copies the plan & checkpoint data, which could be
-  // large. Since that data is already an absl::Cord, consider changing this
-  // method's return type to use absl::Cord to avoid the copy.
-  return PlanAndCheckpointPayloads{std::string(plan_data_response->body),
-                                   std::string(checkpoint_data_response->body)};
-}
-
 absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
     const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
   // Checkin(...) must follow an earlier call to EligibilityEvalCheckin() that
@@ -395,7 +507,114 @@ absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
   }
   object_state_ = ObjectState::kCheckinFailed;
 
-  return absl::UnimplementedError("Checkin() not implemented yet!");
+  // Send the request and parse the response.
+  auto response = HandleTaskAssignmentOperationResponse(
+      PerformTaskAssignmentRequest(task_eligibility_info));
+  // Update the object state to ensure we return the correct retry delay.
+  UpdateObjectStateIfPermanentError(
+      response.status(),
+      ObjectState::kEligibilityEvalCheckinFailedPermanentError);
+  return response;
+}
+
+absl::StatusOr<InMemoryHttpResponse>
+HttpFederatedProtocol::PerformTaskAssignmentRequest(
+    const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
+  // Create and serialize the request body. Note that the `population_name`
+  // and `session_id` fields are set in the URI instead of in this request
+  // proto message.
+  StartTaskAssignmentRequest request;
+  request.mutable_client_version()->set_version_code(client_version_);
+  // TODO(team): Populate an attestation_measurement value here.
+
+  if (task_eligibility_info.has_value()) {
+    *request.mutable_task_eligibility_info() = *task_eligibility_info;
+  }
+
+  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                       EncodeUriSinglePathSegment(population_name_));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
+                       EncodeUriSinglePathSegment(session_id_));
+
+  // Construct the URI suffix.
+  std::string uri_suffix =
+      absl::Substitute(kStartTaskAssignmentUriSuffix, encoded_population_name,
+                       encoded_session_id);
+
+  // Issue the request.
+  return protocol_request_helper_.PerformProtocolRequest(
+      uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString());
+}
+
+absl::StatusOr<FederatedProtocol::CheckinResult>
+HttpFederatedProtocol::HandleTaskAssignmentOperationResponse(
+    absl::StatusOr<InMemoryHttpResponse> http_response) {
+  absl::StatusOr<Operation> response_operation_proto =
+      protocol_request_helper_.PollOperationResponseUntilDone(http_response);
+  if (!response_operation_proto.ok()) {
+    // If the protocol request failed then forward the error, but add a prefix
+    // to the error message to ensure we can easily distinguish an HTTP error
+    // occurring in response to the protocol request from HTTP errors
+    // occurring during checkpoint/plan resource fetch requests later on.
+    return absl::Status(
+        response_operation_proto.status().code(),
+        absl::StrCat("protocol request failed: ",
+                     response_operation_proto.status().ToString()));
+  }
+
+  // The Operation has finished. Check if it resulted in an error, and if so
+  // forward it after converting it to an absl::Status error.
+  if (response_operation_proto->has_error()) {
+    auto rpc_error =
+        ConvertRpcStatusToAbslStatus(response_operation_proto->error());
+    return absl::Status(
+        rpc_error.code(),
+        absl::StrCat("Operation contained error: ", rpc_error.ToString()));
+  }
+
+  // Otherwise, handle the StartTaskAssignmentResponse that should have been
+  // returned by the Operation response proto.
+  return HandleTaskAssignmentInnerResponse(
+      response_operation_proto->response());
+}
+
+absl::StatusOr<FederatedProtocol::CheckinResult>
+HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
+    const ::google::protobuf::Any& operation_response) {
+  StartTaskAssignmentResponse response_proto;
+  if (!operation_response.UnpackTo(&response_proto)) {
+    return absl::InvalidArgumentError(
+        "could not parse StartTaskAssignmentResponse proto");
+  }
+  if (response_proto.has_rejection_info()) {
+    object_state_ = ObjectState::kCheckinRejected;
+    return Rejection{};
+  }
+  if (!response_proto.has_task_assignment()) {
+    return absl::UnimplementedError("Unrecognized StartTaskAssignmentResponse");
+  }
+  const auto& task_assignment = response_proto.task_assignment();
+
+  FCP_RETURN_IF_ERROR(protocol_request_helper_.ProcessForwardingInfo(
+      task_assignment.aggregation_report_forwarding_info()));
+
+  // Fetch the task resources, returning any errors that may be encountered in
+  // the process.
+  FCP_ASSIGN_OR_RETURN(
+      auto result,
+      FetchTaskResources({.plan = task_assignment.plan(),
+                          .checkpoint = task_assignment.init_checkpoint()}));
+
+  object_state_ = ObjectState::kCheckinAccepted;
+
+  return TaskAssignment{
+      .payloads = {.plan = std::move(result.plan),
+                   .checkpoint = std::move(result.checkpoint)},
+      .aggregation_session_id = task_assignment.aggregation_session_id(),
+      // TODO(team): Populate this field with the actual values
+      // provided by the server, once we support Secure Aggregation in the
+      // HTTP protocol.
+      .sec_agg_info = std::nullopt};
 }
 
 absl::Status HttpFederatedProtocol::ReportCompleted(
@@ -477,6 +696,49 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
           // NOLINTEND(whitespace/line_length)
           bit_gen_);
   }
+}
+
+absl::StatusOr<HttpFederatedProtocol::PlanAndCheckpointPayloads>
+HttpFederatedProtocol::FetchTaskResources(
+    HttpFederatedProtocol::TaskResources task_resources) {
+  FCP_ASSIGN_OR_RETURN(UriOrInlineData plan_uri_or_data,
+                       ConvertResourceToUriOrInlineData(task_resources.plan));
+  FCP_ASSIGN_OR_RETURN(
+      UriOrInlineData checkpoint_uri_or_data,
+      ConvertResourceToUriOrInlineData(task_resources.checkpoint));
+
+  // Fetch the plan and init checkpoint resources if they need to be fetched
+  // (using the inline data instead if available).
+  absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
+      resource_responses =
+          FetchResourcesInMemory(*http_client_, *interruptible_runner_,
+                                 {plan_uri_or_data, checkpoint_uri_or_data},
+                                 &bytes_downloaded_, &bytes_uploaded_);
+  FCP_RETURN_IF_ERROR(resource_responses);
+  auto& plan_data_response = (*resource_responses)[0];
+  auto& checkpoint_data_response = (*resource_responses)[1];
+
+  // Note: we forward any error during the fetching of the plan/checkpoint
+  // resources resources to the caller, which means that these error codes
+  // will be checked against the set of 'permanent' error codes, just like the
+  // errors in response to the protocol request are.
+  if (!plan_data_response.ok()) {
+    return absl::Status(plan_data_response.status().code(),
+                        absl::StrCat("plan fetch failed: ",
+                                     plan_data_response.status().ToString()));
+  }
+  if (!checkpoint_data_response.ok()) {
+    return absl::Status(
+        checkpoint_data_response.status().code(),
+        absl::StrCat("checkpoint fetch failed: ",
+                     checkpoint_data_response.status().ToString()));
+  }
+
+  // TODO(team): This copies the plan & checkpoint data, which could be
+  // large. Since that data is already an absl::Cord, consider changing this
+  // method's return type to use absl::Cord to avoid the copy.
+  return PlanAndCheckpointPayloads{std::string(plan_data_response->body),
+                                   std::string(checkpoint_data_response->body)};
 }
 
 void HttpFederatedProtocol::UpdateObjectStateIfPermanentError(

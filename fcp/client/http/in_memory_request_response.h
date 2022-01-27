@@ -81,11 +81,11 @@ class InMemoryHttpRequest : public HttpRequest {
 // Simple container class for holding an HTTP response code, headers, and
 // in-memory request body.
 struct InMemoryHttpResponse {
-  const int code;
+  int code;
   // This is empty if no "Content-Encoding" header was present in the response
   // headers.
-  const std::string content_encoding;
-  const absl::Cord body;
+  std::string content_encoding;
+  absl::Cord body;
 };
 
 // Simple `HttpRequestCallback` implementation that stores the response and its

@@ -125,6 +125,9 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/time",
+        "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
+        "@com_google_googleapis//google/rpc:status_cc_proto",
+        "@com_google_protobuf//:cc_wkt_protos",
     ],
 )
 
@@ -154,6 +157,7 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
+        "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
         "@com_google_protobuf//:cc_wkt_protos",
     ],
 )

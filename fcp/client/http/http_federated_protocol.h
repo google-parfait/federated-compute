@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "google/rpc/status.pb.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -44,11 +45,80 @@
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
+#include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp {
 namespace client {
 namespace http {
+
+// Converts a `::google::rpc::Status` into an `absl::Status`.
+absl::Status ConvertRpcStatusToAbslStatus(::google::rpc::Status rpc_status);
+
+// A helper for managing a chain of protocol requests, with each request being
+// pointed at an endpoint specified by a previous request's
+// `ForwardingInfo.target_uri_prefix`.
+class ProtocolRequestHelper {
+ public:
+  ProtocolRequestHelper(HttpClient* http_client,
+                        InterruptibleRunner* interruptible_runner,
+                        int64_t* bytes_downloaded, int64_t* bytes_uploaded,
+                        absl::string_view entry_point_uri);
+
+  // Performs the given request (handling any interruptions that may occur) and
+  // updates the network stats.
+  //
+  // The `uri_suffix` argument must always either be empty or start with a
+  // leading '/'. The method will CHECK-fail if this isn't the case.
+  //
+  // The URI to which the protocol request will be sent will be constructed by
+  // joining `next_request_base_uri_` with `uri_suffix` (see
+  // `JoinBaseUriWithSuffix` for details).
+  absl::StatusOr<InMemoryHttpResponse> PerformProtocolRequest(
+      absl::string_view uri_suffix, HttpRequest::Method method,
+      std::string request_body);
+
+  // Helper function for handling an HTTP response that contains an `Operation`
+  // proto.
+  //
+  // Takes an HTTP response (which must have been produced by a call to
+  // `PerformRequestInMemory`), parses the proto, and returns it if its
+  // `Operation.done` field is true. If the field is false then this method
+  // keeps polling the Operation via `PerformGetOperationRequest` until it a
+  // response is received where the field is true, at which point that most
+  // recent response is returned. If at any point an HTTP or response parsing
+  // error is encountered, then that error is returned instead.
+  absl::StatusOr<::google::longrunning::Operation>
+  PollOperationResponseUntilDone(
+      absl::StatusOr<InMemoryHttpResponse> http_response);
+
+  // Validates and extracts the base URI and headers to use for the subsequent
+  // request(s). This should be called by the user of this class after every
+  // successful `PerformProtocolRequest(...)` call.
+  absl::Status ProcessForwardingInfo(
+      const ::google::internal::federatedcompute::v1::ForwardingInfo&
+          forwarding_info);
+
+ private:
+  absl::StatusOr<InMemoryHttpResponse> PerformProtocolRequest(
+      absl::string_view uri_suffix, HttpRequest::Method method,
+      std::string request_body, InterruptibleRunner& interruptible_runner);
+
+  // Helper function for issuing a `GetOperationRequest` with which to poll the
+  // given operation.
+  absl::StatusOr<InMemoryHttpResponse> PerformGetOperationRequest(
+      std::string operation_name);
+
+  HttpClient& http_client_;
+  InterruptibleRunner& interruptible_runner_;
+  int64_t& bytes_downloaded_;
+  int64_t& bytes_uploaded_;
+  // The URI to use for the next protocol request. See `ForwardingInfo`.
+  std::string next_request_base_uri_;
+  // The set of headers to attach to the next protocol request. See
+  // `ForwardingInfo`.
+  HeaderList next_request_headers_;
+};
 
 // Implements a single session of the HTTP-based Federated Compute protocol.
 class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
@@ -94,18 +164,6 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   int64_t report_request_size_bytes() override;
 
  private:
-  // Performs the given request (handling any interruptions that may occur) and
-  // updates the network stats.
-  //
-  // The `uri_suffix` argument must always either be empty or start with a
-  // leading '/'. The method will CHECK-fail if this isn't the case.
-  //
-  // The URI to which the protocol request will be sent will be constructed by
-  // joining `next_request_base_uri_` with `uri_suffix` (see
-  // `JoinBaseUriWithSuffix` for details).
-  absl::StatusOr<InMemoryHttpResponse> PerformProtocolRequest(
-      absl::string_view uri_suffix, std::string request_body);
-
   // Helper function to perform an eligibility eval task request and get its
   // response.
   absl::StatusOr<InMemoryHttpResponse> PerformEligibilityEvalTaskRequest();
@@ -115,6 +173,26 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   absl::StatusOr<fcp::client::FederatedProtocol::EligibilityEvalCheckinResult>
   HandleEligibilityEvalTaskResponse(
       absl::StatusOr<InMemoryHttpResponse> http_response);
+
+  // Helper function to perform a task assignment request and get its response.
+  absl::StatusOr<InMemoryHttpResponse> PerformTaskAssignmentRequest(
+      const std::optional<
+          ::google::internal::federatedml::v2::TaskEligibilityInfo>&
+          task_eligibility_info);
+
+  // Helper function for handling the 'outer' task assignment response, which
+  // consists of an `Operation` which may or may not need to be polled before a
+  // final 'inner' response is available.
+  absl::StatusOr<::fcp::client::FederatedProtocol::CheckinResult>
+  HandleTaskAssignmentOperationResponse(
+      absl::StatusOr<InMemoryHttpResponse> http_response);
+
+  // Helper function for handling an 'inner' task assignment response (i.e.
+  // after the outer `Operation` has concluded). This includes fetching any
+  // resources, if necessary.
+  absl::StatusOr<::fcp::client::FederatedProtocol::CheckinResult>
+  HandleTaskAssignmentInnerResponse(
+      const ::google::protobuf::Any& operation_response);
 
   struct TaskResources {
     const ::google::internal::federatedcompute::v1::Resource& plan;
@@ -135,11 +213,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   const Flags* const flags_;
   HttpClient* const http_client_;
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
-  // The URI to use for the next protocol request. See `ForwardingInfo`.
-  std::string next_request_base_uri_;
-  // The set of headers to attach to the next protocol request. See
-  // `ForwardingInfo`.
-  HeaderList next_request_headers_;
+  ProtocolRequestHelper protocol_request_helper_;
   const std::string api_key_;
   const std::string population_name_;
   const std::string retry_token_;
@@ -166,6 +240,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // received.
   std::optional<RetryTimes> retry_times_;
   std::string session_id_;
+  // The identifier of the aggregation session we are participating in (or empty
+  // if that phase of the protocol hasn't been reached yet).
+  std::string aggregation_session_id_;
 };
 
 }  // namespace http
