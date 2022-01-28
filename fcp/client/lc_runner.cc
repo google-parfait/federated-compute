@@ -98,7 +98,6 @@ absl::Status RunPlanWithTensorflowSpec(
 
   // Run plan
   std::vector<std::string> output_names_unused;
-  engine::PlanResult plan_result(engine::PlanOutcome::kTensorflowError);
 
   // Construct input tensors based on the values in the LocalComputeIORouter
   // message.
@@ -106,7 +105,7 @@ absl::Status RunPlanWithTensorflowSpec(
       client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
   engine::SimplePlanEngine plan_engine(env_deps, log_manager, event_publisher,
                                        opstats_logger, &timing_config, flags);
-  plan_result = plan_engine.RunPlan(
+  engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs),
       output_names_unused, run_plan_start_time, reference_time,

@@ -17,6 +17,7 @@
 #define FCP_CLIENT_ENGINE_COMMON_H_
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
@@ -42,14 +43,17 @@ enum class PlanOutcome {
 // The result of a call to `SimplePlanEngine::RunPlan` or
 // `TfLitePlanEngine::RunPlan`.
 struct PlanResult {
-  explicit PlanResult(PlanOutcome outcome) : outcome(outcome) {}
+  explicit PlanResult(PlanOutcome outcome, absl::Status status);
 
   // The outcome of the plan execution.
   PlanOutcome outcome;
-  // Only set if `outcome` is `COMPLETE`, otherwise this is empty.
+  // Only set if `outcome` is `kSuccess`, otherwise this is empty.
   std::vector<tensorflow::Tensor> output_tensors;
-  // Only set if `outcome` is `COMPLETE`, otherwise this is empty.
+  // Only set if `outcome` is `kSuccess`, otherwise this is empty.
   std::vector<std::string> output_names;
+  // When the outcome is `kSuccess`, the status is ok. Otherwise, this status
+  // contain the original error status which leads to the PlanOutcome.
+  absl::Status original_status;
   int total_example_count = 0;
   int64_t total_example_size_bytes = 0;
 

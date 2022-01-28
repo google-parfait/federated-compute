@@ -154,6 +154,7 @@ cc_library(
     hdrs = ["common.h"],
     deps = [
         ":engine_cc_proto",
+        "//fcp/base",
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",

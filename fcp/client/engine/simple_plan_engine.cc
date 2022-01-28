@@ -72,7 +72,8 @@ PlanResult SimplePlanEngine::RunPlan(
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_IO,
         std::string(validity_checks.message()));
-    return PlanResult(PlanOutcome::kInvalidArgument);
+    return PlanResult(PlanOutcome::kInvalidArgument,
+                      std::move(validity_checks));
   }
 
   absl::StatusOr<std::unique_ptr<TensorFlowWrapper>> tf_wrapper_or =
@@ -93,7 +94,7 @@ PlanResult SimplePlanEngine::RunPlan(
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
         std::string(tf_wrapper_or.status().message()));
-    return PlanResult(PlanOutcome::kTensorflowError);
+    return PlanResult(PlanOutcome::kTensorflowError, tf_wrapper_or.status());
   }
 
   std::unique_ptr<TensorFlowWrapper> tf_wrapper =
@@ -113,7 +114,7 @@ PlanResult SimplePlanEngine::RunPlan(
 
   switch (tf_result.status().code()) {
     case absl::StatusCode::kOk: {
-      PlanResult plan_result(PlanOutcome::kSuccess);
+      PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
       plan_result.output_names = output_names;
       plan_result.output_tensors = std::move(tf_result).value();
       plan_result.total_example_count = total_example_count;
@@ -121,14 +122,14 @@ PlanResult SimplePlanEngine::RunPlan(
       return plan_result;
     }
     case absl::StatusCode::kCancelled:
-      return PlanResult(PlanOutcome::kInterrupted);
+      return PlanResult(PlanOutcome::kInterrupted, tf_result.status());
     case absl::StatusCode::kInvalidArgument:
-      return PlanResult(PlanOutcome::kTensorflowError);
+      return PlanResult(PlanOutcome::kTensorflowError, tf_result.status());
     default:
       FCP_LOG(FATAL) << "unexpected status code: " << tf_result.status().code();
   }
   // Unreachable, but clang doesn't get it.
-  return PlanResult(PlanOutcome::kTensorflowError);
+  return PlanResult(PlanOutcome::kTensorflowError, absl::InternalError(""));
 }
 
 absl::StatusOr<std::vector<tensorflow::Tensor>>

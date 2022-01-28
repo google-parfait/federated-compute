@@ -192,7 +192,8 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
     event_publisher->PublishIoError(0, message);
     opstats_logger->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    return engine::PlanResult(engine::PlanOutcome::kInvalidArgument);
+    return engine::PlanResult(engine::PlanOutcome::kInvalidArgument,
+                              absl::InvalidArgumentError(message));
   }
 
   const FederatedComputeEligibilityIORouter& io_router =
@@ -313,9 +314,6 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time run_plan_start_time, const absl::Time reference_time,
     const SelectorContext& selector_context) {
-  PlanResultAndCheckpointFile result(
-      (engine::PlanResult(engine::PlanOutcome::kTensorflowError)));
-
   // Check that this is a TensorflowSpec-based plan for federated computation.
   FCP_CHECK(client_plan.phase().has_tensorflow_spec());
   if (!client_plan.phase().has_federated_compute() ||
@@ -326,7 +324,9 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
     event_publisher->PublishIoError(0, message);
     opstats_logger->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    return result;
+    return PlanResultAndCheckpointFile(
+        engine::PlanResult(engine::PlanOutcome::kTensorflowError,
+                           absl::InvalidArgumentError(message)));
   }
 
   // Construct input tensors based on the values in the
@@ -342,7 +342,9 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
     event_publisher->PublishIoError(0, message);
     opstats_logger->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    return result;
+    return PlanResultAndCheckpointFile(
+        engine::PlanResult(engine::PlanOutcome::kTensorflowError,
+                           absl::UnavailableError(message)));
   }
   auto inputs = ConstructInputsForTensorflowSpecPlan(
       client_plan.phase().federated_compute(), checkpoint_input_filename,
@@ -354,7 +356,8 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
           event_publisher, log_manager, opstats_logger,
           client_plan.phase().federated_compute());
   if (!output_names.ok()) {
-    return result;
+    return PlanResultAndCheckpointFile(engine::PlanResult(
+        engine::PlanOutcome::kTensorflowError, output_names.status()));
   }
 
   auto log_computation_started = [opstats_logger]() {
@@ -376,7 +379,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
       run_plan_start_time, reference_time, log_computation_started,
       log_computation_finished, selector_context);
 
-  result.plan_result = std::move(plan_result);
+  PlanResultAndCheckpointFile result(std::move(plan_result));
   result.checkpoint_file = *checkpoint_output_filename;
 
   return result;
@@ -1034,7 +1037,8 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     const absl::Time run_plan_start_time, const absl::Time reference_time) {
   FLRunnerTensorflowSpecResult result;
   result.set_outcome(engine::PhaseOutcome::ERROR);
-  engine::PlanResult plan_result(engine::PlanOutcome::kTensorflowError);
+  engine::PlanResult plan_result(engine::PlanOutcome::kTensorflowError,
+                                 absl::UnknownError(""));
   auto opstats_logger =
       engine::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
                                   /*session_name=*/"", /*population_name=*/"");

@@ -17,6 +17,7 @@
 
 #include <string>
 
+#include "fcp/base/monitoring.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 
 namespace fcp {
@@ -24,6 +25,13 @@ namespace client {
 namespace engine {
 
 using ::google::internal::federated::plan::TensorflowSpec;
+
+PlanResult::PlanResult(PlanOutcome outcome, absl::Status status)
+    : outcome(outcome), original_status(std::move(status)) {
+  if (outcome == PlanOutcome::kSuccess) {
+    FCP_CHECK(original_status.ok());
+  }
+}
 
 absl::Status ValidateTensorflowSpec(
     const TensorflowSpec& tensorflow_spec,
