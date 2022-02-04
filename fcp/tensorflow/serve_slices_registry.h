@@ -22,7 +22,15 @@
 #include <utility>
 
 #include "fcp/tensorflow/host_object.h"
-#include "tensorflow/core/framework/tensor.h"
+
+// Forward declare Tensor to avoid an explicit dependency on the TensorFlow
+// framework. Dependencies of custom ops (which this target is) are not able to
+// depend on the full TensorFlow framework.
+namespace tensorflow {
+
+class Tensor;
+
+}  // namespace tensorflow
 
 namespace fcp {
 

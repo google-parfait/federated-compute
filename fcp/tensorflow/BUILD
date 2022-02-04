@@ -357,7 +357,6 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":host_object",
-        "@org_tensorflow//tensorflow/core:framework",
     ],
 )
 
@@ -369,6 +368,7 @@ cc_test(
         ":serve_slices_registry",
         "//fcp/base:random_token",
         "@com_google_googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/core:framework",
     ],
 )
 
@@ -376,8 +376,8 @@ SERVE_SLICES_OP_SRCS = ["serve_slices_op.cc"]
 
 SERVE_SLICES_OP_DEPS = [
     ":serve_slices_registry",
-    "@org_tensorflow//tensorflow/core:framework",
-    "@org_tensorflow//tensorflow/core:lib",
+    "@com_google_absl//absl/strings",
+    "@com_google_absl//absl/strings:str_format",
 ]
 
 # Custom op to register slices to serve for a `federated_select`.
@@ -387,8 +387,8 @@ cc_library(
     copts = FCP_TF_COPTS,
     visibility = ["//visibility:public"],
     deps = SERVE_SLICES_OP_DEPS + [
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:lib",
     ],
     # Uses TensorFlow's registration macros
     alwayslink = 1,
@@ -398,9 +398,9 @@ cc_library(
 # wrappers. See explanation above starting with "The targets below...".
 tf_custom_op_library(
     name = "_serve_slices_op.so",
-    srcs = EXTERNAL_DATASET_OP_SRCS,
+    srcs = SERVE_SLICES_OP_SRCS,
     copts = FCP_TF_COPTS,
-    deps = EXTERNAL_DATASET_OP_DEPS,
+    deps = SERVE_SLICES_OP_DEPS,
 )
 
 # Generates the basic op wrapper for use in Python.
@@ -415,6 +415,48 @@ tf_gen_op_wrapper_py(
 )
 
 # Public: Python library for ServeSlices.
+
+TENSOR_NAME_OP_SRCS = ["tensor_name_op.cc"]
+
+TENSOR_NAME_OP_DEPS = [
+    "@com_google_absl//absl/strings:str_format",
+]
+
+# Custom op to get the name of a tensor in the final graph at runtime.
+cc_library(
+    name = "tensor_name_op_lib",
+    srcs = TENSOR_NAME_OP_SRCS,
+    copts = FCP_TF_COPTS,
+    visibility = ["//visibility:public"],
+    deps = TENSOR_NAME_OP_DEPS + [
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:lib",
+    ],
+    # Uses TensorFlow's registration macros
+    alwayslink = 1,
+)
+
+# DSO version of `:tensor_name_op_lib`, intended to be loaded by Python
+# wrappers. See explanation above starting with "The targets below...".
+tf_custom_op_library(
+    name = "_tensor_name_op.so",
+    srcs = TENSOR_NAME_OP_SRCS,
+    copts = FCP_TF_COPTS,
+    deps = TENSOR_NAME_OP_DEPS,
+)
+
+# Generates the basic op wrapper for use in Python.
+# Don't use this directly: use `:tensor_name_py` to ensure that the
+# appropriate shared libraries are loaded.
+tf_gen_op_wrapper_py(
+    name = "gen_tensor_name_py",
+    out = "gen_tensor_name_py.py",
+    deps = [
+        ":tensor_name_op_lib",
+    ],
+)
+
+# Public: Python library for the `TensorName` op.
 
 cc_library(
     name = "task_eligibility_info_ops_lib",

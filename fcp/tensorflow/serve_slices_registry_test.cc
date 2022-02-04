@@ -20,6 +20,7 @@
 #include "gtest/gtest.h"
 #include "fcp/base/random_token.h"
 #include "fcp/tensorflow/host_object.h"
+#include "tensorflow/core/framework/tensor.h"
 
 namespace fcp {
 namespace {
