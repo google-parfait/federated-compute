@@ -416,6 +416,47 @@ tf_gen_op_wrapper_py(
 
 # Public: Python library for ServeSlices.
 
+MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS = ["make_slices_selector_example_selector_op.cc"]
+
+MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS = [
+    "@com_google_absl//absl/strings:str_format",
+    "//fcp/protos:plan_cc_proto",
+]
+
+# Custom op to serialize an ExampleSelector containing a SlicesSelector proto.
+cc_library(
+    name = "make_slices_selector_example_selector_op_lib",
+    srcs = MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS,
+    copts = FCP_TF_COPTS,
+    visibility = ["//visibility:public"],
+    deps = ["@com_google_protobuf//:cc_wkt_protos"] + MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS + [
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:lib",
+    ],
+    # Uses TensorFlow's registration macros
+    alwayslink = 1,
+)
+
+tf_custom_op_library(
+    name = "_make_slices_selector_example_selector_op.so",
+    srcs = MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS,
+    copts = FCP_TF_COPTS,
+    deps = ["@com_google_protobuf//:cc_wkt_protos"] + MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS,
+)
+
+# Generates the basic op wrapper for use in Python.
+# Don't use this directly: use `:make_slices_selector_py` to ensure that the
+# appropriate shared libraries are loaded.
+tf_gen_op_wrapper_py(
+    name = "gen_make_slices_selector_example_selector_py",
+    out = "gen_make_slices_selector_example_selector_py.py",
+    deps = [
+        ":make_slices_selector_example_selector_op_lib",
+    ],
+)
+
+# Public: Python library for the `MakeSlicesSelectorExampleSelector` op.
+
 TENSOR_NAME_OP_SRCS = ["tensor_name_op.cc"]
 
 TENSOR_NAME_OP_DEPS = [
