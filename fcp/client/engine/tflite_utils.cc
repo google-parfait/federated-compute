@@ -64,6 +64,8 @@ tensorflow::DataType GetTensorFlowDataType(TfLiteType type) {
       return tensorflow::DataType::DT_RESOURCE;
     case kTfLiteVariant:
       return tensorflow::DataType::DT_VARIANT;
+    default:
+      return tensorflow::DataType::DT_INVALID;
   }
 }
 
