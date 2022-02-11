@@ -486,12 +486,6 @@ message AcceptanceInfo {
     UriResource plan_resource = 9;
   }
 
-  // Maps client version to plan bytes.
-  // Note: This field should only be set when included in a JoinResponse from
-  // the aggregator to the selector, and then unset by the selector before
-  // sending on to the client.
-  map<string, bytes> client_version_to_plan_bytes = 6 [deprecated = true];
-
   // Per-aggregand dynamic configuration information for side channel protocols.
   // The keys in this map are the names of side channels, aligning with
   // CheckpointOp.side_channel_tensors in plan.proto.
@@ -502,7 +496,7 @@ message AcceptanceInfo {
   // protocol.
   SideChannelProtocolExecutionInfo side_channel_protocol_execution_info = 5;
 
-  reserved 7;
+  reserved 6, 7;
 }
 
 // This is sent when client (device) is rejected for the participation.
