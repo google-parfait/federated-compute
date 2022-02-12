@@ -131,6 +131,11 @@ enum ProdDiagCode {
   BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT = 21;
 
   /**
+   * Sent when TFLite was used.
+   */
+  BACKGROUND_TRAINING_TFLITE_ENGINE_USED = 20;
+
+  /**
    * A generic SecAgg client error.
    */
   SECAGG_CLIENT_NATIVE_ERROR_GENERIC = 1369;

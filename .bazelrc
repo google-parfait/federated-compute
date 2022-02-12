@@ -39,6 +39,14 @@ build --define=absl=1
 # This results in -Werror for all FCP code, but nothing we pull in via
 # repository rules (those labels have a @ prefix).
 build --per_file_copt=+^//@-Werror
+# We pull in some headers from TensorFlow which give the following warning, we
+# don't want to convert them to errors.
+build --per_file_copt=+^//@-Wno-error=inconsistent-missing-override
+build --per_file_copt=+^//@-Wno-error=mismatched-tags
+build --per_file_copt=+^//@-Wno-error=defaulted-function-deleted
+
+# TF now has `cc_shared_library` targets, so it needs the experimental flag.
+build --experimental_cc_shared_library
 
 # Bazel defaults to --std=c++0x
 build --cxxopt=-std=c++17

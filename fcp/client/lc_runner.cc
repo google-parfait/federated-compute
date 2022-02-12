@@ -27,6 +27,10 @@
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/simple_plan_engine.h"
 
+#ifdef FCP_CLIENT_SUPPORT_TFLITE
+#include "fcp/client/engine/tflite_plan_engine.h"
+#endif
+
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -57,6 +61,17 @@ ConstructInputsForTensorflowSpecPlan(const LocalComputeIORouter& local_compute,
   inputs->push_back({local_compute.output_dir_tensor_name(), output_dirpath});
   return inputs;
 }
+
+#ifdef FCP_CLIENT_SUPPORT_TFLITE
+std::unique_ptr<TfLiteInputs> ConstructInputsForTFLitePlan(
+    const LocalComputeIORouter& local_compute, const std::string& input_dir_uri,
+    const std::string& output_dir_uri) {
+  auto inputs = std::make_unique<TfLiteInputs>();
+  (*inputs)[local_compute.input_dir_tensor_name()] = input_dir_uri;
+  (*inputs)[local_compute.output_dir_tensor_name()] = output_dir_uri;
+  return inputs;
+}
+#endif
 
 absl::Status RunPlanWithTensorflowSpec(
     SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
@@ -98,6 +113,21 @@ absl::Status RunPlanWithTensorflowSpec(
 
   // Run plan
   std::vector<std::string> output_names_unused;
+
+#ifdef FCP_CLIENT_SUPPORT_TFLITE
+  if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
+    auto inputs = ConstructInputsForTFLitePlan(
+        client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
+    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, event_publisher,
+                                         opstats_logger, &timing_config, flags);
+    engine::PlanResult plan_result = plan_engine.RunPlan(
+        client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
+        std::move(inputs), output_names_unused, run_plan_start_time,
+        reference_time, log_computation_started, log_computation_finished,
+        selector_context);
+    return ConvertPlanOutcomeToStatus(plan_result.outcome);
+  }
+#endif
 
   // Construct input tensors based on the values in the LocalComputeIORouter
   // message.

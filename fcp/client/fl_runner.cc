@@ -31,6 +31,11 @@
 #include "fcp/client/engine/plan_engine.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/simple_plan_engine.h"
+
+#ifdef FCP_CLIENT_SUPPORT_TFLITE
+#include "fcp/client/engine/tflite_plan_engine.h"
+#endif
+
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/federated_protocol_util.h"
@@ -173,6 +178,19 @@ ConstructInputsForEligibilityEvalPlan(
   return inputs;
 }
 
+#ifdef FCP_CLIENT_SUPPORT_TFLITE
+std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
+    const FederatedComputeEligibilityIORouter& io_router,
+    const std::string& checkpoint_input_filename) {
+  auto inputs = std::make_unique<TfLiteInputs>();
+  if (!io_router.input_filepath_tensor_name().empty()) {
+    (*inputs)[io_router.input_filepath_tensor_name()] =
+        checkpoint_input_filename;
+  }
+  return inputs;
+}
+#endif
+
 engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
     SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
@@ -210,6 +228,21 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
     opstats_logger->AddEvent(
         OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_FINISHED);
   };
+
+#ifdef FCP_CLIENT_SUPPORT_TFLITE
+  if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
+    std::unique_ptr<TfLiteInputs> tflite_inputs =
+        ConstructTfLiteInputsForEligibilityEvalPlan(io_router,
+                                                    checkpoint_input_filename);
+    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, event_publisher,
+                                         opstats_logger, &timing_config, flags);
+    return plan_engine.RunPlan(
+        client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
+        std::move(tflite_inputs), output_names, run_plan_start_time,
+        reference_time, log_computation_started, log_computation_finished,
+        eligibility_selector_context);
+  }
+#endif
 
   // Construct input tensors and output tensor names based on the values in the
   // FederatedComputeEligibilityIORouter message.
@@ -282,6 +315,26 @@ ConstructInputsForTensorflowSpecPlan(
 
   return inputs;
 }
+
+#ifdef FCP_CLIENT_SUPPORT_TFLITE
+std::unique_ptr<TfLiteInputs> ConstructTFLiteInputsForTensorflowSpecPlan(
+    const FederatedComputeIORouter& io_router,
+    const std::string& checkpoint_input_filename,
+    const std::string& checkpoint_output_filename) {
+  auto inputs = std::make_unique<TfLiteInputs>();
+  if (!io_router.input_filepath_tensor_name().empty()) {
+    (*inputs)[io_router.input_filepath_tensor_name()] =
+        checkpoint_input_filename;
+  }
+
+  if (!io_router.output_filepath_tensor_name().empty()) {
+    (*inputs)[io_router.output_filepath_tensor_name()] =
+        checkpoint_output_filename;
+  }
+
+  return inputs;
+}
+#endif
 
 absl::StatusOr<std::vector<std::string>> ConstructOutputsForTensorflowSpecPlan(
     EventPublisher* event_publisher, LogManager* log_manager,
@@ -370,6 +423,25 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   };
 
   // Run plan and get a set of output tensors back.
+#ifdef FCP_CLIENT_SUPPORT_TFLITE
+  if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
+    std::unique_ptr<TfLiteInputs> tflite_inputs =
+        ConstructTFLiteInputsForTensorflowSpecPlan(
+            client_plan.phase().federated_compute(), checkpoint_input_filename,
+            *checkpoint_output_filename);
+    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, event_publisher,
+                                         opstats_logger, &timing_config, flags);
+    engine::PlanResult plan_result = plan_engine.RunPlan(
+        client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
+        std::move(tflite_inputs), *output_names, run_plan_start_time,
+        reference_time, log_computation_started, log_computation_finished,
+        selector_context);
+    PlanResultAndCheckpointFile result(std::move(plan_result));
+    result.checkpoint_file = *checkpoint_output_filename;
+
+    return result;
+  }
+#endif
 
   engine::SimplePlanEngine plan_engine(env_deps, log_manager, event_publisher,
                                        opstats_logger, &timing_config, flags);
