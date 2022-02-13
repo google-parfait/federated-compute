@@ -129,7 +129,6 @@ cc_library(
     hdrs = ["tflite_wrapper.h"],
     deps = [
         ":caching_error_reporter",
-        ":tflite_utils",
         "//fcp/base",
         "//fcp/client:interfaces",
         "//fcp/client:interruptible_runner",
@@ -140,6 +139,7 @@ cc_library(
         "@org_tensorflow//tensorflow/lite:framework_stable",
         "@org_tensorflow//tensorflow/lite:string_util",
         "@org_tensorflow//tensorflow/lite/delegates/flex:delegate_only_runtime",
+        "@org_tensorflow//tensorflow/lite/delegates/flex:util",
         "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
     ],
 )
@@ -203,31 +203,6 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/strings",
         "@org_tensorflow//tensorflow/lite/core/api:error_reporter",
-    ],
-)
-
-cc_library(
-    name = "tflite_utils",
-    srcs = ["tflite_utils.cc"],
-    hdrs = ["tflite_utils.h"],
-    deps = [
-        "//fcp/base",
-        "@com_google_absl//absl/status:statusor",
-        "@org_tensorflow//tensorflow/core:framework",
-        "@org_tensorflow//tensorflow/core:protos_all_cc",
-        "@org_tensorflow//tensorflow/lite:string_util",
-        "@org_tensorflow//tensorflow/lite/c:common",
-    ],
-)
-
-cc_test(
-    name = "tflite_utils_test",
-    srcs = ["tflite_utils_test.cc"],
-    deps = [
-        ":tflite_utils",
-        "//fcp/testing",
-        "@com_google_googletest//:gtest_main",
-        "@org_tensorflow//tensorflow/lite:string_util",
     ],
 )
 

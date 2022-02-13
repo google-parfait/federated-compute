@@ -24,7 +24,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/client/engine/tflite_utils.h"
+#include "tensorflow/lite/delegates/flex/util.h"
 #include "tensorflow/lite/interpreter_builder.h"
 #include "tensorflow/lite/kernels/register.h"
 #include "tensorflow/lite/model_builder.h"
@@ -173,9 +173,11 @@ TfLiteWrapper::ConstructOutputs() {
   std::vector<tensorflow::Tensor> outputs;
   for (int output_tensor_index : interpreter_->outputs()) {
     TfLiteTensor* tflite_tensor = interpreter_->tensor(output_tensor_index);
-    FCP_ASSIGN_OR_RETURN(tensorflow::Tensor tensor,
-                         CreateTfTensorFromTfLiteTensor(tflite_tensor));
-    outputs.push_back(tensor);
+    auto tensor = tflite::flex::CreateTfTensorFromTfLiteTensor(tflite_tensor);
+    if (!tensor.ok()) {
+      return absl::InvalidArgumentError(tensor.status().error_message());
+    }
+    outputs.push_back(*tensor);
   }
   return outputs;
 }
