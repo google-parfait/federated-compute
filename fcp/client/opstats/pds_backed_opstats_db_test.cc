@@ -98,24 +98,21 @@ TEST_F(PdsBackedOpStatsDbTest, FailToCreateParentDirectory) {
               LogDiag(ProdDiagCode::OPSTATS_PARENT_DIR_CREATION_FAILED));
   ASSERT_THAT(
       PdsBackedOpStatsDb::Create("/proc/0", ttl, log_manager_, size_limit,
-                                 /*enforce_singleton=*/false,
                                  /*record_earliest_trustworthy_time=*/false),
       IsCode(INTERNAL));
 }
 
 TEST_F(PdsBackedOpStatsDbTest, InvalidRelativePath) {
   EXPECT_CALL(log_manager_, LogDiag(ProdDiagCode::OPSTATS_INVALID_FILE_PATH));
-  ASSERT_THAT(
-      PdsBackedOpStatsDb::Create("relative/opstats", ttl, log_manager_,
-                                 size_limit, /*enforce_singleton=*/false,
-                                 /*record_earliest_trustworthy_time=*/false),
-      IsCode(INVALID_ARGUMENT));
+  ASSERT_THAT(PdsBackedOpStatsDb::Create(
+                  "relative/opstats", ttl, log_manager_, size_limit,
+                  /*record_earliest_trustworthy_time=*/false),
+              IsCode(INVALID_ARGUMENT));
 }
 
 TEST_F(PdsBackedOpStatsDbTest, AddOpStats) {
   auto db =
       PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                 /*enforce_singleton=*/false,
                                  /*record_earliest_trustworthy_time=*/false);
   ASSERT_THAT(db, IsOk());
   OperationalStats op_stats = CreateOperationalStatsWithSingleEvent(
@@ -143,7 +140,6 @@ TEST_F(PdsBackedOpStatsDbTest, AddOpStats) {
 TEST_F(PdsBackedOpStatsDbTest, MutateOpStats) {
   auto db =
       PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                 /*enforce_singleton=*/false,
                                  /*record_earliest_trustworthy_time=*/false);
   ASSERT_THAT(db, IsOk());
   auto initialCommit = [](OpStatsSequence& data) {
@@ -185,7 +181,6 @@ TEST_F(PdsBackedOpStatsDbTest, MutateOpStats) {
 TEST_F(PdsBackedOpStatsDbTest, LastUpdateTimeIsCorrectlyUsed) {
   auto db =
       PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                 /*enforce_singleton=*/false,
                                  /*record_earliest_trustworthy_time=*/false);
   ASSERT_THAT(db, IsOk());
   OperationalStats op_stats;
@@ -224,7 +219,6 @@ TEST_F(PdsBackedOpStatsDbTest, LastUpdateTimeIsCorrectlyUsed) {
 TEST_F(PdsBackedOpStatsDbTest, NoEventsOpStatsGotRemoved) {
   auto db =
       PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                 /*enforce_singleton=*/false,
                                  /*record_earliest_trustworthy_time=*/false);
   ASSERT_THAT(db, IsOk());
   OperationalStats op_stats;
@@ -262,9 +256,9 @@ TEST_F(PdsBackedOpStatsDbTest, TwoInstanceOnTwoThreadsAccessSameFile) {
   std::vector<absl::StatusOr<std::unique_ptr<OpStatsDb>>> results;
   std::function<void()> init = [&]() {
     absl::WriterMutexLock lock(&mu_);
-    results.push_back(PdsBackedOpStatsDb::Create(
-        base_dir_, ttl, log_manager_, size_limit, /*enforce_singleton=*/true,
-        /*record_earliest_trustworthy_time=*/false));
+    results.push_back(
+        PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
+                                   /*record_earliest_trustworthy_time=*/false));
   };
   std::thread first_thread(init);
   std::thread second_thread(init);
@@ -285,7 +279,6 @@ TEST_F(PdsBackedOpStatsDbTest, TwoInstanceOnTwoThreadsAccessDifferentFile) {
     absl::WriterMutexLock lock(&mu_);
     results.push_back(PdsBackedOpStatsDb::Create(
         absl::StrCat(base_dir_, "/", thread_id), ttl, log_manager_, size_limit,
-        /*enforce_singleton=*/true,
         /*record_earliest_trustworthy_time=*/false));
   };
   std::thread first_thread(init, "1");
@@ -307,7 +300,6 @@ TEST_F(PdsBackedOpStatsDbTest, BackfillEarliestTrustWorthyTime) {
   {
     absl::StatusOr<std::unique_ptr<OpStatsDb>> db =
         PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                   /*enforce_singleton=*/true,
                                    /*record_earliest_trustworthy_time=*/false);
     ASSERT_OK(db);
     ASSERT_FALSE(db.value()->Read()->has_earliest_trustworthy_time());
@@ -331,7 +323,6 @@ TEST_F(PdsBackedOpStatsDbTest, BackfillEarliestTrustWorthyTime) {
 
   absl::StatusOr<std::unique_ptr<OpStatsDb>> db =
       PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                 /*enforce_singleton=*/true,
                                  /*record_earliest_trustworthy_time=*/true);
   ASSERT_OK(db);
   OperationalStats third_op_stats = CreateOperationalStatsWithSingleEvent(
@@ -366,7 +357,6 @@ TEST_P(ParameterizedPdsBackedOpStatsDbTest, ReadEmpty) {
       TimeUtil::GetCurrentTime();
   auto db = PdsBackedOpStatsDb::Create(
       base_dir_, ttl, log_manager_, size_limit,
-      /*enforce_singleton=*/false,
       /*record_earliest_trustworthy_time=*/GetParam());
   ::google::protobuf::Timestamp after_creation_time =
       TimeUtil::GetCurrentTime();
@@ -385,7 +375,6 @@ TEST_P(ParameterizedPdsBackedOpStatsDbTest, ReadEmpty) {
 TEST_P(ParameterizedPdsBackedOpStatsDbTest, RemoveOpstatsDueToTtl) {
   auto db = PdsBackedOpStatsDb::Create(
       base_dir_, ttl, log_manager_, size_limit,
-      /*enforce_singleton=*/false,
       /*record_earliest_trustworthy_time=*/GetParam());
   ASSERT_THAT(db, IsOk());
   OperationalStats op_stats_remove = CreateOperationalStatsWithSingleEvent(
@@ -440,7 +429,6 @@ TEST_P(ParameterizedPdsBackedOpStatsDbTest, CorruptedFile) {
     std::unique_ptr<OpStatsDb> db =
         PdsBackedOpStatsDb::Create(
             base_dir_, ttl, log_manager_, size_limit,
-            /*enforce_singleton=*/false,
             /*record_earliest_trustworthy_time=*/GetParam())
             .value();
     auto func = [](OpStatsSequence& data) {
@@ -475,7 +463,6 @@ TEST_P(ParameterizedPdsBackedOpStatsDbTest, CorruptedFile) {
   std::unique_ptr<OpStatsDb> db =
       PdsBackedOpStatsDb::Create(
           base_dir_, ttl, log_manager_, size_limit,
-          /*enforce_singleton=*/false,
           /*record_earliest_trustworthy_time=*/GetParam())
           .value();
   EXPECT_CALL(log_manager_, LogDiag(ProdDiagCode::OPSTATS_READ_FAILED));
@@ -504,7 +491,6 @@ TEST_P(ParameterizedPdsBackedOpStatsDbTest, OpStatsRemovedDueToSizeLimit) {
   absl::StatusOr<std::unique_ptr<OpStatsDb>> db_status =
       PdsBackedOpStatsDb::Create(
           base_dir_, ttl, log_manager_, max_size_bytes,
-          /*enforce_singleton=*/false,
           /*record_earliest_trustworthy_time=*/GetParam());
   ASSERT_THAT(db_status, IsOk());
   std::unique_ptr<OpStatsDb> db = std::move(db_status.value());

@@ -46,8 +46,7 @@ class PdsBackedOpStatsDb : public OpStatsDb {
   // is kept since its last update time.
   static absl::StatusOr<std::unique_ptr<OpStatsDb>> Create(
       const std::string& base_dir, absl::Duration ttl, LogManager& log_manager,
-      int64_t max_size_bytes, bool enforce_singleton,
-      bool record_earliest_trustworthy_time);
+      int64_t max_size_bytes, bool record_earliest_trustworthy_time);
 
   ~PdsBackedOpStatsDb() override;
 

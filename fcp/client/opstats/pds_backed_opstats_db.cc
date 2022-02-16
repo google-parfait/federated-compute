@@ -216,8 +216,7 @@ void PruneOldDataUntilBelowSizeLimit(OpStatsSequence& data,
 
 absl::StatusOr<std::unique_ptr<OpStatsDb>> PdsBackedOpStatsDb::Create(
     const std::string& base_dir, absl::Duration ttl, LogManager& log_manager,
-    int64_t max_size_bytes, bool enforce_singleton,
-    bool record_earliest_trustworthy_time) {
+    int64_t max_size_bytes, bool record_earliest_trustworthy_time) {
   std::filesystem::path path(base_dir);
   if (!path.is_absolute()) {
     log_manager.LogDiag(ProdDiagCode::OPSTATS_INVALID_FILE_PATH);
@@ -237,30 +236,19 @@ absl::StatusOr<std::unique_ptr<OpStatsDb>> PdsBackedOpStatsDb::Create(
   std::function<void()> lock_releaser;
   auto file_storage = std::make_unique<protostore::FileStorage>();
   std::unique_ptr<protostore::ProtoDataStore<OpStatsSequence>> pds;
-  bool should_initiate;
-  if (enforce_singleton) {
-    std::string db_path = path.generic_string();
-    FCP_ASSIGN_OR_RETURN(int fd, AcquireFileLock(db_path, log_manager));
-    lock_releaser = [db_path, fd]() { ReleaseFileLock(db_path, fd); };
-    pds = std::make_unique<protostore::ProtoDataStore<OpStatsSequence>>(
-        *file_storage, db_path);
-    absl::StatusOr<int64_t> file_size = file_storage->GetFileSize(path);
-    if (!file_size.ok()) {
-      lock_releaser();
-      return file_size.status();
-    }
-    // If the size of the underlying file is zero, it means this is the first
-    // time we create the database.
-    should_initiate = file_size.value() == 0;
-  } else {
-    // Lock releaser is no-op because we didn't acquire the lock in this branch.
-    lock_releaser = []() {};
-    pds = std::make_unique<protostore::ProtoDataStore<OpStatsSequence>>(
-        *file_storage, path.generic_string());
-    // If the underlying file doesn't exist, it means this is the first time we
-    // create the database.
-    should_initiate = !std::filesystem::exists(path);
+  std::string db_path = path.generic_string();
+  FCP_ASSIGN_OR_RETURN(int fd, AcquireFileLock(db_path, log_manager));
+  lock_releaser = [db_path, fd]() { ReleaseFileLock(db_path, fd); };
+  pds = std::make_unique<protostore::ProtoDataStore<OpStatsSequence>>(
+      *file_storage, db_path);
+  absl::StatusOr<int64_t> file_size = file_storage->GetFileSize(path);
+  if (!file_size.ok()) {
+    lock_releaser();
+    return file_size.status();
   }
+  // If the size of the underlying file is zero, it means this is the first
+  // time we create the database.
+  bool should_initiate = file_size.value() == 0;
 
   // If this is the first time we create the OpStatsDb, we want to create an
   // empty database.

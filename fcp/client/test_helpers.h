@@ -374,7 +374,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_opstats, (), (const, override));
   MOCK_METHOD(int64_t, opstats_ttl_days, (), (const, override));
   MOCK_METHOD(int64_t, opstats_db_size_limit_bytes, (), (const, override));
-  MOCK_METHOD(bool, opstats_enforce_singleton, (), (const, override));
   MOCK_METHOD(int64_t, federated_training_transient_errors_retry_delay_secs, (),
               (const, override));
   MOCK_METHOD(float,

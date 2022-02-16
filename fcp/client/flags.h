@@ -69,10 +69,6 @@ class Flags {
     return 1 * 1024 * 1024;
   }
 
-  // If true, the user won't be able to create two instances of OpStatsDb which
-  // use the same underlying file.
-  virtual bool opstats_enforce_singleton() const { return false; }
-
   // The retry delay to use when encountering a transient error during a
   // training run before having received a RetryWindow from the server.
   virtual int64_t federated_training_transient_errors_retry_delay_secs() const {
