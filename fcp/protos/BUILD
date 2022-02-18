@@ -71,7 +71,8 @@ tf_proto_library(
         "@org_tensorflow//tensorflow/core:protos_all",
     ],
     # Needed by TFLite on-device training tests.
-    visibility = default_visibility + ["@org_tensorflow//tensorflow/lite/delegates/flex/training:__subpackages__"],
+    visibility = default_visibility + [
+    ],
 )
 
 java_proto_library(
@@ -84,7 +85,6 @@ alias(
     name = "plan_cc_proto",
     actual = "plan_proto_cc",
     visibility = default_visibility + [
-        "@org_tensorflow//tensorflow/lite/delegates/flex/training:__subpackages__",
     ],
 )
 

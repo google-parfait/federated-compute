@@ -168,8 +168,6 @@ cc_library(
     ],
     copts = FCP_TF_COPTS,
     visibility = default_visibility + [
-        # Needed by TFLite on-device training tests.
-        "@org_tensorflow//tensorflow/lite/delegates/flex/training:__subpackages__",
     ],
     deps = [
         ":host_object",
