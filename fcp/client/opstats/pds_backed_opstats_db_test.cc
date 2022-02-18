@@ -81,39 +81,24 @@ class PdsBackedOpStatsDbTest : public BasePdsBackedOpStatsDbTest,
   void TearDown() override { TearDownBaseDir(); }
 };
 
-class ParameterizedPdsBackedOpStatsDbTest
-    : public BasePdsBackedOpStatsDbTest,
-      public testing::TestWithParam<bool> {
-  void SetUp() override { SetUpBaseDir(); }
-
-  void TearDown() override { TearDownBaseDir(); }
-};
-
-INSTANTIATE_TEST_SUITE_P(WithoutVsWithEarliestTrustworthyTime,
-                         ParameterizedPdsBackedOpStatsDbTest,
-                         testing::Values(false, true));
-
 TEST_F(PdsBackedOpStatsDbTest, FailToCreateParentDirectory) {
   EXPECT_CALL(log_manager_,
               LogDiag(ProdDiagCode::OPSTATS_PARENT_DIR_CREATION_FAILED));
   ASSERT_THAT(
-      PdsBackedOpStatsDb::Create("/proc/0", ttl, log_manager_, size_limit,
-                                 /*record_earliest_trustworthy_time=*/false),
+      PdsBackedOpStatsDb::Create("/proc/0", ttl, log_manager_, size_limit),
       IsCode(INTERNAL));
 }
 
 TEST_F(PdsBackedOpStatsDbTest, InvalidRelativePath) {
   EXPECT_CALL(log_manager_, LogDiag(ProdDiagCode::OPSTATS_INVALID_FILE_PATH));
-  ASSERT_THAT(PdsBackedOpStatsDb::Create(
-                  "relative/opstats", ttl, log_manager_, size_limit,
-                  /*record_earliest_trustworthy_time=*/false),
+  ASSERT_THAT(PdsBackedOpStatsDb::Create("relative/opstats", ttl, log_manager_,
+                                         size_limit),
               IsCode(INVALID_ARGUMENT));
 }
 
 TEST_F(PdsBackedOpStatsDbTest, AddOpStats) {
   auto db =
-      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                 /*record_earliest_trustworthy_time=*/false);
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
   ASSERT_THAT(db, IsOk());
   OperationalStats op_stats = CreateOperationalStatsWithSingleEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED, benchmark_time_sec);
@@ -129,18 +114,19 @@ TEST_F(PdsBackedOpStatsDbTest, AddOpStats) {
               LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/1));
-  ASSERT_OK(db.value()->Transform(func));
+  ASSERT_OK((*db)->Transform(func));
   OpStatsSequence expected;
   *expected.add_opstats() = op_stats;
-  absl::StatusOr<OpStatsSequence> data = db.value()->Read();
+  absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_THAT(data, IsOk());
-  ASSERT_THAT(data.value(), EqualsProto(expected));
+  ASSERT_TRUE(data->has_earliest_trustworthy_time());
+  data->clear_earliest_trustworthy_time();
+  EXPECT_THAT(*data, EqualsProto(expected));
 }
 
 TEST_F(PdsBackedOpStatsDbTest, MutateOpStats) {
   auto db =
-      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                 /*record_earliest_trustworthy_time=*/false);
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
   ASSERT_THAT(db, IsOk());
   auto initialCommit = [](OpStatsSequence& data) {
     *data.add_opstats() = CreateOperationalStatsWithSingleEvent(
@@ -158,13 +144,13 @@ TEST_F(PdsBackedOpStatsDbTest, MutateOpStats) {
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/1))
       .Times(2);
-  ASSERT_OK(db.value()->Transform(initialCommit));
+  ASSERT_OK((*db)->Transform(initialCommit));
   auto mutate = [](OpStatsSequence& data) {
     data.mutable_opstats(0)->mutable_events()->Add(
         CreateEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED,
                     benchmark_time_sec));
   };
-  ASSERT_OK(db.value()->Transform(mutate));
+  ASSERT_OK((*db)->Transform(mutate));
   OperationalStats expected_op_stats;
   expected_op_stats.mutable_events()->Add(CreateEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED, benchmark_time_sec));
@@ -173,15 +159,16 @@ TEST_F(PdsBackedOpStatsDbTest, MutateOpStats) {
                   benchmark_time_sec));
   OpStatsSequence expected;
   *expected.add_opstats() = expected_op_stats;
-  absl::StatusOr<OpStatsSequence> data = db.value()->Read();
+  absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_THAT(data, IsOk());
-  ASSERT_THAT(data.value(), EqualsProto(expected));
+  ASSERT_TRUE(data->has_earliest_trustworthy_time());
+  data->clear_earliest_trustworthy_time();
+  EXPECT_THAT(*data, EqualsProto(expected));
 }
 
 TEST_F(PdsBackedOpStatsDbTest, LastUpdateTimeIsCorrectlyUsed) {
   auto db =
-      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                 /*record_earliest_trustworthy_time=*/false);
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
   ASSERT_THAT(db, IsOk());
   OperationalStats op_stats;
   op_stats.mutable_events()->Add(
@@ -204,22 +191,23 @@ TEST_F(PdsBackedOpStatsDbTest, LastUpdateTimeIsCorrectlyUsed) {
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/1))
       .Times(2);
-  ASSERT_OK(db.value()->Transform(initialCommit));
+  ASSERT_OK((*db)->Transform(initialCommit));
 
   // We do a second unity commit to trigger the ttl cleanup.
   auto unityCommit = [](OpStatsSequence& data) {};
-  ASSERT_OK(db.value()->Transform(unityCommit));
+  ASSERT_OK((*db)->Transform(unityCommit));
   OpStatsSequence expected;
   *expected.add_opstats() = op_stats;
-  absl::StatusOr<OpStatsSequence> data = db.value()->Read();
+  absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_THAT(data, IsOk());
-  ASSERT_THAT(data.value(), EqualsProto(expected));
+  ASSERT_TRUE(data->has_earliest_trustworthy_time());
+  data->clear_earliest_trustworthy_time();
+  EXPECT_THAT(*data, EqualsProto(expected));
 }
 
 TEST_F(PdsBackedOpStatsDbTest, NoEventsOpStatsGotRemoved) {
   auto db =
-      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                 /*record_earliest_trustworthy_time=*/false);
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
   ASSERT_THAT(db, IsOk());
   OperationalStats op_stats;
   op_stats.set_population_name("population");
@@ -240,14 +228,16 @@ TEST_F(PdsBackedOpStatsDbTest, NoEventsOpStatsGotRemoved) {
               LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/0));
-  ASSERT_OK(db.value()->Transform(initialCommit));
+  ASSERT_OK((*db)->Transform(initialCommit));
 
   // We do a second unity commit to trigger the ttl cleanup.
   auto unityCommit = [](OpStatsSequence& data) {};
-  ASSERT_OK(db.value()->Transform(unityCommit));
-  absl::StatusOr<OpStatsSequence> data = db.value()->Read();
+  ASSERT_OK((*db)->Transform(unityCommit));
+  absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_THAT(data, IsOk());
-  ASSERT_THAT(data.value(), EqualsProto(OpStatsSequence::default_instance()));
+  ASSERT_TRUE(data->has_earliest_trustworthy_time());
+  data->clear_earliest_trustworthy_time();
+  EXPECT_THAT(*data, EqualsProto(OpStatsSequence::default_instance()));
 }
 
 TEST_F(PdsBackedOpStatsDbTest, TwoInstanceOnTwoThreadsAccessSameFile) {
@@ -257,8 +247,7 @@ TEST_F(PdsBackedOpStatsDbTest, TwoInstanceOnTwoThreadsAccessSameFile) {
   std::function<void()> init = [&]() {
     absl::WriterMutexLock lock(&mu_);
     results.push_back(
-        PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                   /*record_earliest_trustworthy_time=*/false));
+        PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit));
   };
   std::thread first_thread(init);
   std::thread second_thread(init);
@@ -277,9 +266,9 @@ TEST_F(PdsBackedOpStatsDbTest, TwoInstanceOnTwoThreadsAccessDifferentFile) {
   std::vector<absl::StatusOr<std::unique_ptr<OpStatsDb>>> results;
   std::function<void(std::string)> init = [&](std::string thread_id) {
     absl::WriterMutexLock lock(&mu_);
-    results.push_back(PdsBackedOpStatsDb::Create(
-        absl::StrCat(base_dir_, "/", thread_id), ttl, log_manager_, size_limit,
-        /*record_earliest_trustworthy_time=*/false));
+    results.push_back(
+        PdsBackedOpStatsDb::Create(absl::StrCat(base_dir_, "/", thread_id), ttl,
+                                   log_manager_, size_limit));
   };
   std::thread first_thread(init, "1");
   std::thread second_thread(init, "2");
@@ -299,31 +288,32 @@ TEST_F(PdsBackedOpStatsDbTest, BackfillEarliestTrustWorthyTime) {
       benchmark_time_sec);
   {
     absl::StatusOr<std::unique_ptr<OpStatsDb>> db =
-        PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                   /*record_earliest_trustworthy_time=*/false);
+        PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
     ASSERT_OK(db);
-    ASSERT_FALSE(db.value()->Read()->has_earliest_trustworthy_time());
     auto add = [first_op_stats, second_op_stats](OpStatsSequence& data) {
       *data.add_opstats() = first_op_stats;
       *data.add_opstats() = second_op_stats;
+    };
+    auto remove_earliest_trustworthy_time = [](OpStatsSequence& data) {
+      data.clear_earliest_trustworthy_time();
     };
     EXPECT_CALL(
         log_manager_,
         LogToLongHistogram(HistogramCounters::OPSTATS_DB_SIZE_BYTES,
                            /*execution_index=*/0, /*epoch_index=*/0,
-                           engine::DataSourceType::DATASET, /*value=*/Gt(0)));
-    EXPECT_CALL(
-        log_manager_,
-        LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
-                           /*execution_index=*/0, /*epoch_index=*/0,
-                           engine::DataSourceType::DATASET, /*value=*/2));
-    ASSERT_OK(db.value()->Transform(add));
-    ASSERT_FALSE(db.value()->Read()->has_earliest_trustworthy_time());
+                           engine::DataSourceType::DATASET, /*value=*/Gt(0)))
+        .Times(2);
+    EXPECT_CALL(log_manager_, LogToLongHistogram(
+                                  HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
+                                  /*execution_index=*/0, /*epoch_index=*/0,
+                                  engine::DataSourceType::DATASET, /*value=*/2))
+        .Times(2);
+    ASSERT_OK((*db)->Transform(add));
+    ASSERT_OK((*db)->Transform(remove_earliest_trustworthy_time));
   }
 
   absl::StatusOr<std::unique_ptr<OpStatsDb>> db =
-      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit,
-                                 /*record_earliest_trustworthy_time=*/true);
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
   ASSERT_OK(db);
   OperationalStats third_op_stats = CreateOperationalStatsWithSingleEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED,
@@ -340,8 +330,8 @@ TEST_F(PdsBackedOpStatsDbTest, BackfillEarliestTrustWorthyTime) {
               LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/3));
-  ASSERT_OK(db.value()->Transform(add_another));
-  absl::StatusOr<OpStatsSequence> data = db.value()->Read();
+  ASSERT_OK((*db)->Transform(add_another));
+  absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_OK(data);
   OpStatsSequence expected;
   *expected.mutable_earliest_trustworthy_time() =
@@ -349,33 +339,27 @@ TEST_F(PdsBackedOpStatsDbTest, BackfillEarliestTrustWorthyTime) {
   *expected.add_opstats() = first_op_stats;
   *expected.add_opstats() = second_op_stats;
   *expected.add_opstats() = third_op_stats;
-  ASSERT_THAT(data.value(), EqualsProto(expected));
+  EXPECT_THAT((*data), EqualsProto(expected));
 }
 
-TEST_P(ParameterizedPdsBackedOpStatsDbTest, ReadEmpty) {
+TEST_F(PdsBackedOpStatsDbTest, ReadEmpty) {
   ::google::protobuf::Timestamp before_creation_time =
       TimeUtil::GetCurrentTime();
-  auto db = PdsBackedOpStatsDb::Create(
-      base_dir_, ttl, log_manager_, size_limit,
-      /*record_earliest_trustworthy_time=*/GetParam());
+  auto db =
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
   ::google::protobuf::Timestamp after_creation_time =
       TimeUtil::GetCurrentTime();
   ASSERT_THAT(db, IsOk());
-  absl::StatusOr<OpStatsSequence> data = db.value()->Read();
+  absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_THAT(data, IsOk());
-  EXPECT_TRUE(data.value().opstats().empty());
-  if (GetParam()) {
-    ASSERT_TRUE(data.value().earliest_trustworthy_time() >=
-                before_creation_time);
-    ASSERT_TRUE(data.value().earliest_trustworthy_time() <=
-                after_creation_time);
-  }
+  EXPECT_TRUE(data->opstats().empty());
+  EXPECT_TRUE(data->earliest_trustworthy_time() >= before_creation_time);
+  EXPECT_TRUE(data->earliest_trustworthy_time() <= after_creation_time);
 }
 
-TEST_P(ParameterizedPdsBackedOpStatsDbTest, RemoveOpstatsDueToTtl) {
-  auto db = PdsBackedOpStatsDb::Create(
-      base_dir_, ttl, log_manager_, size_limit,
-      /*record_earliest_trustworthy_time=*/GetParam());
+TEST_F(PdsBackedOpStatsDbTest, RemoveOpstatsDueToTtl) {
+  auto db =
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
   ASSERT_THAT(db, IsOk());
   OperationalStats op_stats_remove = CreateOperationalStatsWithSingleEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED,
@@ -401,35 +385,31 @@ TEST_P(ParameterizedPdsBackedOpStatsDbTest, RemoveOpstatsDueToTtl) {
               LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/1));
-  ASSERT_OK(db.value()->Transform(initialCommit));
+  ASSERT_OK((*db)->Transform(initialCommit));
 
   // We do a second unity commit to trigger the ttl cleanup.
   auto unityCommit = [](OpStatsSequence& data) {};
-  ASSERT_OK(db.value()->Transform(unityCommit));
+  ASSERT_OK((*db)->Transform(unityCommit));
 
-  absl::StatusOr<OpStatsSequence> data = db.value()->Read();
+  absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_THAT(data, IsOk());
-  ASSERT_EQ(data.value().opstats().size(), 1);
-  ASSERT_THAT(data.value().opstats()[0], EqualsProto(op_stats_keep));
-  if (GetParam()) {
-    // The TTL is 24 hours, the timestamp should be set to the time when the db
-    // got purged - 24 hours.  It should be smaller than the kept
-    // OperationalStats, but larger than benchmark time - 24 hours.
-    ::google::protobuf::Timestamp lower_bound = TimeUtil::SecondsToTimestamp(
-        absl::ToUnixSeconds(benchmark_time - absl::Hours(24)));
-    ::google::protobuf::Timestamp upper_bound = TimeUtil::SecondsToTimestamp(
-        absl::ToUnixSeconds(benchmark_time - absl::Hours(23)));
-    ASSERT_TRUE(data.value().earliest_trustworthy_time() >= lower_bound);
-    ASSERT_TRUE(data.value().earliest_trustworthy_time() <= upper_bound);
-  }
+  ASSERT_EQ(data->opstats().size(), 1);
+  ASSERT_THAT(data->opstats()[0], EqualsProto(op_stats_keep));
+  // The TTL is 24 hours, the timestamp should be set to the time when the db
+  // got purged - 24 hours.  It should be smaller than the kept
+  // OperationalStats, but larger than benchmark time - 24 hours.
+  google::protobuf::Timestamp lower_bound = TimeUtil::SecondsToTimestamp(
+      absl::ToUnixSeconds(benchmark_time - absl::Hours(24)));
+  google::protobuf::Timestamp upper_bound = TimeUtil::SecondsToTimestamp(
+      absl::ToUnixSeconds(benchmark_time - absl::Hours(23)));
+  EXPECT_TRUE(data->earliest_trustworthy_time() >= lower_bound);
+  EXPECT_TRUE(data->earliest_trustworthy_time() <= upper_bound);
 }
 
-TEST_P(ParameterizedPdsBackedOpStatsDbTest, CorruptedFile) {
+TEST_F(PdsBackedOpStatsDbTest, CorruptedFile) {
   {
     std::unique_ptr<OpStatsDb> db =
-        PdsBackedOpStatsDb::Create(
-            base_dir_, ttl, log_manager_, size_limit,
-            /*record_earliest_trustworthy_time=*/GetParam())
+        PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit)
             .value();
     auto func = [](OpStatsSequence& data) {
       *data.add_opstats() = CreateOperationalStatsWithSingleEvent(
@@ -461,9 +441,7 @@ TEST_P(ParameterizedPdsBackedOpStatsDbTest, CorruptedFile) {
   }
 
   std::unique_ptr<OpStatsDb> db =
-      PdsBackedOpStatsDb::Create(
-          base_dir_, ttl, log_manager_, size_limit,
-          /*record_earliest_trustworthy_time=*/GetParam())
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit)
           .value();
   EXPECT_CALL(log_manager_, LogDiag(ProdDiagCode::OPSTATS_READ_FAILED));
   ::google::protobuf::Timestamp before_read_time = TimeUtil::GetCurrentTime();
@@ -473,25 +451,19 @@ TEST_P(ParameterizedPdsBackedOpStatsDbTest, CorruptedFile) {
   // Second read should succeed, and return empty data.
   absl::StatusOr<OpStatsSequence> data = db->Read();
   ASSERT_THAT(data, IsOk());
-  if (GetParam()) {
-    ASSERT_TRUE(data.value().opstats().empty());
-    ASSERT_TRUE(data.value().earliest_trustworthy_time() >= before_read_time);
-    ASSERT_TRUE(data.value().earliest_trustworthy_time() <= after_read_time);
-  } else {
-    ASSERT_THAT(data.value(), EqualsProto(OpStatsSequence::default_instance()));
-  }
+  EXPECT_TRUE(data->opstats().empty());
+  EXPECT_TRUE(data->earliest_trustworthy_time() >= before_read_time);
+  EXPECT_TRUE(data->earliest_trustworthy_time() <= after_read_time);
 }
 
-TEST_P(ParameterizedPdsBackedOpStatsDbTest, OpStatsRemovedDueToSizeLimit) {
+TEST_F(PdsBackedOpStatsDbTest, OpStatsRemovedDueToSizeLimit) {
   // Set size limit to 18, which allow a single OperationalStats with a single
   // event (12 bytes for OperationalStats, 14 bytes when it is wrapped inside
   // an OpStatsSequence). If record_earliest_trustworthy_time is true, we'll
   // increase the size limit to 30 bytes to accommodate the timestamp.
-  int64_t max_size_bytes = GetParam() ? 30 : 18;
+  int64_t max_size_bytes = 30;
   absl::StatusOr<std::unique_ptr<OpStatsDb>> db_status =
-      PdsBackedOpStatsDb::Create(
-          base_dir_, ttl, log_manager_, max_size_bytes,
-          /*record_earliest_trustworthy_time=*/GetParam());
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, max_size_bytes);
   ASSERT_THAT(db_status, IsOk());
   std::unique_ptr<OpStatsDb> db = std::move(db_status.value());
   EXPECT_CALL(
@@ -533,14 +505,12 @@ TEST_P(ParameterizedPdsBackedOpStatsDbTest, OpStatsRemovedDueToSizeLimit) {
   // Verify the first event doesn't exist in the database.
   OpStatsSequence expected;
   *expected.add_opstats() = another_op_stats;
-  if (GetParam()) {
-    *expected.mutable_earliest_trustworthy_time() =
-        TimeUtil::SecondsToTimestamp(benchmark_time_sec + 5);
-  }
+  *expected.mutable_earliest_trustworthy_time() =
+      TimeUtil::SecondsToTimestamp(benchmark_time_sec + 5);
 
   absl::StatusOr<OpStatsSequence> data = db->Read();
   ASSERT_THAT(data, IsOk());
-  ASSERT_THAT(data.value(), EqualsProto(expected));
+  EXPECT_THAT(*data, EqualsProto(expected));
 }
 
 }  // anonymous namespace

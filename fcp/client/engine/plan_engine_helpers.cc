@@ -281,8 +281,7 @@ std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
   if (flags->enable_opstats()) {
     auto db_or = PdsBackedOpStatsDb::Create(
         base_dir, flags->opstats_ttl_days() * absl::Hours(24), *log_manager,
-        flags->opstats_db_size_limit_bytes(),
-        flags->record_earliest_trustworthy_time_for_opstats());
+        flags->opstats_db_size_limit_bytes());
     if (db_or.ok()) {
       return std::make_unique<OpStatsLoggerImpl>(
           std::move(db_or).value(), log_manager, session_name, population_name);

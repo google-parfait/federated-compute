@@ -92,13 +92,10 @@ void ReleaseFileLock(const std::string& db_path, int fd) {
   close(fd);
 }
 
-std::unique_ptr<OpStatsSequence> CreateEmptyData(
-    bool record_earliest_trustworthy_time) {
+std::unique_ptr<OpStatsSequence> CreateEmptyData() {
   auto empty_data = std::make_unique<OpStatsSequence>();
-  if (record_earliest_trustworthy_time) {
-    *(empty_data->mutable_earliest_trustworthy_time()) =
-        google::protobuf::util::TimeUtil::GetCurrentTime();
-  }
+  *(empty_data->mutable_earliest_trustworthy_time()) =
+      google::protobuf::util::TimeUtil::GetCurrentTime();
   return empty_data;
 }
 
@@ -118,10 +115,8 @@ absl::StatusOr<OpStatsSequence> ReadInternal(
 
 // Overwrites the db to contain an empty OpStatsSequence message.
 absl::Status ResetInternal(protostore::ProtoDataStore<OpStatsSequence>& db,
-                           LogManager& log_manager,
-                           bool record_earliest_trustworthy_time) {
-  absl::Status reset_status =
-      db.Write(CreateEmptyData(record_earliest_trustworthy_time));
+                           LogManager& log_manager) {
+  absl::Status reset_status = db.Write(CreateEmptyData());
   if (!reset_status.ok()) {
     log_manager.LogDiag(ProdDiagCode::OPSTATS_RESET_FAILED);
     return absl::InternalError(
@@ -153,8 +148,7 @@ absl::Time GetLastUpdateTime(const OperationalStats& operational_stats) {
   return timestamp;
 }
 
-void RemoveOutdatedData(OpStatsSequence& data, absl::Duration ttl,
-                        bool record_earliest_trustworthy_time) {
+void RemoveOutdatedData(OpStatsSequence& data, absl::Duration ttl) {
   absl::Time earliest_accepted_time = absl::Now() - ttl;
   auto* op_stats = data.mutable_opstats();
   int64_t original_num_entries = op_stats->size();
@@ -165,8 +159,7 @@ void RemoveOutdatedData(OpStatsSequence& data, absl::Duration ttl,
                      }),
       op_stats->end());
   int64_t num_entries_after_purging = op_stats->size();
-  if (record_earliest_trustworthy_time &&
-      num_entries_after_purging < original_num_entries) {
+  if (num_entries_after_purging < original_num_entries) {
     *(data.mutable_earliest_trustworthy_time()) =
         TimeUtil::MillisecondsToTimestamp(
             absl::ToUnixMillis(earliest_accepted_time));
@@ -175,8 +168,7 @@ void RemoveOutdatedData(OpStatsSequence& data, absl::Duration ttl,
 
 void PruneOldDataUntilBelowSizeLimit(OpStatsSequence& data,
                                      const int64_t max_size_bytes,
-                                     LogManager& log_manager,
-                                     bool record_earliest_trustworthy_time) {
+                                     LogManager& log_manager) {
   int64_t current_size = data.ByteSizeLong();
   auto& op_stats = *(data.mutable_opstats());
   if (current_size > max_size_bytes) {
@@ -196,10 +188,8 @@ void PruneOldDataUntilBelowSizeLimit(OpStatsSequence& data,
       it++;
     }
     op_stats.erase(op_stats.begin(), it);
-    if (record_earliest_trustworthy_time) {
-      *data.mutable_earliest_trustworthy_time() =
-          GetEarliestTrustWorthyTime(op_stats);
-    }
+    *data.mutable_earliest_trustworthy_time() =
+        GetEarliestTrustWorthyTime(op_stats);
     log_manager.LogToLongHistogram(
         HistogramCounters::OPSTATS_NUM_PRUNED_ENTRIES, num_pruned_entries);
     log_manager.LogToLongHistogram(
@@ -216,7 +206,7 @@ void PruneOldDataUntilBelowSizeLimit(OpStatsSequence& data,
 
 absl::StatusOr<std::unique_ptr<OpStatsDb>> PdsBackedOpStatsDb::Create(
     const std::string& base_dir, absl::Duration ttl, LogManager& log_manager,
-    int64_t max_size_bytes, bool record_earliest_trustworthy_time) {
+    int64_t max_size_bytes) {
   std::filesystem::path path(base_dir);
   if (!path.is_absolute()) {
     log_manager.LogDiag(ProdDiagCode::OPSTATS_INVALID_FILE_PATH);
@@ -253,16 +243,15 @@ absl::StatusOr<std::unique_ptr<OpStatsDb>> PdsBackedOpStatsDb::Create(
   // If this is the first time we create the OpStatsDb, we want to create an
   // empty database.
   if (should_initiate) {
-    absl::Status write_status =
-        pds->Write(CreateEmptyData(record_earliest_trustworthy_time));
+    absl::Status write_status = pds->Write(CreateEmptyData());
     if (!write_status.ok()) {
       lock_releaser();
       return write_status;
     }
   }
-  return absl::WrapUnique(new PdsBackedOpStatsDb(
-      std::move(pds), std::move(file_storage), ttl, log_manager, max_size_bytes,
-      lock_releaser, record_earliest_trustworthy_time));
+  return absl::WrapUnique(
+      new PdsBackedOpStatsDb(std::move(pds), std::move(file_storage), ttl,
+                             log_manager, max_size_bytes, lock_releaser));
 }
 
 PdsBackedOpStatsDb::~PdsBackedOpStatsDb() { lock_releaser_(); }
@@ -272,8 +261,7 @@ absl::StatusOr<OpStatsSequence> PdsBackedOpStatsDb::Read() {
   auto data_or = ReadInternal(*db_, log_manager_);
   if (!data_or.ok()) {
     // Try resetting after a failed read.
-    auto reset_status =
-        ResetInternal(*db_, log_manager_, record_earliest_trustworthy_time_);
+    auto reset_status = ResetInternal(*db_, log_manager_);
   }
   return data_or;
 }
@@ -285,17 +273,14 @@ absl::Status PdsBackedOpStatsDb::Transform(
   auto data_or = ReadInternal(*db_, log_manager_);
   if (!data_or.ok()) {
     // Try resetting after a failed read.
-    FCP_RETURN_IF_ERROR(
-        ResetInternal(*db_, log_manager_, record_earliest_trustworthy_time_));
+    FCP_RETURN_IF_ERROR(ResetInternal(*db_, log_manager_));
   } else {
     data = std::move(data_or).value();
-    RemoveOutdatedData(data, ttl_, record_earliest_trustworthy_time_);
+    RemoveOutdatedData(data, ttl_);
   }
   func(data);
-  PruneOldDataUntilBelowSizeLimit(data, max_size_bytes_, log_manager_,
-                                  record_earliest_trustworthy_time_);
-  if (record_earliest_trustworthy_time_ &&
-      !data.has_earliest_trustworthy_time()) {
+  PruneOldDataUntilBelowSizeLimit(data, max_size_bytes_, log_manager_);
+  if (!data.has_earliest_trustworthy_time()) {
     *data.mutable_earliest_trustworthy_time() =
         GetEarliestTrustWorthyTime(data.opstats());
   }

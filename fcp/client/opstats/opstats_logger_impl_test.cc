@@ -23,6 +23,7 @@
 #include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/opstats/pds_backed_opstats_db.h"
@@ -53,17 +54,14 @@ class OpStatsLoggerImplTest : public testing::Test {
     EXPECT_CALL(mock_flags_, opstats_ttl_days()).WillRepeatedly(Return(1));
     EXPECT_CALL(mock_flags_, opstats_db_size_limit_bytes())
         .WillRepeatedly(Return(1 * 1024 * 1024));
-    EXPECT_CALL(mock_flags_, record_earliest_trustworthy_time_for_opstats())
-        .WillRepeatedly(Return(false));
     base_dir_ = testing::TempDir();
   }
 
   void TearDown() override {
     auto db = PdsBackedOpStatsDb::Create(
-                  base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                  mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                  mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                  .value();
+        base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+        mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+    ASSERT_OK(db);
     EXPECT_CALL(
         mock_log_manager_,
         LogToLongHistogram(OPSTATS_DB_SIZE_BYTES, /*execution_index=*/0,
@@ -74,19 +72,18 @@ class OpStatsLoggerImplTest : public testing::Test {
         LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                            /*execution_index=*/0, /*epoch_index=*/0,
                            engine::DataSourceType::DATASET, /*value=*/0));
-    EXPECT_THAT(db->Transform([](OpStatsSequence& data) { data.Clear(); }),
+    EXPECT_THAT((*db)->Transform([](OpStatsSequence& data) { data.Clear(); }),
                 IsOk());
   }
 
   std::unique_ptr<OpStatsLogger> CreateOpStatsLoggerImpl(
       const std::string& session_name, const std::string& population_name) {
     auto db = PdsBackedOpStatsDb::Create(
-                  base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                  mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                  mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                  .value();
+        base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+        mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+    FCP_CHECK(db.ok());
     return std::make_unique<OpStatsLoggerImpl>(
-        std::move(db), &mock_log_manager_, session_name, population_name);
+        std::move(*db), &mock_log_manager_, session_name, population_name);
   }
 
   // Checks that the expected and actual protos are equivalent, ignoring the
@@ -103,6 +100,7 @@ class OpStatsLoggerImplTest : public testing::Test {
         event.clear_timestamp();
       }
     }
+    actual.clear_earliest_trustworthy_time();
     EXPECT_THAT(actual, EqualsProto(expected));
   }
 
@@ -177,13 +175,11 @@ TEST_F(OpStatsLoggerImplTest, SetTaskName) {
   opstats_logger_no_session.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
-                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                .value();
-  auto data = db->Read();
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
   ASSERT_OK(data);
-  auto opstats_sequence = data.value();
 
   OpStatsSequence expected;
   // Add the first run
@@ -206,9 +202,7 @@ TEST_F(OpStatsLoggerImplTest, SetTaskName) {
   new_opstats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
 
-  EXPECT_EQ(opstats_sequence.opstats_size(), 3);
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected,
-                                          opstats_sequence);
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
 TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
@@ -239,13 +233,11 @@ TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
   opstats_logger_no_population.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
-                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                .value();
-  auto data = db->Read();
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
   ASSERT_OK(data);
-  auto opstats_sequence = data.value();
 
   // Expect only the second run to be represented in the db.
   OpStatsSequence expected;
@@ -254,9 +246,7 @@ TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
   new_opstats->set_task_name(kTaskName);
   new_opstats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-  EXPECT_EQ(opstats_sequence.opstats_size(), 1);
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected,
-                                          opstats_sequence);
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
 TEST_F(OpStatsLoggerImplTest, AddEvent) {
@@ -277,13 +267,11 @@ TEST_F(OpStatsLoggerImplTest, AddEvent) {
   opstats_logger_no_population.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
-                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                .value();
-  auto data = db->Read();
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
   ASSERT_OK(data);
-  auto opstats_sequence = data.value();
 
   OpStatsSequence expected;
   // Add the first run
@@ -300,10 +288,7 @@ TEST_F(OpStatsLoggerImplTest, AddEvent) {
   new_opstats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
 
-  EXPECT_EQ(opstats_sequence.opstats_size(), 2);
-  EXPECT_EQ(opstats_sequence.opstats(1).events_size(), 2);
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected,
-                                          opstats_sequence);
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
 TEST_F(OpStatsLoggerImplTest, AddEventAfterTtl) {
@@ -327,13 +312,10 @@ TEST_F(OpStatsLoggerImplTest, AddEventAfterTtl) {
   opstats_logger_no_population.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
-                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                .value();
-  auto data = db->Read();
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  auto data = (*db)->Read();
   ASSERT_OK(data);
-  auto opstats_sequence = data.value();
 
   // Expect the db to contain only data associated with the second run. The
   // second run should be complete, however.
@@ -345,9 +327,7 @@ TEST_F(OpStatsLoggerImplTest, AddEventAfterTtl) {
   new_opstats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
 
-  EXPECT_EQ(opstats_sequence.opstats_size(), 1);
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected,
-                                          opstats_sequence);
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
 TEST_F(OpStatsLoggerImplTest, AddEventWithErrorMessage) {
@@ -362,13 +342,10 @@ TEST_F(OpStatsLoggerImplTest, AddEventWithErrorMessage) {
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
-                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                .value();
-  auto data = db->Read();
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  auto data = (*db)->Read();
   ASSERT_OK(data);
-  auto opstats_sequence = data.value();
 
   OpStatsSequence expected;
   auto new_opstats = expected.add_opstats();
@@ -380,10 +357,7 @@ TEST_F(OpStatsLoggerImplTest, AddEventWithErrorMessage) {
       OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW);
   new_opstats->set_error_message("first error");
 
-  EXPECT_EQ(opstats_sequence.opstats_size(), 1);
-  EXPECT_EQ(opstats_sequence.opstats(0).events_size(), 2);
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected,
-                                          opstats_sequence);
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
 TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
@@ -404,13 +378,10 @@ TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
-                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                .value();
-  auto data = db->Read();
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  auto data = (*db)->Read();
   ASSERT_OK(data);
-  auto opstats_sequence = data.value();
 
   OpStatsSequence expected;
   auto new_opstats = expected.add_opstats();
@@ -427,9 +398,8 @@ TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
   (*new_opstats->mutable_dataset_stats())[kCollectionUriOther] =
       std::move(dataset_stats_other);
 
-  EXPECT_EQ(opstats_sequence.opstats_size(), 1);
-  EXPECT_EQ(opstats_sequence.opstats(0).dataset_stats().size(), 2);
-  EXPECT_THAT(opstats_sequence, EqualsProto(expected));
+  (*data).clear_earliest_trustworthy_time();
+  EXPECT_THAT(*data, EqualsProto(expected));
 }
 
 TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
@@ -447,13 +417,11 @@ TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
-                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                .value();
-  auto data = db->Read();
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
   ASSERT_OK(data);
-  auto opstats_sequence = data.value();
 
   OpStatsSequence expected;
   auto new_opstats = expected.add_opstats();
@@ -464,8 +432,8 @@ TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
   new_opstats->set_chunking_layer_bytes_downloaded(202);
   new_opstats->set_chunking_layer_bytes_uploaded(203);
 
-  EXPECT_EQ(opstats_sequence.opstats_size(), 1);
-  EXPECT_THAT(opstats_sequence, EqualsProto(expected));
+  (*data).clear_earliest_trustworthy_time();
+  EXPECT_THAT(*data, EqualsProto(expected));
 }
 
 TEST_F(OpStatsLoggerImplTest, SetRetryWindow) {
@@ -477,13 +445,11 @@ TEST_F(OpStatsLoggerImplTest, SetRetryWindow) {
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
-                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                .value();
-  auto data = db->Read();
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
   ASSERT_OK(data);
-  auto opstats_sequence = data.value();
 
   OpStatsSequence expected;
   auto new_opstats = expected.add_opstats();
@@ -492,8 +458,8 @@ TEST_F(OpStatsLoggerImplTest, SetRetryWindow) {
   *new_opstats->mutable_retry_window() =
       CreateRetryWindow(/*retry_token=*/"", 300, 400);
 
-  EXPECT_EQ(opstats_sequence.opstats_size(), 1);
-  EXPECT_THAT(opstats_sequence, EqualsProto(expected));
+  (*data).clear_earliest_trustworthy_time();
+  EXPECT_THAT(*data, EqualsProto(expected));
 }
 
 TEST_F(OpStatsLoggerImplTest, AddEventCommitAddMoreEvents) {
@@ -519,13 +485,11 @@ TEST_F(OpStatsLoggerImplTest, AddEventCommitAddMoreEvents) {
   opstats_logger_no_population.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
-                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                .value();
-  auto data = db->Read();
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
   ASSERT_OK(data);
-  auto opstats_sequence = data.value();
 
   OpStatsSequence expected;
   // Add the first run
@@ -544,22 +508,17 @@ TEST_F(OpStatsLoggerImplTest, AddEventCommitAddMoreEvents) {
   second_run->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
 
-  EXPECT_EQ(opstats_sequence.opstats_size(), 2);
-  EXPECT_EQ(opstats_sequence.opstats(1).events_size(), 3);
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected,
-                                          opstats_sequence);
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
 TEST_F(OpStatsLoggerImplTest, MisconfiguredTtlMultipleCommit) {
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 3);
-  auto db_zero_ttl =
-      PdsBackedOpStatsDb::Create(
-          base_dir_, absl::ZeroDuration(), mock_log_manager_,
-          mock_flags_.opstats_db_size_limit_bytes(),
-          mock_flags_.record_earliest_trustworthy_time_for_opstats())
-          .value();
+  auto db_zero_ttl = PdsBackedOpStatsDb::Create(
+                         base_dir_, absl::ZeroDuration(), mock_log_manager_,
+                         mock_flags_.opstats_db_size_limit_bytes())
+                         .value();
   auto opstats_logger = std::make_unique<OpStatsLoggerImpl>(
       std::move(db_zero_ttl), &mock_log_manager_, kSessionName,
       kPopulationName);
@@ -575,13 +534,11 @@ TEST_F(OpStatsLoggerImplTest, MisconfiguredTtlMultipleCommit) {
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
-                base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-                mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes(),
-                mock_flags_.record_earliest_trustworthy_time_for_opstats())
-                .value();
-  auto data = db->Read();
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
   ASSERT_OK(data);
-  auto opstats_sequence = data.value();
 
   // Even though we had corruption in the middle of the run, it should be ok
   // because we committed the entire history successfully at the end.
@@ -595,10 +552,8 @@ TEST_F(OpStatsLoggerImplTest, MisconfiguredTtlMultipleCommit) {
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
   expected_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
-  EXPECT_EQ(opstats_sequence.opstats_size(), 1);
-  EXPECT_EQ(opstats_sequence.opstats(0).events_size(), 3);
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected,
-                                          opstats_sequence);
+
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
 }  // anonymous namespace
