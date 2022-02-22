@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 
+#include "google/rpc/status.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
@@ -99,6 +100,46 @@ TEST(ConvertHttpCodeToStatusTest, IncludesOriginalErrorCodeInMessage) {
   EXPECT_THAT(ConvertHttpCodeToStatus(502).message(), HasSubstr("code: 502"));
   EXPECT_THAT(ConvertHttpCodeToStatus(503).message(), HasSubstr("code: 503"));
   EXPECT_THAT(ConvertHttpCodeToStatus(300).message(), HasSubstr("code: 300"));
+}
+
+void ExpectRpcStatusMatchAbslStatus(absl::StatusCode code) {
+  ::google::rpc::Status rpc_status;
+  *rpc_status.mutable_message() = "the_message";
+  rpc_status.set_code(static_cast<int>(code));
+  absl::Status converted_status = ConvertRpcStatusToAbslStatus(rpc_status);
+  EXPECT_THAT(converted_status, IsCode(code));
+  // OK Status objects always have empty messages.
+  EXPECT_EQ(converted_status.message(),
+            code == absl::StatusCode::kOk ? "" : "the_message");
+}
+
+TEST(ConvertRpcStatusToAbslStatusTest, ValidCodesShouldConvertSuccessfully) {
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kOk);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kCancelled);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kUnknown);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kInvalidArgument);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kDeadlineExceeded);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kNotFound);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kAlreadyExists);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kPermissionDenied);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kResourceExhausted);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kFailedPrecondition);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kAborted);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kOutOfRange);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kUnimplemented);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kInternal);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kUnavailable);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kDataLoss);
+  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kUnauthenticated);
+}
+
+TEST(ConvertRpcStatusToAbslStatusTest, InvalidCodesShouldConvertToUnknown) {
+  ::google::rpc::Status rpc_status;
+  *rpc_status.mutable_message() = "the_message";
+  rpc_status.set_code(100);  // 100 is not a valid status code.
+  absl::Status converted_status = ConvertRpcStatusToAbslStatus(rpc_status);
+  EXPECT_THAT(converted_status, IsCode(UNKNOWN));
+  EXPECT_EQ(converted_status.message(), "the_message");
 }
 
 TEST(FindHeaderTest, DoesNotFindMissingHeader) {

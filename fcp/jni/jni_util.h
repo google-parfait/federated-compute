@@ -19,6 +19,7 @@
 
 #include <jni.h>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/container/fixed_array.h"
 #include "fcp/base/monitoring.h"
 
@@ -151,6 +152,24 @@ struct JavaMethodSig {
 struct JavaFieldSig {
   char const* name;
   char const* signature;
+};
+
+// A utility for ensuring that a local JNI reference is deleted once the object
+// goes out of scope. This class is only intended to be used inside a function
+// body (and not to be returned or passed as an argument).
+class LocalRefDeleter {
+ public:
+  LocalRefDeleter(JNIEnv* env, jobject local_ref)
+      : env_(env), local_ref_(local_ref) {}
+  // Prevent copies & moves, to make it harder to accidentally have this object
+  // be passed as a parameter or return type.
+  LocalRefDeleter(LocalRefDeleter& other) = delete;
+  LocalRefDeleter(LocalRefDeleter&& other) = delete;
+  ~LocalRefDeleter() { env_->DeleteLocalRef(local_ref_); }
+
+ private:
+  JNIEnv* env_;
+  jobject local_ref_;
 };
 
 }  // namespace jni

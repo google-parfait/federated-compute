@@ -11,23 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-default_visibility = [
-    "//fcp:internal",
-]
-
 package(
-    default_visibility = default_visibility,
+    default_visibility = [
+        "//fcp:internal",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
-cc_library(
-    name = "jni_util",
-    hdrs = ["jni_util.h"],
+java_library(
+    name = "jni_interface",
+    srcs = [
+        "HttpClientForNative.java",
+    ],
     deps = [
-        "//fcp/base",
-        "@com_google_absl//absl/cleanup",
-        "@com_google_absl//absl/container:fixed_array",
-        "@bazel_tools//tools/jdk:jni",
+        "@maven//:com_google_errorprone_error_prone_annotations",
     ],
 )

@@ -41,6 +41,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_googleapis//google/rpc:status_cc_proto",
     ],
 )
 
@@ -53,6 +54,7 @@ cc_test(
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/status",
+        "@com_google_googleapis//google/rpc:status_cc_proto",
     ],
 )
 
@@ -126,7 +128,6 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/time",
         "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
-        "@com_google_googleapis//google/rpc:status_cc_proto",
         "@com_google_protobuf//:cc_wkt_protos",
     ],
 )

@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 
+#include "google/rpc/status.pb.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -58,6 +59,9 @@ enum HttpResponseCode {
 // Converts an HTTP response code into an `absl::Status` (incl. an error message
 // with the original HTTP code).
 absl::Status ConvertHttpCodeToStatus(int code);
+
+// Converts a `::google::rpc::Status` into an `absl::Status`.
+absl::Status ConvertRpcStatusToAbslStatus(::google::rpc::Status rpc_status);
 
 // Finds the header value for header with name `needle` in a list of headers
 // (incl. normalizing the header names to lowercase before doing any

@@ -94,10 +94,12 @@ class HttpResponse;         // forward declaration
 // - Response body decompression & decoding:
 //   *  If no "Accept-Encoding" request header is explicitly specified in
 //      `HttpRequest::headers()`, then implementations must advertise an
-//      "Accept-Encoding: gzip,deflate" request header themselves, and must
-//      transparently decompress any compressed server responses before
-//      returning the data via these interfaces. Implementations are also
-//      allowed to advertise/support additional encoding methods.
+//      "Accept-Encoding" request header themselves whose value includes at
+//      least "gzip" (additional encodings are allowed to be specified in
+//      addition to "gzip"), and must transparently decompress any compressed
+//      server responses before returning the data via these interfaces.
+//      Implementations are also allowed to advertise/support additional
+//      encoding methods.
 //   *  In such cases where no "Accept-Encoding" header is specified,
 //      implementations must remove the "Content-Encoding" and
 //      "Content-Length" headers from headers returned via
@@ -159,7 +161,9 @@ class HttpClient {
   // has returned.
   //
   // Returns an `INVALID_ARGUMENT` error if a `HttpRequestHandle` was previously
-  // already passed to another `PerformRequests` call.
+  // already passed to another `PerformRequests` call, or if an
+  // `HttpRequestHandle`'s `Cancel` method was already called before being
+  // passed to this call.
   virtual absl::Status PerformRequests(
       std::vector<std::pair<HttpRequestHandle*, HttpRequestCallback*>>
           requests) = 0;
@@ -231,7 +235,8 @@ class HttpRequest {
   // Callees should return data ASAP, as delaying this for too long may cause
   // the network stream to fall idle/run out of data to transmit.
   //
-  // May also return other errors, in which case the request will be cancelled.
+  // May also return other errors, in which case the request will be ended and
+  // `HttpRequestCallback::OnResponseError` will be called with the same error.
   virtual absl::StatusOr<int64_t> ReadBody(char* buffer, int64_t requested) = 0;
 };
 
@@ -309,10 +314,19 @@ class HttpRequestHandle {
 // `HttpClient`. Instances must remain alive for at least as long as their
 // corresponding `PerformRequests` call.
 //
-// Methods of this class may get called from any thread (and subsequent calls
-// are not required to all happen on the same thread), but only a single method
-// should ever be called at the same time (i.e. implementations likely should
-// use external synchronization).
+// Methods of this class may get called from any thread (incl. concurrently),
+// but callers of this class must always call the callback methods for a
+// specific `HttpRequest` in the order specified in each method's documentation.
+// Implementations of this class therefore likely should use internal
+// synchronization.
+//
+// For example, a call to `OnResponseBody` for a given `HttpRequest` A will
+// always be preceded by a completed call to `OnResponseStarted` for that same
+// request A. However, callbacks for different `HttpRequest` objects may happen
+// concurrently, so for example, `OnResponseStarted` may be called concurrently
+// for two different requests A and B. This latter scenario means that if the
+// same `HttpRequestCallback` object is used to handle callbacks for both
+// requests, then the object has to handle concurrent calls correctly.
 class HttpRequestCallback {
  public:
   virtual ~HttpRequestCallback() = default;
@@ -361,6 +375,9 @@ class HttpRequestCallback {
   // If the `HttpRequestHandle::Cancel` method was called before
   // `OnResponseStarted` was called for the given `HttpRequest`, then this
   // method will be called with a `CANCELLED` status.
+  //
+  // If the request's `HttpRequest::ReadBody` returned an unexpected error,
+  // then method will be called with that error.
   virtual void OnResponseError(const HttpRequest& request,
                                const absl::Status& error) = 0;
 

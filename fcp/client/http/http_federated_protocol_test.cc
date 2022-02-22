@@ -1626,45 +1626,5 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseErrorAfterPolling) {
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
-
-void ExpectRpcStatusMatchAbslStatus(absl::StatusCode code) {
-  ::google::rpc::Status rpc_status;
-  *rpc_status.mutable_message() = "the_message";
-  rpc_status.set_code(static_cast<int>(code));
-  absl::Status converted_status = ConvertRpcStatusToAbslStatus(rpc_status);
-  EXPECT_THAT(converted_status, IsCode(code));
-  // OK Status objects always have empty messages.
-  EXPECT_EQ(converted_status.message(),
-            code == absl::StatusCode::kOk ? "" : "the_message");
-}
-
-TEST(ConvertRpcStatusToAbslStatusTest, ValidCodesShouldConvertSuccessfully) {
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kOk);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kCancelled);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kUnknown);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kInvalidArgument);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kDeadlineExceeded);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kNotFound);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kAlreadyExists);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kPermissionDenied);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kResourceExhausted);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kFailedPrecondition);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kAborted);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kOutOfRange);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kUnimplemented);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kInternal);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kUnavailable);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kDataLoss);
-  ExpectRpcStatusMatchAbslStatus(absl::StatusCode::kUnauthenticated);
-}
-
-TEST(ConvertRpcStatusToAbslStatusTest, InvalidCodesShouldConvertToUnknown) {
-  ::google::rpc::Status rpc_status;
-  *rpc_status.mutable_message() = "the_message";
-  rpc_status.set_code(100);  // 100 is not a valid status code.
-  absl::Status converted_status = ConvertRpcStatusToAbslStatus(rpc_status);
-  EXPECT_THAT(converted_status, IsCode(UNKNOWN));
-  EXPECT_EQ(converted_status.message(), "the_message");
-}
 }  // anonymous namespace
 }  // namespace fcp::client::http

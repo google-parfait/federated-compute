@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "google/rpc/status.pb.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -75,6 +76,51 @@ absl::StatusCode ConvertHttpCodeToStatusCode(int code) {
   }
 }
 
+// Converts a `::google::rpc::Status` error code into an `absl::StatusCode`
+// (there is a 1:1 mapping).
+absl::StatusCode ConvertRpcCodeToStatusCode(int code) {
+  switch (code) {
+    case static_cast<int>(absl::StatusCode::kOk):
+      return absl::StatusCode::kOk;
+    case static_cast<int>(absl::StatusCode::kCancelled):
+      return absl::StatusCode::kCancelled;
+    case static_cast<int>(absl::StatusCode::kUnknown):
+      return absl::StatusCode::kUnknown;
+    case static_cast<int>(absl::StatusCode::kInvalidArgument):
+      return absl::StatusCode::kInvalidArgument;
+    case static_cast<int>(absl::StatusCode::kDeadlineExceeded):
+      return absl::StatusCode::kDeadlineExceeded;
+    case static_cast<int>(absl::StatusCode::kNotFound):
+      return absl::StatusCode::kNotFound;
+    case static_cast<int>(absl::StatusCode::kAlreadyExists):
+      return absl::StatusCode::kAlreadyExists;
+    case static_cast<int>(absl::StatusCode::kPermissionDenied):
+      return absl::StatusCode::kPermissionDenied;
+    case static_cast<int>(absl::StatusCode::kResourceExhausted):
+      return absl::StatusCode::kResourceExhausted;
+    case static_cast<int>(absl::StatusCode::kFailedPrecondition):
+      return absl::StatusCode::kFailedPrecondition;
+    case static_cast<int>(absl::StatusCode::kAborted):
+      return absl::StatusCode::kAborted;
+    case static_cast<int>(absl::StatusCode::kOutOfRange):
+      return absl::StatusCode::kOutOfRange;
+    case static_cast<int>(absl::StatusCode::kUnimplemented):
+      return absl::StatusCode::kUnimplemented;
+    case static_cast<int>(absl::StatusCode::kInternal):
+      return absl::StatusCode::kInternal;
+    case static_cast<int>(absl::StatusCode::kUnavailable):
+      return absl::StatusCode::kUnavailable;
+    case static_cast<int>(absl::StatusCode::kDataLoss):
+      return absl::StatusCode::kDataLoss;
+    case static_cast<int>(absl::StatusCode::kUnauthenticated):
+      return absl::StatusCode::kUnauthenticated;
+    default:
+      // This should never be reached, since there should be a 1:1 mapping
+      // between Absl and Google RPC status codes.
+      return absl::StatusCode::kUnknown;
+  }
+}
+
 absl::StatusOr<std::string> PercentEncode(
     absl::string_view input, std::function<bool(char c)> unencoded_chars) {
   std::string result;
@@ -105,6 +151,11 @@ absl::Status ConvertHttpCodeToStatus(int code) {
   std::string error_message =
       absl::StrCat("Request returned non-OK response (code: ", code, ")");
   return absl::Status(status_code, error_message);
+}
+
+absl::Status ConvertRpcStatusToAbslStatus(::google::rpc::Status rpc_status) {
+  return absl::Status(ConvertRpcCodeToStatusCode(rpc_status.code()),
+                      rpc_status.message());
 }
 
 std::optional<std::string> FindHeader(const HeaderList& headers,

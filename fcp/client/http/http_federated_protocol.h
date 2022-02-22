@@ -24,7 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include "google/rpc/status.pb.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -51,9 +50,6 @@
 namespace fcp {
 namespace client {
 namespace http {
-
-// Converts a `::google::rpc::Status` into an `absl::Status`.
-absl::Status ConvertRpcStatusToAbslStatus(::google::rpc::Status rpc_status);
 
 // A helper for managing a chain of protocol requests, with each request being
 // pointed at an endpoint specified by a previous request's
