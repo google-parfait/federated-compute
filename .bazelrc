@@ -58,6 +58,9 @@ build --host_cxxopt=-std=c++17
 # minutes just to fetch them from RBE cache.
 build --compilation_mode=opt
 
+# Without this, bazel doesn't print all Java compilation errors.
+build --javacopt="-verbose"
+
 build:asan --compilation_mode=dbg
 build:asan --strip=never
 build:asan --copt=-fsanitize=address
