@@ -44,6 +44,9 @@ build --per_file_copt=+^//@-Werror
 build --per_file_copt=+^//@-Wno-error=inconsistent-missing-override
 build --per_file_copt=+^//@-Wno-error=mismatched-tags
 build --per_file_copt=+^//@-Wno-error=defaulted-function-deleted
+# Some of the opstats.proto enums are deprecated, but until all references to
+# them have been removed we should be allowed to use them.
+build --per_file_copt=+^//@-Wno-error=deprecated-declarations
 
 # TF now has `cc_shared_library` targets, so it needs the experimental flag.
 build --experimental_cc_shared_library
