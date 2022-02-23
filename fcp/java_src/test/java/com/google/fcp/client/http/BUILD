@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 package(
     default_visibility = [
         "//fcp:internal",
@@ -19,29 +18,19 @@ package(
     licenses = ["notice"],  # Apache 2.0
 )
 
-java_library(
-    name = "jni_interface",
-    srcs = [
-        "HttpClientForNative.java",
-    ],
+java_test(
+    name = "HttpClientForNativeImplTest",
+    size = "small",
+    srcs = ["HttpClientForNativeImplTest.java"],
     deps = [
-        "@maven//:com_google_errorprone_error_prone_annotations",
-    ],
-)
-
-java_library(
-    name = "http",
-    srcs = [
-        "HttpClientForNativeImpl.java",
-        "HttpRequestHandleImpl.java",
-    ],
-    deps = [
-        ":jni_interface",
-        "//fcp/client/http/java:java_http_client",
         "//fcp/client/http/java:jni_java_proto",
         "//fcp/java_src/main/java/com/google/fcp/client",
+        "//fcp/java_src/main/java/com/google/fcp/client/http",
         "@com_google_googleapis//google/rpc:rpc_java_proto",
         "@com_google_protobuf//:protobuf_java",
-        "@maven//:com_google_code_findbugs_jsr305",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_truth_truth",
+        "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
     ],
 )
