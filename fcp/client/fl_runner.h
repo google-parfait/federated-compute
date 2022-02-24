@@ -31,6 +31,7 @@
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/phase_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -86,8 +87,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 // RunFederatedComputation method once the FederatedProtocol and OpStatsLogger
 // objects have been created.
 absl::StatusOr<FLRunnerResult> RunFederatedComputation(
-    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
-    Files* files, LogManager* log_manager,
+    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger,
+    EventPublisher* event_publisher, Files* files, LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,

@@ -24,6 +24,7 @@
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/phase_logger.h"
 #include "fcp/client/simple_task_environment.h"
 
 namespace fcp {
@@ -53,8 +54,8 @@ absl::Status RunLocalComputation(SimpleTaskEnvironment* env_deps,
 // Otherwise, this is used internally by the other RunLocalComputation
 // method once the OpStatsLogger object has been created.
 absl::Status RunLocalComputation(
-    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
-    LogManager* log_manager,
+    PhaseLogger& phase_logger, SimpleTaskEnvironment* env_deps,
+    EventPublisher* event_publisher, LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
     const std::string& plan_uri, const std::string& input_dir_uri,
     const std::string& output_dir_uri, const SelectorContext& selector_context);

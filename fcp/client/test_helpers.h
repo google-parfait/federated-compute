@@ -31,6 +31,7 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"
 #include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/phase_logger.h"
 #include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/simple_task_environment.h"
 #include "tensorflow/core/example/example.pb.h"
@@ -130,37 +131,30 @@ class MockEventPublisher : public EventPublisher {
 // each stage, making it easier to write accurate assertions in unit tests.
 class MockFederatedProtocol : public FederatedProtocol {
  public:
-  struct NetworkStats {
-    int64_t bytes_downloaded = 0;
-    int64_t bytes_uploaded = 0;
-    int64_t chunking_bytes_received = 0;
-    int64_t chunking_bytes_sent = 0;
-    int64_t report_request_size_bytes = 0;
-  };
   constexpr static NetworkStats kPostEligibilityCheckinStats = {
       .bytes_downloaded = 100,
       .bytes_uploaded = 200,
-      .chunking_bytes_received = 300,
-      .chunking_bytes_sent = 400,
-      .report_request_size_bytes = 0};
+      .chunking_layer_bytes_received = 300,
+      .chunking_layer_bytes_sent = 400,
+      .report_size_bytes = 0};
   constexpr static NetworkStats kPostCheckinStats = {
       .bytes_downloaded = 1000,
       .bytes_uploaded = 2000,
-      .chunking_bytes_received = 3000,
-      .chunking_bytes_sent = 4000,
-      .report_request_size_bytes = 0};
+      .chunking_layer_bytes_received = 3000,
+      .chunking_layer_bytes_sent = 4000,
+      .report_size_bytes = 0};
   constexpr static NetworkStats kPostReportCompletedStats = {
       .bytes_downloaded = 10000,
       .bytes_uploaded = 20000,
-      .chunking_bytes_received = 30000,
-      .chunking_bytes_sent = 40000,
-      .report_request_size_bytes = 555};
+      .chunking_layer_bytes_received = 30000,
+      .chunking_layer_bytes_sent = 40000,
+      .report_size_bytes = 555};
   constexpr static NetworkStats kPostReportNotCompletedStats = {
       .bytes_downloaded = 9999,
       .bytes_uploaded = 19999,
-      .chunking_bytes_received = 29999,
-      .chunking_bytes_sent = 39999,
-      .report_request_size_bytes = 111};
+      .chunking_layer_bytes_received = 29999,
+      .chunking_layer_bytes_sent = 39999,
+      .report_size_bytes = 111};
 
   static google::internal::federatedml::v2::RetryWindow
   GetInitialRetryWindow() {
@@ -262,15 +256,15 @@ class MockFederatedProtocol : public FederatedProtocol {
   }
 
   int64_t chunking_layer_bytes_sent() final {
-    return network_stats_.chunking_bytes_sent;
+    return network_stats_.chunking_layer_bytes_sent;
   }
   int64_t chunking_layer_bytes_received() final {
-    return network_stats_.chunking_bytes_received;
+    return network_stats_.chunking_layer_bytes_received;
   }
   int64_t bytes_downloaded() final { return network_stats_.bytes_downloaded; };
   int64_t bytes_uploaded() final { return network_stats_.bytes_uploaded; };
   int64_t report_request_size_bytes() final {
-    return network_stats_.report_request_size_bytes;
+    return network_stats_.report_size_bytes;
   };
 
  private:
@@ -407,6 +401,144 @@ class MockOpStatsDb : public ::fcp::client::opstats::OpStatsDb {
               (override));
   MOCK_METHOD(absl::Status, Transform,
               (std::function<void(::fcp::client::opstats::OpStatsSequence&)>),
+              (override));
+};
+
+class MockPhaseLogger : public PhaseLogger {
+ public:
+  MOCK_METHOD(
+      void, UpdateRetryWindowAndNetworkStats,
+      (const ::google::internal::federatedml::v2::RetryWindow& retry_window,
+       NetworkStats stats),
+      (override));
+  MOCK_METHOD(void, SetModelIdentifier, (absl::string_view model_identifier),
+              (override));
+  MOCK_METHOD(void, LogTaskNotStarted, (absl::string_view error_message),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalCheckInStarted, (), (override));
+  MOCK_METHOD(void, LogEligibilityEvalCheckInIOError,
+              (absl::Status error_status,
+               absl::Time time_before_eligibility_eval_checkin),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalCheckInInvalidPayloadError,
+              (absl::string_view error_message,
+               absl::Time time_before_eligibility_eval_checkin),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalCheckInClientInterrupted,
+              (absl::Status error_status,
+               absl::Time time_before_eligibility_eval_checkin),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalCheckInServerAborted,
+              (absl::Status error_status,
+               absl::Time time_before_eligibility_eval_checkin),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalNotConfigured,
+              (NetworkStats stats,
+               absl::Time time_before_eligibility_eval_checkin),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalCheckInTurnedAway,
+              (NetworkStats stats,
+               absl::Time time_before_eligibility_eval_checkin),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalCheckInCompleted,
+              (NetworkStats stats,
+               absl::Time time_before_eligibility_eval_checkin),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalComputationStarted, (), (override));
+  MOCK_METHOD(void, LogEligibilityEvalComputationInvalidArgument,
+              (absl::Status error_status), (override));
+  MOCK_METHOD(void, LogEligibilityEvalComputationExampleIteratorError,
+              (absl::string_view error_message), (override));
+  MOCK_METHOD(void, LogEligibilityEvalComputationTensorflowError,
+              (absl::Status error_status, int total_example_count,
+               absl::Time run_plan_start_time, absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalComputationInterrupted,
+              (absl::Status error_status, int total_example_count,
+               int64_t total_example_size_bytes, absl::Time run_plan_start_time,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalComputationCompleted,
+              (int total_example_count, int64_t total_example_size_bytes,
+               absl::Time run_plan_start_time, absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogCheckInStarted, (), (override));
+  MOCK_METHOD(void, LogCheckInIOError,
+              (absl::Status error_status, absl::Time time_before_checkin,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogCheckInInvalidPayload,
+              (absl::string_view error_message, absl::Time time_before_checkin,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogCheckInClientInterrupted,
+              (absl::Status error_status, absl::Time time_before_checkin,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogCheckInServerAborted,
+              (absl::Status error_status, absl::Time time_before_checkin,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogCheckInTurnedAway,
+              (absl::Time time_before_checkin, absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogCheckInCompleted,
+              (absl::string_view task_name, NetworkStats stats,
+               absl::Time time_before_checkin, absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogComputationStarted, (), (override));
+  MOCK_METHOD(void, LogComputationInvalidArgument, (absl::Status error_status),
+              (override));
+  MOCK_METHOD(void, LogComputationExampleIteratorError,
+              (absl::string_view error_message), (override));
+  MOCK_METHOD(void, LogComputationIOError, (absl::Status error_status),
+              (override));
+  MOCK_METHOD(void, LogComputationTensorflowError,
+              (absl::Status error_status, int total_example_count,
+               absl::Time run_plan_start_time, absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogComputationInterrupted,
+              (absl::Status error_status, int total_example_count,
+               int64_t total_example_size_bytes, absl::Time run_plan_start_time,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogComputationCompleted,
+              (int total_example_count, int64_t total_example_size_bytes,
+               absl::Time run_plan_start_time, absl::Time reference_time),
+              (override));
+  MOCK_METHOD(absl::Status, LogResultUploadStarted, (), (override));
+  MOCK_METHOD(void, LogResultUploadIOError,
+              (absl::Status error_status, absl::Time time_before_result_upload,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogResultUploadClientInterrupted,
+              (absl::Status error_status, absl::Time time_before_result_upload,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogResultUploadServerAborted,
+              (absl::Status error_status, absl::Time time_before_result_upload,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogResultUploadCompleted,
+              (NetworkStats stats, absl::Time time_before_result_upload,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(absl::Status, LogFailureUploadStarted, (), (override));
+  MOCK_METHOD(void, LogFailureUploadIOError,
+              (absl::Status error_status, absl::Time time_before_failure_upload,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogFailureUploadClientInterrupted,
+              (absl::Status error_status, absl::Time time_before_failure_upload,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogFailureUploadServerAborted,
+              (absl::Status error_status, absl::Time time_before_failure_upload,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogFailureUploadCompleted,
+              (NetworkStats stats, absl::Time time_before_result_upload,
+               absl::Time reference_time),
               (override));
 };
 

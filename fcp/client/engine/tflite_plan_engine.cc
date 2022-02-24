@@ -45,15 +45,18 @@ PlanResult CreatePlanResultFromOutput(
     absl::Time run_plan_start_time, absl::Time reference_time) {
   switch (output.status().code()) {
     case absl::StatusCode::kOk: {
-      event_publisher->PublishPlanCompleted(
-          *total_example_count, *total_example_size_bytes, run_plan_start_time);
-      log_computation_finished();
-      log_manager->LogToLongHistogram(
-          HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
-          *total_example_size_bytes);
-      log_manager->LogToLongHistogram(
-          HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT,
-          *total_example_count);
+      if (!flags->per_phase_logs()) {
+        event_publisher->PublishPlanCompleted(*total_example_count,
+                                              *total_example_size_bytes,
+                                              run_plan_start_time);
+        log_computation_finished();
+        log_manager->LogToLongHistogram(
+            HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
+            *total_example_size_bytes);
+        log_manager->LogToLongHistogram(
+            HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT,
+            *total_example_count);
+      }
       PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
       plan_result.output_names = output_names;
       plan_result.output_tensors = std::move(*output);
@@ -62,23 +65,27 @@ PlanResult CreatePlanResultFromOutput(
       return plan_result;
     }
     case absl::StatusCode::kCancelled:
-      event_publisher->PublishInterruption(
-          /*execution_index=*/0, /*epoch_index=*/0, *total_example_count,
-          *total_example_size_bytes, reference_time);
-      opstats_logger->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED,
-          std::string(output.status().message()));
+      if (!flags->per_phase_logs()) {
+        event_publisher->PublishInterruption(
+            /*execution_index=*/0, /*epoch_index=*/0, *total_example_count,
+            *total_example_size_bytes, reference_time);
+        opstats_logger->AddEventWithErrorMessage(
+            OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED,
+            std::string(output.status().message()));
+      }
       return PlanResult(PlanOutcome::kInterrupted, std::move(output.status()));
     case absl::StatusCode::kInvalidArgument:
-      event_publisher->PublishTensorFlowError(
-          /*execution_index=*/0, /*epoch_index=*/0, *total_example_count,
-          absl::StrCat("code: ", output.status().code(), ", error: ",
-                       flags->log_tensorflow_error_messages()
-                           ? output.status().message()
-                           : ""));
-      opstats_logger->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
-          std::string(output.status().message()));
+      if (!flags->per_phase_logs()) {
+        event_publisher->PublishTensorFlowError(
+            /*execution_index=*/0, /*epoch_index=*/0, *total_example_count,
+            absl::StrCat("code: ", output.status().code(), ", error: ",
+                         flags->log_tensorflow_error_messages()
+                             ? output.status().message()
+                             : ""));
+        opstats_logger->AddEventWithErrorMessage(
+            OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
+            std::string(output.status().message()));
+      }
       return PlanResult(PlanOutcome::kTensorflowError,
                         std::move(output.status()));
     default:
@@ -107,13 +114,15 @@ PlanResult TfLitePlanEngine::RunPlan(
       tensorflow_spec, expected_input_tensor_names_set, output_names);
   if (!validity_checks.ok()) {
     FCP_LOG(ERROR) << validity_checks.message();
-    log_manager_->LogDiag(
-        ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-    event_publisher_->PublishIoError(
-        /*execution_index=*/0, validity_checks.message());
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO,
-        std::string(validity_checks.message()));
+    if (!flags_->per_phase_logs()) {
+      log_manager_->LogDiag(
+          ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
+      event_publisher_->PublishIoError(
+          /*execution_index=*/0, validity_checks.message());
+      opstats_logger_->AddEventWithErrorMessage(
+          OperationalStats::Event::EVENT_KIND_ERROR_IO,
+          std::string(validity_checks.message()));
+    }
     return PlanResult(PlanOutcome::kInvalidArgument,
                       std::move(validity_checks));
   }
@@ -136,20 +145,24 @@ PlanResult TfLitePlanEngine::RunPlan(
           },
           *timing_config_, log_manager_, std::move(inputs));
   if (!tflite_wrapper.ok()) {
-    event_publisher_->PublishTensorFlowError(
-        /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
-        absl::StrCat("code: ", tflite_wrapper.status().code(), ", error: ",
-                     flags_->log_tensorflow_error_messages()
-                         ? tflite_wrapper.status().message()
-                         : ""));
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
-        std::string(tflite_wrapper.status().message()));
+    if (!flags_->per_phase_logs()) {
+      event_publisher_->PublishTensorFlowError(
+          /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
+          absl::StrCat("code: ", tflite_wrapper.status().code(), ", error: ",
+                       flags_->log_tensorflow_error_messages()
+                           ? tflite_wrapper.status().message()
+                           : ""));
+      opstats_logger_->AddEventWithErrorMessage(
+          OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
+          std::string(tflite_wrapper.status().message()));
+    }
     return PlanResult(PlanOutcome::kTensorflowError, tflite_wrapper.status());
   }
   // Start running the plan.
-  event_publisher_->PublishPlanExecutionStarted();
-  log_computation_started();
+  if (!flags_->per_phase_logs()) {
+    event_publisher_->PublishPlanExecutionStarted();
+    log_computation_started();
+  }
   absl::StatusOr<std::vector<tensorflow::Tensor>> output =
       (*tflite_wrapper)->Run();
   PlanResult plan_result = CreatePlanResultFromOutput(
@@ -158,9 +171,12 @@ PlanResult TfLitePlanEngine::RunPlan(
       &total_example_size_bytes, output_names, run_plan_start_time,
       reference_time);
   // Log timing info.
-  LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_LATENCY,
-               run_plan_start_time);
-  LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, reference_time);
+  if (!flags_->per_phase_logs()) {
+    LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_LATENCY,
+                 run_plan_start_time);
+    LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_END_TIME,
+                 reference_time);
+  }
   return plan_result;
 }
 

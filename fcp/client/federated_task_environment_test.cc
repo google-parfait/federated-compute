@@ -318,9 +318,9 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublishWithError) {
     EXPECT_CALL(mock_event_publisher_,
                 PublishReportFinished(
                     MockFederatedProtocol::kPostReportNotCompletedStats
-                        .report_request_size_bytes,
+                        .report_size_bytes,
                     MockFederatedProtocol::kPostReportNotCompletedStats
-                        .chunking_bytes_sent,
+                        .chunking_layer_bytes_sent,
                     _));
     EXPECT_CALL(
         mock_opstats_logger_,

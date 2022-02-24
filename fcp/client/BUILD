@@ -329,6 +329,8 @@ cc_library(
         ":interruptible_runner",
         ":simple_task_environment",
         ":selector_context_cc_proto",
+        ":phase_logger",
+        ":phase_logger_impl",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
@@ -358,6 +360,8 @@ cc_library(
         ":interfaces",
         ":selector_context_cc_proto",
         ":simple_task_environment",
+        ":phase_logger",
+        ":phase_logger_impl",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
@@ -369,6 +373,44 @@ cc_library(
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
     ] + OPTIONAL_DEPS,
+)
+
+cc_library(
+    name = "phase_logger",
+    hdrs = ["phase_logger.h"],
+    deps = [
+        "//fcp/client/opstats:opstats_logger",
+        "//fcp/protos:federated_api_cc_proto",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "phase_logger_impl",
+    srcs = ["phase_logger_impl.cc"],
+    hdrs = ["phase_logger_impl.h"],
+    deps = [
+        ":interfaces",
+        ":phase_logger",
+        "//fcp/base",
+        "//fcp/client/opstats:opstats_logger",
+        "//fcp/protos:federated_api_cc_proto",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "phase_logger_impl_test",
+    srcs = ["phase_logger_impl_test.cc"],
+    deps = [
+        ":phase_logger_impl",
+        ":test_helpers",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
 )
 
 cc_library(
@@ -474,6 +516,7 @@ cc_library(
     deps = [
         ":federated_protocol",
         ":interfaces",
+        ":phase_logger",
         ":simple_task_environment",
         "//fcp/base",
         "//fcp/client/opstats:opstats_db",

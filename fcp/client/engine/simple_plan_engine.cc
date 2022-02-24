@@ -65,13 +65,15 @@ PlanResult SimplePlanEngine::RunPlan(
       tensorflow_spec, expected_input_tensor_names_set, output_names);
   if (!validity_checks.ok()) {
     FCP_LOG(ERROR) << validity_checks.message();
-    log_manager_->LogDiag(
-        ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-    event_publisher_->PublishIoError(
-        /*execution_index=*/0, validity_checks.message());
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO,
-        std::string(validity_checks.message()));
+    if (!flags_->per_phase_logs()) {
+      log_manager_->LogDiag(
+          ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
+      event_publisher_->PublishIoError(
+          /*execution_index=*/0, validity_checks.message());
+      opstats_logger_->AddEventWithErrorMessage(
+          OperationalStats::Event::EVENT_KIND_ERROR_IO,
+          std::string(validity_checks.message()));
+    }
     return PlanResult(PlanOutcome::kInvalidArgument,
                       std::move(validity_checks));
   }
@@ -85,15 +87,17 @@ PlanResult SimplePlanEngine::RunPlan(
           },
           *timing_config_, log_manager_);
   if (!tf_wrapper_or.ok()) {
-    event_publisher_->PublishTensorFlowError(
-        /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
-        absl::StrCat("code: ", tf_wrapper_or.status().code(), ", error: ",
-                     flags_->log_tensorflow_error_messages()
-                         ? tf_wrapper_or.status().message()
-                         : ""));
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
-        std::string(tf_wrapper_or.status().message()));
+    if (!flags_->per_phase_logs()) {
+      event_publisher_->PublishTensorFlowError(
+          /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
+          absl::StrCat("code: ", tf_wrapper_or.status().code(), ", error: ",
+                       flags_->log_tensorflow_error_messages()
+                           ? tf_wrapper_or.status().message()
+                           : ""));
+      opstats_logger_->AddEventWithErrorMessage(
+          OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
+          std::string(tf_wrapper_or.status().message()));
+    }
     return PlanResult(PlanOutcome::kTensorflowError, tf_wrapper_or.status());
   }
 
@@ -166,8 +170,10 @@ SimplePlanEngine::RunPlanInternal(
   }
 
   // Start running the plan.
-  event_publisher_->PublishPlanExecutionStarted();
-  log_computation_started();
+  if (!flags_->per_phase_logs()) {
+    event_publisher_->PublishPlanExecutionStarted();
+    log_computation_started();
+  }
 
   absl::Time call_start_time = absl::Now();
   FCP_ASSIGN_OR_RETURN(
@@ -175,15 +181,17 @@ SimplePlanEngine::RunPlanInternal(
       RunTensorFlowInternal(tf_wrapper, *inputs, output_names, target_names,
                             total_example_count, total_example_size_bytes,
                             call_start_time));
-
-  event_publisher_->PublishPlanCompleted(
-      *total_example_count, *total_example_size_bytes, run_plan_start_time);
-  log_computation_finished();
-  log_manager_->LogToLongHistogram(
-      HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
-      *total_example_size_bytes);
-  log_manager_->LogToLongHistogram(
-      HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT, *total_example_count);
+  if (!flags_->per_phase_logs()) {
+    event_publisher_->PublishPlanCompleted(
+        *total_example_count, *total_example_size_bytes, run_plan_start_time);
+    log_computation_finished();
+    log_manager_->LogToLongHistogram(
+        HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
+        *total_example_size_bytes);
+    log_manager_->LogToLongHistogram(
+        HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT,
+        *total_example_count);
+  }
   return result;
 }
 
@@ -200,22 +208,29 @@ SimplePlanEngine::RunTensorFlowInternal(
       tf_wrapper->Run(inputs, output_tensor_names, target_node_names, &outputs);
   switch (status.code()) {
     case absl::StatusCode::kCancelled:
-      event_publisher_->PublishInterruption(
-          /*execution_index=*/0, /*epoch_index=*/0, total_example_count->load(),
-          total_example_size_bytes->load(), start);
-      opstats_logger_->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED,
-          std::string(status.message()));
+      if (!flags_->per_phase_logs()) {
+        event_publisher_->PublishInterruption(
+            /*execution_index=*/0, /*epoch_index=*/0,
+            total_example_count->load(), total_example_size_bytes->load(),
+            start);
+        opstats_logger_->AddEventWithErrorMessage(
+            OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED,
+            std::string(status.message()));
+      }
       return status;
     case absl::StatusCode::kInvalidArgument:
-      event_publisher_->PublishTensorFlowError(
-          /*execution_index=*/0, /*epoch_index=*/0, total_example_count->load(),
-          absl::StrCat(
-              "code: ", status.code(), ", error: ",
-              flags_->log_tensorflow_error_messages() ? status.message() : ""));
-      opstats_logger_->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
-          std::string(status.message()));
+      if (!flags_->per_phase_logs()) {
+        event_publisher_->PublishTensorFlowError(
+            /*execution_index=*/0, /*epoch_index=*/0,
+            total_example_count->load(),
+            absl::StrCat("code: ", status.code(), ", error: ",
+                         flags_->log_tensorflow_error_messages()
+                             ? status.message()
+                             : ""));
+        opstats_logger_->AddEventWithErrorMessage(
+            OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
+            std::string(status.message()));
+      }
       return status;
     case absl::StatusCode::kOutOfRange:
     case absl::StatusCode::kOk:

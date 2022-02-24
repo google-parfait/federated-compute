@@ -31,6 +31,7 @@
 #include "fcp/client/engine/tflite_plan_engine.h"
 #endif
 
+#include "fcp/client/phase_logger_impl.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -73,9 +74,37 @@ std::unique_ptr<TfLiteInputs> ConstructInputsForTFLitePlan(
 }
 #endif
 
+void LogComputationOutcome(engine::PlanResult plan_result,
+                           PhaseLogger& phase_logger,
+                           absl::Time run_plan_start_time,
+                           absl::Time reference_time) {
+  switch (plan_result.outcome) {
+    case engine::PlanOutcome::kSuccess:
+      phase_logger.LogComputationCompleted(plan_result.total_example_count,
+                                           plan_result.total_example_size_bytes,
+                                           run_plan_start_time, reference_time);
+      break;
+    case engine::PlanOutcome::kInterrupted:
+      phase_logger.LogComputationInterrupted(
+          plan_result.original_status, plan_result.total_example_count,
+          plan_result.total_example_size_bytes, run_plan_start_time,
+          reference_time);
+      break;
+    case engine::PlanOutcome::kInvalidArgument:
+      phase_logger.LogComputationInvalidArgument(plan_result.original_status);
+      break;
+    case engine::PlanOutcome::kTensorflowError:
+      phase_logger.LogComputationTensorflowError(
+          std::move(plan_result.original_status),
+          plan_result.total_example_count, run_plan_start_time, reference_time);
+      break;
+  }
+}
+
 absl::Status RunPlanWithTensorflowSpec(
-    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
-    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
+    PhaseLogger& phase_logger, SimpleTaskEnvironment* env_deps,
+    EventPublisher* event_publisher, LogManager* log_manager,
+    OpStatsLogger* opstats_logger, const Flags* flags,
     const ClientOnlyPlan& client_plan, const std::string& input_dir_uri,
     const std::string& output_dir_uri,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
@@ -83,23 +112,17 @@ absl::Status RunPlanWithTensorflowSpec(
     const SelectorContext& selector_context) {
   // Check that this is a TensorflowSpec-based plan for local computation.
   if (!client_plan.phase().has_tensorflow_spec()) {
-    log_manager->LogDiag(
-        ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-    std::string message = "Plan without TensorflowSpec";
-    event_publisher->PublishIoError(0, message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    return absl::InvalidArgumentError("");
+    absl::Status error_status =
+        absl::InvalidArgumentError("Plan without TensorflowSpec");
+    phase_logger.LogComputationInvalidArgument(error_status);
+    return error_status;
   }
   if (!client_plan.phase().has_local_compute() ||
       client_plan.phase().execution_size() > 0) {
-    log_manager->LogDiag(
-        ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-    std::string message = "Invalid TensorflowSpec-based plan";
-    event_publisher->PublishIoError(0, message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    return absl::InvalidArgumentError("");
+    absl::Status error_status =
+        absl::InvalidArgumentError("Invalid TensorflowSpec-based plan");
+    phase_logger.LogComputationInvalidArgument(error_status);
+    return error_status;
   }
 
   auto log_computation_started = [opstats_logger]() {
@@ -125,7 +148,10 @@ absl::Status RunPlanWithTensorflowSpec(
         std::move(inputs), output_names_unused, run_plan_start_time,
         reference_time, log_computation_started, log_computation_finished,
         selector_context);
-    return ConvertPlanOutcomeToStatus(plan_result.outcome);
+    engine::PlanOutcome outcome = plan_result.outcome;
+    LogComputationOutcome(std::move(plan_result), phase_logger,
+                          run_plan_start_time, reference_time);
+    return ConvertPlanOutcomeToStatus(outcome);
   }
 #endif
 
@@ -140,7 +166,10 @@ absl::Status RunPlanWithTensorflowSpec(
       client_plan.tensorflow_config_proto(), std::move(inputs),
       output_names_unused, run_plan_start_time, reference_time,
       log_computation_started, log_computation_finished, selector_context);
-  return ConvertPlanOutcomeToStatus(plan_result.outcome);
+  engine::PlanOutcome outcome = plan_result.outcome;
+  LogComputationOutcome(std::move(plan_result), phase_logger,
+                        run_plan_start_time, reference_time);
+  return ConvertPlanOutcomeToStatus(outcome);
 }
 }  // anonymous namespace
 
@@ -159,14 +188,17 @@ absl::Status RunLocalComputation(SimpleTaskEnvironment* env_deps,
       session_name);
   *selector_context.mutable_computation_properties()->mutable_local_compute() =
       LocalComputation();
-  return RunLocalComputation(env_deps, event_publisher, log_manager,
-                             opstats_logger.get(), flags, plan_uri,
+  PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
+                               log_manager, flags);
+  return RunLocalComputation(phase_logger, env_deps, event_publisher,
+                             log_manager, opstats_logger.get(), flags, plan_uri,
                              input_dir_uri, output_dir_uri, selector_context);
 }
 
 absl::Status RunLocalComputation(
-    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
-    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
+    PhaseLogger& phase_logger, SimpleTaskEnvironment* env_deps,
+    EventPublisher* event_publisher, LogManager* log_manager,
+    OpStatsLogger* opstats_logger, const Flags* flags,
     const std::string& plan_uri, const std::string& input_dir_uri,
     const std::string& output_dir_uri,
     const SelectorContext& selector_context) {
@@ -178,8 +210,7 @@ absl::Status RunLocalComputation(
     std::string message =
         "Device conditions not satisfied, aborting local computation";
     FCP_LOG(INFO) << message;
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, message);
+    phase_logger.LogTaskNotStarted(message);
     return absl::CancelledError("");
   }
   fcp::client::InterruptibleRunner::TimingConfig timing_config = {
@@ -190,24 +221,29 @@ absl::Status RunLocalComputation(
           flags->tf_execution_teardown_extended_period_millis()),
   };
 
-  FCP_ASSIGN_OR_RETURN(std::string plan_str, fcp::ReadFileToString(plan_uri));
-  ClientOnlyPlan plan;
-  if (!plan.ParseFromString(plan_str)) {
-    std::string message = "could not parse received plan";
-    log_manager->LogDiag(
-        ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    return absl::InvalidArgumentError(message);
+  absl::Time run_plan_start_time = absl::Now();
+  phase_logger.LogComputationStarted();
+
+  absl::StatusOr<std::string> plan_str = fcp::ReadFileToString(plan_uri);
+  if (!plan_str.ok()) {
+    phase_logger.LogComputationIOError(plan_str.status());
+    return plan_str.status();
   }
 
-  absl::Time run_plan_start_time = absl::Now();
+  ClientOnlyPlan plan;
+  if (!plan.ParseFromString(*plan_str)) {
+    absl::Status error_status =
+        absl::InvalidArgumentError("could not parse received plan");
+    phase_logger.LogComputationInvalidArgument(error_status);
+    return error_status;
+  }
+
   std::vector<std::string> output_names;
   std::vector<tensorflow::Tensor> output_tensors;
   return RunPlanWithTensorflowSpec(
-      env_deps, event_publisher, log_manager, opstats_logger, flags, plan,
-      input_dir_uri, output_dir_uri, timing_config, run_plan_start_time,
-      reference_time, selector_context);
+      phase_logger, env_deps, event_publisher, log_manager, opstats_logger,
+      flags, plan, input_dir_uri, output_dir_uri, timing_config,
+      run_plan_start_time, reference_time, selector_context);
 }
 
 }  // namespace client

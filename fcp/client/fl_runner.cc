@@ -45,9 +45,9 @@
 #include "fcp/client/fl_runner_internal.pb.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/grpc_federated_protocol.h"
-#include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/phase_logger_impl.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -101,8 +101,11 @@ struct PlanResultAndCheckpointFile {
 
 absl::StatusOr<ComputationResults> CreateComputationResults(
     const TensorflowSpec& tensorflow_spec,
-    PlanResultAndCheckpointFile plan_result_and_checkpoint_file) {
+    const PlanResultAndCheckpointFile& plan_result_and_checkpoint_file) {
   const auto& [plan_result, checkpoint_file] = plan_result_and_checkpoint_file;
+  if (plan_result.outcome != engine::PlanOutcome::kSuccess) {
+    return absl::InvalidArgumentError("Computation failed.");
+  }
   ComputationResults computation_results;
   for (int i = 0; i < plan_result.output_names.size(); i++) {
     QuantizedTensor quantized;
@@ -191,6 +194,28 @@ std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
 }
 #endif
 
+NetworkStats GetNetworkStats(FederatedProtocol* federated_protocol) {
+  return {.bytes_downloaded = federated_protocol->bytes_downloaded(),
+          .bytes_uploaded = federated_protocol->bytes_uploaded(),
+          .chunking_layer_bytes_received =
+              federated_protocol->chunking_layer_bytes_received(),
+          .chunking_layer_bytes_sent =
+              federated_protocol->chunking_layer_bytes_sent(),
+          .report_size_bytes = federated_protocol->report_request_size_bytes()};
+}
+
+// Updates the fields of `FLRunnerResult` that should always be updated after
+// each interaction with the `FederatedProtocol` object.
+void UpdateRetryWindowAndNetworkStats(FederatedProtocol& federated_protocol,
+                                      PhaseLogger& phase_logger,
+                                      FLRunnerResult& fl_runner_result) {
+  // Update the result's retry window to the most recent one.
+  auto retry_window = federated_protocol.GetLatestRetryWindow();
+  *fl_runner_result.mutable_retry_window() = retry_window;
+  phase_logger.UpdateRetryWindowAndNetworkStats(
+      retry_window, GetNetworkStats(&federated_protocol));
+}
+
 engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
     SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
@@ -204,16 +229,10 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
   if (!client_plan.phase().has_tensorflow_spec() ||
       !client_plan.phase().has_federated_compute_eligibility() ||
       client_plan.phase().execution_size() > 0) {
-    log_manager->LogDiag(
-        ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-    std::string message = "Invalid eligibility eval plan";
-    event_publisher->PublishIoError(0, message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    return engine::PlanResult(engine::PlanOutcome::kInvalidArgument,
-                              absl::InvalidArgumentError(message));
+    return engine::PlanResult(
+        engine::PlanOutcome::kInvalidArgument,
+        absl::InvalidArgumentError("Invalid eligibility eval plan"));
   }
-
   const FederatedComputeEligibilityIORouter& io_router =
       client_plan.phase().federated_compute_eligibility();
 
@@ -337,22 +356,18 @@ std::unique_ptr<TfLiteInputs> ConstructTFLiteInputsForTensorflowSpecPlan(
 #endif
 
 absl::StatusOr<std::vector<std::string>> ConstructOutputsForTensorflowSpecPlan(
-    EventPublisher* event_publisher, LogManager* log_manager,
-    OpStatsLogger* opstats_logger, const FederatedComputeIORouter& io_router) {
+    PhaseLogger& phase_logger, const FederatedComputeIORouter& io_router) {
   std::vector<std::string> output_names;
   for (const google::protobuf::MapPair<std::string, AggregationConfig>& it :
        io_router.aggregations()) {
     output_names.push_back(it.first);
     // The only aggregation type currently supported is secure aggregation.
     if (!it.second.has_secure_aggregation()) {
-      log_manager->LogDiag(
-          ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-      std::string message =
+      std::string error_message =
           "Unsupported aggregation type in TensorflowSpec-based plan";
-      event_publisher->PublishIoError(0, message);
-      opstats_logger->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-      return absl::InvalidArgumentError("");
+      phase_logger.LogComputationInvalidArgument(
+          absl::InvalidArgumentError(error_message));
+      return absl::InvalidArgumentError(error_message);
     }
   }
 
@@ -360,10 +375,12 @@ absl::StatusOr<std::vector<std::string>> ConstructOutputsForTensorflowSpecPlan(
 }
 
 PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
-    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
-    Files* files, LogManager* log_manager, OpStatsLogger* opstats_logger,
-    const Flags* flags, const ClientOnlyPlan& client_plan,
+    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger,
+    EventPublisher* event_publisher, LogManager* log_manager,
+    OpStatsLogger* opstats_logger, const Flags* flags,
+    const ClientOnlyPlan& client_plan,
     const std::string& checkpoint_input_filename,
+    const std::string& checkpoint_output_filename,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time run_plan_start_time, const absl::Time reference_time,
     const SelectorContext& selector_context) {
@@ -371,43 +388,22 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   FCP_CHECK(client_plan.phase().has_tensorflow_spec());
   if (!client_plan.phase().has_federated_compute() ||
       client_plan.phase().execution_size() > 0) {
-    log_manager->LogDiag(
-        ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-    std::string message = "Invalid TensorflowSpec-based plan";
-    event_publisher->PublishIoError(0, message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    return PlanResultAndCheckpointFile(
-        engine::PlanResult(engine::PlanOutcome::kTensorflowError,
-                           absl::InvalidArgumentError(message)));
+    return PlanResultAndCheckpointFile(engine::PlanResult(
+        engine::PlanOutcome::kInvalidArgument,
+        absl::InvalidArgumentError("Invalid TensorflowSpec-based plan")));
   }
 
   // Construct input tensors based on the values in the
   // FederatedComputeIORouter message and create a temporary file for the output
   // checkpoint if needed.
-  absl::StatusOr<std::string> checkpoint_output_filename =
-      files->CreateTempFile("output", ".ckp");
-  if (!checkpoint_output_filename.ok()) {
-    auto status = checkpoint_output_filename.status();
-    auto message = absl::StrCat(
-        "Could not create temporary output checkpoint file: code: ",
-        status.code(), ", message: ", status.message());
-    event_publisher->PublishIoError(0, message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-    return PlanResultAndCheckpointFile(
-        engine::PlanResult(engine::PlanOutcome::kTensorflowError,
-                           absl::UnavailableError(message)));
-  }
   auto inputs = ConstructInputsForTensorflowSpecPlan(
       client_plan.phase().federated_compute(), checkpoint_input_filename,
-      *checkpoint_output_filename);
+      checkpoint_output_filename);
 
   // Get the output tensor names.
   absl::StatusOr<std::vector<std::string>> output_names =
       ConstructOutputsForTensorflowSpecPlan(
-          event_publisher, log_manager, opstats_logger,
-          client_plan.phase().federated_compute());
+          phase_logger, client_plan.phase().federated_compute());
   if (!output_names.ok()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
         engine::PlanOutcome::kTensorflowError, output_names.status()));
@@ -428,7 +424,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
     std::unique_ptr<TfLiteInputs> tflite_inputs =
         ConstructTFLiteInputsForTensorflowSpecPlan(
             client_plan.phase().federated_compute(), checkpoint_input_filename,
-            *checkpoint_output_filename);
+            checkpoint_output_filename);
     engine::TfLitePlanEngine plan_engine(env_deps, log_manager, event_publisher,
                                          opstats_logger, &timing_config, flags);
     engine::PlanResult plan_result = plan_engine.RunPlan(
@@ -437,7 +433,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
         reference_time, log_computation_started, log_computation_finished,
         selector_context);
     PlanResultAndCheckpointFile result(std::move(plan_result));
-    result.checkpoint_file = *checkpoint_output_filename;
+    result.checkpoint_file = checkpoint_output_filename;
 
     return result;
   }
@@ -452,34 +448,158 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
       log_computation_finished, selector_context);
 
   PlanResultAndCheckpointFile result(std::move(plan_result));
-  result.checkpoint_file = *checkpoint_output_filename;
+  result.checkpoint_file = checkpoint_output_filename;
 
   return result;
 }
 
+void LogEligibilityEvalComputationOutcome(
+    PhaseLogger& phase_logger, engine::PlanResult plan_result,
+    const absl::Status& eligibility_info_parsing_status,
+    absl::Time run_plan_start_time, absl::Time reference_time) {
+  switch (plan_result.outcome) {
+    case engine::PlanOutcome::kSuccess: {
+      if (eligibility_info_parsing_status.ok()) {
+        phase_logger.LogEligibilityEvalComputationCompleted(
+            plan_result.total_example_count,
+            plan_result.total_example_size_bytes, run_plan_start_time,
+            reference_time);
+      } else {
+        phase_logger.LogEligibilityEvalComputationTensorflowError(
+            eligibility_info_parsing_status, plan_result.total_example_count,
+            run_plan_start_time, reference_time);
+        FCP_LOG(ERROR) << eligibility_info_parsing_status.message();
+      }
+      break;
+    }
+    case engine::PlanOutcome::kInterrupted:
+      phase_logger.LogEligibilityEvalComputationInterrupted(
+          plan_result.original_status, plan_result.total_example_count,
+          plan_result.total_example_size_bytes, run_plan_start_time,
+          reference_time);
+      break;
+    case engine::PlanOutcome::kInvalidArgument:
+      phase_logger.LogEligibilityEvalComputationInvalidArgument(
+          plan_result.original_status);
+      break;
+    case engine::PlanOutcome::kTensorflowError:
+      phase_logger.LogEligibilityEvalComputationTensorflowError(
+          plan_result.original_status, plan_result.total_example_count,
+          run_plan_start_time, reference_time);
+      break;
+  }
+}
+
+void LogComputationOutcome(const engine::PlanResult& plan_result,
+                           absl::Status computation_results_parsing_status,
+                           PhaseLogger& phase_logger,
+                           absl::Time run_plan_start_time,
+                           absl::Time reference_time) {
+  switch (plan_result.outcome) {
+    case engine::PlanOutcome::kSuccess: {
+      int total_example_count = plan_result.total_example_count;
+      int64_t total_example_size_bytes = plan_result.total_example_size_bytes;
+      if (computation_results_parsing_status.ok()) {
+        phase_logger.LogComputationCompleted(
+            total_example_count, total_example_size_bytes, run_plan_start_time,
+            reference_time);
+      } else {
+        phase_logger.LogComputationTensorflowError(
+            computation_results_parsing_status, total_example_count,
+            run_plan_start_time, reference_time);
+      }
+      break;
+    }
+    case engine::PlanOutcome::kInterrupted:
+      phase_logger.LogComputationInterrupted(
+          plan_result.original_status, plan_result.total_example_count,
+          plan_result.total_example_size_bytes, run_plan_start_time,
+          reference_time);
+      break;
+    case engine::PlanOutcome::kInvalidArgument:
+      phase_logger.LogComputationInvalidArgument(plan_result.original_status);
+      break;
+    case engine::PlanOutcome::kTensorflowError:
+      phase_logger.LogComputationTensorflowError(
+          plan_result.original_status, plan_result.total_example_count,
+          run_plan_start_time, reference_time);
+      break;
+  }
+}
+
+void LogResultUploadStatus(PhaseLogger& phase_logger, absl::Status result,
+                           NetworkStats stats,
+                           absl::Time time_before_result_upload,
+                           absl::Time reference_time) {
+  if (result.ok()) {
+    phase_logger.LogResultUploadCompleted(stats, time_before_result_upload,
+                                          reference_time);
+  } else {
+    auto message =
+        absl::StrCat("Error reporting results: code: ", result.code(),
+                     ", message: ", result.message());
+    FCP_LOG(INFO) << message;
+    if (result.code() == absl::StatusCode::kAborted) {
+      phase_logger.LogResultUploadServerAborted(
+          result, time_before_result_upload, reference_time);
+    } else if (result.code() == absl::StatusCode::kCancelled) {
+      phase_logger.LogResultUploadClientInterrupted(
+          result, time_before_result_upload, reference_time);
+    } else {
+      phase_logger.LogResultUploadIOError(result, time_before_result_upload,
+                                          reference_time);
+    }
+  }
+}
+
+void LogFailureUploadStatus(PhaseLogger& phase_logger, absl::Status result,
+                            NetworkStats stats,
+                            absl::Time time_before_failure_upload,
+                            absl::Time reference_time) {
+  if (result.ok()) {
+    phase_logger.LogFailureUploadCompleted(stats, time_before_failure_upload,
+                                           reference_time);
+  } else {
+    auto message = absl::StrCat("Error reporting computation failure: code: ",
+                                result.code(), ", message: ", result.message());
+    FCP_LOG(INFO) << message;
+    if (result.code() == absl::StatusCode::kAborted) {
+      phase_logger.LogFailureUploadServerAborted(
+          result, time_before_failure_upload, reference_time);
+    } else if (result.code() == absl::StatusCode::kCancelled) {
+      phase_logger.LogFailureUploadClientInterrupted(
+          result, time_before_failure_upload, reference_time);
+    } else {
+      phase_logger.LogFailureUploadIOError(result, time_before_failure_upload,
+                                           reference_time);
+    }
+  }
+}
+
 absl::Status ReportTensorflowSpecPlanResult(
-    LogManager* log_manager, FederatedProtocol* federated_protocol,
+    FederatedProtocol* federated_protocol, PhaseLogger& phase_logger,
     absl::StatusOr<ComputationResults> computation_results,
     absl::Time run_plan_start_time, absl::Time reference_time) {
   const absl::Time before_report_time = absl::Now();
   absl::Status result = absl::InternalError("");
   if (computation_results.ok()) {
+    FCP_RETURN_IF_ERROR(phase_logger.LogResultUploadStarted());
     result = federated_protocol->ReportCompleted(
         std::move(*computation_results),
         /*stats=*/std::vector<std::pair<std::string, double>>(),
         /*plan_duration=*/absl::Now() - run_plan_start_time);
+    LogResultUploadStatus(phase_logger, result,
+                          GetNetworkStats(federated_protocol),
+                          before_report_time, reference_time);
   } else {
+    FCP_RETURN_IF_ERROR(phase_logger.LogFailureUploadStarted());
     result = federated_protocol->ReportNotCompleted(
         engine::PhaseOutcome::ERROR,
         /*plan_duration=*/absl::Now() - run_plan_start_time);
+    LogFailureUploadStatus(phase_logger, result,
+                           GetNetworkStats(federated_protocol),
+                           before_report_time, reference_time);
   }
-  const absl::Time after_report_time = absl::Now();
-  log_manager->LogToLongHistogram(
-      HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
-      absl::ToInt64Milliseconds(after_report_time - reference_time));
-  log_manager->LogToLongHistogram(
-      HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
-      absl::ToInt64Milliseconds(after_report_time - before_report_time));
   return result;
 }
 
@@ -504,27 +624,6 @@ bool RunPlanWithExecutions(
       env.get(), files, log_manager, event_publisher, opstats_logger,
       client_plan, checkpoint_input_filename, timing_config, reference_time,
       flags->log_tensorflow_error_messages());
-}
-
-// Updates the fields of `FLRunnerResult` that should always be updated after
-// each interaction with the `FederatedProtocol` object.
-void UpdateRetryWindowAndNetworkStats(FederatedProtocol& federated_protocol,
-                                      const Flags& flags,
-                                      OpStatsLogger* opstats_logger,
-                                      FLRunnerResult& fl_runner_result) {
-  // Update the result's retry window to the most recent one.
-  auto retry_window = federated_protocol.GetLatestRetryWindow();
-  *fl_runner_result.mutable_retry_window() = retry_window;
-  opstats_logger->SetRetryWindow(retry_window);
-
-  if (flags.per_phase_logs()) {
-    // Update the network stats.
-    opstats_logger->SetNetworkStats(
-        federated_protocol.bytes_downloaded(),
-        federated_protocol.bytes_uploaded(),
-        federated_protocol.chunking_layer_bytes_received(),
-        federated_protocol.chunking_layer_bytes_sent());
-  }
 }
 
 // Writes the given checkpoint data to a newly created temporary file.
@@ -561,26 +660,23 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
 //   appropriately.
 absl::StatusOr<std::optional<TaskEligibilityInfo>>
 IssueEligibilityEvalCheckinAndRunPlan(
-    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
-    Files* files, LogManager* log_manager, OpStatsLogger* opstats_logger,
-    const Flags* flags, FederatedProtocol* federated_protocol,
+    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger,
+    EventPublisher* event_publisher, Files* files, LogManager* log_manager,
+    OpStatsLogger* opstats_logger, const Flags* flags,
+    FederatedProtocol* federated_protocol,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, FLRunnerResult& fl_runner_result,
     const SelectorContext& selector_context) {
   absl::Time time_before_eligibility_eval_checkin = absl::Now();
   // Log that we are about to check in with the server.
-  if (flags->per_phase_logs()) {
-    event_publisher->PublishEligibilityEvalCheckin();
-    opstats_logger->AddEvent(
-        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
-  }
+  phase_logger.LogEligibilityEvalCheckInStarted();
   // Issue the eligibility eval checkin request.
   // The EligibilityEvalCheckin(...) method will call SetModelIdentifier() with
   // the name of whatever task it receives, ensuring that subsequent events will
   // be tagged with that identifier.
   absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
       eligibility_checkin_result = federated_protocol->EligibilityEvalCheckin();
-  UpdateRetryWindowAndNetworkStats(*federated_protocol, *flags, opstats_logger,
+  UpdateRetryWindowAndNetworkStats(*federated_protocol, phase_logger,
                                    fl_runner_result);
 
   // It's a bit unfortunate that we have to inspect the checkin_result and
@@ -588,43 +684,38 @@ IssueEligibilityEvalCheckinAndRunPlan(
   // but this ensures that the histograms below will have the right model
   // identifier attached (and we want to also emit the histograms even if we
   // have failed/rejected checkin outcomes).
-  if (flags->per_phase_logs() && eligibility_checkin_result.ok() &&
+  if (eligibility_checkin_result.ok() &&
       std::holds_alternative<FederatedProtocol::EligibilityEvalTask>(
           *eligibility_checkin_result)) {
     auto model_identifier = std::get<FederatedProtocol::EligibilityEvalTask>(
                                 *eligibility_checkin_result)
                                 .execution_id;
-    event_publisher->SetModelIdentifier(model_identifier);
-    log_manager->SetModelIdentifier(model_identifier);
+    phase_logger.SetModelIdentifier(model_identifier);
   }
-
-  log_manager->LogToLongHistogram(
-      HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, 0, 0,
-      engine::DataSourceType::TRAINING_DATA_SOURCE_UNDEFINED,
-      absl::ToInt64Milliseconds(absl::Now() -
-                                time_before_eligibility_eval_checkin));
 
   if (!eligibility_checkin_result.ok()) {
     auto status = eligibility_checkin_result.status();
     auto message = absl::StrCat("Error during eligibility eval checkin: code: ",
                                 status.code(), ", message: ", status.message());
-    event_publisher->PublishIoError(0, message);
-    engine::LogOpStatsNetworkErrors(
-        opstats_logger, eligibility_checkin_result.status(), message);
+    if (status.code() == absl::StatusCode::kAborted) {
+      phase_logger.LogEligibilityEvalCheckInServerAborted(
+          status, time_before_eligibility_eval_checkin);
+    } else if (status.code() == absl::StatusCode::kCancelled) {
+      phase_logger.LogEligibilityEvalCheckInClientInterrupted(
+          status, time_before_eligibility_eval_checkin);
+    } else if (!status.ok()) {
+      phase_logger.LogEligibilityEvalCheckInIOError(
+          status, time_before_eligibility_eval_checkin);
+    }
     FCP_LOG(INFO) << message;
     return absl::InternalError("");
   }
 
   if (std::holds_alternative<FederatedProtocol::Rejection>(
           *eligibility_checkin_result)) {
-    if (flags->per_phase_logs()) {
-      event_publisher->PublishEligibilityEvalRejected(
-          federated_protocol->bytes_downloaded(),
-          federated_protocol->chunking_layer_bytes_received(),
-          absl::Now() - time_before_eligibility_eval_checkin);
-      opstats_logger->AddEvent(
-          OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
-    }
+    phase_logger.LogEligibilityEvalCheckInTurnedAway(
+        GetNetworkStats(federated_protocol),
+        time_before_eligibility_eval_checkin);
     // If the server explicitly rejected our request, then we must abort and
     // we must not proceed to the "checkin" phase below.
     FCP_LOG(INFO) << "Device rejected by server during eligibility eval "
@@ -632,14 +723,9 @@ IssueEligibilityEvalCheckinAndRunPlan(
     return absl::InternalError("");
   } else if (std::holds_alternative<FederatedProtocol::EligibilityEvalDisabled>(
                  *eligibility_checkin_result)) {
-    if (flags->per_phase_logs()) {
-      event_publisher->PublishEligibilityEvalNotConfigured(
-          federated_protocol->bytes_downloaded(),
-          federated_protocol->chunking_layer_bytes_received(),
-          absl::Now() - time_before_eligibility_eval_checkin);
-      opstats_logger->AddEvent(
-          OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED);
-    }
+    phase_logger.LogEligibilityEvalNotConfigured(
+        GetNetworkStats(federated_protocol),
+        time_before_eligibility_eval_checkin);
     // If the server indicates that no eligibility eval task is configured for
     // the population then there is nothing more to do. We simply proceed to
     // the "checkin" phase below without providing it a TaskEligibilityInfo
@@ -654,13 +740,9 @@ IssueEligibilityEvalCheckinAndRunPlan(
 
   ClientOnlyPlan plan;
   if (!plan.ParseFromString(eligibility_eval_task.payloads.plan)) {
-    log_manager->LogDiag(
-        ProdDiagCode::
-            BACKGROUND_TRAINING_ELIGIBILITY_EVAL_FAILED_CANNOT_PARSE_PLAN);
     auto message = "Failed to parse received eligibility eval plan";
-    event_publisher->PublishIoError(0, message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
+    phase_logger.LogEligibilityEvalCheckInInvalidPayloadError(
+        message, time_before_eligibility_eval_checkin);
     FCP_LOG(ERROR) << message;
     return absl::InternalError("");
   }
@@ -673,49 +755,31 @@ IssueEligibilityEvalCheckinAndRunPlan(
     auto message = absl::StrCat(
         "Failed to create eligibility eval checkpoint input file: code: ",
         status.code(), ", message: ", status.message());
-    event_publisher->PublishIoError(0, message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
+    phase_logger.LogEligibilityEvalCheckInIOError(
+        status, time_before_eligibility_eval_checkin);
     FCP_LOG(ERROR) << message;
     return absl::InternalError("");
   }
 
-  if (flags->per_phase_logs()) {
-    opstats_logger->AddEvent(
-        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED);
-    event_publisher->PublishEligibilityEvalPlanReceived(
-        federated_protocol->bytes_downloaded(),
-        federated_protocol->chunking_layer_bytes_received(),
-        absl::Now() - time_before_eligibility_eval_checkin);
-  }
+  phase_logger.LogEligibilityEvalCheckInCompleted(
+      GetNetworkStats(federated_protocol),
+      time_before_eligibility_eval_checkin);
 
   absl::Time run_plan_start_time = absl::Now();
+  phase_logger.LogEligibilityEvalComputationStarted();
   engine::PlanResult plan_result = RunEligibilityEvalPlanWithTensorflowSpec(
       env_deps, event_publisher, log_manager, opstats_logger, flags, plan,
       *checkpoint_input_filename, timing_config, run_plan_start_time,
       reference_time, selector_context);
-  if (plan_result.outcome != engine::PlanOutcome::kSuccess) {
-    // If eligibility eval plan execution failed then we can't proceed to
-    // the checkin phase, since we'll have no TaskEligibilityInfo to
-    // provide. All we can do is abort and reschedule. An error will already
-    // have been published to EventPublisher by SimplePlanEngine.
-    return absl::InternalError("");
+  absl::StatusOr<TaskEligibilityInfo> task_eligibility_info;
+  if (plan_result.outcome == engine::PlanOutcome::kSuccess) {
+    task_eligibility_info =
+        ParseEligibilityEvalPlanOutput(plan_result.output_tensors);
   }
-  absl::StatusOr<TaskEligibilityInfo> parsed_output =
-      ParseEligibilityEvalPlanOutput(plan_result.output_tensors);
-  if (!parsed_output.ok()) {
-    auto status = parsed_output.status();
-    auto message = absl::StrCat("Invalid eligibility eval plan output: code: ",
-                                status.code(), ", message: ", status.message());
-    event_publisher->PublishTensorFlowError(
-        /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
-        message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW, message);
-    FCP_LOG(ERROR) << message;
-    return absl::InternalError("");
-  }
-  return std::move(*parsed_output);
+  LogEligibilityEvalComputationOutcome(phase_logger, std::move(plan_result),
+                                       task_eligibility_info.status(),
+                                       run_plan_start_time, reference_time);
+  return task_eligibility_info;
 }
 
 struct CheckinResult {
@@ -725,8 +789,7 @@ struct CheckinResult {
   std::string checkpoint_input_filename;
 };
 absl::StatusOr<CheckinResult> IssueCheckin(
-    EventPublisher* event_publisher, OpStatsLogger* opstats_logger,
-    LogManager* log_manager, const Flags* flags, Files* files,
+    PhaseLogger& phase_logger, LogManager* log_manager, Files* files,
     FederatedProtocol* federated_protocol,
     std::optional<TaskEligibilityInfo> task_eligibility_info,
     absl::Time reference_time, const std::string& population_name,
@@ -734,21 +797,15 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   absl::Time time_before_checkin = absl::Now();
   // Clear the model identifier before check-in, to ensure that the any prior
   // eligibility eval task name isn't used any longer.
-  event_publisher->SetModelIdentifier("");
-  log_manager->SetModelIdentifier("");
-  if (flags->per_phase_logs()) {
-    // Log that we are about to check in with the server.
-    event_publisher->PublishCheckin();
-    opstats_logger->AddEvent(
-        OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
-  }
+  phase_logger.SetModelIdentifier("");
+  phase_logger.LogCheckInStarted();
 
   // The Checkin(...) method will call SetModelIdentifier() with the name of
   // whatever task it receives, ensuring that subsequent events will be tagged
   // with that identifier.
   absl::StatusOr<FederatedProtocol::CheckinResult> checkin_result =
       federated_protocol->Checkin(task_eligibility_info);
-  UpdateRetryWindowAndNetworkStats(*federated_protocol, *flags, opstats_logger,
+  UpdateRetryWindowAndNetworkStats(*federated_protocol, phase_logger,
                                    fl_runner_result);
 
   // It's a bit unfortunate that we have to inspect the checkin_result and
@@ -756,42 +813,36 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   // but this ensures that the histograms below will have the right model
   // identifier attached (and we want to also emit the histograms even if we
   // have failed/rejected checkin outcomes).
-  if (flags->per_phase_logs() && checkin_result.ok() &&
+  if (checkin_result.ok() &&
       std::holds_alternative<FederatedProtocol::TaskAssignment>(
           *checkin_result)) {
     auto model_identifier =
         std::get<FederatedProtocol::TaskAssignment>(*checkin_result)
             .aggregation_session_id;
-    event_publisher->SetModelIdentifier(model_identifier);
-    log_manager->SetModelIdentifier(model_identifier);
+    phase_logger.SetModelIdentifier(model_identifier);
   }
 
-  log_manager->LogToLongHistogram(
-      HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, 0, 0,
-      engine::DataSourceType::TRAINING_DATA_SOURCE_UNDEFINED,
-      absl::ToInt64Milliseconds(absl::Now() - reference_time));
-  log_manager->LogToLongHistogram(
-      HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, 0, 0,
-      engine::DataSourceType::TRAINING_DATA_SOURCE_UNDEFINED,
-      absl::ToInt64Milliseconds(absl::Now() - time_before_checkin));
   if (!checkin_result.ok()) {
     auto status = checkin_result.status();
     auto message = absl::StrCat("Error during checkin: code: ", status.code(),
                                 ", message: ", status.message());
-    event_publisher->PublishIoError(0, message);
-    engine::LogOpStatsNetworkErrors(opstats_logger, checkin_result.status(),
-                                    message);
+    if (status.code() == absl::StatusCode::kAborted) {
+      phase_logger.LogCheckInServerAborted(status, time_before_checkin,
+                                           reference_time);
+    } else if (status.code() == absl::StatusCode::kCancelled) {
+      phase_logger.LogCheckInClientInterrupted(status, time_before_checkin,
+                                               reference_time);
+    } else if (!status.ok()) {
+      phase_logger.LogCheckInIOError(status, time_before_checkin,
+                                     reference_time);
+    }
     FCP_LOG(INFO) << message;
     return status;
   }
 
   // Server rejected us? Return the fl_runner_results as-is.
   if (std::holds_alternative<FederatedProtocol::Rejection>(*checkin_result)) {
-    if (flags->per_phase_logs()) {
-      event_publisher->PublishRejected();
-      opstats_logger->AddEvent(
-          OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
-    }
+    phase_logger.LogCheckInTurnedAway(time_before_checkin, reference_time);
     FCP_LOG(INFO) << "Device rejected by server during checkin; aborting";
     return absl::InternalError("Device rejected by server.");
   }
@@ -801,12 +852,9 @@ absl::StatusOr<CheckinResult> IssueCheckin(
 
   ClientOnlyPlan plan;
   if (!plan.ParseFromString(task_assignment.payloads.plan)) {
-    log_manager->LogDiag(
-        ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN);
     auto message = "Failed to parse received plan";
-    event_publisher->PublishIoError(0, message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
+    phase_logger.LogCheckInInvalidPayload(message, time_before_checkin,
+                                          reference_time);
     FCP_LOG(ERROR) << message;
     return absl::InternalError("");
   }
@@ -833,21 +881,15 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     auto message = absl::StrCat(
         "Failed to create checkpoint input file: code: ", status.code(),
         ", message: ", status.message());
-    event_publisher->PublishIoError(0, message);
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
+    phase_logger.LogCheckInIOError(status, time_before_checkin, reference_time);
     FCP_LOG(ERROR) << message;
     return status;
   }
   std::string task_name = ExtractTaskNameFromAggregationSessionId(
       task_assignment.aggregation_session_id, population_name, *log_manager);
-  if (flags->per_phase_logs()) {
-    event_publisher->PublishCheckinFinished(
-        federated_protocol->bytes_downloaded(),
-        federated_protocol->chunking_layer_bytes_received(),
-        absl::Now() - time_before_checkin);
-    opstats_logger->AddCheckinAcceptedEventWithTaskName(task_name);
-  }
+  phase_logger.LogCheckInCompleted(task_name,
+                                   GetNetworkStats(federated_protocol),
+                                   time_before_checkin, reference_time);
   return CheckinResult{
       .task_name = std::move(task_name),
       .plan = std::move(plan),
@@ -900,16 +942,18 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       federated_service_uri, api_key, test_cert_path, population_name,
       retry_token, client_version, attestation_measurement,
       should_abort_protocol_callback, timing_config, grpc_channel_deadline);
-  return RunFederatedComputation(env_deps, event_publisher, files, log_manager,
-                                 opstats_logger.get(), flags,
+  PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
+                               log_manager, flags);
+  return RunFederatedComputation(env_deps, phase_logger, event_publisher, files,
+                                 log_manager, opstats_logger.get(), flags,
                                  &federated_protocol, timing_config,
                                  reference_time, session_name, population_name);
 }
 
 absl::StatusOr<FLRunnerResult> RunFederatedComputation(
-    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
-    Files* files, LogManager* log_manager,
-    ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger,
+    EventPublisher* event_publisher, Files* files, LogManager* log_manager,
+    OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, const std::string& session_name,
@@ -941,7 +985,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // available (an implementation detail of FederatedProtocol, but generally a
   // 'transient error' retry window based on the provided flag values) in case
   // we do need to abort.
-  UpdateRetryWindowAndNetworkStats(*federated_protocol, *flags, opstats_logger,
+  UpdateRetryWindowAndNetworkStats(*federated_protocol, phase_logger,
                                    fl_runner_result);
 
   // Check if the device conditions allow for checking in with the server
@@ -953,8 +997,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     std::string message =
         "Device conditions not satisfied, aborting federated computation";
     FCP_LOG(INFO) << message;
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, message);
+    phase_logger.LogTaskNotStarted(message);
     return fl_runner_result;
   }
 
@@ -962,17 +1005,17 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // received over the course of the eligibility eval protocol interaction.
   absl::StatusOr<std::optional<TaskEligibilityInfo>> eligibility_eval_result =
       IssueEligibilityEvalCheckinAndRunPlan(
-          env_deps, event_publisher, files, log_manager, opstats_logger, flags,
-          federated_protocol, timing_config, reference_time, fl_runner_result,
-          eligibility_selector_context);
+          env_deps, phase_logger, event_publisher, files, log_manager,
+          opstats_logger, flags, federated_protocol, timing_config,
+          reference_time, fl_runner_result, eligibility_selector_context);
   if (!eligibility_eval_result.ok()) {
     return fl_runner_result;
   }
 
   auto checkin_result =
-      IssueCheckin(event_publisher, opstats_logger, log_manager, flags, files,
-                   federated_protocol, std::move(*eligibility_eval_result),
-                   reference_time, population_name, fl_runner_result);
+      IssueCheckin(phase_logger, log_manager, files, federated_protocol,
+                   std::move(*eligibility_eval_result), reference_time,
+                   population_name, fl_runner_result);
 
   if (!checkin_result.ok()) {
     return fl_runner_result;
@@ -1009,75 +1052,43 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   RetryWindow report_retry_window;
   if (checkin_result->plan.phase().has_tensorflow_spec()) {
+    phase_logger.LogComputationStarted();
     absl::Time run_plan_start_time = absl::Now();
-    PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
-        RunPlanWithTensorflowSpec(env_deps, event_publisher, files, log_manager,
-                                  opstats_logger, flags, checkin_result->plan,
-                                  checkin_result->checkpoint_input_filename,
-                                  timing_config, run_plan_start_time,
-                                  reference_time,
-                                  federated_selector_context_with_task_name);
-
-    auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
-    if (outcome == engine::PlanOutcome::kInterrupted) {
-      // If plan execution got interrupted, we do not report to the server, and
-      // do not wait for a reply, but bail fast to get out of the way.
+    absl::StatusOr<std::string> checkpoint_output_filename =
+        files->CreateTempFile("output", ".ckp");
+    if (!checkpoint_output_filename.ok()) {
+      auto status = checkpoint_output_filename.status();
+      auto message = absl::StrCat(
+          "Could not create temporary output checkpoint file: code: ",
+          status.code(), ", message: ", status.message());
+      phase_logger.LogComputationIOError(status);
       return fl_runner_result;
     }
+    PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
+        RunPlanWithTensorflowSpec(
+            env_deps, phase_logger, event_publisher, log_manager,
+            opstats_logger, flags, checkin_result->plan,
+            checkin_result->checkpoint_input_filename,
+            *checkpoint_output_filename, timing_config, run_plan_start_time,
+            reference_time, federated_selector_context_with_task_name);
+    auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
     absl::StatusOr<ComputationResults> computation_results;
     if (outcome == engine::PlanOutcome::kSuccess) {
       computation_results = CreateComputationResults(
           checkin_result->plan.phase().tensorflow_spec(),
-          std::move(plan_result_and_checkpoint_file));
-      if (!computation_results.ok()) {
-        auto status = computation_results.status();
-        auto message = absl::StrCat(
-            "Unable to create computation results from TensorflowSpec-based "
-            "plan outputs. code: ",
-            status.code(), ", message: ", status.message());
-        event_publisher->PublishTensorFlowError(
-            /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
-            message);
-        opstats_logger->AddEventWithErrorMessage(
-            OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW, message);
-      }
+          plan_result_and_checkpoint_file);
     }
-    absl::Time upload_start = absl::Now();
-    if (flags->per_phase_logs()) {
-      opstats_logger->AddEvent(
-          OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
-      // Commit the run data accumulated thus far to Opstats and fail if
-      // something goes wrong.
-      FCP_RETURN_IF_ERROR(opstats_logger->CommitToStorage());
-      event_publisher->PublishReportStarted(0);
-    }
+    LogComputationOutcome(plan_result_and_checkpoint_file.plan_result,
+                          computation_results.status(), phase_logger,
+                          run_plan_start_time, reference_time);
     absl::Status report_result = ReportTensorflowSpecPlanResult(
-        log_manager, federated_protocol, std::move(computation_results),
+        federated_protocol, phase_logger, std::move(computation_results),
         run_plan_start_time, reference_time);
-    if (!report_result.ok()) {
-      // If the report to the server failed, log an error.
-      auto message =
-          absl::StrCat("Error reporting results: code: ", report_result.code(),
-                       ", message: ", report_result.message());
-      event_publisher->PublishIoError(0, message);
-      engine::LogOpStatsNetworkErrors(opstats_logger, report_result, message);
-      FCP_LOG(INFO) << message;
-    } else {
-      if (flags->per_phase_logs()) {
-        event_publisher->PublishReportFinished(
-            federated_protocol->report_request_size_bytes(),
-            federated_protocol->chunking_layer_bytes_sent(),
-            absl::Now() - upload_start);
-        opstats_logger->AddEvent(
-            OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
-      }
-      if (outcome == engine::PlanOutcome::kSuccess) {
-        // Only if training succeeded *and* reporting succeeded do we consider
-        // the device to have contributed successfully.
-        fl_runner_result.set_contribution_result(FLRunnerResult::SUCCESS);
-      }
+    if (outcome == engine::PlanOutcome::kSuccess && report_result.ok()) {
+      // Only if training succeeded *and* reporting succeeded do we consider
+      // the device to have contributed successfully.
+      fl_runner_result.set_contribution_result(FLRunnerResult::SUCCESS);
     }
-
   } else {
     if (!flags->disable_legacy_plan_support() &&
         RunPlanWithExecutions(env_deps, event_publisher, files, log_manager,
@@ -1094,7 +1105,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   // Update the FLRunnerResult fields one more time to account for the "Report"
   // protocol interaction.
-  UpdateRetryWindowAndNetworkStats(*federated_protocol, *flags, opstats_logger,
+  UpdateRetryWindowAndNetworkStats(*federated_protocol, phase_logger,
                                    fl_runner_result);
 
   return fl_runner_result;
@@ -1114,14 +1125,23 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   auto opstats_logger =
       engine::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
                                   /*session_name=*/"", /*population_name=*/"");
+  PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
+                               log_manager, flags);
   SelectorContext selector_context;
   if (client_plan.phase().has_federated_compute()) {
+    absl::StatusOr<std::string> checkpoint_output_filename =
+        files->CreateTempFile("output", ".ckp");
+    if (!checkpoint_output_filename.ok()) {
+      phase_logger.LogComputationIOError(checkpoint_output_filename.status());
+      return result;
+    }
     // Regular TensorflowSpec-based plans.
     PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
         RunPlanWithTensorflowSpec(
-            env_deps, event_publisher, files, log_manager, opstats_logger.get(),
-            flags, client_plan, checkpoint_input_filename, timing_config,
-            run_plan_start_time, reference_time, selector_context);
+            env_deps, phase_logger, event_publisher, log_manager,
+            opstats_logger.get(), flags, client_plan, checkpoint_input_filename,
+            *checkpoint_output_filename, timing_config, run_plan_start_time,
+            reference_time, selector_context);
     result.set_checkpoint_output_filename(
         plan_result_and_checkpoint_file.checkpoint_file);
     plan_result = std::move(plan_result_and_checkpoint_file.plan_result);
