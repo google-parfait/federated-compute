@@ -24,11 +24,11 @@ namespace fcp {
 namespace client {
 
 struct NetworkStats {
-  int64_t bytes_downloaded;
-  int64_t bytes_uploaded;
-  int64_t chunking_layer_bytes_received;
-  int64_t chunking_layer_bytes_sent;
-  int64_t report_size_bytes;
+  int64_t bytes_downloaded = 0;
+  int64_t bytes_uploaded = 0;
+  int64_t chunking_layer_bytes_received = 0;
+  int64_t chunking_layer_bytes_sent = 0;
+  int64_t report_size_bytes = 0;
 };
 
 class PhaseLogger {
