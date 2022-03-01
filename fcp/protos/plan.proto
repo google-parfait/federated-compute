@@ -77,6 +77,14 @@ message CheckpointOp {
   // with a feed dict whose keys are the restore_names in the SideChannel and
   // whose values are the values to be restored.
   map<string, SideChannel> side_channel_tensors = 6;
+
+  // An optional name of a tensor in to which a unique token for the current
+  // session should be written.
+  //
+  // This session identifier allows TensorFlow ops such as `ServeSlices` or
+  // `ExternalDataset` to refer to callbacks and other session-global objects
+  // registered before running the session.
+  string session_token_tensor_name = 7;
 }
 
 message SideChannel {
