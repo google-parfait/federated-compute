@@ -160,13 +160,14 @@ absl::Status PlanEngine::RunPlanInternal(
   // 3. Loop over ClientExecutions.
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
+  ExampleIteratorStatus example_iterator_status;
   for (int execution_index = 0;
        execution_index < client_plan.phase().execution_size();
        execution_index++) {
-    FCP_ENGINE_RETURN_IF_ERROR(
-        RunExecution(task_environment, files, log_manager, event_publisher,
-                     opstats_logger, client_plan, execution_index, start_time,
-                     &total_example_count, &total_example_size_bytes));
+    FCP_ENGINE_RETURN_IF_ERROR(RunExecution(
+        task_environment, files, log_manager, event_publisher, opstats_logger,
+        client_plan, execution_index, start_time, &total_example_count,
+        &total_example_size_bytes, &example_iterator_status));
   }
 
   event_publisher->PublishPlanCompleted(total_example_count,
@@ -188,7 +189,8 @@ absl::Status PlanEngine::RunExecution(
     EventPublisher* event_publisher, OpStatsLogger* opstats_logger,
     const ClientOnlyPlan& client_plan, int execution_index,
     absl::Time start_time, std::atomic<int>* total_example_count,
-    std::atomic<int64_t>* total_example_size_bytes) {
+    std::atomic<int64_t>* total_example_size_bytes,
+    ExampleIteratorStatus* example_iterator_status) {
   absl::Time execution_start_time = absl::Now();
   const ClientExecution& execution =
       client_plan.phase().execution(execution_index);
@@ -223,9 +225,10 @@ absl::Status PlanEngine::RunExecution(
                 selector) {
           return task_environment->CreateExampleIterator(selector);
         },
-        event_publisher, log_manager, opstats_logger, &inputs,
+        event_publisher, log_manager, opstats_logger,
+        /* use_per_phase_logs= */ false, &inputs,
         execution.external_dataset_token_feed(), total_example_count,
-        total_example_size_bytes);
+        total_example_size_bytes, example_iterator_status);
 
     // unused
     std::vector<std::string> output_names(0);

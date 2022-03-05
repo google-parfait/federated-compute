@@ -81,7 +81,7 @@ class PhaseLogger {
   // Called when an example store error happened during eligibility eval
   // computation.
   virtual void LogEligibilityEvalComputationExampleIteratorError(
-      absl::string_view error_message) = 0;
+      absl::Status error_status) = 0;
   // Called when a tensorflow error happened during eligibiliity eval
   // computation.
   virtual void LogEligibilityEvalComputationTensorflowError(
@@ -132,7 +132,7 @@ class PhaseLogger {
   virtual void LogComputationInvalidArgument(absl::Status error_status) = 0;
   // Called when an example store error occurred during computation.
   virtual void LogComputationExampleIteratorError(
-      absl::string_view error_message) = 0;
+      absl::Status error_status) = 0;
   // Called when an IO error happened during computation
   virtual void LogComputationIOError(absl::Status error_status) = 0;
   // Called when a tensorflow error happened during computation.

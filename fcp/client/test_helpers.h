@@ -448,7 +448,7 @@ class MockPhaseLogger : public PhaseLogger {
   MOCK_METHOD(void, LogEligibilityEvalComputationInvalidArgument,
               (absl::Status error_status), (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationExampleIteratorError,
-              (absl::string_view error_message), (override));
+              (absl::Status error_status), (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationTensorflowError,
               (absl::Status error_status, int total_example_count,
                absl::Time run_plan_start_time, absl::Time reference_time),
@@ -490,7 +490,7 @@ class MockPhaseLogger : public PhaseLogger {
   MOCK_METHOD(void, LogComputationInvalidArgument, (absl::Status error_status),
               (override));
   MOCK_METHOD(void, LogComputationExampleIteratorError,
-              (absl::string_view error_message), (override));
+              (absl::Status error_status), (override));
   MOCK_METHOD(void, LogComputationIOError, (absl::Status error_status),
               (override));
   MOCK_METHOD(void, LogComputationTensorflowError,

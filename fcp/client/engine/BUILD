@@ -107,6 +107,7 @@ cc_library(
     visibility = default_visibility + [
     ],
     deps = [
+        ":common",
         "//fcp/base",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interfaces",

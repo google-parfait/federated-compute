@@ -98,6 +98,10 @@ void LogComputationOutcome(engine::PlanResult plan_result,
           std::move(plan_result.original_status),
           plan_result.total_example_count, run_plan_start_time, reference_time);
       break;
+    case engine::PlanOutcome::kExampleIteratorError:
+      phase_logger.LogComputationExampleIteratorError(
+          plan_result.original_status);
+      break;
   }
 }
 

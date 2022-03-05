@@ -27,6 +27,7 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/engine.pb.h"
+#include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/tf_wrapper.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/files.h"
@@ -76,7 +77,8 @@ class PlanEngine {
       const google::internal::federated::plan::ClientOnlyPlan& client_plan,
       int execution_index, absl::Time start_time,
       std::atomic<int>* total_example_count,
-      std::atomic<int64_t>* total_example_size_bytes);
+      std::atomic<int64_t>* total_example_size_bytes,
+      ExampleIteratorStatus* example_iterator_status);
 
   // Struct used to aggregate latency + counter statistics across multiple
   // epochs for telemetry purposes.

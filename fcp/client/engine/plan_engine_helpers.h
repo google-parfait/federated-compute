@@ -22,6 +22,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/engine/common.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
@@ -74,6 +75,20 @@ inline absl::Status AsStatus(absl::Status status) { return status; }
     }                                                                       \
   } while (0)
 
+// Tracks whether any example iterator encountered an error during the
+// computation (a single computation may use multiple iterators), either during
+// creation of the iterator or during one of the iterations.
+// This class is thread-safe.
+class ExampleIteratorStatus {
+ public:
+  void SetStatus(absl::Status status) ABSL_LOCKS_EXCLUDED(mu_);
+  absl::Status GetStatus() ABSL_LOCKS_EXCLUDED(mu_);
+
+ private:
+  absl::Status status_ ABSL_GUARDED_BY(mu_) = absl::OkStatus();
+  mutable absl::Mutex mu_;
+};
+
 // Sets up a ExternalDatasetProvider that is registered with the global
 // HostObjectRegistry. Adds a tensor representing the HostObjectRegistration
 // token to the input tensors with the provided dataset_token_tensor_name key.
@@ -83,10 +98,12 @@ HostObjectRegistration AddDatasetTokenToInputs(
         create_example_iterator,
     EventPublisher* event_publisher, LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger,
+    bool use_per_phase_logs,
     std::vector<std::pair<std::string, tensorflow::Tensor>>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
-    std::atomic<int64_t>* total_example_size_bytes);
+    std::atomic<int64_t>* total_example_size_bytes,
+    ExampleIteratorStatus* example_iterator_status);
 
 // Sets up an ExternalDatasetProvider that is registered with the global
 // HostObjectRegistry. Adds a std::string representing the HostObjectRegistration
@@ -98,10 +115,12 @@ HostObjectRegistration AddDatasetTokenToInputsForTfLite(
         create_example_iterator,
     EventPublisher* event_publisher, LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger,
+    bool use_per_phase_logs,
     absl::flat_hash_map<std::string, std::string>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
-    std::atomic<int64_t>* total_example_size_bytes);
+    std::atomic<int64_t>* total_example_size_bytes,
+    ExampleIteratorStatus* example_iterator_status);
 
 // Helper for constructing the appropriate example iterator (opstats data or
 // user data) based on the provided selector.
@@ -126,6 +145,13 @@ void LogOpStatsNetworkErrors(
 std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
     const std::string& base_dir, const Flags* flags, LogManager* log_manager,
     const std::string& session_name, const std::string& population_name);
+
+// Utility for creating a PlanResult when an `INVALID_ARGUMENT` TensorFlow error
+// was encountered, disambiguating between generic TF errors and TF errors that
+// were likely root-caused by an earlier example iterator error.
+PlanResult CreateComputationErrorPlanResult(
+    absl::Status example_iterator_status,
+    absl::Status computation_error_status);
 
 }  // namespace engine
 }  // namespace client

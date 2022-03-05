@@ -80,18 +80,20 @@ PhaseOutcome ConvertPlanOutcomeToPhaseOutcome(PlanOutcome plan_outcome) {
       return PhaseOutcome::INTERRUPTED;
     case PlanOutcome::kTensorflowError:
     case PlanOutcome::kInvalidArgument:
+    case PlanOutcome::kExampleIteratorError:
       return PhaseOutcome::ERROR;
   }
 }
 
-absl::Status ConvertPlanOutcomeToStatus(engine::PlanOutcome outcome) {
+absl::Status ConvertPlanOutcomeToStatus(PlanOutcome outcome) {
   switch (outcome) {
-    case engine::PlanOutcome::kSuccess:
+    case PlanOutcome::kSuccess:
       return absl::OkStatus();
-    case engine::PlanOutcome::kTensorflowError:
-    case engine::PlanOutcome::kInvalidArgument:
+    case PlanOutcome::kTensorflowError:
+    case PlanOutcome::kInvalidArgument:
+    case PlanOutcome::kExampleIteratorError:
       return absl::InternalError("");
-    case engine::PlanOutcome::kInterrupted:
+    case PlanOutcome::kInterrupted:
       return absl::CancelledError("");
   }
 }

@@ -38,6 +38,8 @@ enum class PlanOutcome {
   kInterrupted,
   // The input parameters are invalid.
   kInvalidArgument,
+  // An example iterator error occurred.
+  kExampleIteratorError,
 };
 
 // The result of a call to `SimplePlanEngine::RunPlan` or

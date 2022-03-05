@@ -487,6 +487,10 @@ void LogEligibilityEvalComputationOutcome(
           plan_result.original_status, plan_result.total_example_count,
           run_plan_start_time, reference_time);
       break;
+    case engine::PlanOutcome::kExampleIteratorError:
+      phase_logger.LogEligibilityEvalComputationExampleIteratorError(
+          plan_result.original_status);
+      break;
   }
 }
 
@@ -523,6 +527,10 @@ void LogComputationOutcome(const engine::PlanResult& plan_result,
       phase_logger.LogComputationTensorflowError(
           plan_result.original_status, plan_result.total_example_count,
           run_plan_start_time, reference_time);
+      break;
+    case engine::PlanOutcome::kExampleIteratorError:
+      phase_logger.LogComputationExampleIteratorError(
+          plan_result.original_status);
       break;
   }
 }

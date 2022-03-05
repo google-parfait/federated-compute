@@ -301,17 +301,23 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationInvalidArgument) {
 }
 
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationExampleIteratorError) {
-  std::string error_message = "Failed to create example iterator";
-  InSequence seq;
-  EXPECT_CALL(mock_event_publisher_,
-              PublishExampleSelectorError(0, 0, 0, error_message));
-  EXPECT_CALL(mock_opstats_logger_,
-              AddEventWithErrorMessage(
-                  OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
-                  error_message));
+  std::string original_message = "Failed to create example iterator";
+  absl::Status error_status = absl::InvalidArgumentError(original_message);
+  std::string expected_error_message = absl::StrCat(
+      "Error during eligibility eval computation: code: 3, error: ",
+      original_message);
+  if (use_per_phase_logs_) {
+    InSequence seq;
+    EXPECT_CALL(mock_event_publisher_,
+                PublishExampleSelectorError(0, 0, 0, expected_error_message));
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEventWithErrorMessage(
+                    OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
+                    expected_error_message));
+  }
 
   phase_logger_->LogEligibilityEvalComputationExampleIteratorError(
-      error_message);
+      error_status);
 }
 
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationTensorflowError) {
@@ -548,15 +554,20 @@ TEST_P(PhaseLoggerImplTest, LogComputationIOError) {
 }
 
 TEST_P(PhaseLoggerImplTest, LogComputationExampleIteratorError) {
-  std::string error_message = "Cannot create example iterator";
-  InSequence seq;
-  EXPECT_CALL(mock_event_publisher_,
-              PublishExampleSelectorError(0, 0, 0, error_message));
-  EXPECT_CALL(mock_opstats_logger_,
-              AddEventWithErrorMessage(
-                  OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
-                  error_message));
-  phase_logger_->LogComputationExampleIteratorError(error_message);
+  std::string original_message = "Cannot create example iterator";
+  absl::Status error_status = absl::InvalidArgumentError(original_message);
+  std::string expected_error_message = absl::StrCat(
+      "Error during computation: code: 3, error: ", original_message);
+  if (use_per_phase_logs_) {
+    InSequence seq;
+    EXPECT_CALL(mock_event_publisher_,
+                PublishExampleSelectorError(0, 0, 0, expected_error_message));
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEventWithErrorMessage(
+                    OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
+                    expected_error_message));
+  }
+  phase_logger_->LogComputationExampleIteratorError(error_status);
 }
 
 TEST_P(PhaseLoggerImplTest, LogComputationTensorflowError) {

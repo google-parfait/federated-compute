@@ -76,7 +76,7 @@ class PhaseLoggerImpl : public PhaseLogger {
   void LogEligibilityEvalComputationInvalidArgument(
       absl::Status error_status) override;
   void LogEligibilityEvalComputationExampleIteratorError(
-      absl::string_view error_message) override;
+      absl::Status error_status) override;
   void LogEligibilityEvalComputationTensorflowError(
       absl::Status error_status, int total_example_count,
       absl::Time run_plan_start_time, absl::Time reference_time) override;
@@ -111,8 +111,7 @@ class PhaseLoggerImpl : public PhaseLogger {
   // Computation phase.
   void LogComputationStarted() override;
   void LogComputationInvalidArgument(absl::Status error_status) override;
-  void LogComputationExampleIteratorError(
-      absl::string_view error_message) override;
+  void LogComputationExampleIteratorError(absl::Status error_status) override;
   void LogComputationIOError(absl::Status error_status) override;
   void LogComputationTensorflowError(absl::Status error_status,
                                      int total_example_count,

@@ -105,16 +105,21 @@ PlanResult SimplePlanEngine::RunPlan(
       std::move(tf_wrapper_or.value());
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
+  ExampleIteratorStatus example_iterator_status;
   auto tf_result = RunPlanInternal(
       tf_wrapper.get(), tensorflow_spec, std::move(inputs), output_names,
       run_plan_start_time, log_computation_started, log_computation_finished,
-      selector_context, &total_example_count, &total_example_size_bytes);
+      selector_context, &total_example_count, &total_example_size_bytes,
+      &example_iterator_status);
   FCP_CHECK(tf_wrapper->CloseAndRelease().ok());
 
   // Log timing info.
-  LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_LATENCY,
-               run_plan_start_time);
-  LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, reference_time);
+  if (!flags_->per_phase_logs()) {
+    LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_LATENCY,
+                 run_plan_start_time);
+    LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_END_TIME,
+                 reference_time);
+  }
 
   switch (tf_result.status().code()) {
     case absl::StatusCode::kOk: {
@@ -128,7 +133,8 @@ PlanResult SimplePlanEngine::RunPlan(
     case absl::StatusCode::kCancelled:
       return PlanResult(PlanOutcome::kInterrupted, tf_result.status());
     case absl::StatusCode::kInvalidArgument:
-      return PlanResult(PlanOutcome::kTensorflowError, tf_result.status());
+      return CreateComputationErrorPlanResult(
+          example_iterator_status.GetStatus(), tf_result.status());
     default:
       FCP_LOG(FATAL) << "unexpected status code: " << tf_result.status().code();
   }
@@ -148,7 +154,8 @@ SimplePlanEngine::RunPlanInternal(
     std::function<void()> log_computation_finished,
     const SelectorContext& selector_context,
     std::atomic<int>* total_example_count,
-    std::atomic<int64_t>* total_example_size_bytes) {
+    std::atomic<int64_t>* total_example_size_bytes,
+    ExampleIteratorStatus* example_iterator_status) {
   // Populate input tensor vector
   // AddDatasetTokenToInputs first registers a DatasetProvider with the global
   // ExternalDatasetProviderRegistry and then returns a HostObjectRegistration
@@ -159,9 +166,9 @@ SimplePlanEngine::RunPlanInternal(
           const google::internal::federated::plan::ExampleSelector& selector) {
         return task_env_->CreateExampleIterator(selector, selector_context);
       },
-      event_publisher_, log_manager_, opstats_logger_, inputs.get(),
-      tensorflow_spec.dataset_token_tensor_name(), total_example_count,
-      total_example_size_bytes);
+      event_publisher_, log_manager_, opstats_logger_, flags_->per_phase_logs(),
+      inputs.get(), tensorflow_spec.dataset_token_tensor_name(),
+      total_example_count, total_example_size_bytes, example_iterator_status);
 
   std::vector<std::string> target_names;
   for (const std::string& target_node_name :

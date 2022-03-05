@@ -41,6 +41,7 @@ PlanResult CreatePlanResultFromOutput(
     std::function<void()> log_computation_finished,
     std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes,
+    absl::Status example_iterator_status,
     const std::vector<std::string>& output_names,
     absl::Time run_plan_start_time, absl::Time reference_time) {
   switch (output.status().code()) {
@@ -86,8 +87,8 @@ PlanResult CreatePlanResultFromOutput(
             OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
             std::string(output.status().message()));
       }
-      return PlanResult(PlanOutcome::kTensorflowError,
-                        std::move(output.status()));
+      return CreateComputationErrorPlanResult(example_iterator_status,
+                                              output.status());
     default:
       FCP_LOG(FATAL) << "unexpected status code: " << output.status().code();
   }
@@ -128,14 +129,16 @@ PlanResult TfLitePlanEngine::RunPlan(
   }
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
+  ExampleIteratorStatus example_iterator_status;
   HostObjectRegistration host_registration = AddDatasetTokenToInputsForTfLite(
       [this, selector_context](
           const google::internal::federated::plan::ExampleSelector& selector) {
         return task_env_->CreateExampleIterator(selector, selector_context);
       },
-      event_publisher_, log_manager_, opstats_logger_, inputs.get(),
-      tensorflow_spec.dataset_token_tensor_name(), &total_example_count,
-      &total_example_size_bytes);
+      event_publisher_, log_manager_, opstats_logger_, flags_->per_phase_logs(),
+      inputs.get(), tensorflow_spec.dataset_token_tensor_name(),
+      &total_example_count, &total_example_size_bytes,
+      &example_iterator_status);
   absl::StatusOr<std::unique_ptr<TfLiteWrapper>> tflite_wrapper =
       TfLiteWrapper::Create(
           model,
@@ -168,8 +171,8 @@ PlanResult TfLitePlanEngine::RunPlan(
   PlanResult plan_result = CreatePlanResultFromOutput(
       std::move(output), event_publisher_, opstats_logger_, log_manager_,
       flags_, std::move(log_computation_finished), &total_example_count,
-      &total_example_size_bytes, output_names, run_plan_start_time,
-      reference_time);
+      &total_example_size_bytes, example_iterator_status.GetStatus(),
+      output_names, run_plan_start_time, reference_time);
   // Log timing info.
   if (!flags_->per_phase_logs()) {
     LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_LATENCY,

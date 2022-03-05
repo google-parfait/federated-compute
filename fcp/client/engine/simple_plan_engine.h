@@ -26,6 +26,7 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/common.h"
+#include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/tf_wrapper.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/flags.h"
@@ -76,7 +77,8 @@ class SimplePlanEngine {
       std::function<void()> log_computation_finished,
       const SelectorContext& selector_context,
       std::atomic<int>* total_example_count,
-      std::atomic<int64_t>* total_example_size_bytes);
+      std::atomic<int64_t>* total_example_size_bytes,
+      ExampleIteratorStatus* example_iterator_status);
 
   // Invokes TensorFlowWrapper, and takes care of logging TensorFlow errors and
   // external interruptions via event_publisher.

@@ -174,11 +174,16 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationInvalidArgument(
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationExampleIteratorError(
-    absl::string_view error_message) {
-  event_publisher_->PublishExampleSelectorError(0, 0, 0, error_message);
-  opstats_logger_->AddEventWithErrorMessage(
-      OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
-      std::string(error_message));
+    absl::Status error_status) {
+  if (use_per_phase_logs_) {
+    std::string error_message =
+        GetErrorMessage(error_status, kEligibilityComputationErrorPrefix,
+                        /* keep_error_message= */ true);
+    event_publisher_->PublishExampleSelectorError(0, 0, 0, error_message);
+    opstats_logger_->AddEventWithErrorMessage(
+        OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
+        error_message);
+  }
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationTensorflowError(
@@ -337,11 +342,15 @@ void PhaseLoggerImpl::LogComputationIOError(absl::Status error_status) {
 }
 
 void PhaseLoggerImpl::LogComputationExampleIteratorError(
-    absl::string_view error_message) {
-  event_publisher_->PublishExampleSelectorError(0, 0, 0, error_message);
-  opstats_logger_->AddEventWithErrorMessage(
-      OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
-      std::string(error_message));
+    absl::Status error_status) {
+  if (use_per_phase_logs_) {
+    std::string error_message = GetErrorMessage(
+        error_status, kComputationErrorPrefix, /* keep_error_message= */ true);
+    event_publisher_->PublishExampleSelectorError(0, 0, 0, error_message);
+    opstats_logger_->AddEventWithErrorMessage(
+        OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
+        error_message);
+  }
 }
 
 void PhaseLoggerImpl::LogComputationTensorflowError(

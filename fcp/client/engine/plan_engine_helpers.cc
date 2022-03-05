@@ -45,13 +45,16 @@ class DatasetIterator : public ExternalDatasetIterator {
                   OpStatsLogger* opstats_logger,
                   std::atomic<int>* total_example_count,
                   std::atomic<int64_t>* total_example_size_bytes,
-                  const std::string& collection_uri)
+                  ExampleIteratorStatus* example_iterator_status,
+                  bool use_per_phase_logs, const std::string& collection_uri)
       : example_iterator_(std::move(example_iterator)),
         event_publisher_(event_publisher),
         opstats_logger_(opstats_logger),
         iterator_start_time_(absl::Now()),
         total_example_count_(total_example_count),
         total_example_size_bytes_(total_example_size_bytes),
+        example_iterator_status_(example_iterator_status),
+        use_per_phase_logs_(use_per_phase_logs),
         example_count_(0),
         example_size_bytes_(0),
         collection_uri_(collection_uri),
@@ -68,34 +71,41 @@ class DatasetIterator : public ExternalDatasetIterator {
       // If we've reached the end of the iterator, always return OUT_OF_RANGE.
       return absl::OutOfRangeError("End of iterator reached");
     }
-    absl::StatusOr<std::string> example_or = example_iterator_->Next();
-    absl::StatusCode error_code = example_or.status().code();
+    absl::StatusOr<std::string> example = example_iterator_->Next();
+    absl::StatusCode error_code = example.status().code();
+    if (use_per_phase_logs_) {
+      example_iterator_status_->SetStatus(example.status());
+    }
     if (error_code == absl::StatusCode::kCancelled) {
-      event_publisher_->PublishInterruption(0, 0, 0, 0, iterator_start_time_);
-      opstats_logger_->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED,
-          std::string(example_or.status().message()));
+      if (!use_per_phase_logs_) {
+        event_publisher_->PublishInterruption(0, 0, 0, 0, iterator_start_time_);
+        opstats_logger_->AddEventWithErrorMessage(
+            OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED,
+            std::string(example.status().message()));
+      }
     } else if (error_code == absl::StatusCode::kInvalidArgument) {
-      std::string message = absl::StrCat("Error reading example: ",
-                                         example_or.status().message());
-      event_publisher_->PublishIoError(0, message);
-      opstats_logger_->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
+      if (!use_per_phase_logs_) {
+        std::string message =
+            absl::StrCat("Error reading example: ", example.status().message());
+        event_publisher_->PublishIoError(0, message);
+        opstats_logger_->AddEventWithErrorMessage(
+            OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
+      }
     } else if (error_code == absl::StatusCode::kOutOfRange) {
       example_iterator_->Close();
       iterator_finished_ = true;
     }
     // If we're not forwarding an OUT_OF_RANGE to the caller, record example
     // stats for metrics logging.
-    if (example_or.ok()) {
+    if (example.ok()) {
       // TODO(team): Consider reducing logic duplication in cross-dataset
       // and single-dataset example stat variables.
       *total_example_count_ += 1;
-      *total_example_size_bytes_ += example_or.value().size();
+      *total_example_size_bytes_ += example->size();
       example_count_ += 1;
-      example_size_bytes_ += example_or.value().size();
+      example_size_bytes_ += example->size();
     }
-    return example_or;
+    return example;
   }
 
  private:
@@ -107,6 +117,8 @@ class DatasetIterator : public ExternalDatasetIterator {
   // Example stats across all datasets.
   std::atomic<int>* total_example_count_;
   std::atomic<int64_t>* total_example_size_bytes_;
+  ExampleIteratorStatus* example_iterator_status_;
+  const bool use_per_phase_logs_;
   // Example stats only for this dataset.
   std::atomic<int> example_count_;
   std::atomic<int64_t> example_size_bytes_;
@@ -135,14 +147,18 @@ class TrainingDatasetProvider
           const google::internal::federated::plan::ExampleSelector&)>
           create_example_iterator,
       EventPublisher* event_publisher, LogManager* log_manager,
-      OpStatsLogger* opstats_logger, std::atomic<int>* total_example_count,
-      std::atomic<int64_t>* total_example_size_bytes)
+      OpStatsLogger* opstats_logger, bool use_per_phase_logs,
+      std::atomic<int>* total_example_count,
+      std::atomic<int64_t>* total_example_size_bytes,
+      ExampleIteratorStatus* example_iterator_status)
       : create_example_iterator_(create_example_iterator),
         event_publisher_(event_publisher),
         log_manager_(log_manager),
         opstats_logger_(opstats_logger),
+        use_per_phase_logs_(use_per_phase_logs),
         total_example_count_(total_example_count),
-        total_example_size_bytes_(total_example_size_bytes) {}
+        total_example_size_bytes_(total_example_size_bytes),
+        example_iterator_status_(example_iterator_status) {}
 
   absl::StatusOr<std::unique_ptr<ExternalDataset>> MakeDataset(
       ExampleSelector selector) final {
@@ -150,28 +166,36 @@ class TrainingDatasetProvider
         [create_example_iterator = create_example_iterator_,
          event_publisher = event_publisher_, log_manager = log_manager_,
          opstats_logger = opstats_logger_, selector,
+         use_per_phase_logs = use_per_phase_logs_,
          total_example_count = total_example_count_,
-         total_example_size_bytes = total_example_size_bytes_]()
+         total_example_size_bytes = total_example_size_bytes_,
+         example_iterator_status = example_iterator_status_]()
             -> std::unique_ptr<ExternalDatasetIterator> {
-          auto example_iterator_or = GetExampleIterator(
+          auto example_iterator = GetExampleIterator(
               selector, log_manager, opstats_logger, create_example_iterator);
           // The DatasetOp requires a valid iterator at
           // this stage so return an empty iterator if there was an error.
-          if (!example_iterator_or.ok()) {
-            if (example_iterator_or.status().code() ==
+          if (!example_iterator.ok()) {
+            if (example_iterator.status().code() ==
                 absl::StatusCode::kInvalidArgument) {
-              event_publisher->PublishExampleSelectorError(
-                  0, 0, 0, example_iterator_or.status().message());
-              opstats_logger->AddEventWithErrorMessage(
-                  OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
-                  std::string(example_iterator_or.status().message()));
+              if (!use_per_phase_logs) {
+                event_publisher->PublishExampleSelectorError(
+                    0, 0, 0, example_iterator.status().message());
+                opstats_logger->AddEventWithErrorMessage(
+                    OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
+                    std::string(example_iterator.status().message()));
+              }
+            }
+            if (use_per_phase_logs) {
+              example_iterator_status->SetStatus(example_iterator.status());
             }
             return std::make_unique<FailingDatasetIterator>(
-                example_iterator_or.status());
+                example_iterator.status());
           }
           return std::make_unique<DatasetIterator>(
-              std::move(example_iterator_or.value()), event_publisher,
-              opstats_logger, total_example_count, total_example_size_bytes,
+              std::move(*example_iterator), event_publisher, opstats_logger,
+              total_example_count, total_example_size_bytes,
+              example_iterator_status, use_per_phase_logs,
               selector.collection_uri());
         });
   }
@@ -183,28 +207,48 @@ class TrainingDatasetProvider
   EventPublisher* event_publisher_;
   LogManager* log_manager_;
   OpStatsLogger* opstats_logger_;
+  const bool use_per_phase_logs_;
   std::atomic<int>* total_example_count_;
   std::atomic<int64_t>* total_example_size_bytes_;
+  ExampleIteratorStatus* example_iterator_status_;
 };
 
 }  // namespace
+
+void ExampleIteratorStatus::SetStatus(absl::Status status) {
+  absl::MutexLock lock(&mu_);
+  // We ignores normal status such as ok and outOfRange to avoid running into a
+  // race condition when an error happened, then an outofRange or ok status
+  // returned in a different thread which overrides the error status.
+  if (status.code() != absl::StatusCode::kOk &&
+      status.code() != absl::StatusCode::kOutOfRange) {
+    status_ = status;
+  }
+}
+
+absl::Status ExampleIteratorStatus::GetStatus() {
+  absl::MutexLock lock(&mu_);
+  return status_;
+}
 
 HostObjectRegistration AddDatasetTokenToInputs(
     std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
         const google::internal::federated::plan::ExampleSelector&)>
         create_example_iterator,
     EventPublisher* event_publisher, LogManager* log_manager,
-    OpStatsLogger* opstats_logger,
+    OpStatsLogger* opstats_logger, bool use_per_phase_logs,
     std::vector<std::pair<std::string, tensorflow::Tensor>>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
-    std::atomic<int64_t>* total_example_size_bytes) {
+    std::atomic<int64_t>* total_example_size_bytes,
+    ExampleIteratorStatus* example_iterator_status) {
   // Register the TrainingDatasetProvider with the global
   // ExternalDatasetProviderRegistry.
   auto host_registration = fcp::ExternalDatasetProviderRegistry::Register(
       std::make_shared<TrainingDatasetProvider>(
           create_example_iterator, event_publisher, log_manager, opstats_logger,
-          total_example_count, total_example_size_bytes));
+          use_per_phase_logs, total_example_count, total_example_size_bytes,
+          example_iterator_status));
   // Pack the token returned from registering the provider into a std::string
   // tensor. TensorFlow will use that token via the ExternalDatasetOp to create
   // datasets and iterators.
@@ -222,17 +266,19 @@ HostObjectRegistration AddDatasetTokenToInputsForTfLite(
         const google::internal::federated::plan::ExampleSelector&)>
         create_example_iterator,
     EventPublisher* event_publisher, LogManager* log_manager,
-    OpStatsLogger* opstats_logger,
+    OpStatsLogger* opstats_logger, bool use_per_phase_logs,
     absl::flat_hash_map<std::string, std::string>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
-    std::atomic<int64_t>* total_example_size_bytes) {
+    std::atomic<int64_t>* total_example_size_bytes,
+    ExampleIteratorStatus* example_iterator_status) {
   // Registers the TrainingDatasetProvider with the global
   // ExternalDatasetProviderRegistry.
   auto host_registration = fcp::ExternalDatasetProviderRegistry::Register(
       std::make_shared<TrainingDatasetProvider>(
           create_example_iterator, event_publisher, log_manager, opstats_logger,
-          total_example_count, total_example_size_bytes));
+          use_per_phase_logs, total_example_count, total_example_size_bytes,
+          example_iterator_status));
   // Adds the token returned from registering the provider to the map of inputs.
   // TfLite will use that token via the ExternalDatasetOp to create
   // datasets and iterators.
@@ -289,6 +335,27 @@ std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
   }
   return std::make_unique<OpStatsLogger>(
       /*opstats_enabled=*/flags->enable_opstats());
+}
+
+PlanResult CreateComputationErrorPlanResult(
+    absl::Status example_iterator_status,
+    absl::Status computation_error_status) {
+  switch (example_iterator_status.code()) {
+    case absl::StatusCode::kOk:
+    case absl::StatusCode::kOutOfRange:
+      // Either example iterators are working fine or we don't know the status
+      // of the example iterators. In this case, we'll use the error status
+      // returned from TensorFlow.
+      return PlanResult(PlanOutcome::kTensorflowError,
+                        computation_error_status);
+    case absl::StatusCode::kCancelled:
+      // Example iterator got interrupted.
+      return PlanResult(PlanOutcome::kInterrupted, example_iterator_status);
+    default:
+      // All other Example iterator errors.
+      return PlanResult(PlanOutcome::kExampleIteratorError,
+                        example_iterator_status);
+  }
 }
 
 }  // namespace engine
