@@ -170,7 +170,7 @@ message CheckinRequest {
   // Protocol options supported by the client.
   ProtocolOptionsRequest protocol_options_request = 5;
 
-  string client_version = 6;
+  string client_version = 6 ;
 
   // The client computes this message using the plan returned by a previous
   // `EligibilityEvalCheckinResponse`.
@@ -309,7 +309,7 @@ message EligibilityEvalCheckinRequest {
 
   // This field has the same semantics as `CheckinRequest.client_version`. See
   // that field for details.
-  string client_version = 6;
+  string client_version = 6 ;
 }
 
 // Response to the `EligibilityEvalCheckinRequest`, sent to the

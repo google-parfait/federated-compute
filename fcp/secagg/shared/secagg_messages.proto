@@ -143,7 +143,7 @@ message ShareKeysRequest {
 
   // The session ID for the Secagg execution. All clients will use this session
   // ID as part of the seed of PRNGs used during the execution of the protocol,
-  bytes session_id = 4;
+  bytes session_id = 4 ;
 }
 
 // Part of a ClientToServerWrapperMessage. Contains a list of encrypted pairs of

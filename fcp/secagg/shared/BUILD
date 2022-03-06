@@ -12,7 +12,9 @@ proto_library(
     name = "proto",
     srcs = ["secagg_messages.proto"],
     visibility = ["//visibility:public"],
-    deps = ["@com_google_protobuf//:any_proto"],
+    deps = [
+        "@com_google_protobuf//:any_proto",
+    ],
 )
 
 cc_proto_library(
