@@ -51,6 +51,7 @@ class TfLiteWrapperTest : public testing::Test {
           .graceful_shutdown_period = absl::Milliseconds(1000),
           .extended_shutdown_period = absl::Milliseconds(2000),
       };
+  absl::flat_hash_set<std::string> output_names_ = {"Identity"};
 };
 
 TEST_F(TfLiteWrapperTest, InvalidModel) {
@@ -58,7 +59,8 @@ TEST_F(TfLiteWrapperTest, InvalidModel) {
       TfLiteWrapper::Create(
           "INVALID_FLATBUFFER", []() { return false; }, default_timing_config_,
           &mock_log_manager_,
-          std::make_unique<absl::flat_hash_map<std::string, std::string>>()),
+          std::make_unique<absl::flat_hash_map<std::string, std::string>>(),
+          output_names_),
       IsCode(INVALID_ARGUMENT));
 }
 
@@ -72,7 +74,8 @@ TEST_F(TfLiteWrapperTest, InputNotSet) {
       TfLiteWrapper::Create(
           *plan, []() { return false; }, default_timing_config_,
           &mock_log_manager_,
-          std::make_unique<absl::flat_hash_map<std::string, std::string>>()),
+          std::make_unique<absl::flat_hash_map<std::string, std::string>>(),
+          output_names_),
       IsCode(INVALID_ARGUMENT));
 }
 
@@ -87,7 +90,7 @@ TEST_F(TfLiteWrapperTest, Aborted) {
   // to see a CANCELLED status when we run the plan.
   auto wrapper = TfLiteWrapper::Create(
       *plan, []() { return true; }, default_timing_config_, &mock_log_manager_,
-      std::move(inputs));
+      std::move(inputs), output_names_);
   ASSERT_OK(wrapper);
   EXPECT_THAT((*wrapper)->Run(), IsCode(CANCELLED));
 }
@@ -101,13 +104,14 @@ TEST_F(TfLiteWrapperTest, Success) {
   (*inputs)["y"] = "def";
   auto wrapper = TfLiteWrapper::Create(
       *plan, []() { return false; }, default_timing_config_, &mock_log_manager_,
-      std::move(inputs));
+      std::move(inputs), output_names_);
   EXPECT_THAT(wrapper, IsCode(OK));
   auto outputs = (*wrapper)->Run();
   ASSERT_OK(outputs);
-  EXPECT_EQ(outputs->size(), 1);
-  EXPECT_EQ(*static_cast<tensorflow::tstring*>(outputs->at(0).data()),
-            "abcdef");
+  EXPECT_EQ(outputs->output_tensor_names.size(), 1);
+  EXPECT_EQ(
+      *static_cast<tensorflow::tstring*>(outputs->output_tensors.at(0).data()),
+      "abcdef");
 }
 
 }  // anonymous namespace

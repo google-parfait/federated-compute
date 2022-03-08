@@ -34,6 +34,11 @@ namespace fcp {
 namespace client {
 namespace engine {
 
+struct OutputTensors {
+  std::vector<std::string> output_tensor_names;
+  std::vector<tensorflow::Tensor> output_tensors;
+};
+
 // A class to call into TFLite.
 // All functions in this interface indicate errors as follows:
 // - CANCELLED: interrupted execution
@@ -46,39 +51,53 @@ namespace engine {
 //    Status message.
 // This class supports aborting ongoing calls, by polling the provided
 // should_abort function.
+// Parameters:
+//    1. model: The serialized TFLite model.
+//    2. should_abort: A function which will be polled periodically to determine
+//    if the computation should be aborted.
+//    3. timing_config: The TimingConfig for an InterruptibleRunner.
+//    4. log_manager: A LogManager.
+//    5. inputs: A hashmap which has input tensor name as key, tensor data as
+//    value.
+//    6. output_names: The names of the output tensors. The order for these
+//    tensor names are not deterministic.
 class TfLiteWrapper {
  public:
   static absl::StatusOr<std::unique_ptr<TfLiteWrapper>> Create(
       const std::string& model, std::function<bool()> should_abort,
       const InterruptibleRunner::TimingConfig& timing_config,
       LogManager* log_manager,
-      std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs);
+      std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
+      absl::flat_hash_set<std::string> output_names);
 
   // Wrapper around TfLite's Interpreter::Invoke method.
   // If the run succeeds, a vector of output tensors (empty if there's no
   // output tensors), or CANCELLED if the training run was cancelled or
   // INVALID_ARGUMENT for the rest of errors.
-  absl::StatusOr<std::vector<tensorflow::Tensor>> Run();
+  absl::StatusOr<OutputTensors> Run();
 
  private:
   TfLiteWrapper(std::unique_ptr<tflite::FlatBufferModel> model,
                 std::unique_ptr<CachingErrorReporter> error_reporter,
                 tflite::TfLiteDelegateUniquePtr delegate,
                 std::unique_ptr<tflite::Interpreter> interpreter,
-                std::unique_ptr<InterruptibleRunner> interruptible_runner)
+                std::unique_ptr<InterruptibleRunner> interruptible_runner,
+                absl::flat_hash_set<std::string> output_names)
       : model_(std::move(model)),
         error_reporter_(std::move(error_reporter)),
         delegate_(std::move(delegate)),
         interpreter_(std::move(interpreter)),
-        interruptible_runner_(std::move(interruptible_runner)) {}
+        interruptible_runner_(std::move(interruptible_runner)),
+        output_names_(std::move(output_names)) {}
   absl::Status ConvertTfLiteStatus(TfLiteStatus status);
-  absl::StatusOr<std::vector<tensorflow::Tensor>> ConstructOutputs();
+  absl::StatusOr<OutputTensors> ConstructOutputs();
 
   std::unique_ptr<tflite::FlatBufferModel> model_;
   std::unique_ptr<CachingErrorReporter> error_reporter_;
   tflite::TfLiteDelegateUniquePtr delegate_;
   std::unique_ptr<tflite::Interpreter> interpreter_;
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
+  const absl::flat_hash_set<std::string> output_names_;
 };
 
 }  // namespace engine

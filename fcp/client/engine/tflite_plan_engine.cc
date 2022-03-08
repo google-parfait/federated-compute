@@ -35,10 +35,9 @@ using ::google::internal::federated::plan::TensorflowSpec;
 namespace {
 
 PlanResult CreatePlanResultFromOutput(
-    absl::StatusOr<std::vector<tensorflow::Tensor>> output,
-    EventPublisher* event_publisher, opstats::OpStatsLogger* opstats_logger,
-    LogManager* log_manager, const Flags* flags,
-    std::function<void()> log_computation_finished,
+    absl::StatusOr<OutputTensors> output, EventPublisher* event_publisher,
+    opstats::OpStatsLogger* opstats_logger, LogManager* log_manager,
+    const Flags* flags, std::function<void()> log_computation_finished,
     std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes,
     absl::Status example_iterator_status,
@@ -59,8 +58,8 @@ PlanResult CreatePlanResultFromOutput(
             *total_example_count);
       }
       PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
-      plan_result.output_names = output_names;
-      plan_result.output_tensors = std::move(*output);
+      plan_result.output_names = std::move(output->output_tensor_names);
+      plan_result.output_tensors = std::move(output->output_tensors);
       plan_result.total_example_count = *total_example_count;
       plan_result.total_example_size_bytes = *total_example_size_bytes;
       return plan_result;
@@ -139,6 +138,8 @@ PlanResult TfLitePlanEngine::RunPlan(
       inputs.get(), tensorflow_spec.dataset_token_tensor_name(),
       &total_example_count, &total_example_size_bytes,
       &example_iterator_status);
+  absl::flat_hash_set<std::string> output_names_set(output_names.begin(),
+                                                    output_names.end());
   absl::StatusOr<std::unique_ptr<TfLiteWrapper>> tflite_wrapper =
       TfLiteWrapper::Create(
           model,
@@ -146,7 +147,8 @@ PlanResult TfLitePlanEngine::RunPlan(
             return task_env_->ShouldAbort(absl::Now(),
                                           timing_config_->polling_period);
           },
-          *timing_config_, log_manager_, std::move(inputs));
+          *timing_config_, log_manager_, std::move(inputs),
+          std::move(output_names_set));
   if (!tflite_wrapper.ok()) {
     if (!flags_->per_phase_logs()) {
       event_publisher_->PublishTensorFlowError(
@@ -166,8 +168,7 @@ PlanResult TfLitePlanEngine::RunPlan(
     event_publisher_->PublishPlanExecutionStarted();
     log_computation_started();
   }
-  absl::StatusOr<std::vector<tensorflow::Tensor>> output =
-      (*tflite_wrapper)->Run();
+  absl::StatusOr<OutputTensors> output = (*tflite_wrapper)->Run();
   PlanResult plan_result = CreatePlanResultFromOutput(
       std::move(output), event_publisher_, opstats_logger_, log_manager_,
       flags_, std::move(log_computation_finished), &total_example_count,

@@ -57,7 +57,8 @@ absl::StatusOr<std::unique_ptr<TfLiteWrapper>> TfLiteWrapper::Create(
     const std::string& model, std::function<bool()> should_abort,
     const InterruptibleRunner::TimingConfig& timing_config,
     LogManager* log_manager,
-    std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs) {
+    std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
+    absl::flat_hash_set<std::string> output_names) {
   std::unique_ptr<tflite::FlatBufferModel> flat_buffer_model =
       tflite::FlatBufferModel::BuildFromBuffer(model.c_str(), model.size());
   if (flat_buffer_model == nullptr) {
@@ -103,13 +104,13 @@ absl::StatusOr<std::unique_ptr<TfLiteWrapper>> TfLiteWrapper::Create(
               BACKGROUND_TRAINING_INTERRUPT_TF_EXTENDED_EXECUTION_COMPLETED,
           .interrupt_timeout_extended = ProdDiagCode::
               BACKGROUND_TRAINING_INTERRUPT_TF_EXTENDED_EXECUTION_TIMED_OUT});
-
-  return absl::WrapUnique(new TfLiteWrapper(
-      std::move(flat_buffer_model), std::move(error_reporter),
-      std::move(delegate), std::move(interpreter), std::move(runner)));
+  return absl::WrapUnique(
+      new TfLiteWrapper(std::move(flat_buffer_model), std::move(error_reporter),
+                        std::move(delegate), std::move(interpreter),
+                        std::move(runner), std::move(output_names)));
 }
 
-absl::StatusOr<std::vector<tensorflow::Tensor>> TfLiteWrapper::Run() {
+absl::StatusOr<OutputTensors> TfLiteWrapper::Run() {
   auto* interpreter_raw_pointer = interpreter_.get();
   auto tflite_runnable = [interpreter_raw_pointer, this]() {
     return ConvertTfLiteStatus(interpreter_raw_pointer->Invoke());
@@ -168,18 +169,24 @@ absl::Status TfLiteWrapper::ConvertTfLiteStatus(TfLiteStatus status) {
   }
 }
 
-absl::StatusOr<std::vector<tensorflow::Tensor>>
-TfLiteWrapper::ConstructOutputs() {
-  std::vector<tensorflow::Tensor> outputs;
+absl::StatusOr<OutputTensors> TfLiteWrapper::ConstructOutputs() {
+  OutputTensors output_tensors;
   for (int output_tensor_index : interpreter_->outputs()) {
     TfLiteTensor* tflite_tensor = interpreter_->tensor(output_tensor_index);
+    std::string tensor_name = tflite_tensor->name;
+    // If the output tensor name is not in the expected output names, we simply
+    // ignore it.
+    if (!output_names_.contains(tensor_name)) {
+      continue;
+    }
     auto tensor = tflite::flex::CreateTfTensorFromTfLiteTensor(tflite_tensor);
     if (!tensor.ok()) {
       return absl::InvalidArgumentError(tensor.status().error_message());
     }
-    outputs.push_back(*tensor);
+    output_tensors.output_tensor_names.push_back(tensor_name);
+    output_tensors.output_tensors.push_back(*tensor);
   }
-  return outputs;
+  return output_tensors;
 }
 
 }  // namespace engine
