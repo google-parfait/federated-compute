@@ -62,10 +62,13 @@ message FederatedComputation {
 
   // Types of server aggregation.
   oneof aggregation_type {
-    // Simple aggregation.
+    // Simple aggregation. At least one value is aggregated with simple
+    // aggregation. This includes the mixed case where some values are
+    // aggregated with simple aggregation while others are aggregated with
+    // secure aggregation.
     SimpleAggregation simple_aggregation = 3;
 
-    // Secure Aggregation.
+    // Secure aggregation. All values are aggregated with secure aggregation.
     SecureAggregation secure_aggregation = 4;
   }
 }
