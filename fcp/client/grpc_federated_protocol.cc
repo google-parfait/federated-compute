@@ -69,7 +69,6 @@ using ::fcp::secagg::SecAggVector;
 using ::fcp::secagg::SecAggVectorMap;
 using ::fcp::secagg::SendToServerInterface;
 using ::fcp::secagg::StateTransitionListenerInterface;
-using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federatedml::v2::CheckinRequest;
 using ::google::internal::federatedml::v2::CheckinRequestAck;
 using ::google::internal::federatedml::v2::CheckinResponse;
