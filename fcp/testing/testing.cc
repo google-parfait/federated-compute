@@ -79,13 +79,6 @@ absl::Status EnsureDirExists(absl::string_view path) {
 
 }  // namespace
 
-std::string TemporaryTestDir() {
-  std::string dir =
-      ConcatPath(StripTrailingPathSeparator(testing::TempDir()), TestName());
-  FCP_CHECK(EnsureDirExists(dir).ok());
-  return dir;
-}
-
 bool ShouldUpdateBaseline() {
   return getenv("FCP_UPDATE_BASELINE");
 }

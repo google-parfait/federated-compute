@@ -89,12 +89,6 @@ std::string GetTestDataPath(absl::string_view relative_path);
 std::string TemporaryTestFile(absl::string_view suffix);
 
 /**
- * Creates a temporary directory unique for the running test and returns the
- * directory name.
- */
-std::string TemporaryTestDir();
-
-/**
  * Verifies a provided content against an expected stored in a baseline file.
  * Returns an empty std::string if both are identical, otherwise a diagnostic
  * message for error reports.
