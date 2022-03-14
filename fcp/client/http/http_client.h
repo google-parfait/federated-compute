@@ -114,8 +114,8 @@ class HttpResponse;         // forward declaration
 //      the decompression and/or choose to store decompressed payloads on disk
 //      if it so chooses.
 //   *  Implementations must transparently decode server responses served with
-//      "Transfer-Encoding: gzip", "deflate", or "chunked". In such cases they
-//      must remove the "Transfer-Encoding" response header.
+//      "Transfer-Encoding: chunked". In such cases they must remove the
+//      "Transfer-Encoding" response header.
 // - Request body compression & encoding:
 //   *  If implementations receive a "Content-Encoding" request header, this
 //      means that the request body stream they receive has already been
