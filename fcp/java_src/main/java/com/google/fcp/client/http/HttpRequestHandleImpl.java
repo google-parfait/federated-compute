@@ -64,6 +64,10 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
   private static final String CONTENT_ENCODING_HEADER = "Content-Encoding";
   // The Accept-Encoding and Content-Encoding value to indicate gzip-based compression.
   private static final String GZIP_ENCODING = "gzip";
+  // The Transfer-Encoding header name.
+  private static final String TRANSFER_ENCODING_HEADER = "Transfer-Encoding";
+  // The Transfer-Encoding value indicating "chunked" encoding.
+  private static final String CHUNKED_TRANSFER_ENCODING = "chunked";
 
   /** Used to indicate that the request was invalid in some way. */
   private static final class InvalidHttpRequestException extends Exception {
@@ -716,7 +720,15 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     for (Map.Entry<String, List<String>> header : connection.getHeaderFields().entrySet()) {
       // The status line gets returned as a header field with a null key. We need to ignore that
       // one (as we treat it as a separate field in JniHttpResponse, rather than a header).
-      if (header.getKey() == null) {
+      //
+      // Also, the HttpURLConnection implementation generally unchunks response bodies that used
+      // "Transfer-Encoding: chunked". However, while Android's implementation also then removes the
+      // "Transfer-Encoding" header, the JDK implementation does not. Since the HttpClient contract
+      // requires us to remove that header, we explicitly filter it out here.
+      if (header.getKey() == null
+          || (TRANSFER_ENCODING_HEADER.equalsIgnoreCase(header.getKey())
+              && header.getValue().size() == 1
+              && CHUNKED_TRANSFER_ENCODING.equalsIgnoreCase(header.getValue().get(0)))) {
         continue;
       }
       // If the response will automatically be gzip-decoded, then we must redact any

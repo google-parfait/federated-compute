@@ -710,6 +710,8 @@ public final class HttpClientForNativeImplTest {
                 ImmutableList.of("Bar"),
                 "Content-Encoding",
                 ImmutableList.of("gzip"),
+                "Transfer-Encoding",
+                ImmutableList.of("chunked"),
                 "Content-Length",
                 ImmutableList.of(String.valueOf(compressedResponseBody.size()))));
 
@@ -821,6 +823,64 @@ public final class HttpClientForNativeImplTest {
     // The Accept-Encoding header provided by the native layer should have been used, verbatim.
     verify(mockConnection).addRequestProperty("Accept-encoding", "gzip,foobar");
     verify(mockConnection, never()).setRequestProperty(eq("Accept-Encoding"), any());
+  }
+
+  @Test
+  public void testChunkedTransferEncodingResponseHeaderShouldBeRemoved() throws Exception {
+    TestHttpRequestHandleImpl requestHandle =
+        (TestHttpRequestHandleImpl)
+            httpClient.enqueueRequest(
+                JniHttpRequest.newBuilder()
+                    .setUri("https://foo.com")
+                    .setMethod(JniHttpMethod.HTTP_METHOD_GET)
+                    .setHasBody(false)
+                    .build()
+                    .toByteArray());
+
+    HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+    when(urlConnectionFactory.createUrlConnection("https://foo.com")).thenReturn(mockConnection);
+
+    int expectedResponseCode = 200;
+    when(mockConnection.getResponseCode()).thenReturn(expectedResponseCode);
+
+    // Fake some response body data.
+    String expectedResponseBody = "another_test_response_body";
+    when(mockConnection.getInputStream())
+        .thenReturn(new ByteArrayInputStream(expectedResponseBody.getBytes(UTF_8)));
+
+    // And make the response headers include a "Transfer-Encoding: chunked" header, simulating the
+    // case when HttpClientForNativeImpl is used with the JDK, which will un-chunk response data but
+    // which will not remove the Transfer-Encoding header afterwards (contrary to Android's
+    // HttpURLConnection implementation which *does* remove the header in this case).
+    when(mockConnection.getHeaderFields())
+        .thenReturn(
+            ImmutableMap.of(
+                "Response-Header1",
+                ImmutableList.of("Bar"),
+                "Transfer-Encoding",
+                ImmutableList.of("chunked")));
+    // Make the response body length *not* be known ahead of time (in accordance with the "chunked"
+    // transfer encoding having been used.
+    when(mockConnection.getContentLength()).thenReturn(-1);
+
+    // Run the request.
+    byte[] result = httpClient.performRequests(new Object[] {requestHandle});
+    assertThat(Status.parseFrom(result, ExtensionRegistryLite.getEmptyRegistry()).getCode())
+        .isEqualTo(Code.OK_VALUE);
+
+    requestHandle.close();
+
+    // Verify the results.
+    requestHandle.assertSuccessfulCompletion();
+    assertThat(requestHandle.responseProto)
+        .isEqualTo(
+            JniHttpResponse.newBuilder()
+                .setCode(expectedResponseCode)
+                // The Transfer-Encoding header should have been redacted.
+                .addHeaders(
+                    JniHttpHeader.newBuilder().setName("Response-Header1").setValue("Bar").build())
+                .build());
+    assertThat(requestHandle.responseBody.toString(UTF_8.name())).isEqualTo(expectedResponseBody);
   }
 
   @Test
