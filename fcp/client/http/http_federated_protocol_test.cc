@@ -331,8 +331,8 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
   ForwardingInfo* forwarding_info =
       task_assignment->mutable_aggregation_report_forwarding_info();
   forwarding_info->set_target_uri_prefix(kAggregationTargetUri);
-  task_assignment->set_client_session_id(kClientSessionId);
-  task_assignment->set_aggregation_session_id(aggregation_session_id);
+  task_assignment->set_session_id(kClientSessionId);
+  task_assignment->set_aggregation_id(aggregation_session_id);
   *task_assignment->mutable_plan() = plan;
   *task_assignment->mutable_init_checkpoint() = checkpoint;
   return response;

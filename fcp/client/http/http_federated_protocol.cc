@@ -559,7 +559,7 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   return TaskAssignment{
       .payloads = {.plan = std::move(result.plan),
                    .checkpoint = std::move(result.checkpoint)},
-      .aggregation_session_id = task_assignment.aggregation_session_id(),
+      .aggregation_session_id = task_assignment.aggregation_id(),
       // TODO(team): Populate this field with the actual values
       // provided by the server, once we support Secure Aggregation in the
       // HTTP protocol.

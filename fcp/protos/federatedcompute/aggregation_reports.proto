@@ -17,7 +17,6 @@ syntax = "proto3";
 package google.internal.federatedcompute.v1;
 
 import "google/api/annotations.proto";
-import "google/protobuf/duration.proto";
 import "google/rpc/code.proto";
 import "fcp/protos/federatedcompute/common.proto";
 
@@ -122,19 +121,7 @@ message AggregationReport {
   // may contain detailed diagnostic information.
   google.rpc.Code status_code = 1;
 
-  // Stats produced during the client-side execution of the task.
-  ClientStats client_stats = 2;
-
   // Resource name to which the aggregation result was uploaded. This will be
   // empty if no result was uploaded.
   string resource_name = 3;
-}
-
-// This message is used to report client stats and execution duration to the
-// server.
-message ClientStats {
-  // The time spent on running the task (includes I/O such as reading examples,
-  // but does not include time spent on the network for retrieving the task
-  // or uploading results).
-  google.protobuf.Duration execution_duration = 1;
 }
