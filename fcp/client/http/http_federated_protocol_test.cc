@@ -641,9 +641,9 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
       *eligibility_checkin_result,
       VariantWith<FederatedProtocol::EligibilityEvalTask>(FieldsAre(
           AllOf(Field(&FederatedProtocol::PlanAndCheckpointPayloads::plan,
-                      expected_plan),
+                      absl::Cord(expected_plan)),
                 Field(&FederatedProtocol::PlanAndCheckpointPayloads::checkpoint,
-                      expected_checkpoint)),
+                      absl::Cord(expected_checkpoint))),
           expected_execution_id)));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
@@ -1172,10 +1172,11 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   auto checkin_result = federated_protocol_->Checkin(expected_eligibility_info);
 
   ASSERT_OK(checkin_result.status());
-  EXPECT_THAT(*checkin_result,
-              VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
-                  FieldsAre(expected_plan, expected_checkpoint),
-                  expected_aggregation_session_id, Eq(std::nullopt))));
+  EXPECT_THAT(
+      *checkin_result,
+      VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
+          FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
+          expected_aggregation_session_id, Eq(std::nullopt))));
   // The Checkin call is expected to return the accepted retry window from the
   // response to the first eligibility eval request.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -1235,10 +1236,11 @@ TEST_F(HttpFederatedProtocolTest,
       federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
 
   ASSERT_OK(checkin_result.status());
-  EXPECT_THAT(*checkin_result,
-              VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
-                  FieldsAre(expected_plan, expected_checkpoint),
-                  expected_aggregation_session_id, Eq(std::nullopt))));
+  EXPECT_THAT(
+      *checkin_result,
+      VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
+          FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
+          expected_aggregation_session_id, Eq(std::nullopt))));
   // The Checkin call is expected to return the accepted retry window from the
   // response to the first eligibility eval request.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());

@@ -83,6 +83,18 @@ void AddValuesToQuantized(QuantizedTensor* quantized,
   }
 }
 
+// Parses a proto from either an std::string or an absl::Cord. This allows the
+// proto data to be provided in either format.
+template <typename MessageT>
+bool ParseFromStringOrCord(MessageT& proto,
+                           std::variant<std::string, absl::Cord> data) {
+  if (std::holds_alternative<std::string>(data)) {
+    return proto.ParseFromString(std::get<std::string>(data));
+  } else {
+    return proto.ParseFromString(std::string(std::get<absl::Cord>(data)));
+  }
+}
+
 struct PlanResultAndCheckpointFile {
   explicit PlanResultAndCheckpointFile(engine::PlanResult plan_result)
       : plan_result(std::move(plan_result)) {}
@@ -634,18 +646,36 @@ bool RunPlanWithExecutions(
       flags->log_tensorflow_error_messages());
 }
 
+// Writes the given data to the stream, and returns true if successful and false
+// if not.
+bool WriteStringOrCordToFstream(
+    std::fstream& stream, const std::variant<std::string, absl::Cord>& data) {
+  if (stream.fail()) {
+    return false;
+  }
+  if (std::holds_alternative<std::string>(data)) {
+    return (stream << std::get<std::string>(data)).good();
+  }
+  for (absl::string_view chunk : std::get<absl::Cord>(data).Chunks()) {
+    if (!(stream << chunk).good()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Writes the given checkpoint data to a newly created temporary file.
 // Returns the filename if successful, or an error if the file could not be
 // created, or if writing to the file failed.
 absl::StatusOr<std::string> CreateInputCheckpointFile(
-    Files* files, const std::string& checkpoint) {
+    Files* files, const std::variant<std::string, absl::Cord>& checkpoint) {
   // Create the temporary checkpoint file.
   // Deletion of the file is left to the caller / the Files implementation.
   FCP_ASSIGN_OR_RETURN(absl::StatusOr<std::string> filename,
                        files->CreateTempFile("init", ".ckp"));
   // Write the checkpoint data to the file.
   std::fstream checkpoint_stream(*filename, std::ios_base::out);
-  if (checkpoint_stream.fail() || !(checkpoint_stream << checkpoint).good()) {
+  if (!WriteStringOrCordToFstream(checkpoint_stream, checkpoint)) {
     return absl::InvalidArgumentError("Failed to write to file");
   }
   checkpoint_stream.close();
@@ -747,7 +777,7 @@ IssueEligibilityEvalCheckinAndRunPlan(
           *eligibility_checkin_result);
 
   ClientOnlyPlan plan;
-  if (!plan.ParseFromString(eligibility_eval_task.payloads.plan)) {
+  if (!ParseFromStringOrCord(plan, eligibility_eval_task.payloads.plan)) {
     auto message = "Failed to parse received eligibility eval plan";
     phase_logger.LogEligibilityEvalCheckInInvalidPayloadError(
         message, time_before_eligibility_eval_checkin);
@@ -859,7 +889,7 @@ absl::StatusOr<CheckinResult> IssueCheckin(
       absl::get<FederatedProtocol::TaskAssignment>(*checkin_result);
 
   ClientOnlyPlan plan;
-  if (!plan.ParseFromString(task_assignment.payloads.plan)) {
+  if (!ParseFromStringOrCord(plan, task_assignment.payloads.plan)) {
     auto message = "Failed to parse received plan";
     phase_logger.LogCheckInInvalidPayload(message, time_before_checkin,
                                           reference_time);
@@ -947,8 +977,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   GrpcFederatedProtocol federated_protocol(
       event_publisher, log_manager, opstats_logger.get(), flags,
-      federated_service_uri, api_key, test_cert_path, population_name,
-      retry_token, client_version, attestation_measurement,
+      // HTTP support is still disabled for now, except in tests.
+      /*http_client=*/nullptr, federated_service_uri, api_key, test_cert_path,
+      population_name, retry_token, client_version, attestation_measurement,
       should_abort_protocol_callback, timing_config, grpc_channel_deadline);
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
                                log_manager, flags);

@@ -39,6 +39,8 @@
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/grpc_bidi_stream.h"
+#include "fcp/client/http/http_client.h"
+#include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -58,6 +60,7 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   GrpcFederatedProtocol(
       EventPublisher* event_publisher, LogManager* log_manager,
       ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+      ::fcp::client::http::HttpClient* http_client,
       const std::string& federated_service_uri, const std::string& api_key,
       const std::string& test_cert_path, absl::string_view population_name,
       absl::string_view retry_token, absl::string_view client_version,
@@ -70,6 +73,7 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   GrpcFederatedProtocol(
       EventPublisher* event_publisher, LogManager* log_manager,
       ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+      ::fcp::client::http::HttpClient* http_client,
       std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream,
       std::unique_ptr<secagg::SecAggClient> secagg_client,
       absl::string_view population_name, absl::string_view retry_token,
@@ -177,11 +181,39 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   void UpdateObjectStateIfPermanentError(
       absl::Status status, ObjectState permanent_error_object_state);
 
+  // Utility struct to represent resource data coming from the gRPC protocol.
+  // A resource is either represented by a URI from which the data should be
+  // fetched (in which case `has_uri` is true and `uri` should not be empty), or
+  // is available as inline data (in which case `has_uri` is false and `data`
+  // may or may not be empty).
+  struct TaskResource {
+    bool has_uri;
+    const std::string& uri;
+    const std::string& data;
+  };
+  // Represents the common set of resources a task may have.
+  struct TaskResources {
+    TaskResource plan;
+    TaskResource checkpoint;
+  };
+
+  // Helper function for fetching the checkpoint/plan resources for an
+  // eligibility eval task or regular task. This function will return an error
+  // if either `TaskResource` represents an invalid state (e.g. if `has_uri &&
+  // uri.empty()`).
+  absl::StatusOr<PlanAndCheckpointPayloads> FetchTaskResources(
+      TaskResources task_resources);
+  // Validates the given `TaskResource` and converts it to a `UriOrInlineData`
+  // object for use with the `FetchResourcesInMemory` utility method.
+  absl::StatusOr<::fcp::client::http::UriOrInlineData>
+  ConvertResourceToUriOrInlineData(const TaskResource& resource);
+
   ObjectState object_state_;
   EventPublisher* const event_publisher_;
   LogManager* const log_manager_;
   ::fcp::client::opstats::OpStatsLogger* const opstats_logger_;
   const Flags* const flags_;
+  ::fcp::client::http::HttpClient* const http_client_;
   std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream_;
   std::unique_ptr<secagg::SecAggClient> secagg_client_;
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
@@ -196,6 +228,8 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   absl::flat_hash_set<int32_t> federated_training_permanent_error_codes_;
   int64_t bytes_downloaded_ = 0;
   int64_t bytes_uploaded_ = 0;
+  int64_t http_bytes_downloaded_ = 0;
+  int64_t http_bytes_uploaded_ = 0;
   int64_t report_request_size_bytes_ = 0;
   // Represents 2 absolute retry timestamps and their corresponding retry
   // tokens, to use when the device is rejected or accepted. The retry

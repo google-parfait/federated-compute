@@ -92,10 +92,11 @@ class FederatedProtocol {
  public:
   virtual ~FederatedProtocol() = default;
 
-  // The unparsed plan and checkpoint payload which make up a computation.
+  // The unparsed plan and checkpoint payload which make up a computation. The
+  // data can be provided as either an std::string or an absl::Cord.
   struct PlanAndCheckpointPayloads {
-    std::string plan;
-    std::string checkpoint;
+    std::variant<std::string, absl::Cord> plan;
+    std::variant<std::string, absl::Cord> checkpoint;
   };
 
   // An eligibility task, consisting of task payloads and an execution ID.

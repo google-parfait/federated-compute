@@ -37,6 +37,8 @@
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/grpc_bidi_stream.h"
+#include "fcp/client/http/http_client.h"
+#include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -120,6 +122,7 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+    ::fcp::client::http::HttpClient* http_client,
     const std::string& federated_service_uri, const std::string& api_key,
     const std::string& test_cert_path, absl::string_view population_name,
     absl::string_view retry_token, absl::string_view client_version,
@@ -128,7 +131,7 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
     const InterruptibleRunner::TimingConfig& timing_config,
     const int64_t grpc_channel_deadline_seconds)
     : GrpcFederatedProtocol(
-          event_publisher, log_manager, opstats_logger, flags,
+          event_publisher, log_manager, opstats_logger, flags, http_client,
           std::make_unique<GrpcBidiStream>(
               federated_service_uri, api_key, std::string(population_name),
               grpc_channel_deadline_seconds, test_cert_path),
@@ -139,6 +142,7 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
 GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
     OpStatsLogger* opstats_logger, const Flags* flags,
+    ::fcp::client::http::HttpClient* http_client,
     std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream,
     std::unique_ptr<SecAggClient> secagg_client,
     absl::string_view population_name, absl::string_view retry_token,
@@ -150,6 +154,7 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
       log_manager_(log_manager),
       opstats_logger_(opstats_logger),
       flags_(flags),
+      http_client_(http_client),
       grpc_bidi_stream_(std::move(grpc_bidi_stream)),
       secagg_client_(std::move(secagg_client)),
       population_name_(population_name),
@@ -213,6 +218,7 @@ ProtocolOptionsRequest GrpcFederatedProtocol::CreateProtocolOptionsRequest(
     bool should_ack_checkin) const {
   ProtocolOptionsRequest request;
   request.set_should_ack_checkin(should_ack_checkin);
+  request.set_supports_http_download(http_client_ != nullptr);
 
   // Note that we set this field for both eligibility eval checkin requests
   // and regular checkin requests. Even though eligibility eval tasks do not
@@ -416,7 +422,6 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
   const CheckinResponse& checkin_response =
       server_stream_message.checkin_response();
 
-  absl::Duration download_duration = absl::Now() - start_time;
   execution_phase_id_ =
       checkin_response.has_acceptance_info()
           ? checkin_response.acceptance_info().execution_phase_id()
@@ -424,6 +429,17 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
   if (!flags_->per_phase_logs()) {
     log_manager_->SetModelIdentifier(execution_phase_id_);
     event_publisher_->SetModelIdentifier(execution_phase_id_);
+  }
+  // If we're not supporting the downloading of task resources via HTTP, then
+  // we've reached the end of the checkin phase and can publish the relevant
+  // event.
+  // If we are supporting the downloading of task resources via HTTP OTOH,
+  // then while we may have received the AcceptanceInfo message on the gRPC
+  // protocol, we won't yet have actually downloaded the plan/initial checkpoint
+  // resources, and hence we shouldn't publish the 'checkin finished' event yet.
+  if (!flags_->per_phase_logs() &&
+      (http_client_ == nullptr || !checkin_response.has_acceptance_info())) {
+    absl::Duration download_duration = absl::Now() - start_time;
     event_publisher_->PublishCheckinFinished(
         bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
         download_duration);
@@ -431,14 +447,6 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
   switch (checkin_response.checkin_result_case()) {
     case CheckinResponse::kAcceptanceInfo: {
       const auto& acceptance_info = checkin_response.acceptance_info();
-
-      if (!flags_->per_phase_logs()) {
-        // Record the task name in the opstats db.
-        std::string task_name = ExtractTaskNameFromAggregationSessionId(
-            acceptance_info.execution_phase_id(), population_name_,
-            *log_manager_);
-        opstats_logger_->AddCheckinAcceptedEventWithTaskName(task_name);
-      }
 
       for (const auto& [k, v] : acceptance_info.side_channels())
         side_channels_[k] = v;
@@ -458,10 +466,49 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
                     .minimum_clients_in_server_visible_aggregate()};
       }
 
+      PlanAndCheckpointPayloads payloads;
+      if (http_client_ == nullptr) {
+        payloads = {.plan = acceptance_info.plan(),
+                    .checkpoint = acceptance_info.init_checkpoint()};
+      } else {
+        // Fetch the task resources, returning any errors that may be
+        // encountered in the process.
+        FCP_ASSIGN_OR_RETURN(
+            payloads,
+            FetchTaskResources(
+                {.plan =
+                     {
+                         .has_uri = acceptance_info.has_plan_resource(),
+                         .uri = acceptance_info.plan_resource().uri(),
+                         .data = acceptance_info.plan(),
+                     },
+                 .checkpoint = {
+                     .has_uri = acceptance_info.has_init_checkpoint_resource(),
+                     .uri = acceptance_info.init_checkpoint_resource().uri(),
+                     .data = acceptance_info.init_checkpoint(),
+                 }}));
+        if (!flags_->per_phase_logs()) {
+          // Only now that we've successfully downloaded the task resources
+          // we should publish the 'checkin finished' event.
+          absl::Duration download_duration = absl::Now() - start_time;
+          event_publisher_->PublishCheckinFinished(
+              bytes_downloaded_,
+              grpc_bidi_stream_->ChunkingLayerBytesReceived(),
+              download_duration);
+        }
+      }
+
+      if (!flags_->per_phase_logs()) {
+        // Record the task name in the opstats db.
+        std::string task_name = ExtractTaskNameFromAggregationSessionId(
+            acceptance_info.execution_phase_id(), population_name_,
+            *log_manager_);
+        opstats_logger_->AddCheckinAcceptedEventWithTaskName(task_name);
+      }
+
       object_state_ = ObjectState::kCheckinAccepted;
       return TaskAssignment{
-          .payloads = {.plan = acceptance_info.plan(),
-                       .checkpoint = acceptance_info.init_checkpoint()},
+          .payloads = std::move(payloads),
           .aggregation_session_id = acceptance_info.execution_phase_id(),
           .sec_agg_info = sec_agg_info};
     }
@@ -1042,10 +1089,9 @@ RetryWindow GrpcFederatedProtocol::GenerateRetryWindowFromRetryTimeAndToken(
 
 void GrpcFederatedProtocol::UpdateOpStatsNetworkStats() {
   if (!flags_->per_phase_logs()) {
-    opstats_logger_->SetNetworkStats(
-        bytes_downloaded_, bytes_uploaded_,
-        grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-        grpc_bidi_stream_->ChunkingLayerBytesSent());
+    opstats_logger_->SetNetworkStats(bytes_downloaded(), bytes_uploaded(),
+                                     chunking_layer_bytes_received(),
+                                     chunking_layer_bytes_sent());
   }
 }
 
@@ -1058,17 +1104,109 @@ void GrpcFederatedProtocol::UpdateObjectStateIfPermanentError(
   }
 }
 
+absl::StatusOr<FederatedProtocol::PlanAndCheckpointPayloads>
+GrpcFederatedProtocol::FetchTaskResources(
+    GrpcFederatedProtocol::TaskResources task_resources) {
+  FCP_ASSIGN_OR_RETURN(::fcp::client::http::UriOrInlineData plan_uri_or_data,
+                       ConvertResourceToUriOrInlineData(task_resources.plan));
+  FCP_ASSIGN_OR_RETURN(
+      ::fcp::client::http::UriOrInlineData checkpoint_uri_or_data,
+      ConvertResourceToUriOrInlineData(task_resources.checkpoint));
+
+  // Log a diag code if either resource is about to be downloaded via HTTP.
+  if (!plan_uri_or_data.uri().empty() ||
+      !checkpoint_uri_or_data.uri().empty()) {
+    log_manager_->LogDiag(
+        ProdDiagCode::HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP);
+  }
+
+  // Fetch the plan and init checkpoint resources if they need to be fetched
+  // (using the inline data instead if available).
+  absl::StatusOr<
+      std::vector<absl::StatusOr<::fcp::client::http::InMemoryHttpResponse>>>
+      resource_responses = ::fcp::client::http::FetchResourcesInMemory(
+          *http_client_, *interruptible_runner_,
+          {plan_uri_or_data, checkpoint_uri_or_data}, &http_bytes_downloaded_,
+          &http_bytes_uploaded_);
+  UpdateOpStatsNetworkStats();
+  FCP_RETURN_IF_ERROR(resource_responses);
+  auto& plan_data_response = (*resource_responses)[0];
+  auto& checkpoint_data_response = (*resource_responses)[1];
+
+  // Note: we forward any error during the fetching of the plan/checkpoint
+  // resources resources to the caller, which means that these error codes
+  // will be checked against the set of 'permanent' error codes, just like the
+  // errors in response to the protocol request are.
+  if (!plan_data_response.ok()) {
+    return absl::Status(plan_data_response.status().code(),
+                        absl::StrCat("plan fetch failed: ",
+                                     plan_data_response.status().ToString()));
+  }
+  if (!checkpoint_data_response.ok()) {
+    return absl::Status(
+        checkpoint_data_response.status().code(),
+        absl::StrCat("checkpoint fetch failed: ",
+                     checkpoint_data_response.status().ToString()));
+  }
+
+  return PlanAndCheckpointPayloads{plan_data_response->body,
+                                   checkpoint_data_response->body};
+}
+
+// Convert a Resource proto into a UriOrInlineData object. Returns an
+// `INVALID_ARGUMENT` error if the given `Resource` has the `uri` field set to
+// an empty value, or an `UNIMPLEMENTED` error if the `Resource` has an unknown
+// field set.
+absl::StatusOr<::fcp::client::http::UriOrInlineData>
+GrpcFederatedProtocol::ConvertResourceToUriOrInlineData(
+    const GrpcFederatedProtocol::TaskResource& resource) {
+  // We need to support 3 states:
+  // - Inline data is available.
+  // - No inline data nor is there a URI. This should be treated as there being
+  //   an 'empty' inline data.
+  // - No inline data is available but a URI is available.
+  if (!resource.has_uri) {
+    // If the URI field wasn't set, then we'll just use the inline data field
+    // (which will either be set or be empty).
+    //
+    // Note: this copies the data into the new absl::Cord. However, this Cord is
+    // then passed around all the way to fl_runner.cc without copying its data,
+    // so this is ultimately approx. as efficient as the non-HTTP resource code
+    // path where we also make a copy of the protobuf std::string into a new std::string
+    // which is then returned.
+    return ::fcp::client::http::UriOrInlineData::CreateInlineData(
+        absl::Cord(resource.data));
+  } else {
+    if (resource.uri.empty()) {
+      return absl::InvalidArgumentError(
+          "Resource uri must be non-empty when set");
+    }
+    return ::fcp::client::http::UriOrInlineData::CreateUri(resource.uri);
+  }
+}
+
+// Note: the `HttpClient` bandwidth stats are most similar to the gRPC
+// protocol's chunking layer stats, in that they reflect as closely as possible
+// the amount of data sent on the wire. Because the `HttpClient` layer doesn't
+// track 'uncompressed' bandwidth (i.e. more similar to our other
+// `bytes_downloaded/uploaded` stats), we simply use the same HTTP bandwidth
+// stats in both cases.
 int64_t GrpcFederatedProtocol::chunking_layer_bytes_sent() {
-  return grpc_bidi_stream_->ChunkingLayerBytesSent();
+  return grpc_bidi_stream_->ChunkingLayerBytesSent() + http_bytes_uploaded_;
 }
 
 int64_t GrpcFederatedProtocol::chunking_layer_bytes_received() {
-  return grpc_bidi_stream_->ChunkingLayerBytesReceived();
+  return grpc_bidi_stream_->ChunkingLayerBytesReceived() +
+         http_bytes_downloaded_;
 }
 
-int64_t GrpcFederatedProtocol::bytes_downloaded() { return bytes_downloaded_; }
+int64_t GrpcFederatedProtocol::bytes_downloaded() {
+  return bytes_downloaded_ + http_bytes_downloaded_;
+}
 
-int64_t GrpcFederatedProtocol::bytes_uploaded() { return bytes_uploaded_; }
+int64_t GrpcFederatedProtocol::bytes_uploaded() {
+  return bytes_uploaded_ + http_bytes_uploaded_;
+}
 
 int64_t GrpcFederatedProtocol::report_request_size_bytes() {
   return report_request_size_bytes_;

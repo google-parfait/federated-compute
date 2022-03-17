@@ -550,15 +550,14 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   // Fetch the task resources, returning any errors that may be encountered in
   // the process.
   FCP_ASSIGN_OR_RETURN(
-      auto result,
+      auto payloads,
       FetchTaskResources({.plan = task_assignment.plan(),
                           .checkpoint = task_assignment.init_checkpoint()}));
 
   object_state_ = ObjectState::kCheckinAccepted;
 
   return TaskAssignment{
-      .payloads = {.plan = std::move(result.plan),
-                   .checkpoint = std::move(result.checkpoint)},
+      .payloads = std::move(payloads),
       .aggregation_session_id = task_assignment.aggregation_id(),
       // TODO(team): Populate this field with the actual values
       // provided by the server, once we support Secure Aggregation in the
@@ -647,7 +646,7 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
   }
 }
 
-absl::StatusOr<HttpFederatedProtocol::PlanAndCheckpointPayloads>
+absl::StatusOr<FederatedProtocol::PlanAndCheckpointPayloads>
 HttpFederatedProtocol::FetchTaskResources(
     HttpFederatedProtocol::TaskResources task_resources) {
   FCP_ASSIGN_OR_RETURN(UriOrInlineData plan_uri_or_data,
@@ -683,11 +682,8 @@ HttpFederatedProtocol::FetchTaskResources(
                      checkpoint_data_response.status().ToString()));
   }
 
-  // TODO(team): This copies the plan & checkpoint data, which could be
-  // large. Since that data is already an absl::Cord, consider changing this
-  // method's return type to use absl::Cord to avoid the copy.
-  return PlanAndCheckpointPayloads{std::string(plan_data_response->body),
-                                   std::string(checkpoint_data_response->body)};
+  return PlanAndCheckpointPayloads{plan_data_response->body,
+                                   checkpoint_data_response->body};
 }
 
 void HttpFederatedProtocol::UpdateObjectStateIfPermanentError(

@@ -211,5 +211,14 @@ enum ProdDiagCode {
   // file.
   OPSTATS_FAILED_TO_OPEN_FILE = 1687;
 
+  /**
+   * Codes reserved for logs related to HTTP
+   * =======================================
+   */
+  /* Logged when a client using the GRPC protocol downloads a regular
+   * (non-eligibility eval) task's resource (plan or initial checkpoint) using
+   * HTTP. */
+  HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP = 1799;
+
   reserved 25;
 }
