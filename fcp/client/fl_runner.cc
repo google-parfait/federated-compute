@@ -975,10 +975,14 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
                   << grpc_channel_deadline << " seconds.";
   }
 
+  std::unique_ptr<::fcp::client::http::HttpClient> http_client =
+      flags->enable_grpc_with_http_resource_support()
+          ? env_deps->CreateHttpClient()
+          : nullptr;
+
   GrpcFederatedProtocol federated_protocol(
       event_publisher, log_manager, opstats_logger.get(), flags,
-      // HTTP support is still disabled for now, except in tests.
-      /*http_client=*/nullptr, federated_service_uri, api_key, test_cert_path,
+      http_client.get(), federated_service_uri, api_key, test_cert_path,
       population_name, retry_token, client_version, attestation_measurement,
       should_abort_protocol_callback, timing_config, grpc_channel_deadline);
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),

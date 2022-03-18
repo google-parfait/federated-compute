@@ -48,6 +48,7 @@
 #include "fcp/client/files.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/histogram_counters.pb.h"
+#include "fcp/client/http/http_client.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/task_environment.h"

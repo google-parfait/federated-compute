@@ -22,6 +22,7 @@
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/http/http_client.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/protos/plan.pb.h"
 
@@ -65,6 +66,12 @@ class SimpleTaskEnvironment {
           example_selector,
       const SelectorContext& selector_context) {
     return CreateExampleIterator(example_selector);
+  }
+
+  // Creates an HttpClient. May return a nullptr if HTTP is not supported
+  // (although support for HTTP will become mandatory in the future).
+  virtual std::unique_ptr<fcp::client::http::HttpClient> CreateHttpClient() {
+    return nullptr;
   }
 
   // Checks whether the caller should abort computation. If less than

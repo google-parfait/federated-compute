@@ -252,6 +252,7 @@ cc_library(
     deps = [
         ":selector_context_cc_proto",
         "//fcp/base",
+        "//fcp/client/http:http_client",
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
@@ -481,6 +482,7 @@ cc_library(
         ":histogram_counters_cc_proto",
         ":interfaces",
         "//fcp/base",
+        "//fcp/client/http:http_client",
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",
@@ -523,6 +525,7 @@ cc_library(
         ":phase_logger",
         ":simple_task_environment",
         "//fcp/base",
+        "//fcp/client/http:http_client",
         "//fcp/client/opstats:opstats_db",
         "//fcp/client/opstats:opstats_logger",
         "@com_google_absl//absl/status",

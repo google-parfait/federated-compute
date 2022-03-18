@@ -28,6 +28,7 @@
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/flags.h"
+#include "fcp/client/http/http_client.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -327,6 +328,8 @@ class MockSimpleTaskEnvironment : public SimpleTaskEnvironment {
                    example_selector,
                const SelectorContext& selector_context),
               (override));
+  MOCK_METHOD(std::unique_ptr<fcp::client::http::HttpClient>, CreateHttpClient,
+              (), (override));
   MOCK_METHOD(bool, TrainingConditionsSatisfied, (), (override));
 };
 
@@ -383,6 +386,8 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, per_phase_logs, (), (const, override));
   MOCK_METHOD(bool, use_tflite_training, (), (const, override));
   MOCK_METHOD(bool, disable_legacy_plan_support, (), (const, override));
+  MOCK_METHOD(bool, enable_grpc_with_http_resource_support, (),
+              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
