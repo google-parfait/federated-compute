@@ -25,6 +25,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -84,19 +85,23 @@ public final class HttpClientForNativeImplTest {
    */
   static class TestHttpRequestHandleImpl extends HttpRequestHandleImpl {
     TestHttpRequestHandleImpl(
-        JniHttpRequest request, HttpURLConnectionFactory urlConnectionFactory) {
+        JniHttpRequest request,
+        HttpURLConnectionFactory urlConnectionFactory,
+        boolean supportAcceptEncodingHeader,
+        boolean disableTimeouts) {
       super(
           request,
           TEST_CALL_FROM_NATIVE_WRAPPER,
           TEST_EXECUTOR_SERVICE,
           urlConnectionFactory,
-          /*connectTimeoutMs=*/ 123,
-          /*readTimeoutMs=*/ 456,
+          /*connectTimeoutMs=*/ disableTimeouts ? -1 : 123,
+          /*readTimeoutMs=*/ disableTimeouts ? -1 : 456,
           // Force the implementation to read 5 bytes at a time, to exercise the chunking logic.
           /*requestBodyChunkSizeBytes=*/ DEFAULT_TEST_CHUNK_BUFFER_SIZE,
           /*responseBodyChunkSizeBytes=*/ DEFAULT_TEST_CHUNK_BUFFER_SIZE,
           /*responseBodyGzipBufferSizeBytes=*/ DEFAULT_TEST_CHUNK_BUFFER_SIZE,
-          /*callDisconnectWhenCancelled=*/ true);
+          /*callDisconnectWhenCancelled=*/ true,
+          /*supportAcceptEncodingHeader=*/ supportAcceptEncodingHeader);
     }
 
     // There should be no need for us to synchronize around these mutable fields, since the
@@ -201,11 +206,53 @@ public final class HttpClientForNativeImplTest {
     httpClient =
         new HttpClientForNativeImpl(
             TEST_CALL_FROM_NATIVE_WRAPPER,
-            (request) -> new TestHttpRequestHandleImpl(request, urlConnectionFactory));
+            (request) ->
+                new TestHttpRequestHandleImpl(
+                    request,
+                    urlConnectionFactory,
+                    /*supportAcceptEncodingHeader=*/ true,
+                    /*disableTimeouts=*/ false));
   }
 
   @Test
   public void testSingleRequestWithoutRequestBodySucceeds() throws Exception {
+    doTestSingleRequestWithoutRequestBodySucceeds(
+        /*supportAcceptEncodingHeader=*/ true, /*expectTimeoutsToBeSet=*/ true);
+  }
+
+  @Test
+  public void testSingleRequestWithoutRequestBodyAndDisableAcceptEncodingHeaderSupportSucceeds()
+      throws Exception {
+    httpClient =
+        new HttpClientForNativeImpl(
+            TEST_CALL_FROM_NATIVE_WRAPPER,
+            (request) ->
+                new TestHttpRequestHandleImpl(
+                    request,
+                    urlConnectionFactory,
+                    /*supportAcceptEncodingHeader=*/ false,
+                    /*disableTimeouts=*/ false));
+    doTestSingleRequestWithoutRequestBodySucceeds(
+        /*supportAcceptEncodingHeader=*/ false, /*expectTimeoutsToBeSet=*/ true);
+  }
+
+  @Test
+  public void testSingleRequestWithoutRequestBodyAndDisableTimeoutsSucceeds() throws Exception {
+    httpClient =
+        new HttpClientForNativeImpl(
+            TEST_CALL_FROM_NATIVE_WRAPPER,
+            (request) ->
+                new TestHttpRequestHandleImpl(
+                    request,
+                    urlConnectionFactory,
+                    /*supportAcceptEncodingHeader=*/ false,
+                    /*disableTimeouts=*/ true));
+    doTestSingleRequestWithoutRequestBodySucceeds(
+        /*supportAcceptEncodingHeader=*/ false, /*expectTimeoutsToBeSet=*/ false);
+  }
+
+  private void doTestSingleRequestWithoutRequestBodySucceeds(
+      boolean supportAcceptEncodingHeader, boolean expectTimeoutsToBeSet) throws Exception {
     TestHttpRequestHandleImpl requestHandle =
         (TestHttpRequestHandleImpl)
             httpClient.enqueueRequest(
@@ -240,6 +287,9 @@ public final class HttpClientForNativeImplTest {
     LinkedHashMap<String, List<String>> headerFields = new LinkedHashMap<>();
     headerFields.put("Response-Header1", ImmutableList.of("Bar", "Baz"));
     headerFields.put("Response-Header2", ImmutableList.of("Barbaz"));
+    // And add a Content-Length and 'null' header (to check whether they are correctly redacted &
+    // ignored.
+    headerFields.put("Content-Length", ImmutableList.of("9999")); // Should be ignored.
     headerFields.put(null, ImmutableList.of("200 OK")); // Should be ignored.
     when(mockConnection.getHeaderFields()).thenReturn(headerFields);
 
@@ -247,8 +297,6 @@ public final class HttpClientForNativeImplTest {
     String expectedResponseBody = "test_response_body";
     when(mockConnection.getInputStream())
         .thenReturn(new ByteArrayInputStream(expectedResponseBody.getBytes(UTF_8)));
-    // But make the response body length *not* be known ahead of time.
-    when(mockConnection.getContentLength()).thenReturn(-1);
 
     // Run the request.
     byte[] result = httpClient.performRequests(new Object[] {requestHandle});
@@ -263,6 +311,7 @@ public final class HttpClientForNativeImplTest {
         .isEqualTo(
             JniHttpResponse.newBuilder()
                 .setCode(expectedResponseCode)
+                // The Content-Length and 'null' headers should have been redacted.
                 .addHeaders(
                     JniHttpHeader.newBuilder().setName("Response-Header1").setValue("Bar").build())
                 .addHeaders(
@@ -281,9 +330,10 @@ public final class HttpClientForNativeImplTest {
     InOrder requestHeadersOrder = inOrder(mockConnection);
     requestHeadersOrder.verify(mockConnection).addRequestProperty("Request-Header1", "Foo");
     requestHeadersOrder.verify(mockConnection).addRequestProperty("Request-Header2", "Bar");
-    verify(mockConnection).setRequestProperty("Accept-Encoding", "gzip");
-    verify(mockConnection).setConnectTimeout(123);
-    verify(mockConnection).setReadTimeout(456);
+    verify(mockConnection, supportAcceptEncodingHeader ? times(1) : never())
+        .setRequestProperty("Accept-Encoding", "gzip");
+    verify(mockConnection, expectTimeoutsToBeSet ? times(1) : never()).setConnectTimeout(123);
+    verify(mockConnection, expectTimeoutsToBeSet ? times(1) : never()).setReadTimeout(456);
     verify(mockConnection, never()).setDoOutput(anyBoolean());
     verify(mockConnection, never()).getOutputStream();
     verify(mockConnection).setDoInput(true);
@@ -338,8 +388,6 @@ public final class HttpClientForNativeImplTest {
     String expectedResponseBody = "test_response_body";
     when(mockConnection.getInputStream())
         .thenReturn(new ByteArrayInputStream(expectedResponseBody.getBytes(UTF_8)));
-    // But make the response body length *not* be known ahead of time.
-    when(mockConnection.getContentLength()).thenReturn(-1);
 
     // Run the request.
     byte[] result = httpClient.performRequests(new Object[] {requestHandle});
@@ -386,11 +434,11 @@ public final class HttpClientForNativeImplTest {
   }
 
   /**
-   * Tests whether a single request with <strong>known-ahead-of-time</strong> request and response
-   * body content lengths is processed correctly.
+   * Tests whether a single request with a <strong>known-ahead-of-time</strong> request body content
+   * length is processed correctly.
    */
   @Test
-  public void testSingleRequestWithKnownContentLengthsSucceeds() throws Exception {
+  public void testSingleRequestWithKnownRequestContentLengthSucceeds() throws Exception {
     String expectedRequestBody = "another_test_request_body";
     String requestBodyLength = "25"; // the length of the above string.
     long requestBodyLengthLong = 25L;
@@ -435,12 +483,8 @@ public final class HttpClientForNativeImplTest {
 
     // Fake some response body data.
     String expectedResponseBody = "another_test_response_body";
-    int responseBodyLength = 26;
-    assertThat(expectedResponseBody).hasLength(responseBodyLength);
     when(mockConnection.getInputStream())
         .thenReturn(new ByteArrayInputStream(expectedResponseBody.getBytes(UTF_8)));
-    // And *do* make the response body length be known ahead of time.
-    when(mockConnection.getContentLength()).thenReturn(responseBodyLength);
 
     // Run the request.
     byte[] result = httpClient.performRequests(new Object[] {requestHandle});
@@ -471,11 +515,11 @@ public final class HttpClientForNativeImplTest {
   }
 
   /**
-   * Tests whether a single request with request and response bodies that are smaller than our
-   * read/write buffer sizes is processed correctly.
+   * Tests whether a single request with a request body that is smaller than our read buffer size is
+   * processed correctly.
    */
   @Test
-  public void testSingleRequestWithKnownContentLengthsThatFitInSingleBufferSucceeds()
+  public void testSingleRequestWithKnownRequestContentLengthThatFitsInSingleBufferSucceeds()
       throws Exception {
     String expectedRequestBody = "1234";
     String requestBodyLength =
@@ -518,13 +562,8 @@ public final class HttpClientForNativeImplTest {
 
     // Fake some response body data (via the error stream this time).
     String expectedResponseBody = "abc";
-    int responseBodyLength = 3;
-    assertThat(expectedResponseBody).hasLength(responseBodyLength);
-    assertThat(responseBodyLength).isLessThan(DEFAULT_TEST_CHUNK_BUFFER_SIZE);
     when(mockConnection.getErrorStream())
         .thenReturn(new ByteArrayInputStream(expectedResponseBody.getBytes(UTF_8)));
-    // And *do* make the response body length be known ahead of time.
-    when(mockConnection.getContentLength()).thenReturn(responseBodyLength);
 
     // Run the request.
     byte[] result = httpClient.performRequests(new Object[] {requestHandle});
@@ -617,14 +656,10 @@ public final class HttpClientForNativeImplTest {
     String expectedResponseBody1 = "test_response_body";
     when(mockConnection1.getInputStream())
         .thenReturn(new ByteArrayInputStream(expectedResponseBody1.getBytes(UTF_8)));
-    // But make the response body length *not* be known ahead of time.
-    when(mockConnection1.getContentLength()).thenReturn(-1);
 
     String expectedResponseBody2 = "test_response_body";
     when(mockConnection2.getInputStream())
         .thenReturn(new ByteArrayInputStream(expectedResponseBody2.getBytes(UTF_8)));
-    // *Do* make the 2nd response body length be known ahead of time.
-    when(mockConnection2.getContentLength()).thenReturn(expectedResponseBody2.length());
 
     // Run both requests (we provide them in opposite order to how they were created, just to try
     // to exercise more edge conditions).
@@ -700,9 +735,8 @@ public final class HttpClientForNativeImplTest {
     compressedResponseBodyGzipStream.finish();
     when(mockConnection.getInputStream())
         .thenReturn(new ByteArrayInputStream(compressedResponseBody.toByteArray()));
-    // And make the response body length be known ahead of time (to check whether the headers are
-    // correctly redacted).
-    when(mockConnection.getContentLength()).thenReturn(compressedResponseBody.size());
+    // And add Content-Encoding and Content-Length headers (to check whether they are correctly
+    // redacted).
     when(mockConnection.getHeaderFields())
         .thenReturn(
             ImmutableMap.of(
@@ -713,7 +747,7 @@ public final class HttpClientForNativeImplTest {
                 "Transfer-Encoding",
                 ImmutableList.of("chunked"),
                 "Content-Length",
-                ImmutableList.of(String.valueOf(compressedResponseBody.size()))));
+                ImmutableList.of("9999")));
 
     // Run the request.
     byte[] result = httpClient.performRequests(new Object[] {requestHandle});
@@ -775,10 +809,8 @@ public final class HttpClientForNativeImplTest {
     String expectedResponseBody = "i_should_not_be_decompressed";
     when(mockConnection.getInputStream())
         .thenReturn(new ByteArrayInputStream(expectedResponseBody.getBytes(UTF_8)));
-    // And make the response body length be known ahead of time (to check whether the headers are
-    // correctly left *un*redacted).
-    int expectedResponseBodyLength = expectedResponseBody.length();
-    when(mockConnection.getContentLength()).thenReturn(expectedResponseBodyLength);
+    // And add Content-Encoding and Content-Length headers (to check whether the first header is
+    // correctly left *un*redacted, and the second is still redacted).
     when(mockConnection.getHeaderFields())
         .thenReturn(
             ImmutableMap.of(
@@ -787,7 +819,7 @@ public final class HttpClientForNativeImplTest {
                 "Content-Encoding",
                 ImmutableList.of("gzip"),
                 "Content-Length",
-                ImmutableList.of(String.valueOf(expectedResponseBodyLength))));
+                ImmutableList.of("9999")));
 
     // Run the request.
     byte[] result = httpClient.performRequests(new Object[] {requestHandle});
@@ -802,16 +834,11 @@ public final class HttpClientForNativeImplTest {
         .isEqualTo(
             JniHttpResponse.newBuilder()
                 .setCode(expectedResponseCode)
-                // The Content-Encoding and Content-Length headers should *not* have been redacted.
+                // The Content-Length header should have been redacted.
                 .addHeaders(
                     JniHttpHeader.newBuilder().setName("Response-Header1").setValue("Bar").build())
                 .addHeaders(
                     JniHttpHeader.newBuilder().setName("Content-Encoding").setValue("gzip").build())
-                .addHeaders(
-                    JniHttpHeader.newBuilder()
-                        .setName("Content-Length")
-                        .setValue(String.valueOf(expectedResponseBodyLength))
-                        .build())
                 .build());
 
     // The response body should have been returned without trying to decompress it.
@@ -910,6 +937,48 @@ public final class HttpClientForNativeImplTest {
             CallFromNativeRuntimeException.class,
             () -> httpClient.performRequests(new Object[] {requestHandle}));
     assertThat(thrown).hasCauseThat().isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  public void testRequestWithAcceptEncodingHeaderIfNotSupportedShouldResultInError()
+      throws Exception {
+    // Disable support for the Accept-Encoding header.
+    httpClient =
+        new HttpClientForNativeImpl(
+            TEST_CALL_FROM_NATIVE_WRAPPER,
+            (request) ->
+                new TestHttpRequestHandleImpl(
+                    request,
+                    urlConnectionFactory,
+                    /*supportAcceptEncodingHeader=*/ false,
+                    /*disableTimeouts=*/ false));
+
+    TestHttpRequestHandleImpl requestHandle =
+        (TestHttpRequestHandleImpl)
+            httpClient.enqueueRequest(
+                JniHttpRequest.newBuilder()
+                    .setUri("https://foo.com")
+                    .setMethod(JniHttpMethod.HTTP_METHOD_GET)
+                    .addExtraHeaders(
+                        JniHttpHeader.newBuilder().setName("Content-Length").setValue("1"))
+                    .addExtraHeaders(
+                        JniHttpHeader.newBuilder().setName("Accept-Encoding").setValue("gzip"))
+                    .setHasBody(false)
+                    .build()
+                    .toByteArray());
+
+    HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+    when(urlConnectionFactory.createUrlConnection(any())).thenReturn(mockConnection);
+
+    byte[] result = httpClient.performRequests(new Object[] {requestHandle});
+    assertThat(Status.parseFrom(result, ExtensionRegistryLite.getEmptyRegistry()).getCode())
+        .isEqualTo(Code.OK_VALUE);
+
+    assertThat(requestHandle.responseError).isNotNull();
+    assertThat(requestHandle.responseError.getCode()).isEqualTo(Code.INVALID_ARGUMENT_VALUE);
+    assertThat(requestHandle.responseProto).isNull();
+    assertThat(requestHandle.responseBodyError).isNull();
+    assertThat(requestHandle.completedSuccessfully).isFalse();
   }
 
   @Test

@@ -120,6 +120,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
   private final int responseBodyChunkSizeBytes;
   private final int responseBodyGzipBufferSizeBytes;
   private final boolean callDisconnectWhenCancelled;
+  private final boolean supportAcceptEncodingHeader;
 
   // Until we have an actual connection, this is a no-op.
   @GuardedBy("this")
@@ -142,7 +143,9 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
    * @param executorService the {@link ExecutorService} to use for background work.
    * @param urlConnectionFactory the factory to use to instance new {@link HttpURLConnection}s.
    * @param connectTimeoutMs the value to use with {@link HttpURLConnection#setConnectTimeout(int)}.
-   * @param readTimeoutMs the value to use with {@link HttpURLConnection#setReadTimeout(int)}.
+   *     If this is -1 then {@code setConnectTimeout} will not be called at all.
+   * @param readTimeoutMs the value to use with {@link HttpURLConnection#setReadTimeout(int)}. If
+   *     this is -1 then {@code setReadTimeout} will not be called at all.
    *     <p>If {@code getInputStream().read(...)} or other methods like {@code getResponseCode()}
    *     take longer than this amount of time, they will throw a {@link
    *     java.net.SocketTimeoutException} and request will fail. Setting it to -1 will result in an
@@ -164,6 +167,11 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
    * @param callDisconnectWhenCancelled whether to call {@link HttpURLConnection#disconnect()} (from
    *     a different thread than the request is being run on) when a request gets cancelled. See
    *     note in {@link HttpRequestHandleImpl#close()}.
+   * @param supportAcceptEncodingHeader whether to set the "Accept-Encoding" request header by
+   *     default. Some {@link HttpURLConnection} implementations don't allow setting it, and this
+   *     flag allows turning that behavior off. When this setting is false, the assumption is that
+   *     the implementation at the very least sets "Accept-Encoding: gzip" (as required by the C++
+   *     `HttpClient` contract).
    */
   public HttpRequestHandleImpl(
       JniHttpRequest request,
@@ -175,7 +183,8 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
       int requestBodyChunkSizeBytes,
       int responseBodyChunkSizeBytes,
       int responseBodyGzipBufferSizeBytes,
-      boolean callDisconnectWhenCancelled) {
+      boolean callDisconnectWhenCancelled,
+      boolean supportAcceptEncodingHeader) {
     this.request = request;
     this.callFromNativeWrapper = callFromNativeWrapper;
     this.executorService = executorService;
@@ -186,6 +195,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     this.responseBodyChunkSizeBytes = responseBodyChunkSizeBytes;
     this.responseBodyGzipBufferSizeBytes = responseBodyGzipBufferSizeBytes;
     this.callDisconnectWhenCancelled = callDisconnectWhenCancelled;
+    this.supportAcceptEncodingHeader = supportAcceptEncodingHeader;
   }
 
   @Override
@@ -569,12 +579,21 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     // does this by default, but the JDK's implementation does not. Note that by setting this header
     // we must also handle the response InputStream data correctly (by inflating it, if the
     // Content-Encoding indicates the data is compressed).
-    if (acceptEncodingHeader == null) {
+    // Some HttpURLConnection implementations (such as Cronet's) don't allow setting this header,
+    // and print out a warning if you do. The supportAcceptEncodingHeader allows turning this
+    // behavior off (thereby avoiding the warning being logged).
+    if (supportAcceptEncodingHeader && acceptEncodingHeader == null) {
       connection.setRequestProperty(ACCEPT_ENCODING_HEADER, GZIP_ENCODING);
+    } else if (!supportAcceptEncodingHeader && acceptEncodingHeader != null) {
+      throw new InvalidHttpRequestException("cannot support Accept-Encoding header");
     }
 
-    connection.setConnectTimeout(connectTimeoutMs);
-    connection.setReadTimeout(readTimeoutMs);
+    if (connectTimeoutMs >= 0) {
+      connection.setConnectTimeout(connectTimeoutMs);
+    }
+    if (readTimeoutMs >= 0) {
+      connection.setReadTimeout(readTimeoutMs);
+    }
 
     connection.setDoInput(true);
     if (request.getHasBody()) {
@@ -695,14 +714,14 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     int responseCode = connection.getResponseCode();
 
     // If the original headers we received from the native layer did not include an Accept-Encoding
-    // header, then *if we receive an encoded response body* we should a) remove the
-    // Content-Encoding and Content-Length headers (since they refer to the encoded data, not the
-    // decoded data we will return to the native layer), and b) decode the response body data before
-    // returning it to the native layer. Note that if we did receive an Accept-Encoding header (even
-    // if it specified "gzip"), we must not auto-decode the response body and we should also leave
-    // the headers alone.
+    // header, then *if we specified an "Accept-Encoding" header ourselves and subsequently received
+    // an encoded response body* we should a) remove the Content-Encoding header (since they refer
+    // to the encoded data, not the decoded data we will return to the native layer), and b) decode
+    // the response body data before returning it to the native layer. Note that if we did receive
+    // an "Accept-Encoding" header (even if it specified "gzip"), we must not auto-decode the
+    // response body and we should also leave the headers alone.
     boolean shouldDecodeGzip = false;
-    if (originalAcceptEncodingHeader == null) {
+    if (supportAcceptEncodingHeader && originalAcceptEncodingHeader == null) {
       // We need to strip the headers, if the body is encoded. Determine if it is encoded first.
       for (Map.Entry<String, List<String>> header : connection.getHeaderFields().entrySet()) {
         List<String> headerValues = header.getValue();
@@ -725,19 +744,25 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
       // "Transfer-Encoding: chunked". However, while Android's implementation also then removes the
       // "Transfer-Encoding" header, the JDK implementation does not. Since the HttpClient contract
       // requires us to remove that header, we explicitly filter it out here.
+      //
+      // Also, the "Content-Length" value returned by HttpURLConnection may or may not correspond to
+      // the response body data we will see via getInputStream() (e.g. it may reflect the length of
+      // the previously compressed data, even if the data is already decompressed for us when we
+      // read it from the InputStream). Hence, we ignore it as well. We do so even though the C++
+      // `HttpClient` asks us to leave it unredacted, because its value cannot be interpreted
+      // consistently.
+      //
+      // Finally, if the response will automatically be gzip-decoded by us, then we must redact any
+      // Content-Encoding header too.
       if (header.getKey() == null
           || (TRANSFER_ENCODING_HEADER.equalsIgnoreCase(header.getKey())
               && header.getValue().size() == 1
-              && CHUNKED_TRANSFER_ENCODING.equalsIgnoreCase(header.getValue().get(0)))) {
+              && CHUNKED_TRANSFER_ENCODING.equalsIgnoreCase(header.getValue().get(0)))
+          || CONTENT_LENGTH_HEADER.equalsIgnoreCase(header.getKey())
+          || (shouldDecodeGzip && CONTENT_ENCODING_HEADER.equalsIgnoreCase(header.getKey()))) {
         continue;
       }
-      // If the response will automatically be gzip-decoded, then we must redact any
-      // Content-Encoding or Content-Length header.
-      if (shouldDecodeGzip
-          && (CONTENT_ENCODING_HEADER.equalsIgnoreCase(header.getKey())
-              || CONTENT_LENGTH_HEADER.equalsIgnoreCase(header.getKey()))) {
-        continue;
-      }
+
       for (String headerValue : header.getValue()) {
         response.addHeaders(
             JniHttpHeader.newBuilder().setName(header.getKey()).setValue(headerValue));
@@ -768,7 +793,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     try (InputStream networkStream = getResponseBodyStream(connection);
         InputStream inputStream = getDecodedResponseBodyStream(networkStream, shouldDecodeGzip)) {
       // Allocate a buffer for reading the response body data into memory and passing it to JNI.
-      int bufferSize = calculateResponseBodyBufferSize(connection.getContentLength());
+      int bufferSize = responseBodyChunkSizeBytes;
       byte[] buffer = new byte[bufferSize];
       // This outer loop runs until we reach the end of the response body stream (or hit an
       // error).
@@ -840,16 +865,5 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
       return new GZIPInputStream(inputStream, responseBodyGzipBufferSizeBytes);
     }
     return inputStream;
-  }
-
-  private int calculateResponseBodyBufferSize(int responseContentLength) {
-    // If the response body size is known ahead of time, and is smaller than the chunk size we
-    // otherwise would use, then we allocate a buffer of just the exact size we need. If the
-    // request body size is unknown or too large, then we use a set chunk buffer size to read
-    // one chunk at a time.
-    if (responseContentLength >= 0 && responseContentLength < responseBodyChunkSizeBytes) {
-      return responseContentLength;
-    }
-    return responseBodyChunkSizeBytes;
   }
 }
