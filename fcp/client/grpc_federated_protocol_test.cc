@@ -1348,6 +1348,11 @@ TEST_P(GrpcFederatedProtocolTest,
         mock_log_manager_,
         LogDiag(
             ProdDiagCode::HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP));
+    EXPECT_CALL(
+        mock_log_manager_,
+        LogDiag(
+            ProdDiagCode::
+                HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_SUCCEEDED));
     if (!use_per_phase_logging_) {
       EXPECT_CALL(
           mock_event_publisher_,
@@ -1431,6 +1436,11 @@ TEST_P(GrpcFederatedProtocolTest,
         mock_log_manager_,
         LogDiag(
             ProdDiagCode::HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP));
+    EXPECT_CALL(
+        mock_log_manager_,
+        LogDiag(
+            ProdDiagCode::
+                HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_FAILED));
   }
 
   // Issue the regular checkin.
@@ -1499,6 +1509,11 @@ TEST_P(GrpcFederatedProtocolTest,
         mock_log_manager_,
         LogDiag(
             ProdDiagCode::HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP));
+    EXPECT_CALL(
+        mock_log_manager_,
+        LogDiag(
+            ProdDiagCode::
+                HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_FAILED));
   }
 
   // Issue the regular checkin.

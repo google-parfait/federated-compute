@@ -1129,10 +1129,20 @@ GrpcFederatedProtocol::FetchTaskResources(
           {plan_uri_or_data, checkpoint_uri_or_data}, &http_bytes_downloaded_,
           &http_bytes_uploaded_);
   UpdateOpStatsNetworkStats();
-  FCP_RETURN_IF_ERROR(resource_responses);
+  if (!resource_responses.ok()) {
+    log_manager_->LogDiag(
+        ProdDiagCode::
+            HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_FAILED);
+    return resource_responses.status();
+  }
   auto& plan_data_response = (*resource_responses)[0];
   auto& checkpoint_data_response = (*resource_responses)[1];
 
+  if (!plan_data_response.ok() || !checkpoint_data_response.ok()) {
+    log_manager_->LogDiag(
+        ProdDiagCode::
+            HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_FAILED);
+  }
   // Note: we forward any error during the fetching of the plan/checkpoint
   // resources resources to the caller, which means that these error codes
   // will be checked against the set of 'permanent' error codes, just like the
@@ -1147,6 +1157,14 @@ GrpcFederatedProtocol::FetchTaskResources(
         checkpoint_data_response.status().code(),
         absl::StrCat("checkpoint fetch failed: ",
                      checkpoint_data_response.status().ToString()));
+  }
+  if (!plan_uri_or_data.uri().empty() ||
+      !checkpoint_uri_or_data.uri().empty()) {
+    // We only want to log this diag code when we actually did fetch something
+    // via HTTP.
+    log_manager_->LogDiag(
+        ProdDiagCode::
+            HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_SUCCEEDED);
   }
 
   return PlanAndCheckpointPayloads{plan_data_response->body,

@@ -219,6 +219,12 @@ enum ProdDiagCode {
    * (non-eligibility eval) task's resource (plan or initial checkpoint) using
    * HTTP. */
   HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP = 1799;
+  /* Logged when the attempt to fetch HTTP resources (as per
+   * `HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP`) failed. */
+  HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_FAILED = 1798;
+  /* Logged when the attempt to fetch HTTP resources (as per
+   * `HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP`) succeeded. */
+  HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_SUCCEEDED = 1797;
 
   reserved 25;
 }
