@@ -1137,7 +1137,7 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
     EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-    EXPECT_CALL(mock_event_publisher_, PublishRejected());
+    EXPECT_CALL(mock_event_publisher_, PublishRejected(Gt(0), 0, _));
     EXPECT_CALL(mock_opstats_logger_,
                 AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
   }
@@ -1179,7 +1179,7 @@ TEST_P(GrpcFederatedProtocolTest,
     EXPECT_CALL(mock_log_manager_, SetModelIdentifier(""));
     EXPECT_CALL(mock_event_publisher_, SetModelIdentifier(""));
     EXPECT_CALL(mock_event_publisher_, PublishCheckinFinished(_, _, _));
-    EXPECT_CALL(mock_event_publisher_, PublishRejected());
+    EXPECT_CALL(mock_event_publisher_, PublishRejected(Gt(0), 0, _));
     EXPECT_CALL(mock_opstats_logger_,
                 AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
   }

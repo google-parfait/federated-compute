@@ -514,7 +514,9 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
     }
     case CheckinResponse::kRejectionInfo: {
       if (!flags_->per_phase_logs()) {
-        event_publisher_->PublishRejected();
+        event_publisher_->PublishRejected(bytes_downloaded_,
+                                          chunking_layer_bytes_received(),
+                                          absl::Now() - start_time);
         opstats_logger_->AddEvent(
             OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
       }

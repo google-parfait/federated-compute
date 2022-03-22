@@ -91,16 +91,20 @@ void LogComputationOutcome(engine::PlanResult plan_result,
           reference_time);
       break;
     case engine::PlanOutcome::kInvalidArgument:
-      phase_logger.LogComputationInvalidArgument(plan_result.original_status);
+      phase_logger.LogComputationInvalidArgument(
+          plan_result.original_status, plan_result.total_example_count,
+          plan_result.total_example_size_bytes, run_plan_start_time);
       break;
     case engine::PlanOutcome::kTensorflowError:
       phase_logger.LogComputationTensorflowError(
           std::move(plan_result.original_status),
-          plan_result.total_example_count, run_plan_start_time, reference_time);
+          plan_result.total_example_count, plan_result.total_example_size_bytes,
+          run_plan_start_time, reference_time);
       break;
     case engine::PlanOutcome::kExampleIteratorError:
       phase_logger.LogComputationExampleIteratorError(
-          plan_result.original_status);
+          plan_result.original_status, plan_result.total_example_count,
+          plan_result.total_example_size_bytes, run_plan_start_time);
       break;
   }
 }
@@ -118,14 +122,18 @@ absl::Status RunPlanWithTensorflowSpec(
   if (!client_plan.phase().has_tensorflow_spec()) {
     absl::Status error_status =
         absl::InvalidArgumentError("Plan without TensorflowSpec");
-    phase_logger.LogComputationInvalidArgument(error_status);
+    phase_logger.LogComputationInvalidArgument(
+        error_status, /*total_example_count=*/0,
+        /*total_example_size_bytes=*/0, run_plan_start_time);
     return error_status;
   }
   if (!client_plan.phase().has_local_compute() ||
       client_plan.phase().execution_size() > 0) {
     absl::Status error_status =
         absl::InvalidArgumentError("Invalid TensorflowSpec-based plan");
-    phase_logger.LogComputationInvalidArgument(error_status);
+    phase_logger.LogComputationInvalidArgument(
+        error_status, /*total_example_count=*/0,
+        /*total_example_size_bytes=*/0, run_plan_start_time);
     return error_status;
   }
 
@@ -230,7 +238,9 @@ absl::Status RunLocalComputation(
 
   absl::StatusOr<std::string> plan_str = fcp::ReadFileToString(plan_uri);
   if (!plan_str.ok()) {
-    phase_logger.LogComputationIOError(plan_str.status());
+    phase_logger.LogComputationIOError(
+        plan_str.status(), /*total_example_count=*/0,
+        /*total_example_size_bytes=*/0, run_plan_start_time);
     return plan_str.status();
   }
 
@@ -238,7 +248,9 @@ absl::Status RunLocalComputation(
   if (!plan.ParseFromString(*plan_str)) {
     absl::Status error_status =
         absl::InvalidArgumentError("could not parse received plan");
-    phase_logger.LogComputationInvalidArgument(error_status);
+    phase_logger.LogComputationInvalidArgument(
+        error_status, /*total_example_count=*/0,
+        /*total_example_size_bytes=*/0, run_plan_start_time);
     return error_status;
   }
 

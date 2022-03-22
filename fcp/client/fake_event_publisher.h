@@ -91,6 +91,197 @@ class FakeEventPublisher : public EventPublisher {
                             int64_t total_example_size_bytes,
                             absl::Time start_time) override {}
 
+  void PublishTaskNotStarted(absl::string_view error_message) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishEligibilityEvalCheckInIoError(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message,
+      absl::Duration download_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishEligibilityEvalCheckInClientInterrupted(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message,
+      absl::Duration download_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishEligibilityEvalCheckInServerAborted(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message,
+      absl::Duration download_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishEligibilityEvalCheckInErrorInvalidPayload(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message,
+      absl::Duration download_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishEligibilityEvalComputationStarted() override {}
+
+  void PublishEligibilityEvalComputationInvalidArgument(
+      absl::string_view error_message, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Duration computation_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishEligibilityEvalComputationExampleIteratorError(
+      absl::string_view error_message, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Duration computation_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishEligibilityEvalComputationTensorflowError(
+      int total_example_count, int64_t total_example_size_bytes,
+      absl::string_view error_message,
+      absl::Duration computation_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishEligibilityEvalComputationInterrupted(
+      int total_example_count, int64_t total_example_size_bytes,
+      absl::string_view error_message,
+      absl::Duration computation_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishEligibilityEvalComputationCompleted(
+      int total_example_count, int64_t total_example_size_bytes,
+      absl::Duration computation_duration) override {}
+
+  void PublishCheckinIoError(int64_t bytes_downloaded,
+                             int64_t chunking_layer_bytes_received,
+                             absl::string_view error_message,
+                             absl::Duration download_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishCheckinClientInterrupted(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message,
+      absl::Duration download_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishCheckinServerAborted(int64_t bytes_downloaded,
+                                   int64_t chunking_layer_bytes_received,
+                                   absl::string_view error_message,
+                                   absl::Duration download_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishCheckinInvalidPayload(int64_t bytes_downloaded,
+                                    int64_t chunking_layer_bytes_received,
+                                    absl::string_view error_message,
+                                    absl::Duration download_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishRejected(int64_t bytes_downloaded,
+                       int64_t chunking_layer_bytes_downloaded,
+                       absl::Duration download_duration) override {}
+
+  void PublishCheckinFinishedV2(int64_t bytes_downloaded,
+                                int64_t chunking_layer_bytes_downloaded,
+                                absl::Duration download_duration) override {}
+
+  void PublishComputationInvalidArgument(
+      absl::string_view error_message, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Duration computation_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishComputationIOError(absl::string_view error_message,
+                                 int total_example_count,
+                                 int64_t total_example_size_bytes,
+                                 absl::Duration computation_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishComputationExampleIteratorError(
+      absl::string_view error_message, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Duration computation_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishComputationTensorflowError(
+      int total_example_count, int64_t total_example_size_bytes,
+      absl::string_view error_message,
+      absl::Duration computation_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishComputationInterrupted(
+      int total_example_count, int64_t total_example_size_bytes,
+      absl::string_view error_message,
+      absl::Duration computation_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishResultUploadStarted() override {}
+
+  void PublishResultUploadIOError(int64_t report_size_bytes,
+                                  int64_t chunking_layer_bytes_sent,
+                                  absl::string_view error_message,
+                                  absl::Duration upload_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishResultUploadClientInterrupted(
+      int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+      absl::string_view error_message,
+      absl::Duration upload_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishResultUploadServerAborted(
+      int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+      absl::string_view error_message,
+      absl::Duration upload_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishResultUploadCompleted(int64_t report_size_bytes,
+                                    int64_t chunking_layer_bytes_sent,
+                                    absl::Duration upload_duration) override {}
+
+  void PublishFailureUploadStarted() override {}
+
+  void PublishFailureUploadIOError(int64_t report_size_bytes,
+                                   int64_t chunking_layer_bytes_sent,
+                                   absl::string_view error_message,
+                                   absl::Duration upload_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishFailureUploadClientInterrupted(
+      int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+      absl::string_view error_message,
+      absl::Duration upload_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishFailureUploadServerAborted(
+      int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+      absl::string_view error_message,
+      absl::Duration upload_duration) override {
+    FCP_LOG(ERROR) << error_message;
+  }
+
+  void PublishFailureUploadCompleted(int64_t report_size_bytes,
+                                     int64_t chunking_layer_bytes_snet,
+                                     absl::Duration upload_duration) override {}
+
   void SetModelIdentifier(const std::string& model_identifier) override {}
 
   SecAggEventPublisher* secagg_event_publisher() override { return nullptr; }

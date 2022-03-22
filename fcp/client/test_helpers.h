@@ -118,6 +118,142 @@ class MockEventPublisher : public EventPublisher {
               (override));
   MOCK_METHOD(void, SetModelIdentifier, (const std::string& model_identifier),
               (override));
+  MOCK_METHOD(void, PublishTaskNotStarted, (absl::string_view error_message),
+              (override));
+  MOCK_METHOD(void, PublishEligibilityEvalCheckInIoError,
+              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+               absl::string_view error_message,
+               absl::Duration download_duration),
+              (override));
+  MOCK_METHOD(void, PublishEligibilityEvalCheckInClientInterrupted,
+              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+               absl::string_view error_message,
+               absl::Duration download_duration),
+              (override));
+  MOCK_METHOD(void, PublishEligibilityEvalCheckInServerAborted,
+              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+               absl::string_view error_message,
+               absl::Duration download_duration),
+              (override));
+  MOCK_METHOD(void, PublishEligibilityEvalCheckInErrorInvalidPayload,
+              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+               absl::string_view error_message,
+               absl::Duration download_duration),
+              (override));
+  MOCK_METHOD(void, PublishEligibilityEvalComputationStarted, (), (override));
+  MOCK_METHOD(void, PublishEligibilityEvalComputationInvalidArgument,
+              (absl::string_view error_message, int total_example_count,
+               int64_t total_example_size_bytes,
+               absl::Duration computation_duration),
+              (override));
+  MOCK_METHOD(void, PublishEligibilityEvalComputationExampleIteratorError,
+              (absl::string_view error_message, int total_example_count,
+               int64_t total_example_size_bytes,
+               absl::Duration computation_duration),
+              (override));
+  MOCK_METHOD(void, PublishEligibilityEvalComputationTensorflowError,
+              (int total_example_count, int64_t total_example_size_bytes,
+               absl::string_view error_message,
+               absl::Duration computation_duration),
+              (override));
+  MOCK_METHOD(void, PublishEligibilityEvalComputationInterrupted,
+              (int total_example_count, int64_t total_example_size_bytes,
+               absl::string_view error_message,
+               absl::Duration computation_duration),
+              (override));
+  MOCK_METHOD(void, PublishEligibilityEvalComputationCompleted,
+              (int total_example_count, int64_t total_example_size_bytes,
+               absl::Duration computation_duration),
+              (override));
+  MOCK_METHOD(void, PublishCheckinIoError,
+              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+               absl::string_view error_message,
+               absl::Duration download_duration),
+              (override));
+  MOCK_METHOD(void, PublishCheckinClientInterrupted,
+              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+               absl::string_view error_message,
+               absl::Duration download_duration),
+              (override));
+  MOCK_METHOD(void, PublishCheckinServerAborted,
+              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+               absl::string_view error_message,
+               absl::Duration download_duration),
+              (override));
+  MOCK_METHOD(void, PublishCheckinInvalidPayload,
+              (int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+               absl::string_view error_message,
+               absl::Duration download_duration),
+              (override));
+  MOCK_METHOD(void, PublishRejected,
+              (int64_t bytes_downloaded,
+               int64_t chunking_layer_bytes_downloaded,
+               absl::Duration download_duration),
+              (override));
+  MOCK_METHOD(void, PublishCheckinFinishedV2,
+              (int64_t bytes_downloaded,
+               int64_t chunking_layer_bytes_downloaded,
+               absl::Duration download_duration),
+              (override));
+  MOCK_METHOD(void, PublishComputationInvalidArgument,
+              (absl::string_view error_message, int total_example_count,
+               int64_t total_example_size_bytes,
+               absl::Duration computation_duration),
+              (override));
+  MOCK_METHOD(void, PublishComputationIOError,
+              (absl::string_view error_message, int total_example_count,
+               int64_t total_example_size_bytes,
+               absl::Duration computation_duration),
+              (override));
+  MOCK_METHOD(void, PublishComputationExampleIteratorError,
+              (absl::string_view error_message, int total_example_count,
+               int64_t total_example_size_bytes,
+               absl::Duration computation_duration),
+              (override));
+  MOCK_METHOD(void, PublishComputationTensorflowError,
+              (int total_example_count, int64_t total_example_size_bytes,
+               absl::string_view error_message,
+               absl::Duration computation_duration),
+              (override));
+  MOCK_METHOD(void, PublishComputationInterrupted,
+              (int total_example_count, int64_t total_example_size_bytes,
+               absl::string_view error_message,
+               absl::Duration computation_duration),
+              (override));
+  MOCK_METHOD(void, PublishResultUploadStarted, (), (override));
+  MOCK_METHOD(void, PublishResultUploadIOError,
+              (int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+               absl::string_view error_message, absl::Duration upload_duration),
+              (override));
+  MOCK_METHOD(void, PublishResultUploadClientInterrupted,
+              (int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+               absl::string_view error_message, absl::Duration upload_duration),
+              (override));
+  MOCK_METHOD(void, PublishResultUploadServerAborted,
+              (int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+               absl::string_view error_message, absl::Duration upload_duration),
+              (override));
+  MOCK_METHOD(void, PublishResultUploadCompleted,
+              (int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+               absl::Duration upload_duration),
+              (override));
+  MOCK_METHOD(void, PublishFailureUploadStarted, (), (override));
+  MOCK_METHOD(void, PublishFailureUploadIOError,
+              (int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+               absl::string_view error_message, absl::Duration upload_duration),
+              (override));
+  MOCK_METHOD(void, PublishFailureUploadClientInterrupted,
+              (int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+               absl::string_view error_message, absl::Duration upload_duration),
+              (override));
+  MOCK_METHOD(void, PublishFailureUploadServerAborted,
+              (int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+               absl::string_view error_message, absl::Duration upload_duration),
+              (override));
+  MOCK_METHOD(void, PublishFailureUploadCompleted,
+              (int64_t report_size_bytes, int64_t chunking_layer_bytes_snet,
+               absl::Duration upload_duration),
+              (override));
 
   SecAggEventPublisher* secagg_event_publisher() override {
     return &secagg_event_publisher_;
@@ -388,6 +524,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, disable_legacy_plan_support, (), (const, override));
   MOCK_METHOD(bool, enable_grpc_with_http_resource_support, (),
               (const, override));
+  MOCK_METHOD(bool, granular_per_phase_logs, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
@@ -422,19 +559,19 @@ class MockPhaseLogger : public PhaseLogger {
               (override));
   MOCK_METHOD(void, LogEligibilityEvalCheckInStarted, (), (override));
   MOCK_METHOD(void, LogEligibilityEvalCheckInIOError,
-              (absl::Status error_status,
+              (absl::Status error_status, NetworkStats stats,
                absl::Time time_before_eligibility_eval_checkin),
               (override));
   MOCK_METHOD(void, LogEligibilityEvalCheckInInvalidPayloadError,
-              (absl::string_view error_message,
+              (absl::string_view error_message, NetworkStats stats,
                absl::Time time_before_eligibility_eval_checkin),
               (override));
   MOCK_METHOD(void, LogEligibilityEvalCheckInClientInterrupted,
-              (absl::Status error_status,
+              (absl::Status error_status, NetworkStats stats,
                absl::Time time_before_eligibility_eval_checkin),
               (override));
   MOCK_METHOD(void, LogEligibilityEvalCheckInServerAborted,
-              (absl::Status error_status,
+              (absl::Status error_status, NetworkStats stats,
                absl::Time time_before_eligibility_eval_checkin),
               (override));
   MOCK_METHOD(void, LogEligibilityEvalNotConfigured,
@@ -451,12 +588,19 @@ class MockPhaseLogger : public PhaseLogger {
               (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationStarted, (), (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationInvalidArgument,
-              (absl::Status error_status), (override));
+              (absl::Status error_status, int total_example_count,
+               int64_t total_example_size_bytes,
+               absl::Time run_plan_start_time),
+              (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationExampleIteratorError,
-              (absl::Status error_status), (override));
+              (absl::Status error_status, int total_example_count,
+               int64_t total_example_size_bytes,
+               absl::Time run_plan_start_time),
+              (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationTensorflowError,
               (absl::Status error_status, int total_example_count,
-               absl::Time run_plan_start_time, absl::Time reference_time),
+               int64_t total_example_size_bytes, absl::Time run_plan_start_time,
+               absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationInterrupted,
               (absl::Status error_status, int total_example_count,
@@ -469,38 +613,49 @@ class MockPhaseLogger : public PhaseLogger {
               (override));
   MOCK_METHOD(void, LogCheckInStarted, (), (override));
   MOCK_METHOD(void, LogCheckInIOError,
-              (absl::Status error_status, absl::Time time_before_checkin,
-               absl::Time reference_time),
+              (absl::Status error_status, NetworkStats stats,
+               absl::Time time_before_checkin, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogCheckInInvalidPayload,
-              (absl::string_view error_message, absl::Time time_before_checkin,
-               absl::Time reference_time),
+              (absl::string_view error_message, NetworkStats stats,
+               absl::Time time_before_checkin, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogCheckInClientInterrupted,
-              (absl::Status error_status, absl::Time time_before_checkin,
-               absl::Time reference_time),
+              (absl::Status error_status, NetworkStats stats,
+               absl::Time time_before_checkin, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogCheckInServerAborted,
-              (absl::Status error_status, absl::Time time_before_checkin,
-               absl::Time reference_time),
+              (absl::Status error_status, NetworkStats stats,
+               absl::Time time_before_checkin, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogCheckInTurnedAway,
-              (absl::Time time_before_checkin, absl::Time reference_time),
+              (NetworkStats stats, absl::Time time_before_checkin,
+               absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogCheckInCompleted,
               (absl::string_view task_name, NetworkStats stats,
                absl::Time time_before_checkin, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogComputationStarted, (), (override));
-  MOCK_METHOD(void, LogComputationInvalidArgument, (absl::Status error_status),
+  MOCK_METHOD(void, LogComputationInvalidArgument,
+              (absl::Status error_status, int total_example_count,
+               int64_t total_example_size_bytes,
+               absl::Time run_plan_start_time),
               (override));
   MOCK_METHOD(void, LogComputationExampleIteratorError,
-              (absl::Status error_status), (override));
-  MOCK_METHOD(void, LogComputationIOError, (absl::Status error_status),
+              (absl::Status error_status, int total_example_count,
+               int64_t total_example_size_bytes,
+               absl::Time run_plan_start_time),
+              (override));
+  MOCK_METHOD(void, LogComputationIOError,
+              (absl::Status error_status, int total_example_count,
+               int64_t total_example_size_bytes,
+               absl::Time run_plan_start_time),
               (override));
   MOCK_METHOD(void, LogComputationTensorflowError,
               (absl::Status error_status, int total_example_count,
-               absl::Time run_plan_start_time, absl::Time reference_time),
+               int64_t total_example_size_bytes, absl::Time run_plan_start_time,
+               absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogComputationInterrupted,
               (absl::Status error_status, int total_example_count,
@@ -513,16 +668,16 @@ class MockPhaseLogger : public PhaseLogger {
               (override));
   MOCK_METHOD(absl::Status, LogResultUploadStarted, (), (override));
   MOCK_METHOD(void, LogResultUploadIOError,
-              (absl::Status error_status, absl::Time time_before_result_upload,
-               absl::Time reference_time),
+              (absl::Status error_status, NetworkStats stats,
+               absl::Time time_before_result_upload, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogResultUploadClientInterrupted,
-              (absl::Status error_status, absl::Time time_before_result_upload,
-               absl::Time reference_time),
+              (absl::Status error_status, NetworkStats stats,
+               absl::Time time_before_result_upload, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogResultUploadServerAborted,
-              (absl::Status error_status, absl::Time time_before_result_upload,
-               absl::Time reference_time),
+              (absl::Status error_status, NetworkStats stats,
+               absl::Time time_before_result_upload, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogResultUploadCompleted,
               (NetworkStats stats, absl::Time time_before_result_upload,
@@ -530,15 +685,18 @@ class MockPhaseLogger : public PhaseLogger {
               (override));
   MOCK_METHOD(absl::Status, LogFailureUploadStarted, (), (override));
   MOCK_METHOD(void, LogFailureUploadIOError,
-              (absl::Status error_status, absl::Time time_before_failure_upload,
+              (absl::Status error_status, NetworkStats stats,
+               absl::Time time_before_failure_upload,
                absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogFailureUploadClientInterrupted,
-              (absl::Status error_status, absl::Time time_before_failure_upload,
+              (absl::Status error_status, NetworkStats stats,
+               absl::Time time_before_failure_upload,
                absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogFailureUploadServerAborted,
-              (absl::Status error_status, absl::Time time_before_failure_upload,
+              (absl::Status error_status, NetworkStats stats,
+               absl::Time time_before_failure_upload,
                absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogFailureUploadCompleted,

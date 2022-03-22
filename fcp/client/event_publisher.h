@@ -125,6 +125,139 @@ class EventPublisher {
   virtual void PublishPlanCompleted(int total_example_count,
                                     int64_t total_example_size_bytes,
                                     absl::Time start_time) = 0;
+  // Publishes that the task didn't start.
+  virtual void PublishTaskNotStarted(absl::string_view error_message) = 0;
+
+  // Publish that an IO error was encountered during eligibility eval check-in.
+  virtual void PublishEligibilityEvalCheckInIoError(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message, absl::Duration download_duration) = 0;
+  // Publish that the eligibility eval check-in is interrupted by the client.
+  virtual void PublishEligibilityEvalCheckInClientInterrupted(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message, absl::Duration download_duration) = 0;
+  // Publish that the eligibility eval check-in is aborted by the server.
+  virtual void PublishEligibilityEvalCheckInServerAborted(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message, absl::Duration download_duration) = 0;
+  // Publish that the eligibility eval check-in returned an invalid payload.
+  virtual void PublishEligibilityEvalCheckInErrorInvalidPayload(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message, absl::Duration download_duration) = 0;
+  // Publish an eligibility eval task starts computation.
+  virtual void PublishEligibilityEvalComputationStarted() = 0;
+  // Publish that the eligibility eval task is invalid.
+  virtual void PublishEligibilityEvalComputationInvalidArgument(
+      absl::string_view error_message, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Duration computation_duration) = 0;
+  // Publish an example iterator error occurred during eligibility eval task.
+  virtual void PublishEligibilityEvalComputationExampleIteratorError(
+      absl::string_view error_message, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Duration computation_duration) = 0;
+  // Publish that a tensorflow error occurred during eligibility eval task.
+  virtual void PublishEligibilityEvalComputationTensorflowError(
+      int total_example_count, int64_t total_example_size_bytes,
+      absl::string_view error_message, absl::Duration computation_duration) = 0;
+  // Publish that the client has interrupted the eligibility eval task.
+  virtual void PublishEligibilityEvalComputationInterrupted(
+      int total_example_count, int64_t total_example_size_bytes,
+      absl::string_view error_message, absl::Duration computation_duration) = 0;
+  // Publish an eligibility eval task finished.
+  virtual void PublishEligibilityEvalComputationCompleted(
+      int total_example_count, int64_t total_example_size_bytes,
+      absl::Duration computation_duration) = 0;
+  // Publish an IO error occurred during regular check-in.
+  virtual void PublishCheckinIoError(int64_t bytes_downloaded,
+                                     int64_t chunking_layer_bytes_received,
+                                     absl::string_view error_message,
+                                     absl::Duration download_duration) = 0;
+  // Publish that the client interrupted the regular check-in.
+  virtual void PublishCheckinClientInterrupted(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message, absl::Duration download_duration) = 0;
+  // Publish that the server aborted the regular check-in.
+  virtual void PublishCheckinServerAborted(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message, absl::Duration download_duration) = 0;
+  // Publish that an invalid payload was downloaded from the regular check-in.
+  virtual void PublishCheckinInvalidPayload(
+      int64_t bytes_downloaded, int64_t chunking_layer_bytes_received,
+      absl::string_view error_message, absl::Duration download_duration) = 0;
+  // Publishes that the server rejected the device, also logs network stats and
+  // duration.
+  virtual void PublishRejected(int64_t bytes_downloaded,
+                               int64_t chunking_layer_bytes_downloaded,
+                               absl::Duration download_duration) = 0;
+
+  // Publishes that the device has finished checking in with the server, along
+  // with information how much data was downloaded and how long that took.
+  virtual void PublishCheckinFinishedV2(int64_t bytes_downloaded,
+                                        int64_t chunking_layer_bytes_downloaded,
+                                        absl::Duration download_duration) = 0;
+  // Publish that the task is invalid.
+  virtual void PublishComputationInvalidArgument(
+      absl::string_view error_message, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Duration computation_duration) = 0;
+  // Publish that an IO error occurred during computation.
+  virtual void PublishComputationIOError(
+      absl::string_view error_message, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Duration computation_duration) = 0;
+  // Publish that an example iterator error occurred during computation.
+  virtual void PublishComputationExampleIteratorError(
+      absl::string_view error_message, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Duration computation_duration) = 0;
+  // Publish that an tensorflow error occurred during computation.
+  virtual void PublishComputationTensorflowError(
+      int total_example_count, int64_t total_example_size_bytes,
+      absl::string_view error_message, absl::Duration computation_duration) = 0;
+  // Publish that the task computation is interrupted.
+  virtual void PublishComputationInterrupted(
+      int total_example_count, int64_t total_example_size_bytes,
+      absl::string_view error_message, absl::Duration computation_duration) = 0;
+  // Publish that the client starts to upload result.
+  virtual void PublishResultUploadStarted() = 0;
+  // Publish that an IO error occurred during result upload.
+  virtual void PublishResultUploadIOError(int64_t report_size_bytes,
+                                          int64_t chunking_layer_bytes_sent,
+                                          absl::string_view error_message,
+                                          absl::Duration upload_duration) = 0;
+  // Publish that the client has interrupted the result upload.
+  virtual void PublishResultUploadClientInterrupted(
+      int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+      absl::string_view error_message, absl::Duration upload_duration) = 0;
+  // Publish hat the server has aborted the result upload.
+  virtual void PublishResultUploadServerAborted(
+      int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+      absl::string_view error_message, absl::Duration upload_duration) = 0;
+  // Publish that the result upload is completed.
+  virtual void PublishResultUploadCompleted(int64_t report_size_bytes,
+                                            int64_t chunking_layer_bytes_sent,
+                                            absl::Duration upload_duration) = 0;
+  // Publish that the task computation has failed, and the client starts to
+  // upload the failure to the server.
+  virtual void PublishFailureUploadStarted() = 0;
+  // Publish that an IO error occurred during failure upload.
+  virtual void PublishFailureUploadIOError(int64_t report_size_bytes,
+                                           int64_t chunking_layer_bytes_sent,
+                                           absl::string_view error_message,
+                                           absl::Duration upload_duration) = 0;
+  // Publish that the client has interrupted the failure upload.
+  virtual void PublishFailureUploadClientInterrupted(
+      int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+      absl::string_view error_message, absl::Duration upload_duration) = 0;
+  // Publish that the server has aborted the failure upload.
+  virtual void PublishFailureUploadServerAborted(
+      int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+      absl::string_view error_message, absl::Duration upload_duration) = 0;
+  // Publish that the failure upload completed.
+  virtual void PublishFailureUploadCompleted(
+      int64_t report_size_bytes, int64_t chunking_layer_bytes_sent,
+      absl::Duration upload_duration) = 0;
 
   // After calling this function, all subsequently published events will be
   // annotated with the specified model_identifier. This value is typically

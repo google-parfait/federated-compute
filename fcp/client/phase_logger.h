@@ -47,20 +47,20 @@ class PhaseLogger {
   virtual void LogEligibilityEvalCheckInStarted() = 0;
   // Called when an IO error is encountered during eligibility eval check-in.
   virtual void LogEligibilityEvalCheckInIOError(
-      absl::Status error_status,
+      absl::Status error_status, NetworkStats stats,
       absl::Time time_before_eligibility_eval_checkin) = 0;
   // Called when an invalid payload is received from the eligibility eval
   // check-in result.
   virtual void LogEligibilityEvalCheckInInvalidPayloadError(
-      absl::string_view error_message,
+      absl::string_view error_message, NetworkStats stats,
       absl::Time time_before_eligibility_eval_checkin) = 0;
   // Called when the eligibility eval check-in is interrupted by the client.
   virtual void LogEligibilityEvalCheckInClientInterrupted(
-      absl::Status error_status,
+      absl::Status error_status, NetworkStats stats,
       absl::Time time_before_eligibility_eval_checkin) = 0;
   // Called when the eligibility eval check-in is aborted by the server.
   virtual void LogEligibilityEvalCheckInServerAborted(
-      absl::Status error_status,
+      absl::Status error_status, NetworkStats stats,
       absl::Time time_before_eligibility_eval_checkin) = 0;
   // Called when eligibility eval is not configured.
   virtual void LogEligibilityEvalNotConfigured(
@@ -77,16 +77,19 @@ class PhaseLogger {
   virtual void LogEligibilityEvalComputationStarted() = 0;
   // Called when the input parameters for the eligibility eval task are invalid.
   virtual void LogEligibilityEvalComputationInvalidArgument(
-      absl::Status error_status) = 0;
+      absl::Status error_status, int total_example_count,
+      int64_t total_example_size_bytes, absl::Time run_plan_start_time) = 0;
   // Called when an example store error happened during eligibility eval
   // computation.
   virtual void LogEligibilityEvalComputationExampleIteratorError(
-      absl::Status error_status) = 0;
+      absl::Status error_status, int total_example_count,
+      int64_t total_example_size_bytes, absl::Time run_plan_start_time) = 0;
   // Called when a tensorflow error happened during eligibiliity eval
   // computation.
   virtual void LogEligibilityEvalComputationTensorflowError(
       absl::Status error_status, int total_example_count,
-      absl::Time run_plan_start_time, absl::Time reference_time) = 0;
+      int64_t total_example_size_bytes, absl::Time run_plan_start_time,
+      absl::Time reference_time) = 0;
   // Called when the eligibility eval computation is interrupted.
   virtual void LogEligibilityEvalComputationInterrupted(
       absl::Status error_status, int total_example_count,
@@ -101,23 +104,27 @@ class PhaseLogger {
   // Called when a regular check-in starts.
   virtual void LogCheckInStarted() = 0;
   // Called when an IO error occurred during check-in.
-  virtual void LogCheckInIOError(absl::Status error_status,
+  virtual void LogCheckInIOError(absl::Status error_status, NetworkStats stats,
                                  absl::Time time_before_checkin,
                                  absl::Time reference_time) = 0;
   // Called when an invalid payload is received from the check-in result.
   virtual void LogCheckInInvalidPayload(absl::string_view error_message,
+                                        NetworkStats stats,
                                         absl::Time time_before_checkin,
                                         absl::Time reference_time) = 0;
   // Called when check-in is interrupted by the client.
   virtual void LogCheckInClientInterrupted(absl::Status error_status,
+                                           NetworkStats stats,
                                            absl::Time time_before_checkin,
                                            absl::Time reference_time) = 0;
   // Called when check-in is aborted by the server.
   virtual void LogCheckInServerAborted(absl::Status error_status,
+                                       NetworkStats stats,
                                        absl::Time time_before_checkin,
                                        absl::Time reference_time) = 0;
   // Called when the client's check-in request is turned away by the server.
-  virtual void LogCheckInTurnedAway(absl::Time time_before_checkin,
+  virtual void LogCheckInTurnedAway(NetworkStats stats,
+                                    absl::Time time_before_checkin,
                                     absl::Time reference_time) = 0;
   // Called when check-in is completed.
   virtual void LogCheckInCompleted(absl::string_view task_name,
@@ -129,15 +136,22 @@ class PhaseLogger {
   // Called when computation started.
   virtual void LogComputationStarted() = 0;
   // Called when the input parameters are invalid.
-  virtual void LogComputationInvalidArgument(absl::Status error_status) = 0;
+  virtual void LogComputationInvalidArgument(
+      absl::Status error_status, int total_example_count,
+      int64_t total_example_size_bytes, absl::Time run_plan_start_time) = 0;
   // Called when an example store error occurred during computation.
   virtual void LogComputationExampleIteratorError(
-      absl::Status error_status) = 0;
+      absl::Status error_status, int total_example_count,
+      int64_t total_example_size_bytes, absl::Time run_plan_start_time) = 0;
   // Called when an IO error happened during computation
-  virtual void LogComputationIOError(absl::Status error_status) = 0;
+  virtual void LogComputationIOError(absl::Status error_status,
+                                     int total_example_count,
+                                     int64_t total_example_size_bytes,
+                                     absl::Time run_plan_start_time) = 0;
   // Called when a tensorflow error happened during computation.
   virtual void LogComputationTensorflowError(absl::Status error_status,
                                              int total_example_count,
+                                             int64_t total_example_size_bytes,
                                              absl::Time run_plan_start_time,
                                              absl::Time reference_time) = 0;
   // Called when computation is interrupted.
@@ -158,16 +172,17 @@ class PhaseLogger {
   virtual absl::Status LogResultUploadStarted() = 0;
   // Called when an IO error occurred during result upload.
   virtual void LogResultUploadIOError(absl::Status error_status,
+                                      NetworkStats stats,
                                       absl::Time time_before_result_upload,
                                       absl::Time reference_time) = 0;
   // Called when the result upload is interrupted by the client.
   virtual void LogResultUploadClientInterrupted(
-      absl::Status error_status, absl::Time time_before_result_upload,
-      absl::Time reference_time) = 0;
+      absl::Status error_status, NetworkStats stats,
+      absl::Time time_before_result_upload, absl::Time reference_time) = 0;
   // Called when the result upload is aborted by the server.
   virtual void LogResultUploadServerAborted(
-      absl::Status error_status, absl::Time time_before_result_upload,
-      absl::Time reference_time) = 0;
+      absl::Status error_status, NetworkStats stats,
+      absl::Time time_before_result_upload, absl::Time reference_time) = 0;
   // Called when result upload is completed.
   virtual void LogResultUploadCompleted(NetworkStats stats,
                                         absl::Time time_before_result_upload,
@@ -179,16 +194,17 @@ class PhaseLogger {
   virtual absl::Status LogFailureUploadStarted() = 0;
   // Called when an IO error occurred during failure upload.
   virtual void LogFailureUploadIOError(absl::Status error_status,
+                                       NetworkStats stats,
                                        absl::Time time_before_failure_upload,
                                        absl::Time reference_time) = 0;
   // Called when the failure upload is interrupted by the client.
   virtual void LogFailureUploadClientInterrupted(
-      absl::Status error_status, absl::Time time_before_failure_upload,
-      absl::Time reference_time) = 0;
+      absl::Status error_status, NetworkStats stats,
+      absl::Time time_before_failure_upload, absl::Time reference_time) = 0;
   // Called when the failure upload is aborted by the server.
   virtual void LogFailureUploadServerAborted(
-      absl::Status error_status, absl::Time time_before_failure_upload,
-      absl::Time reference_time) = 0;
+      absl::Status error_status, NetworkStats stats,
+      absl::Time time_before_failure_upload, absl::Time reference_time) = 0;
   // Called when the failure upload is completed.
   virtual void LogFailureUploadCompleted(NetworkStats stats,
                                          absl::Time time_before_failure_upload,

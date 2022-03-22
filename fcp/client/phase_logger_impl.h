@@ -38,8 +38,8 @@ class PhaseLoggerImpl : public PhaseLogger {
         opstats_logger_(opstats_logger),
         log_manager_(log_manager),
         use_per_phase_logs_(flags->per_phase_logs()),
-        log_tensorflow_error_messages_(flags->log_tensorflow_error_messages()) {
-  }
+        log_tensorflow_error_messages_(flags->log_tensorflow_error_messages()),
+        granular_per_phase_logs_(flags->granular_per_phase_logs()) {}
 
   void UpdateRetryWindowAndNetworkStats(
       const ::google::internal::federatedml::v2::RetryWindow& retry_window,
@@ -50,16 +50,16 @@ class PhaseLoggerImpl : public PhaseLogger {
   // Eligibility eval check-in phase.
   void LogEligibilityEvalCheckInStarted() override;
   void LogEligibilityEvalCheckInIOError(
-      absl::Status error_status,
+      absl::Status error_status, NetworkStats stats,
       absl::Time time_before_eligibility_eval_checkin) override;
   void LogEligibilityEvalCheckInInvalidPayloadError(
-      absl::string_view error_message,
+      absl::string_view error_message, NetworkStats stats,
       absl::Time time_before_eligibility_eval_checkin) override;
   void LogEligibilityEvalCheckInClientInterrupted(
-      absl::Status error_status,
+      absl::Status error_status, NetworkStats stats,
       absl::Time time_before_eligibility_eval_checkin) override;
   void LogEligibilityEvalCheckInServerAborted(
-      absl::Status error_status,
+      absl::Status error_status, NetworkStats stats,
       absl::Time time_before_eligibility_eval_checkin) override;
   void LogEligibilityEvalNotConfigured(
       NetworkStats stats,
@@ -74,12 +74,17 @@ class PhaseLoggerImpl : public PhaseLogger {
   // Eligibility eval computation phase.
   void LogEligibilityEvalComputationStarted() override;
   void LogEligibilityEvalComputationInvalidArgument(
-      absl::Status error_status) override;
+      absl::Status error_status, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Time run_plan_start_time) override;
   void LogEligibilityEvalComputationExampleIteratorError(
-      absl::Status error_status) override;
+      absl::Status error_status, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Time run_plan_start_time) override;
   void LogEligibilityEvalComputationTensorflowError(
       absl::Status error_status, int total_example_count,
-      absl::Time run_plan_start_time, absl::Time reference_time) override;
+      int64_t total_example_size_bytes, absl::Time run_plan_start_time,
+      absl::Time reference_time) override;
   void LogEligibilityEvalComputationInterrupted(
       absl::Status error_status, int total_example_count,
       int64_t total_example_size_bytes, absl::Time run_plan_start_time,
@@ -90,19 +95,21 @@ class PhaseLoggerImpl : public PhaseLogger {
 
   // Check-in phase.
   void LogCheckInStarted() override;
-  void LogCheckInIOError(absl::Status error_status,
+  void LogCheckInIOError(absl::Status error_status, NetworkStats stats,
                          absl::Time time_before_checkin,
                          absl::Time reference_time) override;
   void LogCheckInInvalidPayload(absl::string_view error_message,
+                                NetworkStats stats,
                                 absl::Time time_before_checkin,
                                 absl::Time reference_time) override;
   void LogCheckInClientInterrupted(absl::Status error_status,
+                                   NetworkStats stats,
                                    absl::Time time_before_checkin,
                                    absl::Time reference_time) override;
-  void LogCheckInServerAborted(absl::Status error_status,
+  void LogCheckInServerAborted(absl::Status error_status, NetworkStats stats,
                                absl::Time time_before_checkin,
                                absl::Time reference_time) override;
-  void LogCheckInTurnedAway(absl::Time time_before_checkin,
+  void LogCheckInTurnedAway(NetworkStats stats, absl::Time time_before_checkin,
                             absl::Time reference_time) override;
   void LogCheckInCompleted(absl::string_view task_name, NetworkStats stats,
                            absl::Time time_before_checkin,
@@ -110,11 +117,20 @@ class PhaseLoggerImpl : public PhaseLogger {
 
   // Computation phase.
   void LogComputationStarted() override;
-  void LogComputationInvalidArgument(absl::Status error_status) override;
-  void LogComputationExampleIteratorError(absl::Status error_status) override;
-  void LogComputationIOError(absl::Status error_status) override;
+  void LogComputationInvalidArgument(absl::Status error_status,
+                                     int total_example_count,
+                                     int64_t total_example_size_bytes,
+                                     absl::Time run_plan_start_time) override;
+  void LogComputationExampleIteratorError(
+      absl::Status error_status, int total_example_count,
+      int64_t total_example_size_bytes,
+      absl::Time run_plan_start_time) override;
+  void LogComputationIOError(absl::Status error_status, int total_example_count,
+                             int64_t total_example_size_bytes,
+                             absl::Time run_plan_start_time) override;
   void LogComputationTensorflowError(absl::Status error_status,
                                      int total_example_count,
+                                     int64_t total_example_size_bytes,
                                      absl::Time run_plan_start_time,
                                      absl::Time reference_time) override;
   void LogComputationInterrupted(absl::Status error_status,
@@ -128,13 +144,15 @@ class PhaseLoggerImpl : public PhaseLogger {
                                absl::Time reference_time) override;
 
   absl::Status LogResultUploadStarted() override;
-  void LogResultUploadIOError(absl::Status error_status,
+  void LogResultUploadIOError(absl::Status error_status, NetworkStats stats,
                               absl::Time time_before_result_upload,
                               absl::Time reference_time) override;
   void LogResultUploadClientInterrupted(absl::Status error_status,
+                                        NetworkStats stats,
                                         absl::Time time_before_result_upload,
                                         absl::Time reference_time) override;
   void LogResultUploadServerAborted(absl::Status error_status,
+                                    NetworkStats stats,
                                     absl::Time time_before_result_upload,
                                     absl::Time reference_time) override;
   void LogResultUploadCompleted(NetworkStats stats,
@@ -143,13 +161,15 @@ class PhaseLoggerImpl : public PhaseLogger {
 
   // Failure upload phase.
   absl::Status LogFailureUploadStarted() override;
-  void LogFailureUploadIOError(absl::Status error_status,
+  void LogFailureUploadIOError(absl::Status error_status, NetworkStats stats,
                                absl::Time time_before_failure_upload,
                                absl::Time reference_time) override;
   void LogFailureUploadClientInterrupted(absl::Status error_status,
+                                         NetworkStats stats,
                                          absl::Time time_before_failure_upload,
                                          absl::Time reference_time) override;
   void LogFailureUploadServerAborted(absl::Status error_status,
+                                     NetworkStats stats,
                                      absl::Time time_before_failure_upload,
                                      absl::Time reference_time) override;
   void LogFailureUploadCompleted(NetworkStats stats,
@@ -178,6 +198,7 @@ class PhaseLoggerImpl : public PhaseLogger {
   LogManager* log_manager_;
   const bool use_per_phase_logs_;
   const bool log_tensorflow_error_messages_;
+  const bool granular_per_phase_logs_;
 };
 
 }  // namespace client

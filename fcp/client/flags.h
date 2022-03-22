@@ -56,9 +56,8 @@ class Flags {
   // db.
   virtual bool enable_opstats() const { return true; }
 
-  // If true, splits up TRAIN_STARTED, TRAIN_COMPLETED, TRAIN_ERROR and
-  // TRAIN_INTERRUPTED into separate logs for eligibility, checkin, and
-  // training.
+  // If true, trainer event logging is moved from plan engines and federated
+  // protocols into fl/lc runners..
   virtual bool per_phase_logs() const { return false; }
 
   // The number of days for data to live in the OpStatsDb without update.
@@ -139,6 +138,10 @@ class Flags {
   // Whether to enable support for downloading plan/initial checkpoint resources
   // via HTTP, while still using gRPC for the main protocol.
   virtual bool enable_grpc_with_http_resource_support() const { return false; }
+
+  // Whether to splits up TRAIN_ERROR and TRAIN_INTERRUPTED into separate errors
+  // for eligibility, checkin, and training.
+  virtual bool granular_per_phase_logs() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
