@@ -34,4 +34,18 @@ message TaskEligibilityContext {
 message SingleTaskEligibilityContext {
   // Name of the task.
   string task_name = 1;
+
+  // Information about a policy that should be applied to the task to determine
+  // if it's eligible to be run. For example, a "didnt_run_recently" policy
+  // could instruct the server task eligibility computation that the task should
+  // not be run again by a client that ran it recently, where "recently" is
+  // implementation defined.
+  message EligibilityPolicy {
+    // The name of the policy. The set of possible values and their
+    // interpretation is implementation defined.
+    string name = 1;
+  }
+
+  // The list of eligibility policies that should be applied to the task.
+  repeated EligibilityPolicy policies = 2;
 }
