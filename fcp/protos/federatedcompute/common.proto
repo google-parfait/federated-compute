@@ -94,3 +94,15 @@ message RetryWindow {
   // rejected again is higher.
   google.protobuf.Duration delay_max = 2;
 }
+
+// Information about where to upload data (e.g. aggregation results, client
+// stats).
+message ByteStreamResource {
+  // Information to construct the URI to use for uploading the data.
+  ForwardingInfo data_upload_forwarding_info = 1;
+  // Resource name to which the data should be uploaded.
+  // Clients should use this field as well as the
+  // `ForwardingInfo.target_uri_prefix` to create the upload URL:
+  // {target_uri_prefix}/upload/v1/media/{resource_name}.
+  string resource_name = 2;
+}

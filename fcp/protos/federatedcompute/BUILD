@@ -28,16 +28,19 @@ package(
 proto_library(
     name = "federated_compute_proto",
     srcs = [
-        "aggregation_reports.proto",
+        "aggregations.proto",
         "common.proto",
         "eligibility_eval_tasks.proto",
+        "secure_aggregations.proto",
         "task_assignments.proto",
     ],
     deps = [
         "//fcp/protos:federated_api_proto",
+        "//fcp/secagg/shared:proto",
         "@com_google_googleapis//google/api:annotations_proto",
         "@com_google_googleapis//google/longrunning:operations_proto",
         "@com_google_googleapis//google/rpc:code_proto",
+        "@com_google_googleapis//google/rpc:status_proto",
         "@com_google_protobuf//:duration_proto",
     ],
 )
