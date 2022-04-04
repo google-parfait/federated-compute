@@ -40,9 +40,11 @@ class TensorNameOp : public tensorflow::OpKernel {
   explicit TensorNameOp(tensorflow::OpKernelConstruction* context)
       : OpKernel(context) {
     const tensorflow::NodeDef& def = context->def();
-    OP_REQUIRES(context, def.input_size() == 1,
-                tensorflow::errors::InvalidArgument(absl::StrFormat(
-                    "Expected single input, found %d.", def.input_size())));
+    // Note: more than one input is allowed since the "true" input node may be
+    // followed by any number of control inputs.
+    OP_REQUIRES(
+        context, def.input_size() >= 1,
+        tensorflow::errors::InvalidArgument("Expected an input, found none."));
     input_name_ = def.input(0);
   }
 
