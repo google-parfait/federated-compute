@@ -31,12 +31,14 @@ namespace fcp {
 namespace client {
 namespace engine {
 
+namespace {
 using ::google::protobuf::Any;
 
-// If `external_config_proto` contains a non-empty config proto, use that.
-// Otherwise initializes a config proto from a set of defaults.
-absl::StatusOr<tensorflow::ConfigProto>
-TensorFlowWrapper::InitializeConfigProto(const Any& external_config_proto) {
+// Internal wrapper for InitializeConfigProto; if `external_config_proto`
+// contains a non-empty config proto, use that. Otherwise initializes a config
+// proto from a set of defaults.
+absl::StatusOr<tensorflow::ConfigProto> InitializeConfigProtoFromExternalProto(
+    const Any& external_config_proto) {
   // Previously, we specified a hardcoded set of options in the ConfigProto by
   // default. However, if a non-empty ConfigProto is now provided as a
   // parameter, then we should use it as-is, without overriding any of the
@@ -77,6 +79,17 @@ TensorFlowWrapper::InitializeConfigProto(const Any& external_config_proto) {
   auto mutable_experimental = config_proto.mutable_experimental();
   mutable_experimental->set_optimize_for_static_graph(true);
   mutable_experimental->set_disable_output_partition_graphs(true);
+  return config_proto;
+}
+
+}  // namespace
+
+absl::StatusOr<tensorflow::ConfigProto>
+TensorFlowWrapper::InitializeConfigProto(const Any& external_config_proto) {
+  FCP_ASSIGN_OR_RETURN(
+      tensorflow::ConfigProto config_proto,
+      InitializeConfigProtoFromExternalProto(external_config_proto));
+
   return config_proto;
 }
 
