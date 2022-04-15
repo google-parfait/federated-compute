@@ -467,7 +467,11 @@ void PhaseLoggerImpl::LogCheckInCompleted(absl::string_view task_name,
 
 void PhaseLoggerImpl::LogComputationStarted() {
   if (use_per_phase_logs_) {
-    event_publisher_->PublishPlanExecutionStarted();
+    if (granular_per_phase_logs_) {
+      event_publisher_->PublishComputationStarted();
+    } else {
+      event_publisher_->PublishPlanExecutionStarted();
+    }
     opstats_logger_->AddEvent(
         OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
   }
@@ -597,8 +601,13 @@ void PhaseLoggerImpl::LogComputationCompleted(int total_example_count,
                                               absl::Time run_plan_start_time,
                                               absl::Time reference_time) {
   if (use_per_phase_logs_) {
-    event_publisher_->PublishPlanCompleted(
-        total_example_count, total_example_size_bytes, run_plan_start_time);
+    if (granular_per_phase_logs_) {
+      event_publisher_->PublishComputationCompleted(
+          total_example_count, total_example_size_bytes, run_plan_start_time);
+    } else {
+      event_publisher_->PublishPlanCompleted(
+          total_example_count, total_example_size_bytes, run_plan_start_time);
+    }
     opstats_logger_->AddEvent(
         OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
     log_manager_->LogToLongHistogram(

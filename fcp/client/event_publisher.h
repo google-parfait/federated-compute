@@ -196,6 +196,8 @@ class EventPublisher {
   virtual void PublishCheckinFinishedV2(int64_t bytes_downloaded,
                                         int64_t chunking_layer_bytes_downloaded,
                                         absl::Duration download_duration) = 0;
+  // Publishes that plan execution has started.
+  virtual void PublishComputationStarted() = 0;
   // Publish that the task is invalid.
   virtual void PublishComputationInvalidArgument(
       absl::string_view error_message, int total_example_count,
@@ -219,6 +221,10 @@ class EventPublisher {
   virtual void PublishComputationInterrupted(
       int total_example_count, int64_t total_example_size_bytes,
       absl::string_view error_message, absl::Duration computation_duration) = 0;
+  // Publishes an event that plan execution is complete.
+  virtual void PublishComputationCompleted(int total_example_count,
+                                           int64_t total_example_size_bytes,
+                                           absl::Time start_time) = 0;
   // Publish that the client starts to upload result.
   virtual void PublishResultUploadStarted() = 0;
   // Publish that an IO error occurred during result upload.

@@ -193,6 +193,8 @@ class FakeEventPublisher : public EventPublisher {
                                 int64_t chunking_layer_bytes_downloaded,
                                 absl::Duration download_duration) override {}
 
+  void PublishComputationStarted() override {}
+
   void PublishComputationInvalidArgument(
       absl::string_view error_message, int total_example_count,
       int64_t total_example_size_bytes,
@@ -227,6 +229,10 @@ class FakeEventPublisher : public EventPublisher {
       absl::Duration computation_duration) override {
     FCP_LOG(ERROR) << error_message;
   }
+
+  void PublishComputationCompleted(int total_example_count,
+                                   int64_t total_example_size_bytes,
+                                   absl::Time start_time) override {}
 
   void PublishResultUploadStarted() override {}
 

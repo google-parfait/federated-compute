@@ -277,6 +277,8 @@ class LoggingEventPublisher : public EventPublisher {
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
 
+  void PublishComputationStarted() override { FCP_CLIENT_LOG_FUNCTION_NAME; }
+
   void PublishComputationInvalidArgument(
       absl::string_view error_message, int total_example_count,
       int64_t total_example_size_bytes,
@@ -310,6 +312,12 @@ class LoggingEventPublisher : public EventPublisher {
       absl::string_view error_message,
       absl::Duration computation_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
+  }
+
+  void PublishComputationCompleted(int total_example_count, int64_t,
+                                   absl::Time) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME << ":\ttotal_example_count="
+                                 << total_example_count;
   }
 
   void PublishResultUploadStarted() override { FCP_CLIENT_LOG_FUNCTION_NAME; }

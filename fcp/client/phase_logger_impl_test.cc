@@ -708,7 +708,11 @@ TEST_P(PhaseLoggerImplTest, LogCheckInCompleted) {
 TEST_P(PhaseLoggerImplTest, LogComputationStarted) {
   InSequence seq;
   if (use_per_phase_logs_) {
-    EXPECT_CALL(mock_event_publisher_, PublishPlanExecutionStarted());
+    if (granular_per_phase_logs_) {
+      EXPECT_CALL(mock_event_publisher_, PublishComputationStarted());
+    } else {
+      EXPECT_CALL(mock_event_publisher_, PublishPlanExecutionStarted());
+    }
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED));
@@ -888,9 +892,18 @@ TEST_P(PhaseLoggerImplTest, LogComputationCompleted) {
   absl::Time reference_time = absl::Now() - absl::Minutes(8);
   InSequence seq;
   if (use_per_phase_logs_) {
-    EXPECT_CALL(mock_event_publisher_,
-                PublishPlanCompleted(kTotalExampleCount, kTotalExampleSizeBytes,
-                                     run_plan_start_time));
+    if (granular_per_phase_logs_) {
+      EXPECT_CALL(
+          mock_event_publisher_,
+          PublishComputationCompleted(
+              kTotalExampleCount, kTotalExampleSizeBytes, run_plan_start_time));
+
+    } else {
+      EXPECT_CALL(
+          mock_event_publisher_,
+          PublishPlanCompleted(kTotalExampleCount, kTotalExampleSizeBytes,
+                               run_plan_start_time));
+    }
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED));
