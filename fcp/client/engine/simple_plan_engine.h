@@ -47,10 +47,8 @@ namespace engine {
 class SimplePlanEngine {
  public:
   SimplePlanEngine(SimpleTaskEnvironment* task_env, LogManager* log_manager,
-                   EventPublisher* event_publisher,
                    ::fcp::client::opstats::OpStatsLogger* opstats_logger,
-                   const InterruptibleRunner::TimingConfig* timing_config,
-                   const Flags* flags);
+                   const InterruptibleRunner::TimingConfig* timing_config);
 
   PlanResult RunPlan(
       const google::internal::federated::plan::TensorflowSpec& tensorflow_spec,
@@ -58,9 +56,6 @@ class SimplePlanEngine {
       std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
           inputs,
       const std::vector<std::string>& output_names,
-      absl::Time run_plan_start_time, absl::Time reference_time,
-      std::function<void()> log_computation_started,
-      std::function<void()> log_computation_finished,
       const SelectorContext& selector_context);
 
  private:
@@ -72,9 +67,6 @@ class SimplePlanEngine {
       std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
           inputs,
       const std::vector<std::string>& output_names,
-      absl::Time run_plan_start_time,
-      std::function<void()> log_computation_started,
-      std::function<void()> log_computation_finished,
       const SelectorContext& selector_context,
       std::atomic<int>* total_example_count,
       std::atomic<int64_t>* total_example_size_bytes,
@@ -91,21 +83,12 @@ class SimplePlanEngine {
       TensorFlowWrapper* tf_wrapper,
       const std::vector<std::pair<std::string, tensorflow::Tensor>>& inputs,
       const std::vector<std::string>& output_tensor_names,
-      const std::vector<std::string>& target_node_names,
-      std::atomic<int>* total_example_count,
-      std::atomic<int64_t>* total_example_size_bytes, absl::Time start);
-
-  // Logs duration between reference_time and call to this function to the
-  // specified HistogramCounter.
-  void LogTimeSince(HistogramCounters histogram_counter,
-                    absl::Time reference_time);
+      const std::vector<std::string>& target_node_names);
 
   SimpleTaskEnvironment* task_env_;
   LogManager* log_manager_;
-  EventPublisher* event_publisher_;
   ::fcp::client::opstats::OpStatsLogger* opstats_logger_;
   const InterruptibleRunner::TimingConfig* timing_config_;
-  const Flags* flags_;
 };
 
 }  // namespace engine

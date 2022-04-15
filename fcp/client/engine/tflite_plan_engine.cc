@@ -29,34 +29,17 @@ namespace fcp {
 namespace client {
 namespace engine {
 
-using ::fcp::client::opstats::OperationalStats;
 using ::google::internal::federated::plan::TensorflowSpec;
 
 namespace {
 
 PlanResult CreatePlanResultFromOutput(
-    absl::StatusOr<OutputTensors> output, EventPublisher* event_publisher,
-    opstats::OpStatsLogger* opstats_logger, LogManager* log_manager,
-    const Flags* flags, std::function<void()> log_computation_finished,
-    std::atomic<int>* total_example_count,
+    absl::StatusOr<OutputTensors> output, std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes,
     absl::Status example_iterator_status,
-    const std::vector<std::string>& output_names,
-    absl::Time run_plan_start_time, absl::Time reference_time) {
+    const std::vector<std::string>& output_names) {
   switch (output.status().code()) {
     case absl::StatusCode::kOk: {
-      if (!flags->per_phase_logs()) {
-        event_publisher->PublishPlanCompleted(*total_example_count,
-                                              *total_example_size_bytes,
-                                              run_plan_start_time);
-        log_computation_finished();
-        log_manager->LogToLongHistogram(
-            HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
-            *total_example_size_bytes);
-        log_manager->LogToLongHistogram(
-            HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT,
-            *total_example_count);
-      }
       PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
       plan_result.output_names = std::move(output->output_tensor_names);
       plan_result.output_tensors = std::move(output->output_tensors);
@@ -65,27 +48,8 @@ PlanResult CreatePlanResultFromOutput(
       return plan_result;
     }
     case absl::StatusCode::kCancelled:
-      if (!flags->per_phase_logs()) {
-        event_publisher->PublishInterruption(
-            /*execution_index=*/0, /*epoch_index=*/0, *total_example_count,
-            *total_example_size_bytes, reference_time);
-        opstats_logger->AddEventWithErrorMessage(
-            OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED,
-            std::string(output.status().message()));
-      }
       return PlanResult(PlanOutcome::kInterrupted, std::move(output.status()));
     case absl::StatusCode::kInvalidArgument:
-      if (!flags->per_phase_logs()) {
-        event_publisher->PublishTensorFlowError(
-            /*execution_index=*/0, /*epoch_index=*/0, *total_example_count,
-            absl::StrCat("code: ", output.status().code(), ", error: ",
-                         flags->log_tensorflow_error_messages()
-                             ? output.status().message()
-                             : ""));
-        opstats_logger->AddEventWithErrorMessage(
-            OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
-            std::string(output.status().message()));
-      }
       return CreateComputationErrorPlanResult(example_iterator_status,
                                               output.status());
     default:
@@ -100,9 +64,6 @@ PlanResult TfLitePlanEngine::RunPlan(
     const TensorflowSpec& tensorflow_spec, const std::string& model,
     std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
     const std::vector<std::string>& output_names,
-    absl::Time run_plan_start_time, absl::Time reference_time,
-    std::function<void()> log_computation_started,
-    std::function<void()> log_computation_finished,
     const SelectorContext& selector_context) {
   log_manager_->LogDiag(ProdDiagCode::BACKGROUND_TRAINING_TFLITE_ENGINE_USED);
   // Check that all inputs have corresponding TensorSpecProtos.
@@ -114,15 +75,6 @@ PlanResult TfLitePlanEngine::RunPlan(
       tensorflow_spec, expected_input_tensor_names_set, output_names);
   if (!validity_checks.ok()) {
     FCP_LOG(ERROR) << validity_checks.message();
-    if (!flags_->per_phase_logs()) {
-      log_manager_->LogDiag(
-          ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-      event_publisher_->PublishIoError(
-          /*execution_index=*/0, validity_checks.message());
-      opstats_logger_->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_ERROR_IO,
-          std::string(validity_checks.message()));
-    }
     return PlanResult(PlanOutcome::kInvalidArgument,
                       std::move(validity_checks));
   }
@@ -134,10 +86,9 @@ PlanResult TfLitePlanEngine::RunPlan(
           const google::internal::federated::plan::ExampleSelector& selector) {
         return task_env_->CreateExampleIterator(selector, selector_context);
       },
-      event_publisher_, log_manager_, opstats_logger_, flags_->per_phase_logs(),
-      inputs.get(), tensorflow_spec.dataset_token_tensor_name(),
-      &total_example_count, &total_example_size_bytes,
-      &example_iterator_status);
+      log_manager_, opstats_logger_, inputs.get(),
+      tensorflow_spec.dataset_token_tensor_name(), &total_example_count,
+      &total_example_size_bytes, &example_iterator_status);
   absl::flat_hash_set<std::string> output_names_set(output_names.begin(),
                                                     output_names.end());
   absl::StatusOr<std::unique_ptr<TfLiteWrapper>> tflite_wrapper =
@@ -150,45 +101,14 @@ PlanResult TfLitePlanEngine::RunPlan(
           *timing_config_, log_manager_, std::move(inputs),
           std::move(output_names_set));
   if (!tflite_wrapper.ok()) {
-    if (!flags_->per_phase_logs()) {
-      event_publisher_->PublishTensorFlowError(
-          /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
-          absl::StrCat("code: ", tflite_wrapper.status().code(), ", error: ",
-                       flags_->log_tensorflow_error_messages()
-                           ? tflite_wrapper.status().message()
-                           : ""));
-      opstats_logger_->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
-          std::string(tflite_wrapper.status().message()));
-    }
     return PlanResult(PlanOutcome::kTensorflowError, tflite_wrapper.status());
   }
   // Start running the plan.
-  if (!flags_->per_phase_logs()) {
-    event_publisher_->PublishPlanExecutionStarted();
-    log_computation_started();
-  }
   absl::StatusOr<OutputTensors> output = (*tflite_wrapper)->Run();
   PlanResult plan_result = CreatePlanResultFromOutput(
-      std::move(output), event_publisher_, opstats_logger_, log_manager_,
-      flags_, std::move(log_computation_finished), &total_example_count,
-      &total_example_size_bytes, example_iterator_status.GetStatus(),
-      output_names, run_plan_start_time, reference_time);
-  // Log timing info.
-  if (!flags_->per_phase_logs()) {
-    LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_LATENCY,
-                 run_plan_start_time);
-    LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_END_TIME,
-                 reference_time);
-  }
+      std::move(output), &total_example_count, &total_example_size_bytes,
+      example_iterator_status.GetStatus(), output_names);
   return plan_result;
-}
-
-void TfLitePlanEngine::LogTimeSince(HistogramCounters histogram_counter,
-                                    absl::Time reference_time) {
-  absl::Duration duration = absl::Now() - reference_time;
-  log_manager_->LogToLongHistogram(histogram_counter,
-                                   absl::ToInt64Milliseconds(duration));
 }
 
 }  // namespace engine

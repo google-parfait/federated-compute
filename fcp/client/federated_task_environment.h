@@ -48,7 +48,7 @@ class FederatedTaskEnvironment : public TaskEnvironment {
                            LogManager* log_manager,
                            EventPublisher* event_publisher,
                            opstats::OpStatsLogger* opstats_logger,
-                           const Flags* flags, absl::Time reference_time,
+                           absl::Time reference_time,
                            absl::Duration condition_polling_period);
 
   // Test constructor to allow injection of a mock time source.
@@ -57,7 +57,7 @@ class FederatedTaskEnvironment : public TaskEnvironment {
                            LogManager* log_manager,
                            EventPublisher* event_publisher,
                            opstats::OpStatsLogger* opstats_logger,
-                           const Flags* flags, absl::Time reference_time,
+                           absl::Time reference_time,
                            std::function<absl::Time()> get_time_fn,
                            absl::Duration condition_polling_period);
 
@@ -100,7 +100,6 @@ class FederatedTaskEnvironment : public TaskEnvironment {
   LogManager* const log_manager_;
   EventPublisher* const event_publisher_;
   opstats::OpStatsLogger* const opstats_logger_;
-  const Flags* const flags_;
   const absl::Time reference_time_;
   std::string tf_checkpoint_file_;
   std::string secagg_checkpoint_file_;

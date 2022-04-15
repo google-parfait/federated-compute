@@ -55,7 +55,7 @@ absl::Status RunLocalComputation(SimpleTaskEnvironment* env_deps,
 // method once the OpStatsLogger object has been created.
 absl::Status RunLocalComputation(
     PhaseLogger& phase_logger, SimpleTaskEnvironment* env_deps,
-    EventPublisher* event_publisher, LogManager* log_manager,
+    LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
     const std::string& plan_uri, const std::string& input_dir_uri,
     const std::string& output_dir_uri, const SelectorContext& selector_context);

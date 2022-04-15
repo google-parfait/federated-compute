@@ -42,12 +42,10 @@ void PhaseLoggerImpl::UpdateRetryWindowAndNetworkStats(
     const RetryWindow& retry_window, NetworkStats stats) {
   opstats_logger_->SetRetryWindow(retry_window);
 
-  if (use_per_phase_logs_) {
-    // Update the network stats.
-    opstats_logger_->SetNetworkStats(
-        stats.bytes_downloaded, stats.bytes_uploaded,
-        stats.chunking_layer_bytes_received, stats.chunking_layer_bytes_sent);
-  }
+  // Update the network stats.
+  opstats_logger_->SetNetworkStats(stats.bytes_downloaded, stats.bytes_uploaded,
+                                   stats.chunking_layer_bytes_received,
+                                   stats.chunking_layer_bytes_sent);
 }
 
 void PhaseLoggerImpl::SetModelIdentifier(absl::string_view model_identifier) {
@@ -69,11 +67,9 @@ void PhaseLoggerImpl::LogTaskNotStarted(absl::string_view error_message) {
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalCheckInStarted() {
-  if (use_per_phase_logs_) {
     event_publisher_->PublishEligibilityEvalCheckin();
     opstats_logger_->AddEvent(
         OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
-  }
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalCheckInIOError(
@@ -142,25 +138,21 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckInServerAborted(
 
 void PhaseLoggerImpl::LogEligibilityEvalNotConfigured(
     NetworkStats stats, absl::Time time_before_eligibility_eval_checkin) {
-  if (use_per_phase_logs_) {
     event_publisher_->PublishEligibilityEvalNotConfigured(
         stats.bytes_downloaded, stats.chunking_layer_bytes_received,
         absl::Now() - time_before_eligibility_eval_checkin);
     opstats_logger_->AddEvent(
         OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED);
-  }
   LogEligibilityEvalCheckInLatency(time_before_eligibility_eval_checkin);
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalCheckInTurnedAway(
     NetworkStats stats, absl::Time time_before_eligibility_eval_checkin) {
-  if (use_per_phase_logs_) {
     event_publisher_->PublishEligibilityEvalRejected(
         stats.bytes_downloaded, stats.chunking_layer_bytes_received,
         absl::Now() - time_before_eligibility_eval_checkin);
     opstats_logger_->AddEvent(
         OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
-  }
   LogEligibilityEvalCheckInLatency(time_before_eligibility_eval_checkin);
 }
 
@@ -189,18 +181,15 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckInInvalidPayloadError(
 
 void PhaseLoggerImpl::LogEligibilityEvalCheckInCompleted(
     NetworkStats stats, absl::Time time_before_eligibility_eval_checkin) {
-  if (use_per_phase_logs_) {
     opstats_logger_->AddEvent(
         OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED);
     event_publisher_->PublishEligibilityEvalPlanReceived(
         stats.bytes_downloaded, stats.chunking_layer_bytes_received,
         absl::Now() - time_before_eligibility_eval_checkin);
-  }
   LogEligibilityEvalCheckInLatency(time_before_eligibility_eval_checkin);
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationStarted() {
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       event_publisher_->PublishEligibilityEvalComputationStarted();
     } else {
@@ -208,7 +197,6 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationStarted() {
     }
     opstats_logger_->AddEvent(
         OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED);
-  }
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationInvalidArgument(
@@ -237,7 +225,6 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationInvalidArgument(
 void PhaseLoggerImpl::LogEligibilityEvalComputationExampleIteratorError(
     absl::Status error_status, int total_example_count,
     int64_t total_example_size_bytes, absl::Time run_plan_start_time) {
-  if (use_per_phase_logs_) {
     std::string error_message =
         GetErrorMessage(error_status, kEligibilityComputationErrorPrefix,
                         /* keep_error_message= */ true);
@@ -255,7 +242,6 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationExampleIteratorError(
           OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
           error_message);
     }
-  }
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationTensorflowError(
@@ -280,16 +266,13 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationTensorflowError(
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW, error_message);
   }
-  if (use_per_phase_logs_) {
     LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
-  }
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationInterrupted(
     absl::Status error_status, int total_example_count,
     int64_t total_example_size_bytes, absl::Time run_plan_start_time,
     absl::Time reference_time) {
-  if (use_per_phase_logs_) {
     std::string error_message =
         GetErrorMessage(error_status, kEligibilityComputationErrorPrefix,
                         /* keep_error_message= */ true);
@@ -310,13 +293,11 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationInterrupted(
           error_message);
     }
     LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
-  }
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationCompleted(
     int total_example_count, int64_t total_example_size_bytes,
     absl::Time run_plan_start_time, absl::Time reference_time) {
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       event_publisher_->PublishEligibilityEvalComputationCompleted(
           total_example_count, total_example_size_bytes,
@@ -333,16 +314,13 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationCompleted(
     log_manager_->LogToLongHistogram(
         HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT, total_example_count);
     LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
-  }
 }
 
 void PhaseLoggerImpl::LogCheckInStarted() {
-  if (use_per_phase_logs_) {
     // Log that we are about to check in with the server.
     event_publisher_->PublishCheckin();
     opstats_logger_->AddEvent(
         OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
-  }
 }
 
 void PhaseLoggerImpl::LogCheckInIOError(absl::Status error_status,
@@ -409,7 +387,6 @@ void PhaseLoggerImpl::LogCheckInServerAborted(absl::Status error_status,
 void PhaseLoggerImpl::LogCheckInTurnedAway(NetworkStats stats,
                                            absl::Time time_before_checkin,
                                            absl::Time reference_time) {
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       event_publisher_->PublishRejected(stats.bytes_downloaded,
                                         stats.chunking_layer_bytes_received,
@@ -419,7 +396,6 @@ void PhaseLoggerImpl::LogCheckInTurnedAway(NetworkStats stats,
     }
     opstats_logger_->AddEvent(
         OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
-  }
   LogCheckInLatency(time_before_checkin, reference_time);
 }
 
@@ -449,7 +425,6 @@ void PhaseLoggerImpl::LogCheckInCompleted(absl::string_view task_name,
                                           NetworkStats stats,
                                           absl::Time time_before_checkin,
                                           absl::Time reference_time) {
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       event_publisher_->PublishCheckinFinishedV2(
           stats.bytes_downloaded, stats.chunking_layer_bytes_received,
@@ -461,20 +436,17 @@ void PhaseLoggerImpl::LogCheckInCompleted(absl::string_view task_name,
     }
     opstats_logger_->AddCheckinAcceptedEventWithTaskName(
         std::string(task_name));
-  }
   LogCheckInLatency(time_before_checkin, reference_time);
 }
 
 void PhaseLoggerImpl::LogComputationStarted() {
-  if (use_per_phase_logs_) {
-    if (granular_per_phase_logs_) {
-      event_publisher_->PublishComputationStarted();
-    } else {
-      event_publisher_->PublishPlanExecutionStarted();
-    }
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
+  if (granular_per_phase_logs_) {
+    event_publisher_->PublishComputationStarted();
+  } else {
+    event_publisher_->PublishPlanExecutionStarted();
   }
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
 }
 
 void PhaseLoggerImpl::LogComputationInvalidArgument(
@@ -523,7 +495,6 @@ void PhaseLoggerImpl::LogComputationIOError(absl::Status error_status,
 void PhaseLoggerImpl::LogComputationExampleIteratorError(
     absl::Status error_status, int total_example_count,
     int64_t total_example_size_bytes, absl::Time run_plan_start_time) {
-  if (use_per_phase_logs_) {
     std::string error_message = GetErrorMessage(
         error_status, kComputationErrorPrefix, /* keep_error_message= */ true);
     if (granular_per_phase_logs_) {
@@ -540,7 +511,6 @@ void PhaseLoggerImpl::LogComputationExampleIteratorError(
           OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
           error_message);
     }
-  }
 }
 
 void PhaseLoggerImpl::LogComputationTensorflowError(
@@ -563,16 +533,13 @@ void PhaseLoggerImpl::LogComputationTensorflowError(
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW, error_message);
   }
-  if (use_per_phase_logs_) {
     LogComputationLatency(run_plan_start_time, reference_time);
-  }
 }
 
 void PhaseLoggerImpl::LogComputationInterrupted(
     absl::Status error_status, int total_example_count,
     int64_t total_example_size_bytes, absl::Time run_plan_start_time,
     absl::Time reference_time) {
-  if (use_per_phase_logs_) {
     std::string error_message =
         GetErrorMessage(error_status, kComputationErrorPrefix,
                         /* keep_error_message= */ true);
@@ -593,14 +560,12 @@ void PhaseLoggerImpl::LogComputationInterrupted(
           error_message);
     }
     LogComputationLatency(run_plan_start_time, reference_time);
-  }
 }
 
 void PhaseLoggerImpl::LogComputationCompleted(int total_example_count,
                                               int64_t total_example_size_bytes,
                                               absl::Time run_plan_start_time,
                                               absl::Time reference_time) {
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       event_publisher_->PublishComputationCompleted(
           total_example_count, total_example_size_bytes, run_plan_start_time);
@@ -616,11 +581,9 @@ void PhaseLoggerImpl::LogComputationCompleted(int total_example_count,
     log_manager_->LogToLongHistogram(
         HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT, total_example_count);
     LogComputationLatency(run_plan_start_time, reference_time);
-  }
 }
 
 absl::Status PhaseLoggerImpl::LogResultUploadStarted() {
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       opstats_logger_->AddEvent(
           OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED);
@@ -636,7 +599,6 @@ absl::Status PhaseLoggerImpl::LogResultUploadStarted() {
     } else {
       event_publisher_->PublishReportStarted(0);
     }
-  }
   return absl::OkStatus();
 }
 
@@ -706,7 +668,6 @@ void PhaseLoggerImpl::LogResultUploadServerAborted(
 void PhaseLoggerImpl::LogResultUploadCompleted(
     NetworkStats stats, absl::Time time_before_result_upload,
     absl::Time reference_time) {
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       event_publisher_->PublishResultUploadCompleted(
           stats.report_size_bytes, stats.chunking_layer_bytes_sent,
@@ -720,12 +681,10 @@ void PhaseLoggerImpl::LogResultUploadCompleted(
       opstats_logger_->AddEvent(
           OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
     }
-  }
   LogReportLatency(time_before_result_upload, reference_time);
 }
 
 absl::Status PhaseLoggerImpl::LogFailureUploadStarted() {
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       opstats_logger_->AddEvent(
           OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_STARTED);
@@ -741,7 +700,6 @@ absl::Status PhaseLoggerImpl::LogFailureUploadStarted() {
     } else {
       event_publisher_->PublishReportStarted(0);
     }
-  }
   return absl::OkStatus();
 }
 
@@ -811,7 +769,6 @@ void PhaseLoggerImpl::LogFailureUploadServerAborted(
 void PhaseLoggerImpl::LogFailureUploadCompleted(
     NetworkStats stats, absl::Time time_before_failure_upload,
     absl::Time reference_time) {
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       event_publisher_->PublishFailureUploadCompleted(
           stats.report_size_bytes, stats.chunking_layer_bytes_sent,
@@ -825,7 +782,6 @@ void PhaseLoggerImpl::LogFailureUploadCompleted(
       opstats_logger_->AddEvent(
           OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
     }
-  }
   LogReportLatency(time_before_failure_upload, reference_time);
 }
 

@@ -111,8 +111,7 @@ void LogComputationOutcome(engine::PlanResult plan_result,
 
 absl::Status RunPlanWithTensorflowSpec(
     PhaseLogger& phase_logger, SimpleTaskEnvironment* env_deps,
-    EventPublisher* event_publisher, LogManager* log_manager,
-    OpStatsLogger* opstats_logger, const Flags* flags,
+    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     const ClientOnlyPlan& client_plan, const std::string& input_dir_uri,
     const std::string& output_dir_uri,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
@@ -137,15 +136,6 @@ absl::Status RunPlanWithTensorflowSpec(
     return error_status;
   }
 
-  auto log_computation_started = [opstats_logger]() {
-    opstats_logger->AddEvent(
-        OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
-  };
-  auto log_computation_finished = [opstats_logger]() {
-    opstats_logger->AddEvent(
-        OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
-  };
-
   // Run plan
   std::vector<std::string> output_names_unused;
 
@@ -153,13 +143,11 @@ absl::Status RunPlanWithTensorflowSpec(
   if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
     auto inputs = ConstructInputsForTFLitePlan(
         client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
-    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, event_publisher,
-                                         opstats_logger, &timing_config, flags);
+    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
+                                         &timing_config);
     engine::PlanResult plan_result = plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
-        std::move(inputs), output_names_unused, run_plan_start_time,
-        reference_time, log_computation_started, log_computation_finished,
-        selector_context);
+        std::move(inputs), output_names_unused, selector_context);
     engine::PlanOutcome outcome = plan_result.outcome;
     LogComputationOutcome(std::move(plan_result), phase_logger,
                           run_plan_start_time, reference_time);
@@ -171,13 +159,12 @@ absl::Status RunPlanWithTensorflowSpec(
   // message.
   auto inputs = ConstructInputsForTensorflowSpecPlan(
       client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
-  engine::SimplePlanEngine plan_engine(env_deps, log_manager, event_publisher,
-                                       opstats_logger, &timing_config, flags);
+  engine::SimplePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
+                                       &timing_config);
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs),
-      output_names_unused, run_plan_start_time, reference_time,
-      log_computation_started, log_computation_finished, selector_context);
+      output_names_unused, selector_context);
   engine::PlanOutcome outcome = plan_result.outcome;
   LogComputationOutcome(std::move(plan_result), phase_logger,
                         run_plan_start_time, reference_time);
@@ -202,15 +189,14 @@ absl::Status RunLocalComputation(SimpleTaskEnvironment* env_deps,
       LocalComputation();
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
                                log_manager, flags);
-  return RunLocalComputation(phase_logger, env_deps, event_publisher,
-                             log_manager, opstats_logger.get(), flags, plan_uri,
+  return RunLocalComputation(phase_logger, env_deps, log_manager,
+                             opstats_logger.get(), flags, plan_uri,
                              input_dir_uri, output_dir_uri, selector_context);
 }
 
 absl::Status RunLocalComputation(
     PhaseLogger& phase_logger, SimpleTaskEnvironment* env_deps,
-    EventPublisher* event_publisher, LogManager* log_manager,
-    OpStatsLogger* opstats_logger, const Flags* flags,
+    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     const std::string& plan_uri, const std::string& input_dir_uri,
     const std::string& output_dir_uri,
     const SelectorContext& selector_context) {
@@ -257,9 +243,9 @@ absl::Status RunLocalComputation(
   std::vector<std::string> output_names;
   std::vector<tensorflow::Tensor> output_tensors;
   return RunPlanWithTensorflowSpec(
-      phase_logger, env_deps, event_publisher, log_manager, opstats_logger,
-      flags, plan, input_dir_uri, output_dir_uri, timing_config,
-      run_plan_start_time, reference_time, selector_context);
+      phase_logger, env_deps, log_manager, opstats_logger, flags, plan,
+      input_dir_uri, output_dir_uri, timing_config, run_plan_start_time,
+      reference_time, selector_context);
 }
 
 }  // namespace client

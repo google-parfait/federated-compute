@@ -229,8 +229,8 @@ void UpdateRetryWindowAndNetworkStats(FederatedProtocol& federated_protocol,
 }
 
 engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
-    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
-    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
+    SimpleTaskEnvironment* env_deps, LogManager* log_manager,
+    OpStatsLogger* opstats_logger, const Flags* flags,
     const ClientOnlyPlan& client_plan,
     const std::string& checkpoint_input_filename,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
@@ -251,27 +251,16 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
   std::vector<std::string> output_names = {
       io_router.task_eligibility_info_tensor_name()};
 
-  auto log_computation_started = [opstats_logger]() {
-    opstats_logger->AddEvent(
-        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED);
-  };
-  auto log_computation_finished = [opstats_logger]() {
-    opstats_logger->AddEvent(
-        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_FINISHED);
-  };
-
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
   if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
     std::unique_ptr<TfLiteInputs> tflite_inputs =
         ConstructTfLiteInputsForEligibilityEvalPlan(io_router,
                                                     checkpoint_input_filename);
-    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, event_publisher,
-                                         opstats_logger, &timing_config, flags);
+    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
+                                         &timing_config);
     return plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
-        std::move(tflite_inputs), output_names, run_plan_start_time,
-        reference_time, log_computation_started, log_computation_finished,
-        eligibility_selector_context);
+        std::move(tflite_inputs), output_names, eligibility_selector_context);
   }
 #endif
 
@@ -280,13 +269,12 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
   auto inputs = ConstructInputsForEligibilityEvalPlan(
       io_router, checkpoint_input_filename);
   // Run plan and get a set of output tensors back.
-  engine::SimplePlanEngine plan_engine(env_deps, log_manager, event_publisher,
-                                       opstats_logger, &timing_config, flags);
+  engine::SimplePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
+                                       &timing_config);
   return plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs), output_names,
-      run_plan_start_time, reference_time, log_computation_started,
-      log_computation_finished, eligibility_selector_context);
+      eligibility_selector_context);
 }
 
 // Validates the output tensors that resulted from executing the plan, and then
@@ -391,8 +379,7 @@ absl::StatusOr<std::vector<std::string>> ConstructOutputsForTensorflowSpecPlan(
 
 PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
     SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger,
-    EventPublisher* event_publisher, LogManager* log_manager,
-    OpStatsLogger* opstats_logger, const Flags* flags,
+    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     const ClientOnlyPlan& client_plan,
     const std::string& checkpoint_input_filename,
     const std::string& checkpoint_output_filename,
@@ -425,15 +412,6 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
         engine::PlanOutcome::kTensorflowError, output_names.status()));
   }
 
-  auto log_computation_started = [opstats_logger]() {
-    opstats_logger->AddEvent(
-        OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
-  };
-  auto log_computation_finished = [opstats_logger]() {
-    opstats_logger->AddEvent(
-        OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
-  };
-
   // Run plan and get a set of output tensors back.
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
   if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
@@ -441,13 +419,11 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
         ConstructTFLiteInputsForTensorflowSpecPlan(
             client_plan.phase().federated_compute(), checkpoint_input_filename,
             checkpoint_output_filename);
-    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, event_publisher,
-                                         opstats_logger, &timing_config, flags);
+    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
+                                         &timing_config);
     engine::PlanResult plan_result = plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
-        std::move(tflite_inputs), *output_names, run_plan_start_time,
-        reference_time, log_computation_started, log_computation_finished,
-        selector_context);
+        std::move(tflite_inputs), *output_names, selector_context);
     PlanResultAndCheckpointFile result(std::move(plan_result));
     result.checkpoint_file = checkpoint_output_filename;
 
@@ -455,13 +431,12 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   }
 #endif
 
-  engine::SimplePlanEngine plan_engine(env_deps, log_manager, event_publisher,
-                                       opstats_logger, &timing_config, flags);
+  engine::SimplePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
+                                       &timing_config);
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs), *output_names,
-      run_plan_start_time, reference_time, log_computation_started,
-      log_computation_finished, selector_context);
+      selector_context);
 
   PlanResultAndCheckpointFile result(std::move(plan_result));
   result.checkpoint_file = checkpoint_output_filename;
@@ -646,7 +621,7 @@ bool RunPlanWithExecutions(
   // Create a task environment.
   auto env = std::make_unique<FederatedTaskEnvironment>(
       env_deps, federated_protocol, log_manager, event_publisher,
-      opstats_logger, flags, reference_time,
+      opstats_logger, reference_time,
       absl::Milliseconds(flags->condition_polling_period_millis()));
 
   // Run plan. The task environment will report results back to server via the
@@ -710,9 +685,8 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
 //   appropriately.
 absl::StatusOr<std::optional<TaskEligibilityInfo>>
 IssueEligibilityEvalCheckinAndRunPlan(
-    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger,
-    EventPublisher* event_publisher, Files* files, LogManager* log_manager,
-    OpStatsLogger* opstats_logger, const Flags* flags,
+    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger, Files* files,
+    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, FLRunnerResult& fl_runner_result,
@@ -823,7 +797,7 @@ IssueEligibilityEvalCheckinAndRunPlan(
   absl::Time run_plan_start_time = absl::Now();
   phase_logger.LogEligibilityEvalComputationStarted();
   engine::PlanResult plan_result = RunEligibilityEvalPlanWithTensorflowSpec(
-      env_deps, event_publisher, log_manager, opstats_logger, flags, plan,
+      env_deps, log_manager, opstats_logger, flags, plan,
       *checkpoint_input_filename, timing_config, run_plan_start_time,
       reference_time, selector_context);
   absl::StatusOr<TaskEligibilityInfo> task_eligibility_info;
@@ -1004,9 +978,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           : nullptr;
 
   GrpcFederatedProtocol federated_protocol(
-      event_publisher, log_manager, opstats_logger.get(), flags,
-      http_client.get(), federated_service_uri, api_key, test_cert_path,
-      population_name, retry_token, client_version, attestation_measurement,
+      event_publisher, log_manager, flags, http_client.get(),
+      federated_service_uri, api_key, test_cert_path, population_name,
+      retry_token, client_version, attestation_measurement,
       should_abort_protocol_callback, timing_config, grpc_channel_deadline);
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
                                log_manager, flags);
@@ -1071,9 +1045,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // received over the course of the eligibility eval protocol interaction.
   absl::StatusOr<std::optional<TaskEligibilityInfo>> eligibility_eval_result =
       IssueEligibilityEvalCheckinAndRunPlan(
-          env_deps, phase_logger, event_publisher, files, log_manager,
-          opstats_logger, flags, federated_protocol, timing_config,
-          reference_time, fl_runner_result, eligibility_selector_context);
+          env_deps, phase_logger, files, log_manager, opstats_logger, flags,
+          federated_protocol, timing_config, reference_time, fl_runner_result,
+          eligibility_selector_context);
   if (!eligibility_eval_result.ok()) {
     return fl_runner_result;
   }
@@ -1134,9 +1108,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     }
     PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
         RunPlanWithTensorflowSpec(
-            env_deps, phase_logger, event_publisher, log_manager,
-            opstats_logger, flags, checkin_result->plan,
-            checkin_result->checkpoint_input_filename,
+            env_deps, phase_logger, log_manager, opstats_logger, flags,
+            checkin_result->plan, checkin_result->checkpoint_input_filename,
             *checkpoint_output_filename, timing_config, run_plan_start_time,
             reference_time, federated_selector_context_with_task_name);
     auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
@@ -1196,6 +1169,7 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
                                log_manager, flags);
   SelectorContext selector_context;
+  phase_logger.LogComputationStarted();
   if (client_plan.phase().has_federated_compute()) {
     absl::StatusOr<std::string> checkpoint_output_filename =
         files->CreateTempFile("output", ".ckp");
@@ -1208,19 +1182,19 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     // Regular TensorflowSpec-based plans.
     PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
         RunPlanWithTensorflowSpec(
-            env_deps, phase_logger, event_publisher, log_manager,
-            opstats_logger.get(), flags, client_plan, checkpoint_input_filename,
-            *checkpoint_output_filename, timing_config, run_plan_start_time,
-            reference_time, selector_context);
+            env_deps, phase_logger, log_manager, opstats_logger.get(), flags,
+            client_plan, checkpoint_input_filename, *checkpoint_output_filename,
+            timing_config, run_plan_start_time, reference_time,
+            selector_context);
     result.set_checkpoint_output_filename(
         plan_result_and_checkpoint_file.checkpoint_file);
     plan_result = std::move(plan_result_and_checkpoint_file.plan_result);
   } else if (client_plan.phase().has_federated_compute_eligibility()) {
     // Eligibility eval plans.
     plan_result = RunEligibilityEvalPlanWithTensorflowSpec(
-        env_deps, event_publisher, log_manager, opstats_logger.get(), flags,
-        client_plan, checkpoint_input_filename, timing_config,
-        run_plan_start_time, reference_time, selector_context);
+        env_deps, log_manager, opstats_logger.get(), flags, client_plan,
+        checkpoint_input_filename, timing_config, run_plan_start_time,
+        reference_time, selector_context);
   } else {
     // This branch shouldn't be taken, unless we add an additional type of
     // TensorflowSpec-based plan in the future. We return a readable error so
@@ -1241,6 +1215,14 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
       (*result.mutable_output_tensors())[plan_result.output_names[i]] =
           std::move(output_tensor_proto);
     }
+    phase_logger.LogComputationCompleted(plan_result.total_example_count,
+                                         plan_result.total_example_size_bytes,
+                                         run_plan_start_time, reference_time);
+  } else {
+    phase_logger.LogComputationTensorflowError(
+        plan_result.original_status, plan_result.total_example_count,
+        plan_result.total_example_size_bytes, run_plan_start_time,
+        reference_time);
   }
 
   return result;

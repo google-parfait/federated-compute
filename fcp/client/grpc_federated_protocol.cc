@@ -59,7 +59,6 @@
 namespace fcp {
 namespace client {
 
-using ::fcp::client::opstats::OperationalStats;
 using ::fcp::client::opstats::OpStatsLogger;
 using ::fcp::secagg::AesCtrPrngFactory;
 using ::fcp::secagg::ClientState;
@@ -121,8 +120,7 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 
 GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
-    ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
-    ::fcp::client::http::HttpClient* http_client,
+    const Flags* flags, ::fcp::client::http::HttpClient* http_client,
     const std::string& federated_service_uri, const std::string& api_key,
     const std::string& test_cert_path, absl::string_view population_name,
     absl::string_view retry_token, absl::string_view client_version,
@@ -131,7 +129,7 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
     const InterruptibleRunner::TimingConfig& timing_config,
     const int64_t grpc_channel_deadline_seconds)
     : GrpcFederatedProtocol(
-          event_publisher, log_manager, opstats_logger, flags, http_client,
+          event_publisher, log_manager, flags, http_client,
           std::make_unique<GrpcBidiStream>(
               federated_service_uri, api_key, std::string(population_name),
               grpc_channel_deadline_seconds, test_cert_path),
@@ -141,8 +139,7 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
 
 GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
-    OpStatsLogger* opstats_logger, const Flags* flags,
-    ::fcp::client::http::HttpClient* http_client,
+    const Flags* flags, ::fcp::client::http::HttpClient* http_client,
     std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream,
     std::unique_ptr<SecAggClient> secagg_client,
     absl::string_view population_name, absl::string_view retry_token,
@@ -152,7 +149,6 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
     : object_state_(ObjectState::kInitialized),
       event_publisher_(event_publisher),
       log_manager_(log_manager),
-      opstats_logger_(opstats_logger),
       flags_(flags),
       http_client_(http_client),
       grpc_bidi_stream_(std::move(grpc_bidi_stream)),
@@ -197,7 +193,6 @@ absl::Status GrpcFederatedProtocol::Send(
       },
       [this]() { this->grpc_bidi_stream_->Close(); }));
   bytes_uploaded_ += client_stream_message->ByteSizeLong();
-  UpdateOpStatsNetworkStats();
   return absl::OkStatus();
 }
 
@@ -210,7 +205,6 @@ absl::Status GrpcFederatedProtocol::Receive(
       },
       [this]() { this->grpc_bidi_stream_->Close(); }));
   bytes_downloaded_ += server_stream_message->ByteSizeLong();
-  UpdateOpStatsNetworkStats();
   return absl::OkStatus();
 }
 
@@ -247,13 +241,6 @@ absl::Status GrpcFederatedProtocol::SendEligibilityEvalCheckinRequest() {
       CreateProtocolOptionsRequest(
           /* should_ack_checkin=*/true);
 
-  // Log that we are about to check in with the server.
-  if (!flags_->per_phase_logs()) {
-    event_publisher_->PublishEligibilityEvalCheckin();
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
-  }
-
   return Send(&client_stream_message);
 }
 
@@ -271,13 +258,6 @@ absl::Status GrpcFederatedProtocol::SendCheckinRequest(
 
   if (task_eligibility_info.has_value()) {
     *checkin_request->mutable_task_eligibility_info() = *task_eligibility_info;
-  }
-
-  // Log that we are about to check in with the server.
-  if (!flags_->per_phase_logs()) {
-    event_publisher_->PublishCheckin();
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
   }
 
   return Send(&client_stream_message);
@@ -353,24 +333,11 @@ GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
 
   const EligibilityEvalCheckinResponse& eligibility_checkin_response =
       server_stream_message.eligibility_eval_checkin_response();
-
-  absl::Duration download_duration = absl::Now() - start_time;
-
   switch (eligibility_checkin_response.checkin_result_case()) {
     case EligibilityEvalCheckinResponse::kEligibilityEvalPayload: {
       const EligibilityEvalPayload& eligibility_eval_payload =
           eligibility_checkin_response.eligibility_eval_payload();
       std::string execution_id = eligibility_eval_payload.execution_id();
-
-      if (!flags_->per_phase_logs()) {
-        log_manager_->SetModelIdentifier(execution_id);
-        event_publisher_->SetModelIdentifier(execution_id);
-        event_publisher_->PublishEligibilityEvalPlanReceived(
-            bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-            download_duration);
-        opstats_logger_->AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED);
-      }
       object_state_ = ObjectState::kEligibilityEvalEnabled;
       return EligibilityEvalTask{
           .payloads = {.plan = eligibility_eval_payload.plan(),
@@ -380,24 +347,10 @@ GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
     }
     case EligibilityEvalCheckinResponse::kNoEligibilityEvalConfigured: {
       // Nothing to do...
-      if (!flags_->per_phase_logs()) {
-        event_publisher_->PublishEligibilityEvalNotConfigured(
-            bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-            download_duration);
-        opstats_logger_->AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED);
-      }
       object_state_ = ObjectState::kEligibilityEvalDisabled;
       return EligibilityEvalDisabled{};
     }
     case EligibilityEvalCheckinResponse::kRejectionInfo: {
-      if (!flags_->per_phase_logs()) {
-        event_publisher_->PublishEligibilityEvalRejected(
-            bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-            download_duration);
-        opstats_logger_->AddEvent(
-            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
-      }
       object_state_ = ObjectState::kEligibilityEvalCheckinRejected;
       return Rejection{};
     }
@@ -426,24 +379,6 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
       checkin_response.has_acceptance_info()
           ? checkin_response.acceptance_info().execution_phase_id()
           : "";
-  if (!flags_->per_phase_logs()) {
-    log_manager_->SetModelIdentifier(execution_phase_id_);
-    event_publisher_->SetModelIdentifier(execution_phase_id_);
-  }
-  // If we're not supporting the downloading of task resources via HTTP, then
-  // we've reached the end of the checkin phase and can publish the relevant
-  // event.
-  // If we are supporting the downloading of task resources via HTTP OTOH,
-  // then while we may have received the AcceptanceInfo message on the gRPC
-  // protocol, we won't yet have actually downloaded the plan/initial checkpoint
-  // resources, and hence we shouldn't publish the 'checkin finished' event yet.
-  if (!flags_->per_phase_logs() &&
-      (http_client_ == nullptr || !checkin_response.has_acceptance_info())) {
-    absl::Duration download_duration = absl::Now() - start_time;
-    event_publisher_->PublishCheckinFinished(
-        bytes_downloaded_, grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-        download_duration);
-  }
   switch (checkin_response.checkin_result_case()) {
     case CheckinResponse::kAcceptanceInfo: {
       const auto& acceptance_info = checkin_response.acceptance_info();
@@ -487,23 +422,6 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
                      .uri = acceptance_info.init_checkpoint_resource().uri(),
                      .data = acceptance_info.init_checkpoint(),
                  }}));
-        if (!flags_->per_phase_logs()) {
-          // Only now that we've successfully downloaded the task resources
-          // we should publish the 'checkin finished' event.
-          absl::Duration download_duration = absl::Now() - start_time;
-          event_publisher_->PublishCheckinFinished(
-              bytes_downloaded_,
-              grpc_bidi_stream_->ChunkingLayerBytesReceived(),
-              download_duration);
-        }
-      }
-
-      if (!flags_->per_phase_logs()) {
-        // Record the task name in the opstats db.
-        std::string task_name = ExtractTaskNameFromAggregationSessionId(
-            acceptance_info.execution_phase_id(), population_name_,
-            *log_manager_);
-        opstats_logger_->AddCheckinAcceptedEventWithTaskName(task_name);
       }
 
       object_state_ = ObjectState::kCheckinAccepted;
@@ -513,13 +431,6 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
           .sec_agg_info = sec_agg_info};
     }
     case CheckinResponse::kRejectionInfo: {
-      if (!flags_->per_phase_logs()) {
-        event_publisher_->PublishRejected(bytes_downloaded_,
-                                          chunking_layer_bytes_received(),
-                                          absl::Now() - start_time);
-        opstats_logger_->AddEvent(
-            OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
-      }
       object_state_ = ObjectState::kCheckinRejected;
       return Rejection{};
     }
@@ -755,16 +666,6 @@ absl::Status GrpcFederatedProtocol::ReportInternal(
 
   // 4. Send ReportRequest.
   report_request_size_bytes_ += client_stream_message.ByteSizeLong();
-  if (!flags_->per_phase_logs()) {
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
-    // Commit the run data accumulated thus far to Opstats and fail if
-    // something goes wrong.
-    FCP_RETURN_IF_ERROR(opstats_logger_->CommitToStorage());
-    // Log the event after we know we've successfully committed the event to
-    // Opstats.
-    event_publisher_->PublishReportStarted(report_request_size_bytes_);
-  }
 
   // Note that we do not use the GrpcFederatedProtocol::Send(...) helper method
   // here, since we are already running within a call to
@@ -776,7 +677,6 @@ absl::Status GrpcFederatedProtocol::ReportInternal(
         absl::StrCat("Error sending ReportRequest: ", status.message()));
   }
   bytes_uploaded_ += report_request_size_bytes_;
-  UpdateOpStatsNetworkStats();
 
   return absl::OkStatus();
 }
@@ -794,8 +694,6 @@ absl::Status GrpcFederatedProtocol::Report(
     return ReportInternal(std::move(tf_checkpoint), phase_outcome,
                           plan_duration, stats, secagg_commit_message);
   };
-
-  absl::Time start_time = absl::Now();
 
   // Run the Secure Aggregation protocol, if necessary.
   if (side_channel_protocol_execution_info_.has_secure_aggregation()) {
@@ -919,7 +817,6 @@ absl::Status GrpcFederatedProtocol::Report(
             }
             last_received_message_size = server_stream_message.ByteSizeLong();
             this->bytes_downloaded_ += last_received_message_size;
-            UpdateOpStatsNetworkStats();
             if (!server_stream_message
                      .has_secure_aggregation_server_message()) {
               return absl::InternalError(
@@ -964,7 +861,6 @@ absl::Status GrpcFederatedProtocol::Report(
         }));
     if (send_to_server_impl_raw_ptr) {
       bytes_uploaded_ += send_to_server_impl_raw_ptr->total_bytes_uploaded();
-      UpdateOpStatsNetworkStats();
     }
   } else {
     // Report without secure aggregation.
@@ -1002,14 +898,6 @@ absl::Status GrpcFederatedProtocol::Report(
     return absl::UnimplementedError(absl::StrCat(
         "Bad response to ReportRequest; Expected REPORT_RESPONSE but got ",
         server_stream_message.kind_case(), "."));
-  }
-  if (!flags_->per_phase_logs()) {
-    absl::Duration upload_time = absl::Now() - start_time;
-    event_publisher_->PublishReportFinished(
-        report_request_size_bytes_, grpc_bidi_stream_->ChunkingLayerBytesSent(),
-        upload_time);
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
   }
   return absl::OkStatus();
 }
@@ -1089,14 +977,6 @@ RetryWindow GrpcFederatedProtocol::GenerateRetryWindowFromRetryTimeAndToken(
   return retry_window;
 }
 
-void GrpcFederatedProtocol::UpdateOpStatsNetworkStats() {
-  if (!flags_->per_phase_logs()) {
-    opstats_logger_->SetNetworkStats(bytes_downloaded(), bytes_uploaded(),
-                                     chunking_layer_bytes_received(),
-                                     chunking_layer_bytes_sent());
-  }
-}
-
 void GrpcFederatedProtocol::UpdateObjectStateIfPermanentError(
     absl::Status status,
     GrpcFederatedProtocol::ObjectState permanent_error_object_state) {
@@ -1130,7 +1010,6 @@ GrpcFederatedProtocol::FetchTaskResources(
           *http_client_, *interruptible_runner_,
           {plan_uri_or_data, checkpoint_uri_or_data}, &http_bytes_downloaded_,
           &http_bytes_uploaded_);
-  UpdateOpStatsNetworkStats();
   if (!resource_responses.ok()) {
     log_manager_->LogDiag(
         ProdDiagCode::

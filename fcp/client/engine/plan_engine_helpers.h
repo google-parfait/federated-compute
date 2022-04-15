@@ -96,9 +96,8 @@ HostObjectRegistration AddDatasetTokenToInputs(
     std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
         const google::internal::federated::plan::ExampleSelector&)>
         create_example_iterator,
-    EventPublisher* event_publisher, LogManager* log_manager,
+    LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger,
-    bool use_per_phase_logs,
     std::vector<std::pair<std::string, tensorflow::Tensor>>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
@@ -113,9 +112,8 @@ HostObjectRegistration AddDatasetTokenToInputsForTfLite(
     std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
         const google::internal::federated::plan::ExampleSelector&)>
         create_example_iterator,
-    EventPublisher* event_publisher, LogManager* log_manager,
+    LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger,
-    bool use_per_phase_logs,
     absl::flat_hash_map<std::string, std::string>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,

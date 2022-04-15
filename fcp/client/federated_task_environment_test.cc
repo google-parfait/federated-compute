@@ -32,10 +32,8 @@ namespace fcp {
 namespace client {
 namespace {
 
-using ::google::internal::federated::plan::ExampleSelector;
 using ::google::internal::federatedml::v2::Checkpoint;
 using ::testing::_;
-using ::testing::ByMove;
 using ::testing::DoAll;
 using ::testing::NiceMock;
 using ::testing::Return;
@@ -43,9 +41,7 @@ using ::testing::StrictMock;
 
 static constexpr absl::Time kReferenceTime = absl::InfinitePast();
 
-// The parameter indicates whether the new behavior w.r.t. per phase logs should
-// be enabled.
-class FederatedTaskEnvironmentTest : public testing::TestWithParam<bool> {
+class FederatedTaskEnvironmentTest : public testing::Test {
  public:
   FederatedTaskEnvironmentTest() {}
 
@@ -54,86 +50,20 @@ class FederatedTaskEnvironmentTest : public testing::TestWithParam<bool> {
     task_env_ = std::make_unique<FederatedTaskEnvironment>(
         &mock_simple_task_environment_, &mock_federated_protocol_,
         &mock_log_manager_, &mock_event_publisher_, &mock_opstats_logger_,
-        &mock_flags_, kReferenceTime, absl::ZeroDuration());
-    use_per_phase_logs_ = GetParam();
-
-    ON_CALL(mock_flags_, per_phase_logs())
-        .WillByDefault(Return(use_per_phase_logs_));
+        kReferenceTime, absl::ZeroDuration());
   }
 
   StrictMock<MockSimpleTaskEnvironment> mock_simple_task_environment_;
   StrictMock<MockLogManager> mock_log_manager_;
   StrictMock<MockEventPublisher> mock_event_publisher_;
   StrictMock<MockOpStatsLogger> mock_opstats_logger_;
-  NiceMock<MockFlags> mock_flags_;
   StrictMock<MockFederatedProtocol> mock_federated_protocol_;
   std::unique_ptr<TaskEnvironment> task_env_;
-  bool use_per_phase_logs_;
 };
-
-INSTANTIATE_TEST_SUITE_P(OldVsNewLoggingBehavior, FederatedTaskEnvironmentTest,
-                         testing::Values(false, true));
-
-// Test ShouldAbort() - should delegate the call to the injected
-// SimpleTaskEnvironment object.
-TEST_P(FederatedTaskEnvironmentTest, TestShouldAbort) {
-  if (use_per_phase_logs_) {
-    GTEST_SKIP();
-  }
-  absl::Time now = absl::Now();
-  auto task_env = std::make_unique<FederatedTaskEnvironment>(
-      &mock_simple_task_environment_, &mock_federated_protocol_,
-      &mock_log_manager_, &mock_event_publisher_, &mock_opstats_logger_,
-      &mock_flags_, kReferenceTime,
-      /*get_time_fn=*/[&now]() { return now; },
-      /*condition_polling_period=*/absl::Milliseconds(1600));
-  EXPECT_CALL(mock_simple_task_environment_, TrainingConditionsSatisfied())
-      .WillOnce(Return(true));
-  EXPECT_FALSE(task_env->ShouldAbort());
-}
-
-// Test CreateExampleIterator() - should delegate the call to the injected
-// SimpleTaskEnvironment object.
-TEST_P(FederatedTaskEnvironmentTest, TestCreateExampleIterator) {
-  if (use_per_phase_logs_) {
-    GTEST_SKIP();
-  }
-  ExampleSelector example_selector;
-  example_selector.set_collection_uri("collection_name");
-  EXPECT_CALL(mock_simple_task_environment_,
-              CreateExampleIterator(EqualsProto(example_selector)))
-      .WillOnce(Return(ByMove(absl::UnimplementedError(""))));
-  EXPECT_THAT(task_env_->CreateExampleIterator(example_selector).status(),
-              fcp::IsCode(UNIMPLEMENTED));
-}
-
-// Tests that PublishParameters deletes previously staged files when called
-// twice, and fails when provided files are non-existent.
-TEST_P(FederatedTaskEnvironmentTest, TestPublishParameters) {
-  if (use_per_phase_logs_) {
-    GTEST_SKIP();
-  }
-  // Creates test files for PublishParameters.
-  const std::string tf_file = fcp::TemporaryTestFile("tf");
-  EXPECT_THAT(fcp::WriteStringToFile(tf_file, "tf_checkpoint"),
-              fcp::IsCode(OK));
-  const std::string secagg_file = fcp::TemporaryTestFile("secagg");
-  EXPECT_THAT(fcp::WriteStringToFile(secagg_file, ""), fcp::IsCode(OK));
-  EXPECT_TRUE(fcp::FileExists(tf_file));
-  EXPECT_TRUE(fcp::FileExists(secagg_file));
-  EXPECT_THAT(task_env_->PublishParameters(tf_file, secagg_file),
-              fcp::IsCode(OK));
-  // Second invocation should delete files from first invocation - and fail with
-  // an error because the now provided files don't exist.
-  EXPECT_THAT(task_env_->PublishParameters("/does/not/exist", "/not/here"),
-              fcp::IsCode(INVALID_ARGUMENT));
-  EXPECT_FALSE(fcp::FileExists(tf_file));
-  EXPECT_FALSE(fcp::FileExists(secagg_file));
-}
 
 // Tests the case where Finish is called with PhaseOutcome::Interrupted. This
 // must not lead to a call to the protocol or LogManager and must return OK.
-TEST_P(FederatedTaskEnvironmentTest, TestFinishWhenInterrupted) {
+TEST_F(FederatedTaskEnvironmentTest, TestFinishWhenInterrupted) {
   EXPECT_OK(task_env_->Finish(engine::PhaseOutcome::INTERRUPTED,
                               absl::InfiniteDuration(), {}));
 }
@@ -164,7 +94,7 @@ MATCHER_P(EqualsComputationResult, expected, "") {
 
 // Tests the case where Finish is called without any prior call to Publish().
 // This should work, but the checkpoint fed to the protocol should be empty.
-TEST_P(FederatedTaskEnvironmentTest, TestFinishWithoutPublish) {
+TEST_F(FederatedTaskEnvironmentTest, TestFinishWithoutPublish) {
   ComputationResults empty_result;
   empty_result.emplace("tensorflow_checkpoint", "");
   EXPECT_CALL(
@@ -184,14 +114,12 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishWithoutPublish) {
                   engine::DataSourceType::TRAINING_DATA_SOURCE_UNDEFINED,
                   testing::Ge(0)));
 
-  if (use_per_phase_logs_) {
     EXPECT_CALL(mock_event_publisher_, PublishReportStarted(0));
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(opstats::OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED));
     EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
         .WillOnce(Return(absl::OkStatus()));
-  }
 
   // NB once SecAgg is supported
   EXPECT_THAT(task_env_->Finish(engine::PhaseOutcome::COMPLETED,
@@ -199,7 +127,7 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishWithoutPublish) {
               fcp::IsCode(UNIMPLEMENTED));
 }
 
-TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublish) {
+TEST_F(FederatedTaskEnvironmentTest, TestFinishAndPublish) {
   // Expected ComputationResult.
   const std::string kTFCheckpointContent = "tf_checkpoint";
   ComputationResults result;
@@ -242,7 +170,6 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublish) {
   EXPECT_THAT(task_env_->PublishParameters(tf_file, secagg_file),
               fcp::IsCode(OK));
 
-  if (use_per_phase_logs_) {
     EXPECT_CALL(mock_event_publisher_, PublishReportStarted(0));
     EXPECT_CALL(
         mock_opstats_logger_,
@@ -263,12 +190,11 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublish) {
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(opstats::OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
-  }
   EXPECT_OK(task_env_->Finish(engine::PhaseOutcome::COMPLETED,
                               absl::InfiniteDuration(), {}));
 }
 
-TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublishWithError) {
+TEST_F(FederatedTaskEnvironmentTest, TestFinishAndPublishWithError) {
   // Create a SecAgg Checkpoint file.
   Checkpoint checkpoint;
   Checkpoint::Aggregand secagg_aggregand;
@@ -306,7 +232,6 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublishWithError) {
                   HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY, 0, 0,
                   engine::DataSourceType::TRAINING_DATA_SOURCE_UNDEFINED,
                   testing::Ge(0)));
-  if (use_per_phase_logs_) {
     EXPECT_CALL(mock_event_publisher_, PublishReportStarted(0));
     EXPECT_CALL(
         mock_opstats_logger_,
@@ -325,7 +250,6 @@ TEST_P(FederatedTaskEnvironmentTest, TestFinishAndPublishWithError) {
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(opstats::OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
-  }
   EXPECT_THAT(task_env_->PublishParameters(tf_file, secagg_file),
               fcp::IsCode(OK));
   EXPECT_OK(task_env_->Finish(engine::PhaseOutcome::ERROR,

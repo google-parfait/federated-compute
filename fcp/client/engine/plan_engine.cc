@@ -225,8 +225,7 @@ absl::Status PlanEngine::RunExecution(
                 selector) {
           return task_environment->CreateExampleIterator(selector);
         },
-        event_publisher, log_manager, opstats_logger,
-        /* use_per_phase_logs= */ false, &inputs,
+        log_manager, opstats_logger, &inputs,
         execution.external_dataset_token_feed(), total_example_count,
         total_example_size_bytes, example_iterator_status);
 

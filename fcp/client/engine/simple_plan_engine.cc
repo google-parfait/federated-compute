@@ -23,7 +23,6 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 
@@ -31,20 +30,17 @@ namespace fcp {
 namespace client {
 namespace engine {
 
-using ::fcp::client::opstats::OperationalStats;
 using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::TensorflowSpec;
 
 SimplePlanEngine::SimplePlanEngine(
     SimpleTaskEnvironment* task_env, LogManager* log_manager,
-    EventPublisher* event_publisher, OpStatsLogger* opstats_logger,
-    const InterruptibleRunner::TimingConfig* timing_config, const Flags* flags)
+    OpStatsLogger* opstats_logger,
+    const InterruptibleRunner::TimingConfig* timing_config)
     : task_env_(task_env),
       log_manager_(log_manager),
-      event_publisher_(event_publisher),
       opstats_logger_(opstats_logger),
-      timing_config_(timing_config),
-      flags_(flags) {}
+      timing_config_(timing_config) {}
 
 PlanResult SimplePlanEngine::RunPlan(
     const TensorflowSpec& tensorflow_spec, const std::string& graph,
@@ -52,9 +48,6 @@ PlanResult SimplePlanEngine::RunPlan(
     std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
         inputs,
     const std::vector<std::string>& output_names,
-    absl::Time run_plan_start_time, absl::Time reference_time,
-    std::function<void()> log_computation_started,
-    std::function<void()> log_computation_finished,
     const SelectorContext& selector_context) {
   // Check that all inputs have corresponding TensorSpecProtos.
   absl::flat_hash_set<std::string> expected_input_tensor_names_set;
@@ -65,15 +58,6 @@ PlanResult SimplePlanEngine::RunPlan(
       tensorflow_spec, expected_input_tensor_names_set, output_names);
   if (!validity_checks.ok()) {
     FCP_LOG(ERROR) << validity_checks.message();
-    if (!flags_->per_phase_logs()) {
-      log_manager_->LogDiag(
-          ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-      event_publisher_->PublishIoError(
-          /*execution_index=*/0, validity_checks.message());
-      opstats_logger_->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_ERROR_IO,
-          std::string(validity_checks.message()));
-    }
     return PlanResult(PlanOutcome::kInvalidArgument,
                       std::move(validity_checks));
   }
@@ -87,17 +71,6 @@ PlanResult SimplePlanEngine::RunPlan(
           },
           *timing_config_, log_manager_);
   if (!tf_wrapper_or.ok()) {
-    if (!flags_->per_phase_logs()) {
-      event_publisher_->PublishTensorFlowError(
-          /*execution_index=*/0, /*epoch_index=*/0, /*epoch_example_index=*/0,
-          absl::StrCat("code: ", tf_wrapper_or.status().code(), ", error: ",
-                       flags_->log_tensorflow_error_messages()
-                           ? tf_wrapper_or.status().message()
-                           : ""));
-      opstats_logger_->AddEventWithErrorMessage(
-          OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
-          std::string(tf_wrapper_or.status().message()));
-    }
     return PlanResult(PlanOutcome::kTensorflowError, tf_wrapper_or.status());
   }
 
@@ -108,18 +81,9 @@ PlanResult SimplePlanEngine::RunPlan(
   ExampleIteratorStatus example_iterator_status;
   auto tf_result = RunPlanInternal(
       tf_wrapper.get(), tensorflow_spec, std::move(inputs), output_names,
-      run_plan_start_time, log_computation_started, log_computation_finished,
       selector_context, &total_example_count, &total_example_size_bytes,
       &example_iterator_status);
   FCP_CHECK(tf_wrapper->CloseAndRelease().ok());
-
-  // Log timing info.
-  if (!flags_->per_phase_logs()) {
-    LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_LATENCY,
-                 run_plan_start_time);
-    LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_END_TIME,
-                 reference_time);
-  }
 
   switch (tf_result.status().code()) {
     case absl::StatusCode::kOk: {
@@ -149,9 +113,6 @@ SimplePlanEngine::RunPlanInternal(
     std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
         inputs,
     const std::vector<std::string>& output_names,
-    absl::Time run_plan_start_time,
-    std::function<void()> log_computation_started,
-    std::function<void()> log_computation_finished,
     const SelectorContext& selector_context,
     std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes,
@@ -166,39 +127,18 @@ SimplePlanEngine::RunPlanInternal(
           const google::internal::federated::plan::ExampleSelector& selector) {
         return task_env_->CreateExampleIterator(selector, selector_context);
       },
-      event_publisher_, log_manager_, opstats_logger_, flags_->per_phase_logs(),
-      inputs.get(), tensorflow_spec.dataset_token_tensor_name(),
-      total_example_count, total_example_size_bytes, example_iterator_status);
+      log_manager_, opstats_logger_, inputs.get(),
+      tensorflow_spec.dataset_token_tensor_name(), total_example_count,
+      total_example_size_bytes, example_iterator_status);
 
   std::vector<std::string> target_names;
   for (const std::string& target_node_name :
        tensorflow_spec.target_node_names()) {
     target_names.push_back(target_node_name);
   }
-
-  // Start running the plan.
-  if (!flags_->per_phase_logs()) {
-    event_publisher_->PublishPlanExecutionStarted();
-    log_computation_started();
-  }
-
-  absl::Time call_start_time = absl::Now();
   FCP_ASSIGN_OR_RETURN(
       auto result,
-      RunTensorFlowInternal(tf_wrapper, *inputs, output_names, target_names,
-                            total_example_count, total_example_size_bytes,
-                            call_start_time));
-  if (!flags_->per_phase_logs()) {
-    event_publisher_->PublishPlanCompleted(
-        *total_example_count, *total_example_size_bytes, run_plan_start_time);
-    log_computation_finished();
-    log_manager_->LogToLongHistogram(
-        HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
-        *total_example_size_bytes);
-    log_manager_->LogToLongHistogram(
-        HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT,
-        *total_example_count);
-  }
+      RunTensorFlowInternal(tf_wrapper, *inputs, output_names, target_names));
   return result;
 }
 
@@ -207,37 +147,13 @@ SimplePlanEngine::RunTensorFlowInternal(
     TensorFlowWrapper* tf_wrapper,
     const std::vector<std::pair<std::string, tensorflow::Tensor>>& inputs,
     const std::vector<std::string>& output_tensor_names,
-    const std::vector<std::string>& target_node_names,
-    std::atomic<int>* total_example_count,
-    std::atomic<int64_t>* total_example_size_bytes, absl::Time start) {
+    const std::vector<std::string>& target_node_names) {
   std::vector<tensorflow::Tensor> outputs;
   absl::Status status =
       tf_wrapper->Run(inputs, output_tensor_names, target_node_names, &outputs);
   switch (status.code()) {
     case absl::StatusCode::kCancelled:
-      if (!flags_->per_phase_logs()) {
-        event_publisher_->PublishInterruption(
-            /*execution_index=*/0, /*epoch_index=*/0,
-            total_example_count->load(), total_example_size_bytes->load(),
-            start);
-        opstats_logger_->AddEventWithErrorMessage(
-            OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED,
-            std::string(status.message()));
-      }
-      return status;
     case absl::StatusCode::kInvalidArgument:
-      if (!flags_->per_phase_logs()) {
-        event_publisher_->PublishTensorFlowError(
-            /*execution_index=*/0, /*epoch_index=*/0,
-            total_example_count->load(),
-            absl::StrCat("code: ", status.code(), ", error: ",
-                         flags_->log_tensorflow_error_messages()
-                             ? status.message()
-                             : ""));
-        opstats_logger_->AddEventWithErrorMessage(
-            OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
-            std::string(status.message()));
-      }
       return status;
     case absl::StatusCode::kOutOfRange:
     case absl::StatusCode::kOk:
@@ -245,15 +161,7 @@ SimplePlanEngine::RunTensorFlowInternal(
     default:
       FCP_CHECK_STATUS(status);
   }
-
   return outputs;
-}
-
-void SimplePlanEngine::LogTimeSince(HistogramCounters histogram_counter,
-                                    absl::Time reference_time) {
-  absl::Duration duration = absl::Now() - reference_time;
-  log_manager_->LogToLongHistogram(histogram_counter,
-                                   absl::ToInt64Milliseconds(duration));
 }
 
 }  // namespace engine

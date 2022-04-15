@@ -48,18 +48,14 @@ const int kTotalExampleCount = 10;
 const int64_t kTotalExampleSizeBytes = 1000;
 
 // Parameterize tests with
-// 1) whether use per phase log;
-// 2) whether log tf error message;
-// 3) whether use granular per phase logs.
+// 1) whether log tf error message;
+// 2) whether use granular per phase logs.
 class PhaseLoggerImplTest
-    : public testing::TestWithParam<std::tuple<bool, bool, bool>> {
+    : public testing::TestWithParam<std::tuple<bool, bool>> {
  protected:
   void SetUp() override {
-    use_per_phase_logs_ = std::get<0>(GetParam());
-    log_tensorflow_error_messages_ = std::get<1>(GetParam());
-    granular_per_phase_logs_ = std::get<2>(GetParam());
-    EXPECT_CALL(mock_flags_, per_phase_logs())
-        .WillRepeatedly(Return(use_per_phase_logs_));
+    log_tensorflow_error_messages_ = std::get<0>(GetParam());
+    granular_per_phase_logs_ = std::get<1>(GetParam());
     EXPECT_CALL(mock_flags_, log_tensorflow_error_messages())
         .WillRepeatedly(Return(log_tensorflow_error_messages_));
     EXPECT_CALL(mock_flags_, granular_per_phase_logs())
@@ -81,7 +77,6 @@ class PhaseLoggerImplTest
   StrictMock<MockEventPublisher> mock_event_publisher_;
   StrictMock<MockOpStatsLogger> mock_opstats_logger_;
   MockFlags mock_flags_;
-  bool use_per_phase_logs_ = false;
   bool log_tensorflow_error_messages_ = false;
   bool granular_per_phase_logs_ = false;
   std::unique_ptr<PhaseLoggerImpl> phase_logger_;
@@ -96,15 +91,13 @@ class PhaseLoggerImplTest
 std::string GenerateTestName(
     const testing::TestParamInfo<PhaseLoggerImplTest::ParamType>& info) {
   std::string name = absl::StrCat(
-      std::get<0>(info.param) ? "Per_phase_log" : "Legacy_log", "__",
-      std::get<1>(info.param) ? "Log_tf_error" : "No_tf_error", "__",
-      std::get<2>(info.param) ? "Granular_event" : "Regular_event");
+      std::get<0>(info.param) ? "Log_tf_error" : "No_tf_error", "__",
+      std::get<1>(info.param) ? "Granular_event" : "Regular_event");
   return name;
 }
 
 INSTANTIATE_TEST_SUITE_P(OldVsNewBehavior, PhaseLoggerImplTest,
-                         testing::Combine(testing::Bool(), testing::Bool(),
-                                          testing::Bool()),
+                         testing::Combine(testing::Bool(), testing::Bool()),
                          GenerateTestName);
 
 TEST_P(PhaseLoggerImplTest, UpdateRetryWindowAndNetworkStats) {
@@ -115,12 +108,10 @@ TEST_P(PhaseLoggerImplTest, UpdateRetryWindowAndNetworkStats) {
 
   InSequence seq;
   EXPECT_CALL(mock_opstats_logger_, SetRetryWindow(EqualsProto(retry_window)));
-  if (use_per_phase_logs_) {
     EXPECT_CALL(
         mock_opstats_logger_,
         SetNetworkStats(kBytesDownloaded, kBytesUploaded,
                         kChunkingLayerBytesReceived, kChunkingLayerBytesSent));
-  }
 
   phase_logger_->UpdateRetryWindowAndNetworkStats(retry_window, network_stats_);
 }
@@ -153,13 +144,11 @@ TEST_P(PhaseLoggerImplTest, LogTaskNotStarted) {
 
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckInStarted) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(
             OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED));
-  }
   phase_logger_->LogEligibilityEvalCheckInStarted();
 }
 
@@ -254,14 +243,12 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckInServerAborted) {
 
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalNotConfigured) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     EXPECT_CALL(mock_event_publisher_,
                 PublishEligibilityEvalNotConfigured(
                     kBytesDownloaded, kChunkingLayerBytesReceived, _));
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED));
-  }
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, Ge(0));
 
@@ -270,14 +257,12 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalNotConfigured) {
 
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckInTurnedAway) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     EXPECT_CALL(mock_event_publisher_,
                 PublishEligibilityEvalRejected(kBytesDownloaded,
                                                kChunkingLayerBytesReceived, _));
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED));
-  }
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, Ge(0));
 
@@ -319,14 +304,12 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckInInvalidPayloadError) {
 
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckInCompleted) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED));
     EXPECT_CALL(mock_event_publisher_,
                 PublishEligibilityEvalPlanReceived(
                     kBytesDownloaded, kChunkingLayerBytesReceived, _));
-  }
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, Ge(0));
 
@@ -336,7 +319,6 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckInCompleted) {
 
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationStarted) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(mock_event_publisher_,
                   PublishEligibilityEvalComputationStarted());
@@ -346,7 +328,6 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationStarted) {
     EXPECT_CALL(mock_opstats_logger_,
                 AddEvent(OperationalStats::Event::
                              EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED));
-  }
 
   phase_logger_->LogEligibilityEvalComputationStarted();
 }
@@ -392,7 +373,6 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationExampleIteratorError) {
   std::string expected_error_message = absl::StrCat(
       "Error during eligibility eval computation: code: 3, error: ",
       original_message);
-  if (use_per_phase_logs_) {
     InSequence seq;
     if (granular_per_phase_logs_) {
       EXPECT_CALL(mock_event_publisher_,
@@ -414,7 +394,6 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationExampleIteratorError) {
               OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
               expected_error_message));
     }
-  }
 
   phase_logger_->LogEligibilityEvalComputationExampleIteratorError(
       error_status, kTotalExampleCount, kTotalExampleSizeBytes, absl::Now());
@@ -449,10 +428,8 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationTensorflowError) {
                     OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
                     expected_error_message));
   }
-  if (use_per_phase_logs_) {
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
-  }
   phase_logger_->LogEligibilityEvalComputationTensorflowError(
       error_status, kTotalExampleCount, kTotalExampleSizeBytes,
       absl::Now() - absl::Minutes(2), absl::Now() - absl::Minutes(5));
@@ -464,7 +441,6 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationInterrupted) {
       "Error during eligibility eval computation: code: 1, error: ",
       error_message);
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(mock_event_publisher_,
                   PublishEligibilityEvalComputationInterrupted(
@@ -487,7 +463,6 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationInterrupted) {
     }
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
-  }
 
   phase_logger_->LogEligibilityEvalComputationInterrupted(
       absl::CancelledError(error_message), kTotalExampleCount,
@@ -499,7 +474,6 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationCompleted) {
   absl::Time run_plan_start_time = absl::Now() - absl::Minutes(8);
   absl::Time reference_time = absl::Now() - absl::Minutes(9);
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(mock_event_publisher_,
                   PublishEligibilityEvalComputationCompleted(
@@ -519,7 +493,6 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationCompleted) {
                         kTotalExampleCount);
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
-  }
 
   phase_logger_->LogEligibilityEvalComputationCompleted(
       kTotalExampleCount, kTotalExampleSizeBytes, run_plan_start_time,
@@ -528,11 +501,9 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationCompleted) {
 
 TEST_P(PhaseLoggerImplTest, LogCheckInStarted) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     EXPECT_CALL(mock_event_publisher_, PublishCheckin());
     EXPECT_CALL(mock_opstats_logger_,
                 AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
-  }
   phase_logger_->LogCheckInStarted();
 }
 
@@ -630,7 +601,6 @@ TEST_P(PhaseLoggerImplTest, LogCheckInServerAborted) {
 
 TEST_P(PhaseLoggerImplTest, LogCheckInTurnedAway) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(
           mock_event_publisher_,
@@ -640,7 +610,6 @@ TEST_P(PhaseLoggerImplTest, LogCheckInTurnedAway) {
     }
     EXPECT_CALL(mock_opstats_logger_,
                 AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
-  }
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, Ge(0));
 
@@ -683,7 +652,6 @@ TEST_P(PhaseLoggerImplTest, LogCheckInInvalidPayload) {
 TEST_P(PhaseLoggerImplTest, LogCheckInCompleted) {
   std::string task_name = "my_task";
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(mock_event_publisher_,
                   PublishCheckinFinishedV2(kBytesDownloaded,
@@ -696,7 +664,6 @@ TEST_P(PhaseLoggerImplTest, LogCheckInCompleted) {
     }
     EXPECT_CALL(mock_opstats_logger_,
                 AddCheckinAcceptedEventWithTaskName(task_name));
-  }
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, Ge(0));
 
@@ -707,7 +674,6 @@ TEST_P(PhaseLoggerImplTest, LogCheckInCompleted) {
 
 TEST_P(PhaseLoggerImplTest, LogComputationStarted) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(mock_event_publisher_, PublishComputationStarted());
     } else {
@@ -716,7 +682,6 @@ TEST_P(PhaseLoggerImplTest, LogComputationStarted) {
     EXPECT_CALL(
         mock_opstats_logger_,
         AddEvent(OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED));
-  }
   phase_logger_->LogComputationStarted();
 }
 
@@ -784,7 +749,6 @@ TEST_P(PhaseLoggerImplTest, LogComputationExampleIteratorError) {
   absl::Status error_status = absl::InvalidArgumentError(original_message);
   std::string expected_error_message = absl::StrCat(
       "Error during computation: code: 3, error: ", original_message);
-  if (use_per_phase_logs_) {
     InSequence seq;
     if (granular_per_phase_logs_) {
       EXPECT_CALL(mock_event_publisher_,
@@ -805,7 +769,6 @@ TEST_P(PhaseLoggerImplTest, LogComputationExampleIteratorError) {
               OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
               expected_error_message));
     }
-  }
   phase_logger_->LogComputationExampleIteratorError(
       error_status, kTotalExampleCount, kTotalExampleSizeBytes, absl::Now());
 }
@@ -839,10 +802,8 @@ TEST_P(PhaseLoggerImplTest, LogComputationTensorflowError) {
                     OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW,
                     expected_error_message));
   }
-  if (use_per_phase_logs_) {
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
-  }
   phase_logger_->LogComputationTensorflowError(
       error_status, kTotalExampleCount, kTotalExampleSizeBytes,
       absl::Now() - absl::Minutes(6), absl::Now() - absl::Minutes(8));
@@ -855,7 +816,6 @@ TEST_P(PhaseLoggerImplTest, LogComputationInterrupted) {
   std::string expected_error_message =
       absl::StrCat("Error during computation: code: 1, error: ", error_message);
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(mock_event_publisher_,
                   PublishComputationInterrupted(kTotalExampleCount,
@@ -880,7 +840,6 @@ TEST_P(PhaseLoggerImplTest, LogComputationInterrupted) {
 
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
-  }
 
   phase_logger_->LogComputationInterrupted(
       absl::CancelledError(error_message), kTotalExampleCount,
@@ -891,7 +850,6 @@ TEST_P(PhaseLoggerImplTest, LogComputationCompleted) {
   absl::Time run_plan_start_time = absl::Now() - absl::Minutes(6);
   absl::Time reference_time = absl::Now() - absl::Minutes(8);
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(
           mock_event_publisher_,
@@ -913,7 +871,6 @@ TEST_P(PhaseLoggerImplTest, LogComputationCompleted) {
                         kTotalExampleCount);
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
     VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
-  }
 
   phase_logger_->LogComputationCompleted(kTotalExampleCount,
                                          kTotalExampleSizeBytes,
@@ -922,7 +879,6 @@ TEST_P(PhaseLoggerImplTest, LogComputationCompleted) {
 
 TEST_P(PhaseLoggerImplTest, LogResultUploadStartedOpStatsDbCommitSucceeds) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(
           mock_opstats_logger_,
@@ -938,14 +894,12 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadStartedOpStatsDbCommitSucceeds) {
     } else {
       EXPECT_CALL(mock_event_publisher_, PublishReportStarted(0));
     }
-  }
 
   ASSERT_OK(phase_logger_->LogResultUploadStarted());
 }
 
 TEST_P(PhaseLoggerImplTest, LogResultUploadStartedOpStatsDbCommitFails) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(
           mock_opstats_logger_,
@@ -956,14 +910,9 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadStartedOpStatsDbCommitFails) {
     }
     EXPECT_CALL(mock_opstats_logger_, CommitToStorage)
         .WillOnce(Return(absl::InternalError("")));
-  }
 
-  absl::Status status = phase_logger_->LogResultUploadStarted();
-  if (use_per_phase_logs_) {
-    ASSERT_THAT(status, IsCode(absl::StatusCode::kInternal));
-  } else {
-    ASSERT_OK(status);
-  }
+    ASSERT_THAT(phase_logger_->LogResultUploadStarted(),
+                IsCode(absl::StatusCode::kInternal));
 }
 
 TEST_P(PhaseLoggerImplTest, LogResultUploadIOError) {
@@ -1065,7 +1014,6 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadServerAborted) {
 
 TEST_P(PhaseLoggerImplTest, LogResultUploadCompleted) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(mock_event_publisher_,
                   PublishResultUploadCompleted(kReportSizeBytes,
@@ -1081,7 +1029,6 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadCompleted) {
           mock_opstats_logger_,
           AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
     }
-  }
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
                       Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
@@ -1094,7 +1041,6 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadCompleted) {
 
 TEST_P(PhaseLoggerImplTest, LogFailureUploadStartedOpstatsDbCommitSucceeds) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(
           mock_opstats_logger_,
@@ -1110,13 +1056,11 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadStartedOpstatsDbCommitSucceeds) {
     } else {
       EXPECT_CALL(mock_event_publisher_, PublishReportStarted(0));
     }
-  }
   ASSERT_OK(phase_logger_->LogFailureUploadStarted());
 }
 
 TEST_P(PhaseLoggerImplTest, LogFailureUploadStartedOpstatsDbCommitFails) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(
           mock_opstats_logger_,
@@ -1127,13 +1071,8 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadStartedOpstatsDbCommitFails) {
     }
     EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
         .WillOnce(Return(absl::InternalError("")));
-  }
-  absl::Status status = phase_logger_->LogFailureUploadStarted();
-  if (use_per_phase_logs_) {
-    ASSERT_THAT(status, IsCode(absl::StatusCode::kInternal));
-  } else {
-    ASSERT_OK(status);
-  }
+    ASSERT_THAT(phase_logger_->LogFailureUploadStarted(),
+                IsCode(absl::StatusCode::kInternal));
 }
 
 TEST_P(PhaseLoggerImplTest, LogFailureUploadIOError) {
@@ -1233,7 +1172,6 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadServerAborted) {
 
 TEST_P(PhaseLoggerImplTest, LogFailureUploadCompleted) {
   InSequence seq;
-  if (use_per_phase_logs_) {
     if (granular_per_phase_logs_) {
       EXPECT_CALL(mock_event_publisher_,
                   PublishFailureUploadCompleted(kReportSizeBytes,
@@ -1250,7 +1188,6 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadCompleted) {
           mock_opstats_logger_,
           AddEvent(OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED));
     }
-  }
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
                       Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,

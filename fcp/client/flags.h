@@ -56,10 +56,6 @@ class Flags {
   // db.
   virtual bool enable_opstats() const { return true; }
 
-  // If true, trainer event logging is moved from plan engines and federated
-  // protocols into fl/lc runners..
-  virtual bool per_phase_logs() const { return false; }
-
   // The number of days for data to live in the OpStatsDb without update.
   virtual int64_t opstats_ttl_days() const { return 30; }
 

@@ -35,25 +35,24 @@ using ::google::internal::federatedml::v2::Checkpoint;
 FederatedTaskEnvironment::FederatedTaskEnvironment(
     SimpleTaskEnvironment* env_deps, FederatedProtocol* federated_protocol,
     LogManager* log_manager, EventPublisher* event_publisher,
-    opstats::OpStatsLogger* opstats_logger, const Flags* flags,
-    absl::Time reference_time, absl::Duration condition_polling_period)
+    opstats::OpStatsLogger* opstats_logger, absl::Time reference_time,
+    absl::Duration condition_polling_period)
     : FederatedTaskEnvironment(
           env_deps, federated_protocol, log_manager, event_publisher,
-          opstats_logger, flags, reference_time, []() { return absl::Now(); },
+          opstats_logger, reference_time, []() { return absl::Now(); },
           condition_polling_period) {}
 
 FederatedTaskEnvironment::FederatedTaskEnvironment(
     SimpleTaskEnvironment* env_deps, FederatedProtocol* federated_protocol,
     LogManager* log_manager, EventPublisher* event_publisher,
-    opstats::OpStatsLogger* opstats_logger, const Flags* flags,
-    absl::Time reference_time, std::function<absl::Time()> get_time_fn,
+    opstats::OpStatsLogger* opstats_logger, absl::Time reference_time,
+    std::function<absl::Time()> get_time_fn,
     absl::Duration condition_polling_period)
     : env_deps_(env_deps),
       federated_protocol_(federated_protocol),
       log_manager_(log_manager),
       event_publisher_(event_publisher),
       opstats_logger_(opstats_logger),
-      flags_(flags),
       reference_time_(reference_time),
       get_time_fn_(get_time_fn),
       condition_polling_period_(condition_polling_period) {}
@@ -75,9 +74,7 @@ absl::Status FederatedTaskEnvironment::Finish(
   }
   absl::Status report_result = absl::InternalError("");
   const absl::Time before_report = get_time_fn_();
-  if (flags_->per_phase_logs()) {
     FCP_RETURN_IF_ERROR(LogReportStart());
-  }
   if (phase_outcome == engine::COMPLETED) {
     FCP_ASSIGN_OR_RETURN(auto results, CreateComputationResults());
     report_result = federated_protocol_->ReportCompleted(std::move(results),
@@ -88,7 +85,7 @@ absl::Status FederatedTaskEnvironment::Finish(
   }
 
   const absl::Time after_report = get_time_fn_();
-  if (flags_->per_phase_logs() && report_result.ok()) {
+  if (report_result.ok()) {
     LogReportFinish(federated_protocol_->report_request_size_bytes(),
                     federated_protocol_->chunking_layer_bytes_sent(),
                     after_report - before_report);

@@ -524,7 +524,6 @@ class MockFlags : public Flags {
               (), (const, override));
   MOCK_METHOD(std::vector<int32_t>, federated_training_permanent_error_codes,
               (), (const, override));
-  MOCK_METHOD(bool, per_phase_logs, (), (const, override));
   MOCK_METHOD(bool, use_tflite_training, (), (const, override));
   MOCK_METHOD(bool, disable_legacy_plan_support, (), (const, override));
   MOCK_METHOD(bool, enable_grpc_with_http_resource_support, (),

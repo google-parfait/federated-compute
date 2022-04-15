@@ -36,16 +36,12 @@ namespace engine {
 class TfLitePlanEngine {
  public:
   TfLitePlanEngine(SimpleTaskEnvironment* task_env, LogManager* log_manager,
-                   EventPublisher* event_publisher,
                    ::fcp::client::opstats::OpStatsLogger* opstats_logger,
-                   const InterruptibleRunner::TimingConfig* timing_config,
-                   const Flags* flags)
+                   const InterruptibleRunner::TimingConfig* timing_config)
       : task_env_(task_env),
         log_manager_(log_manager),
-        event_publisher_(event_publisher),
         opstats_logger_(opstats_logger),
-        timing_config_(timing_config),
-        flags_(flags) {}
+        timing_config_(timing_config) {}
 
   // Runs the plan, and takes care of logging TfLite errors and external
   // interruptions via event_publisher. If the TfLite call fails because it got
@@ -57,23 +53,13 @@ class TfLitePlanEngine {
       const std::string& model,
       std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
       const std::vector<std::string>& output_names,
-      absl::Time run_plan_start_time, absl::Time reference_time,
-      std::function<void()> log_computation_started,
-      std::function<void()> log_computation_finished,
       const SelectorContext& selector_context);
 
  private:
-  // Logs duration between reference_time and call to this function to the
-  // specified HistogramCounter.
-  void LogTimeSince(HistogramCounters histogram_counter,
-                    absl::Time reference_time);
-
   SimpleTaskEnvironment* task_env_;
   LogManager* log_manager_;
-  EventPublisher* event_publisher_;
   ::fcp::client::opstats::OpStatsLogger* opstats_logger_;
   const InterruptibleRunner::TimingConfig* timing_config_;
-  const Flags* flags_;
 };
 
 }  // namespace engine
