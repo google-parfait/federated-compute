@@ -147,6 +147,9 @@ message TaskAssignment {
   // Unique identifier for the client's participation in an aggregation session.
   string client_token = 6;
 
+  // The name identifying the task that was assigned.
+  string task_name = 7;
+
   // The checkpoint from which to start execution.
   Resource init_checkpoint = 3;
 

@@ -467,6 +467,9 @@ message AcceptanceInfo {
   // a specific device.
   string execution_phase_id = 1;
 
+  // The name identifying the task for which the client was accepted.
+  string task_name = 10;
+
   oneof init_checkpoint_type {
     // A blob representing the checkpoint to start execution from.
     bytes init_checkpoint = 2;
