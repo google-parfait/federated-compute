@@ -28,7 +28,6 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/client/engine/engine.pb.h"
-#include "fcp/client/engine/plan_engine.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/simple_plan_engine.h"
 
@@ -386,8 +385,11 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time run_plan_start_time, const absl::Time reference_time,
     const SelectorContext& selector_context) {
-  // Check that this is a TensorflowSpec-based plan for federated computation.
-  FCP_CHECK(client_plan.phase().has_tensorflow_spec());
+  if (!client_plan.phase().has_tensorflow_spec()) {
+    return PlanResultAndCheckpointFile(engine::PlanResult(
+        engine::PlanOutcome::kInvalidArgument,
+        absl::InvalidArgumentError("Plan must include TensorflowSpec.")));
+  }
   if (!client_plan.phase().has_federated_compute() ||
       client_plan.phase().execution_size() > 0) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
@@ -608,29 +610,6 @@ absl::Status ReportTensorflowSpecPlanResult(
                            before_report_time, reference_time);
   }
   return result;
-}
-
-bool RunPlanWithExecutions(
-    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
-    Files* files, LogManager* log_manager, OpStatsLogger* opstats_logger,
-    const Flags* flags, FederatedProtocol* federated_protocol,
-    const ClientOnlyPlan& client_plan,
-    const std::string& checkpoint_input_filename,
-    const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time reference_time) {
-  // Create a task environment.
-  auto env = std::make_unique<FederatedTaskEnvironment>(
-      env_deps, federated_protocol, log_manager, event_publisher,
-      opstats_logger, reference_time,
-      absl::Milliseconds(flags->condition_polling_period_millis()));
-
-  // Run plan. The task environment will report results back to server via the
-  // underlying federated protocol.
-  engine::PlanEngine plan_engine;
-  return plan_engine.RunPlan(
-      env.get(), files, log_manager, event_publisher, opstats_logger,
-      client_plan, checkpoint_input_filename, timing_config, reference_time,
-      flags->log_tensorflow_error_messages());
 }
 
 // Writes the given data to the stream, and returns true if successful and false
@@ -1091,57 +1070,43 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   }
 
   RetryWindow report_retry_window;
-  if (checkin_result->plan.phase().has_tensorflow_spec()) {
-    phase_logger.LogComputationStarted();
-    absl::Time run_plan_start_time = absl::Now();
-    absl::StatusOr<std::string> checkpoint_output_filename =
-        files->CreateTempFile("output", ".ckp");
-    if (!checkpoint_output_filename.ok()) {
-      auto status = checkpoint_output_filename.status();
-      auto message = absl::StrCat(
-          "Could not create temporary output checkpoint file: code: ",
-          status.code(), ", message: ", status.message());
-      phase_logger.LogComputationIOError(status, /*total_example_count=*/0,
-                                         /*total_example_size_bytes=*/0,
-                                         run_plan_start_time);
-      return fl_runner_result;
-    }
-    PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
-        RunPlanWithTensorflowSpec(
-            env_deps, phase_logger, log_manager, opstats_logger, flags,
-            checkin_result->plan, checkin_result->checkpoint_input_filename,
-            *checkpoint_output_filename, timing_config, run_plan_start_time,
-            reference_time, federated_selector_context_with_task_name);
-    auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
-    absl::StatusOr<ComputationResults> computation_results;
-    if (outcome == engine::PlanOutcome::kSuccess) {
-      computation_results = CreateComputationResults(
-          checkin_result->plan.phase().tensorflow_spec(),
-          plan_result_and_checkpoint_file);
-    }
-    LogComputationOutcome(plan_result_and_checkpoint_file.plan_result,
-                          computation_results.status(), phase_logger,
-                          run_plan_start_time, reference_time);
-    absl::Status report_result = ReportTensorflowSpecPlanResult(
-        federated_protocol, phase_logger, std::move(computation_results),
-        run_plan_start_time, reference_time);
-    if (outcome == engine::PlanOutcome::kSuccess && report_result.ok()) {
-      // Only if training succeeded *and* reporting succeeded do we consider
-      // the device to have contributed successfully.
-      fl_runner_result.set_contribution_result(FLRunnerResult::SUCCESS);
-    }
-  } else {
-    if (!flags->disable_legacy_plan_support() &&
-        RunPlanWithExecutions(env_deps, event_publisher, files, log_manager,
-                              opstats_logger, flags, federated_protocol,
-                              checkin_result->plan,
-                              checkin_result->checkpoint_input_filename,
-                              timing_config, reference_time)) {
-      // Only if RunPlanWithExecutions returns true, indicating that both
-      // training *and* reporting succeeded, do we consider the device to have
-      // contributed successfully.
-      fl_runner_result.set_contribution_result(FLRunnerResult::SUCCESS);
-    }
+  phase_logger.LogComputationStarted();
+  absl::Time run_plan_start_time = absl::Now();
+  absl::StatusOr<std::string> checkpoint_output_filename =
+      files->CreateTempFile("output", ".ckp");
+  if (!checkpoint_output_filename.ok()) {
+    auto status = checkpoint_output_filename.status();
+    auto message = absl::StrCat(
+        "Could not create temporary output checkpoint file: code: ",
+        status.code(), ", message: ", status.message());
+    phase_logger.LogComputationIOError(status, /*total_example_count=*/0,
+                                       /*total_example_size_bytes=*/0,
+                                       run_plan_start_time);
+    return fl_runner_result;
+  }
+  PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
+      RunPlanWithTensorflowSpec(
+          env_deps, phase_logger, log_manager, opstats_logger, flags,
+          checkin_result->plan, checkin_result->checkpoint_input_filename,
+          *checkpoint_output_filename, timing_config, run_plan_start_time,
+          reference_time, federated_selector_context_with_task_name);
+  auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
+  absl::StatusOr<ComputationResults> computation_results;
+  if (outcome == engine::PlanOutcome::kSuccess) {
+    computation_results =
+        CreateComputationResults(checkin_result->plan.phase().tensorflow_spec(),
+                                 plan_result_and_checkpoint_file);
+  }
+  LogComputationOutcome(plan_result_and_checkpoint_file.plan_result,
+                        computation_results.status(), phase_logger,
+                        run_plan_start_time, reference_time);
+  absl::Status report_result = ReportTensorflowSpecPlanResult(
+      federated_protocol, phase_logger, std::move(computation_results),
+      run_plan_start_time, reference_time);
+  if (outcome == engine::PlanOutcome::kSuccess && report_result.ok()) {
+    // Only if training succeeded *and* reporting succeeded do we consider
+    // the device to have contributed successfully.
+    fl_runner_result.set_contribution_result(FLRunnerResult::SUCCESS);
   }
 
   // Update the FLRunnerResult fields one more time to account for the "Report"

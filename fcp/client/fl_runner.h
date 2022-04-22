@@ -21,7 +21,6 @@
 #include "absl/status/statusor.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/engine.pb.h"
-#include "fcp/client/engine/plan_engine.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/files.h"

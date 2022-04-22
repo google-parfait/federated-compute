@@ -128,8 +128,6 @@ class Flags {
 
   // Whether use TFLite for training.
   virtual bool use_tflite_training() const { return false; }
-  // Whether to support legacy plan without TensorflowSpec.
-  virtual bool disable_legacy_plan_support() const { return false; }
 
   // Whether to enable support for downloading plan/initial checkpoint resources
   // via HTTP, while still using gRPC for the main protocol.
