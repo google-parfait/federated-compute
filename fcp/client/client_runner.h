@@ -44,14 +44,13 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/event_publisher.h"
-#include "fcp/client/federated_task_environment.h"
 #include "fcp/client/files.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/secagg_event_publisher.h"
-#include "fcp/client/task_environment.h"
+#include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp::client {

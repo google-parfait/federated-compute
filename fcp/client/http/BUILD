@@ -142,7 +142,6 @@ cc_test(
         "//fcp/base",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:federated_protocol",
-        "//fcp/client:interfaces",
         "//fcp/client:interruptible_runner",
         "//fcp/client:test_helpers",
         "//fcp/client/engine:engine_cc_proto",

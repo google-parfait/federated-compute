@@ -36,7 +36,6 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/files.h"
 #include "fcp/client/simple_task_environment.h"
-#include "fcp/client/task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"
@@ -58,20 +57,11 @@ inline std::string MakeTestFileName(absl::string_view dir,
 // Implementation of TaskEnvironment, the interface by which the client plan
 // engine interacts with the environment, that allows tests to provide a dataset
 // as input and consume the output checkpoint.
-class TestTaskEnvironment : public TaskEnvironment,
-                            public SimpleTaskEnvironment {
+class TestTaskEnvironment : public SimpleTaskEnvironment {
  public:
   explicit TestTaskEnvironment(const Dataset::ClientDataset* dataset,
                                const std::string& base_dir)
       : dataset_(dataset), base_dir_(base_dir) {}
-
-  absl::Status Finish(
-      client::engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
-      const std::vector<std::pair<std::string, double>>& stats) override {
-    return absl::OkStatus();
-  };
-
-  bool ShouldAbort() override { return false; }
 
   absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
       const google::internal::federated::plan::ExampleSelector&
@@ -89,23 +79,6 @@ class TestTaskEnvironment : public TaskEnvironment,
   }
 
   std::string GetBaseDir() override { return base_dir_; }
-
- public:
-  absl::Status PublishParameters(
-      const std::string& checkpoint_file,
-      const std::string& secagg_checkpoint_file) override {
-    checkpoint_file_ = checkpoint_file;
-    return absl::OkStatus();
-  }
-
-  Result<absl::Cord> GetCheckpoint() {
-    FCP_CHECK(!checkpoint_file_.empty())
-        << "GetCheckpoint should only be called after TestTaskEnvironment has "
-           "been used successfully by client::engine::PlanEngine::RunPlan";
-    return Result(fcp::ReadFileToCord(checkpoint_file_)).Then(ExpectOk());
-  }
-
-  bool ShouldPublishStats() override { return false; }
 
  private:
   bool TrainingConditionsSatisfied() override { return true; }

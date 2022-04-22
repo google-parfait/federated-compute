@@ -44,7 +44,6 @@
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/selector_context.pb.h"
-#include "fcp/client/task_environment.h"
 #include "fcp/protocol/grpc_chunked_bidi_stream.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"

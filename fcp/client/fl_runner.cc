@@ -38,7 +38,6 @@
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/federated_protocol_util.h"
-#include "fcp/client/federated_task_environment.h"
 #include "fcp/client/files.h"
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/fl_runner_internal.pb.h"

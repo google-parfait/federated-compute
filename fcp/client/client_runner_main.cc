@@ -21,7 +21,6 @@
 #include "absl/strings/str_split.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/client_runner.h"
-#include "fcp/client/federated_task_environment.h"
 #include "fcp/client/fl_runner.h"
 
 ABSL_FLAG(std::string, server, "",

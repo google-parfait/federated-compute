@@ -119,15 +119,12 @@ cc_library(
         "flags.h",
         "log_manager.h",
         "secagg_event_publisher.h",
-        "task_environment.h",
     ],
     visibility = ["//fcp:public_api_visibility"],
     deps = [
         ":diag_codes_cc_proto",
         ":histogram_counters_cc_proto",
-        ":simple_task_environment",
         "//fcp/client/engine:engine_cc_proto",
-        "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -269,40 +266,6 @@ cc_test(
     ],
 )
 
-cc_library(
-    name = "federated_task_environment",
-    srcs = ["federated_task_environment.cc"],
-    hdrs = [
-        "federated_task_environment.h",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":federated_protocol",
-        ":interfaces",
-        ":simple_task_environment",
-        "//fcp/base",
-        "//fcp/client/engine:engine_cc_proto",
-        "//fcp/client/opstats:opstats_logger",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/time",
-    ],
-)
-
-cc_test(
-    name = "federated_task_environment_test",
-    srcs = ["federated_task_environment_test.cc"],
-    deps = [
-        ":federated_task_environment",
-        ":test_helpers",
-        "//fcp/base",
-        "//fcp/protos:federated_api_cc_proto",
-        "//fcp/protos:plan_cc_proto",
-        "//fcp/testing",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
 OPTIONAL_DEPS = select({
     "//conditions:default": [],
 })
@@ -324,7 +287,6 @@ cc_library(
         ":federated_protocol",
         ":federated_protocol_util",
         ":grpc_federated_protocol",
-        ":federated_task_environment",
         ":fl_runner_internal_cc_proto",
         ":fl_runner_cc_proto",
         ":histogram_counters_cc_proto",
@@ -476,9 +438,9 @@ cc_library(
     hdrs = ["client_runner.h"],
     deps = [
         ":diag_codes_cc_proto",
-        ":federated_task_environment",
         ":histogram_counters_cc_proto",
         ":interfaces",
+        ":simple_task_environment",
         "//fcp/base",
         "//fcp/client/http:http_client",
         "//fcp/protos:plan_cc_proto",
@@ -499,7 +461,6 @@ cc_binary(
     srcs = ["client_runner_main.cc"],
     deps = [
         ":client_runner",
-        ":federated_task_environment",
         ":fl_runner",
         "//fcp/base",
         "//fcp/tensorflow:external_dataset_op_lib",

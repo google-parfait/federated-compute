@@ -48,7 +48,6 @@
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
-#include "fcp/client/task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"

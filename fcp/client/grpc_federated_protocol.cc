@@ -43,7 +43,6 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/secagg_event_publisher.h"
-#include "fcp/client/task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/secagg/client/secagg_client.h"

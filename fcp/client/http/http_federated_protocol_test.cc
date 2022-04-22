@@ -41,7 +41,6 @@
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
-#include "fcp/client/task_environment.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
