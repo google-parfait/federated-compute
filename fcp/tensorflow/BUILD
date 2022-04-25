@@ -455,6 +455,50 @@ tf_gen_op_wrapper_py(
 
 # Public: Python library for the `MakeSlicesSelectorExampleSelector` op.
 
+APPEND_SLICES_OP_SRCS = ["append_slices_op.cc"]
+
+APPEND_SLICES_OP_DEPS = [
+    "@com_google_absl//absl/base:core_headers",
+    "@com_google_absl//absl/synchronization",
+]
+
+# Custom op to serialize an ExampleSelector containing a SlicesSelector proto.
+cc_library(
+    name = "append_slices_op_lib",
+    srcs = APPEND_SLICES_OP_SRCS,
+    copts = FCP_TF_COPTS,
+    visibility = ["//visibility:public"],
+    deps = APPEND_SLICES_OP_DEPS + [
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:lib",
+        "@org_tensorflow//tensorflow/core/kernels:save_restore_tensor",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/core/util:saved_tensor_slice_proto_cc",
+    ],
+    # Uses TensorFlow's registration macros
+    alwayslink = 1,
+)
+
+tf_custom_op_library(
+    name = "_append_slices_op.so",
+    srcs = APPEND_SLICES_OP_SRCS,
+    copts = FCP_TF_COPTS,
+    deps = APPEND_SLICES_OP_DEPS,
+)
+
+# Generates the basic op wrapper for use in Python.
+# Don't use this directly: use `:append_slices_py` to ensure that the
+# appropriate shared libraries are loaded.
+tf_gen_op_wrapper_py(
+    name = "gen_append_slices_py",
+    out = "gen_append_slices_py.py",
+    deps = [
+        ":append_slices_op_lib",
+    ],
+)
+
+# Public: Python library for the `AppendSlices` and `MergeAppendedSlices` ops.
+
 TENSOR_NAME_OP_SRCS = ["tensor_name_op.cc"]
 
 TENSOR_NAME_OP_DEPS = [
