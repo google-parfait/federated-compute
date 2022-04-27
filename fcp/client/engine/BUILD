@@ -61,7 +61,7 @@ cc_library(
     srcs = ["tf_wrapper.cc"],
     hdrs = ["tf_wrapper.h"],
     copts = FCP_COPTS,
-    visibility = ["//fcp:internal"],
+    visibility = ["//visibility:private"],
     deps = [
         ":plan_engine_helpers",
         "//fcp/base",
