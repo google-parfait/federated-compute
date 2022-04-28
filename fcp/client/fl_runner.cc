@@ -354,35 +354,47 @@ std::unique_ptr<TfLiteInputs> ConstructTFLiteInputsForTensorflowSpecPlan(
 #endif
 
 absl::StatusOr<std::vector<std::string>> ConstructOutputsForTensorflowSpecPlan(
-    PhaseLogger& phase_logger, const FederatedComputeIORouter& io_router,
-    absl::Time run_plan_start_time) {
+    const FederatedComputeIORouter& io_router) {
   std::vector<std::string> output_names;
   for (const google::protobuf::MapPair<std::string, AggregationConfig>& it :
        io_router.aggregations()) {
     output_names.push_back(it.first);
     // The only aggregation type currently supported is secure aggregation.
     if (!it.second.has_secure_aggregation()) {
-      std::string error_message =
-          "Unsupported aggregation type in TensorflowSpec-based plan";
-      phase_logger.LogComputationInvalidArgument(
-          absl::InvalidArgumentError(error_message),
-          /* total_example_count= */ 0, /* total_example_size_bytes= */ 0,
-          run_plan_start_time);
-      return absl::InvalidArgumentError(error_message);
+      return absl::InvalidArgumentError(
+          "Unsupported aggregation type in TensorflowSpec-based plan");
     }
   }
 
   return output_names;
 }
 
+absl::StatusOr<std::vector<std::string>> ConstructOutputsWithDeterministicOrder(
+    const TensorflowSpec& tensorflow_spec,
+    const FederatedComputeIORouter& io_router) {
+  std::vector<std::string> output_names;
+  // The order of output tensor names should match the order in TensorflowSpec.
+  for (const auto& output_tensor_spec : tensorflow_spec.output_tensor_specs()) {
+    std::string tensor_name = output_tensor_spec.name();
+    if (!io_router.aggregations().contains(tensor_name) ||
+        !io_router.aggregations().at(tensor_name).has_secure_aggregation()) {
+      return absl::InvalidArgumentError(
+          "Output tensor is missing in AggregationConfig, or has unsupported "
+          "aggregation type.");
+    }
+    output_names.push_back(tensor_name);
+  }
+
+  return output_names;
+}
+
 PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
-    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger,
-    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
+    SimpleTaskEnvironment* env_deps, LogManager* log_manager,
+    OpStatsLogger* opstats_logger, const Flags* flags,
     const ClientOnlyPlan& client_plan,
     const std::string& checkpoint_input_filename,
     const std::string& checkpoint_output_filename,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time run_plan_start_time, const absl::Time reference_time,
     const SelectorContext& selector_context) {
   if (!client_plan.phase().has_tensorflow_spec()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
@@ -396,21 +408,19 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
         absl::InvalidArgumentError("Invalid TensorflowSpec-based plan")));
   }
 
-  // Construct input tensors based on the values in the
-  // FederatedComputeIORouter message and create a temporary file for the output
-  // checkpoint if needed.
-  auto inputs = ConstructInputsForTensorflowSpecPlan(
-      client_plan.phase().federated_compute(), checkpoint_input_filename,
-      checkpoint_output_filename);
-
   // Get the output tensor names.
-  absl::StatusOr<std::vector<std::string>> output_names =
-      ConstructOutputsForTensorflowSpecPlan(
-          phase_logger, client_plan.phase().federated_compute(),
-          run_plan_start_time);
+  absl::StatusOr<std::vector<std::string>> output_names;
+  if (flags->use_tflite_training() || flags->deterministic_output_order()) {
+    output_names = ConstructOutputsWithDeterministicOrder(
+        client_plan.phase().tensorflow_spec(),
+        client_plan.phase().federated_compute());
+  } else {
+    output_names = ConstructOutputsForTensorflowSpecPlan(
+        client_plan.phase().federated_compute());
+  }
   if (!output_names.ok()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
-        engine::PlanOutcome::kTensorflowError, output_names.status()));
+        engine::PlanOutcome::kInvalidArgument, output_names.status()));
   }
 
   // Run plan and get a set of output tensors back.
@@ -432,6 +442,12 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   }
 #endif
 
+  // Construct input tensors based on the values in the
+  // FederatedComputeIORouter message and create a temporary file for the output
+  // checkpoint if needed.
+  auto inputs = ConstructInputsForTensorflowSpecPlan(
+      client_plan.phase().federated_compute(), checkpoint_input_filename,
+      checkpoint_output_filename);
   engine::SimplePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
                                        &timing_config);
   engine::PlanResult plan_result = plan_engine.RunPlan(
@@ -1084,11 +1100,11 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return fl_runner_result;
   }
   PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
-      RunPlanWithTensorflowSpec(
-          env_deps, phase_logger, log_manager, opstats_logger, flags,
-          checkin_result->plan, checkin_result->checkpoint_input_filename,
-          *checkpoint_output_filename, timing_config, run_plan_start_time,
-          reference_time, federated_selector_context_with_task_name);
+      RunPlanWithTensorflowSpec(env_deps, log_manager, opstats_logger, flags,
+                                checkin_result->plan,
+                                checkin_result->checkpoint_input_filename,
+                                *checkpoint_output_filename, timing_config,
+                                federated_selector_context_with_task_name);
   auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
   absl::StatusOr<ComputationResults> computation_results;
   if (outcome == engine::PlanOutcome::kSuccess) {
@@ -1145,11 +1161,10 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     }
     // Regular TensorflowSpec-based plans.
     PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
-        RunPlanWithTensorflowSpec(
-            env_deps, phase_logger, log_manager, opstats_logger.get(), flags,
-            client_plan, checkpoint_input_filename, *checkpoint_output_filename,
-            timing_config, run_plan_start_time, reference_time,
-            selector_context);
+        RunPlanWithTensorflowSpec(env_deps, log_manager, opstats_logger.get(),
+                                  flags, client_plan, checkpoint_input_filename,
+                                  *checkpoint_output_filename, timing_config,
+                                  selector_context);
     result.set_checkpoint_output_filename(
         plan_result_and_checkpoint_file.checkpoint_file);
     plan_result = std::move(plan_result_and_checkpoint_file.plan_result);

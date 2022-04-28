@@ -136,6 +136,9 @@ class Flags {
   // Whether to splits up TRAIN_ERROR and TRAIN_INTERRUPTED into separate errors
   // for eligibility, checkin, and training.
   virtual bool granular_per_phase_logs() const { return false; }
+
+  // Whether to use deterministic order for output tensors.
+  virtual bool deterministic_output_order() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

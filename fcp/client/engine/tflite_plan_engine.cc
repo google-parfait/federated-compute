@@ -36,8 +36,7 @@ namespace {
 PlanResult CreatePlanResultFromOutput(
     absl::StatusOr<OutputTensors> output, std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes,
-    absl::Status example_iterator_status,
-    const std::vector<std::string>& output_names) {
+    absl::Status example_iterator_status) {
   switch (output.status().code()) {
     case absl::StatusCode::kOk: {
       PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
@@ -89,8 +88,6 @@ PlanResult TfLitePlanEngine::RunPlan(
       log_manager_, opstats_logger_, inputs.get(),
       tensorflow_spec.dataset_token_tensor_name(), &total_example_count,
       &total_example_size_bytes, &example_iterator_status);
-  absl::flat_hash_set<std::string> output_names_set(output_names.begin(),
-                                                    output_names.end());
   absl::StatusOr<std::unique_ptr<TfLiteWrapper>> tflite_wrapper =
       TfLiteWrapper::Create(
           model,
@@ -98,8 +95,7 @@ PlanResult TfLitePlanEngine::RunPlan(
             return task_env_->ShouldAbort(absl::Now(),
                                           timing_config_->polling_period);
           },
-          *timing_config_, log_manager_, std::move(inputs),
-          std::move(output_names_set));
+          *timing_config_, log_manager_, std::move(inputs), output_names);
   if (!tflite_wrapper.ok()) {
     return PlanResult(PlanOutcome::kTensorflowError, tflite_wrapper.status());
   }
@@ -107,7 +103,7 @@ PlanResult TfLitePlanEngine::RunPlan(
   absl::StatusOr<OutputTensors> output = (*tflite_wrapper)->Run();
   PlanResult plan_result = CreatePlanResultFromOutput(
       std::move(output), &total_example_count, &total_example_size_bytes,
-      example_iterator_status.GetStatus(), output_names);
+      example_iterator_status.GetStatus());
   return plan_result;
 }
 

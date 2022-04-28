@@ -51,7 +51,7 @@ class TfLiteWrapperTest : public testing::Test {
           .graceful_shutdown_period = absl::Milliseconds(1000),
           .extended_shutdown_period = absl::Milliseconds(2000),
       };
-  absl::flat_hash_set<std::string> output_names_ = {"Identity"};
+  std::vector<std::string> output_names_ = {"Identity"};
 };
 
 TEST_F(TfLiteWrapperTest, InvalidModel) {
@@ -76,6 +76,21 @@ TEST_F(TfLiteWrapperTest, InputNotSet) {
           &mock_log_manager_,
           std::make_unique<absl::flat_hash_map<std::string, std::string>>(),
           output_names_),
+      IsCode(INVALID_ARGUMENT));
+}
+
+TEST_F(TfLiteWrapperTest, WrongNumberOfOutputs) {
+  auto plan = ReadFileAsString(absl::StrCat(kAssetsPath, kJoinModelFile));
+  ASSERT_OK(plan);
+  // The plan that we use here join two strings. It requires two std::string tensors
+  // as input.  We didn't pass the required tensor, therefore, we expect an
+  // internal error to be thrown.
+  EXPECT_THAT(
+      TfLiteWrapper::Create(
+          *plan, []() { return false; }, default_timing_config_,
+          &mock_log_manager_,
+          std::make_unique<absl::flat_hash_map<std::string, std::string>>(),
+          {"Identity", "EXTRA"}),
       IsCode(INVALID_ARGUMENT));
 }
 

@@ -128,6 +128,7 @@ cc_library(
         "//fcp/client:simple_task_environment",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_protobuf//:cc_wkt_protos",
         "@org_tensorflow//tensorflow/lite:framework_stable",
         "@org_tensorflow//tensorflow/lite:string_util",

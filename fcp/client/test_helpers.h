@@ -528,6 +528,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_grpc_with_http_resource_support, (),
               (const, override));
   MOCK_METHOD(bool, granular_per_phase_logs, (), (const, override));
+  MOCK_METHOD(bool, deterministic_output_order, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

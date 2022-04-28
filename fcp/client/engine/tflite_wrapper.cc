@@ -23,6 +23,7 @@
 #include "google/protobuf/any.pb.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "fcp/base/monitoring.h"
 #include "tensorflow/lite/delegates/flex/util.h"
 #include "tensorflow/lite/interpreter_builder.h"
@@ -58,7 +59,7 @@ absl::StatusOr<std::unique_ptr<TfLiteWrapper>> TfLiteWrapper::Create(
     const InterruptibleRunner::TimingConfig& timing_config,
     LogManager* log_manager,
     std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
-    absl::flat_hash_set<std::string> output_names) {
+    std::vector<std::string> output_names) {
   std::unique_ptr<tflite::FlatBufferModel> flat_buffer_model =
       tflite::FlatBufferModel::BuildFromBuffer(model.c_str(), model.size());
   if (flat_buffer_model == nullptr) {
@@ -170,22 +171,24 @@ absl::Status TfLiteWrapper::ConvertTfLiteStatus(TfLiteStatus status) {
 }
 
 absl::StatusOr<OutputTensors> TfLiteWrapper::ConstructOutputs() {
+  if (interpreter_->outputs().size() != output_names_.size()) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("The number of output tensors is wrong. Expected: %d, "
+                        "Returned by TFLite interpreter: %d",
+                        output_names_.size(), interpreter_->outputs().size()));
+  }
   OutputTensors output_tensors;
+  // The order of the output tensors should match the order of output tensor
+  // names.
   for (int output_tensor_index : interpreter_->outputs()) {
-    TfLiteTensor* tflite_tensor = interpreter_->tensor(output_tensor_index);
-    std::string tensor_name = tflite_tensor->name;
-    // If the output tensor name is not in the expected output names, we simply
-    // ignore it.
-    if (!output_names_.contains(tensor_name)) {
-      continue;
-    }
-    auto tensor = tflite::flex::CreateTfTensorFromTfLiteTensor(tflite_tensor);
+    auto tensor = tflite::flex::CreateTfTensorFromTfLiteTensor(
+        interpreter_->tensor(output_tensor_index));
     if (!tensor.ok()) {
       return absl::InvalidArgumentError(tensor.status().error_message());
     }
-    output_tensors.output_tensor_names.push_back(tensor_name);
     output_tensors.output_tensors.push_back(*tensor);
   }
+  output_tensors.output_tensor_names = output_names_;
   return output_tensors;
 }
 

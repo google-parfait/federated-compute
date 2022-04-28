@@ -60,7 +60,7 @@ struct OutputTensors {
 //    5. inputs: A hashmap which has input tensor name as key, tensor data as
 //    value.
 //    6. output_names: The names of the output tensors. The order for these
-//    tensor names are not deterministic.
+//    tensor names must be deterministic.
 class TfLiteWrapper {
  public:
   static absl::StatusOr<std::unique_ptr<TfLiteWrapper>> Create(
@@ -68,7 +68,7 @@ class TfLiteWrapper {
       const InterruptibleRunner::TimingConfig& timing_config,
       LogManager* log_manager,
       std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
-      absl::flat_hash_set<std::string> output_names);
+      std::vector<std::string> output_names);
 
   // Wrapper around TfLite's Interpreter::Invoke method.
   // If the run succeeds, a vector of output tensors (empty if there's no
@@ -82,7 +82,7 @@ class TfLiteWrapper {
                 tflite::TfLiteDelegateUniquePtr delegate,
                 std::unique_ptr<tflite::Interpreter> interpreter,
                 std::unique_ptr<InterruptibleRunner> interruptible_runner,
-                absl::flat_hash_set<std::string> output_names)
+                std::vector<std::string> output_names)
       : model_(std::move(model)),
         error_reporter_(std::move(error_reporter)),
         delegate_(std::move(delegate)),
@@ -97,7 +97,7 @@ class TfLiteWrapper {
   tflite::TfLiteDelegateUniquePtr delegate_;
   std::unique_ptr<tflite::Interpreter> interpreter_;
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
-  const absl::flat_hash_set<std::string> output_names_;
+  const std::vector<std::string> output_names_;
 };
 
 }  // namespace engine
