@@ -15,6 +15,7 @@
  */
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <numeric>
 #include <queue>
@@ -375,15 +376,13 @@ tensorflow::Status MetadataFromString(absl::string_view serialized,
   return tensorflow::Status::OK();
 }
 
-// Loads `filename`, which must contain a series of checkpoint entries, each
-// with a 64-bit start position footer.
+// Merges appended checkpoints in `filename` into a single checkpoint.
 //
-// Returns the entries for the new, merged checkpoint table in
-// `merged_table_entries_out`.
-tensorflow::Status LoadAndMergeAppendedSlices(
-    const std::string& filename,
-    std::vector<std::pair<std::string, std::string>>&
-        merged_table_entries_out) {
+// Note: this function accepts `filename` as a `const std::string&` rather than
+// `string_view` because that is the type accepted by the functions it calls
+// (`GetFileSize` and `NewRandomAccessFile`). This avoids unnecessary
+// allocation.
+tensorflow::Status LoadAndMergeAppendedSlices(const std::string& filename) {
   tensorflow::Env* env = tensorflow::Env::Default();
   uint64_t file_size;
   TF_RETURN_IF_ERROR(env->GetFileSize(filename, &file_size));
@@ -394,6 +393,10 @@ tensorflow::Status LoadAndMergeAppendedSlices(
   }
   std::unique_ptr<tensorflow::RandomAccessFile> file;
   TF_RETURN_IF_ERROR(env->NewRandomAccessFile(filename, &file));
+
+  // Overwrite the underlying file, relying on `file` above to provide a handle
+  // into the old file contents even after it is overwritten.
+  TF_RETURN_IF_ERROR(tensorflow::Env::Default()->DeleteFile(filename));
 
   // `chunk_files` and `chunk_tables` must be kept around since they are
   // referenced internally by `chunk_iterators`.
@@ -476,42 +479,23 @@ tensorflow::Status LoadAndMergeAppendedSlices(
   VLOG(1) << "Merging " << chunk_files.size() << " checkpoint chunks from file "
           << filename;
 
+  tensorflow::checkpoint::TensorSliceWriter::Builder* raw_builder;
+  TF_RETURN_IF_ERROR(tensorflow::checkpoint::CreateTableTensorSliceBuilder(
+      filename, &raw_builder));
+  std::unique_ptr<tensorflow::checkpoint::TensorSliceWriter::Builder> builder(
+      raw_builder);
+
   // First, we add the merged entry which holds a `SavedTensorSlices` proto.
-  merged_table_entries_out.push_back(std::pair(
-      std::string(kSavedTensorSlicesKey), merged_sts.SerializeAsString()));
+  builder->Add(kSavedTensorSlicesKey, merged_sts.SerializeAsString());
 
   // Then the remaining entries are concatenated alphabetically.
   while (chunk_iterators.top()->Valid()) {
     std::unique_ptr<tensorflow::table::Iterator> iter =
         PopWithElement(chunk_iterators);
     VLOG(2) << "Merging table entry for key " << iter->key();
-    merged_table_entries_out.push_back(
-        std::pair(std::string(iter->key()), std::string(iter->value())));
+    builder->Add(iter->key(), iter->value());
     iter->Next();
     chunk_iterators.push(std::move(iter));
-  }
-  return tensorflow::Status::OK();
-}
-
-// Merges appended checkpoints in `filename` into a single checkpoint.
-//
-// Note: this function accepts `filename` as a `const std::string&` rather than
-// `string_view` because that is the type accepted by the functions it calls
-// (`GetFileSize` and `NewRandomAccessFile`). This avoids unnecessary
-// allocation.
-tensorflow::Status MergeAppendedSlices(const std::string& filename) {
-  // Load all the table contents into memory so that we can overwrite the
-  // underlying file.
-  std::vector<std::pair<std::string, std::string>> merged_entries;
-  TF_RETURN_IF_ERROR(LoadAndMergeAppendedSlices(filename, merged_entries));
-  // Write the resulting table back to the file.
-  tensorflow::checkpoint::TensorSliceWriter::Builder* raw_builder;
-  TF_RETURN_IF_ERROR(tensorflow::checkpoint::CreateTableTensorSliceBuilder(
-      filename, &raw_builder));
-  std::unique_ptr<tensorflow::checkpoint::TensorSliceWriter::Builder> builder(
-      raw_builder);
-  for (const auto& entry : merged_entries) {
-    builder->Add(entry.first, entry.second);
   }
   int64_t resulting_file_size;
   TF_RETURN_WITH_CONTEXT_IF_ERROR(builder->Finish(&resulting_file_size),
@@ -571,7 +555,7 @@ class MergeAppendedSlicesOp : public OpKernel {
     OP_REQUIRES_OK(context, context->input("filename", &filename_tensor));
     const tensorflow::tstring filename =
         filename_tensor->scalar<tensorflow::tstring>()();
-    OP_REQUIRES_OK(context, MergeAppendedSlices(filename));
+    OP_REQUIRES_OK(context, LoadAndMergeAppendedSlices(filename));
   }
 };
 
