@@ -529,6 +529,9 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, granular_per_phase_logs, (), (const, override));
   MOCK_METHOD(bool, deterministic_output_order, (), (const, override));
+  MOCK_METHOD(bool, ensure_dynamic_tensors_are_released, (), (const, override));
+  MOCK_METHOD(int32_t, large_tensor_threshold_for_dynamic_allocation, (),
+              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

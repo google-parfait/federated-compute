@@ -39,6 +39,16 @@ struct OutputTensors {
   std::vector<tensorflow::Tensor> output_tensors;
 };
 
+// Options for TFLite interpreter.
+struct TfLiteInterpreterOptions {
+  // When true, TFLite uses dynamic tensor allocation and release tensors that
+  // are no longer needed.
+  bool ensure_dynamic_tensors_are_released = false;
+  // When the threshold is zero, dynamic allocation is not enabled for any
+  // tensor.
+  int32_t large_tensor_threshold_for_dynamic_allocation = 0;
+};
+
 // A class to call into TFLite.
 // All functions in this interface indicate errors as follows:
 // - CANCELLED: interrupted execution
@@ -68,7 +78,8 @@ class TfLiteWrapper {
       const InterruptibleRunner::TimingConfig& timing_config,
       LogManager* log_manager,
       std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
-      std::vector<std::string> output_names);
+      std::vector<std::string> output_names,
+      const TfLiteInterpreterOptions& interpreter_options);
 
   // Wrapper around TfLite's Interpreter::Invoke method.
   // If the run succeeds, a vector of output tensors (empty if there's no

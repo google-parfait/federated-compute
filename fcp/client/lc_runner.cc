@@ -144,7 +144,7 @@ absl::Status RunPlanWithTensorflowSpec(
     auto inputs = ConstructInputsForTFLitePlan(
         client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
     engine::TfLitePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
-                                         &timing_config);
+                                         flags, &timing_config);
     engine::PlanResult plan_result = plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
         std::move(inputs), output_names_unused, selector_context);

@@ -26,6 +26,7 @@
 #include "absl/strings/str_format.h"
 #include "fcp/base/monitoring.h"
 #include "tensorflow/lite/delegates/flex/util.h"
+#include "tensorflow/lite/interpreter.h"
 #include "tensorflow/lite/interpreter_builder.h"
 #include "tensorflow/lite/kernels/register.h"
 #include "tensorflow/lite/model_builder.h"
@@ -59,7 +60,8 @@ absl::StatusOr<std::unique_ptr<TfLiteWrapper>> TfLiteWrapper::Create(
     const InterruptibleRunner::TimingConfig& timing_config,
     LogManager* log_manager,
     std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
-    std::vector<std::string> output_names) {
+    std::vector<std::string> output_names,
+    const TfLiteInterpreterOptions& interpreter_options) {
   std::unique_ptr<tflite::FlatBufferModel> flat_buffer_model =
       tflite::FlatBufferModel::BuildFromBuffer(model.c_str(), model.size());
   if (flat_buffer_model == nullptr) {

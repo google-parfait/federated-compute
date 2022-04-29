@@ -139,6 +139,17 @@ class Flags {
 
   // Whether to use deterministic order for output tensors.
   virtual bool deterministic_output_order() const { return false; }
+
+  // When true, TFLite interpreter will use dynamic memory allocation, and
+  // release the memory for tensors that are no longer needed.
+  virtual bool ensure_dynamic_tensors_are_released() const { return false; }
+
+  // When the value is above zero, any tensor size (bytes) above the threshold
+  // will be considered as a large tensor, and dynamic allocation is applied on
+  // them.
+  virtual int32_t large_tensor_threshold_for_dynamic_allocation() const {
+    return 0;
+  }
 };
 }  // namespace client
 }  // namespace fcp

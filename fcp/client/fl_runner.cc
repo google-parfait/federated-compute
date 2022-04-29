@@ -255,7 +255,7 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
         ConstructTfLiteInputsForEligibilityEvalPlan(io_router,
                                                     checkpoint_input_filename);
     engine::TfLitePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
-                                         &timing_config);
+                                         flags, &timing_config);
     return plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
         std::move(tflite_inputs), output_names, eligibility_selector_context);
@@ -431,7 +431,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
             client_plan.phase().federated_compute(), checkpoint_input_filename,
             checkpoint_output_filename);
     engine::TfLitePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
-                                         &timing_config);
+                                         flags, &timing_config);
     engine::PlanResult plan_result = plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
         std::move(tflite_inputs), *output_names, selector_context);

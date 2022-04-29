@@ -52,6 +52,9 @@ class TfLiteWrapperTest : public testing::Test {
           .extended_shutdown_period = absl::Milliseconds(2000),
       };
   std::vector<std::string> output_names_ = {"Identity"};
+  TfLiteInterpreterOptions options_ = {
+      .ensure_dynamic_tensors_are_released = true,
+      .large_tensor_threshold_for_dynamic_allocation = 1000};
 };
 
 TEST_F(TfLiteWrapperTest, InvalidModel) {
@@ -60,7 +63,7 @@ TEST_F(TfLiteWrapperTest, InvalidModel) {
           "INVALID_FLATBUFFER", []() { return false; }, default_timing_config_,
           &mock_log_manager_,
           std::make_unique<absl::flat_hash_map<std::string, std::string>>(),
-          output_names_),
+          output_names_, options_),
       IsCode(INVALID_ARGUMENT));
 }
 
@@ -75,7 +78,7 @@ TEST_F(TfLiteWrapperTest, InputNotSet) {
           *plan, []() { return false; }, default_timing_config_,
           &mock_log_manager_,
           std::make_unique<absl::flat_hash_map<std::string, std::string>>(),
-          output_names_),
+          output_names_, options_),
       IsCode(INVALID_ARGUMENT));
 }
 
@@ -90,7 +93,7 @@ TEST_F(TfLiteWrapperTest, WrongNumberOfOutputs) {
           *plan, []() { return false; }, default_timing_config_,
           &mock_log_manager_,
           std::make_unique<absl::flat_hash_map<std::string, std::string>>(),
-          {"Identity", "EXTRA"}),
+          {"Identity", "EXTRA"}, options_),
       IsCode(INVALID_ARGUMENT));
 }
 
@@ -105,7 +108,7 @@ TEST_F(TfLiteWrapperTest, Aborted) {
   // to see a CANCELLED status when we run the plan.
   auto wrapper = TfLiteWrapper::Create(
       *plan, []() { return true; }, default_timing_config_, &mock_log_manager_,
-      std::move(inputs), output_names_);
+      std::move(inputs), output_names_, options_);
   ASSERT_OK(wrapper);
   EXPECT_THAT((*wrapper)->Run(), IsCode(CANCELLED));
 }
@@ -119,7 +122,7 @@ TEST_F(TfLiteWrapperTest, Success) {
   (*inputs)["y"] = "def";
   auto wrapper = TfLiteWrapper::Create(
       *plan, []() { return false; }, default_timing_config_, &mock_log_manager_,
-      std::move(inputs), output_names_);
+      std::move(inputs), output_names_, options_);
   EXPECT_THAT(wrapper, IsCode(OK));
   auto outputs = (*wrapper)->Run();
   ASSERT_OK(outputs);

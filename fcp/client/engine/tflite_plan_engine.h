@@ -37,10 +37,12 @@ class TfLitePlanEngine {
  public:
   TfLitePlanEngine(SimpleTaskEnvironment* task_env, LogManager* log_manager,
                    ::fcp::client::opstats::OpStatsLogger* opstats_logger,
+                   const Flags* flags,
                    const InterruptibleRunner::TimingConfig* timing_config)
       : task_env_(task_env),
         log_manager_(log_manager),
         opstats_logger_(opstats_logger),
+        flags_(*flags),
         timing_config_(timing_config) {}
 
   // Runs the plan, and takes care of logging TfLite errors and external
@@ -59,6 +61,7 @@ class TfLitePlanEngine {
   SimpleTaskEnvironment* task_env_;
   LogManager* log_manager_;
   ::fcp::client::opstats::OpStatsLogger* opstats_logger_;
+  const Flags& flags_;
   const InterruptibleRunner::TimingConfig* timing_config_;
 };
 

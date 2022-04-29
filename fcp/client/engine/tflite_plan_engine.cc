@@ -57,6 +57,14 @@ PlanResult CreatePlanResultFromOutput(
   // Unreachable code.
   return PlanResult(PlanOutcome::kTensorflowError, absl::InternalError(""));
 }
+
+TfLiteInterpreterOptions CreateOptions(const Flags& flags) {
+  return TfLiteInterpreterOptions{
+      .ensure_dynamic_tensors_are_released =
+          flags.ensure_dynamic_tensors_are_released(),
+      .large_tensor_threshold_for_dynamic_allocation =
+          flags.large_tensor_threshold_for_dynamic_allocation()};
+}
 }  // namespace
 
 PlanResult TfLitePlanEngine::RunPlan(
@@ -95,7 +103,8 @@ PlanResult TfLitePlanEngine::RunPlan(
             return task_env_->ShouldAbort(absl::Now(),
                                           timing_config_->polling_period);
           },
-          *timing_config_, log_manager_, std::move(inputs), output_names);
+          *timing_config_, log_manager_, std::move(inputs), output_names,
+          CreateOptions(flags_));
   if (!tflite_wrapper.ok()) {
     return PlanResult(PlanOutcome::kTensorflowError, tflite_wrapper.status());
   }
