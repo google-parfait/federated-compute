@@ -132,9 +132,9 @@ message StartTaskAssignmentResponse {
 // When client (device) is accepted for the current phase, this
 // data structure carries information necessary to begin task execution.
 message TaskAssignment {
-  // Information to construct the URI to use for providing a result report after
-  // task execution.
-  ForwardingInfo aggregation_report_forwarding_info = 1;
+  // Information to construct the URI to use for providing resulting aggregation
+  // data after task execution.
+  ForwardingInfo aggregation_data_forwarding_info = 1;
 
   // Unique identifier for the client's protocol session.
   string session_id = 5;

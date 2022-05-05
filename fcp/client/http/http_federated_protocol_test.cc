@@ -328,7 +328,7 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
   StartTaskAssignmentResponse response;
   TaskAssignment* task_assignment = response.mutable_task_assignment();
   ForwardingInfo* forwarding_info =
-      task_assignment->mutable_aggregation_report_forwarding_info();
+      task_assignment->mutable_aggregation_data_forwarding_info();
   forwarding_info->set_target_uri_prefix(kAggregationTargetUri);
   task_assignment->set_session_id(kClientSessionId);
   task_assignment->set_aggregation_id(aggregation_session_id);

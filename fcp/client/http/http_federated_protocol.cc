@@ -542,7 +542,7 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   const auto& task_assignment = response_proto.task_assignment();
 
   FCP_RETURN_IF_ERROR(protocol_request_helper_.ProcessForwardingInfo(
-      task_assignment.aggregation_report_forwarding_info()));
+      task_assignment.aggregation_data_forwarding_info()));
 
   // Fetch the task resources, returning any errors that may be encountered in
   // the process.
