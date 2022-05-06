@@ -610,7 +610,6 @@ absl::Status ReportTensorflowSpecPlanResult(
     FCP_RETURN_IF_ERROR(phase_logger.LogResultUploadStarted());
     result = federated_protocol->ReportCompleted(
         std::move(*computation_results),
-        /*stats=*/std::vector<std::pair<std::string, double>>(),
         /*plan_duration=*/absl::Now() - run_plan_start_time);
     LogResultUploadStatus(phase_logger, result,
                           GetNetworkStats(federated_protocol),

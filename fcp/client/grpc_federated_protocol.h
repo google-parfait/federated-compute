@@ -90,7 +90,6 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
 
   absl::Status ReportCompleted(
       ComputationResults results,
-      const std::vector<std::pair<std::string, double>>& stats,
       absl::Duration plan_duration) override;
 
   absl::Status ReportNotCompleted(engine::PhaseOutcome phase_outcome,
@@ -114,12 +113,10 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   // ReportNotCompleted().
   absl::Status Report(ComputationResults results,
                       engine::PhaseOutcome phase_outcome,
-                      absl::Duration plan_duration,
-                      const std::vector<std::pair<std::string, double>>& stats);
+                      absl::Duration plan_duration);
   absl::Status ReportInternal(
       std::string tf_checkpoint, engine::PhaseOutcome phase_outcome,
       absl::Duration plan_duration,
-      const std::vector<std::pair<std::string, double>>& stats,
       fcp::secagg::ClientToServerWrapperMessage* secagg_commit_message);
 
   // Helper function to send a ClientStreamMessage. If sending did not succeed,

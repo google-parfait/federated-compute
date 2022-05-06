@@ -506,14 +506,12 @@ absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
 
 absl::Status GrpcFederatedProtocol::ReportCompleted(
     ComputationResults results,
-    const std::vector<std::pair<std::string, double>>& stats,
     absl::Duration plan_duration) {
   FCP_LOG(INFO) << "Reporting outcome: " << static_cast<int>(engine::COMPLETED);
   FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)
       << "Invalid call sequence";
   object_state_ = ObjectState::kReportCalled;
-  auto response =
-      Report(std::move(results), engine::COMPLETED, plan_duration, stats);
+  auto response = Report(std::move(results), engine::COMPLETED, plan_duration);
   // See note about how we handle 'permanent' errors at the top of this file.
   UpdateObjectStateIfPermanentError(response,
                                     ObjectState::kReportFailedPermanentError);
@@ -528,7 +526,7 @@ absl::Status GrpcFederatedProtocol::ReportNotCompleted(
   object_state_ = ObjectState::kReportCalled;
   ComputationResults results;
   results.emplace("tensorflow_checkpoint", "");
-  auto response = Report(std::move(results), phase_outcome, plan_duration, {});
+  auto response = Report(std::move(results), phase_outcome, plan_duration);
   // See note about how we handle 'permanent' errors at the top of this file.
   UpdateObjectStateIfPermanentError(response,
                                     ObjectState::kReportFailedPermanentError);
@@ -630,7 +628,6 @@ class SecAggStateTransitionListenerImpl
 absl::Status GrpcFederatedProtocol::ReportInternal(
     std::string tf_checkpoint, engine::PhaseOutcome phase_outcome,
     absl::Duration plan_duration,
-    const std::vector<std::pair<std::string, double>>& stats,
     ClientToServerWrapperMessage* secagg_commit_message) {
   ClientStreamMessage client_stream_message;
   auto report_request = client_stream_message.mutable_report_request();
@@ -652,11 +649,6 @@ absl::Status GrpcFederatedProtocol::ReportInternal(
 
   // 3. Include client execution statistics, if any.
   ClientExecutionStats client_execution_stats;
-  for (const auto& [name, value] : stats) {
-    auto training_stat = client_execution_stats.add_training_stat();
-    training_stat->set_stat_name(name);
-    training_stat->set_stat_value(value);
-  }
   client_execution_stats.mutable_duration()->set_seconds(
       absl::IDivDuration(plan_duration, absl::Seconds(1), &plan_duration));
   client_execution_stats.mutable_duration()->set_nanos(static_cast<int32_t>(
@@ -680,10 +672,9 @@ absl::Status GrpcFederatedProtocol::ReportInternal(
   return absl::OkStatus();
 }
 
-absl::Status GrpcFederatedProtocol::Report(
-    ComputationResults results, engine::PhaseOutcome phase_outcome,
-    absl::Duration plan_duration,
-    const std::vector<std::pair<std::string, double>>& stats) {
+absl::Status GrpcFederatedProtocol::Report(ComputationResults results,
+                                           engine::PhaseOutcome phase_outcome,
+                                           absl::Duration plan_duration) {
   std::string tf_checkpoint;
 
   // This lambda allows for convenient reporting from within SecAgg's
@@ -691,7 +682,7 @@ absl::Status GrpcFederatedProtocol::Report(
   std::function<absl::Status(ClientToServerWrapperMessage*)> report_lambda =
       [&](ClientToServerWrapperMessage* secagg_commit_message) -> absl::Status {
     return ReportInternal(std::move(tf_checkpoint), phase_outcome,
-                          plan_duration, stats, secagg_commit_message);
+                          plan_duration, secagg_commit_message);
   };
 
   // Run the Secure Aggregation protocol, if necessary.

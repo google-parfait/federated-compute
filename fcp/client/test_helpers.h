@@ -371,15 +371,13 @@ class MockFederatedProtocol : public FederatedProtocol {
 
   absl::Status ReportCompleted(
       ComputationResults results,
-      const std::vector<std::pair<std::string, double>>& stats,
       absl::Duration plan_duration) final {
     network_stats_ = kPostReportCompletedStats;
     retry_window_ = GetPostReportCompletedRetryWindow();
-    return MockReportCompleted(std::move(results), stats, plan_duration);
+    return MockReportCompleted(std::move(results), plan_duration);
   };
   MOCK_METHOD(absl::Status, MockReportCompleted,
               (ComputationResults results,
-               (const std::vector<std::pair<std::string, double>>& stats),
                absl::Duration plan_duration));
 
   absl::Status ReportNotCompleted(engine::PhaseOutcome phase_outcome,

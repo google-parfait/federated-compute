@@ -564,7 +564,6 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
 
 absl::Status HttpFederatedProtocol::ReportCompleted(
     ComputationResults results,
-    const std::vector<std::pair<std::string, double>>& stats,
     absl::Duration plan_duration) {
   FCP_LOG(INFO) << "Reporting outcome: " << static_cast<int>(engine::COMPLETED);
   FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)

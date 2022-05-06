@@ -217,7 +217,6 @@ class FederatedProtocol {
   //   - any server-provided error code.
   virtual absl::Status ReportCompleted(
       ComputationResults results,
-      const std::vector<std::pair<std::string, double>>& stats,
       absl::Duration plan_duration) = 0;
 
   // Reports the unsuccessful result of a federated computation to the server.

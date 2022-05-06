@@ -139,7 +139,6 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
 
   absl::Status ReportCompleted(
       ComputationResults results,
-      const std::vector<std::pair<std::string, double>>& stats,
       absl::Duration plan_duration) override;
 
   absl::Status ReportNotCompleted(engine::PhaseOutcome phase_outcome,

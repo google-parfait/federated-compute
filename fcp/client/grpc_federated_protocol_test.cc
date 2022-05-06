@@ -1266,7 +1266,7 @@ TEST_P(GrpcFederatedProtocolTest,
   EXPECT_CALL(*mock_secagg_client_, Start())
       .WillOnce(Return(absl::UnimplementedError("foo")));
   auto report_result = federated_protocol_->ReportCompleted(
-      std::move(results), {}, absl::ZeroDuration());
+      std::move(results), absl::ZeroDuration());
   EXPECT_THAT(report_result, IsCode(UNIMPLEMENTED));
   EXPECT_THAT(report_result.message(), "foo");
 }
@@ -1285,7 +1285,7 @@ TEST_P(GrpcFederatedProtocolTest,
   EXPECT_CALL(*mock_secagg_client_, Start())
       .WillOnce(Return(absl::UnimplementedError("foo")));
   auto report_result = federated_protocol_->ReportCompleted(
-      std::move(results), {}, absl::ZeroDuration());
+      std::move(results), absl::ZeroDuration());
   EXPECT_THAT(report_result, IsCode(UNIMPLEMENTED));
   EXPECT_THAT(report_result.message(), "foo");
 }
@@ -1298,7 +1298,6 @@ TEST_P(GrpcFederatedProtocolTest, TestReportSendFails) {
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/false));
 
   // 1. Create input for the Report function.
-  std::vector<std::pair<std::string, double>> stats{{"a", 1.0}, {"b", -2.1}};
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
   checkpoint_str.resize(kTFCheckpointSize, 'X');
@@ -1317,8 +1316,6 @@ TEST_P(GrpcFederatedProtocolTest, TestReportSendFails) {
           "    update_checkpoint: \"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\"",
           "    serialized_train_event {", "[type.googleapis.com/",
           "google.internal.federatedml.v2.ClientExecutionStats] {",
-          "        training_stat { stat_name: \"a\" stat_value: 1 }",
-          "        training_stat { stat_name: \"b\" stat_value: -2.1 }",
           "        duration { seconds: 1 nanos: 337000000 }", "      }",
           "    }", "  }", "}"),
       &expected_client_stream_message));
@@ -1329,8 +1326,8 @@ TEST_P(GrpcFederatedProtocolTest, TestReportSendFails) {
       .WillOnce(Return(absl::AbortedError("foo")));
 
   // 4. Test that ReportCompleted() sends the expected message.
-  auto report_result = federated_protocol_->ReportCompleted(
-      std::move(results), stats, plan_duration);
+  auto report_result =
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
   EXPECT_THAT(report_result, IsCode(ABORTED));
   EXPECT_THAT(report_result.message(), HasSubstr("foo"));
 
@@ -1362,7 +1359,7 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccess) {
 
   // 3. Test that ReportCompleted() sends the expected message.
   auto report_result = federated_protocol_->ReportCompleted(
-      std::move(results), {}, absl::ZeroDuration());
+      std::move(results), absl::ZeroDuration());
   EXPECT_OK(report_result);
 
   // If we made it to the Report protocol phase, then the client must've been
@@ -1434,7 +1431,7 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
 
   // 3. Test that ReportCompleted() sends the expected message.
   auto report_result = federated_protocol_->ReportCompleted(
-      std::move(results), {}, absl::ZeroDuration());
+      std::move(results), absl::ZeroDuration());
   EXPECT_OK(report_result);
 
   // If we made it to the Report protocol phase, then the client must've been
