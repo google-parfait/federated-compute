@@ -308,14 +308,6 @@ message Dataset {
   repeated ClientDataset client_data = 1;
 }
 
-message HealthPredicates {
-  reserved 1, 2;
-  // The highest value peak memory is allowed to be. Note that this number
-  // represents the max memory *growth* allowed caused by executing the task,
-  // not the overall peak memory of the whole test process.
-  int64 max_peak_memory_usage_bytes = 3;
-}
-
 // Represents predicates over metrics - i.e., expectations. This is used in
 // training/eval tests to encode metric names and values expected to be reported
 // by a client execution.
@@ -366,7 +358,7 @@ message MetricTestPredicates {
 
   repeated MetricCriterion metric_criterion = 1;
 
-  HealthPredicates health_predicates = 2;
+  reserved 2;
 }
 
 // A message for inference testing (input data + expected outputs).
@@ -411,7 +403,7 @@ message InferenceTestData {
 
   repeated InferenceTestExample test_examples = 1;
 
-  HealthPredicates health_predicates = 2;
+  reserved 2;
 }
 
 // Client Phase
