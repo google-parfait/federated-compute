@@ -23,6 +23,7 @@
 #include "google/longrunning/operations.pb.h"
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/duration.pb.h"
+#include "google/rpc/code.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/memory/memory.h"
@@ -38,6 +39,7 @@
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
+#include "fcp/client/federated_protocol_util.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
@@ -54,10 +56,13 @@ namespace {
 
 using ::fcp::EqualsProto;
 using ::fcp::IsCode;
+using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTask;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
+using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
+using ::google::internal::federatedcompute::v1::ReportTaskResultResponse;
 using ::google::internal::federatedcompute::v1::Resource;
 using ::google::internal::federatedcompute::v1::RetryWindow;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentRequest;
@@ -137,9 +142,21 @@ MATCHER_P(StartTaskAssignmentRequestMatcher, matcher,
 MATCHER_P(GetOperationRequestMatcher, matcher,
           absl::StrCat(negation ? "doesn't parse" : "parses",
                        " as a GetOperationRequest, and that ",
-                       DescribeMatcher<StartTaskAssignmentRequest>(matcher,
-                                                                   negation))) {
+                       DescribeMatcher<GetOperationRequest>(matcher,
+                                                            negation))) {
   GetOperationRequest request;
+  if (!request.ParseFromString(arg)) {
+    return false;
+  }
+  return ExplainMatchResult(matcher, request, result_listener);
+}
+
+MATCHER_P(ReportTaskResultRequestMatcher, matcher,
+          absl::StrCat(negation ? "doesn't parse" : "parses",
+                       " as a ReportTaskResultRequest, and that ",
+                       DescribeMatcher<ReportTaskResultRequest>(matcher,
+                                                                negation))) {
+  ReportTaskResultRequest request;
   if (!request.ParseFromString(arg)) {
     return false;
   }
@@ -337,6 +354,19 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
   return response;
 }
 
+ReportTaskResultRequest GetExpectedReportTaskResultRequest(
+    absl::string_view aggregation_id, ::google::rpc::Code code,
+    absl::Duration train_duration) {
+  ReportTaskResultRequest request;
+  request.set_aggregation_id(std::string(aggregation_id));
+  request.set_computation_status_code(code);
+  ClientStats client_stats;
+  *client_stats.mutable_computation_execution_duration() =
+      ConvertAbslToProtoDuration(train_duration);
+  *request.mutable_client_stats() = client_stats;
+  return request;
+}
+
 class HttpFederatedProtocolTest : public testing::Test {
  protected:
   void SetUp() override {
@@ -421,6 +451,50 @@ class HttpFederatedProtocolTest : public testing::Test {
         .WillOnce(Return(
             FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
     return federated_protocol_->EligibilityEvalCheckin().status();
+  }
+
+  // This function runs a successful Checkin() that results in a
+  // task assignment payload being returned by the server. This is a
+  // utility function used by Report*() tests that depend on a prior,
+  // successful execution of Checkin(). It returns a
+  // absl::Status, which the caller should verify is OK using ASSERT_OK.
+  absl::Status RunSuccessfulCheckin() {
+    // We return a fake response which returns the plan/initial checkpoint
+    // data inline, to keep things simple.
+    std::string expected_plan = kPlan;
+    std::string plan_uri = "https://fake.uri/plan";
+    Resource plan_resource;
+    plan_resource.set_uri(plan_uri);
+    std::string expected_checkpoint = kInitCheckpoint;
+    Resource checkpoint_resource;
+    checkpoint_resource.set_data(expected_checkpoint);
+    std::string expected_aggregation_session_id = kAggregationSessionId;
+    StartTaskAssignmentResponse task_assignment_response =
+        GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
+                                      expected_aggregation_session_id);
+
+    std::string request_uri =
+        "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+        "taskassignments/ELIGIBILITY%2FSESSION%23ID:start";
+    TaskEligibilityInfo expected_eligibility_info =
+        GetFakeTaskEligibilityInfo();
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    request_uri, HttpRequest::Method::kPost, _,
+                    StartTaskAssignmentRequestMatcher(
+                        EqualsProto(GetExpectedStartTaskAssignmentRequest(
+                            expected_eligibility_info))))))
+        .WillOnce(Return(
+            FakeHttpResponse(200, {},
+                             CreateDoneOperation(task_assignment_response)
+                                 .SerializeAsString())));
+
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    plan_uri, HttpRequest::Method::kGet, _, "")))
+        .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
+
+    return federated_protocol_->Checkin(expected_eligibility_info).status();
   }
 
   StrictMock<MockHttpClient> mock_http_client_;
@@ -1344,6 +1418,75 @@ TEST_F(HttpFederatedProtocolTest,
   // The Checkin call is expected to return the rejected retry window from the
   // response to the first eligibility eval request.
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+  absl::Duration plan_duration = absl::Minutes(5);
+  ReportTaskResultResponse response;
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://aggregation.uri/v1/populations/TEST%2FPOPULATION/"
+                  "taskassignments/CLIENT_SESSION_ID:reportresult",
+                  HttpRequest::Method::kPost, _,
+                  ReportTaskResultRequestMatcher(
+                      EqualsProto(GetExpectedReportTaskResultRequest(
+                          kAggregationSessionId, ::google::rpc::Code::INTERNAL,
+                          plan_duration))))))
+      .WillOnce(
+          Return(FakeHttpResponse(200, {}, response.SerializeAsString())));
+
+  ASSERT_OK(federated_protocol_->ReportNotCompleted(engine::PhaseOutcome::ERROR,
+                                                    plan_duration));
+
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedError) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+  ReportTaskResultResponse response;
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://aggregation.uri/v1/populations/TEST%2FPOPULATION/"
+                  "taskassignments/CLIENT_SESSION_ID:reportresult",
+                  HttpRequest::Method::kPost, _, _)))
+      .WillOnce(Return(FakeHttpResponse(503, {})));
+
+  absl::Status status = federated_protocol_->ReportNotCompleted(
+      engine::PhaseOutcome::ERROR, absl::Minutes(5));
+  EXPECT_THAT(status, IsCode(UNAVAILABLE));
+  EXPECT_THAT(
+      status.message(),
+      AllOf(HasSubstr("ReportTaskResult request failed:"), HasSubstr("503")));
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+  ReportTaskResultResponse response;
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://aggregation.uri/v1/populations/TEST%2FPOPULATION/"
+                  "taskassignments/CLIENT_SESSION_ID:reportresult",
+                  HttpRequest::Method::kPost, _, _)))
+      .WillOnce(Return(FakeHttpResponse(404, {})));
+
+  absl::Status status = federated_protocol_->ReportNotCompleted(
+      engine::PhaseOutcome::ERROR, absl::Minutes(5));
+  EXPECT_THAT(status, IsCode(NOT_FOUND));
+  EXPECT_THAT(
+      status.message(),
+      AllOf(HasSubstr("ReportTaskResult request failed:"), HasSubstr("404")));
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 class ProtocolRequestHelperTest : public testing::Test {

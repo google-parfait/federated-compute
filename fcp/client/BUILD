@@ -153,8 +153,10 @@ cc_library(
     deps = [
         ":diag_codes_cc_proto",
         ":interfaces",
+        "//fcp/base",
         "//fcp/protos:federated_api_cc_proto",
         "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
         "@com_google_protobuf//:cc_wkt_protos",
     ],
@@ -167,6 +169,7 @@ cc_test(
         ":diag_codes_cc_proto",
         ":federated_protocol_util",
         ":test_helpers",
+        "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],
 )

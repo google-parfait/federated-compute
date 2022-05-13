@@ -21,6 +21,7 @@
 #include "gtest/gtest.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/test_helpers.h"
+#include "fcp/testing/testing.h"
 
 namespace fcp::client {
 namespace {
@@ -73,6 +74,15 @@ TEST(ExtractTaskNameFromAggregationSessionIdTest, ExtractUnsuccessfully) {
             "population_name2/foo#bar", "population_name", mock_log_manager_),
         "population_name2/foo#bar");
   }
+}
+
+TEST(ConvertAbslToProtoDurationTest, ConvertSuccessfully) {
+  absl::Duration duration = absl::Seconds(1000) + absl::Nanoseconds(3);
+  google::protobuf::Duration expected_duration;
+  expected_duration.set_seconds(1000L);
+  expected_duration.set_nanos(3);
+  EXPECT_THAT(ConvertAbslToProtoDuration(duration),
+              EqualsProto(expected_duration));
 }
 
 }  // namespace

@@ -26,6 +26,7 @@
 
 #include "google/longrunning/operations.pb.h"
 #include "google/protobuf/any.pb.h"
+#include "google/rpc/code.pb.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -61,9 +62,11 @@ namespace http {
 using ::fcp::client::GenerateRetryWindowFromRetryTime;
 using ::fcp::client::GenerateRetryWindowFromTargetDelay;
 using ::fcp::client::PickRetryTimeFromRange;
+using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
+using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
 using ::google::internal::federatedcompute::v1::Resource;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentRequest;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentResponse;
@@ -110,27 +113,51 @@ using ::google::longrunning::Operation;
 
 namespace {
 
-// The URI suffix for a RequestEligibilityEvalTask protocol request.
-//
-// Arguments (which must be encoded using `EncodeUriSinglePathSegment`):
-//   $0: the `EligibilityEvalTaskRequest.population_name` request field.
-constexpr absl::string_view kRequestEligibilityEvalTaskUriSuffix =
-    "/v1/eligibilityevaltasks/$0:request";
+// Creates the URI suffix for a RequestEligibilityEvalTask protocol request.
+absl::StatusOr<std::string> CreateRequestEligibilityEvalTaskUriSuffix(
+    absl::string_view population_name) {
+  constexpr absl::string_view kRequestEligibilityEvalTaskUriSuffix =
+      "/v1/eligibilityevaltasks/$0:request";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                       EncodeUriSinglePathSegment(population_name));
+  return absl::Substitute(kRequestEligibilityEvalTaskUriSuffix,
+                          encoded_population_name);
+}
 
-// The URI suffix for a StartTaskAssignment protocol request.
-//
-// Arguments (which must be encoded using `EncodeUriSinglePathSegment`):
-//   $0: the `StartTaskAssignmentRequest.population_name` request field.
-//   $1: the `StartTaskAssignmentRequest.session_id` request field.
-constexpr absl::string_view kStartTaskAssignmentUriSuffix =
-    "/v1/populations/$0/taskassignments/$1:start";
+// Creates the URI suffix for a StartTaskAssignment protocol request.
+absl::StatusOr<std::string> CreateStartTaskAssignmentUriSuffix(
+    absl::string_view population_name, absl::string_view session_id) {
+  constexpr absl::string_view kStartTaskAssignmentUriSuffix =
+      "/v1/populations/$0/taskassignments/$1:start";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                       EncodeUriSinglePathSegment(population_name));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
+                       EncodeUriSinglePathSegment(session_id));
+  return absl::Substitute(kStartTaskAssignmentUriSuffix,
+                          encoded_population_name, encoded_session_id);
+}
 
-// The URI suffix for a GetOperation protocol request.
-//
-// Arguments (which must be encoded using `EncodeUriMultiplePathSegments`):
-//   $0: the `GetOperationRequest.name` request field, which must start with
-//       "operations/".
-constexpr absl::string_view kGetOperationUriSuffix = "/v1/$0";
+// Creates the URI suffix for a GetOperation protocol request.
+absl::StatusOr<std::string> CreateGetOperationUriSuffix(
+    absl::string_view operation_name) {
+  constexpr absl::string_view kGetOperationUriSuffix = "/v1/$0";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_operation_name,
+                       EncodeUriMultiplePathSegments(operation_name));
+  return absl::Substitute(kGetOperationUriSuffix, encoded_operation_name);
+}
+
+// Creates he URI suffix for a ReportTaskResult protocol request.
+absl::StatusOr<std::string> CreateReportTaskResultUriSuffix(
+    absl::string_view population_name, absl::string_view session_id) {
+  constexpr absl::string_view pattern =
+      "/v1/populations/$0/taskassignments/$1:reportresult";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                       EncodeUriSinglePathSegment(population_name));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
+                       EncodeUriSinglePathSegment(session_id));
+  // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_population_name, encoded_session_id);
+}
 
 // Convert a Resource proto into a UriOrInlineData object. Returns an
 // `INVALID_ARGUMENT` error if the given `Resource` has the `uri` field set to
@@ -154,6 +181,33 @@ absl::StatusOr<UriOrInlineData> ConvertResourceToUriOrInlineData(
     default:
       return absl::UnimplementedError("Unknown Resource type");
   }
+}
+
+::google::rpc::Code ConvertPhaseOutcomeToRpcCode(
+    engine::PhaseOutcome phase_outcome) {
+  switch (phase_outcome) {
+    case engine::PhaseOutcome::COMPLETED:
+      return ::google::rpc::Code::OK;
+    case engine::PhaseOutcome::ERROR:
+      return ::google::rpc::Code::INTERNAL;
+    case engine::PhaseOutcome::INTERRUPTED:
+      return ::google::rpc::Code::CANCELLED;
+    default:
+      return ::google::rpc::Code::UNKNOWN;
+  }
+}
+
+absl::StatusOr<ReportTaskResultRequest> CreateReportTaskResultRequest(
+    engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
+    absl::string_view aggregation_id) {
+  ReportTaskResultRequest request;
+  request.set_aggregation_id(std::string(aggregation_id));
+  request.set_computation_status_code(
+      ConvertPhaseOutcomeToRpcCode(phase_outcome));
+  ClientStats* client_stats = request.mutable_client_stats();
+  *client_stats->mutable_computation_execution_duration() =
+      ConvertAbslToProtoDuration(plan_duration);
+  return request;
 }
 
 }  // namespace
@@ -265,12 +319,8 @@ ProtocolRequestHelper::PollOperationResponseUntilDone(
 
 absl::StatusOr<InMemoryHttpResponse>
 ProtocolRequestHelper::PerformGetOperationRequest(std::string operation_name) {
-  FCP_ASSIGN_OR_RETURN(std::string encoded_operation_name,
-                       EncodeUriMultiplePathSegments(operation_name));
-
-  // Construct the URI suffix.
-  std::string uri_suffix =
-      absl::Substitute(kGetOperationUriSuffix, encoded_operation_name);
+  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
+                       CreateGetOperationUriSuffix(operation_name));
 
   // Issue the request. Note that the request body is empty, because its only
   // field (`name`) is included in the URI instead. Also note that
@@ -347,11 +397,9 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   request.mutable_client_version()->set_version_code(client_version_);
   // TODO(team): Populate an attestation_measurement value here.
 
-  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
-                       EncodeUriSinglePathSegment(population_name_));
-  // Construct the URI suffix.
-  std::string uri_suffix = absl::Substitute(
-      kRequestEligibilityEvalTaskUriSuffix, encoded_population_name);
+  FCP_ASSIGN_OR_RETURN(
+      std::string uri_suffix,
+      CreateRequestEligibilityEvalTaskUriSuffix(population_name_));
 
   // Issue the request.
   return protocol_request_helper_.PerformProtocolRequest(
@@ -477,15 +525,10 @@ HttpFederatedProtocol::PerformTaskAssignmentRequest(
     *request.mutable_task_eligibility_info() = *task_eligibility_info;
   }
 
-  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
-                       EncodeUriSinglePathSegment(population_name_));
-  FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
-                       EncodeUriSinglePathSegment(session_id_));
-
   // Construct the URI suffix.
-  std::string uri_suffix =
-      absl::Substitute(kStartTaskAssignmentUriSuffix, encoded_population_name,
-                       encoded_session_id);
+  FCP_ASSIGN_OR_RETURN(
+      std::string uri_suffix,
+      CreateStartTaskAssignmentUriSuffix(population_name_, session_id_));
 
   // Issue the request.
   return protocol_request_helper_.PerformProtocolRequest(
@@ -552,6 +595,8 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
                           .checkpoint = task_assignment.init_checkpoint()}));
 
   object_state_ = ObjectState::kCheckinAccepted;
+  session_id_ = task_assignment.session_id();
+  aggregation_session_id_ = task_assignment.aggregation_id();
 
   return TaskAssignment{
       .payloads = std::move(payloads),
@@ -578,7 +623,26 @@ absl::Status HttpFederatedProtocol::ReportNotCompleted(
   FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)
       << "Invalid call sequence";
   object_state_ = ObjectState::kReportCalled;
-  return absl::UnimplementedError("ReportNotCompleted() not implemented yet!");
+  FCP_ASSIGN_OR_RETURN(
+      ReportTaskResultRequest request,
+      CreateReportTaskResultRequest(phase_outcome, plan_duration,
+                                    aggregation_session_id_));
+  // Construct the URI suffix.
+  FCP_ASSIGN_OR_RETURN(
+      std::string uri_suffix,
+      CreateReportTaskResultUriSuffix(population_name_, session_id_));
+
+  // Issue the request.
+  absl::StatusOr<InMemoryHttpResponse> http_response =
+      protocol_request_helper_.PerformProtocolRequest(
+          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString());
+  if (!http_response.ok()) {
+    // If the request failed, we'll forward the error status.
+    return absl::Status(http_response.status().code(),
+                        absl::StrCat("ReportTaskResult request failed: ",
+                                     http_response.status().ToString()));
+  }
+  return absl::OkStatus();
 }
 
 ::google::internal::federatedml::v2::RetryWindow

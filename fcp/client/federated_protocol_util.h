@@ -20,6 +20,7 @@
 
 #include "google/protobuf/duration.pb.h"
 #include "absl/random/random.h"
+#include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -58,6 +59,14 @@ GenerateRetryWindowFromRetryTime(absl::Time retry_time);
 std::string ExtractTaskNameFromAggregationSessionId(
     const std::string& session_id, const std::string& population_name,
     fcp::client::LogManager& log_manager);
+
+// Converts an absl::Duration to a google::protobuf::Duration.
+// Note that we assume the durations we deal with here are representable by
+// both formats.  If the resulted google::protobuf::Duration is invalid, it will
+// lead to undefined behavior.
+google::protobuf::Duration ConvertAbslToProtoDuration(
+    absl::Duration absl_duration);
+
 }  // namespace client
 }  // namespace fcp
 

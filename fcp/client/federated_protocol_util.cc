@@ -20,8 +20,10 @@
 
 #include "google/protobuf/duration.pb.h"
 #include "absl/random/random.h"
+#include "absl/status/statusor.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -44,19 +46,6 @@ absl::Duration PickRetryDelayFromRange(absl::Duration min_delay,
   absl::Duration window_width = max_delay - min_delay;
   double random = absl::Uniform(bit_gen, 0, 1.0);
   return min_delay + (window_width * random);
-}
-
-// Converts an absl::Duration to a google::protobuf::Duration.
-// Note that we assume the durations we deal with here are representable by
-// both formats.
-::google::protobuf::Duration ConvertAbslToProtoDuration(
-    absl::Duration absl_duration) {
-  google::protobuf::Duration proto_duration;
-  proto_duration.set_seconds(int32_t(
-      absl::IDivDuration(absl_duration, absl::Seconds(1), &absl_duration)));
-  proto_duration.set_nanos(int32_t(
-      absl::IDivDuration(absl_duration, absl::Nanoseconds(1), &absl_duration)));
-  return proto_duration;
 }
 
 }  // namespace
@@ -120,6 +109,27 @@ std::string ExtractTaskNameFromAggregationSessionId(
     return session_id.substr(population_name.length() + 1,
                              task_end - population_name.length() - 1);
   }
+}
+
+google::protobuf::Duration ConvertAbslToProtoDuration(
+    absl::Duration absl_duration) {
+  google::protobuf::Duration proto_duration;
+  if (absl_duration == absl::InfiniteDuration()) {
+    proto_duration.set_seconds(std::numeric_limits<int64_t>::max());
+    proto_duration.set_nanos(static_cast<int32_t>(999999999));
+  } else if (absl_duration == -absl::InfiniteDuration()) {
+    proto_duration.set_seconds(std::numeric_limits<int64_t>::min());
+    proto_duration.set_nanos(static_cast<int32_t>(-999999999));
+  } else {
+    // s and n may both be negative, per the Duration proto spec.
+    const int64_t s =
+        absl::IDivDuration(absl_duration, absl::Seconds(1), &absl_duration);
+    const int64_t n =
+        absl::IDivDuration(absl_duration, absl::Nanoseconds(1), &absl_duration);
+    proto_duration.set_seconds(s);
+    proto_duration.set_nanos(static_cast<int32_t>(n));
+  }
+  return proto_duration;
 }
 
 }  // namespace client
