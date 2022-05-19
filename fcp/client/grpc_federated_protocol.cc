@@ -212,6 +212,9 @@ ProtocolOptionsRequest GrpcFederatedProtocol::CreateProtocolOptionsRequest(
   ProtocolOptionsRequest request;
   request.set_should_ack_checkin(should_ack_checkin);
   request.set_supports_http_download(http_client_ != nullptr);
+  request.set_supports_eligibility_eval_http_download(
+      http_client_ != nullptr &&
+      flags_->enable_grpc_with_eligibility_eval_http_resource_support());
 
   // Note that we set this field for both eligibility eval checkin requests
   // and regular checkin requests. Even though eligibility eval tasks do not
@@ -336,13 +339,36 @@ GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
     case EligibilityEvalCheckinResponse::kEligibilityEvalPayload: {
       const EligibilityEvalPayload& eligibility_eval_payload =
           eligibility_checkin_response.eligibility_eval_payload();
-      std::string execution_id = eligibility_eval_payload.execution_id();
       object_state_ = ObjectState::kEligibilityEvalEnabled;
+      PlanAndCheckpointPayloads payloads;
+      if (http_client_ == nullptr ||
+          !flags_->enable_grpc_with_eligibility_eval_http_resource_support()) {
+        payloads = {.plan = eligibility_eval_payload.plan(),
+                    .checkpoint = eligibility_eval_payload.init_checkpoint()};
+      } else {
+        // Fetch the task resources, returning any errors that may be
+        // encountered in the process.
+        FCP_ASSIGN_OR_RETURN(
+            payloads,
+            FetchTaskResources(
+                {.plan =
+                     {
+                         .has_uri =
+                             eligibility_eval_payload.has_plan_resource(),
+                         .uri = eligibility_eval_payload.plan_resource().uri(),
+                         .data = eligibility_eval_payload.plan(),
+                     },
+                 .checkpoint = {
+                     .has_uri = eligibility_eval_payload
+                                    .has_init_checkpoint_resource(),
+                     .uri = eligibility_eval_payload.init_checkpoint_resource()
+                                .uri(),
+                     .data = eligibility_eval_payload.init_checkpoint(),
+                 }}));
+      }
       return EligibilityEvalTask{
-          .payloads = {.plan = eligibility_eval_payload.plan(),
-                       .checkpoint =
-                           eligibility_eval_payload.init_checkpoint()},
-          .execution_id = execution_id};
+          .payloads = std::move(payloads),
+          .execution_id = eligibility_eval_payload.execution_id()};
     }
     case EligibilityEvalCheckinResponse::kNoEligibilityEvalConfigured: {
       // Nothing to do...

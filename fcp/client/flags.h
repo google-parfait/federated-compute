@@ -133,6 +133,13 @@ class Flags {
   // via HTTP, while still using gRPC for the main protocol.
   virtual bool enable_grpc_with_http_resource_support() const { return false; }
 
+  // Whether to enable support for downloading eligibility eval plan/initial
+  // checkpoint resources via HTTP, while still using gRPC for the main
+  // protocol.
+  virtual bool enable_grpc_with_eligibility_eval_http_resource_support() const {
+    return false;
+  }
+
   // Whether to splits up TRAIN_ERROR and TRAIN_INTERRUPTED into separate errors
   // for eligibility, checkin, and training.
   virtual bool granular_per_phase_logs() const { return false; }

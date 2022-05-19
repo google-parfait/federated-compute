@@ -285,6 +285,8 @@ ClientStreamMessage GetExpectedEligibilityEvalCheckinRequest(
   if (enable_http_resource_support) {
     checkin_request->mutable_protocol_options_request()
         ->set_supports_http_download(true);
+    checkin_request->mutable_protocol_options_request()
+        ->set_supports_eligibility_eval_http_download(true);
   }
 
   return expected_message;
@@ -312,6 +314,8 @@ ClientStreamMessage GetExpectedCheckinRequest(
   if (enable_http_resource_support) {
     checkin_request->mutable_protocol_options_request()
         ->set_supports_http_download(true);
+    checkin_request->mutable_protocol_options_request()
+        ->set_supports_eligibility_eval_http_download(true);
   }
 
   if (task_eligibility_info.has_value()) {
@@ -354,6 +358,9 @@ class GrpcFederatedProtocolTest
             static_cast<int32_t>(absl::StatusCode::kNotFound),
             static_cast<int32_t>(absl::StatusCode::kInvalidArgument),
             static_cast<int32_t>(absl::StatusCode::kUnimplemented)}));
+    EXPECT_CALL(mock_flags_,
+                enable_grpc_with_eligibility_eval_http_resource_support)
+        .WillRepeatedly(Return(enable_http_resource_support_));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -739,10 +746,211 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
       federated_protocol_->EligibilityEvalCheckin();
 
   ASSERT_OK(eligibility_checkin_result);
-  EXPECT_THAT(*eligibility_checkin_result,
-              VariantWith<FederatedProtocol::EligibilityEvalTask>(
-                  FieldsAre(FieldsAre(expected_plan, expected_checkpoint),
-                            expected_execution_id)));
+  // If HTTP support is enabled then the checkpoint data gets returned in the
+  // shape of an absl::Cord (rather than an std::string), regardless of whether
+  // it was actually downloaded via HTTP.
+  if (enable_http_resource_support_) {
+    EXPECT_THAT(*eligibility_checkin_result,
+                VariantWith<FederatedProtocol::EligibilityEvalTask>(
+                    FieldsAre(FieldsAre(absl::Cord(expected_plan),
+                                        absl::Cord(expected_checkpoint)),
+                              expected_execution_id)));
+  } else {
+    EXPECT_THAT(*eligibility_checkin_result,
+                VariantWith<FederatedProtocol::EligibilityEvalTask>(
+                    FieldsAre(FieldsAre(expected_plan, expected_checkpoint),
+                              expected_execution_id)));
+  }
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_P(GrpcFederatedProtocolTest,
+       TestEligiblityEvalCheckinEnabledWithHttpResourcesDownloaded) {
+  if (!enable_http_resource_support_) {
+    GTEST_SKIP() << "This test only applies if the HTTP task resources feature "
+                    "is enabled";
+    return;
+  }
+
+  EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
+      .WillOnce(Return(absl::OkStatus()));
+
+  std::string expected_plan = kPlan;
+  std::string plan_uri = "https://fake.uri/plan";
+  std::string expected_checkpoint = kInitCheckpoint;
+  std::string checkpoint_uri = "https://fake.uri/checkpoint";
+  std::string expected_execution_id = "ELIGIBILITY_EVAL_EXECUTION_ID";
+  ServerStreamMessage fake_response = GetFakeEnabledEligibilityCheckinResponse(
+      /*plan=*/"", /*init_checkpoint=*/"", expected_execution_id);
+  EligibilityEvalPayload* eligibility_eval_payload =
+      fake_response.mutable_eligibility_eval_checkin_response()
+          ->mutable_eligibility_eval_payload();
+  eligibility_eval_payload->mutable_plan_resource()->set_uri(plan_uri);
+  eligibility_eval_payload->mutable_init_checkpoint_resource()->set_uri(
+      checkpoint_uri);
+  EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
+      .WillOnce(DoAll(SetArgPointee<0>(GetFakeCheckinRequestAck()),
+                      Return(absl::OkStatus())))
+      .WillOnce(
+          DoAll(SetArgPointee<0>(fake_response), Return(absl::OkStatus())));
+  EXPECT_CALL(
+      mock_log_manager_,
+      LogDiag(ProdDiagCode::BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_RECEIVED));
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  plan_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  checkpoint_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(200, {}, expected_checkpoint)));
+
+  {
+    InSequence seq;
+    EXPECT_CALL(
+        mock_log_manager_,
+        LogDiag(
+            ProdDiagCode::HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP));
+    EXPECT_CALL(
+        mock_log_manager_,
+        LogDiag(
+            ProdDiagCode::
+                HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_SUCCEEDED));
+  }
+
+  // Issue the Eligibility Eval checkin.
+  auto eligibility_checkin_result =
+      federated_protocol_->EligibilityEvalCheckin();
+
+  ASSERT_OK(eligibility_checkin_result);
+  EXPECT_THAT(
+      *eligibility_checkin_result,
+      VariantWith<FederatedProtocol::EligibilityEvalTask>(FieldsAre(
+          FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
+          expected_execution_id)));
+}
+
+TEST_P(GrpcFederatedProtocolTest,
+       TestEligiblityEvalCheckinEnabledWithHttpResourcesPlanDataFetchFailed) {
+  if (!enable_http_resource_support_) {
+    GTEST_SKIP() << "This test only applies if the HTTP task resources feature "
+                    "is enabled";
+    return;
+  }
+
+  EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
+      .WillOnce(Return(absl::OkStatus()));
+
+  std::string expected_plan = kPlan;
+  std::string plan_uri = "https://fake.uri/plan";
+  std::string expected_checkpoint = kInitCheckpoint;
+  std::string expected_execution_id = "ELIGIBILITY_EVAL_EXECUTION_ID";
+  ServerStreamMessage fake_response = GetFakeEnabledEligibilityCheckinResponse(
+      /*plan=*/"", expected_checkpoint, expected_execution_id);
+  fake_response.mutable_eligibility_eval_checkin_response()
+      ->mutable_eligibility_eval_payload()
+      ->mutable_plan_resource()
+      ->set_uri(plan_uri);
+  EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
+      .WillOnce(DoAll(SetArgPointee<0>(GetFakeCheckinRequestAck()),
+                      Return(absl::OkStatus())))
+      .WillOnce(
+          DoAll(SetArgPointee<0>(fake_response), Return(absl::OkStatus())));
+  EXPECT_CALL(
+      mock_log_manager_,
+      LogDiag(ProdDiagCode::BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_RECEIVED));
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  plan_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(404, {}, "")));
+
+  {
+    InSequence seq;
+    EXPECT_CALL(
+        mock_log_manager_,
+        LogDiag(
+            ProdDiagCode::HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP));
+    EXPECT_CALL(
+        mock_log_manager_,
+        LogDiag(
+            ProdDiagCode::
+                HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_FAILED));
+  }
+
+  // Issue the eligibility eval checkin.
+  auto eligibility_checkin_result =
+      federated_protocol_->EligibilityEvalCheckin();
+
+  EXPECT_THAT(eligibility_checkin_result.status(), IsCode(NOT_FOUND));
+  EXPECT_THAT(eligibility_checkin_result.status().message(),
+              HasSubstr("plan fetch failed"));
+  EXPECT_THAT(eligibility_checkin_result.status().message(), HasSubstr("404"));
+  // The EligibilityEvalCheckin call is expected to return the permanent error
+  // retry window, since 404 maps to a permanent error.
+  ExpectPermanentErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_P(GrpcFederatedProtocolTest,
+       TestEligiblityEvalCheckinEnabledWithHttpResourcesCheckpointFetchFailed) {
+  if (!enable_http_resource_support_) {
+    GTEST_SKIP() << "This test only applies if the HTTP task resources feature "
+                    "is enabled";
+    return;
+  }
+
+  EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
+      .WillOnce(Return(absl::OkStatus()));
+
+  std::string expected_plan = kPlan;
+  std::string expected_checkpoint = kInitCheckpoint;
+  std::string checkpoint_uri = "https://fake.uri/checkpoint";
+  std::string expected_execution_id = "ELIGIBILITY_EVAL_EXECUTION_ID";
+  ServerStreamMessage fake_response = GetFakeEnabledEligibilityCheckinResponse(
+      expected_plan, /*init_checkpoint=*/"", expected_execution_id);
+  fake_response.mutable_eligibility_eval_checkin_response()
+      ->mutable_eligibility_eval_payload()
+      ->mutable_init_checkpoint_resource()
+      ->set_uri(checkpoint_uri);
+  EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
+      .WillOnce(DoAll(SetArgPointee<0>(GetFakeCheckinRequestAck()),
+                      Return(absl::OkStatus())))
+      .WillOnce(
+          DoAll(SetArgPointee<0>(fake_response), Return(absl::OkStatus())));
+  EXPECT_CALL(
+      mock_log_manager_,
+      LogDiag(ProdDiagCode::BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_RECEIVED));
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  checkpoint_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(503, {}, "")));
+
+  {
+    InSequence seq;
+    EXPECT_CALL(
+        mock_log_manager_,
+        LogDiag(
+            ProdDiagCode::HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP));
+    EXPECT_CALL(
+        mock_log_manager_,
+        LogDiag(
+            ProdDiagCode::
+                HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_FAILED));
+  }
+
+  // Issue the eligibility eval checkin.
+  auto eligibility_checkin_result =
+      federated_protocol_->EligibilityEvalCheckin();
+
+  EXPECT_THAT(eligibility_checkin_result.status(), IsCode(UNAVAILABLE));
+  EXPECT_THAT(eligibility_checkin_result.status().message(),
+              HasSubstr("checkpoint fetch failed"));
+  EXPECT_THAT(eligibility_checkin_result.status().message(), HasSubstr("503"));
+  // The EligibilityEvalCheckin call is expected to return the rejected error
+  // retry window, since 503 maps to a transient error.
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
