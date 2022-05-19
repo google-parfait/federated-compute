@@ -45,7 +45,12 @@ message QueryTimeComputationProperties {
 }
 
 // On-device, local computation only. No aggregation.
-message LocalComputation {}
+message LocalComputation {
+  // The absolute path to the input directory.
+  string input_dir = 1;
+  // The absolute path to the output directory.
+  string output_dir = 2;
+}
 
 // ElgibilityEval computation, no aggregation.
 message EligibilityEvalComputation {

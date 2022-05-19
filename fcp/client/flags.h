@@ -150,6 +150,9 @@ class Flags {
   virtual int32_t large_tensor_threshold_for_dynamic_allocation() const {
     return 0;
   }
+
+  // Whether to include input_dir and output_dir in SelectorContext.
+  virtual bool include_lc_inputs_in_selector_context() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
