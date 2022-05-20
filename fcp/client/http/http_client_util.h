@@ -37,6 +37,7 @@ inline static constexpr char kTransferEncodingHdr[] = "Transfer-Encoding";
 // The "Transfer-Encoding" header value when the header is present but indicates
 // that no encoding was actually applied.
 inline static constexpr char kIdentityEncodingHdrValue[] = "identity";
+inline static constexpr char kGzipEncodingHdrValue[] = "gzip";
 
 // A non-exhaustive enumeration of common HTTP response codes.
 // Note this is purposely *not* an "enum class", to allow easy comparisons

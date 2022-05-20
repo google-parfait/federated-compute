@@ -21,6 +21,8 @@
 #include <utility>
 #include <vector>
 
+#include "google/protobuf/io/gzip_stream.h"
+#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
@@ -42,6 +44,8 @@ namespace fcp::client::http {
 namespace {
 
 using ::fcp::IsCode;
+using ::google::protobuf::io::ArrayInputStream;
+using ::google::protobuf::io::GzipInputStream;
 using ::testing::_;
 using ::testing::ContainerEq;
 using ::testing::Contains;
@@ -57,6 +61,46 @@ using ::testing::Pair;
 using ::testing::Return;
 using ::testing::StrEq;
 using ::testing::StrictMock;
+
+absl::StatusOr<std::string> GunzipString(const std::string& compressed_data,
+                                         size_t expected_size) {
+  const void* in;
+  int in_size = 0;
+
+  std::unique_ptr<char[]> buffer(new char[expected_size]);
+  char* out = buffer.get();
+  int out_size = static_cast<int>(expected_size);
+
+  ArrayInputStream sub_stream(compressed_data.data(),
+                              static_cast<int>(compressed_data.size()));
+  GzipInputStream input(&sub_stream, GzipInputStream::GZIP);
+  while (true) {
+    if (!input.Next(&in, &in_size)) {
+      return absl::InternalError(
+          absl::StrCat("Uncompress failed.", input.ZlibErrorMessage()));
+    }
+    if (in_size <= -1) {
+      return absl::InternalError(
+          "Uncompress failed: invalid input size returned by the "
+          "GzipInputStream.");
+    }
+
+    if (out_size <= in_size) {
+      memcpy(out, in, out_size);
+      if (in_size > out_size) {
+        // The buffer we received is larger than the bytes we'll receive, so we
+        // need to back up to the correct end of the stream.
+        input.BackUp(in_size - out_size);
+      }
+      break;  // Copied all of it.
+    }
+
+    memcpy(out, in, in_size);
+    out += in_size;
+    out_size -= in_size;
+  }
+  return std::string(buffer.get(), expected_size);
+}
 
 TEST(InMemoryHttpRequestTest, NonHttpsUriFails) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
@@ -171,7 +215,6 @@ TEST(InMemoryHttpRequestTest, ReadBodySimple) {
   ASSERT_OK(read_result);
   EXPECT_THAT(*read_result, actual_body.size());
   EXPECT_THAT(actual_body, StrEq(expected_body));
-
   // Expect the second read to indicate the end of the stream.
   EXPECT_THAT((*request)->ReadBody(nullptr, 1), IsCode(OUT_OF_RANGE));
 }
@@ -217,6 +260,42 @@ TEST(InMemoryHttpRequestTest, ReadBodyChunked) {
 
   // Expect the last read to indicate the end of the stream.
   EXPECT_THAT((*request)->ReadBody(nullptr, 1), IsCode(OUT_OF_RANGE));
+}
+
+TEST(InMemoryHttpRequestTest, RequestWithCompressedBody) {
+  const std::string uncompressed_body =
+      "request_body_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  absl::StatusOr<std::unique_ptr<HttpRequest>> request =
+      InMemoryHttpRequest::Create("https://valid.com",
+                                  HttpRequest::Method::kPost, {},
+                                  uncompressed_body, /*use_compression=*/true);
+  ASSERT_OK(request);
+  auto content_encoding_header =
+      FindHeader((*request)->extra_headers(), kContentEncodingHdr);
+  ASSERT_TRUE(content_encoding_header.has_value());
+  ASSERT_EQ(content_encoding_header.value(), kGzipEncodingHdrValue);
+
+  auto content_length_header =
+      FindHeader((*request)->extra_headers(), kContentLengthHdr);
+  ASSERT_TRUE(content_length_header.has_value());
+  int compressed_length = std::stoi(content_length_header.value());
+  ASSERT_GT(compressed_length, 0);
+  ASSERT_LT(compressed_length, uncompressed_body.size());
+
+  std::string actual_body;
+  actual_body.resize(compressed_length);
+  // Read the body in one go (the "simple" case).
+  auto read_result =
+      (*request)->ReadBody(actual_body.data(), actual_body.size());
+  ASSERT_OK(read_result);
+  EXPECT_THAT(*read_result, actual_body.size());
+
+  // Expect the second read to indicate the end of the stream.
+  EXPECT_THAT((*request)->ReadBody(nullptr, 1), IsCode(OUT_OF_RANGE));
+
+  auto recovered_body = GunzipString(actual_body, uncompressed_body.size());
+  ASSERT_OK(recovered_body);
+  EXPECT_EQ(*recovered_body, uncompressed_body);
 }
 
 TEST(InMemoryHttpRequestCallbackTest, ResponseFailsBeforeHeaders) {

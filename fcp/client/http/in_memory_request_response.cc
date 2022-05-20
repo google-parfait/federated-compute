@@ -24,6 +24,8 @@
 #include <utility>
 #include <vector>
 
+#include "google/protobuf/io/gzip_stream.h"
+#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -43,6 +45,9 @@ namespace client {
 namespace http {
 
 namespace {
+using ::google::protobuf::io::GzipOutputStream;
+using ::google::protobuf::io::StringOutputStream;
+
 // Utility for performing multiple HTTP requests and return the results (incl.
 // the response body) in memory.
 //
@@ -114,6 +119,46 @@ PerformRequestsInMemory(
   }
   return results;
 }
+
+absl::StatusOr<std::string> CompressWithGZip(
+    const std::string& uncompressed_data) {
+  int starting_pos = 0;
+  size_t str_size = uncompressed_data.length();
+  size_t in_size = str_size;
+
+  std::string output;
+  StringOutputStream string_output_stream(&output);
+  GzipOutputStream::Options options;
+  options.format = GzipOutputStream::GZIP;
+  GzipOutputStream compressed_stream(&string_output_stream, options);
+  void* out;
+  int out_size;
+  while (starting_pos < str_size) {
+    if (!compressed_stream.Next(&out, &out_size) || out_size <= 0) {
+      return absl::InternalError(
+          absl::StrCat("An error has occured during compression:",
+                       compressed_stream.ZlibErrorMessage()));
+    }
+
+    if (in_size <= out_size) {
+      uncompressed_data.copy(static_cast<char*>(out), in_size, starting_pos);
+      // Ensure that the stream's output buffer is truncated to match the total
+      // amount of data.
+      compressed_stream.BackUp(out_size - static_cast<int>(in_size));
+      break;
+    }
+    uncompressed_data.copy(static_cast<char*>(out), out_size, starting_pos);
+    starting_pos += out_size;
+    in_size -= out_size;
+  }
+
+  if (!compressed_stream.Close()) {
+    return absl::InternalError(absl::StrCat(
+        "Failed to close the stream: ", compressed_stream.ZlibErrorMessage()));
+  }
+  return output;
+}
+
 }  // namespace
 
 // The maximum payload size we're willing to download via the simple in-memory
@@ -126,10 +171,14 @@ constexpr int64_t kMaxBufferSize = 50 * 1024 * 1024;  // 50 MiB
 
 absl::StatusOr<std::unique_ptr<HttpRequest>> InMemoryHttpRequest::Create(
     absl::string_view uri, HttpRequest::Method method, HeaderList extra_headers,
-    std::string body) {
+    std::string body, bool use_compression) {
   if (!absl::StartsWithIgnoreCase(uri, kHttpsScheme)) {
     return absl::InvalidArgumentError(
         absl::StrCat("Non-HTTPS URIs are not supported: ", uri));
+  }
+  if (use_compression) {
+    FCP_ASSIGN_OR_RETURN(body, CompressWithGZip(body));
+    extra_headers.push_back({kContentEncodingHdr, kGzipEncodingHdrValue});
   }
   std::optional<std::string> content_length_hdr =
       FindHeader(extra_headers, kContentLengthHdr);

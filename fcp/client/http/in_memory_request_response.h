@@ -47,13 +47,17 @@ class InMemoryHttpRequest : public HttpRequest {
   // Note that a "Content-Length" header will be constructed automatically, and
   // must not be provided by the caller.
   //
+  // When "use_compression" is true, the body will be compressed with gzip.
+  // A "Content-Encoding" header will be added, and the "Content-Length" header
+  // will be the compressed length.
+  //
   // Returns an INVALID_ARGUMENT error if:
   // - the URI is a non-HTTPS URI,
   // - the request has a body but the request method doesn't allow it,
   // - the headers contain a "Content-Length" header.
   static absl::StatusOr<std::unique_ptr<HttpRequest>> Create(
       absl::string_view uri, Method method, HeaderList extra_headers,
-      std::string body);
+      std::string body, bool use_compression = false);
 
   absl::string_view uri() const override { return uri_; };
   Method method() const override { return method_; };
