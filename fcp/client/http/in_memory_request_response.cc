@@ -136,7 +136,7 @@ absl::StatusOr<std::string> CompressWithGZip(
   while (starting_pos < str_size) {
     if (!compressed_stream.Next(&out, &out_size) || out_size <= 0) {
       return absl::InternalError(
-          absl::StrCat("An error has occured during compression:",
+          absl::StrCat("An error has occurred during compression:",
                        compressed_stream.ZlibErrorMessage()));
     }
 
@@ -418,7 +418,7 @@ FetchResourcesInMemory(HttpClient& http_client,
       FCP_ASSIGN_OR_RETURN(
           std::unique_ptr<http::HttpRequest> request,
           InMemoryHttpRequest::Create(resource.uri(), HttpRequest::Method::kGet,
-                                      {}, ""));
+                                      {}, "", /*use_compression=*/false));
       http_requests.push_back(std::move(request));
       int64_t response_index = http_requests.end() - http_requests.begin() - 1;
       response_accessors.push_back([&http_responses, response_index]() {

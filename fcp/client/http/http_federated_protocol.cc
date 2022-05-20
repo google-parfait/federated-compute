@@ -215,12 +215,13 @@ absl::StatusOr<ReportTaskResultRequest> CreateReportTaskResultRequest(
 ProtocolRequestHelper::ProtocolRequestHelper(
     HttpClient* http_client, InterruptibleRunner* interruptible_runner,
     int64_t* bytes_downloaded, int64_t* bytes_uploaded,
-    absl::string_view entry_point_uri)
+    absl::string_view entry_point_uri, bool use_compression)
     : http_client_(*http_client),
       interruptible_runner_(*interruptible_runner),
       bytes_downloaded_(*bytes_downloaded),
       bytes_uploaded_(*bytes_uploaded),
-      next_request_base_uri_(entry_point_uri) {}
+      next_request_base_uri_(entry_point_uri),
+      use_compression_(use_compression) {}
 
 absl::StatusOr<InMemoryHttpResponse>
 ProtocolRequestHelper::PerformProtocolRequest(absl::string_view uri_suffix,
@@ -241,7 +242,7 @@ ProtocolRequestHelper::PerformProtocolRequest(
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<http::HttpRequest> request,
       InMemoryHttpRequest::Create(*uri, method, next_request_headers_,
-                                  std::move(request_body)));
+                                  std::move(request_body), use_compression_));
 
   // Check whether issuing the request failed as a whole (generally indicating
   // a programming error).
@@ -350,7 +351,8 @@ HttpFederatedProtocol::HttpFederatedProtocol(
                   BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT})),
       protocol_request_helper_(http_client, interruptible_runner_.get(),
                                &bytes_downloaded_, &bytes_uploaded_,
-                               entry_point_uri),
+                               entry_point_uri,
+                               !flags->disable_http_request_body_compression()),
       api_key_(api_key),
       population_name_(population_name),
       retry_token_(retry_token),

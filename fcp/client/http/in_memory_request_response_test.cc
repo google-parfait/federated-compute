@@ -105,15 +105,16 @@ absl::StatusOr<std::string> GunzipString(const std::string& compressed_data,
 TEST(InMemoryHttpRequestTest, NonHttpsUriFails) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("http://invalid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   EXPECT_THAT(request.status(), IsCode(INVALID_ARGUMENT));
 }
 
 TEST(InMemoryHttpRequestTest, GetWithRequestBodyFails) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
-      InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {},
-                                  "non_empty_request_body");
+      InMemoryHttpRequest::Create(
+          "https://valid.com", HttpRequest::Method::kGet, {},
+          "non_empty_request_body", /*use_compression=*/false);
   EXPECT_THAT(request.status(), IsCode(INVALID_ARGUMENT));
 }
 
@@ -125,7 +126,8 @@ TEST(InMemoryHttpRequestTest, ContentLengthHeaderFails) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create(
           "https://valid.com", HttpRequest::Method::kPost,
-          {{"Content-length", "1234"}}, "non_empty_request_body");
+          {{"Content-length", "1234"}}, "non_empty_request_body",
+          /*use_compression=*/false);
   EXPECT_THAT(request.status(), IsCode(INVALID_ARGUMENT));
 }
 
@@ -133,7 +135,7 @@ TEST(InMemoryHttpRequestTest, ValidGetRequest) {
   const std::string expected_uri = "https://valid.com";
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create(expected_uri, HttpRequest::Method::kGet, {},
-                                  "");
+                                  "", /*use_compression=*/false);
   ASSERT_OK(request);
   EXPECT_THAT((*request)->uri(), StrEq(expected_uri));
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kGet);
@@ -146,8 +148,9 @@ TEST(InMemoryHttpRequestTest, ValidGetRequest) {
 TEST(InMemoryHttpRequestTest, ValidGetRequestWithHeaders) {
   const HeaderList expected_headers{{"Foo", "Bar"}, {"Baz", "123"}};
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
-      InMemoryHttpRequest::Create(
-          "https://valid.com", HttpRequest::Method::kGet, expected_headers, "");
+      InMemoryHttpRequest::Create("https://valid.com",
+                                  HttpRequest::Method::kGet, expected_headers,
+                                  "", /*use_compression=*/false);
   ASSERT_OK(request);
   EXPECT_THAT((*request)->extra_headers(), ContainerEq(expected_headers));
 }
@@ -156,7 +159,7 @@ TEST(InMemoryHttpRequestTest, ValidPostRequestWithoutBody) {
   const std::string expected_uri = "https://valid.com";
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create(expected_uri, HttpRequest::Method::kPost, {},
-                                  "");
+                                  "", /*use_compression=*/false);
   ASSERT_OK(request);
   EXPECT_THAT((*request)->uri(), StrEq(expected_uri));
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
@@ -171,7 +174,7 @@ TEST(InMemoryHttpRequestTest, ValidPostRequestWithBody) {
   const std::string expected_body = "request_body";
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create(expected_uri, HttpRequest::Method::kPost, {},
-                                  expected_body);
+                                  expected_body, /*use_compression=*/false);
   ASSERT_OK(request);
   EXPECT_THAT((*request)->uri(), StrEq(expected_uri));
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
@@ -194,7 +197,7 @@ TEST(InMemoryHttpRequestTest, ValidPostRequestWithBodyAndHeaders) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kPost, original_headers,
-                                  expected_body);
+                                  expected_body, /*use_compression=*/false);
   ASSERT_OK(request);
 
   EXPECT_THAT((*request)->extra_headers(), ContainerEq(expected_headers));
@@ -203,8 +206,9 @@ TEST(InMemoryHttpRequestTest, ValidPostRequestWithBodyAndHeaders) {
 TEST(InMemoryHttpRequestTest, ReadBodySimple) {
   const std::string expected_body = "request_body";
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
-      InMemoryHttpRequest::Create(
-          "https://valid.com", HttpRequest::Method::kPost, {}, expected_body);
+      InMemoryHttpRequest::Create("https://valid.com",
+                                  HttpRequest::Method::kPost, {}, expected_body,
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   std::string actual_body;
@@ -226,8 +230,9 @@ TEST(InMemoryHttpRequestTest, ReadBodyChunked) {
   const std::string expected_body = "12345678";
   ASSERT_THAT(expected_body.size() % 3, Ne(0));
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
-      InMemoryHttpRequest::Create(
-          "https://valid.com", HttpRequest::Method::kPost, {}, expected_body);
+      InMemoryHttpRequest::Create("https://valid.com",
+                                  HttpRequest::Method::kPost, {}, expected_body,
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   std::string actual_body;
@@ -301,7 +306,8 @@ TEST(InMemoryHttpRequestTest, RequestWithCompressedBody) {
 TEST(InMemoryHttpRequestCallbackTest, ResponseFailsBeforeHeaders) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   InMemoryHttpRequestCallback callback;
@@ -315,7 +321,8 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseFailsBeforeHeaders) {
 TEST(InMemoryHttpRequestCallbackTest, ResponseFailsAfterHeaders) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   auto fake_response = FakeHttpResponse(kHttpOk, {});
@@ -333,7 +340,8 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseFailsAfterHeaders) {
 TEST(InMemoryHttpRequestCallbackTest, ResponseFailsAfterPartialBody) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   auto fake_response = FakeHttpResponse(kHttpOk, {});
@@ -353,7 +361,8 @@ TEST(InMemoryHttpRequestCallbackTest,
      TestResponseWithContentLengthAndBodyTooShort) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   auto fake_response = FakeHttpResponse(kHttpOk, {{"Content-Length", "5"}});
@@ -376,7 +385,8 @@ TEST(InMemoryHttpRequestCallbackTest,
      TestResponseWithContentLengthAndBodyTooLong) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   auto fake_response = FakeHttpResponse(kHttpOk, {{"Content-Length", "5"}});
@@ -398,7 +408,8 @@ TEST(InMemoryHttpRequestCallbackTest,
      TestResponseWithBodyTooLongHardcodedWithoutContentLength) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   auto fake_response = FakeHttpResponse(kHttpOk, {});
@@ -420,7 +431,8 @@ TEST(InMemoryHttpRequestCallbackTest,
      TestResponseWithContentLengthTooLongHardcoded) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   // Set the Content-Length to a size larger than our hardcoded limit.
@@ -440,7 +452,8 @@ TEST(InMemoryHttpRequestCallbackTest,
 TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNegative) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   // Set the Content-Length to an invalid negative value.
@@ -457,7 +470,8 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNegative) {
 TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNonInteger) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   // Set the Content-Length to an invalid non-integer, non-ASCII value.
@@ -475,7 +489,8 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNonInteger) {
 TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentEncodingHeader) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   // Add a Content-Encoding header, which implementations should never provide
@@ -493,7 +508,8 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentEncodingHeader) {
 TEST(InMemoryHttpRequestCallbackTest, ResponseWithTransferEncodingHeader) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   // Add a Transfer-Encoding header, which implementations should never provide
@@ -512,7 +528,8 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithTransferEncodingHeader) {
 TEST(InMemoryHttpRequestCallbackTest, OkResponseWithoutContentLength) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   // Note that the fake response does not contain a Content-Length header. The
@@ -537,7 +554,8 @@ TEST(InMemoryHttpRequestCallbackTest, OkResponseWithoutContentLength) {
 TEST(InMemoryHttpRequestCallbackTest, OkResponseWithContentLength) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   int expected_code = kHttpOk;
@@ -560,7 +578,8 @@ TEST(InMemoryHttpRequestCallbackTest, OkResponseWithContentLength) {
 TEST(InMemoryHttpRequestCallbackTest, OkResponseChunkedBody) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   // Note that the fake response does not contain a Content-Length header. The
@@ -587,7 +606,8 @@ TEST(InMemoryHttpRequestCallbackTest,
      TestOkResponseWithEmptyBodyWithoutContentLength) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   int expected_code = kHttpOk;
@@ -607,7 +627,8 @@ TEST(InMemoryHttpRequestCallbackTest,
      TestOkResponseWithEmptyBodyWithContentLength) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   int expected_code = kHttpOk;
@@ -630,7 +651,8 @@ TEST(InMemoryHttpRequestCallbackTest,
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create(
           "https://valid.com", HttpRequest::Method::kGet,
-          {{"Accept-Encoding", expected_content_encoding}}, "");
+          {{"Accept-Encoding", expected_content_encoding}}, "",
+          /*use_compression=*/false);
   ASSERT_OK(request);
 
   // Note that the fake response contains a Content-Encoding header, which
@@ -657,7 +679,8 @@ TEST(InMemoryHttpRequestCallbackTest,
 TEST(InMemoryHttpRequestCallbackTest, NotFoundResponse) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   // Return an HTTP error response.
@@ -704,7 +727,8 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryOk) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create(
           "https://valid.com", HttpRequest::Method::kPost,
-          {{"Some-Request-Header", "foo"}}, expected_request_body);
+          {{"Some-Request-Header", "foo"}}, expected_request_body,
+          /*use_compression=*/false);
   ASSERT_OK(request);
 
   int expected_response_code = kHttpOk;
@@ -737,7 +761,8 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryOk) {
 TEST_F(PerformRequestsTest, PerformRequestInMemoryNotFound) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   int expected_response_code = kHttpNotFound;
@@ -758,7 +783,8 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryNotFound) {
 TEST_F(PerformRequestsTest, PerformRequestInMemoryEarlyError) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kPost, {}, "");
+                                  HttpRequest::Method::kPost, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   EXPECT_CALL(mock_http_client_,
@@ -790,7 +816,8 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryEarlyError) {
 TEST_F(PerformRequestsTest, PerformRequestInMemoryCancellation) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "");
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   absl::Notification request_issued;

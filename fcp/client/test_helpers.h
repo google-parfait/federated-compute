@@ -534,6 +534,8 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, include_lc_inputs_in_selector_context, (),
               (const, override));
+  MOCK_METHOD(bool, disable_http_request_body_compression, (),
+              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

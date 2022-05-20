@@ -160,6 +160,9 @@ class Flags {
 
   // Whether to include input_dir and output_dir in SelectorContext.
   virtual bool include_lc_inputs_in_selector_context() const { return false; }
+
+  // When true, http request body won't be compressed.
+  virtual bool disable_http_request_body_compression() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

@@ -387,6 +387,11 @@ class HttpFederatedProtocolTest : public testing::Test {
             static_cast<int32_t>(absl::StatusCode::kNotFound),
             static_cast<int32_t>(absl::StatusCode::kInvalidArgument),
             static_cast<int32_t>(absl::StatusCode::kUnimplemented)}));
+    // Note that we disable compression in test to make it easier to verify the
+    // request body. The compression logic is tested in
+    // in_memory_request_response_test.cc.
+    EXPECT_CALL(mock_flags_, disable_http_request_body_compression)
+        .WillRepeatedly(Return(true));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -1508,7 +1513,8 @@ class ProtocolRequestHelperTest : public testing::Test {
                     BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT}),
         protocol_request_helper_(&mock_http_client_, &interruptible_runner_,
                                  &bytes_downloaded_, &bytes_uploaded_,
-                                 "https://initial.uri") {}
+                                 "https://initial.uri",
+                                 /*use_compression=*/false) {}
 
  protected:
   void TearDown() override {

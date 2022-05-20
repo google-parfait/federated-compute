@@ -58,7 +58,8 @@ class ProtocolRequestHelper {
   ProtocolRequestHelper(HttpClient* http_client,
                         InterruptibleRunner* interruptible_runner,
                         int64_t* bytes_downloaded, int64_t* bytes_uploaded,
-                        absl::string_view entry_point_uri);
+                        absl::string_view entry_point_uri,
+                        bool use_compression);
 
   // Performs the given request (handling any interruptions that may occur) and
   // updates the network stats.
@@ -113,6 +114,7 @@ class ProtocolRequestHelper {
   // The set of headers to attach to the next protocol request. See
   // `ForwardingInfo`.
   HeaderList next_request_headers_;
+  const bool use_compression_;
 };
 
 // Implements a single session of the HTTP-based Federated Compute protocol.
