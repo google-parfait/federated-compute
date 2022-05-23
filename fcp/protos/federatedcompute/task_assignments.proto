@@ -28,11 +28,15 @@ option java_multiple_files = true;
 
 service TaskAssignments {
   // A request sent by the device to check if it should participate in the
-  // current phase. Clients should use the same `ForwardingInfo` (incl. the
-  // headers) as used in this request to construct the URI to poll the operation
-  // service to check for task assignment completion. When the task assignment
-  // is complete, the result of the operation will either contain an error or
-  // the resulting `StartTaskAssignmentResponse` in the response.
+  // current phase.
+  //
+  // Clients should use the same `ForwardingInfo` (incl. the headers) as used in
+  // this request to construct the URI to poll the operation service to check
+  // for task assignment completion.
+  //
+  // When the task assignment is complete, the result of the operation will
+  // either contain an error or the resulting `StartTaskAssignmentResponse` in
+  // the response.
   //
   // If the client no longer needs a task assignment because it is interrupted
   // or drops out, the client should make a best effort to call CancelOperation.
@@ -50,6 +54,9 @@ service TaskAssignments {
 
   // A request sent by the device to report the result of running the task
   // provided by `StartTaskAssignmentResponse`.
+  //
+  // Clients should use the same `ForwardingInfo` as used in the
+  // `StartTaskAssignment` request to construct the URI for this request.
   //
   // A result with a status code other than Code.OK indicates client session
   // termination. The client may not send any future requests with the given

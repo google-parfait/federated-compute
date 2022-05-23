@@ -47,6 +47,10 @@ service Aggregations {
   // client's aggregation session. If a client's result is not needed for the
   // aggregation (e.g. the reporting goal was already reached for the task), the
   // server will respond with an ABORTED error.
+  //
+  // Clients should use the `ForwardingInfo` from the
+  // `StartAggregationDataUploadResponse.aggregation_protocol_forwarding_info`
+  // response field to construct the URI for this request.
   rpc SubmitAggregationResult(SubmitAggregationResultRequest)
       returns (SubmitAggregationResultResponse) {
     option (google.api.http) = {
@@ -57,6 +61,16 @@ service Aggregations {
 
   // A request sent by the client indicating the client's aggregation session
   // should be aborted.
+  //
+  // Clients must only call this if they've previously called
+  // `StartAggregationDataUpload`.
+  //
+  // If clients have already received a `StartAggregationDataUploadResponse`
+  // they should use the `ForwardingInfo` from the
+  // `StartAggregationDataUploadResponse.aggregation_protocol_forwarding_info`
+  // response field to construct the URI for this request. Otherwise, clients
+  // should use the same `ForwardingInfo` as was used to construct the
+  // `StartAggregationDataUpload` request URI.
   rpc AbortAggregation(AbortAggregationRequest)
       returns (AbortAggregationResponse) {
     option (google.api.http) = {

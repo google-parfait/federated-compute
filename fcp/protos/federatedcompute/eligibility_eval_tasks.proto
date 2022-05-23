@@ -45,6 +45,9 @@ service EligibilityEvalTasks {
   // A result with a status code other than Code.OK indicates client session
   // termination. The client may not send any future requests with the given
   // session_id.
+  //
+  // Clients should use the same `ForwardingInfo` as used in the
+  // `RequestEligibilityEvalTask` request to construct the URI for this request.
   rpc ReportEligibilityEvalTaskResult(ReportEligibilityEvalTaskResultRequest)
       returns (ReportEligibilityEvalTaskResultResponse) {
     option (google.api.http) = {

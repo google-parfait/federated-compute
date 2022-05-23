@@ -47,6 +47,16 @@ service SecureAggregations {
 
   // A request sent by the client indicating the client is ending its
   // participation in the Secure Aggregation protocol.
+  //
+  // Clients must only call this if they've previously called
+  // `StartSecureAggregation`.
+  //
+  // If clients have already received a `StartSecureAggregationResponse`
+  // they should use the `ForwardingInfo` from the
+  // `StartSecureAggregationResponse.secagg_protocol_forwarding_info`
+  // response field to construct the URI for this request. Otherwise, clients
+  // should use the same `ForwardingInfo` as was used to construct the
+  // `StartSecureAggregation` request URI.
   rpc AbortSecureAggregation(AbortSecureAggregationRequest)
       returns (AbortSecureAggregationResponse) {
     option (google.api.http) = {
@@ -58,6 +68,10 @@ service SecureAggregations {
   // A request sent by the client to advertise its pair of public keys. The
   // server responds with a list of the (pairs of) public keys of all other
   // participating clients.
+  //
+  // Clients should use the `ForwardingInfo` from the
+  // `StartSecureAggregationResponse.secagg_protocol_forwarding_info`
+  // response field to construct the URI for this request.
   rpc AdvertiseKeys(AdvertiseKeysRequest)
       returns (google.longrunning.Operation) {
     option (google.api.http) = {
@@ -74,6 +88,10 @@ service SecureAggregations {
   // own noise_sk and prf_sk with all the other clients (encrypting shares for
   // client j with their own enc_pk). The server responds with the client's
   // shares of the keys of each other client that sent a ShareKeysRequest.
+  //
+  // Clients should use the `ForwardingInfo` from the
+  // `StartSecureAggregationResponse.secagg_protocol_forwarding_info`
+  // response field to construct the URI for this request.
   rpc ShareKeys(ShareKeysRequest) returns (google.longrunning.Operation) {
     option (google.api.http) = {
       post: "/v1/secureaggregations/{aggregation_id}/clients/{client_token}:sharekeys"
@@ -89,6 +107,10 @@ service SecureAggregations {
   // client's masked and unmasked results. The server responds with a list of
   // clients that did not successfully upload their results (and therefore are
   // considered dead).
+  //
+  // Clients should use the `ForwardingInfo` from the
+  // `StartSecureAggregationResponse.secagg_protocol_forwarding_info`
+  // response field to construct the URI for this request.
   rpc SubmitSecureAggregationResult(SubmitSecureAggregationResultRequest)
       returns (google.longrunning.Operation) {
     option (google.api.http) = {
@@ -108,6 +130,10 @@ service SecureAggregations {
   // If a client's aggregation result is no longer needed for the aggregation
   // (e.g. the reporting goal was already reached for the task), the server will
   // respond with an ABORTED error.
+  //
+  // Clients should use the `ForwardingInfo` from the
+  // `StartSecureAggregationResponse.secagg_protocol_forwarding_info`
+  // response field to construct the URI for this request.
   rpc Unmask(UnmaskRequest) returns (UnmaskResponse) {
     option (google.api.http) = {
       post: "/v1/secureaggregations/{aggregation_id}/clients/{client_token}:unmask"
