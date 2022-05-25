@@ -361,51 +361,6 @@ message MetricTestPredicates {
   reserved 2;
 }
 
-// A message for inference testing (input data + expected outputs).
-// The following message contains inference input data + output expectations
-// that are used in e.g. compatibility tests of the client side code, to
-// ensure the code conforms to the test expectations.
-message InferenceTestData {
-  message InferenceTestPredicate {
-    message FloatInterval {
-      float lower = 1;
-      float upper = 2;
-    }
-    message FloatIntervalList {
-      repeated FloatInterval float_interval = 1;
-    }
-
-    // Name of the output.
-    string name = 1;
-
-    // A predicate that the inference output must fulfill.
-    oneof Predicate {
-      // An exact match for bytes_list.
-      tensorflow.BytesList bytes_list = 2;
-      // An exact match of an integer vector.
-      tensorflow.Int64List int64_list = 3;
-      // An interval match for float vectors (inclusive lower and upper bounds
-      // for every element in the float vector). Setting lower == upper implies
-      // an exact match.
-      FloatIntervalList float_interval_list = 4;
-    }
-  }
-
-  // An inference text example consists of input data (a tf.Example),
-  // and expectations for the output (exact bytes or integer vector matches,
-  // or interval matches for float vectors).
-  message InferenceTestExample {
-    // A serialized tf.Example proto.
-    bytes input_data = 1;
-
-    repeated InferenceTestPredicate output_expectations = 2;
-  }
-
-  repeated InferenceTestExample test_examples = 1;
-
-  reserved 2;
-}
-
 // Client Phase
 // ============
 
