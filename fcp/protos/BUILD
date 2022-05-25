@@ -71,8 +71,7 @@ tf_proto_library(
         "@org_tensorflow//tensorflow/core:protos_all",
     ],
     # Needed by TFLite on-device training tests.
-    visibility = default_visibility + [
-    ],
+    visibility = default_visibility,
 )
 
 java_proto_library(
