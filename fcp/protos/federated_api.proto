@@ -610,20 +610,8 @@ message Checkpoint {
   // An aggregand is a (flattened) collection of checkpoint variables
   // that will be aggregated using the same transport-and-aggregate protocol.
   message Aggregand {
-    message TensorflowCheckpoint {
-      bytes checkpoint = 1;
-    }
-
-    message Quantized {
-      repeated uint64 values = 1 [packed = true];
-      int32 bitwidth = 2;
-      repeated int64 dimensions = 3;
-    }
-
-    oneof aggregand_type {
-      TensorflowCheckpoint tensorflow_checkpoint = 1;
-      Quantized quantized = 2;
-    }
+    repeated uint64 values = 1 [packed = true];
+    int32 bitwidth = 2;
   }
 
   // Checkpoint variables are partitioned into multiple aggregands,
