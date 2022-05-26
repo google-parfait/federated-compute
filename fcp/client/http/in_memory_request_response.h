@@ -135,6 +135,18 @@ absl::StatusOr<InMemoryHttpResponse> PerformRequestInMemory(
     std::unique_ptr<http::HttpRequest> request, int64_t* bytes_received_acc,
     int64_t* bytes_sent_acc);
 
+// Utility for performing multiple HTTP requests and returning the results
+// (incl. the response body) in memory.
+//
+// Returns an error if issuing the joint `PerformRequests` call failed.
+// Otherwise it returns a vector containing the result of each request
+// (in the same order the requests were provided in).
+absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
+PerformMultipleRequestsInMemory(
+    HttpClient& http_client, InterruptibleRunner& interruptible_runner,
+    std::vector<std::unique_ptr<http::HttpRequest>> requests,
+    int64_t* bytes_received_acc, int64_t* bytes_sent_acc);
+
 // Simple class representing a resource for which data is already available
 // in-memory (`inline_data`) or for which data needs to be fetched by an HTTP
 // GET request (via `uri`). Only one field can ever be set to a non-empty value,

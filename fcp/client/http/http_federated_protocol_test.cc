@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "google/longrunning/operations.pb.h"
@@ -161,6 +162,14 @@ MATCHER_P(ReportTaskResultRequestMatcher, matcher,
     return false;
   }
   return ExplainMatchResult(matcher, request, result_listener);
+}
+
+void VerifyInMemoryHttpResponse(const InMemoryHttpResponse& response, int code,
+                                absl::string_view content_encoding,
+                                absl::string_view body) {
+  EXPECT_EQ(response.code, code);
+  EXPECT_EQ(response.content_encoding, content_encoding);
+  EXPECT_EQ(response.body, body);
 }
 
 constexpr int kTransientErrorsRetryPeriodSecs = 10;
@@ -1434,7 +1443,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {
   ReportTaskResultResponse response;
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://aggregation.uri/v1/populations/TEST%2FPOPULATION/"
+                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
                   "taskassignments/CLIENT_SESSION_ID:reportresult",
                   HttpRequest::Method::kPost, _,
                   ReportTaskResultRequestMatcher(
@@ -1458,7 +1467,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedError) {
   ReportTaskResultResponse response;
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://aggregation.uri/v1/populations/TEST%2FPOPULATION/"
+                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
                   "taskassignments/CLIENT_SESSION_ID:reportresult",
                   HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(FakeHttpResponse(503, {})));
@@ -1480,7 +1489,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
   ReportTaskResultResponse response;
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://aggregation.uri/v1/populations/TEST%2FPOPULATION/"
+                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
                   "taskassignments/CLIENT_SESSION_ID:reportresult",
                   HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(FakeHttpResponse(404, {})));
@@ -1492,6 +1501,62 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
       status.message(),
       AllOf(HasSubstr("ReportTaskResult request failed:"), HasSubstr("404")));
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST(ProtocolRequestCreatorTest, TestInvalidForwardingInfo) {
+  // If a ForwardingInfo does not have a target_uri_prefix field set then the
+  // ProcessForwardingInfo call should fail.
+  ForwardingInfo forwarding_info;
+  EXPECT_THAT(ProtocolRequestCreator::Create(forwarding_info,
+                                             /*use_compression=*/false),
+              IsCode(INVALID_ARGUMENT));
+
+  (*forwarding_info.mutable_extra_request_headers())["x-header1"] =
+      "header-value1";
+  EXPECT_THAT(ProtocolRequestCreator::Create(forwarding_info,
+                                             /*use_compression=*/false),
+              IsCode(INVALID_ARGUMENT));
+}
+
+TEST(ProtocolRequestCreatorTest, CreateProtocolRequestInvalidSuffix) {
+  ProtocolRequestCreator creator("https://initial.uri", HeaderList{},
+                                 /*use_compression=*/false);
+  std::string uri_suffix = "v1/request";
+  ASSERT_THAT(creator.CreateProtocolRequest(
+                  uri_suffix, HttpRequest::Method::kPost, "request_body"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
+  ProtocolRequestCreator creator("https://initial.uri", HeaderList{},
+                                 /*use_compression=*/false);
+  std::string expected_body = "expected_body";
+  auto request = creator.CreateProtocolRequest(
+      "/v1/request", HttpRequest::Method::kPost, expected_body);
+
+  ASSERT_OK(request);
+  EXPECT_EQ((*request)->uri(), "https://initial.uri/v1/request");
+  EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
+  EXPECT_THAT((*request)->extra_headers(),
+              UnorderedElementsAre(Header{
+                  "Content-Length", std::to_string(expected_body.size())}));
+  EXPECT_TRUE((*request)->HasBody());
+  std::string actual_body;
+  actual_body.resize(expected_body.size());
+  ASSERT_OK((*request)->ReadBody(actual_body.data(), expected_body.size()));
+  EXPECT_EQ(actual_body, expected_body);
+}
+
+TEST(ProtocolRequestCreatorTest, CreateGetOperationRequest) {
+  ProtocolRequestCreator creator("https://initial.uri", HeaderList{},
+                                 /*use_compression=*/false);
+  std::string operation_name = "my_operation";
+  auto request = creator.CreateGetOperationRequest(operation_name);
+  ASSERT_OK(request);
+  EXPECT_EQ((*request)->uri(), "https://initial.uri/v1/my_operation");
+  EXPECT_EQ((*request)->method(), HttpRequest::Method::kGet);
+  EXPECT_THAT((*request)->extra_headers(), IsEmpty());
+  EXPECT_FALSE((*request)->HasBody());
 }
 
 class ProtocolRequestHelperTest : public testing::Test {
@@ -1511,10 +1576,10 @@ class ProtocolRequestHelperTest : public testing::Test {
                     BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
                 .interrupt_timeout_extended = ProdDiagCode::
                     BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT}),
+        initial_request_creator_("https://initial.uri", HeaderList{},
+                                 /*use_compression=*/false),
         protocol_request_helper_(&mock_http_client_, &interruptible_runner_,
-                                 &bytes_downloaded_, &bytes_uploaded_,
-                                 "https://initial.uri",
-                                 /*use_compression=*/false) {}
+                                 &bytes_downloaded_, &bytes_uploaded_) {}
 
  protected:
   void TearDown() override {
@@ -1533,7 +1598,7 @@ class ProtocolRequestHelperTest : public testing::Test {
   int64_t bytes_uploaded_ = 0;
 
   InterruptibleRunner interruptible_runner_;
-
+  ProtocolRequestCreator initial_request_creator_;
   // The class under test.
   ProtocolRequestHelper protocol_request_helper_;
 };
@@ -1543,19 +1608,6 @@ Any GetFakeAnyProto() {
   fake_any.set_type_url("the_type_url");
   *fake_any.mutable_value() = "the_value";
   return fake_any;
-}
-
-TEST_F(ProtocolRequestHelperTest, TestInvalidForwardingInfo) {
-  // If a ForwardingInfo does not have a target_uri_prefix field set then the
-  // ProcessForwardingInfo call should fail.
-  ForwardingInfo forwarding_info;
-  EXPECT_THAT(protocol_request_helper_.ProcessForwardingInfo(forwarding_info),
-              IsCode(INVALID_ARGUMENT));
-
-  (*forwarding_info.mutable_extra_request_headers())["x-header1"] =
-      "header-value1";
-  EXPECT_THAT(protocol_request_helper_.ProcessForwardingInfo(forwarding_info),
-              IsCode(INVALID_ARGUMENT));
 }
 
 TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
@@ -1568,13 +1620,16 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
                   // add this header automatically.
                   ContainerEq(HeaderList{{"Content-Length", "5"}}), "body1")))
       .WillOnce(Return(FakeHttpResponse(200, {}, "response1")));
-
-  auto result = protocol_request_helper_.PerformProtocolRequest(
+  auto request_creator = std::make_unique<ProtocolRequestCreator>(
+      "https://initial.uri", HeaderList{},
+      /*use_compression=*/false);
+  auto http_request = request_creator->CreateProtocolRequest(
       "/suffix1", HttpRequest::Method::kPost, "body1");
+  ASSERT_OK(http_request);
+  auto result =
+      protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
   ASSERT_OK(result);
-  EXPECT_THAT(result->code, 200);
-  EXPECT_EQ(result->content_encoding, "");
-  EXPECT_EQ(result->body, "response1");
+  VerifyInMemoryHttpResponse(*result, 200, "", "response1");
 
   {
     // Process some fake ForwardingInfo.
@@ -1584,7 +1639,10 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
         "header-value1";
     (*forwarding_info1.mutable_extra_request_headers())["x-header2"] =
         "header-value2";
-    ASSERT_OK(protocol_request_helper_.ProcessForwardingInfo(forwarding_info1));
+    auto new_request_creator = ProtocolRequestCreator::Create(
+        forwarding_info1, /*use_compression=*/false);
+    ASSERT_OK(new_request_creator);
+    request_creator = std::move(*new_request_creator);
   }
 
   // The next series of requests should now use the ForwardingInfo (incl. use
@@ -1598,8 +1656,11 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
                                        Header{"x-header2", "header-value2"}),
                   "")))
       .WillOnce(Return(FakeHttpResponse(200, {}, "response2")));
-  result = protocol_request_helper_.PerformProtocolRequest(
+  http_request = request_creator->CreateProtocolRequest(
       "/suffix2", HttpRequest::Method::kGet, "");
+  ASSERT_OK(http_request);
+  result =
+      protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
   ASSERT_OK(result);
   EXPECT_EQ(result->body, "response2");
 
@@ -1614,8 +1675,11 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
                                        Header{"Content-Length", "5"}),
                   "body3")))
       .WillOnce(Return(FakeHttpResponse(200, {}, "response3")));
-  result = protocol_request_helper_.PerformProtocolRequest(
+  http_request = request_creator->CreateProtocolRequest(
       "/suffix3", HttpRequest::Method::kPut, "body3");
+  ASSERT_OK(http_request);
+  result =
+      protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
   ASSERT_OK(result);
   EXPECT_EQ(result->body, "response3");
 
@@ -1623,7 +1687,10 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
     // Process some more fake ForwardingInfo (without any headers this time).
     ForwardingInfo forwarding_info2;
     forwarding_info2.set_target_uri_prefix("https://third.uri");
-    ASSERT_OK(protocol_request_helper_.ProcessForwardingInfo(forwarding_info2));
+    auto new_request_creator = ProtocolRequestCreator::Create(
+        forwarding_info2, /*use_compression=*/false);
+    ASSERT_OK(new_request_creator);
+    request_creator = std::move(*new_request_creator);
   }
 
   // The next request should now use the latest ForwardingInfo again (i.e. use
@@ -1635,8 +1702,11 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
                   // add this header automatically.
                   ContainerEq(HeaderList{{"Content-Length", "5"}}), "body4")))
       .WillOnce(Return(FakeHttpResponse(200, {}, "response4")));
-  result = protocol_request_helper_.PerformProtocolRequest(
+  http_request = request_creator->CreateProtocolRequest(
       "/suffix4", HttpRequest::Method::kPost, "body4");
+  ASSERT_OK(http_request);
+  result =
+      protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
   ASSERT_OK(result);
   EXPECT_EQ(result->body, "response4");
 }
@@ -1644,10 +1714,10 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
 TEST_F(ProtocolRequestHelperTest, TestPollOperationInvalidResponse) {
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          InMemoryHttpResponse{
-              .code = 200,
-              .content_encoding = "",
-              .body = absl::Cord("im_not_an_operation_proto")});
+          InMemoryHttpResponse{.code = 200,
+                               .content_encoding = "",
+                               .body = absl::Cord("im_not_an_operation_proto")},
+          initial_request_creator_);
   EXPECT_THAT(result.status(), IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(),
               HasSubstr("could not parse Operation"));
@@ -1660,7 +1730,8 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationInvalidOperationName) {
                                .content_encoding = "",
                                .body = absl::Cord(CreatePendingOperation(
                                                       "invalid_operation_name")
-                                                      .SerializeAsString())});
+                                                      .SerializeAsString())},
+          initial_request_creator_);
   EXPECT_THAT(result.status(), IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("invalid name"));
 }
@@ -1668,7 +1739,8 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationInvalidOperationName) {
 TEST_F(ProtocolRequestHelperTest, TestPollOperationImmediateHttpError) {
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          absl::Status(absl::StatusCode::kNotFound, "foo"));
+          absl::Status(absl::StatusCode::kNotFound, "foo"),
+          initial_request_creator_);
   EXPECT_THAT(result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(result.status().message(), HasSubstr("foo"));
 }
@@ -1680,7 +1752,8 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationImmediateHttpError) {
 TEST_F(ProtocolRequestHelperTest, TestPollOperationImmediateInterruptedError) {
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          absl::Status(absl::StatusCode::kCancelled, "foo"));
+          absl::Status(absl::StatusCode::kCancelled, "foo"),
+          initial_request_creator_);
   EXPECT_THAT(result.status(), IsCode(CANCELLED));
   EXPECT_THAT(result.status().message(), HasSubstr("foo"));
 }
@@ -1692,7 +1765,8 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseImmediateSuccess) {
           InMemoryHttpResponse{
               .code = 200,
               .content_encoding = "",
-              .body = absl::Cord(expected_response.SerializeAsString())});
+              .body = absl::Cord(expected_response.SerializeAsString())},
+          initial_request_creator_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
@@ -1706,7 +1780,8 @@ TEST_F(ProtocolRequestHelperTest,
           InMemoryHttpResponse{
               .code = 200,
               .content_encoding = "",
-              .body = absl::Cord(expected_response.SerializeAsString())});
+              .body = absl::Cord(expected_response.SerializeAsString())},
+          initial_request_creator_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
@@ -1740,7 +1815,8 @@ TEST_F(ProtocolRequestHelperTest,
               .code = 200,
               .content_encoding = "",
               .body =
-                  absl::Cord(pending_operation_response.SerializeAsString())});
+                  absl::Cord(pending_operation_response.SerializeAsString())},
+          initial_request_creator_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
@@ -1772,9 +1848,91 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseErrorAfterPolling) {
               .code = 200,
               .content_encoding = "",
               .body =
-                  absl::Cord(pending_operation_response.SerializeAsString())});
+                  absl::Cord(pending_operation_response.SerializeAsString())},
+          initial_request_creator_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
+
+TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsSuccess) {
+  auto request_a = initial_request_creator_.CreateProtocolRequest(
+      "/v1/request_a", HttpRequest::Method::kPost, "body1");
+  ASSERT_OK(request_a);
+  auto request_b = initial_request_creator_.CreateProtocolRequest(
+      "/v1/request_b", HttpRequest::Method::kPost, "body2");
+  ASSERT_OK(request_b);
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://initial.uri/v1/request_a", HttpRequest::Method::kPost,
+          // This request has a response body, so the HttpClient will
+          // add this header automatically.
+          ContainerEq(HeaderList{{"Content-Length", "5"}}), "body1")))
+      .WillOnce(Return(FakeHttpResponse(200, {}, "response1")));
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://initial.uri/v1/request_b", HttpRequest::Method::kPost,
+          // This request has a response body, so the HttpClient will
+          // add this header automatically.
+          ContainerEq(HeaderList{{"Content-Length", "5"}}), "body2")))
+      .WillOnce(Return(FakeHttpResponse(200, {}, "response2")));
+
+  std::vector<std::unique_ptr<HttpRequest>> requests;
+  requests.push_back(std::move(*request_a));
+  requests.push_back(std::move(*request_b));
+
+  auto result = protocol_request_helper_.PerformMultipleProtocolRequests(
+      std::move(requests));
+  ASSERT_OK(result);
+  auto response_1 = (*result)[0];
+  ASSERT_OK(response_1);
+  VerifyInMemoryHttpResponse(*response_1, 200, "", "response1");
+  auto response_2 = (*result)[1];
+  ASSERT_OK(response_2);
+  VerifyInMemoryHttpResponse(*response_2, 200, "", "response2");
+}
+
+TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
+  std::string uri_suffix_a = "/v1/request_a";
+  auto request_a = initial_request_creator_.CreateProtocolRequest(
+      uri_suffix_a, HttpRequest::Method::kPost, "body1");
+  ASSERT_OK(request_a);
+  std::string uri_suffix_b = "/v1/request_b";
+  auto request_b = initial_request_creator_.CreateProtocolRequest(
+      uri_suffix_b, HttpRequest::Method::kPost, "body2");
+  ASSERT_OK(request_b);
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://initial.uri/v1/request_a", HttpRequest::Method::kPost,
+          // This request has a response body, so the HttpClient will
+          // add this header automatically.
+          ContainerEq(HeaderList{{"Content-Length", "5"}}), "body1")))
+      .WillOnce(Return(FakeHttpResponse(200, {}, "response1")));
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://initial.uri/v1/request_b", HttpRequest::Method::kPost,
+          // This request has a response body, so the HttpClient will
+          // add this header automatically.
+          ContainerEq(HeaderList{{"Content-Length", "5"}}), "body2")))
+      .WillOnce(Return(FakeHttpResponse(404, {}, "failure_response")));
+
+  std::vector<std::unique_ptr<HttpRequest>> requests;
+  requests.push_back(std::move(*request_a));
+  requests.push_back(std::move(*request_b));
+
+  auto result = protocol_request_helper_.PerformMultipleProtocolRequests(
+      std::move(requests));
+
+  ASSERT_OK(result);
+  auto response_1 = (*result)[0];
+  ASSERT_OK(response_1);
+  VerifyInMemoryHttpResponse(*response_1, 200, "", "response1");
+  auto response_2 = (*result)[1];
+  ASSERT_THAT(response_2, IsCode(absl::StatusCode::kNotFound));
+}
+
 }  // anonymous namespace
 }  // namespace fcp::client::http

@@ -58,6 +58,23 @@
 namespace fcp {
 namespace client {
 namespace http {
+namespace {
+
+absl::StatusOr<InMemoryHttpResponse> CheckResponseContentEncoding(
+    absl::StatusOr<InMemoryHttpResponse> response) {
+  if (response.ok() && !response->content_encoding.empty()) {
+    // Note that the `HttpClient` API contract ensures that if we don't specify
+    // an Accept-Encoding request header, then the response should be delivered
+    // to us without any Content-Encoding applied to it. Hence, if we somehow do
+    // still see a Content-Encoding response header then the `HttpClient`
+    // implementation isn't adhering to its part of the API contract.
+    return absl::UnavailableError(
+        "HTTP response unexpectedly has a Content-Encoding");
+  }
+  return response;
+}
+
+}  // namespace
 
 using ::fcp::client::GenerateRetryWindowFromRetryTime;
 using ::fcp::client::GenerateRetryWindowFromTargetDelay;
@@ -212,73 +229,96 @@ absl::StatusOr<ReportTaskResultRequest> CreateReportTaskResultRequest(
 
 }  // namespace
 
-ProtocolRequestHelper::ProtocolRequestHelper(
-    HttpClient* http_client, InterruptibleRunner* interruptible_runner,
-    int64_t* bytes_downloaded, int64_t* bytes_uploaded,
-    absl::string_view entry_point_uri, bool use_compression)
-    : http_client_(*http_client),
-      interruptible_runner_(*interruptible_runner),
-      bytes_downloaded_(*bytes_downloaded),
-      bytes_uploaded_(*bytes_uploaded),
-      next_request_base_uri_(entry_point_uri),
+ProtocolRequestCreator::ProtocolRequestCreator(
+    absl::string_view request_base_uri, HeaderList request_headers,
+    bool use_compression)
+    : next_request_base_uri_(request_base_uri),
+      next_request_headers_(std::move(request_headers)),
       use_compression_(use_compression) {}
 
-absl::StatusOr<InMemoryHttpResponse>
-ProtocolRequestHelper::PerformProtocolRequest(absl::string_view uri_suffix,
+absl::StatusOr<std::unique_ptr<HttpRequest>>
+ProtocolRequestCreator::CreateProtocolRequest(absl::string_view uri_suffix,
                                               HttpRequest::Method method,
-                                              std::string request_body) {
-  return PerformProtocolRequest(uri_suffix, method, request_body,
-                                interruptible_runner_);
+                                              std::string request_body) const {
+  return CreateHttpRequest(uri_suffix, method, std::move(request_body),
+                           use_compression_);
 }
 
-absl::StatusOr<InMemoryHttpResponse>
-ProtocolRequestHelper::PerformProtocolRequest(
-    absl::string_view uri_suffix, HttpRequest::Method method,
-    std::string request_body, InterruptibleRunner& interruptible_runner) {
-  absl::StatusOr<std::string> uri =
-      JoinBaseUriWithSuffix(next_request_base_uri_, uri_suffix);
-  FCP_CHECK_STATUS(uri.status());
-
-  FCP_ASSIGN_OR_RETURN(
-      std::unique_ptr<http::HttpRequest> request,
-      InMemoryHttpRequest::Create(*uri, method, next_request_headers_,
-                                  std::move(request_body), use_compression_));
-
-  // Check whether issuing the request failed as a whole (generally indicating
-  // a programming error).
-  FCP_ASSIGN_OR_RETURN(
-      InMemoryHttpResponse result,
-      PerformRequestInMemory(http_client_, interruptible_runner,
-                             std::move(request), &bytes_downloaded_,
-                             &bytes_uploaded_));
-  if (!result.content_encoding.empty()) {
-    // Note that the `HttpClient` API contract ensures that if we don't specify
-    // an Accept-Encoding request header, then the response should be delivered
-    // to us without any Content-Encoding applied to it. Hence, if we somehow do
-    // still see a Content-Encoding response header then the `HttpClient`
-    // implementation isn't adhering to its part of the API contract.
-    return absl::UnavailableError(
-        "HTTP response unexpectedly has a Content-Encoding");
-  }
-  return result;
+absl::StatusOr<std::unique_ptr<HttpRequest>>
+ProtocolRequestCreator::CreateGetOperationRequest(
+    absl::string_view operation_name) const {
+  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
+                       CreateGetOperationUriSuffix(operation_name));
+  return CreateHttpRequest(uri_suffix, HttpRequest::Method::kGet, "",
+                           /*use_compression=*/false);
 }
 
-absl::Status ProtocolRequestHelper::ProcessForwardingInfo(
-    const ForwardingInfo& forwarding_info) {
+absl::StatusOr<std::unique_ptr<HttpRequest>>
+ProtocolRequestCreator::CreateHttpRequest(absl::string_view uri_suffix,
+                                          HttpRequest::Method method,
+                                          std::string request_body,
+                                          bool use_compression) const {
+  FCP_ASSIGN_OR_RETURN(
+      std::string uri,
+      JoinBaseUriWithSuffix(next_request_base_uri_, uri_suffix));
+
+  return InMemoryHttpRequest::Create(uri, method, next_request_headers_,
+                                     std::move(request_body), use_compression);
+}
+
+absl::StatusOr<std::unique_ptr<ProtocolRequestCreator>>
+ProtocolRequestCreator::Create(const ForwardingInfo& forwarding_info,
+                               bool use_compression) {
   // Extract the base URI and headers to use for the subsequent request.
   if (forwarding_info.target_uri_prefix().empty()) {
     return absl::InvalidArgumentError(
         "Missing `ForwardingInfo.target_uri_prefix`");
   }
-  next_request_base_uri_ = forwarding_info.target_uri_prefix();
   const auto& new_headers = forwarding_info.extra_request_headers();
-  next_request_headers_ = HeaderList(new_headers.begin(), new_headers.end());
-  return absl::OkStatus();
+  return std::make_unique<ProtocolRequestCreator>(ProtocolRequestCreator(
+      forwarding_info.target_uri_prefix(),
+      HeaderList(new_headers.begin(), new_headers.end()), use_compression));
+}
+
+ProtocolRequestHelper::ProtocolRequestHelper(
+    HttpClient* http_client, InterruptibleRunner* interruptible_runner,
+    int64_t* bytes_downloaded, int64_t* bytes_uploaded)
+    : http_client_(*http_client),
+      interruptible_runner_(*interruptible_runner),
+      bytes_downloaded_(*bytes_downloaded),
+      bytes_uploaded_(*bytes_uploaded) {}
+
+absl::StatusOr<InMemoryHttpResponse>
+ProtocolRequestHelper::PerformProtocolRequest(
+    std::unique_ptr<HttpRequest> request) {
+  std::vector<std::unique_ptr<HttpRequest>> requests;
+  requests.push_back(std::move(request));
+  FCP_ASSIGN_OR_RETURN(
+      std::vector<absl::StatusOr<InMemoryHttpResponse>> response,
+      PerformMultipleProtocolRequests(std::move(requests)));
+  return std::move(response[0]);
+}
+
+absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
+ProtocolRequestHelper::PerformMultipleProtocolRequests(
+    std::vector<std::unique_ptr<http::HttpRequest>> requests) {
+  // Check whether issuing the request failed as a whole (generally indicating
+  // a programming error).
+  FCP_ASSIGN_OR_RETURN(
+      std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
+      PerformMultipleRequestsInMemory(http_client_, interruptible_runner_,
+                                      std::move(requests), &bytes_downloaded_,
+                                      &bytes_uploaded_));
+  std::vector<absl::StatusOr<InMemoryHttpResponse>> results;
+  std::transform(responses.begin(), responses.end(),
+                 std::back_inserter(results), CheckResponseContentEncoding);
+  return results;
 }
 
 absl::StatusOr<::google::longrunning::Operation>
 ProtocolRequestHelper::PollOperationResponseUntilDone(
-    absl::StatusOr<InMemoryHttpResponse> http_response) {
+    absl::StatusOr<InMemoryHttpResponse> http_response,
+    const ProtocolRequestCreator& request_creator) {
   // There are three cases that lead to this method returning:
   // - The HTTP response indicates an error.
   // - The HTTP response cannot be parsed into an Operation proto.
@@ -314,21 +354,13 @@ ProtocolRequestHelper::PollOperationResponseUntilDone(
 
     // The response Operation indicates that the result isn't ready yet. Poll
     // again.
-    http_response = PerformGetOperationRequest(response_operation_proto.name());
+    FCP_ASSIGN_OR_RETURN(std::unique_ptr<HttpRequest> get_operation_request,
+                         request_creator.CreateGetOperationRequest(
+                             response_operation_proto.name()));
+    http_response = PerformProtocolRequest(std::move(get_operation_request));
   }
 }
 
-absl::StatusOr<InMemoryHttpResponse>
-ProtocolRequestHelper::PerformGetOperationRequest(std::string operation_name) {
-  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
-                       CreateGetOperationUriSuffix(operation_name));
-
-  // Issue the request. Note that the request body is empty, because its only
-  // field (`name`) is included in the URI instead. Also note that
-  // `PerformProtocolRequest` will attach the `next_request_headers_` to this
-  // request.
-  return PerformProtocolRequest(uri_suffix, HttpRequest::Method::kGet, "");
-}
 HttpFederatedProtocol::HttpFederatedProtocol(
     LogManager* log_manager, const Flags* flags, HttpClient* http_client,
     absl::string_view entry_point_uri, absl::string_view api_key,
@@ -349,10 +381,12 @@ HttpFederatedProtocol::HttpFederatedProtocol(
                   BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
               .interrupt_timeout_extended = ProdDiagCode::
                   BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT})),
+      eligibility_eval_request_creator_(
+          std::make_unique<ProtocolRequestCreator>(
+              entry_point_uri, HeaderList{},
+              !flags->disable_http_request_body_compression())),
       protocol_request_helper_(http_client, interruptible_runner_.get(),
-                               &bytes_downloaded_, &bytes_uploaded_,
-                               entry_point_uri,
-                               !flags->disable_http_request_body_compression()),
+                               &bytes_downloaded_, &bytes_uploaded_),
       api_key_(api_key),
       population_name_(population_name),
       retry_token_(retry_token),
@@ -402,10 +436,14 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,
       CreateRequestEligibilityEvalTaskUriSuffix(population_name_));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> http_request,
+      eligibility_eval_request_creator_->CreateProtocolRequest(
+          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString()));
 
   // Issue the request.
   return protocol_request_helper_.PerformProtocolRequest(
-      uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString());
+      std::move(http_request));
 }
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
@@ -453,8 +491,10 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
 
   session_id_ = response_proto.session_id();
 
-  FCP_RETURN_IF_ERROR(protocol_request_helper_.ProcessForwardingInfo(
-      response_proto.task_assignment_forwarding_info()));
+  FCP_ASSIGN_OR_RETURN(task_assignment_request_creator_,
+                       ProtocolRequestCreator::Create(
+                           response_proto.task_assignment_forwarding_info(),
+                           !flags_->disable_http_request_body_compression()));
 
   switch (response_proto.result_case()) {
     case EligibilityEvalTaskResponse::kEligibilityEvalTask: {
@@ -531,17 +571,22 @@ HttpFederatedProtocol::PerformTaskAssignmentRequest(
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,
       CreateStartTaskAssignmentUriSuffix(population_name_, session_id_));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> http_request,
+      task_assignment_request_creator_->CreateProtocolRequest(
+          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString()));
 
   // Issue the request.
   return protocol_request_helper_.PerformProtocolRequest(
-      uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString());
+      std::move(http_request));
 }
 
 absl::StatusOr<FederatedProtocol::CheckinResult>
 HttpFederatedProtocol::HandleTaskAssignmentOperationResponse(
     absl::StatusOr<InMemoryHttpResponse> http_response) {
   absl::StatusOr<Operation> response_operation_proto =
-      protocol_request_helper_.PollOperationResponseUntilDone(http_response);
+      protocol_request_helper_.PollOperationResponseUntilDone(
+          http_response, *task_assignment_request_creator_);
   if (!response_operation_proto.ok()) {
     // If the protocol request failed then forward the error, but add a prefix
     // to the error message to ensure we can easily distinguish an HTTP error
@@ -586,8 +631,10 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   }
   const auto& task_assignment = response_proto.task_assignment();
 
-  FCP_RETURN_IF_ERROR(protocol_request_helper_.ProcessForwardingInfo(
-      task_assignment.aggregation_data_forwarding_info()));
+  FCP_ASSIGN_OR_RETURN(aggregation_request_creator_,
+                       ProtocolRequestCreator::Create(
+                           task_assignment.aggregation_data_forwarding_info(),
+                           !flags_->disable_http_request_body_compression()));
 
   // Fetch the task resources, returning any errors that may be encountered in
   // the process.
@@ -633,11 +680,14 @@ absl::Status HttpFederatedProtocol::ReportNotCompleted(
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,
       CreateReportTaskResultUriSuffix(population_name_, session_id_));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> http_request,
+      task_assignment_request_creator_->CreateProtocolRequest(
+          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString()));
 
   // Issue the request.
   absl::StatusOr<InMemoryHttpResponse> http_response =
-      protocol_request_helper_.PerformProtocolRequest(
-          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString());
+      protocol_request_helper_.PerformProtocolRequest(std::move(http_request));
   if (!http_response.ok()) {
     // If the request failed, we'll forward the error status.
     return absl::Status(http_response.status().code(),

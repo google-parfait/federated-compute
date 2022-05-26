@@ -745,7 +745,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryOk) {
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
   absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
-      mock_http_client_, interruptible_runner_, std::move(*request),
+      mock_http_client_, interruptible_runner_, *std::move(request),
       // We pass in non-null pointers for the network stats, to ensure they are
       // correctly updated.
       &bytes_received, &bytes_sent);
@@ -775,7 +775,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryNotFound) {
 
   absl::StatusOr<InMemoryHttpResponse> result =
       PerformRequestInMemory(mock_http_client_, interruptible_runner_,
-                             std::move(*request), nullptr, nullptr);
+                             *std::move(request), nullptr, nullptr);
   EXPECT_THAT(result, IsCode(NOT_FOUND));
   EXPECT_THAT(result.status().message(), HasSubstr("404"));
 }
@@ -799,7 +799,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryEarlyError) {
   int64_t bytes_sent = 0;
   absl::StatusOr<InMemoryHttpResponse> result =
       PerformRequestInMemory(mock_http_client_, interruptible_runner_,
-                             std::move(*request), &bytes_received, &bytes_sent);
+                             *std::move(request), &bytes_received, &bytes_sent);
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("PerformRequests failed"));
 
@@ -854,7 +854,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryCancellation) {
   // The request should result in a CANCELLED outcome.
   absl::StatusOr<InMemoryHttpResponse> result =
       PerformRequestInMemory(mock_http_client_, interruptible_runner_,
-                             std::move(*request), &bytes_received, &bytes_sent);
+                             *std::move(request), &bytes_received, &bytes_sent);
 
   EXPECT_THAT(result, IsCode(CANCELLED));
   EXPECT_THAT(result.status().message(),
@@ -864,6 +864,134 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryCancellation) {
   // data sent and received up until the point of interruption).
   EXPECT_THAT(bytes_sent, Ge(0));
   EXPECT_THAT(bytes_received, Ge(0));
+}
+
+TEST_F(PerformRequestsTest, PerformTwoRequestsInMemoryOk) {
+  std::string expected_request_body = "request_body";
+  absl::StatusOr<std::unique_ptr<HttpRequest>> request =
+      InMemoryHttpRequest::Create(
+          "https://valid.com", HttpRequest::Method::kPost,
+          {{"Some-Request-Header", "foo"}}, expected_request_body,
+          /*use_compression=*/false);
+  ASSERT_OK(request);
+  std::string another_expected_request_body = "request_body_2";
+  absl::StatusOr<std::unique_ptr<HttpRequest>> another_request =
+      InMemoryHttpRequest::Create(
+          "https://valid.com", HttpRequest::Method::kPost,
+          {{"Some-Other-Request-Header", "foo2"}},
+          another_expected_request_body, /*use_compression=*/false);
+  ASSERT_OK(another_request);
+
+  std::string expected_response_body = "response_body";
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre((*request)->uri(), (*request)->method(),
+                            Contains(Header{"Some-Request-Header", "foo"}),
+                            StrEq(expected_request_body))))
+      .WillOnce(Return(FakeHttpResponse(
+          kHttpOk, {{"Some-Response-Header", "bar"}}, expected_response_body)));
+  std::string another_expected_response_body = "another_response_body";
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(FieldsAre(
+                  (*request)->uri(), (*request)->method(),
+                  Contains(Header{"Some-Other-Request-Header", "foo2"}),
+                  StrEq(another_expected_request_body))))
+      .WillOnce(Return(
+          FakeHttpResponse(kHttpOk, {{"Some-Other-Response-Header", "bar2"}},
+                           another_expected_response_body)));
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  std::vector<std::unique_ptr<HttpRequest>> requests;
+  requests.push_back(*std::move(request));
+  requests.push_back(*std::move(another_request));
+  absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>> results =
+      PerformMultipleRequestsInMemory(
+          mock_http_client_, interruptible_runner_, std::move(requests),
+          // We pass in non-null pointers for the network
+          // stats, to ensure they are correctly updated.
+          &bytes_received, &bytes_sent);
+  ASSERT_OK(results);
+  ASSERT_EQ(results->size(), 2);
+
+  auto first_response = (*results)[0];
+  ASSERT_OK(first_response);
+  EXPECT_THAT(*first_response,
+              FieldsAre(kHttpOk, IsEmpty(), StrEq(expected_response_body)));
+  auto second_response = (*results)[1];
+  ASSERT_OK(second_response);
+  EXPECT_THAT(
+      *second_response,
+      FieldsAre(kHttpOk, IsEmpty(), StrEq(another_expected_response_body)));
+
+  EXPECT_THAT(bytes_sent, Ne(bytes_received));
+  EXPECT_THAT(bytes_sent, Ge(expected_request_body.size() +
+                             another_expected_request_body.size()));
+  EXPECT_THAT(bytes_received, Ge(expected_response_body.size() +
+                                 another_expected_response_body.size()));
+}
+
+TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailedOneSuccess) {
+  std::string success_request_body = "success_request_body";
+  absl::StatusOr<std::unique_ptr<HttpRequest>> success_request =
+      InMemoryHttpRequest::Create(
+          "https://valid.com", HttpRequest::Method::kPost,
+          {{"Some-Request-Header", "foo"}}, success_request_body,
+          /*use_compression=*/false);
+  ASSERT_OK(success_request);
+  std::string failure_request_body = "failure_request_body";
+  absl::StatusOr<std::unique_ptr<HttpRequest>> failure_request =
+      InMemoryHttpRequest::Create(
+          "https://valid.com", HttpRequest::Method::kPost,
+          {{"Some-Other-Request-Header", "foo2"}}, failure_request_body,
+          /*use_compression=*/false);
+  ASSERT_OK(failure_request);
+
+  int ok_response_code = kHttpOk;
+  std::string success_response_body = "response_body";
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(FieldsAre(
+                  (*success_request)->uri(), (*success_request)->method(),
+                  Contains(Header{"Some-Request-Header", "foo"}),
+                  StrEq(success_request_body))))
+      .WillOnce(Return(FakeHttpResponse(ok_response_code,
+                                        {{"Some-Response-Header", "bar"}},
+                                        success_response_body)));
+  std::string failure_response_body = "failure_response_body";
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(FieldsAre(
+                  (*failure_request)->uri(), (*failure_request)->method(),
+                  Contains(Header{"Some-Other-Request-Header", "foo2"}),
+                  StrEq(failure_request_body))))
+      .WillOnce(
+          Return(FakeHttpResponse(kHttpNotFound, {}, failure_response_body)));
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  std::vector<std::unique_ptr<HttpRequest>> requests;
+  requests.push_back(*std::move(success_request));
+  requests.push_back(*std::move(failure_request));
+  absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>> results =
+      PerformMultipleRequestsInMemory(
+          mock_http_client_, interruptible_runner_, std::move(requests),
+          // We pass in non-null pointers for the network
+          // stats, to ensure they are correctly updated.
+          &bytes_received, &bytes_sent);
+  ASSERT_OK(results);
+  ASSERT_EQ(results->size(), 2);
+  auto first_response = (*results)[0];
+  ASSERT_OK(first_response);
+  EXPECT_THAT(*first_response, FieldsAre(ok_response_code, IsEmpty(),
+                                         StrEq(success_response_body)));
+
+  EXPECT_THAT(results->at(1), IsCode(NOT_FOUND));
+  EXPECT_THAT(results->at(1).status().message(), HasSubstr("404"));
+
+  EXPECT_THAT(bytes_sent, Ne(bytes_received));
+  EXPECT_THAT(bytes_sent,
+              Ge(success_request_body.size() + failure_request_body.size()));
+  EXPECT_THAT(bytes_received,
+              Ge(success_response_body.size() + failure_response_body.size()));
 }
 
 // Tests the case where a zero-length vector of UriOrInlineData is passed in. It

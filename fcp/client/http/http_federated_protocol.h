@@ -50,29 +50,70 @@ namespace fcp {
 namespace client {
 namespace http {
 
-// A helper for managing a chain of protocol requests, with each request being
-// pointed at an endpoint specified by a previous request's
-// `ForwardingInfo.target_uri_prefix`.
-class ProtocolRequestHelper {
+// A helper for creating HTTP request with base uri, request headers and
+// compression setting.
+class ProtocolRequestCreator {
  public:
-  ProtocolRequestHelper(HttpClient* http_client,
-                        InterruptibleRunner* interruptible_runner,
-                        int64_t* bytes_downloaded, int64_t* bytes_uploaded,
-                        absl::string_view entry_point_uri,
-                        bool use_compression);
+  ProtocolRequestCreator(absl::string_view request_base_uri,
+                         HeaderList request_headers, bool use_compression);
 
-  // Performs the given request (handling any interruptions that may occur) and
-  // updates the network stats.
-  //
-  // The `uri_suffix` argument must always either be empty or start with a
-  // leading '/'. The method will CHECK-fail if this isn't the case.
+  // Creates a `ProtocolRequestCreator` based on the forwarding info.
+  // Validates and extracts the base URI and headers to use for the subsequent
+  // request(s).
+  static absl::StatusOr<std::unique_ptr<ProtocolRequestCreator>> Create(
+      const ::google::internal::federatedcompute::v1::ForwardingInfo&
+          forwarding_info,
+      bool use_compression);
+
+  // Creates an `HttpRequest` with base uri, request headers and compression
+  // setting. The `uri_suffix` argument must always either be empty or start
+  // with a leading '/'. The method will return `InvalidArgumentError` if this
+  // isn't the case.
   //
   // The URI to which the protocol request will be sent will be constructed by
   // joining `next_request_base_uri_` with `uri_suffix` (see
   // `JoinBaseUriWithSuffix` for details).
-  absl::StatusOr<InMemoryHttpResponse> PerformProtocolRequest(
+  absl::StatusOr<std::unique_ptr<HttpRequest>> CreateProtocolRequest(
       absl::string_view uri_suffix, HttpRequest::Method method,
-      std::string request_body);
+      std::string request_body) const;
+
+  // Creates an `HttpRequest` for getting the result of a
+  // `google.longrunning.operation`. Note that the request body is empty,
+  // because its only field (`name`) is included in the URI instead. Also note
+  // that the `next_request_headers_` will be attached to this request.
+  absl::StatusOr<std::unique_ptr<HttpRequest>> CreateGetOperationRequest(
+      absl::string_view operation_name) const;
+
+ private:
+  absl::StatusOr<std::unique_ptr<HttpRequest>> CreateHttpRequest(
+      absl::string_view uri_suffix, HttpRequest::Method method,
+      std::string request_body, bool use_compression) const;
+  // The URI to use for the next protocol request. See `ForwardingInfo`.
+  std::string next_request_base_uri_;
+  // The set of headers to attach to the next protocol request. See
+  // `ForwardingInfo`.
+  HeaderList next_request_headers_;
+  const bool use_compression_;
+};
+
+// A helper for issuing protocol requests.
+class ProtocolRequestHelper {
+ public:
+  ProtocolRequestHelper(HttpClient* http_client,
+                        InterruptibleRunner* interruptible_runner,
+                        int64_t* bytes_downloaded, int64_t* bytes_uploaded);
+
+  // Performs the given request (handling any interruptions that may occur) and
+  // updates the network stats.
+  absl::StatusOr<InMemoryHttpResponse> PerformProtocolRequest(
+      std::unique_ptr<HttpRequest> request);
+
+  // Performs the vector of requests (handling any interruptions that may occur)
+  // concurrently and updates the network stats.
+  // The returned vector of responses has the same order of the issued requests.
+  absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
+  PerformMultipleProtocolRequests(
+      std::vector<std::unique_ptr<HttpRequest>> requests);
 
   // Helper function for handling an HTTP response that contains an `Operation`
   // proto.
@@ -80,41 +121,21 @@ class ProtocolRequestHelper {
   // Takes an HTTP response (which must have been produced by a call to
   // `PerformRequestInMemory`), parses the proto, and returns it if its
   // `Operation.done` field is true. If the field is false then this method
-  // keeps polling the Operation via `PerformGetOperationRequest` until it a
-  // response is received where the field is true, at which point that most
-  // recent response is returned. If at any point an HTTP or response parsing
-  // error is encountered, then that error is returned instead.
+  // keeps polling the Operation via performing requests created by
+  // `CreateGetOperationRequest` until it a response is received where the field
+  // is true, at which point that most recent response is returned. If at any
+  // point an HTTP or response parsing error is encountered, then that error is
+  // returned instead.
   absl::StatusOr<::google::longrunning::Operation>
   PollOperationResponseUntilDone(
-      absl::StatusOr<InMemoryHttpResponse> http_response);
-
-  // Validates and extracts the base URI and headers to use for the subsequent
-  // request(s). This should be called by the user of this class after every
-  // successful `PerformProtocolRequest(...)` call.
-  absl::Status ProcessForwardingInfo(
-      const ::google::internal::federatedcompute::v1::ForwardingInfo&
-          forwarding_info);
+      absl::StatusOr<InMemoryHttpResponse> http_response,
+      const ProtocolRequestCreator& request_creator);
 
  private:
-  absl::StatusOr<InMemoryHttpResponse> PerformProtocolRequest(
-      absl::string_view uri_suffix, HttpRequest::Method method,
-      std::string request_body, InterruptibleRunner& interruptible_runner);
-
-  // Helper function for issuing a `GetOperationRequest` with which to poll the
-  // given operation.
-  absl::StatusOr<InMemoryHttpResponse> PerformGetOperationRequest(
-      std::string operation_name);
-
   HttpClient& http_client_;
   InterruptibleRunner& interruptible_runner_;
   int64_t& bytes_downloaded_;
   int64_t& bytes_uploaded_;
-  // The URI to use for the next protocol request. See `ForwardingInfo`.
-  std::string next_request_base_uri_;
-  // The set of headers to attach to the next protocol request. See
-  // `ForwardingInfo`.
-  HeaderList next_request_headers_;
-  const bool use_compression_;
 };
 
 // Implements a single session of the HTTP-based Federated Compute protocol.
@@ -209,6 +230,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   const Flags* const flags_;
   HttpClient* const http_client_;
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
+  std::unique_ptr<ProtocolRequestCreator> eligibility_eval_request_creator_;
+  std::unique_ptr<ProtocolRequestCreator> task_assignment_request_creator_;
+  std::unique_ptr<ProtocolRequestCreator> aggregation_request_creator_;
   ProtocolRequestHelper protocol_request_helper_;
   const std::string api_key_;
   const std::string population_name_;
