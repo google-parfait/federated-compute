@@ -59,7 +59,6 @@
 namespace fcp {
 namespace client {
 
-using ::fcp::client::opstats::OperationalStats;
 using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::AggregationConfig;
 using ::google::internal::federated::plan::ClientOnlyPlan;

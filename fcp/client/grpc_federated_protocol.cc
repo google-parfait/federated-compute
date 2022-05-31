@@ -58,7 +58,6 @@
 namespace fcp {
 namespace client {
 
-using ::fcp::client::opstats::OpStatsLogger;
 using ::fcp::secagg::AesCtrPrngFactory;
 using ::fcp::secagg::ClientState;
 using ::fcp::secagg::ClientToServerWrapperMessage;

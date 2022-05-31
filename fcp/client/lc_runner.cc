@@ -42,7 +42,6 @@
 namespace fcp {
 namespace client {
 
-using ::fcp::client::opstats::OperationalStats;
 using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federated::plan::LocalComputeIORouter;
