@@ -263,20 +263,6 @@ absl::StatusOr<std::unique_ptr<ExampleIterator>> GetExampleIterator(
   }
 }
 
-void LogOpStatsNetworkErrors(OpStatsLogger* opstats_logger, Status status,
-                             const std::string& message) {
-  if (status.code() == absl::StatusCode::kAborted) {
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_SERVER_ABORTED, message);
-  } else if (status.code() == absl::StatusCode::kCancelled) {
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, message);
-  } else if (!status.ok()) {
-    opstats_logger->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, message);
-  }
-}
-
 std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
     const std::string& base_dir, const Flags* flags, LogManager* log_manager,
     const std::string& session_name, const std::string& population_name) {

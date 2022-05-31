@@ -130,12 +130,6 @@ absl::StatusOr<std::unique_ptr<ExampleIterator>> GetExampleIterator(
         const google::internal::federated::plan::ExampleSelector&)>
         create_example_iterator);
 
-// Categorize network errors into client-side interruptions, server-side aborts,
-// and other IO errors, and log to opstats db.
-void LogOpStatsNetworkErrors(
-    ::fcp::client::opstats::OpStatsLogger* opstats_logger, Status status,
-    const std::string& message);
-
 // If opstats is enabled, this method attempts to create an opstats logger
 // backed by a database within base_dir and prepares to record information for a
 // training run with the provided session and population names. If there is an
