@@ -458,8 +458,8 @@ cc_library(
 
 # A command line executable running most of the client side code to
 # use for debugging and illustrating an example integration.
-cc_binary(
-    name = "client_runner_main",
+cc_library(
+    name = "client_runner_main_lib",
     testonly = True,
     srcs = ["client_runner_main.cc"],
     deps = [
@@ -472,6 +472,14 @@ cc_binary(
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/flags:usage",
         "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_binary(
+    name = "client_runner_main",
+    testonly = True,
+    deps = [
+        ":client_runner_main_lib",
         "@org_tensorflow//tensorflow/core:tensorflow_opensource",
     ],
 )

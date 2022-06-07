@@ -51,8 +51,8 @@ cc_test(
         "//fcp/base",
         "//fcp/testing",
         "//fcp/tracing",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
         "@com_googlesource_code_re2//:re2",
     ],
 )
@@ -81,9 +81,9 @@ cc_test(
         "//fcp/base:scheduler",
         "//fcp/testing",
         "//fcp/tracing",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
         "@com_googlesource_code_re2//:re2",
     ],
 )

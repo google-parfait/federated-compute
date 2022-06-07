@@ -26,8 +26,8 @@ cc_library(
     hdrs = ["jni_util.h"],
     deps = [
         "//fcp/base",
+        "@bazel_tools//tools/jdk:jni",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:fixed_array",
-        "@bazel_tools//tools/jdk:jni",
     ],
 )

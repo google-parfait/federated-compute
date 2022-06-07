@@ -24,5 +24,4 @@ java_library(
     srcs = [
         "CallFromNativeWrapper.java",
     ],
-    deps = [],
 )

@@ -68,10 +68,10 @@ cc_library(
         "//fcp/base:result",
         "//fcp/base:source_location",
         "//fcp/tracing",
-        "@com_google_googletest//:gtest",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -104,8 +104,8 @@ cc_test(
         ":test_messages_cc_proto",
         ":testing",
         "//fcp/base",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/flags:flag",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 

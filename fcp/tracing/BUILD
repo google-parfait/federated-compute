@@ -93,11 +93,11 @@ cc_library(
         ":tracing",
         ":tracing_severity",
         "//fcp/base:source_location",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/synchronization",
+        "@com_google_googletest//:gtest_main",
         "@flatbuffers",
     ],
 )
@@ -127,7 +127,7 @@ cc_test(
     copts = FCP_COPTS,
     deps = [
         ":tracing",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/hash:hash_testing",
+        "@com_google_googletest//:gtest_main",
     ],
 )

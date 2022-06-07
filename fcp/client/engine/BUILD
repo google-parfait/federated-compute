@@ -84,9 +84,9 @@ cc_test(
     deps = [
         ":tf_wrapper",
         "//fcp/testing",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:cc_wkt_protos",
     ],
 )
@@ -194,8 +194,8 @@ cc_test(
     deps = [
         ":caching_error_reporter",
         "//fcp/testing",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/lite/core/api:error_reporter",
     ],
 )

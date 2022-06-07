@@ -52,9 +52,9 @@ cc_test(
         ":http_client_util",
         "//fcp/base",
         "//fcp/testing",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/status",
         "@com_google_googleapis//google/rpc:status_cc_proto",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -90,12 +90,12 @@ cc_test(
         "//fcp/client:interruptible_runner",
         "//fcp/client:test_helpers",
         "//fcp/testing",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -153,7 +153,6 @@ cc_test(
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "//fcp/testing",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
@@ -163,6 +162,7 @@ cc_test(
         "@com_google_absl//absl/time",
         "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
         "@com_google_googleapis//google/rpc:code_cc_proto",
+        "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:cc_wkt_protos",
     ],
 )
@@ -176,10 +176,10 @@ cc_library(
         ":http_client",
         ":http_client_util",
         "//fcp/base",
-        "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
     ],
 )

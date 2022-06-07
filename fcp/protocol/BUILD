@@ -29,10 +29,10 @@ cc_library(
     deps = [
         "//fcp/base",
         "//fcp/protos:cc_grpc",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/status",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_grpc_grpc//:grpc++_codegen_base",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -49,9 +49,9 @@ cc_test(
         "//fcp/client:grpc_bidi_stream",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/testing",
-        "@com_google_googletest//:gtest_main",
+        "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/strings",
-        "@com_github_grpc_grpc//:grpc++",
+        "@com_google_googletest//:gtest_main",
     ],
 )
