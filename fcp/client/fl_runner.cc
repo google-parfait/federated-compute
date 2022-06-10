@@ -352,22 +352,6 @@ std::unique_ptr<TfLiteInputs> ConstructTFLiteInputsForTensorflowSpecPlan(
 }
 #endif
 
-absl::StatusOr<std::vector<std::string>> ConstructOutputsForTensorflowSpecPlan(
-    const FederatedComputeIORouter& io_router) {
-  std::vector<std::string> output_names;
-  for (const google::protobuf::MapPair<std::string, AggregationConfig>& it :
-       io_router.aggregations()) {
-    output_names.push_back(it.first);
-    // The only aggregation type currently supported is secure aggregation.
-    if (!it.second.has_secure_aggregation()) {
-      return absl::InvalidArgumentError(
-          "Unsupported aggregation type in TensorflowSpec-based plan");
-    }
-  }
-
-  return output_names;
-}
-
 absl::StatusOr<std::vector<std::string>> ConstructOutputsWithDeterministicOrder(
     const TensorflowSpec& tensorflow_spec,
     const FederatedComputeIORouter& io_router) {
@@ -409,14 +393,9 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
 
   // Get the output tensor names.
   absl::StatusOr<std::vector<std::string>> output_names;
-  if (flags->use_tflite_training() || flags->deterministic_output_order()) {
-    output_names = ConstructOutputsWithDeterministicOrder(
-        client_plan.phase().tensorflow_spec(),
-        client_plan.phase().federated_compute());
-  } else {
-    output_names = ConstructOutputsForTensorflowSpecPlan(
-        client_plan.phase().federated_compute());
-  }
+  output_names = ConstructOutputsWithDeterministicOrder(
+      client_plan.phase().tensorflow_spec(),
+      client_plan.phase().federated_compute());
   if (!output_names.ok()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
         engine::PlanOutcome::kInvalidArgument, output_names.status()));

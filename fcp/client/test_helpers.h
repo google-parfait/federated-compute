@@ -528,7 +528,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_grpc_with_eligibility_eval_http_resource_support, (),
               (const, override));
   MOCK_METHOD(bool, granular_per_phase_logs, (), (const, override));
-  MOCK_METHOD(bool, deterministic_output_order, (), (const, override));
   MOCK_METHOD(bool, ensure_dynamic_tensors_are_released, (), (const, override));
   MOCK_METHOD(int32_t, large_tensor_threshold_for_dynamic_allocation, (),
               (const, override));

@@ -144,9 +144,6 @@ class Flags {
   // for eligibility, checkin, and training.
   virtual bool granular_per_phase_logs() const { return false; }
 
-  // Whether to use deterministic order for output tensors.
-  virtual bool deterministic_output_order() const { return false; }
-
   // When true, TFLite interpreter will use dynamic memory allocation, and
   // release the memory for tensors that are no longer needed.
   virtual bool ensure_dynamic_tensors_are_released() const { return true; }
