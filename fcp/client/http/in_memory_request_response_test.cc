@@ -404,51 +404,6 @@ TEST(InMemoryHttpRequestCallbackTest,
               HasSubstr("Too much response body data received"));
 }
 
-TEST(InMemoryHttpRequestCallbackTest,
-     TestResponseWithBodyTooLongHardcodedWithoutContentLength) {
-  absl::StatusOr<std::unique_ptr<HttpRequest>> request =
-      InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "",
-                                  /*use_compression=*/false);
-  ASSERT_OK(request);
-
-  auto fake_response = FakeHttpResponse(kHttpOk, {});
-
-  // Construct a response body that is longer than our hardcoded limit.
-  std::string response_body;
-  response_body.resize(50 * 1024 * 1024 + 1, 'X');  // 50 MiB + 1 byte.
-
-  InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
-  absl::Status response_body_result =
-      callback.OnResponseBody(**request, fake_response, response_body);
-  EXPECT_THAT(response_body_result, IsCode(OUT_OF_RANGE));
-  EXPECT_THAT(response_body_result.message(),
-              HasSubstr("Too much response body data received"));
-}
-
-TEST(InMemoryHttpRequestCallbackTest,
-     TestResponseWithContentLengthTooLongHardcoded) {
-  absl::StatusOr<std::unique_ptr<HttpRequest>> request =
-      InMemoryHttpRequest::Create("https://valid.com",
-                                  HttpRequest::Method::kGet, {}, "",
-                                  /*use_compression=*/false);
-  ASSERT_OK(request);
-
-  // Set the Content-Length to a size larger than our hardcoded limit.
-  auto fake_response =
-      FakeHttpResponse(kHttpOk, {{"Content-Length",
-                                  // 50 MiB + 1 byte
-                                  std::to_string(50 * 1024 * 1024 + 1)}});
-
-  InMemoryHttpRequestCallback callback;
-  absl::Status response_started_result =
-      callback.OnResponseStarted(**request, fake_response);
-  EXPECT_THAT(response_started_result, IsCode(OUT_OF_RANGE));
-  EXPECT_THAT(response_started_result.message(),
-              HasSubstr("Content-Length response header too small/large"));
-}
-
 TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNegative) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
@@ -464,7 +419,7 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNegative) {
       callback.OnResponseStarted(**request, fake_response);
   EXPECT_THAT(response_started_result, IsCode(OUT_OF_RANGE));
   EXPECT_THAT(response_started_result.message(),
-              HasSubstr("Content-Length response header too small/large"));
+              HasSubstr("Invalid Content-Length response header"));
 }
 
 TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNonInteger) {

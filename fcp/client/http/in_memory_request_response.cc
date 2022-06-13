@@ -89,14 +89,6 @@ absl::StatusOr<std::string> CompressWithGZip(
 
 }  // namespace
 
-// The maximum payload size we're willing to download via the simple in-memory
-// request/response implementations in this file. Anything larger than this
-// should likely use a smarter implementation that streams the payloads from/to
-// disk. We don't apply this limit to the upload code path, since by the time
-// such a too-large payload would be passed to us, it would already be
-// allocated to begin with.
-constexpr int64_t kMaxBufferSize = 50 * 1024 * 1024;  // 50 MiB
-
 absl::StatusOr<std::unique_ptr<HttpRequest>> InMemoryHttpRequest::Create(
     absl::string_view uri, HttpRequest::Method method, HeaderList extra_headers,
     std::string body, bool use_compression) {
@@ -197,9 +189,6 @@ absl::Status InMemoryHttpRequestCallback::OnResponseStarted(
   // didn't provide one and is streaming the response, or that the HttpClient
   // implementation transparently decompressed the data for us and stripped the
   // Content-Length header (as per the HttpClient contract).
-  //
-  // In this case we won't know how much data to expect ahead of time, and we'll
-  // just limit it to our hardcoded maximum of kMaxBufferSize.
   std::optional<std::string> content_length_hdr =
       FindHeader(response.headers(), kContentLengthHdr);
   if (!content_length_hdr.has_value()) {
@@ -215,10 +204,9 @@ absl::Status InMemoryHttpRequestCallback::OnResponseStarted(
         "Could not parse Content-Length response header");
     return status_;
   }
-  if (content_length < 0 || content_length > kMaxBufferSize) {
-    status_ = absl::OutOfRangeError(
-        absl::StrCat("Content-Length response header too small/large (",
-                     content_length, ", max: ", kMaxBufferSize, ")"));
+  if (content_length < 0) {
+    status_ = absl::OutOfRangeError(absl::StrCat(
+        "Invalid Content-Length response header: ", content_length));
     return status_;
   }
   expected_content_length_ = content_length;
@@ -244,11 +232,11 @@ absl::Status InMemoryHttpRequestCallback::OnResponseBody(
   absl::WriterMutexLock _(&mutex_);
 
   // Ensure we're not receiving more data than expected.
-  int64_t expected_size = expected_content_length_.value_or(kMaxBufferSize);
-  if (response_buffer_.size() + data.size() > expected_size) {
+  if (expected_content_length_.has_value() &&
+      response_buffer_.size() + data.size() > *expected_content_length_) {
     status_ = absl::OutOfRangeError(absl::StrCat(
         "Too much response body data received (rcvd: ", response_buffer_.size(),
-        ", new: ", data.size(), ", max: ", expected_size, ")"));
+        ", new: ", data.size(), ", max: ", *expected_content_length_, ")"));
     return status_;
   }
 
