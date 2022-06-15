@@ -42,10 +42,12 @@
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/federated_protocol_util.h"
 #include "fcp/client/http/http_client.h"
+#include "fcp/client/http/http_client_util.h"
 #include "fcp/client/http/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
+#include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
@@ -57,6 +59,7 @@ namespace {
 
 using ::fcp::EqualsProto;
 using ::fcp::IsCode;
+using ::google::internal::federatedcompute::v1::ByteStreamResource;
 using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTask;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
@@ -66,8 +69,13 @@ using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
 using ::google::internal::federatedcompute::v1::ReportTaskResultResponse;
 using ::google::internal::federatedcompute::v1::Resource;
 using ::google::internal::federatedcompute::v1::RetryWindow;
+using ::google::internal::federatedcompute::v1::
+    StartAggregationDataUploadRequest;
+using ::google::internal::federatedcompute::v1::
+    StartAggregationDataUploadResponse;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentRequest;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentResponse;
+using ::google::internal::federatedcompute::v1::SubmitAggregationResultRequest;
 using ::google::internal::federatedcompute::v1::TaskAssignment;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 using ::google::internal::federatedml::v2::TaskWeight;
@@ -100,6 +108,9 @@ using ::testing::VariantWith;
 constexpr char kEntryPointUri[] = "https://initial.uri/";
 constexpr char kTaskAssignmentTargetUri[] = "https://taskassignment.uri/";
 constexpr char kAggregationTargetUri[] = "https://aggregation.uri/";
+constexpr char kSecondStageAggregationTargetUri[] =
+    "https://aggregation.second.uri/";
+constexpr char kByteStreamTargetUri[] = "https://bytestream.uri/";
 constexpr char kApiKey[] = "TEST_APIKEY";
 // Note that we include a '/' character in the population name, which allows us
 // to verify that it is correctly URL-encoded into "%2F".
@@ -115,6 +126,8 @@ constexpr char kClientVersion[] = "CLIENT_VERSION";
 constexpr char kAttestationMeasurement[] = "ATTESTATION_MEASUREMENT";
 constexpr char kClientSessionId[] = "CLIENT_SESSION_ID";
 constexpr char kAggregationSessionId[] = "AGGREGATION_SESSION_ID";
+constexpr char kClientToken[] = "CLIENT_TOKEN";
+constexpr char kResourceName[] = "CHECKPOINT_RESOURCE";
 
 MATCHER_P(EligibilityEvalTaskRequestMatcher, matcher,
           absl::StrCat(negation ? "doesn't parse" : "parses",
@@ -358,6 +371,7 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
   forwarding_info->set_target_uri_prefix(kAggregationTargetUri);
   task_assignment->set_session_id(kClientSessionId);
   task_assignment->set_aggregation_id(aggregation_session_id);
+  task_assignment->set_client_token(kClientToken);
   *task_assignment->mutable_plan() = plan;
   *task_assignment->mutable_init_checkpoint() = checkpoint;
   return response;
@@ -374,6 +388,28 @@ ReportTaskResultRequest GetExpectedReportTaskResultRequest(
       ConvertAbslToProtoDuration(train_duration);
   *request.mutable_client_stats() = client_stats;
   return request;
+}
+
+StartAggregationDataUploadResponse GetFakeStartAggregationDataUploadResponse(
+    absl::string_view aggregation_resource_name,
+    absl::string_view byte_stream_uri_prefix,
+    absl::string_view second_stage_aggregation_uri_prefix) {
+  StartAggregationDataUploadResponse response;
+  ByteStreamResource* resource = response.mutable_resource();
+  *resource->mutable_resource_name() = aggregation_resource_name;
+  ForwardingInfo* data_upload_forwarding_info =
+      resource->mutable_data_upload_forwarding_info();
+  *data_upload_forwarding_info->mutable_target_uri_prefix() =
+      byte_stream_uri_prefix;
+  ForwardingInfo* aggregation_protocol_forwarding_info =
+      response.mutable_aggregation_protocol_forwarding_info();
+  *aggregation_protocol_forwarding_info->mutable_target_uri_prefix() =
+      second_stage_aggregation_uri_prefix;
+  return response;
+}
+
+FakeHttpResponse CreateEmptySuccessHttpResponse() {
+  return FakeHttpResponse(200, {}, "");
 }
 
 class HttpFederatedProtocolTest : public testing::Test {
@@ -509,6 +545,84 @@ class HttpFederatedProtocolTest : public testing::Test {
         .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
 
     return federated_protocol_->Checkin(expected_eligibility_info).status();
+  }
+
+  void ExpectSuccessfulReportTaskResultRequest(
+      absl::string_view expected_report_result_uri,
+      absl::string_view aggregation_session_id, absl::Duration plan_duration) {
+    ReportTaskResultResponse report_task_result_response;
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    std::string(expected_report_result_uri),
+                    HttpRequest::Method::kPost, _,
+                    ReportTaskResultRequestMatcher(
+                        EqualsProto(GetExpectedReportTaskResultRequest(
+                            aggregation_session_id, google::rpc::Code::OK,
+                            plan_duration))))))
+        .WillOnce(Return(CreateEmptySuccessHttpResponse()));
+  }
+
+  void ExpectSuccessfulStartAggregationDataUploadRequest(
+      absl::string_view expected_start_data_upload_uri,
+      absl::string_view aggregation_resource_name,
+      absl::string_view byte_stream_uri_prefix,
+      absl::string_view second_stage_aggregation_uri_prefix) {
+    Operation pending_operation_response =
+        CreatePendingOperation("operations/foo#bar");
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    std::string(expected_start_data_upload_uri),
+                    HttpRequest::Method::kPost, _,
+                    StartAggregationDataUploadRequest().SerializeAsString())))
+        .WillOnce(Return(FakeHttpResponse(
+            200, {}, pending_operation_response.SerializeAsString())));
+    EXPECT_CALL(
+        mock_http_client_,
+        PerformSingleRequest(SimpleHttpRequestMatcher(
+            // Note that the '#' character is encoded as "%23".
+            "https://aggregation.uri/v1/operations/foo%23bar",
+            HttpRequest::Method::kGet, _,
+            GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
+        .WillOnce(Return(FakeHttpResponse(
+            200, {},
+            CreateDoneOperation(GetFakeStartAggregationDataUploadResponse(
+                                    aggregation_resource_name,
+                                    byte_stream_uri_prefix,
+                                    second_stage_aggregation_uri_prefix))
+                .SerializeAsString())));
+  }
+
+  void ExpectSuccessfulByteStreamUploadRequest(
+      absl::string_view expected_byte_stream_upload_uri,
+      absl::string_view checkpoint_str) {
+    EXPECT_CALL(
+        mock_http_client_,
+        PerformSingleRequest(SimpleHttpRequestMatcher(
+            std::string(expected_byte_stream_upload_uri),
+            HttpRequest::Method::kPost, _, std::string(checkpoint_str))))
+        .WillOnce(Return(CreateEmptySuccessHttpResponse()));
+  }
+
+  void ExpectSuccessfulSubmitAggregationResultRequest(
+      absl::string_view expected_submit_aggregation_result_uri) {
+    SubmitAggregationResultRequest submit_aggregation_result_request;
+    submit_aggregation_result_request.set_resource_name(kResourceName);
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    std::string(expected_submit_aggregation_result_uri),
+                    HttpRequest::Method::kPost, _,
+                    submit_aggregation_result_request.SerializeAsString())))
+        .WillOnce(Return(CreateEmptySuccessHttpResponse()));
+  }
+
+  void ExpectSuccessfulAbortAggregationRequest(absl::string_view base_uri) {
+    EXPECT_CALL(
+        mock_http_client_,
+        PerformSingleRequest(SimpleHttpRequestMatcher(
+            absl::StrCat(base_uri, "/v1/aggregations/",
+                         "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:abort"),
+            HttpRequest::Method::kPost, _, _)))
+        .WillOnce(Return(CreateEmptySuccessHttpResponse()));
   }
 
   StrictMock<MockHttpClient> mock_http_client_;
@@ -1432,6 +1546,243 @@ TEST_F(HttpFederatedProtocolTest,
   // The Checkin call is expected to return the rejected retry window from the
   // response to the first eligibility eval request.
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest, TestReportCompletedSuccess) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult",
+      kAggregationSessionId, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/CLIENT_TOKEN:startdataupload",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
+  ExpectSuccessfulByteStreamUploadRequest(
+      "https://bytestream.uri/upload/v1/media/"
+      "CHECKPOINT_RESOURCE?upload_protocol=raw",
+      checkpoint_str);
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/aggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit");
+
+  EXPECT_OK(
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+}
+
+TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  // Mock a failed ReportTaskResult request.
+  ReportTaskResultResponse report_task_result_response;
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+                  "taskassignments/CLIENT_SESSION_ID:reportresult",
+                  HttpRequest::Method::kPost, _,
+                  ReportTaskResultRequestMatcher(
+                      EqualsProto(GetExpectedReportTaskResultRequest(
+                          kAggregationSessionId, google::rpc::Code::OK,
+                          plan_duration))))))
+      .WillOnce(Return(FakeHttpResponse(503, {})));
+
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/CLIENT_TOKEN:startdataupload",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
+  ExpectSuccessfulByteStreamUploadRequest(
+      "https://bytestream.uri/upload/v1/media/"
+      "CHECKPOINT_RESOURCE?upload_protocol=raw",
+      checkpoint_str);
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/aggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit");
+
+  // Despite the ReportTaskResult request failed, we still consider the overall
+  // ReportCompleted succeeded because the rest of the steps succeeds, and the
+  // ReportTaskResult is a just a metric reporting on a best effort basis.
+  EXPECT_OK(
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedStartAggregationFailedImmediately) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  std::string checkpoint_str;
+  const size_t kTFCheckpointSize = 32;
+  checkpoint_str.resize(kTFCheckpointSize, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult",
+      kAggregationSessionId, plan_duration);
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+          "clients/CLIENT_TOKEN:startdataupload",
+          HttpRequest::Method::kPost, _,
+          StartAggregationDataUploadRequest().SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(503, {})));
+  ExpectSuccessfulAbortAggregationRequest("https://aggregation.uri");
+  absl::Status report_result =
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  ASSERT_THAT(report_result, IsCode(absl::StatusCode::kUnavailable));
+  EXPECT_THAT(report_result.message(),
+              HasSubstr("StartAggregationDataUpload request failed"));
+  EXPECT_THAT(report_result.message(), HasSubstr("503"));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedStartAggregationFailedDuringPolling) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  std::string checkpoint_str;
+  const size_t kTFCheckpointSize = 32;
+  checkpoint_str.resize(kTFCheckpointSize, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult",
+      kAggregationSessionId, plan_duration);
+  Operation pending_operation_response =
+      CreatePendingOperation("operations/foo#bar");
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+          "clients/CLIENT_TOKEN:startdataupload",
+          HttpRequest::Method::kPost, _,
+          StartAggregationDataUploadRequest().SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, {}, pending_operation_response.SerializeAsString())));
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          // Note that the '#' character is encoded as "%23".
+          "https://aggregation.uri/v1/operations/foo%23bar",
+          HttpRequest::Method::kGet, _,
+          GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
+      .WillOnce(Return(FakeHttpResponse(401, {})));
+  ExpectSuccessfulAbortAggregationRequest("https://aggregation.uri");
+  absl::Status report_result =
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  ASSERT_THAT(report_result, IsCode(absl::StatusCode::kUnauthenticated));
+  EXPECT_THAT(report_result.message(),
+              HasSubstr("StartAggregationDataUpload request failed"));
+  EXPECT_THAT(report_result.message(), HasSubstr("401"));
+}
+
+TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  std::string checkpoint_str;
+  const size_t kTFCheckpointSize = 32;
+  checkpoint_str.resize(kTFCheckpointSize, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult",
+      kAggregationSessionId, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/CLIENT_TOKEN:startdataupload",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://bytestream.uri/upload/v1/media/"
+                  "CHECKPOINT_RESOURCE?upload_protocol=raw",
+                  HttpRequest::Method::kPost, _, std::string(checkpoint_str))))
+      .WillOnce(Return(FakeHttpResponse(501, {})));
+  ExpectSuccessfulAbortAggregationRequest("https://aggregation.second.uri");
+  absl::Status report_result =
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  ASSERT_THAT(report_result, IsCode(absl::StatusCode::kUnimplemented));
+  EXPECT_THAT(report_result.message(), HasSubstr("Data upload failed"));
+  EXPECT_THAT(report_result.message(), HasSubstr("501"));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedSubmitAggregationResultFailed) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  std::string checkpoint_str;
+  const size_t kTFCheckpointSize = 32;
+  checkpoint_str.resize(kTFCheckpointSize, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult",
+      kAggregationSessionId, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/CLIENT_TOKEN:startdataupload",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
+  ExpectSuccessfulByteStreamUploadRequest(
+      "https://bytestream.uri/upload/v1/media/"
+      "CHECKPOINT_RESOURCE?upload_protocol=raw",
+      checkpoint_str);
+
+  SubmitAggregationResultRequest submit_aggregation_result_request;
+  submit_aggregation_result_request.set_resource_name(kResourceName);
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://aggregation.second.uri/v1/aggregations/"
+                  "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit",
+                  HttpRequest::Method::kPost, _,
+                  submit_aggregation_result_request.SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(409, {})));
+  absl::Status report_result =
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+
+  ASSERT_THAT(report_result, IsCode(absl::StatusCode::kAborted));
+  EXPECT_THAT(report_result.message(),
+              HasSubstr("SubmitAggregationResult failed"));
+  EXPECT_THAT(report_result.message(), HasSubstr("409"));
 }
 
 TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {

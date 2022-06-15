@@ -158,6 +158,13 @@ absl::Status ConvertRpcStatusToAbslStatus(::google::rpc::Status rpc_status) {
                       rpc_status.message());
 }
 
+::google::rpc::Status ConvertAbslStatusToRpcStatus(absl::Status status) {
+  ::google::rpc::Status rpc_status;
+  rpc_status.set_code(static_cast<int>(status.code()));
+  rpc_status.set_message(std::string(status.message()));
+  return rpc_status;
+}
+
 std::optional<std::string> FindHeader(const HeaderList& headers,
                                       absl::string_view needle) {
   // Normalize the needle (since header names are case insensitive, as per RFC

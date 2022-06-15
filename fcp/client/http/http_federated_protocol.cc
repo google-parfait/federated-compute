@@ -50,6 +50,7 @@
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
+#include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
@@ -79,14 +80,20 @@ absl::StatusOr<InMemoryHttpResponse> CheckResponseContentEncoding(
 using ::fcp::client::GenerateRetryWindowFromRetryTime;
 using ::fcp::client::GenerateRetryWindowFromTargetDelay;
 using ::fcp::client::PickRetryTimeFromRange;
+using ::google::internal::federatedcompute::v1::AbortAggregationRequest;
 using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
 using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
 using ::google::internal::federatedcompute::v1::Resource;
+using ::google::internal::federatedcompute::v1::
+    StartAggregationDataUploadRequest;
+using ::google::internal::federatedcompute::v1::
+    StartAggregationDataUploadResponse;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentRequest;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentResponse;
+using ::google::internal::federatedcompute::v1::SubmitAggregationResultRequest;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 using ::google::longrunning::Operation;
 
@@ -174,6 +181,53 @@ absl::StatusOr<std::string> CreateReportTaskResultUriSuffix(
                        EncodeUriSinglePathSegment(session_id));
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_population_name, encoded_session_id);
+}
+
+absl::StatusOr<std::string> CreateStartAggregationDataUploadUriSuffix(
+    absl::string_view aggregation_id, absl::string_view client_token) {
+  constexpr absl::string_view pattern =
+      "/v1/aggregations/$0/clients/$1:startdataupload";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                       EncodeUriSinglePathSegment(aggregation_id));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                       EncodeUriSinglePathSegment(client_token));
+  // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_aggregation_id,
+                          encoded_client_token);
+}
+
+absl::StatusOr<std::string> CreateByteStreamUploadUriSuffix(
+    absl::string_view resource_name) {
+  constexpr absl::string_view pattern =
+      "/upload/v1/media/$0?upload_protocol=raw";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_resource_name,
+                       EncodeUriMultiplePathSegments(resource_name));
+  // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_resource_name);
+}
+
+absl::StatusOr<std::string> CreateSubmitAggregationResultUriSuffix(
+    absl::string_view aggregation_id, absl::string_view client_token) {
+  constexpr absl::string_view pattern = "/v1/aggregations/$0/clients/$1:submit";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                       EncodeUriSinglePathSegment(aggregation_id));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                       EncodeUriSinglePathSegment(client_token));
+  // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_aggregation_id,
+                          encoded_client_token);
+}
+
+absl::StatusOr<std::string> CreateAbortAggregationUriSuffix(
+    absl::string_view aggregation_id, absl::string_view client_token) {
+  constexpr absl::string_view pattern = "/v1/aggregations/$0/clients/$1:abort";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                       EncodeUriSinglePathSegment(aggregation_id));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                       EncodeUriSinglePathSegment(client_token));
+  // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_aggregation_id,
+                          encoded_client_token);
 }
 
 // Convert a Resource proto into a UriOrInlineData object. Returns an
@@ -646,6 +700,7 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   object_state_ = ObjectState::kCheckinAccepted;
   session_id_ = task_assignment.session_id();
   aggregation_session_id_ = task_assignment.aggregation_id();
+  aggregation_client_token_ = task_assignment.client_token();
 
   return TaskAssignment{
       .payloads = std::move(payloads),
@@ -663,7 +718,195 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
   FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)
       << "Invalid call sequence";
   object_state_ = ObjectState::kReportCalled;
-  return absl::UnimplementedError("ReportCompleted() not implemented yet!");
+
+  if (results.size() != 1 ||
+      !std::holds_alternative<TFCheckpoint>(results.begin()->second)) {
+    return absl::InternalError(
+        "Simple Aggregation aggregands have unexpected format.");
+  }
+
+  auto start_upload_status = HandleStartDataAggregationUploadOperationResponse(
+      PerformStartDataUploadRequestAndReportTaskResult(plan_duration));
+  if (!start_upload_status.ok()) {
+    object_state_ = ObjectState::kReportFailedPermanentError;
+    FCP_LOG_IF(WARNING, !AbortAggregation(start_upload_status,
+                                          "StartDataAggregationUpload failed.")
+                             .ok())
+        << "Failed to signal the server to abort upload.";
+    return start_upload_status;
+  }
+  auto upload_status = UploadDataViaSimpleAgg(
+      std::get<TFCheckpoint>(std::move(results.begin()->second)));
+  if (!upload_status.ok()) {
+    object_state_ = ObjectState::kReportFailedPermanentError;
+    FCP_LOG_IF(WARNING,
+               !AbortAggregation(upload_status,
+                                 "Upload data via simple aggregation failed.")
+                    .ok())
+        << "Failed to signal the server to abort upload.";
+    return upload_status;
+  }
+  return SubmitAggregationResult();
+}
+
+absl::StatusOr<InMemoryHttpResponse>
+HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
+    absl::Duration plan_duration) {
+  FCP_ASSIGN_OR_RETURN(
+      ReportTaskResultRequest report_task_result_request,
+      CreateReportTaskResultRequest(engine::PhaseOutcome::COMPLETED,
+                                    plan_duration, aggregation_session_id_));
+  FCP_ASSIGN_OR_RETURN(
+      std::string report_task_result_uri_suffix,
+      CreateReportTaskResultUriSuffix(population_name_, session_id_));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> http_report_task_result_request,
+      task_assignment_request_creator_->CreateProtocolRequest(
+          report_task_result_uri_suffix, HttpRequest::Method::kPost,
+          report_task_result_request.SerializeAsString()));
+
+  StartAggregationDataUploadRequest start_upload_request;
+  FCP_ASSIGN_OR_RETURN(std::string start_aggregation_data_upload_uri_suffix,
+                       CreateStartAggregationDataUploadUriSuffix(
+                           aggregation_session_id_, aggregation_client_token_));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> http_start_aggregation_data_upload_request,
+      aggregation_request_creator_->CreateProtocolRequest(
+          start_aggregation_data_upload_uri_suffix, HttpRequest::Method::kPost,
+          start_upload_request.SerializeAsString()));
+  std::vector<std::unique_ptr<HttpRequest>> requests;
+  requests.push_back(std::move(http_start_aggregation_data_upload_request));
+  requests.push_back(std::move(http_report_task_result_request));
+  FCP_ASSIGN_OR_RETURN(
+      std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
+      protocol_request_helper_.PerformMultipleProtocolRequests(
+          std::move(requests)));
+  // We should have two responses, otherwise we have made a developer error.
+  FCP_CHECK(responses.size() == 2);
+  // The responses are returned in order so the first response will be the one
+  // for StartAggregationDataUpload request.  We only care about this response,
+  // the ReportTaskResult request is just a best effort to report client metrics
+  // to the server, and we don't want to abort the aggregation even if it
+  // failed.
+  return responses[0];
+}
+
+absl::Status
+HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
+    absl::StatusOr<InMemoryHttpResponse> http_response) {
+  absl::StatusOr<Operation> response_operation_proto =
+      protocol_request_helper_.PollOperationResponseUntilDone(
+          http_response, *aggregation_request_creator_);
+  if (!response_operation_proto.ok()) {
+    // If the protocol request failed then forward the error, but add a prefix
+    // to the error message to ensure we can easily distinguish an HTTP error
+    // occurring in response to the protocol request from HTTP errors
+    // occurring during upload requests later on.
+    return absl::Status(
+        response_operation_proto.status().code(),
+        absl::StrCat("StartAggregationDataUpload request failed: ",
+                     response_operation_proto.status().ToString()));
+  }
+
+  // The Operation has finished. Check if it resulted in an error, and if so
+  // forward it after converting it to an absl::Status error.
+  if (response_operation_proto->has_error()) {
+    auto rpc_error =
+        ConvertRpcStatusToAbslStatus(response_operation_proto->error());
+    return absl::Status(
+        rpc_error.code(),
+        absl::StrCat("Operation contained error: ", rpc_error.ToString()));
+  }
+
+  // Otherwise, handle the StartDataAggregationUploadResponse that should have
+  // been returned by the Operation response proto.
+
+  StartAggregationDataUploadResponse response_proto;
+  if (!response_operation_proto->response().UnpackTo(&response_proto)) {
+    return absl::InvalidArgumentError(
+        "could not parse StartTaskAssignmentResponse proto");
+  }
+
+  // Note that we reassign `aggregation_request_creator_` because from this
+  // point onwards, subsequent aggregation protocol requests should go to the
+  // endpoint identified in the aggregation_protocol_forwarding_info.
+  FCP_ASSIGN_OR_RETURN(
+      aggregation_request_creator_,
+      ProtocolRequestCreator::Create(
+          response_proto.aggregation_protocol_forwarding_info(),
+          !flags_->disable_http_request_body_compression()));
+  auto upload_resource = response_proto.resource();
+  aggregation_resource_name_ = upload_resource.resource_name();
+  FCP_ASSIGN_OR_RETURN(data_upload_request_creator_,
+                       ProtocolRequestCreator::Create(
+                           upload_resource.data_upload_forwarding_info(),
+                           !flags_->disable_http_request_body_compression()));
+  return absl::OkStatus();
+}
+
+absl::Status HttpFederatedProtocol::UploadDataViaSimpleAgg(
+    std::string tf_checkpoint) {
+  FCP_LOG(INFO) << "Uploading checkpoint with simple aggregation.";
+  FCP_ASSIGN_OR_RETURN(std::string uri_suffix, CreateByteStreamUploadUriSuffix(
+                                                   aggregation_resource_name_));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> http_request,
+      data_upload_request_creator_->CreateProtocolRequest(
+          uri_suffix, HttpRequest::Method::kPost, std::move(tf_checkpoint)));
+  auto http_response =
+      protocol_request_helper_.PerformProtocolRequest(std::move(http_request));
+  if (!http_response.ok()) {
+    // If the request failed, we'll forward the error status.
+    return absl::Status(http_response.status().code(),
+                        absl::StrCat("Data upload failed: ",
+                                     http_response.status().ToString()));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status HttpFederatedProtocol::SubmitAggregationResult() {
+  FCP_LOG(INFO) << "Notifying the server that data upload is complete.";
+  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
+                       CreateSubmitAggregationResultUriSuffix(
+                           aggregation_session_id_, aggregation_client_token_));
+  SubmitAggregationResultRequest request;
+  request.set_resource_name(aggregation_resource_name_);
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> http_request,
+      aggregation_request_creator_->CreateProtocolRequest(
+          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString()));
+  auto http_response =
+      protocol_request_helper_.PerformProtocolRequest(std::move(http_request));
+  if (!http_response.ok()) {
+    // If the request failed, we'll forward the error status.
+    return absl::Status(http_response.status().code(),
+                        absl::StrCat("SubmitAggregationResult failed: ",
+                                     http_response.status().ToString()));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status HttpFederatedProtocol::AbortAggregation(
+    absl::Status original_error_status,
+    absl::string_view error_message_for_server) {
+  FCP_LOG(INFO) << "Aborting aggregation: " << original_error_status;
+  FCP_CHECK(object_state_ == ObjectState::kReportFailedPermanentError)
+      << "Invalid call sequence";
+  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
+                       CreateAbortAggregationUriSuffix(
+                           aggregation_session_id_, aggregation_client_token_));
+  // We only provide the server with a simplified error message.
+  absl::Status error_status(original_error_status.code(),
+                            error_message_for_server);
+  AbortAggregationRequest request;
+  *request.mutable_status() = ConvertAbslStatusToRpcStatus(error_status);
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> http_request,
+      aggregation_request_creator_->CreateProtocolRequest(
+          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString()));
+  return protocol_request_helper_
+      .PerformProtocolRequest(std::move(http_request))
+      .status();
 }
 
 absl::Status HttpFederatedProtocol::ReportNotCompleted(

@@ -140,6 +140,7 @@ cc_test(
     srcs = ["http_federated_protocol_test.cc"],
     deps = [
         ":http_client",
+        ":http_client_util",
         ":http_federated_protocol",
         ":test_helpers",
         "//fcp/base",

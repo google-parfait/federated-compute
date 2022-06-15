@@ -211,6 +211,29 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   HandleTaskAssignmentInnerResponse(
       const ::google::protobuf::Any& operation_response);
 
+  // Helper function to perform a StartDataUploadRequest and a ReportTaskResult
+  // request concurrently.
+  // This method will only return the response from the StartDataUploadRequest.
+  absl::StatusOr<InMemoryHttpResponse>
+  PerformStartDataUploadRequestAndReportTaskResult(
+      absl::Duration plan_duration);
+
+  // Helper function for handling a longrunning operation returned by a
+  // StartDataAggregationUpload request.
+  absl::Status HandleStartDataAggregationUploadOperationResponse(
+      absl::StatusOr<InMemoryHttpResponse> http_response);
+
+  // Helper function to perform data upload via simple aggregation.
+  absl::Status UploadDataViaSimpleAgg(std::string tf_checkpoint);
+
+  // Helper function to perform a SubmitAggregationResult request.
+  absl::Status SubmitAggregationResult();
+
+  // Helper function to perform an AbortAggregation request.
+  // We only provide the server with a simplified error message.
+  absl::Status AbortAggregation(absl::Status original_error_status,
+                                absl::string_view error_message_for_server);
+
   struct TaskResources {
     const ::google::internal::federatedcompute::v1::Resource& plan;
     const ::google::internal::federatedcompute::v1::Resource& checkpoint;
@@ -233,6 +256,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   std::unique_ptr<ProtocolRequestCreator> eligibility_eval_request_creator_;
   std::unique_ptr<ProtocolRequestCreator> task_assignment_request_creator_;
   std::unique_ptr<ProtocolRequestCreator> aggregation_request_creator_;
+  std::unique_ptr<ProtocolRequestCreator> data_upload_request_creator_;
   ProtocolRequestHelper protocol_request_helper_;
   const std::string api_key_;
   const std::string population_name_;
@@ -263,6 +287,10 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // The identifier of the aggregation session we are participating in (or empty
   // if that phase of the protocol hasn't been reached yet).
   std::string aggregation_session_id_;
+  // Unique identifier for the client's participation in an aggregation session.
+  std::string aggregation_client_token_;
+  // Resource name for the checkpoint in simple aggregation.
+  std::string aggregation_resource_name_;
 };
 
 }  // namespace http

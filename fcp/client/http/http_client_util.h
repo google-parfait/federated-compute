@@ -64,6 +64,9 @@ absl::Status ConvertHttpCodeToStatus(int code);
 // Converts a `::google::rpc::Status` into an `absl::Status`.
 absl::Status ConvertRpcStatusToAbslStatus(::google::rpc::Status rpc_status);
 
+// Converts an `absl::Status` into a `google::rpc::Status`.
+google::rpc::Status ConvertAbslStatusToRpcStatus(absl::Status status);
+
 // Finds the header value for header with name `needle` in a list of headers
 // (incl. normalizing the header names to lowercase before doing any
 // comparisons). Note that this returns the first matching header value (rather
