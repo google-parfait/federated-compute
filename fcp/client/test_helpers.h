@@ -346,8 +346,8 @@ class MockFederatedProtocol : public FederatedProtocol {
   explicit MockFederatedProtocol() {}
 
   // We override the real FederatedProtocol methods so that we can intercept the
-  // progression of protocol stages, and expose dedicate gMock-overridable m
-  // thods for use in tests.
+  // progression of protocol stages, and expose dedicate gMock-overridable
+  // methods for use in tests.
   absl::StatusOr<EligibilityEvalCheckinResult> EligibilityEvalCheckin() final {
     network_stats_ = kPostEligibilityCheckinStats;
     retry_window_ = GetPostEligibilityCheckinRetryWindow();
@@ -535,6 +535,7 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, disable_http_request_body_compression, (),
               (const, override));
+  MOCK_METHOD(bool, use_http_federated_compute_protocol, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

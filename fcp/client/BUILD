@@ -306,6 +306,7 @@ cc_library(
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/client/engine:plan_engine",
         "//fcp/client/engine:plan_engine_helpers",
+        "//fcp/client/http:http_federated_protocol",
         "//fcp/client/opstats:opstats_logger",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",

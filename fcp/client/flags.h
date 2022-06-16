@@ -160,6 +160,9 @@ class Flags {
 
   // When true, http request body won't be compressed.
   virtual bool disable_http_request_body_compression() const { return false; }
+
+  // When true, HTTP Federated Compute protocol is used.
+  virtual bool use_http_federated_compute_protocol() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
