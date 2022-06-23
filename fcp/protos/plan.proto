@@ -1029,6 +1029,9 @@ message ServerPhase {
   // This is used for downstream, cross-round aggregation of metrics.
   // These variables will be read back into a session with
   // read_intermediate_update.
+  //
+  // Tasks which do not use FL metrics may unset the CheckpointOp.saver_def
+  // to disable writing accumulator checkpoints.
   CheckpointOp write_accumulators = 12;
 
   // 5. Finalize the round.
