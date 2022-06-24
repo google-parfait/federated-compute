@@ -105,6 +105,10 @@ http_archive(
         # This patch enables googleapi Java proto rules such as
         # @com_google_googleapis//google/rpc:rpc_java_proto.
         "//fcp/patches:tensorflow_googleapis_java_proto_rules.patch",
+        # This patch works around failures in GitHub infrastructure to
+        # download versions of LLVM pointed to by non-HEAD TensorFlow.
+        # TODO(team): Remove this patch when resolved.
+        "//fcp/patches:tensorflow_llvm_url.patch",
     ],
     sha256 = "66b953ae7fba61fd78969a2e24e350b26ec116cf2e6a7eb93d02c63939c6f9f7",
     strip_prefix = "tensorflow-2.8.0",
