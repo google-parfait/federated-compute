@@ -945,7 +945,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   }
 
   std::unique_ptr<::fcp::client::http::HttpClient> http_client =
-      flags->enable_grpc_with_http_resource_support()
+      flags->enable_grpc_with_http_resource_support() ||
+              flags->use_http_federated_compute_protocol()
           ? env_deps->CreateHttpClient()
           : nullptr;
 
