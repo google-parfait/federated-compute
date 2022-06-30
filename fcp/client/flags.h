@@ -163,6 +163,10 @@ class Flags {
 
   // When true, HTTP Federated Compute protocol is used.
   virtual bool use_http_federated_compute_protocol() const { return false; }
+
+  // When true, the client computes the task identity to pass in
+  // SelectorContext.
+  virtual bool enable_computation_id() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

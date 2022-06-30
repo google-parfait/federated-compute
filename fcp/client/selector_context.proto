@@ -65,6 +65,9 @@ message FederatedComputation {
   // Name of the task that was executed.
   string task_name = 2;
 
+  // Identity representing the computation e.g. its plan hash.
+  bytes computation_id = 5;
+
   // Types of server aggregation.
   oneof aggregation_type {
     // Simple aggregation. At least one value is aggregated with simple

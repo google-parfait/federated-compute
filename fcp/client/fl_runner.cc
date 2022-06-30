@@ -788,13 +788,14 @@ struct CheckinResult {
   ClientOnlyPlan plan;
   int32_t minimum_clients_in_server_visible_aggregate;
   std::string checkpoint_input_filename;
+  std::string computation_id;
 };
 absl::StatusOr<CheckinResult> IssueCheckin(
     PhaseLogger& phase_logger, LogManager* log_manager, Files* files,
     FederatedProtocol* federated_protocol,
     std::optional<TaskEligibilityInfo> task_eligibility_info,
     absl::Time reference_time, const std::string& population_name,
-    FLRunnerResult& fl_runner_result) {
+    FLRunnerResult& fl_runner_result, const Flags* flags) {
   absl::Time time_before_checkin = absl::Now();
   // Clear the model identifier before check-in, to ensure that the any prior
   // eligibility eval task name isn't used any longer.
@@ -865,6 +866,11 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     return absl::InternalError("");
   }
 
+  std::string computation_id;
+  if (flags->enable_computation_id()) {
+    // TODO(team): compute the hash.
+  }
+
   int32_t minimum_clients_in_server_visible_aggregate = 0;
   if (task_assignment.sec_agg_info.has_value()) {
     auto minimum_number_of_participants =
@@ -902,7 +908,8 @@ absl::StatusOr<CheckinResult> IssueCheckin(
       .plan = std::move(plan),
       .minimum_clients_in_server_visible_aggregate =
           minimum_clients_in_server_visible_aggregate,
-      .checkpoint_input_filename = std::move(*checkpoint_input_filename)};
+      .checkpoint_input_filename = std::move(*checkpoint_input_filename),
+      .computation_id = std::move(computation_id)};
 }
 
 }  // namespace
@@ -1036,7 +1043,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   auto checkin_result =
       IssueCheckin(phase_logger, log_manager, files, federated_protocol,
                    std::move(*eligibility_eval_result), reference_time,
-                   population_name, fl_runner_result);
+                   population_name, fl_runner_result, flags);
 
   if (!checkin_result.ok()) {
     return fl_runner_result;
@@ -1047,6 +1054,12 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   federated_selector_context_with_task_name.mutable_computation_properties()
       ->mutable_federated()
       ->set_task_name(checkin_result->task_name);
+
+  if (flags->enable_computation_id()) {
+    federated_selector_context_with_task_name.mutable_computation_properties()
+        ->mutable_federated()
+        ->set_computation_id(checkin_result->computation_id);
+  }
 
   const auto& federated_compute_io_router =
       checkin_result->plan.phase().federated_compute();

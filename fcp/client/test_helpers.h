@@ -369,16 +369,14 @@ class MockFederatedProtocol : public FederatedProtocol {
                   ::google::internal::federatedml::v2::TaskEligibilityInfo>&
                    task_eligibility_info));
 
-  absl::Status ReportCompleted(
-      ComputationResults results,
-      absl::Duration plan_duration) final {
+  absl::Status ReportCompleted(ComputationResults results,
+                               absl::Duration plan_duration) final {
     network_stats_ = kPostReportCompletedStats;
     retry_window_ = GetPostReportCompletedRetryWindow();
     return MockReportCompleted(std::move(results), plan_duration);
   };
   MOCK_METHOD(absl::Status, MockReportCompleted,
-              (ComputationResults results,
-               absl::Duration plan_duration));
+              (ComputationResults results, absl::Duration plan_duration));
 
   absl::Status ReportNotCompleted(engine::PhaseOutcome phase_outcome,
                                   absl::Duration plan_duration) final {
@@ -536,6 +534,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, disable_http_request_body_compression, (),
               (const, override));
   MOCK_METHOD(bool, use_http_federated_compute_protocol, (), (const, override));
+  MOCK_METHOD(bool, enable_computation_id, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
