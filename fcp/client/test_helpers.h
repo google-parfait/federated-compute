@@ -529,8 +529,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, ensure_dynamic_tensors_are_released, (), (const, override));
   MOCK_METHOD(int32_t, large_tensor_threshold_for_dynamic_allocation, (),
               (const, override));
-  MOCK_METHOD(bool, include_lc_inputs_in_selector_context, (),
-              (const, override));
   MOCK_METHOD(bool, disable_http_request_body_compression, (),
               (const, override));
   MOCK_METHOD(bool, use_http_federated_compute_protocol, (), (const, override));

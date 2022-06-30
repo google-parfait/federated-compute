@@ -185,10 +185,8 @@ absl::Status RunLocalComputation(SimpleTaskEnvironment* env_deps,
   selector_context.mutable_computation_properties()->set_session_name(
       session_name);
   LocalComputation computation = LocalComputation();
-  if (flags->include_lc_inputs_in_selector_context()) {
-    computation.set_input_dir(input_dir_uri);
-    computation.set_output_dir(output_dir_uri);
-  }
+  computation.set_input_dir(input_dir_uri);
+  computation.set_output_dir(output_dir_uri);
   *selector_context.mutable_computation_properties()->mutable_local_compute() =
       computation;
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
