@@ -33,11 +33,13 @@ inline static constexpr char kHttpsScheme[] = "https://";
 inline static constexpr char kAcceptEncodingHdr[] = "Accept-Encoding";
 inline static constexpr char kContentLengthHdr[] = "Content-Length";
 inline static constexpr char kContentEncodingHdr[] = "Content-Encoding";
+inline static constexpr char kContentTypeHdr[] = "Content-Type";
 inline static constexpr char kTransferEncodingHdr[] = "Transfer-Encoding";
 // The "Transfer-Encoding" header value when the header is present but indicates
 // that no encoding was actually applied.
 inline static constexpr char kIdentityEncodingHdrValue[] = "identity";
 inline static constexpr char kGzipEncodingHdrValue[] = "gzip";
+inline static constexpr char kProtobufContentType[] = "application/x-protobuf";
 
 // A non-exhaustive enumeration of common HTTP response codes.
 // Note this is purposely *not* an "enum class", to allow easy comparisons

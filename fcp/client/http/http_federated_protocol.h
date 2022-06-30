@@ -50,6 +50,9 @@ namespace fcp {
 namespace client {
 namespace http {
 
+// Note the uri query parameters should be percent encoded.
+using QueryParams = absl::flat_hash_map<std::string, std::string>;
+
 // A helper for creating HTTP request with base uri, request headers and
 // compression setting.
 class ProtocolRequestCreator {
@@ -66,16 +69,24 @@ class ProtocolRequestCreator {
       bool use_compression);
 
   // Creates an `HttpRequest` with base uri, request headers and compression
-  // setting. The `uri_suffix` argument must always either be empty or start
-  // with a leading '/'. The method will return `InvalidArgumentError` if this
-  // isn't the case.
+  // setting. The `uri_path_suffix` argument must always either be empty or
+  // start with a leading '/'. The method will return `InvalidArgumentError` if
+  // this isn't the case.  The `uri_path_suffix` should not contain any query
+  // parameters, instead, query parameters should be specified in `params`.
   //
   // The URI to which the protocol request will be sent will be constructed by
-  // joining `next_request_base_uri_` with `uri_suffix` (see
-  // `JoinBaseUriWithSuffix` for details).
+  // joining `next_request_base_uri_` with `uri_path_suffix` (see
+  // `JoinBaseUriWithSuffix` for details), and any query parameters if `params`
+  // is not empty.
+  //
+  // When `is_protobuf_encoded` is true, `%24alt=proto` will be added to the uri
+  // as a query parameter to indicate that the proto encoded payload is
+  // expected. When the `request_body` is not empty, a `Content-Type` header
+  // will also be added to the request
   absl::StatusOr<std::unique_ptr<HttpRequest>> CreateProtocolRequest(
-      absl::string_view uri_suffix, HttpRequest::Method method,
-      std::string request_body) const;
+      absl::string_view uri_path_suffix, QueryParams params,
+      HttpRequest::Method method, std::string request_body,
+      bool is_protobuf_encoded) const;
 
   // Creates an `HttpRequest` for getting the result of a
   // `google.longrunning.operation`. Note that the request body is empty,
@@ -86,8 +97,9 @@ class ProtocolRequestCreator {
 
  private:
   absl::StatusOr<std::unique_ptr<HttpRequest>> CreateHttpRequest(
-      absl::string_view uri_suffix, HttpRequest::Method method,
-      std::string request_body, bool use_compression) const;
+      absl::string_view uri_path_suffix, QueryParams params,
+      HttpRequest::Method method, std::string request_body,
+      bool is_protobuf_encoded, bool use_compression) const;
   // The URI to use for the next protocol request. See `ForwardingInfo`.
   std::string next_request_base_uri_;
   // The set of headers to attach to the next protocol request. See

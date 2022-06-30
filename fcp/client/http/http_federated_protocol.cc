@@ -136,6 +136,12 @@ using ::google::longrunning::Operation;
 // this a reasonable tradeoff.
 
 namespace {
+std::string CreateUriSuffixFromPathAndParams(absl::string_view path,
+                                             const QueryParams& params) {
+  return absl::StrCat(path, "?",
+                      absl::StrJoin(params.begin(), params.end(), "&",
+                                    absl::PairFormatter("=")));
+}
 
 // Creates the URI suffix for a RequestEligibilityEvalTask protocol request.
 absl::StatusOr<std::string> CreateRequestEligibilityEvalTaskUriSuffix(
@@ -198,8 +204,7 @@ absl::StatusOr<std::string> CreateStartAggregationDataUploadUriSuffix(
 
 absl::StatusOr<std::string> CreateByteStreamUploadUriSuffix(
     absl::string_view resource_name) {
-  constexpr absl::string_view pattern =
-      "/upload/v1/media/$0?upload_protocol=raw";
+  constexpr absl::string_view pattern = "/upload/v1/media/$0";
   FCP_ASSIGN_OR_RETURN(std::string encoded_resource_name,
                        EncodeUriMultiplePathSegments(resource_name));
   // Construct the URI suffix.
@@ -291,32 +296,53 @@ ProtocolRequestCreator::ProtocolRequestCreator(
       use_compression_(use_compression) {}
 
 absl::StatusOr<std::unique_ptr<HttpRequest>>
-ProtocolRequestCreator::CreateProtocolRequest(absl::string_view uri_suffix,
+ProtocolRequestCreator::CreateProtocolRequest(absl::string_view uri_path_suffix,
+                                              QueryParams params,
                                               HttpRequest::Method method,
-                                              std::string request_body) const {
-  return CreateHttpRequest(uri_suffix, method, std::move(request_body),
+                                              std::string request_body,
+                                              bool is_protobuf_encoded) const {
+  return CreateHttpRequest(uri_path_suffix, std::move(params), method,
+                           std::move(request_body), is_protobuf_encoded,
                            use_compression_);
 }
 
 absl::StatusOr<std::unique_ptr<HttpRequest>>
 ProtocolRequestCreator::CreateGetOperationRequest(
     absl::string_view operation_name) const {
-  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
+  FCP_ASSIGN_OR_RETURN(std::string uri_path_suffix,
                        CreateGetOperationUriSuffix(operation_name));
-  return CreateHttpRequest(uri_suffix, HttpRequest::Method::kGet, "",
+  return CreateHttpRequest(uri_path_suffix, {}, HttpRequest::Method::kGet, "",
+                           /*is_protobuf_encoded=*/false,
                            /*use_compression=*/false);
 }
 
 absl::StatusOr<std::unique_ptr<HttpRequest>>
-ProtocolRequestCreator::CreateHttpRequest(absl::string_view uri_suffix,
+ProtocolRequestCreator::CreateHttpRequest(absl::string_view uri_path_suffix,
+                                          QueryParams params,
                                           HttpRequest::Method method,
                                           std::string request_body,
+                                          bool is_protobuf_encoded,
                                           bool use_compression) const {
+  HeaderList request_headers = next_request_headers_;
+  if (is_protobuf_encoded) {
+    if (!request_body.empty()) {
+      request_headers.push_back({kContentTypeHdr, kProtobufContentType});
+    }
+
+    // %24alt is the percent encoded $alt.  "$" is prepended to alt to indicate
+    // that "alt" is a system parameter.
+    // https://cloud.google.com/apis/docs/system-parameters#http_mapping
+    params["%24alt"] = "proto";
+  }
+  std::string uri_with_params = std::string(uri_path_suffix);
+  if (!params.empty()) {
+    uri_with_params = CreateUriSuffixFromPathAndParams(uri_path_suffix, params);
+  }
   FCP_ASSIGN_OR_RETURN(
       std::string uri,
-      JoinBaseUriWithSuffix(next_request_base_uri_, uri_suffix));
+      JoinBaseUriWithSuffix(next_request_base_uri_, uri_with_params));
 
-  return InMemoryHttpRequest::Create(uri, method, next_request_headers_,
+  return InMemoryHttpRequest::Create(uri, method, request_headers,
                                      std::move(request_body), use_compression);
 }
 
@@ -493,7 +519,8 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       eligibility_eval_request_creator_->CreateProtocolRequest(
-          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString()));
+          uri_suffix, {}, HttpRequest::Method::kPost,
+          request.SerializeAsString(), /*is_protobuf_encoded=*/true));
 
   // Issue the request.
   return protocol_request_helper_.PerformProtocolRequest(
@@ -628,7 +655,8 @@ HttpFederatedProtocol::PerformTaskAssignmentRequest(
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
-          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString()));
+          uri_suffix, {}, HttpRequest::Method::kPost,
+          request.SerializeAsString(), /*is_protobuf_encoded=*/true));
 
   // Issue the request.
   return protocol_request_helper_.PerformProtocolRequest(
@@ -762,8 +790,9 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_report_task_result_request,
       task_assignment_request_creator_->CreateProtocolRequest(
-          report_task_result_uri_suffix, HttpRequest::Method::kPost,
-          report_task_result_request.SerializeAsString()));
+          report_task_result_uri_suffix, {}, HttpRequest::Method::kPost,
+          report_task_result_request.SerializeAsString(),
+          /*is_protobuf_encoded=*/true));
 
   StartAggregationDataUploadRequest start_upload_request;
   FCP_ASSIGN_OR_RETURN(std::string start_aggregation_data_upload_uri_suffix,
@@ -772,8 +801,9 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_start_aggregation_data_upload_request,
       aggregation_request_creator_->CreateProtocolRequest(
-          start_aggregation_data_upload_uri_suffix, HttpRequest::Method::kPost,
-          start_upload_request.SerializeAsString()));
+          start_aggregation_data_upload_uri_suffix, {},
+          HttpRequest::Method::kPost, start_upload_request.SerializeAsString(),
+          /*is_protobuf_encoded=*/true));
   std::vector<std::unique_ptr<HttpRequest>> requests;
   requests.push_back(std::move(http_start_aggregation_data_upload_request));
   requests.push_back(std::move(http_report_task_result_request));
@@ -852,7 +882,8 @@ absl::Status HttpFederatedProtocol::UploadDataViaSimpleAgg(
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       data_upload_request_creator_->CreateProtocolRequest(
-          uri_suffix, HttpRequest::Method::kPost, std::move(tf_checkpoint)));
+          uri_suffix, {{"upload_protocol", "raw"}}, HttpRequest::Method::kPost,
+          std::move(tf_checkpoint), /*is_protobuf_encoded=*/false));
   auto http_response =
       protocol_request_helper_.PerformProtocolRequest(std::move(http_request));
   if (!http_response.ok()) {
@@ -874,7 +905,8 @@ absl::Status HttpFederatedProtocol::SubmitAggregationResult() {
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       aggregation_request_creator_->CreateProtocolRequest(
-          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString()));
+          uri_suffix, {}, HttpRequest::Method::kPost,
+          request.SerializeAsString(), /*is_protobuf_encoded=*/true));
   auto http_response =
       protocol_request_helper_.PerformProtocolRequest(std::move(http_request));
   if (!http_response.ok()) {
@@ -903,7 +935,8 @@ absl::Status HttpFederatedProtocol::AbortAggregation(
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       aggregation_request_creator_->CreateProtocolRequest(
-          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString()));
+          uri_suffix, {}, HttpRequest::Method::kPost,
+          request.SerializeAsString(), /*is_protobuf_encoded=*/true));
   return protocol_request_helper_
       .PerformProtocolRequest(std::move(http_request))
       .status();
@@ -926,7 +959,8 @@ absl::Status HttpFederatedProtocol::ReportNotCompleted(
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
-          uri_suffix, HttpRequest::Method::kPost, request.SerializeAsString()));
+          uri_suffix, {}, HttpRequest::Method::kPost,
+          request.SerializeAsString(), /*is_protobuf_encoded=*/true));
 
   // Issue the request.
   absl::StatusOr<InMemoryHttpResponse> http_response =

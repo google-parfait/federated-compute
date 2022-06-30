@@ -101,6 +101,7 @@ using ::testing::MockFunction;
 using ::testing::NiceMock;
 using ::testing::Not;
 using ::testing::Return;
+using ::testing::StrEq;
 using ::testing::StrictMock;
 using ::testing::UnorderedElementsAre;
 using ::testing::VariantWith;
@@ -409,7 +410,7 @@ StartAggregationDataUploadResponse GetFakeStartAggregationDataUploadResponse(
 }
 
 FakeHttpResponse CreateEmptySuccessHttpResponse() {
-  return FakeHttpResponse(200, {}, "");
+  return FakeHttpResponse(200, HeaderList(), "");
 }
 
 class HttpFederatedProtocolTest : public testing::Test {
@@ -492,14 +493,15 @@ class HttpFederatedProtocolTest : public testing::Test {
       eval_task_response = GetFakeDisabledEligibilityEvalTaskResponse();
     }
     std::string request_uri =
-        "https://initial.uri/v1/eligibilityevaltasks/TEST%2FPOPULATION:request";
+        "https://initial.uri/v1/eligibilityevaltasks/"
+        "TEST%2FPOPULATION:request?%24alt=proto";
     EXPECT_CALL(mock_http_client_,
                 PerformSingleRequest(SimpleHttpRequestMatcher(
                     request_uri, HttpRequest::Method::kPost, _,
                     EligibilityEvalTaskRequestMatcher(
                         EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
-        .WillOnce(Return(
-            FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
+        .WillOnce(Return(FakeHttpResponse(
+            200, HeaderList(), eval_task_response.SerializeAsString())));
     return federated_protocol_->EligibilityEvalCheckin().status();
   }
 
@@ -525,7 +527,7 @@ class HttpFederatedProtocolTest : public testing::Test {
 
     std::string request_uri =
         "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-        "taskassignments/ELIGIBILITY%2FSESSION%23ID:start";
+        "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto";
     TaskEligibilityInfo expected_eligibility_info =
         GetFakeTaskEligibilityInfo();
     EXPECT_CALL(mock_http_client_,
@@ -535,14 +537,14 @@ class HttpFederatedProtocolTest : public testing::Test {
                         EqualsProto(GetExpectedStartTaskAssignmentRequest(
                             expected_eligibility_info))))))
         .WillOnce(Return(
-            FakeHttpResponse(200, {},
+            FakeHttpResponse(200, HeaderList(),
                              CreateDoneOperation(task_assignment_response)
                                  .SerializeAsString())));
 
     EXPECT_CALL(mock_http_client_,
                 PerformSingleRequest(SimpleHttpRequestMatcher(
                     plan_uri, HttpRequest::Method::kGet, _, "")))
-        .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
+        .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan)));
 
     return federated_protocol_->Checkin(expected_eligibility_info).status();
   }
@@ -574,8 +576,9 @@ class HttpFederatedProtocolTest : public testing::Test {
                     std::string(expected_start_data_upload_uri),
                     HttpRequest::Method::kPost, _,
                     StartAggregationDataUploadRequest().SerializeAsString())))
-        .WillOnce(Return(FakeHttpResponse(
-            200, {}, pending_operation_response.SerializeAsString())));
+        .WillOnce(Return(
+            FakeHttpResponse(200, HeaderList(),
+                             pending_operation_response.SerializeAsString())));
     EXPECT_CALL(
         mock_http_client_,
         PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -584,7 +587,7 @@ class HttpFederatedProtocolTest : public testing::Test {
             HttpRequest::Method::kGet, _,
             GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
         .WillOnce(Return(FakeHttpResponse(
-            200, {},
+            200, HeaderList(),
             CreateDoneOperation(GetFakeStartAggregationDataUploadResponse(
                                     aggregation_resource_name,
                                     byte_stream_uri_prefix,
@@ -593,13 +596,13 @@ class HttpFederatedProtocolTest : public testing::Test {
   }
 
   void ExpectSuccessfulByteStreamUploadRequest(
-      absl::string_view expected_byte_stream_upload_uri,
+      absl::string_view byte_stream_upload_uri,
       absl::string_view checkpoint_str) {
     EXPECT_CALL(
         mock_http_client_,
         PerformSingleRequest(SimpleHttpRequestMatcher(
-            std::string(expected_byte_stream_upload_uri),
-            HttpRequest::Method::kPost, _, std::string(checkpoint_str))))
+            std::string(byte_stream_upload_uri), HttpRequest::Method::kPost, _,
+            std::string(checkpoint_str))))
         .WillOnce(Return(CreateEmptySuccessHttpResponse()));
   }
 
@@ -616,12 +619,12 @@ class HttpFederatedProtocolTest : public testing::Test {
   }
 
   void ExpectSuccessfulAbortAggregationRequest(absl::string_view base_uri) {
-    EXPECT_CALL(
-        mock_http_client_,
-        PerformSingleRequest(SimpleHttpRequestMatcher(
-            absl::StrCat(base_uri, "/v1/aggregations/",
-                         "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:abort"),
-            HttpRequest::Method::kPost, _, _)))
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    absl::StrCat(base_uri, "/v1/aggregations/",
+                                 "AGGREGATION_SESSION_ID/clients/"
+                                 "CLIENT_TOKEN:abort?%24alt=proto"),
+                    HttpRequest::Method::kPost, _, _)))
         .WillOnce(Return(CreateEmptySuccessHttpResponse()));
   }
 
@@ -673,9 +676,9 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(FakeHttpResponse(503, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(503, HeaderList(), "")));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
@@ -699,9 +702,9 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(FakeHttpResponse(404, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(404, HeaderList(), "")));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
@@ -729,13 +732,13 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
       .WillOnce([&request_issued, &request_cancelled](
                     MockableHttpClient::SimpleHttpRequest ignored) {
         request_issued.Notify();
         request_cancelled.WaitForNotification();
-        return FakeHttpResponse(503, {}, "");
+        return FakeHttpResponse(503, HeaderList(), "");
       });
 
   // Make should_abort return false until we know that the request was issued
@@ -767,12 +770,12 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   EligibilityEvalTaskRequestMatcher(
                       EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
-          200, {},
+          200, HeaderList(),
           GetFakeRejectedEligibilityEvalTaskResponse().SerializeAsString())));
 
   auto eligibility_checkin_result =
@@ -788,12 +791,12 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   EligibilityEvalTaskRequestMatcher(
                       EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
-          200, {},
+          200, HeaderList(),
           GetFakeDisabledEligibilityEvalTaskResponse().SerializeAsString())));
 
   auto eligibility_checkin_result =
@@ -822,17 +825,17 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   EligibilityEvalTaskRequestMatcher(
                       EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
-      .WillOnce(Return(
-          FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   plan_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan)));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
@@ -866,21 +869,21 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(
-          FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   checkpoint_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "")));
 
   // Mock a failed plan fetch.
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   plan_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(404, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(404, HeaderList(), "")));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
@@ -915,21 +918,21 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(
-          FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
 
   // Mock a failed checkpoint fetch.
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   checkpoint_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(503, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(503, HeaderList(), "")));
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   plan_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "")));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
@@ -968,10 +971,10 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(
-          FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
 
   ASSERT_OK(federated_protocol_->EligibilityEvalCheckin());
 
@@ -1002,10 +1005,10 @@ TEST_F(HttpFederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(
-          FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
 
   ASSERT_OK(federated_protocol_->EligibilityEvalCheckin());
 
@@ -1031,9 +1034,9 @@ TEST_F(HttpFederatedProtocolDeathTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(FakeHttpResponse(503, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(503, HeaderList(), "")));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
@@ -1051,12 +1054,12 @@ TEST_F(HttpFederatedProtocolDeathTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   EligibilityEvalTaskRequestMatcher(
                       EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
-          200, {},
+          200, HeaderList(),
           GetFakeRejectedEligibilityEvalTaskResponse().SerializeAsString())));
 
   ASSERT_OK(federated_protocol_->EligibilityEvalCheckin());
@@ -1105,15 +1108,15 @@ TEST_F(HttpFederatedProtocolDeathTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request",
+                  "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(
-          FakeHttpResponse(200, {}, eval_task_response.SerializeAsString())));
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
 
   // Mock a failed plan/resource fetch.
   EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
                                      _, HttpRequest::Method::kGet, _, "")))
-      .WillRepeatedly(Return(FakeHttpResponse(503, {}, "")));
+      .WillRepeatedly(Return(FakeHttpResponse(503, HeaderList(), "")));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
@@ -1135,12 +1138,13 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsTransientError) {
   // Make the HTTP request return an 503 Service Unavailable error when the
   // Checkin(...) code tries to send its first request. This should result in
   // the error being returned as the result.
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/ELIGIBILITY%2FSESSION%23ID:start",
-                  HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(FakeHttpResponse(503, {}, "")));
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _, _)))
+      .WillOnce(Return(FakeHttpResponse(503, HeaderList(), "")));
 
   auto checkin_result =
       federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
@@ -1165,12 +1169,13 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromHttp) {
   // Make the HTTP request return an 404 Not Found error when the Checkin(...)
   // code tries to send its first request. This should result in the error being
   // returned as the result.
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/ELIGIBILITY%2FSESSION%23ID:start",
-                  HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(FakeHttpResponse(404, {}, "")));
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _, _)))
+      .WillOnce(Return(FakeHttpResponse(404, HeaderList(), "")));
 
   auto checkin_result =
       federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
@@ -1199,13 +1204,14 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromOperation) {
   // Make the HTTP request return successfully, but make it contain an Operation
   // proto that itself contains a permanent error. This should result in the
   // error being returned as the result.
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/ELIGIBILITY%2FSESSION%23ID:start",
-                  HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(FakeHttpResponse(
-          200, {},
+          200, HeaderList(),
           CreateErrorOperation(absl::StatusCode::kNotFound, "foo")
               .SerializeAsString())));
 
@@ -1236,16 +1242,17 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterrupted) {
   absl::Notification request_cancelled;
 
   // Make HttpClient::PerformRequests() block until the counter is decremented.
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/ELIGIBILITY%2FSESSION%23ID:start",
-                  HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _, _)))
       .WillOnce([&request_issued, &request_cancelled](
                     MockableHttpClient::SimpleHttpRequest ignored) {
         request_issued.Notify();
         request_cancelled.WaitForNotification();
-        return FakeHttpResponse(503, {}, "");
+        return FakeHttpResponse(503, HeaderList(), "");
       });
 
   // Make should_abort return false until we know that the request was issued
@@ -1279,16 +1286,17 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
 
   TaskEligibilityInfo expected_eligibility_info = GetFakeTaskEligibilityInfo();
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/ELIGIBILITY%2FSESSION%23ID:start",
-                  HttpRequest::Method::kPost, _,
-                  StartTaskAssignmentRequestMatcher(
-                      EqualsProto(GetExpectedStartTaskAssignmentRequest(
-                          expected_eligibility_info))))))
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _,
+          StartTaskAssignmentRequestMatcher(
+              EqualsProto(GetExpectedStartTaskAssignmentRequest(
+                  expected_eligibility_info))))))
       .WillOnce(Return(FakeHttpResponse(
-          200, {},
+          200, HeaderList(),
           CreateDoneOperation(GetFakeRejectedTaskAssignmentResponse())
               .SerializeAsString())));
 
@@ -1309,15 +1317,16 @@ TEST_F(HttpFederatedProtocolTest,
   ASSERT_OK(
       RunSuccessfulEligibilityEvalCheckin(/*eligibility_eval_enabled=*/false));
 
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/ELIGIBILITY%2FSESSION%23ID:start",
-                  HttpRequest::Method::kPost, _,
-                  StartTaskAssignmentRequestMatcher(EqualsProto(
-                      GetExpectedStartTaskAssignmentRequest(std::nullopt))))))
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _,
+          StartTaskAssignmentRequestMatcher(EqualsProto(
+              GetExpectedStartTaskAssignmentRequest(std::nullopt))))))
       .WillOnce(Return(FakeHttpResponse(
-          200, {},
+          200, HeaderList(),
           CreateDoneOperation(GetFakeRejectedTaskAssignmentResponse())
               .SerializeAsString())));
 
@@ -1349,16 +1358,17 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   // Note that in this particular test we check that the CheckinRequest is as
   // expected (in all prior tests we just use the '_' matcher, because the
   // request isn't really relevant to the test).
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/ELIGIBILITY%2FSESSION%23ID:start",
-                  HttpRequest::Method::kPost, _,
-                  StartTaskAssignmentRequestMatcher(
-                      EqualsProto(GetExpectedStartTaskAssignmentRequest(
-                          expected_eligibility_info))))))
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _,
+          StartTaskAssignmentRequestMatcher(
+              EqualsProto(GetExpectedStartTaskAssignmentRequest(
+                  expected_eligibility_info))))))
       .WillOnce(Return(FakeHttpResponse(
-          200, {},
+          200, HeaderList(),
           CreateDoneOperation(
               GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
                                             expected_aggregation_session_id))
@@ -1367,7 +1377,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   plan_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan)));
 
   // Issue the regular checkin.
   auto checkin_result = federated_protocol_->Checkin(expected_eligibility_info);
@@ -1397,13 +1407,14 @@ TEST_F(HttpFederatedProtocolTest,
   // to verify that it is properly URL-encoded.
   Operation pending_operation_response =
       CreatePendingOperation("operations/foo#bar");
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/ELIGIBILITY%2FSESSION%23ID:start",
-                  HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(FakeHttpResponse(
-          200, {}, pending_operation_response.SerializeAsString())));
+          200, HeaderList(), pending_operation_response.SerializeAsString())));
 
   // Then, after letting the operation get polled twice more, eventually return
   // a fake response.
@@ -1422,11 +1433,11 @@ TEST_F(HttpFederatedProtocolTest,
           HttpRequest::Method::kGet, _,
           GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
       .WillOnce(Return(FakeHttpResponse(
-          200, {}, pending_operation_response.SerializeAsString())))
+          200, HeaderList(), pending_operation_response.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
-          200, {}, pending_operation_response.SerializeAsString())))
+          200, HeaderList(), pending_operation_response.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
-          200, {},
+          200, HeaderList(),
           CreateDoneOperation(
               GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
                                             expected_aggregation_session_id))
@@ -1459,13 +1470,14 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedPlanDataFetchFailed) {
   std::string checkpoint_uri = "https://fake.uri/checkpoint";
   Resource checkpoint_resource;
   checkpoint_resource.set_uri(checkpoint_uri);
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/ELIGIBILITY%2FSESSION%23ID:start",
-                  HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(FakeHttpResponse(
-          200, {},
+          200, HeaderList(),
           CreateDoneOperation(
               GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
                                             kAggregationSessionId))
@@ -1475,12 +1487,12 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedPlanDataFetchFailed) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   plan_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(404, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(404, HeaderList(), "")));
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   checkpoint_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "")));
 
   // Issue the regular checkin.
   auto checkin_result =
@@ -1510,13 +1522,14 @@ TEST_F(HttpFederatedProtocolTest,
   std::string checkpoint_uri = "https://fake.uri/checkpoint";
   Resource checkpoint_resource;
   checkpoint_resource.set_uri(checkpoint_uri);
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/ELIGIBILITY%2FSESSION%23ID:start",
-                  HttpRequest::Method::kPost, _, _)))
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(FakeHttpResponse(
-          200, {},
+          200, HeaderList(),
           CreateDoneOperation(
               GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
                                             kAggregationSessionId))
@@ -1526,12 +1539,12 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   checkpoint_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(503, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(503, HeaderList(), "")));
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   plan_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "")));
 
   // Issue the regular checkin.
   auto checkin_result =
@@ -1562,11 +1575,11 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedSuccess) {
 
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-      "taskassignments/CLIENT_SESSION_ID:reportresult",
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
       kAggregationSessionId, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/CLIENT_TOKEN:startdataupload",
+      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
   ExpectSuccessfulByteStreamUploadRequest(
       "https://bytestream.uri/upload/v1/media/"
@@ -1574,7 +1587,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedSuccess) {
       checkpoint_str);
   ExpectSuccessfulSubmitAggregationResultRequest(
       "https://aggregation.second.uri/v1/aggregations/"
-      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit");
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto");
 
   EXPECT_OK(
       federated_protocol_->ReportCompleted(std::move(results), plan_duration));
@@ -1597,17 +1610,17 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/CLIENT_SESSION_ID:reportresult",
+                  "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   ReportTaskResultRequestMatcher(
                       EqualsProto(GetExpectedReportTaskResultRequest(
                           kAggregationSessionId, google::rpc::Code::OK,
                           plan_duration))))))
-      .WillOnce(Return(FakeHttpResponse(503, {})));
+      .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
 
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/CLIENT_TOKEN:startdataupload",
+      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
   ExpectSuccessfulByteStreamUploadRequest(
       "https://bytestream.uri/upload/v1/media/"
@@ -1615,7 +1628,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
       checkpoint_str);
   ExpectSuccessfulSubmitAggregationResultRequest(
       "https://aggregation.second.uri/v1/aggregations/"
-      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit");
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto");
 
   // Despite the ReportTaskResult request failed, we still consider the overall
   // ReportCompleted succeeded because the rest of the steps succeeds, and the
@@ -1640,16 +1653,16 @@ TEST_F(HttpFederatedProtocolTest,
 
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-      "taskassignments/CLIENT_SESSION_ID:reportresult",
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
       kAggregationSessionId, plan_duration);
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
           "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-          "clients/CLIENT_TOKEN:startdataupload",
+          "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
           HttpRequest::Method::kPost, _,
           StartAggregationDataUploadRequest().SerializeAsString())))
-      .WillOnce(Return(FakeHttpResponse(503, {})));
+      .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
   ExpectSuccessfulAbortAggregationRequest("https://aggregation.uri");
   absl::Status report_result =
       federated_protocol_->ReportCompleted(std::move(results), plan_duration);
@@ -1675,7 +1688,7 @@ TEST_F(HttpFederatedProtocolTest,
 
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-      "taskassignments/CLIENT_SESSION_ID:reportresult",
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
       kAggregationSessionId, plan_duration);
   Operation pending_operation_response =
       CreatePendingOperation("operations/foo#bar");
@@ -1683,11 +1696,11 @@ TEST_F(HttpFederatedProtocolTest,
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
           "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-          "clients/CLIENT_TOKEN:startdataupload",
+          "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
           HttpRequest::Method::kPost, _,
           StartAggregationDataUploadRequest().SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
-          200, {}, pending_operation_response.SerializeAsString())));
+          200, HeaderList(), pending_operation_response.SerializeAsString())));
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -1695,7 +1708,7 @@ TEST_F(HttpFederatedProtocolTest,
           "https://aggregation.uri/v1/operations/foo%23bar",
           HttpRequest::Method::kGet, _,
           GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
-      .WillOnce(Return(FakeHttpResponse(401, {})));
+      .WillOnce(Return(FakeHttpResponse(401, HeaderList())));
   ExpectSuccessfulAbortAggregationRequest("https://aggregation.uri");
   absl::Status report_result =
       federated_protocol_->ReportCompleted(std::move(results), plan_duration);
@@ -1720,18 +1733,18 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
 
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-      "taskassignments/CLIENT_SESSION_ID:reportresult",
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
       kAggregationSessionId, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/CLIENT_TOKEN:startdataupload",
+      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://bytestream.uri/upload/v1/media/"
-                  "CHECKPOINT_RESOURCE?upload_protocol=raw",
+                  StrEq("https://bytestream.uri/upload/v1/media/"
+                        "CHECKPOINT_RESOURCE?upload_protocol=raw"),
                   HttpRequest::Method::kPost, _, std::string(checkpoint_str))))
-      .WillOnce(Return(FakeHttpResponse(501, {})));
+      .WillOnce(Return(FakeHttpResponse(501, HeaderList())));
   ExpectSuccessfulAbortAggregationRequest("https://aggregation.second.uri");
   absl::Status report_result =
       federated_protocol_->ReportCompleted(std::move(results), plan_duration);
@@ -1756,11 +1769,11 @@ TEST_F(HttpFederatedProtocolTest,
 
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-      "taskassignments/CLIENT_SESSION_ID:reportresult",
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
       kAggregationSessionId, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/CLIENT_TOKEN:startdataupload",
+      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
   ExpectSuccessfulByteStreamUploadRequest(
       "https://bytestream.uri/upload/v1/media/"
@@ -1769,13 +1782,14 @@ TEST_F(HttpFederatedProtocolTest,
 
   SubmitAggregationResultRequest submit_aggregation_result_request;
   submit_aggregation_result_request.set_resource_name(kResourceName);
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://aggregation.second.uri/v1/aggregations/"
-                  "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit",
-                  HttpRequest::Method::kPost, _,
-                  submit_aggregation_result_request.SerializeAsString())))
-      .WillOnce(Return(FakeHttpResponse(409, {})));
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://aggregation.second.uri/v1/aggregations/"
+          "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
+          HttpRequest::Method::kPost, _,
+          submit_aggregation_result_request.SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(409, HeaderList())));
   absl::Status report_result =
       federated_protocol_->ReportCompleted(std::move(results), plan_duration);
 
@@ -1795,14 +1809,14 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/CLIENT_SESSION_ID:reportresult",
+                  "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   ReportTaskResultRequestMatcher(
                       EqualsProto(GetExpectedReportTaskResultRequest(
                           kAggregationSessionId, ::google::rpc::Code::INTERNAL,
                           plan_duration))))))
-      .WillOnce(
-          Return(FakeHttpResponse(200, {}, response.SerializeAsString())));
+      .WillOnce(Return(
+          FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
 
   ASSERT_OK(federated_protocol_->ReportNotCompleted(engine::PhaseOutcome::ERROR,
                                                     plan_duration));
@@ -1819,9 +1833,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedError) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/CLIENT_SESSION_ID:reportresult",
+                  "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(FakeHttpResponse(503, {})));
+      .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
 
   absl::Status status = federated_protocol_->ReportNotCompleted(
       engine::PhaseOutcome::ERROR, absl::Minutes(5));
@@ -1841,9 +1855,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-                  "taskassignments/CLIENT_SESSION_ID:reportresult",
+                  "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
                   HttpRequest::Method::kPost, _, _)))
-      .WillOnce(Return(FakeHttpResponse(404, {})));
+      .WillOnce(Return(FakeHttpResponse(404, HeaderList())));
 
   absl::Status status = federated_protocol_->ReportNotCompleted(
       engine::PhaseOutcome::ERROR, absl::Minutes(5));
@@ -1870,20 +1884,23 @@ TEST(ProtocolRequestCreatorTest, TestInvalidForwardingInfo) {
 }
 
 TEST(ProtocolRequestCreatorTest, CreateProtocolRequestInvalidSuffix) {
-  ProtocolRequestCreator creator("https://initial.uri", HeaderList{},
+  ProtocolRequestCreator creator("https://initial.uri", HeaderList(),
                                  /*use_compression=*/false);
   std::string uri_suffix = "v1/request";
-  ASSERT_THAT(creator.CreateProtocolRequest(
-                  uri_suffix, HttpRequest::Method::kPost, "request_body"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+  ASSERT_THAT(
+      creator.CreateProtocolRequest(uri_suffix, QueryParams(),
+                                    HttpRequest::Method::kPost, "request_body",
+                                    /*is_protobuf_encoded=*/false),
+      IsCode(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
-  ProtocolRequestCreator creator("https://initial.uri", HeaderList{},
+  ProtocolRequestCreator creator("https://initial.uri", HeaderList(),
                                  /*use_compression=*/false);
   std::string expected_body = "expected_body";
   auto request = creator.CreateProtocolRequest(
-      "/v1/request", HttpRequest::Method::kPost, expected_body);
+      "/v1/request", QueryParams(), HttpRequest::Method::kPost, expected_body,
+      /*is_protobuf_encoded=*/false);
 
   ASSERT_OK(request);
   EXPECT_EQ((*request)->uri(), "https://initial.uri/v1/request");
@@ -1898,8 +1915,30 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
   EXPECT_EQ(actual_body, expected_body);
 }
 
+TEST(ProtocolRequestCreatorTest, CreateProtobufEncodedProtocolRequest) {
+  ProtocolRequestCreator creator("https://initial.uri", HeaderList(),
+                                 /*use_compression=*/false);
+  std::string expected_body = "expected_body";
+  auto request = creator.CreateProtocolRequest(
+      "/v1/request", QueryParams(), HttpRequest::Method::kPost, expected_body,
+      /*is_protobuf_encoded=*/true);
+
+  ASSERT_OK(request);
+  EXPECT_EQ((*request)->uri(), "https://initial.uri/v1/request?%24alt=proto");
+  EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
+  EXPECT_THAT((*request)->extra_headers(),
+              UnorderedElementsAre(
+                  Header{"Content-Length", absl::StrCat(expected_body.size())},
+                  Header{"Content-Type", "application/x-protobuf"}));
+  EXPECT_TRUE((*request)->HasBody());
+  std::string actual_body;
+  actual_body.resize(expected_body.size());
+  ASSERT_OK((*request)->ReadBody(actual_body.data(), actual_body.size()));
+  EXPECT_EQ(actual_body, expected_body);
+}
+
 TEST(ProtocolRequestCreatorTest, CreateGetOperationRequest) {
-  ProtocolRequestCreator creator("https://initial.uri", HeaderList{},
+  ProtocolRequestCreator creator("https://initial.uri", HeaderList(),
                                  /*use_compression=*/false);
   std::string operation_name = "my_operation";
   auto request = creator.CreateGetOperationRequest(operation_name);
@@ -1927,7 +1966,7 @@ class ProtocolRequestHelperTest : public testing::Test {
                     BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
                 .interrupt_timeout_extended = ProdDiagCode::
                     BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT}),
-        initial_request_creator_("https://initial.uri", HeaderList{},
+        initial_request_creator_("https://initial.uri", HeaderList(),
                                  /*use_compression=*/false),
         protocol_request_helper_(&mock_http_client_, &interruptible_runner_,
                                  &bytes_downloaded_, &bytes_uploaded_) {}
@@ -1970,12 +2009,13 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
                   // This request has a response body, so the HttpClient will
                   // add this header automatically.
                   ContainerEq(HeaderList{{"Content-Length", "5"}}), "body1")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "response1")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response1")));
   auto request_creator = std::make_unique<ProtocolRequestCreator>(
-      "https://initial.uri", HeaderList{},
+      "https://initial.uri", HeaderList(),
       /*use_compression=*/false);
   auto http_request = request_creator->CreateProtocolRequest(
-      "/suffix1", HttpRequest::Method::kPost, "body1");
+      "/suffix1", QueryParams(), HttpRequest::Method::kPost, "body1",
+      /*is_protobuf_encoded=*/false);
   ASSERT_OK(http_request);
   auto result =
       protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
@@ -2006,9 +2046,10 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
                   UnorderedElementsAre(Header{"x-header1", "header-value1"},
                                        Header{"x-header2", "header-value2"}),
                   "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "response2")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response2")));
   http_request = request_creator->CreateProtocolRequest(
-      "/suffix2", HttpRequest::Method::kGet, "");
+      "/suffix2", QueryParams(), HttpRequest::Method::kGet, "",
+      /*is_protobuf_encoded=*/false);
   ASSERT_OK(http_request);
   result =
       protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
@@ -2025,9 +2066,10 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
                                        // automatically.
                                        Header{"Content-Length", "5"}),
                   "body3")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "response3")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response3")));
   http_request = request_creator->CreateProtocolRequest(
-      "/suffix3", HttpRequest::Method::kPut, "body3");
+      "/suffix3", QueryParams(), HttpRequest::Method::kPut, "body3",
+      /*is_protobuf_encoded=*/false);
   ASSERT_OK(http_request);
   result =
       protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
@@ -2052,9 +2094,10 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
                   // This request has a response body, so the HttpClient will
                   // add this header automatically.
                   ContainerEq(HeaderList{{"Content-Length", "5"}}), "body4")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "response4")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response4")));
   http_request = request_creator->CreateProtocolRequest(
-      "/suffix4", HttpRequest::Method::kPost, "body4");
+      "/suffix4", QueryParams(), HttpRequest::Method::kPost, "body4",
+      /*is_protobuf_encoded=*/false);
   ASSERT_OK(http_request);
   result =
       protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
@@ -2154,11 +2197,11 @@ TEST_F(ProtocolRequestHelperTest,
                   "https://initial.uri/v1/operations/foo%23bar",
                   HttpRequest::Method::kGet, _, IsEmpty())))
       .WillOnce(Return(FakeHttpResponse(
-          200, {}, pending_operation_response.SerializeAsString())))
+          200, HeaderList(), pending_operation_response.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
-          200, {}, pending_operation_response.SerializeAsString())))
-      .WillOnce(Return(
-          FakeHttpResponse(200, {}, expected_response.SerializeAsString())));
+          200, HeaderList(), pending_operation_response.SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), expected_response.SerializeAsString())));
 
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
@@ -2187,11 +2230,11 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseErrorAfterPolling) {
                   "https://initial.uri/v1/operations/foo%23bar",
                   HttpRequest::Method::kGet, _, IsEmpty())))
       .WillOnce(Return(FakeHttpResponse(
-          200, {}, pending_operation_response.SerializeAsString())))
+          200, HeaderList(), pending_operation_response.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
-          200, {}, pending_operation_response.SerializeAsString())))
-      .WillOnce(Return(
-          FakeHttpResponse(200, {}, expected_response.SerializeAsString())));
+          200, HeaderList(), pending_operation_response.SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), expected_response.SerializeAsString())));
 
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
@@ -2207,10 +2250,12 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseErrorAfterPolling) {
 
 TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsSuccess) {
   auto request_a = initial_request_creator_.CreateProtocolRequest(
-      "/v1/request_a", HttpRequest::Method::kPost, "body1");
+      "/v1/request_a", QueryParams(), HttpRequest::Method::kPost, "body1",
+      /*is_protobuf_encoded=*/false);
   ASSERT_OK(request_a);
   auto request_b = initial_request_creator_.CreateProtocolRequest(
-      "/v1/request_b", HttpRequest::Method::kPost, "body2");
+      "/v1/request_b", QueryParams(), HttpRequest::Method::kPost, "body2",
+      /*is_protobuf_encoded=*/false);
   ASSERT_OK(request_b);
   EXPECT_CALL(
       mock_http_client_,
@@ -2219,7 +2264,7 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsSuccess) {
           // This request has a response body, so the HttpClient will
           // add this header automatically.
           ContainerEq(HeaderList{{"Content-Length", "5"}}), "body1")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "response1")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response1")));
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2227,7 +2272,7 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsSuccess) {
           // This request has a response body, so the HttpClient will
           // add this header automatically.
           ContainerEq(HeaderList{{"Content-Length", "5"}}), "body2")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "response2")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response2")));
 
   std::vector<std::unique_ptr<HttpRequest>> requests;
   requests.push_back(std::move(*request_a));
@@ -2247,11 +2292,13 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsSuccess) {
 TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
   std::string uri_suffix_a = "/v1/request_a";
   auto request_a = initial_request_creator_.CreateProtocolRequest(
-      uri_suffix_a, HttpRequest::Method::kPost, "body1");
+      uri_suffix_a, QueryParams(), HttpRequest::Method::kPost, "body1",
+      /*is_protobuf_encoded=*/false);
   ASSERT_OK(request_a);
   std::string uri_suffix_b = "/v1/request_b";
   auto request_b = initial_request_creator_.CreateProtocolRequest(
-      uri_suffix_b, HttpRequest::Method::kPost, "body2");
+      uri_suffix_b, QueryParams(), HttpRequest::Method::kPost, "body2",
+      /*is_protobuf_encoded=*/false);
   ASSERT_OK(request_b);
   EXPECT_CALL(
       mock_http_client_,
@@ -2260,7 +2307,7 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
           // This request has a response body, so the HttpClient will
           // add this header automatically.
           ContainerEq(HeaderList{{"Content-Length", "5"}}), "body1")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, "response1")));
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response1")));
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2268,7 +2315,8 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
           // This request has a response body, so the HttpClient will
           // add this header automatically.
           ContainerEq(HeaderList{{"Content-Length", "5"}}), "body2")))
-      .WillOnce(Return(FakeHttpResponse(404, {}, "failure_response")));
+      .WillOnce(
+          Return(FakeHttpResponse(404, HeaderList(), "failure_response")));
 
   std::vector<std::unique_ptr<HttpRequest>> requests;
   requests.push_back(std::move(*request_a));
