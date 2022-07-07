@@ -17,6 +17,7 @@
 
 #include <fstream>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -24,12 +25,15 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/simple_plan_engine.h"
+#include "openssl/digest.h"
+#include "openssl/evp.h"
 
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
 #include "fcp/client/engine/tflite_plan_engine.h"
@@ -91,6 +95,28 @@ bool ParseFromStringOrCord(MessageT& proto,
   } else {
     return proto.ParseFromString(std::string(std::get<absl::Cord>(data)));
   }
+}
+
+std::string ComputeSHA256FromStringOrCord(
+    std::variant<std::string, absl::Cord> data) {
+  std::unique_ptr<EVP_MD_CTX, void (*)(EVP_MD_CTX*)> mdctx(EVP_MD_CTX_create(),
+                                                           EVP_MD_CTX_destroy);
+  FCP_CHECK(EVP_DigestInit_ex(mdctx.get(), EVP_sha256(), nullptr));
+
+  std::string plan_str;
+  if (std::holds_alternative<std::string>(data)) {
+    plan_str = std::get<std::string>(data);
+  } else {
+    plan_str = std::string(std::get<absl::Cord>(data));
+  }
+
+  FCP_CHECK(EVP_DigestUpdate(mdctx.get(), plan_str.c_str(), sizeof(int)));
+  const int hash_len = 32;  // 32 bytes for SHA-256.
+  uint8_t computation_id_bytes[hash_len];
+  FCP_CHECK(EVP_DigestFinal_ex(mdctx.get(), computation_id_bytes, nullptr));
+
+  return std::string(reinterpret_cast<char const*>(computation_id_bytes),
+                     hash_len);
 }
 
 struct PlanResultAndCheckpointFile {
@@ -857,7 +883,8 @@ absl::StatusOr<CheckinResult> IssueCheckin(
       absl::get<FederatedProtocol::TaskAssignment>(*checkin_result);
 
   ClientOnlyPlan plan;
-  if (!ParseFromStringOrCord(plan, task_assignment.payloads.plan)) {
+  auto plan_bytes = task_assignment.payloads.plan;
+  if (!ParseFromStringOrCord(plan, plan_bytes)) {
     auto message = "Failed to parse received plan";
     phase_logger.LogCheckInInvalidPayload(message,
                                           GetNetworkStats(federated_protocol),
@@ -868,7 +895,7 @@ absl::StatusOr<CheckinResult> IssueCheckin(
 
   std::string computation_id;
   if (flags->enable_computation_id()) {
-    // TODO(team): compute the hash.
+    computation_id = ComputeSHA256FromStringOrCord(plan_bytes);
   }
 
   int32_t minimum_clients_in_server_visible_aggregate = 0;
