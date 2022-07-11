@@ -121,6 +121,12 @@ class ExternalDatasetOp : public tensorflow::data::DatasetOpKernel {
       return "ExternalDatasetOp::Dataset";
     }
 
+    tensorflow::Status InputDatasets(
+        std::vector<const DatasetBase*>* inputs) const override {
+      // ExternalDatast has no input datasets, so just return OK.
+      return tensorflow::Status::OK();
+    }
+
 // The `DatasetBase::CheckExternalState()` method was introduced on 8/7/2019. We
 // use the `TF_GRAPH_DEF_VERSION` value (which is updated daily) to determine if
 // we should add its override.
