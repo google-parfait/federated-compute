@@ -119,7 +119,7 @@ message ServerStreamMessage {
   fcp.secagg.ServerToClientWrapperMessage secure_aggregation_server_message = 3;
 }
 
-// Supported levels of compression.
+// Supported levels of compression for chunked blob transfer.
 enum CompressionLevel {
   // Compression disabled
   UNCOMPRESSED = 0;
@@ -135,6 +135,14 @@ enum CompressionLevel {
   // zlib compression optimized for speed; this level uses gzip-1.
   // '1 gives best speed' Source - http://www.zlib.net/manual.html
   ZLIB_BEST_SPEED = 3;
+}
+
+// Supported compressed file formats for HTTP downloads.
+enum HttpCompressionFormat {
+  HTTP_COMPRESSION_FORMAT_UNSPECIFIED = 0;
+  // Gzip-compressed data. If data is compressed in this way, then the
+  // "Content-Type" HTTP response header will have a "+gzip" suffix.
+  HTTP_COMPRESSION_FORMAT_GZIP = 1;
 }
 
 // A request, sent by the device to check if it should participate
@@ -626,7 +634,7 @@ message ProtocolOptionsRequest {
   // True if client supports chunked blob transfer protocol.
   bool supports_chunked_blob_transfer = 1;
 
-  // Compression levels supported by this client
+  // Chunked blob transfer compression levels supported by this client.
   repeated CompressionLevel supported_compression_levels = 2;
 
   // Per-protocol configuration option information for side channel protocols.
@@ -648,6 +656,10 @@ message ProtocolOptionsRequest {
 
   // True if client supports download of Eligibility Eval resources via HTTP.
   bool supports_eligibility_eval_http_download = 6;
+
+  // HTTP download compression formats supported by this client. All clients
+  // that support HTTP downloads are assumed to support uncompressed payloads.
+  repeated HttpCompressionFormat supported_http_compression_formats = 7;
 }
 
 // Protocol options sent from server to client inside

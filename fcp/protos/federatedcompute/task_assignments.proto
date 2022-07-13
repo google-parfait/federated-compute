@@ -119,6 +119,9 @@ message StartTaskAssignmentRequest {
   // client any task.
   //
   google.internal.federatedml.v2.TaskEligibilityInfo task_eligibility_info = 5;
+
+  // The client's capabilities when downloading and processing resources.
+  ResourceCapabilities resource_capabilities = 6;
 }
 
 message StartTaskAssignmentMetadata {}

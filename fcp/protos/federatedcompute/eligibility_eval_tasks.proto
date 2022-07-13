@@ -75,6 +75,9 @@ message EligibilityEvalTaskRequest {
   AttestationMeasurement attestation_measurement = 2;
 
   ClientVersion client_version = 3;
+
+  // The client's capabilities when downloading and processing resources.
+  ResourceCapabilities resource_capabilities = 4;
 }
 
 message EligibilityEvalTaskResponse {

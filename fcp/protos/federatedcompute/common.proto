@@ -75,6 +75,22 @@ message Resource {
   }
 }
 
+// The client's capabilities for processing Resource messages, such as the
+// compressed file formats supported.
+message ResourceCapabilities {
+  // Compression formats supported for resources downloaded via `Resource.uri`.
+  // All clients are assumed to support uncompressed payloads.
+  repeated ResourceCompressionFormat supported_compression_formats = 1;
+}
+
+// Different file formats that may be used to compress resources.
+enum ResourceCompressionFormat {
+  RESOURCE_COMPRESSION_FORMAT_UNSPECIFIED = 0;
+  // Gzip-compressed data. If data is compressed in this way, then the
+  // "Content-Type" HTTP response header will have a "+gzip" suffix.
+  RESOURCE_COMPRESSION_FORMAT_GZIP = 1;
+}
+
 // Currently empty message which is sent when client (device) is rejected for
 // participation and is not assigned a task.
 message RejectionInfo {}
