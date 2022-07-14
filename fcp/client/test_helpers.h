@@ -533,6 +533,8 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, use_http_federated_compute_protocol, (), (const, override));
   MOCK_METHOD(bool, enable_computation_id, (), (const, override));
+  MOCK_METHOD(int32_t, waiting_period_sec_for_cancellation, (),
+              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

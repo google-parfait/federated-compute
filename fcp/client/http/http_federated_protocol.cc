@@ -59,23 +59,6 @@
 namespace fcp {
 namespace client {
 namespace http {
-namespace {
-
-absl::StatusOr<InMemoryHttpResponse> CheckResponseContentEncoding(
-    absl::StatusOr<InMemoryHttpResponse> response) {
-  if (response.ok() && !response->content_encoding.empty()) {
-    // Note that the `HttpClient` API contract ensures that if we don't specify
-    // an Accept-Encoding request header, then the response should be delivered
-    // to us without any Content-Encoding applied to it. Hence, if we somehow do
-    // still see a Content-Encoding response header then the `HttpClient`
-    // implementation isn't adhering to its part of the API contract.
-    return absl::UnavailableError(
-        "HTTP response unexpectedly has a Content-Encoding");
-  }
-  return response;
-}
-
-}  // namespace
 
 using ::fcp::client::GenerateRetryWindowFromRetryTime;
 using ::fcp::client::GenerateRetryWindowFromTargetDelay;
@@ -286,6 +269,43 @@ absl::StatusOr<ReportTaskResultRequest> CreateReportTaskResultRequest(
   return request;
 }
 
+absl::StatusOr<InMemoryHttpResponse> CheckResponseContentEncoding(
+    absl::StatusOr<InMemoryHttpResponse> response) {
+  if (response.ok() && !response->content_encoding.empty()) {
+    // Note that the `HttpClient` API contract ensures that if we don't specify
+    // an Accept-Encoding request header, then the response should be delivered
+    // to us without any Content-Encoding applied to it. Hence, if we somehow do
+    // still see a Content-Encoding response header then the `HttpClient`
+    // implementation isn't adhering to its part of the API contract.
+    return absl::UnavailableError(
+        "HTTP response unexpectedly has a Content-Encoding");
+  }
+  return response;
+}
+
+// Creates a special InterruptibleRunner which won't check the should_abort
+// function until the timeout duration is passed.  This special
+// InterruptibleRunner is used to issue Cancellation requests or Abort requests.
+std::unique_ptr<InterruptibleRunner> CreateDelayedInterruptibleRunner(
+    LogManager* log_manager, std::function<bool()> should_abort,
+    const InterruptibleRunner::TimingConfig& timing_config,
+    absl::Time deadline) {
+  return std::make_unique<InterruptibleRunner>(
+      log_manager,
+      [deadline, should_abort]() {
+        return absl::Now() > deadline && should_abort();
+      },
+      timing_config,
+      InterruptibleRunner::DiagnosticsConfig{
+          .interrupted = ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP,
+          .interrupt_timeout =
+              ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP_TIMED_OUT,
+          .interrupted_extended = ProdDiagCode::
+              BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
+          .interrupt_timeout_extended = ProdDiagCode::
+              BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT});
+}
+
 }  // namespace
 
 ProtocolRequestCreator::ProtocolRequestCreator(
@@ -360,35 +380,34 @@ ProtocolRequestCreator::Create(const ForwardingInfo& forwarding_info,
       HeaderList(new_headers.begin(), new_headers.end()), use_compression));
 }
 
-ProtocolRequestHelper::ProtocolRequestHelper(
-    HttpClient* http_client, InterruptibleRunner* interruptible_runner,
-    int64_t* bytes_downloaded, int64_t* bytes_uploaded)
+ProtocolRequestHelper::ProtocolRequestHelper(HttpClient* http_client,
+                                             int64_t* bytes_downloaded,
+                                             int64_t* bytes_uploaded)
     : http_client_(*http_client),
-      interruptible_runner_(*interruptible_runner),
       bytes_downloaded_(*bytes_downloaded),
       bytes_uploaded_(*bytes_uploaded) {}
 
 absl::StatusOr<InMemoryHttpResponse>
 ProtocolRequestHelper::PerformProtocolRequest(
-    std::unique_ptr<HttpRequest> request) {
+    std::unique_ptr<HttpRequest> request, InterruptibleRunner& runner) {
   std::vector<std::unique_ptr<HttpRequest>> requests;
   requests.push_back(std::move(request));
   FCP_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> response,
-      PerformMultipleProtocolRequests(std::move(requests)));
+      PerformMultipleProtocolRequests(std::move(requests), runner));
   return std::move(response[0]);
 }
 
 absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
 ProtocolRequestHelper::PerformMultipleProtocolRequests(
-    std::vector<std::unique_ptr<http::HttpRequest>> requests) {
+    std::vector<std::unique_ptr<http::HttpRequest>> requests,
+    InterruptibleRunner& runner) {
   // Check whether issuing the request failed as a whole (generally indicating
   // a programming error).
   FCP_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
-      PerformMultipleRequestsInMemory(http_client_, interruptible_runner_,
-                                      std::move(requests), &bytes_downloaded_,
-                                      &bytes_uploaded_));
+      PerformMultipleRequestsInMemory(http_client_, runner, std::move(requests),
+                                      &bytes_downloaded_, &bytes_uploaded_));
   std::vector<absl::StatusOr<InMemoryHttpResponse>> results;
   std::transform(responses.begin(), responses.end(),
                  std::back_inserter(results), CheckResponseContentEncoding);
@@ -398,7 +417,8 @@ ProtocolRequestHelper::PerformMultipleProtocolRequests(
 absl::StatusOr<::google::longrunning::Operation>
 ProtocolRequestHelper::PollOperationResponseUntilDone(
     absl::StatusOr<InMemoryHttpResponse> http_response,
-    const ProtocolRequestCreator& request_creator) {
+    const ProtocolRequestCreator& request_creator,
+    InterruptibleRunner& runner) {
   // There are three cases that lead to this method returning:
   // - The HTTP response indicates an error.
   // - The HTTP response cannot be parsed into an Operation proto.
@@ -437,7 +457,8 @@ ProtocolRequestHelper::PollOperationResponseUntilDone(
     FCP_ASSIGN_OR_RETURN(std::unique_ptr<HttpRequest> get_operation_request,
                          request_creator.CreateGetOperationRequest(
                              response_operation_proto.name()));
-    http_response = PerformProtocolRequest(std::move(get_operation_request));
+    http_response =
+        PerformProtocolRequest(std::move(get_operation_request), runner);
   }
 }
 
@@ -449,6 +470,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
     std::function<bool()> should_abort, absl::BitGen bit_gen,
     const InterruptibleRunner::TimingConfig& timing_config)
     : object_state_(ObjectState::kInitialized),
+      log_manager_(log_manager),
       flags_(flags),
       http_client_(http_client),
       interruptible_runner_(std::make_unique<InterruptibleRunner>(
@@ -465,14 +487,18 @@ HttpFederatedProtocol::HttpFederatedProtocol(
           std::make_unique<ProtocolRequestCreator>(
               entry_point_uri, HeaderList{},
               !flags->disable_http_request_body_compression())),
-      protocol_request_helper_(http_client, interruptible_runner_.get(),
-                               &bytes_downloaded_, &bytes_uploaded_),
+      protocol_request_helper_(http_client, &bytes_downloaded_,
+                               &bytes_uploaded_),
       api_key_(api_key),
       population_name_(population_name),
       retry_token_(retry_token),
       client_version_(client_version),
       attestation_measurement_(attestation_measurement),
-      bit_gen_(std::move(bit_gen)) {
+      should_abort_(std::move(should_abort)),
+      bit_gen_(std::move(bit_gen)),
+      timing_config_(timing_config),
+      waiting_period_for_cancellation_(
+          absl::Minutes(flags->waiting_period_sec_for_cancellation())) {
   // Note that we could cast the provided error codes to absl::StatusCode
   // values here. However, that means we'd have to handle the case when
   // invalid integers that don't map to a StatusCode enum are provided in the
@@ -524,7 +550,7 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
 
   // Issue the request.
   return protocol_request_helper_.PerformProtocolRequest(
-      std::move(http_request));
+      std::move(http_request), *interruptible_runner_);
 }
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
@@ -660,7 +686,7 @@ HttpFederatedProtocol::PerformTaskAssignmentRequest(
 
   // Issue the request.
   return protocol_request_helper_.PerformProtocolRequest(
-      std::move(http_request));
+      std::move(http_request), *interruptible_runner_);
 }
 
 absl::StatusOr<FederatedProtocol::CheckinResult>
@@ -668,7 +694,8 @@ HttpFederatedProtocol::HandleTaskAssignmentOperationResponse(
     absl::StatusOr<InMemoryHttpResponse> http_response) {
   absl::StatusOr<Operation> response_operation_proto =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          http_response, *task_assignment_request_creator_);
+          http_response, *task_assignment_request_creator_,
+          *interruptible_runner_);
   if (!response_operation_proto.ok()) {
     // If the protocol request failed then forward the error, but add a prefix
     // to the error message to ensure we can easily distinguish an HTTP error
@@ -810,7 +837,7 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
   FCP_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
       protocol_request_helper_.PerformMultipleProtocolRequests(
-          std::move(requests)));
+          std::move(requests), *interruptible_runner_));
   // We should have two responses, otherwise we have made a developer error.
   FCP_CHECK(responses.size() == 2);
   // The responses are returned in order so the first response will be the one
@@ -826,7 +853,7 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
     absl::StatusOr<InMemoryHttpResponse> http_response) {
   absl::StatusOr<Operation> response_operation_proto =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          http_response, *aggregation_request_creator_);
+          http_response, *aggregation_request_creator_, *interruptible_runner_);
   if (!response_operation_proto.ok()) {
     // If the protocol request failed then forward the error, but add a prefix
     // to the error message to ensure we can easily distinguish an HTTP error
@@ -884,8 +911,8 @@ absl::Status HttpFederatedProtocol::UploadDataViaSimpleAgg(
       data_upload_request_creator_->CreateProtocolRequest(
           uri_suffix, {{"upload_protocol", "raw"}}, HttpRequest::Method::kPost,
           std::move(tf_checkpoint), /*is_protobuf_encoded=*/false));
-  auto http_response =
-      protocol_request_helper_.PerformProtocolRequest(std::move(http_request));
+  auto http_response = protocol_request_helper_.PerformProtocolRequest(
+      std::move(http_request), *interruptible_runner_);
   if (!http_response.ok()) {
     // If the request failed, we'll forward the error status.
     return absl::Status(http_response.status().code(),
@@ -907,8 +934,8 @@ absl::Status HttpFederatedProtocol::SubmitAggregationResult() {
       aggregation_request_creator_->CreateProtocolRequest(
           uri_suffix, {}, HttpRequest::Method::kPost,
           request.SerializeAsString(), /*is_protobuf_encoded=*/true));
-  auto http_response =
-      protocol_request_helper_.PerformProtocolRequest(std::move(http_request));
+  auto http_response = protocol_request_helper_.PerformProtocolRequest(
+      std::move(http_request), *interruptible_runner_);
   if (!http_response.ok()) {
     // If the request failed, we'll forward the error status.
     return absl::Status(http_response.status().code(),
@@ -937,8 +964,12 @@ absl::Status HttpFederatedProtocol::AbortAggregation(
       aggregation_request_creator_->CreateProtocolRequest(
           uri_suffix, {}, HttpRequest::Method::kPost,
           request.SerializeAsString(), /*is_protobuf_encoded=*/true));
+  std::unique_ptr<InterruptibleRunner> cancellation_runner =
+      CreateDelayedInterruptibleRunner(
+          log_manager_, should_abort_, timing_config_,
+          absl::Now() + waiting_period_for_cancellation_);
   return protocol_request_helper_
-      .PerformProtocolRequest(std::move(http_request))
+      .PerformProtocolRequest(std::move(http_request), *cancellation_runner)
       .status();
 }
 
@@ -964,7 +995,8 @@ absl::Status HttpFederatedProtocol::ReportNotCompleted(
 
   // Issue the request.
   absl::StatusOr<InMemoryHttpResponse> http_response =
-      protocol_request_helper_.PerformProtocolRequest(std::move(http_request));
+      protocol_request_helper_.PerformProtocolRequest(std::move(http_request),
+                                                      *interruptible_runner_);
   if (!http_response.ok()) {
     // If the request failed, we'll forward the error status.
     return absl::Status(http_response.status().code(),

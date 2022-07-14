@@ -438,6 +438,8 @@ class HttpFederatedProtocolTest : public testing::Test {
     // in_memory_request_response_test.cc.
     EXPECT_CALL(mock_flags_, disable_http_request_body_compression)
         .WillRepeatedly(Return(true));
+    EXPECT_CALL(mock_flags_, waiting_period_sec_for_cancellation)
+        .WillRepeatedly(Return(10));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -1753,6 +1755,64 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
   EXPECT_THAT(report_result.message(), HasSubstr("501"));
 }
 
+TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadInterrupted) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  std::string checkpoint_str;
+  const size_t kTFCheckpointSize = 32;
+  checkpoint_str.resize(kTFCheckpointSize, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
+  absl::Notification request_issued;
+  absl::Notification request_cancelled;
+
+  // Make HttpClient::PerformRequests() block until the counter is decremented.
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  StrEq("https://bytestream.uri/upload/v1/media/"
+                        "CHECKPOINT_RESOURCE?upload_protocol=raw"),
+                  HttpRequest::Method::kPost, _, std::string(checkpoint_str))))
+      .WillOnce([&request_issued, &request_cancelled](
+                    MockableHttpClient::SimpleHttpRequest ignored) {
+        request_issued.Notify();
+        request_cancelled.WaitForNotification();
+        return FakeHttpResponse(503, HeaderList(), "");
+      });
+  // Make should_abort return false until we know that the request was issued
+  // (i.e. once InterruptibleRunner has actually started running the code it
+  // was given), and then make it return true, triggering an abort sequence and
+  // unblocking the PerformRequests()() call we caused to block above.
+  EXPECT_CALL(mock_should_abort_, Call()).WillRepeatedly([&request_issued] {
+    return request_issued.HasBeenNotified();
+  });
+
+  // When the HttpClient receives a HttpRequestHandle::Cancel call, we let the
+  // request complete.
+  mock_http_client_.SetCancellationListener(
+      [&request_cancelled]() { request_cancelled.Notify(); });
+
+  EXPECT_CALL(mock_log_manager_,
+              LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP));
+  ExpectSuccessfulAbortAggregationRequest("https://aggregation.second.uri");
+  absl::Status report_result =
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  ASSERT_THAT(report_result, IsCode(absl::StatusCode::kCancelled));
+  EXPECT_THAT(report_result.message(), HasSubstr("Data upload failed"));
+}
+
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedSubmitAggregationResultFailed) {
   // Issue an eligibility eval checkin first.
@@ -1968,8 +2028,8 @@ class ProtocolRequestHelperTest : public testing::Test {
                     BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT}),
         initial_request_creator_("https://initial.uri", HeaderList(),
                                  /*use_compression=*/false),
-        protocol_request_helper_(&mock_http_client_, &interruptible_runner_,
-                                 &bytes_downloaded_, &bytes_uploaded_) {}
+        protocol_request_helper_(&mock_http_client_, &bytes_downloaded_,
+                                 &bytes_uploaded_) {}
 
  protected:
   void TearDown() override {
@@ -2017,8 +2077,8 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
       "/suffix1", QueryParams(), HttpRequest::Method::kPost, "body1",
       /*is_protobuf_encoded=*/false);
   ASSERT_OK(http_request);
-  auto result =
-      protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
+  auto result = protocol_request_helper_.PerformProtocolRequest(
+      *std::move(http_request), interruptible_runner_);
   ASSERT_OK(result);
   VerifyInMemoryHttpResponse(*result, 200, "", "response1");
 
@@ -2051,8 +2111,8 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
       "/suffix2", QueryParams(), HttpRequest::Method::kGet, "",
       /*is_protobuf_encoded=*/false);
   ASSERT_OK(http_request);
-  result =
-      protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
+  result = protocol_request_helper_.PerformProtocolRequest(
+      *std::move(http_request), interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_EQ(result->body, "response2");
 
@@ -2071,8 +2131,8 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
       "/suffix3", QueryParams(), HttpRequest::Method::kPut, "body3",
       /*is_protobuf_encoded=*/false);
   ASSERT_OK(http_request);
-  result =
-      protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
+  result = protocol_request_helper_.PerformProtocolRequest(
+      *std::move(http_request), interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_EQ(result->body, "response3");
 
@@ -2099,8 +2159,8 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
       "/suffix4", QueryParams(), HttpRequest::Method::kPost, "body4",
       /*is_protobuf_encoded=*/false);
   ASSERT_OK(http_request);
-  result =
-      protocol_request_helper_.PerformProtocolRequest(*std::move(http_request));
+  result = protocol_request_helper_.PerformProtocolRequest(
+      *std::move(http_request), interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_EQ(result->body, "response4");
 }
@@ -2111,7 +2171,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationInvalidResponse) {
           InMemoryHttpResponse{.code = 200,
                                .content_encoding = "",
                                .body = absl::Cord("im_not_an_operation_proto")},
-          initial_request_creator_);
+          initial_request_creator_, interruptible_runner_);
   EXPECT_THAT(result.status(), IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(),
               HasSubstr("could not parse Operation"));
@@ -2125,7 +2185,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationInvalidOperationName) {
                                .body = absl::Cord(CreatePendingOperation(
                                                       "invalid_operation_name")
                                                       .SerializeAsString())},
-          initial_request_creator_);
+          initial_request_creator_, interruptible_runner_);
   EXPECT_THAT(result.status(), IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("invalid name"));
 }
@@ -2134,7 +2194,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationImmediateHttpError) {
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
           absl::Status(absl::StatusCode::kNotFound, "foo"),
-          initial_request_creator_);
+          initial_request_creator_, interruptible_runner_);
   EXPECT_THAT(result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(result.status().message(), HasSubstr("foo"));
 }
@@ -2147,7 +2207,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationImmediateInterruptedError) {
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
           absl::Status(absl::StatusCode::kCancelled, "foo"),
-          initial_request_creator_);
+          initial_request_creator_, interruptible_runner_);
   EXPECT_THAT(result.status(), IsCode(CANCELLED));
   EXPECT_THAT(result.status().message(), HasSubstr("foo"));
 }
@@ -2160,7 +2220,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseImmediateSuccess) {
               .code = 200,
               .content_encoding = "",
               .body = absl::Cord(expected_response.SerializeAsString())},
-          initial_request_creator_);
+          initial_request_creator_, interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
@@ -2175,7 +2235,7 @@ TEST_F(ProtocolRequestHelperTest,
               .code = 200,
               .content_encoding = "",
               .body = absl::Cord(expected_response.SerializeAsString())},
-          initial_request_creator_);
+          initial_request_creator_, interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
@@ -2210,7 +2270,7 @@ TEST_F(ProtocolRequestHelperTest,
               .content_encoding = "",
               .body =
                   absl::Cord(pending_operation_response.SerializeAsString())},
-          initial_request_creator_);
+          initial_request_creator_, interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
@@ -2243,7 +2303,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseErrorAfterPolling) {
               .content_encoding = "",
               .body =
                   absl::Cord(pending_operation_response.SerializeAsString())},
-          initial_request_creator_);
+          initial_request_creator_, interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
@@ -2279,7 +2339,7 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsSuccess) {
   requests.push_back(std::move(*request_b));
 
   auto result = protocol_request_helper_.PerformMultipleProtocolRequests(
-      std::move(requests));
+      std::move(requests), interruptible_runner_);
   ASSERT_OK(result);
   auto response_1 = (*result)[0];
   ASSERT_OK(response_1);
@@ -2323,7 +2383,7 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
   requests.push_back(std::move(*request_b));
 
   auto result = protocol_request_helper_.PerformMultipleProtocolRequests(
-      std::move(requests));
+      std::move(requests), interruptible_runner_);
 
   ASSERT_OK(result);
   auto response_1 = (*result)[0];

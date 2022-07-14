@@ -112,20 +112,20 @@ class ProtocolRequestCreator {
 class ProtocolRequestHelper {
  public:
   ProtocolRequestHelper(HttpClient* http_client,
-                        InterruptibleRunner* interruptible_runner,
                         int64_t* bytes_downloaded, int64_t* bytes_uploaded);
 
   // Performs the given request (handling any interruptions that may occur) and
   // updates the network stats.
   absl::StatusOr<InMemoryHttpResponse> PerformProtocolRequest(
-      std::unique_ptr<HttpRequest> request);
+      std::unique_ptr<HttpRequest> request, InterruptibleRunner& runner);
 
   // Performs the vector of requests (handling any interruptions that may occur)
   // concurrently and updates the network stats.
   // The returned vector of responses has the same order of the issued requests.
   absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
   PerformMultipleProtocolRequests(
-      std::vector<std::unique_ptr<HttpRequest>> requests);
+      std::vector<std::unique_ptr<HttpRequest>> requests,
+      InterruptibleRunner& runner);
 
   // Helper function for handling an HTTP response that contains an `Operation`
   // proto.
@@ -141,11 +141,11 @@ class ProtocolRequestHelper {
   absl::StatusOr<::google::longrunning::Operation>
   PollOperationResponseUntilDone(
       absl::StatusOr<InMemoryHttpResponse> http_response,
-      const ProtocolRequestCreator& request_creator);
+      const ProtocolRequestCreator& request_creator,
+      InterruptibleRunner& runner);
 
  private:
   HttpClient& http_client_;
-  InterruptibleRunner& interruptible_runner_;
   int64_t& bytes_downloaded_;
   int64_t& bytes_uploaded_;
 };
@@ -262,6 +262,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::Status status, ObjectState permanent_error_object_state);
 
   ObjectState object_state_;
+  LogManager* log_manager_;
   const Flags* const flags_;
   HttpClient* const http_client_;
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
@@ -275,8 +276,12 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   const std::string retry_token_;
   const std::string client_version_;
   const std::string attestation_measurement_;
-  std::function<absl::StatusOr<bool>()> should_abort_;
+  std::function<bool()> should_abort_;
   absl::BitGen bit_gen_;
+  const InterruptibleRunner::TimingConfig& timing_config_;
+  // The graceful waiting period for cancellation requests before checking
+  // whether the client should be interrupted.
+  const absl::Duration waiting_period_for_cancellation_;
   // The set of canonical error codes that should be treated as 'permanent'
   // errors.
   absl::flat_hash_set<int32_t> federated_training_permanent_error_codes_;

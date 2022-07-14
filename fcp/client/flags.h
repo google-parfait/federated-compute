@@ -164,6 +164,10 @@ class Flags {
   // When true, the client computes the task identity to pass in
   // SelectorContext.
   virtual bool enable_computation_id() const { return false; }
+
+  // The waiting period for issuing cancellation requests before checking
+  // whether the client should be interrupted.
+  virtual int32_t waiting_period_sec_for_cancellation() const { return 10; }
 };
 }  // namespace client
 }  // namespace fcp
