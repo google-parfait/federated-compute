@@ -472,11 +472,6 @@ class GrpcFederatedProtocolTest
   // The class under test.
   std::unique_ptr<GrpcFederatedProtocol> federated_protocol_;
   bool enable_http_resource_support_;
-
-  int64_t latest_opstats_bytes_downloaded_ = 0;
-  int64_t latest_opstats_bytes_uploaded_ = 0;
-  int64_t latest_opstats_chunking_layer_bytes_downloaded_ = 0;
-  int64_t latest_opstats_chunking_layer_bytes_uploaded_ = 0;
 };
 
 std::string GenerateTestName(
