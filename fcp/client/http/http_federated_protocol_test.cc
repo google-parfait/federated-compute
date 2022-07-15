@@ -2029,7 +2029,8 @@ class ProtocolRequestHelperTest : public testing::Test {
         initial_request_creator_("https://initial.uri", HeaderList(),
                                  /*use_compression=*/false),
         protocol_request_helper_(&mock_http_client_, &bytes_downloaded_,
-                                 &bytes_uploaded_) {}
+                                 &bytes_uploaded_,
+                                 /*client_decoded_http_resources=*/false) {}
 
  protected:
   void TearDown() override {

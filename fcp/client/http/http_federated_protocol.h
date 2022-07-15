@@ -111,8 +111,9 @@ class ProtocolRequestCreator {
 // A helper for issuing protocol requests.
 class ProtocolRequestHelper {
  public:
-  ProtocolRequestHelper(HttpClient* http_client,
-                        int64_t* bytes_downloaded, int64_t* bytes_uploaded);
+  ProtocolRequestHelper(HttpClient* http_client, int64_t* bytes_downloaded,
+                        int64_t* bytes_uploaded,
+                        bool client_decoded_http_resources);
 
   // Performs the given request (handling any interruptions that may occur) and
   // updates the network stats.
@@ -148,6 +149,7 @@ class ProtocolRequestHelper {
   HttpClient& http_client_;
   int64_t& bytes_downloaded_;
   int64_t& bytes_uploaded_;
+  const bool client_decoded_http_resources_;
 };
 
 // Implements a single session of the HTTP-based Federated Compute protocol.

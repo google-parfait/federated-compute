@@ -44,8 +44,6 @@ namespace fcp::client::http {
 namespace {
 
 using ::fcp::IsCode;
-using ::google::protobuf::io::ArrayInputStream;
-using ::google::protobuf::io::GzipInputStream;
 using ::testing::_;
 using ::testing::ContainerEq;
 using ::testing::Contains;
@@ -62,45 +60,6 @@ using ::testing::Return;
 using ::testing::StrEq;
 using ::testing::StrictMock;
 
-absl::StatusOr<std::string> GunzipString(const std::string& compressed_data,
-                                         size_t expected_size) {
-  const void* in;
-  int in_size = 0;
-
-  std::unique_ptr<char[]> buffer(new char[expected_size]);
-  char* out = buffer.get();
-  int out_size = static_cast<int>(expected_size);
-
-  ArrayInputStream sub_stream(compressed_data.data(),
-                              static_cast<int>(compressed_data.size()));
-  GzipInputStream input(&sub_stream, GzipInputStream::GZIP);
-  while (true) {
-    if (!input.Next(&in, &in_size)) {
-      return absl::InternalError(
-          absl::StrCat("Uncompress failed.", input.ZlibErrorMessage()));
-    }
-    if (in_size <= -1) {
-      return absl::InternalError(
-          "Uncompress failed: invalid input size returned by the "
-          "GzipInputStream.");
-    }
-
-    if (out_size <= in_size) {
-      memcpy(out, in, out_size);
-      if (in_size > out_size) {
-        // The buffer we received is larger than the bytes we'll receive, so we
-        // need to back up to the correct end of the stream.
-        input.BackUp(in_size - out_size);
-      }
-      break;  // Copied all of it.
-    }
-
-    memcpy(out, in, in_size);
-    out += in_size;
-    out_size -= in_size;
-  }
-  return std::string(buffer.get(), expected_size);
-}
 
 TEST(InMemoryHttpRequestTest, NonHttpsUriFails) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
@@ -298,7 +257,7 @@ TEST(InMemoryHttpRequestTest, RequestWithCompressedBody) {
   // Expect the second read to indicate the end of the stream.
   EXPECT_THAT((*request)->ReadBody(nullptr, 1), IsCode(OUT_OF_RANGE));
 
-  auto recovered_body = GunzipString(actual_body, uncompressed_body.size());
+  auto recovered_body = internal::UncompressWithGzip(actual_body);
   ASSERT_OK(recovered_body);
   EXPECT_EQ(*recovered_body, uncompressed_body);
 }
@@ -502,8 +461,8 @@ TEST(InMemoryHttpRequestCallbackTest, OkResponseWithoutContentLength) {
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
   ASSERT_OK(actual_response);
-  EXPECT_THAT(*actual_response,
-              FieldsAre(expected_code, IsEmpty(), StrEq(expected_body)));
+  EXPECT_THAT(*actual_response, FieldsAre(expected_code, IsEmpty(), IsEmpty(),
+                                          StrEq(expected_body)));
 }
 
 TEST(InMemoryHttpRequestCallbackTest, OkResponseWithContentLength) {
@@ -526,8 +485,8 @@ TEST(InMemoryHttpRequestCallbackTest, OkResponseWithContentLength) {
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
   ASSERT_OK(actual_response);
-  EXPECT_THAT(*actual_response,
-              FieldsAre(expected_code, IsEmpty(), StrEq(expected_body)));
+  EXPECT_THAT(*actual_response, FieldsAre(expected_code, IsEmpty(), IsEmpty(),
+                                          StrEq(expected_body)));
 }
 
 TEST(InMemoryHttpRequestCallbackTest, OkResponseChunkedBody) {
@@ -575,7 +534,8 @@ TEST(InMemoryHttpRequestCallbackTest,
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
   ASSERT_OK(actual_response);
-  EXPECT_THAT(*actual_response, FieldsAre(expected_code, IsEmpty(), IsEmpty()));
+  EXPECT_THAT(*actual_response,
+              FieldsAre(expected_code, IsEmpty(), IsEmpty(), IsEmpty()));
 }
 
 TEST(InMemoryHttpRequestCallbackTest,
@@ -597,7 +557,8 @@ TEST(InMemoryHttpRequestCallbackTest,
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
   ASSERT_OK(actual_response);
-  EXPECT_THAT(*actual_response, FieldsAre(expected_code, IsEmpty(), IsEmpty()));
+  EXPECT_THAT(*actual_response,
+              FieldsAre(expected_code, IsEmpty(), IsEmpty(), IsEmpty()));
 }
 
 TEST(InMemoryHttpRequestCallbackTest,
@@ -628,7 +589,7 @@ TEST(InMemoryHttpRequestCallbackTest,
   ASSERT_OK(actual_response);
   EXPECT_THAT(*actual_response,
               FieldsAre(expected_code, StrEq(expected_content_encoding),
-                        StrEq(expected_body)));
+                        IsEmpty(), StrEq(expected_body)));
 }
 
 TEST(InMemoryHttpRequestCallbackTest, NotFoundResponse) {
@@ -703,9 +664,9 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryOk) {
       mock_http_client_, interruptible_runner_, *std::move(request),
       // We pass in non-null pointers for the network stats, to ensure they are
       // correctly updated.
-      &bytes_received, &bytes_sent);
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
   ASSERT_OK(result);
-  EXPECT_THAT(*result, FieldsAre(expected_response_code, IsEmpty(),
+  EXPECT_THAT(*result, FieldsAre(expected_response_code, IsEmpty(), IsEmpty(),
                                  StrEq(expected_response_body)));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
@@ -728,9 +689,9 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryNotFound) {
       .WillOnce(Return(FakeHttpResponse(expected_response_code, {},
                                         expected_response_body)));
 
-  absl::StatusOr<InMemoryHttpResponse> result =
-      PerformRequestInMemory(mock_http_client_, interruptible_runner_,
-                             *std::move(request), nullptr, nullptr);
+  absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
+      mock_http_client_, interruptible_runner_, *std::move(request), nullptr,
+      nullptr, /*client_decoded_http_resources=*/false);
   EXPECT_THAT(result, IsCode(NOT_FOUND));
   EXPECT_THAT(result.status().message(), HasSubstr("404"));
 }
@@ -752,9 +713,9 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryEarlyError) {
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
-  absl::StatusOr<InMemoryHttpResponse> result =
-      PerformRequestInMemory(mock_http_client_, interruptible_runner_,
-                             *std::move(request), &bytes_received, &bytes_sent);
+  absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
+      mock_http_client_, interruptible_runner_, *std::move(request),
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("PerformRequests failed"));
 
@@ -807,9 +768,9 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryCancellation) {
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
   // The request should result in a CANCELLED outcome.
-  absl::StatusOr<InMemoryHttpResponse> result =
-      PerformRequestInMemory(mock_http_client_, interruptible_runner_,
-                             *std::move(request), &bytes_received, &bytes_sent);
+  absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
+      mock_http_client_, interruptible_runner_, *std::move(request),
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
 
   EXPECT_THAT(result, IsCode(CANCELLED));
   EXPECT_THAT(result.status().message(),
@@ -865,19 +826,20 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsInMemoryOk) {
           mock_http_client_, interruptible_runner_, std::move(requests),
           // We pass in non-null pointers for the network
           // stats, to ensure they are correctly updated.
-          &bytes_received, &bytes_sent);
+          &bytes_received, &bytes_sent,
+          /*client_decoded_http_resources=*/false);
   ASSERT_OK(results);
   ASSERT_EQ(results->size(), 2);
 
   auto first_response = (*results)[0];
   ASSERT_OK(first_response);
-  EXPECT_THAT(*first_response,
-              FieldsAre(kHttpOk, IsEmpty(), StrEq(expected_response_body)));
+  EXPECT_THAT(*first_response, FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+                                         StrEq(expected_response_body)));
   auto second_response = (*results)[1];
   ASSERT_OK(second_response);
-  EXPECT_THAT(
-      *second_response,
-      FieldsAre(kHttpOk, IsEmpty(), StrEq(another_expected_response_body)));
+  EXPECT_THAT(*second_response,
+              FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+                        StrEq(another_expected_response_body)));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
   EXPECT_THAT(bytes_sent, Ge(expected_request_body.size() +
@@ -931,12 +893,13 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailedOneSuccess) {
           mock_http_client_, interruptible_runner_, std::move(requests),
           // We pass in non-null pointers for the network
           // stats, to ensure they are correctly updated.
-          &bytes_received, &bytes_sent);
+          &bytes_received, &bytes_sent,
+          /*client_decoded_http_resources=*/false);
   ASSERT_OK(results);
   ASSERT_EQ(results->size(), 2);
   auto first_response = (*results)[0];
   ASSERT_OK(first_response);
-  EXPECT_THAT(*first_response, FieldsAre(ok_response_code, IsEmpty(),
+  EXPECT_THAT(*first_response, FieldsAre(ok_response_code, IsEmpty(), IsEmpty(),
                                          StrEq(success_response_body)));
 
   EXPECT_THAT(results->at(1), IsCode(NOT_FOUND));
@@ -954,7 +917,8 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailedOneSuccess) {
 // crash).
 TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyInputVector) {
   auto result = FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                                       {}, nullptr, nullptr);
+                                       {}, nullptr, nullptr,
+                                       /*client_decoded_http_resources=*/false);
   ASSERT_OK(result);
   EXPECT_THAT(*result, IsEmpty());
 }
@@ -964,21 +928,23 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyInputVector) {
 TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyUriAndInline) {
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_,
-      {UriOrInlineData::CreateInlineData(absl::Cord())}, nullptr, nullptr);
+      {UriOrInlineData::CreateInlineData(absl::Cord())}, nullptr, nullptr,
+      /*client_decoded_http_resources=*/false);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
-  EXPECT_THAT(*(*result)[0], FieldsAre(kHttpOk, IsEmpty(), IsEmpty()));
+  EXPECT_THAT(*(*result)[0],
+              FieldsAre(kHttpOk, IsEmpty(), IsEmpty(), IsEmpty()));
 }
 
 // Tests the case where one of the URIs is invalid. The whole request should
 // result in an error in that case.
 TEST_F(PerformRequestsTest, FetchResourcesInMemoryInvalidUri) {
-  auto result =
-      FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                             {UriOrInlineData::CreateUri("https://valid.com"),
-                              UriOrInlineData::CreateUri("http://invalid.com")},
-                             nullptr, nullptr);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_,
+      {UriOrInlineData::CreateUri("https://valid.com"),
+       UriOrInlineData::CreateUri("http://invalid.com")},
+      nullptr, nullptr, /*client_decoded_http_resources=*/false);
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("Non-HTTPS"));
 }
@@ -1021,24 +987,26 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryAllUris) {
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
-  auto result =
-      FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                             {resource1, resource2, resource3, resource4},
-                             // We pass in non-null pointers for the network
-                             // stats, to ensure they are correctly updated.
-                             &bytes_received, &bytes_sent);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_,
+      {resource1, resource2, resource3, resource4},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
-  EXPECT_THAT(*(*result)[0], FieldsAre(expected_response_code1, IsEmpty(),
-                                       StrEq(expected_response_body1)));
+  EXPECT_THAT(*(*result)[0],
+              FieldsAre(expected_response_code1, IsEmpty(), IsEmpty(),
+                        StrEq(expected_response_body1)));
   EXPECT_THAT((*result)[1], IsCode(NOT_FOUND));
   EXPECT_THAT((*result)[1].status().message(), HasSubstr("404"));
   EXPECT_THAT((*result)[2], IsCode(UNAVAILABLE));
   EXPECT_THAT((*result)[2].status().message(), HasSubstr("503"));
   ASSERT_OK((*result)[3]);
-  EXPECT_THAT(*(*result)[3], FieldsAre(expected_response_code4, IsEmpty(),
-                                       StrEq(expected_response_body4)));
+  EXPECT_THAT(*(*result)[3],
+              FieldsAre(expected_response_code4, IsEmpty(), IsEmpty(),
+                        StrEq(expected_response_body4)));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
   EXPECT_THAT(bytes_sent, Ge(0));
@@ -1074,23 +1042,24 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemorySomeInlineData) {
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
-  auto result =
-      FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                             {resource1, resource2, resource3, resource4},
-                             &bytes_received, &bytes_sent);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_,
+      {resource1, resource2, resource3, resource4}, &bytes_received,
+      &bytes_sent, /*client_decoded_http_resources=*/false);
   ASSERT_OK(result);
 
   EXPECT_THAT((*result)[0], IsCode(UNAVAILABLE));
   EXPECT_THAT((*result)[0].status().message(), HasSubstr("503"));
   ASSERT_OK((*result)[1]);
-  EXPECT_THAT(*(*result)[1],
-              FieldsAre(kHttpOk, IsEmpty(), StrEq(expected_response_body2)));
+  EXPECT_THAT(*(*result)[1], FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+                                       StrEq(expected_response_body2)));
   ASSERT_OK((*result)[2]);
-  EXPECT_THAT(*(*result)[2], FieldsAre(expected_response_code3, IsEmpty(),
-                                       StrEq(expected_response_body3)));
+  EXPECT_THAT(*(*result)[2],
+              FieldsAre(expected_response_code3, IsEmpty(), IsEmpty(),
+                        StrEq(expected_response_body3)));
   ASSERT_OK((*result)[3]);
-  EXPECT_THAT(*(*result)[3],
-              FieldsAre(kHttpOk, IsEmpty(), StrEq(expected_response_body4)));
+  EXPECT_THAT(*(*result)[3], FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+                                       StrEq(expected_response_body4)));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
   EXPECT_THAT(bytes_sent, Ge(0));
@@ -1109,17 +1078,17 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryOnlyInlineData) {
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
-  auto result = FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                                       {resource1, resource2}, &bytes_received,
-                                       &bytes_sent);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource1, resource2},
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
-  EXPECT_THAT(*(*result)[0],
-              FieldsAre(kHttpOk, IsEmpty(), StrEq(expected_response_body1)));
+  EXPECT_THAT(*(*result)[0], FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+                                       StrEq(expected_response_body1)));
   ASSERT_OK((*result)[1]);
-  EXPECT_THAT(*(*result)[1],
-              FieldsAre(kHttpOk, IsEmpty(), StrEq(expected_response_body2)));
+  EXPECT_THAT(*(*result)[1], FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+                                       StrEq(expected_response_body2)));
 
   // The network stats should be untouched, since no network requests were
   // issued.
@@ -1167,9 +1136,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCancellation) {
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
   // The request should result in an overall CANCELLED outcome.
-  auto result = FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                                       {resource1, resource2}, &bytes_received,
-                                       &bytes_sent);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource1, resource2},
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
   EXPECT_THAT(result, IsCode(CANCELLED));
   EXPECT_THAT(result.status().message(),
               HasSubstr("cancelled after graceful wait"));
@@ -1178,6 +1147,147 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCancellation) {
   // data sent and received up until the point of interruption).
   EXPECT_THAT(bytes_sent, Ge(0));
   EXPECT_THAT(bytes_received, Ge(0));
+}
+
+TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedUriResource) {
+  const std::string uri = "https://valid.com/";
+  auto resource = UriOrInlineData::CreateUri(uri);
+
+  int expected_response_code = kHttpOk;
+  std::string content_type = "bytes+gzip";
+  std::string expected_response_body = "response_body: AAAAAAAAAAAAAAAAAAAAA";
+  auto compressed_response_body =
+      internal::CompressWithGzip(expected_response_body);
+  ASSERT_OK(compressed_response_body);
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre(uri, HttpRequest::Method::kGet, HeaderList{}, "")))
+      .WillOnce(Return(FakeHttpResponse(expected_response_code,
+                                        {{kContentTypeHdr, content_type}},
+                                        *compressed_response_body)));
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true);
+  ASSERT_OK(result);
+
+  ASSERT_OK((*result)[0]);
+  EXPECT_THAT(*(*result)[0],
+              FieldsAre(expected_response_code, IsEmpty(), StrEq(content_type),
+                        StrEq(expected_response_body)));
+
+  EXPECT_THAT(bytes_sent, Ne(bytes_received));
+  EXPECT_THAT(bytes_sent, Ge(0));
+  EXPECT_THAT(bytes_received, Ge(compressed_response_body->size()));
+}
+
+TEST_F(PerformRequestsTest,
+       FetchResourcesInMemoryFlagOnNotCompressedUriResource) {
+  const std::string uri = "https://valid.com/";
+  auto resource = UriOrInlineData::CreateUri(uri);
+
+  int expected_response_code = kHttpOk;
+  std::string content_type = "uncompressed-bytes-yay";
+  std::string expected_response_body = "response_body: AAAAAAAAAAAAAAAAAAAAA";
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre(uri, HttpRequest::Method::kGet, HeaderList{}, "")))
+      .WillOnce(Return(FakeHttpResponse(expected_response_code,
+                                        {{kContentTypeHdr, content_type}},
+                                        expected_response_body)));
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true);
+  ASSERT_OK(result);
+
+  ASSERT_OK((*result)[0]);
+  EXPECT_THAT(*(*result)[0],
+              FieldsAre(expected_response_code, IsEmpty(), StrEq(content_type),
+                        StrEq(expected_response_body)));
+
+  EXPECT_THAT(bytes_sent, Ne(bytes_received));
+  EXPECT_THAT(bytes_sent, Ge(0));
+  EXPECT_THAT(bytes_received, Ge(expected_response_body.size()));
+}
+
+TEST_F(PerformRequestsTest,
+       FetchResourcesInMemoryCompressedUriResourceFlagOffDoesNotDecompress) {
+  const std::string uri = "https://valid.com/";
+  auto resource = UriOrInlineData::CreateUri(uri);
+
+  int expected_response_code = kHttpOk;
+  std::string content_type = "bytes+gzip";
+  std::string expected_response_body = "response_body: AAAAAAAAAAAAAAAAAAAAA";
+  auto compressed_response_body =
+      internal::CompressWithGzip(expected_response_body);
+  ASSERT_OK(compressed_response_body);
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre(uri, HttpRequest::Method::kGet, HeaderList{}, "")))
+      .WillOnce(Return(FakeHttpResponse(expected_response_code,
+                                        {{kContentTypeHdr, content_type}},
+                                        *compressed_response_body)));
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
+  ASSERT_OK(result);
+
+  ASSERT_OK((*result)[0]);
+  // result body is still compressed!
+  EXPECT_THAT(*(*result)[0],
+              FieldsAre(expected_response_code, IsEmpty(), StrEq(content_type),
+                        StrEq(*compressed_response_body)));
+
+  EXPECT_THAT(bytes_sent, Ne(bytes_received));
+  EXPECT_THAT(bytes_sent, Ge(0));
+  EXPECT_THAT(bytes_received, Ge(compressed_response_body->size()));
+}
+
+TEST_F(PerformRequestsTest,
+       FetchResourcesInMemoryCompressedUriResourceFailsToDecode) {
+  const std::string uri = "https://valid.com/";
+  auto resource = UriOrInlineData::CreateUri(uri);
+
+  int expected_response_code = kHttpOk;
+  std::string content_type = "not-actually-gzipped+gzip";
+  std::string expected_response_body = "I am not a valid gzipped body ლ(ಠ益ಠლ)";
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre(uri, HttpRequest::Method::kGet, HeaderList{}, "")))
+      .WillOnce(Return(FakeHttpResponse(expected_response_code,
+                                        {{kContentTypeHdr, content_type}},
+                                        expected_response_body)));
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true);
+  // Fetching will succeed
+  ASSERT_OK(result);
+
+  // ...but our first (and only) response will have failed to decode.
+  EXPECT_THAT((*result)[0], IsCode(INTERNAL));
+
+  EXPECT_THAT(bytes_sent, Ne(bytes_received));
+  EXPECT_THAT(bytes_sent, Ge(0));
+  EXPECT_THAT(bytes_received, Ge(expected_response_body.size()));
 }
 
 }  // namespace

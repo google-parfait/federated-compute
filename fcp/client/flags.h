@@ -168,6 +168,10 @@ class Flags {
   // The waiting period for issuing cancellation requests before checking
   // whether the client should be interrupted.
   virtual int32_t waiting_period_sec_for_cancellation() const { return 10; }
+
+  // When true, the client supports encoded http payloads with `x+gzip`
+  // Content-Type headers, and will decode them outside of the http engine.
+  virtual bool client_decoded_http_resources() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

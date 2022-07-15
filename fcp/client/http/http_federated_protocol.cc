@@ -382,10 +382,12 @@ ProtocolRequestCreator::Create(const ForwardingInfo& forwarding_info,
 
 ProtocolRequestHelper::ProtocolRequestHelper(HttpClient* http_client,
                                              int64_t* bytes_downloaded,
-                                             int64_t* bytes_uploaded)
+                                             int64_t* bytes_uploaded,
+                                             bool client_decoded_http_resources)
     : http_client_(*http_client),
       bytes_downloaded_(*bytes_downloaded),
-      bytes_uploaded_(*bytes_uploaded) {}
+      bytes_uploaded_(*bytes_uploaded),
+      client_decoded_http_resources_(client_decoded_http_resources) {}
 
 absl::StatusOr<InMemoryHttpResponse>
 ProtocolRequestHelper::PerformProtocolRequest(
@@ -407,7 +409,8 @@ ProtocolRequestHelper::PerformMultipleProtocolRequests(
   FCP_ASSIGN_OR_RETURN(
       std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
       PerformMultipleRequestsInMemory(http_client_, runner, std::move(requests),
-                                      &bytes_downloaded_, &bytes_uploaded_));
+                                      &bytes_downloaded_, &bytes_uploaded_,
+                                      client_decoded_http_resources_));
   std::vector<absl::StatusOr<InMemoryHttpResponse>> results;
   std::transform(responses.begin(), responses.end(),
                  std::back_inserter(results), CheckResponseContentEncoding);
@@ -488,7 +491,8 @@ HttpFederatedProtocol::HttpFederatedProtocol(
               entry_point_uri, HeaderList{},
               !flags->disable_http_request_body_compression())),
       protocol_request_helper_(http_client, &bytes_downloaded_,
-                               &bytes_uploaded_),
+                               &bytes_uploaded_,
+                               flags_->client_decoded_http_resources()),
       api_key_(api_key),
       population_name_(population_name),
       retry_token_(retry_token),
@@ -1079,10 +1083,10 @@ HttpFederatedProtocol::FetchTaskResources(
   // Fetch the plan and init checkpoint resources if they need to be fetched
   // (using the inline data instead if available).
   absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
-      resource_responses =
-          FetchResourcesInMemory(*http_client_, *interruptible_runner_,
-                                 {plan_uri_or_data, checkpoint_uri_or_data},
-                                 &bytes_downloaded_, &bytes_uploaded_);
+      resource_responses = FetchResourcesInMemory(
+          *http_client_, *interruptible_runner_,
+          {plan_uri_or_data, checkpoint_uri_or_data}, &bytes_downloaded_,
+          &bytes_uploaded_, flags_->client_decoded_http_resources());
   FCP_RETURN_IF_ERROR(resource_responses);
   auto& plan_data_response = (*resource_responses)[0];
   auto& checkpoint_data_response = (*resource_responses)[1];

@@ -1024,7 +1024,7 @@ GrpcFederatedProtocol::FetchTaskResources(
       resource_responses = ::fcp::client::http::FetchResourcesInMemory(
           *http_client_, *interruptible_runner_,
           {plan_uri_or_data, checkpoint_uri_or_data}, &http_bytes_downloaded_,
-          &http_bytes_uploaded_);
+          &http_bytes_uploaded_, flags_->client_decoded_http_resources());
   if (!resource_responses.ok()) {
     log_manager_->LogDiag(
         ProdDiagCode::

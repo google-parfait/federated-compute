@@ -89,6 +89,9 @@ struct InMemoryHttpResponse {
   // This is empty if no "Content-Encoding" header was present in the response
   // headers.
   std::string content_encoding;
+  // This is empty if no "Content-Type" header was present in the response
+  // headers.
+  std::string content_type;
   absl::Cord body;
 };
 
@@ -117,6 +120,7 @@ class InMemoryHttpRequestCallback : public HttpRequestCallback {
       absl::UnavailableError("No response received");
   std::optional<int> response_code_ ABSL_GUARDED_BY(mutex_);
   std::string content_encoding_ ABSL_GUARDED_BY(mutex_);
+  std::string content_type_ ABSL_GUARDED_BY(mutex_);
   std::optional<int64_t> expected_content_length_ ABSL_GUARDED_BY(mutex_);
   absl::Cord response_buffer_ ABSL_GUARDED_BY(mutex_);
   mutable absl::Mutex mutex_;
@@ -133,7 +137,7 @@ class InMemoryHttpRequestCallback : public HttpRequestCallback {
 absl::StatusOr<InMemoryHttpResponse> PerformRequestInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::unique_ptr<http::HttpRequest> request, int64_t* bytes_received_acc,
-    int64_t* bytes_sent_acc);
+    int64_t* bytes_sent_acc, bool client_decoded_http_resources);
 
 // Utility for performing multiple HTTP requests and returning the results
 // (incl. the response body) in memory.
@@ -145,7 +149,8 @@ absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
 PerformMultipleRequestsInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::vector<std::unique_ptr<http::HttpRequest>> requests,
-    int64_t* bytes_received_acc, int64_t* bytes_sent_acc);
+    int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
+    bool client_decoded_http_resources);
 
 // Simple class representing a resource for which data is already available
 // in-memory (`inline_data`) or for which data needs to be fetched by an HTTP
@@ -201,7 +206,16 @@ absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
 FetchResourcesInMemory(HttpClient& http_client,
                        InterruptibleRunner& interruptible_runner,
                        const std::vector<UriOrInlineData>& resources,
-                       int64_t* bytes_received_acc, int64_t* bytes_sent_acc);
+                       int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
+                       bool client_decoded_http_resources);
+
+// Used by the class and in tests only.
+namespace internal {
+absl::StatusOr<std::string> CompressWithGzip(
+    const std::string& uncompressed_data);
+absl::StatusOr<absl::Cord> UncompressWithGzip(
+    const std::string& compressed_data);
+}  // namespace internal
 
 };  // namespace http
 };  // namespace client

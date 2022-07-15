@@ -44,50 +44,12 @@ namespace fcp {
 namespace client {
 namespace http {
 
-namespace {
+using ::google::protobuf::io::ArrayInputStream;
+using ::google::protobuf::io::GzipInputStream;
 using ::google::protobuf::io::GzipOutputStream;
 using ::google::protobuf::io::StringOutputStream;
 
-absl::StatusOr<std::string> CompressWithGZip(
-    const std::string& uncompressed_data) {
-  int starting_pos = 0;
-  size_t str_size = uncompressed_data.length();
-  size_t in_size = str_size;
-
-  std::string output;
-  StringOutputStream string_output_stream(&output);
-  GzipOutputStream::Options options;
-  options.format = GzipOutputStream::GZIP;
-  GzipOutputStream compressed_stream(&string_output_stream, options);
-  void* out;
-  int out_size;
-  while (starting_pos < str_size) {
-    if (!compressed_stream.Next(&out, &out_size) || out_size <= 0) {
-      return absl::InternalError(
-          absl::StrCat("An error has occurred during compression:",
-                       compressed_stream.ZlibErrorMessage()));
-    }
-
-    if (in_size <= out_size) {
-      uncompressed_data.copy(static_cast<char*>(out), in_size, starting_pos);
-      // Ensure that the stream's output buffer is truncated to match the total
-      // amount of data.
-      compressed_stream.BackUp(out_size - static_cast<int>(in_size));
-      break;
-    }
-    uncompressed_data.copy(static_cast<char*>(out), out_size, starting_pos);
-    starting_pos += out_size;
-    in_size -= out_size;
-  }
-
-  if (!compressed_stream.Close()) {
-    return absl::InternalError(absl::StrCat(
-        "Failed to close the stream: ", compressed_stream.ZlibErrorMessage()));
-  }
-  return output;
-}
-
-}  // namespace
+static constexpr absl::string_view kClientDecodedGzipSuffix = "+gzip";
 
 absl::StatusOr<std::unique_ptr<HttpRequest>> InMemoryHttpRequest::Create(
     absl::string_view uri, HttpRequest::Method method, HeaderList extra_headers,
@@ -97,7 +59,7 @@ absl::StatusOr<std::unique_ptr<HttpRequest>> InMemoryHttpRequest::Create(
         absl::StrCat("Non-HTTPS URIs are not supported: ", uri));
   }
   if (use_compression) {
-    FCP_ASSIGN_OR_RETURN(body, CompressWithGZip(body));
+    FCP_ASSIGN_OR_RETURN(body, internal::CompressWithGzip(body));
     extra_headers.push_back({kContentEncodingHdr, kGzipEncodingHdrValue});
   }
   std::optional<std::string> content_length_hdr =
@@ -171,6 +133,8 @@ absl::Status InMemoryHttpRequestCallback::OnResponseStarted(
     }
     content_encoding_ = *content_encoding_header;
   }
+
+  content_type_ = FindHeader(response.headers(), kContentTypeHdr).value_or("");
 
   // Similarly, we should under no circumstances receive a non-identity
   // Transfer-Encoding header, since the `HttpClient` is unconditionally
@@ -275,8 +239,7 @@ void InMemoryHttpRequestCallback::OnResponseCompleted(
                      ", expected: ", *expected_content_length_, ")"));
     return;
   }
-  // If we received the expected amount of data, then assign the overall
-  // response Status a value based on the HTTP code.
+
   status_ = ConvertHttpCodeToStatus(*response_code_);
 }
 
@@ -286,23 +249,25 @@ absl::StatusOr<InMemoryHttpResponse> InMemoryHttpRequestCallback::Response()
   FCP_RETURN_IF_ERROR(status_);
   // If status_ is OK, then response_code_ and response_headers_ are guaranteed
   // to have values.
-  return InMemoryHttpResponse{*response_code_, content_encoding_,
+
+  return InMemoryHttpResponse{*response_code_, content_encoding_, content_type_,
                               response_buffer_};
 }
 
 absl::StatusOr<InMemoryHttpResponse> PerformRequestInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::unique_ptr<http::HttpRequest> request, int64_t* bytes_received_acc,
-    int64_t* bytes_sent_acc) {
+    int64_t* bytes_sent_acc, bool client_decoded_http_resources) {
   // Note: we must explicitly instantiate a vector here as opposed to passing an
   // initializer list to PerformRequestsInMemory, because initializer lists do
   // not support move-only values.
   std::vector<std::unique_ptr<http::HttpRequest>> requests;
   requests.push_back(std::move(request));
   FCP_ASSIGN_OR_RETURN(
-      auto result, PerformMultipleRequestsInMemory(
-                       http_client, interruptible_runner, std::move(requests),
-                       bytes_received_acc, bytes_sent_acc));
+      auto result,
+      PerformMultipleRequestsInMemory(
+          http_client, interruptible_runner, std::move(requests),
+          bytes_received_acc, bytes_sent_acc, client_decoded_http_resources));
   return std::move(result[0]);
 }
 
@@ -310,7 +275,8 @@ absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
 PerformMultipleRequestsInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::vector<std::unique_ptr<http::HttpRequest>> requests,
-    int64_t* bytes_received_acc, int64_t* bytes_sent_acc) {
+    int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
+    bool client_decoded_http_resources) {
   // A vector that will own the request handles and callbacks (and will
   // determine their lifetimes).
   std::vector<std::pair<std::unique_ptr<HttpRequestHandle>,
@@ -376,7 +342,8 @@ absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
 FetchResourcesInMemory(HttpClient& http_client,
                        InterruptibleRunner& interruptible_runner,
                        const std::vector<UriOrInlineData>& resources,
-                       int64_t* bytes_received_acc, int64_t* bytes_sent_acc) {
+                       int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
+                       bool client_decoded_http_resources) {
   // Each resource may have the data already available (by having been included
   // in a prior response inline), or may need to be fetched.
 
@@ -412,8 +379,10 @@ FetchResourcesInMemory(HttpClient& http_client,
       // handling logic and doesn't have to know whether a resource was truly
       // fetched via HTTP or not). Because the inline_data field is an
       // absl::Cord, making a copy of it should be very cheap.
+      // TODO(team): if inline_data is gzipped, set the content_type to
+      // `application/octet-stream+gzip`.
       response_accessors.push_back([resource]() {
-        return InMemoryHttpResponse{kHttpOk, "", resource.inline_data()};
+        return InMemoryHttpResponse{kHttpOk, "", "", resource.inline_data()};
       });
     }
   }
@@ -421,7 +390,7 @@ FetchResourcesInMemory(HttpClient& http_client,
   // Perform the requests.
   auto resource_fetch_result = PerformMultipleRequestsInMemory(
       http_client, interruptible_runner, std::move(http_requests),
-      bytes_received_acc, bytes_sent_acc);
+      bytes_received_acc, bytes_sent_acc, client_decoded_http_resources);
   // Check whether issuing the requests failed as a whole (generally indicating
   // a programming error).
   FCP_RETURN_IF_ERROR(resource_fetch_result);
@@ -434,11 +403,98 @@ FetchResourcesInMemory(HttpClient& http_client,
   std::vector<absl::StatusOr<InMemoryHttpResponse>> result;
   result.reserve(response_accessors.size());
   for (const auto& response_accessor : response_accessors) {
-    result.push_back(response_accessor());
+    if (client_decoded_http_resources) {
+      absl::StatusOr<InMemoryHttpResponse> response = response_accessor();
+      if (response.ok() && absl::EndsWithIgnoreCase(response->content_type,
+                                                    kClientDecodedGzipSuffix)) {
+        std::string response_body_temp(response->body);
+        // We're going to overwrite the response body with the decoded contents
+        // shortly, no need to keep an extra copy of it in memory.
+        response->body.Clear();
+        absl::StatusOr<absl::Cord> decoded_response_body =
+            internal::UncompressWithGzip(response_body_temp);
+        if (!decoded_response_body.ok()) {
+          response = decoded_response_body.status();
+        } else {
+          response->body = *std::move(decoded_response_body);
+        }
+      }
+      result.push_back(response);
+    } else {
+      result.push_back(response_accessor());
+    }
   }
   return result;
 }
 
+namespace internal {
+absl::StatusOr<std::string> CompressWithGzip(
+    const std::string& uncompressed_data) {
+  int starting_pos = 0;
+  size_t str_size = uncompressed_data.length();
+  size_t in_size = str_size;
+  std::string output;
+  StringOutputStream string_output_stream(&output);
+  GzipOutputStream::Options options;
+  options.format = GzipOutputStream::GZIP;
+  GzipOutputStream compressed_stream(&string_output_stream, options);
+  void* out;
+  int out_size;
+  while (starting_pos < str_size) {
+    if (!compressed_stream.Next(&out, &out_size) || out_size <= 0) {
+      return absl::InternalError(
+          absl::StrCat("An error has occurred during compression: ",
+                       compressed_stream.ZlibErrorMessage()));
+    }
+
+    if (in_size <= out_size) {
+      uncompressed_data.copy(static_cast<char*>(out), in_size, starting_pos);
+      // Ensure that the stream's output buffer is truncated to match the total
+      // amount of data.
+      compressed_stream.BackUp(out_size - static_cast<int>(in_size));
+      break;
+    }
+    uncompressed_data.copy(static_cast<char*>(out), out_size, starting_pos);
+    starting_pos += out_size;
+    in_size -= out_size;
+  }
+
+  if (!compressed_stream.Close()) {
+    return absl::InternalError(absl::StrCat(
+        "Failed to close the stream: ", compressed_stream.ZlibErrorMessage()));
+  }
+  return output;
+}
+
+absl::StatusOr<absl::Cord> UncompressWithGzip(
+    const std::string& compressed_data) {
+  absl::Cord out;
+  const void* buffer;
+  int size;
+  ArrayInputStream sub_stream(compressed_data.data(),
+                              static_cast<int>(compressed_data.size()));
+  GzipInputStream input_stream(&sub_stream, GzipInputStream::GZIP);
+
+  while (input_stream.Next(&buffer, &size)) {
+    if (size <= -1) {
+      return absl::InternalError(
+          "Uncompress failed: invalid input size returned by the "
+          "GzipInputStream.");
+    }
+    out.Append(absl::string_view(reinterpret_cast<const char*>(buffer), size));
+  }
+
+  if (input_stream.ZlibErrorMessage() != nullptr) {
+    // Some real error happened during decompression.
+    return absl::InternalError(
+        absl::StrCat("An error has occurred during decompression:",
+                     input_stream.ZlibErrorMessage()));
+  }
+
+  return out;
+}
+
+}  // namespace internal
 }  // namespace http
 }  // namespace client
 }  // namespace fcp
