@@ -43,7 +43,7 @@
 #include "fcp/client/federated_protocol_util.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
-#include "fcp/client/http/test_helpers.h"
+#include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -59,6 +59,10 @@ namespace {
 
 using ::fcp::EqualsProto;
 using ::fcp::IsCode;
+using ::fcp::client::http::FakeHttpResponse;
+using ::fcp::client::http::MockableHttpClient;
+using ::fcp::client::http::MockHttpClient;
+using ::fcp::client::http::SimpleHttpRequestMatcher;
 using ::google::internal::federatedcompute::v1::ByteStreamResource;
 using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTask;
@@ -413,7 +417,7 @@ FakeHttpResponse CreateEmptySuccessHttpResponse() {
   return FakeHttpResponse(200, HeaderList(), "");
 }
 
-class HttpFederatedProtocolTest : public testing::Test {
+class HttpFederatedProtocolTest : public ::testing::Test {
  protected:
   void SetUp() override {
     EXPECT_CALL(mock_flags_,
@@ -2009,7 +2013,7 @@ TEST(ProtocolRequestCreatorTest, CreateGetOperationRequest) {
   EXPECT_FALSE((*request)->HasBody());
 }
 
-class ProtocolRequestHelperTest : public testing::Test {
+class ProtocolRequestHelperTest : public ::testing::Test {
  public:
   ProtocolRequestHelperTest()
       : interruptible_runner_(

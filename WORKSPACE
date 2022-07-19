@@ -162,6 +162,31 @@ http_archive(
     url = "https://github.com/google/protodatastore-cpp/archive/0cd8b124bc65bcac105bce4a706923218ae5d625.zip",
 )
 
+# libcurl is used in the http client.
+http_archive(
+    name = "libcurl",
+    build_file = "//third_party:curl.BUILD.bzl",
+    sha256 = "e9d74b8586e0d2e6b45dc948bbe77525a1fa7f7c004ad5192f12e72c365e376e",
+    strip_prefix = "curl-curl-7_84_0",
+    url = "https://github.com/curl/curl/archive/refs/tags/curl-7_84_0.zip",
+)
+
+# We use only the http test server.
+http_archive(
+    name = "tensorflow_serving",
+    patch_tool = "patch",
+    patches = [
+        "//fcp/patches:tensorflow_serving.patch",
+    ],
+    sha256 = "6b428100be7ec4bb34fc7910b7f549b6556854016a3c4cbda5613b5c114797b3",
+    strip_prefix = "serving-2.9.0",
+    url = "https://github.com/tensorflow/serving/archive/refs/tags/2.9.0.zip",
+)
+
+load("@tensorflow_serving//tensorflow_serving:workspace.bzl", "tf_serving_workspace")
+
+tf_serving_workspace()
+
 # Java Maven-based repositories.
 http_archive(
     name = "rules_jvm_external",

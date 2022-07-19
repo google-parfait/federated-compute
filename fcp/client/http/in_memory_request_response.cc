@@ -54,7 +54,10 @@ static constexpr absl::string_view kClientDecodedGzipSuffix = "+gzip";
 absl::StatusOr<std::unique_ptr<HttpRequest>> InMemoryHttpRequest::Create(
     absl::string_view uri, HttpRequest::Method method, HeaderList extra_headers,
     std::string body, bool use_compression) {
-  if (!absl::StartsWithIgnoreCase(uri, kHttpsScheme)) {
+  // Allow http://localhost:xxxx as an exception to the https-only policy,
+  // so that we can use a local http test server.
+  if (!absl::StartsWithIgnoreCase(uri, kHttpsScheme) &&
+      !absl::StartsWithIgnoreCase(uri, kLocalhostUri)) {
     return absl::InvalidArgumentError(
         absl::StrCat("Non-HTTPS URIs are not supported: ", uri));
   }

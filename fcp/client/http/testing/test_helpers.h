@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FCP_CLIENT_HTTP_TEST_HELPERS_H_
-#define FCP_CLIENT_HTTP_TEST_HELPERS_H_
+#ifndef FCP_CLIENT_HTTP_TESTING_TEST_HELPERS_H_
+#define FCP_CLIENT_HTTP_TESTING_TEST_HELPERS_H_
 
 #include <functional>
 #include <memory>
@@ -128,8 +128,36 @@ SimpleHttpRequestMatcher(
     const ::testing::Matcher<HeaderList>& headers_matcher,
     const ::testing::Matcher<std::string>& body_matcher);
 
+// A mock request callback.
+class MockHttpRequestCallback : public HttpRequestCallback {
+ public:
+  explicit MockHttpRequestCallback() = default;
+  ~MockHttpRequestCallback() override = default;
+  MOCK_METHOD(absl::Status, OnResponseStarted,
+              (const HttpRequest& request, const HttpResponse& response),
+              (override));
+
+  MOCK_METHOD(void, OnResponseError,
+              (const HttpRequest& request, const absl::Status& error),
+              (override));
+
+  MOCK_METHOD(absl::Status, OnResponseBody,
+              (const HttpRequest& request, const HttpResponse& response,
+               absl::string_view data),
+              (override));
+
+  MOCK_METHOD(void, OnResponseBodyError,
+              (const HttpRequest& request, const HttpResponse& response,
+               const absl::Status& error),
+              (override));
+
+  MOCK_METHOD(void, OnResponseCompleted,
+              (const HttpRequest& request, const HttpResponse& response),
+              (override));
+};
+
 }  // namespace http
 }  // namespace client
 }  // namespace fcp
 
-#endif  // FCP_CLIENT_HTTP_TEST_HELPERS_H_
+#endif  // FCP_CLIENT_HTTP_TESTING_TEST_HELPERS_H_

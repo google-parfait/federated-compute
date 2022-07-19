@@ -31,7 +31,7 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/grpc_bidi_stream.h"
 #include "fcp/client/http/http_client.h"
-#include "fcp/client/http/test_helpers.h"
+#include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -50,6 +50,7 @@ using ::fcp::IsCode;
 using ::fcp::client::http::FakeHttpResponse;
 using ::fcp::client::http::HttpRequest;
 using ::fcp::client::http::MockHttpClient;
+using ::fcp::client::http::SimpleHttpRequestMatcher;
 using ::fcp::secagg::AesCtrPrngFactory;
 using ::fcp::secagg::FakePrng;
 using ::fcp::secagg::InputVectorSpecification;

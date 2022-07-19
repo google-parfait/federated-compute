@@ -165,6 +165,23 @@ absl::Status ConvertRpcStatusToAbslStatus(::google::rpc::Status rpc_status) {
   return rpc_status;
 }
 
+std::string ConvertMethodToString(HttpRequest::Method method) {
+  switch (method) {
+    case HttpRequest::Method::kGet:
+      return "GET";
+    case HttpRequest::Method::kHead:
+      return "HEAD";
+    case HttpRequest::Method::kDelete:
+      return "DELETE";
+    case HttpRequest::Method::kPatch:
+      return "PATCH";
+    case HttpRequest::Method::kPost:
+      return "POST";
+    case HttpRequest::Method::kPut:
+      return "PUT";
+  }
+}
+
 std::optional<std::string> FindHeader(const HeaderList& headers,
                                       absl::string_view needle) {
   // Normalize the needle (since header names are case insensitive, as per RFC

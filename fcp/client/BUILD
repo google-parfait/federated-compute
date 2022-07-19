@@ -225,7 +225,7 @@ cc_test(
         "//fcp/base",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/client/http:http_client",
-        "//fcp/client/http:test_helpers",
+        "//fcp/client/http/testing:test_helpers",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/secagg/client",
         "//fcp/secagg/shared",

@@ -35,7 +35,7 @@
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
-#include "fcp/client/http/test_helpers.h"
+#include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/testing/testing.h"
@@ -44,6 +44,9 @@ namespace fcp::client::http {
 namespace {
 
 using ::fcp::IsCode;
+using ::fcp::client::http::FakeHttpResponse;
+using ::fcp::client::http::MockableHttpClient;
+using ::fcp::client::http::MockHttpClient;
 using ::testing::_;
 using ::testing::ContainerEq;
 using ::testing::Contains;
@@ -613,7 +616,7 @@ TEST(InMemoryHttpRequestCallbackTest, NotFoundResponse) {
   EXPECT_THAT(actual_response.status().message(), HasSubstr("404"));
 }
 
-class PerformRequestsTest : public testing::Test {
+class PerformRequestsTest : public ::testing::Test {
  protected:
   PerformRequestsTest()
       : interruptible_runner_(

@@ -25,11 +25,10 @@
 #include "absl/strings/string_view.h"
 #include "fcp/client/http/http_client.h"
 
-namespace fcp {
-namespace client {
-namespace http {
+namespace fcp::client::http {
 
 inline static constexpr char kHttpsScheme[] = "https://";
+inline static constexpr char kLocalhostUri[] = "http://localhost:";
 inline static constexpr char kAcceptEncodingHdr[] = "Accept-Encoding";
 inline static constexpr char kContentLengthHdr[] = "Content-Length";
 inline static constexpr char kContentEncodingHdr[] = "Content-Encoding";
@@ -46,6 +45,7 @@ inline static constexpr char kProtobufContentType[] = "application/x-protobuf";
 // against the int codes returned by `HttpResponse`.
 enum HttpResponseCode {
   kHttpOk = 200,
+  kHttpMovedPermanently = 301,
   kHttpBadRequest = 400,
   kHttpUnauthorized = 401,
   kHttpForbidden = 403,
@@ -68,6 +68,9 @@ absl::Status ConvertRpcStatusToAbslStatus(::google::rpc::Status rpc_status);
 
 // Converts an `absl::Status` into a `google::rpc::Status`.
 google::rpc::Status ConvertAbslStatusToRpcStatus(absl::Status status);
+
+// Converts the method enum to a std::string.
+std::string ConvertMethodToString(HttpRequest::Method method);
 
 // Finds the header value for header with name `needle` in a list of headers
 // (incl. normalizing the header names to lowercase before doing any
@@ -117,8 +120,6 @@ absl::StatusOr<std::string> EncodeUriSinglePathSegment(absl::string_view input);
 absl::StatusOr<std::string> EncodeUriMultiplePathSegments(
     absl::string_view input);
 
-}  // namespace http
-}  // namespace client
-}  // namespace fcp
+}  // namespace fcp::client::http
 
 #endif  // FCP_CLIENT_HTTP_HTTP_CLIENT_UTIL_H_
