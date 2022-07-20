@@ -444,6 +444,10 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillRepeatedly(Return(true));
     EXPECT_CALL(mock_flags_, waiting_period_sec_for_cancellation)
         .WillRepeatedly(Return(10));
+    timing_config_ = InterruptibleRunner::TimingConfig{
+        .polling_period = absl::ZeroDuration(),
+        .graceful_shutdown_period = absl::InfiniteDuration(),
+        .extended_shutdown_period = absl::InfiniteDuration()};
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -455,11 +459,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         &mock_log_manager_, &mock_flags_, &mock_http_client_, kEntryPointUri,
         kApiKey, kPopulationName, kRetryToken, kClientVersion,
         kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
-        absl::BitGen(),
-        InterruptibleRunner::TimingConfig{
-            .polling_period = absl::ZeroDuration(),
-            .graceful_shutdown_period = absl::InfiniteDuration(),
-            .extended_shutdown_period = absl::InfiniteDuration()});
+        absl::BitGen(), timing_config_);
   }
 
   void TearDown() override {
@@ -639,6 +639,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   NiceMock<MockLogManager> mock_log_manager_;
   NiceMock<MockFlags> mock_flags_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
+
+  InterruptibleRunner::TimingConfig timing_config_;
 
   // The class under test.
   std::unique_ptr<HttpFederatedProtocol> federated_protocol_;
@@ -1026,10 +1028,10 @@ TEST_F(HttpFederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
   // use DoubleNear instead.
   EXPECT_THAT(actual_retry_window.delay_min().seconds() +
                   actual_retry_window.delay_min().nanos() / 1000000000.0,
-              DoubleNear(1234.0, 0.01));
+              DoubleNear(1234.0, 0.015));
   EXPECT_THAT(actual_retry_window.delay_max().seconds() +
                   actual_retry_window.delay_max().nanos() / 1000000000.0,
-              DoubleNear(1234.0, 0.01));
+              DoubleNear(1234.0, 0.015));
 }
 
 TEST_F(HttpFederatedProtocolDeathTest,
