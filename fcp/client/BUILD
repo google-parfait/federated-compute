@@ -188,6 +188,7 @@ cc_library(
         ":grpc_bidi_stream",
         ":interfaces",
         ":interruptible_runner",
+        ":secagg_state_transition_listener_impl",
         ":selector_context_cc_proto",
         "//fcp/base",
         "//fcp/client/engine:engine_cc_proto",
@@ -385,6 +386,28 @@ cc_test(
 )
 
 cc_library(
+    name = "secagg_state_transition_listener_impl",
+    srcs = ["secagg_state_transition_listener_impl.cc"],
+    hdrs = ["secagg_state_transition_listener_impl.h"],
+    deps = [
+        ":interfaces",
+        "//fcp/base",
+        "//fcp/secagg/client",
+        "//fcp/secagg/client:state_transition_listener",
+    ],
+)
+
+cc_test(
+    name = "secagg_state_transition_listener_impl_test",
+    srcs = ["secagg_state_transition_listener_impl_test.cc"],
+    deps = [
+        ":secagg_state_transition_listener_impl",
+        ":test_helpers",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "interruptible_runner",
     srcs = ["interruptible_runner.cc"],
     hdrs = ["interruptible_runner.h"],
@@ -496,6 +519,7 @@ cc_library(
         ":federated_protocol",
         ":interfaces",
         ":phase_logger",
+        ":secagg_state_transition_listener_impl",
         ":simple_task_environment",
         "//fcp/base",
         "//fcp/client/http:http_client",

@@ -34,6 +34,7 @@
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/phase_logger.h"
 #include "fcp/client/secagg_event_publisher.h"
+#include "fcp/client/secagg_state_transition_listener_impl.h"
 #include "fcp/client/simple_task_environment.h"
 #include "tensorflow/core/example/example.pb.h"
 #include "tensorflow/core/example/feature.pb.h"
@@ -712,6 +713,11 @@ class MockPhaseLogger : public PhaseLogger {
   MOCK_METHOD(void, LogFailureUploadCompleted,
               (NetworkStats stats, absl::Time time_before_result_upload,
                absl::Time reference_time),
+              (override));
+};
+
+class MockSecAggSendToServerBase : public SecAggSendToServerBase {
+  MOCK_METHOD(void, Send, (secagg::ClientToServerWrapperMessage * message),
               (override));
 };
 

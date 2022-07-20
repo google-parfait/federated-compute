@@ -43,6 +43,7 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/secagg_event_publisher.h"
+#include "fcp/client/secagg_state_transition_listener_impl.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/secagg/client/secagg_client.h"
@@ -558,14 +559,14 @@ absl::Status GrpcFederatedProtocol::ReportNotCompleted(
   return response;
 }
 
-class SecAggSendToServerImpl : public SendToServerInterface {
+class GrpcSecAggSendToServerImpl : public SecAggSendToServerBase {
  public:
-  SecAggSendToServerImpl(
+  GrpcSecAggSendToServerImpl(
       GrpcBidiStreamInterface* grpc_bidi_stream,
       const std::function<absl::Status(ClientToServerWrapperMessage*)>&
           report_func)
       : grpc_bidi_stream_(grpc_bidi_stream), report_func_(report_func) {}
-  ~SecAggSendToServerImpl() override = default;
+  ~GrpcSecAggSendToServerImpl() override = default;
 
   void Send(ClientToServerWrapperMessage* message) override {
     // The commit message (MaskedInputRequest) must be piggy-backed onto the
@@ -590,8 +591,6 @@ class SecAggSendToServerImpl : public SendToServerInterface {
       total_bytes_uploaded_ += last_sent_message_size_;
     }
   }
-  int64_t last_sent_message_size() const { return last_sent_message_size_; }
-  int64_t total_bytes_uploaded() const { return total_bytes_uploaded_; }
 
  private:
   GrpcBidiStreamInterface* grpc_bidi_stream_;
@@ -600,54 +599,6 @@ class SecAggSendToServerImpl : public SendToServerInterface {
   // aggregation types.
   const std::function<absl::Status(ClientToServerWrapperMessage*)>&
       report_func_;
-  size_t total_bytes_uploaded_ = 0;
-  size_t last_sent_message_size_ = 0;
-};
-
-class SecAggStateTransitionListenerImpl
-    : public StateTransitionListenerInterface {
- public:
-  SecAggStateTransitionListenerImpl(
-      SecAggEventPublisher* secagg_event_publisher, LogManager* log_manager,
-      const SecAggSendToServerImpl& secagg_send_to_server_impl,
-      const size_t& last_received_message_size)
-      : secagg_event_publisher_(secagg_event_publisher),
-        log_manager_(log_manager),
-        secagg_send_to_server_impl_(secagg_send_to_server_impl),
-        last_received_message_size_(last_received_message_size) {
-    FCP_CHECK(secagg_event_publisher_)
-        << "An implementation of "
-        << "SecAggEventPublisher must be provided.";
-  }
-  void Transition(ClientState new_state) override {
-    FCP_LOG(INFO) << "Transitioning from state: " << static_cast<int>(state_)
-                  << " to state: " << static_cast<int>(new_state);
-    state_ = new_state;
-    if (state_ == ClientState::ABORTED)
-      log_manager_->LogDiag(ProdDiagCode::SECAGG_CLIENT_NATIVE_ERROR_GENERIC);
-    secagg_event_publisher_->PublishStateTransition(
-        new_state, secagg_send_to_server_impl_.last_sent_message_size(),
-        last_received_message_size_);
-  }
-
-  void Started(ClientState state) override {
-    // TODO(team): Implement this.
-  }
-
-  void Stopped(ClientState state) override {
-    // TODO(team): Implement this.
-  }
-
-  void set_execution_session_id(int64_t execution_session_id) override {
-    secagg_event_publisher_->set_execution_session_id(execution_session_id);
-  }
-
- private:
-  SecAggEventPublisher* const secagg_event_publisher_;
-  LogManager* const log_manager_;
-  const SecAggSendToServerImpl& secagg_send_to_server_impl_;
-  const size_t& last_received_message_size_;
-  ClientState state_ = ClientState::INITIAL;
 };
 
 absl::Status GrpcFederatedProtocol::ReportInternal(
@@ -732,11 +683,11 @@ absl::Status GrpcFederatedProtocol::Report(ComputationResults results,
               .client_variant()));
     }
 
-    SecAggSendToServerImpl* send_to_server_impl_raw_ptr = nullptr;
+    GrpcSecAggSendToServerImpl* send_to_server_impl_raw_ptr = nullptr;
     auto input_map = std::make_unique<SecAggVectorMap>();
     auto send_to_server_impl_unique_ptr =
-        std::make_unique<SecAggSendToServerImpl>(grpc_bidi_stream_.get(),
-                                                 report_lambda);
+        std::make_unique<GrpcSecAggSendToServerImpl>(grpc_bidi_stream_.get(),
+                                                     report_lambda);
     send_to_server_impl_raw_ptr = send_to_server_impl_unique_ptr.get();
     size_t last_received_message_size = 0;
     auto secagg_event_publisher = event_publisher_->secagg_event_publisher();
