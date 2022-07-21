@@ -77,6 +77,7 @@ using ::google::internal::federatedml::v2::ClientStreamMessage;
 using ::google::internal::federatedml::v2::EligibilityEvalCheckinRequest;
 using ::google::internal::federatedml::v2::EligibilityEvalCheckinResponse;
 using ::google::internal::federatedml::v2::EligibilityEvalPayload;
+using ::google::internal::federatedml::v2::HttpCompressionFormat;
 using ::google::internal::federatedml::v2::ProtocolOptionsRequest;
 using ::google::internal::federatedml::v2::RetryWindow;
 using ::google::internal::federatedml::v2::ServerStreamMessage;
@@ -227,6 +228,10 @@ ProtocolOptionsRequest GrpcFederatedProtocol::CreateProtocolOptionsRequest(
   request.mutable_side_channels()
       ->mutable_secure_aggregation()
       ->add_client_variant(secagg::SECAGG_CLIENT_VARIANT_NATIVE_V1);
+  if (flags_->client_decoded_http_resources()) {
+    request.mutable_supported_http_compression_formats()->Add(
+        HttpCompressionFormat::HTTP_COMPRESSION_FORMAT_GZIP);
+  }
   return request;
 }
 

@@ -536,6 +536,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_computation_id, (), (const, override));
   MOCK_METHOD(int32_t, waiting_period_sec_for_cancellation, (),
               (const, override));
+  MOCK_METHOD(bool, client_decoded_http_resources, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
