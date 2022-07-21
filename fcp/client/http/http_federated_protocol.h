@@ -280,7 +280,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   const std::string attestation_measurement_;
   std::function<bool()> should_abort_;
   absl::BitGen bit_gen_;
-  const InterruptibleRunner::TimingConfig& timing_config_;
+  const InterruptibleRunner::TimingConfig timing_config_;
   // The graceful waiting period for cancellation requests before checking
   // whether the client should be interrupted.
   const absl::Duration waiting_period_for_cancellation_;

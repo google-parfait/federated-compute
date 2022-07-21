@@ -444,10 +444,6 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillRepeatedly(Return(true));
     EXPECT_CALL(mock_flags_, waiting_period_sec_for_cancellation)
         .WillRepeatedly(Return(10));
-    timing_config_ = InterruptibleRunner::TimingConfig{
-        .polling_period = absl::ZeroDuration(),
-        .graceful_shutdown_period = absl::InfiniteDuration(),
-        .extended_shutdown_period = absl::InfiniteDuration()};
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -459,7 +455,11 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         &mock_log_manager_, &mock_flags_, &mock_http_client_, kEntryPointUri,
         kApiKey, kPopulationName, kRetryToken, kClientVersion,
         kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
-        absl::BitGen(), timing_config_);
+        absl::BitGen(),
+        InterruptibleRunner::TimingConfig{
+            .polling_period = absl::ZeroDuration(),
+            .graceful_shutdown_period = absl::InfiniteDuration(),
+            .extended_shutdown_period = absl::InfiniteDuration()});
   }
 
   void TearDown() override {
@@ -639,8 +639,6 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   NiceMock<MockLogManager> mock_log_manager_;
   NiceMock<MockFlags> mock_flags_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
-
-  InterruptibleRunner::TimingConfig timing_config_;
 
   // The class under test.
   std::unique_ptr<HttpFederatedProtocol> federated_protocol_;
