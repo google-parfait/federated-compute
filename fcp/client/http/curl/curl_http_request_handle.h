@@ -33,7 +33,7 @@ class CurlHttpRequestHandle : public HttpRequestHandle {
  public:
   CurlHttpRequestHandle(std::unique_ptr<HttpRequest> request,
                         std::unique_ptr<CurlEasyHandle> easy_handle);
-  ~CurlHttpRequestHandle() override = default;
+  ~CurlHttpRequestHandle() override;
   CurlHttpRequestHandle(const CurlHttpRequestHandle&) = delete;
   CurlHttpRequestHandle& operator=(const CurlHttpRequestHandle&) = delete;
 
@@ -59,6 +59,9 @@ class CurlHttpRequestHandle : public HttpRequestHandle {
  private:
   // Initializes the easy_handle_ in the constructor.
   CURLcode InitializeConnection() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  // Initializes headers from external_headers
+  CURLcode InitializeHeaders(const HeaderList& extra_headers)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   // A helper function called _sequentially_ when a response header received.
   static size_t HeaderCallback(char* buffer, size_t size, size_t n_items,
                                void* user_data) ABSL_NO_THREAD_SAFETY_ANALYSIS;
@@ -87,6 +90,8 @@ class CurlHttpRequestHandle : public HttpRequestHandle {
   bool is_completed_ ABSL_GUARDED_BY(mutex_);
   bool is_cancelled_ ABSL_GUARDED_BY(mutex_);
   char error_buffer_[CURL_ERROR_SIZE] ABSL_GUARDED_BY(mutex_){};
+  // Owned by the class.
+  curl_slist* header_list_;
 };
 }  // namespace fcp::client::http::curl
 

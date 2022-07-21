@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/time/clock.h"
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/http/testing/http_test_server.h"
 #include "fcp/client/http/testing/test_helpers.h"
@@ -29,97 +30,142 @@ namespace fcp::client::http::curl {
 namespace {
 using ::testing::_;
 using ::testing::StrictMock;
+using ::testing::UnorderedElementsAreArray;
 
-void SetUpGetRequestCallback(
-    StrictMock<MockHttpRequestCallback>* request_callback, int port,
-    const std::string& request_uri, const std::string& expected_response_body,
-    size_t& total_bytes_downloaded) {
+void SetUpOnResponseStarted(
+    StrictMock<MockHttpRequestCallback>* request_callback,
+    const std::string& request_uri, HttpRequest::Method method,
+    const HeaderList& expected_request_extra_headers, bool has_body,
+    const HeaderList& expected_response_headers) {
   EXPECT_CALL(*request_callback, OnResponseStarted(_, _))
-      .WillOnce(::testing::Invoke([&request_uri](const HttpRequest& request,
-                                                 const HttpResponse& response) {
+      .WillOnce(::testing::Invoke([=, &request_uri](
+                                      const HttpRequest& request,
+                                      const HttpResponse& response) {
         EXPECT_THAT(request.uri(), request_uri);
-        EXPECT_THAT(request.method(), HttpRequest::Method::kGet);
-        EXPECT_THAT(request.extra_headers().size(), 0);
-        EXPECT_THAT(request.HasBody(), false);
-
+        EXPECT_THAT(request.method(), method);
+        EXPECT_THAT(request.extra_headers(),
+                    UnorderedElementsAreArray(expected_request_extra_headers));
+        EXPECT_THAT(request.HasBody(), has_body);
         EXPECT_THAT(response.code(), 200);
-        EXPECT_THAT(response.headers().size(), ::testing::Gt(0));
+        EXPECT_THAT(response.headers(),
+                    UnorderedElementsAreArray(expected_response_headers));
         return absl::OkStatus();
-      }));
-
-  EXPECT_CALL(*request_callback, OnResponseBody(_, _, _))
-      .WillOnce(::testing::Invoke(
-          [=, &total_bytes_downloaded](const HttpRequest& request,
-                                       const HttpResponse& response,
-                                       absl::string_view data) {
-            EXPECT_THAT(request.uri(), request_uri);
-            EXPECT_THAT(request.method(), HttpRequest::Method::kGet);
-            EXPECT_THAT(request.extra_headers().size(), 0);
-            EXPECT_THAT(request.HasBody(), false);
-
-            total_bytes_downloaded += data.size();
-
-            EXPECT_THAT(data, expected_response_body);
-            return absl::OkStatus();
-          }));
-
-  EXPECT_CALL(*request_callback, OnResponseCompleted(_, _))
-      .WillOnce(::testing::Invoke([&request_uri](const HttpRequest& request,
-                                                 const HttpResponse& response) {
-        EXPECT_THAT(request.uri(), request_uri);
-        EXPECT_THAT(request.method(), HttpRequest::Method::kGet);
-        EXPECT_THAT(request.extra_headers().size(), 0);
-        EXPECT_THAT(request.HasBody(), false);
-
-        EXPECT_THAT(response.code(), 200);
-        EXPECT_THAT(response.headers().size(), ::testing::Gt(0));
       }));
 }
 
-void SetUpPostRequestCallback(
-    StrictMock<MockHttpRequestCallback>* request_callback, int port,
-    const std::string& request_uri, const std::string& expected_response_body,
-    size_t& total_bytes_downloaded) {
-  EXPECT_CALL(*request_callback, OnResponseStarted(_, _))
-      .WillOnce(::testing::Invoke([&request_uri](const HttpRequest& request,
-                                                 const HttpResponse& response) {
+void SetUpOnResponseBody(StrictMock<MockHttpRequestCallback>* request_callback,
+                         const std::string& request_uri,
+                         HttpRequest::Method method,
+                         const HeaderList& expected_request_extra_headers,
+                         bool has_body,
+                         const HeaderList& expected_response_headers,
+                         const std::string& expected_response_body) {
+  EXPECT_CALL(*request_callback, OnResponseBody(_, _, _))
+      .WillOnce(::testing::Invoke([=](const HttpRequest& request,
+                                      const HttpResponse& response,
+                                      absl::string_view data) {
         EXPECT_THAT(request.uri(), request_uri);
-        EXPECT_THAT(request.method(), HttpRequest::Method::kPost);
-        EXPECT_THAT(request.extra_headers().size(), 1);
-        EXPECT_THAT(request.HasBody(), true);
-
+        EXPECT_THAT(request.method(), method);
+        EXPECT_THAT(request.extra_headers(),
+                    UnorderedElementsAreArray(expected_request_extra_headers));
+        EXPECT_THAT(request.HasBody(), has_body);
         EXPECT_THAT(response.code(), 200);
-        EXPECT_THAT(response.headers().size(), ::testing::Gt(0));
+        EXPECT_THAT(response.headers(),
+                    UnorderedElementsAreArray(expected_response_headers));
+        EXPECT_THAT(data, expected_response_body);
         return absl::OkStatus();
       }));
+}
 
+void SetUpOnResponseBody(StrictMock<MockHttpRequestCallback>* request_callback,
+                         const std::string& request_uri,
+                         HttpRequest::Method method,
+                         const HeaderList& expected_request_extra_headers,
+                         bool has_body,
+                         const HeaderList& expected_response_headers,
+                         const std::string& expected_response_body,
+                         size_t& total_bytes_downloaded) {
   EXPECT_CALL(*request_callback, OnResponseBody(_, _, _))
       .WillOnce(::testing::Invoke(
           [=, &total_bytes_downloaded](const HttpRequest& request,
                                        const HttpResponse& response,
                                        absl::string_view data) {
             EXPECT_THAT(request.uri(), request_uri);
-            EXPECT_THAT(request.method(), HttpRequest::Method::kPost);
-            EXPECT_THAT(request.extra_headers().size(), 1);
-            EXPECT_THAT(request.HasBody(), true);
-
-            total_bytes_downloaded += data.size();
-
+            EXPECT_THAT(request.method(), method);
+            EXPECT_THAT(
+                request.extra_headers(),
+                UnorderedElementsAreArray(expected_request_extra_headers));
+            EXPECT_THAT(request.HasBody(), has_body);
+            EXPECT_THAT(response.code(), 200);
+            EXPECT_THAT(response.headers(),
+                        UnorderedElementsAreArray(expected_response_headers));
             EXPECT_THAT(data, expected_response_body);
+            total_bytes_downloaded += data.size();
             return absl::OkStatus();
           }));
+}
 
+void SetUpOnResponseCompleted(
+    StrictMock<MockHttpRequestCallback>* request_callback,
+    const std::string& request_uri, HttpRequest::Method method,
+    const HeaderList& expected_request_extra_headers, bool has_body,
+    const HeaderList& expected_response_headers) {
   EXPECT_CALL(*request_callback, OnResponseCompleted(_, _))
-      .WillOnce(::testing::Invoke([&request_uri](const HttpRequest& request,
-                                                 const HttpResponse& response) {
+      .WillOnce(::testing::Invoke([=, &request_uri](
+                                      const HttpRequest& request,
+                                      const HttpResponse& response) {
         EXPECT_THAT(request.uri(), request_uri);
-        EXPECT_THAT(request.method(), HttpRequest::Method::kPost);
-        EXPECT_THAT(request.extra_headers().size(), 1);
-        EXPECT_THAT(request.HasBody(), true);
-
+        EXPECT_THAT(request.method(), method);
+        EXPECT_THAT(request.extra_headers(),
+                    UnorderedElementsAreArray(expected_request_extra_headers));
+        EXPECT_THAT(request.HasBody(), has_body);
         EXPECT_THAT(response.code(), 200);
-        EXPECT_THAT(response.headers().size(), ::testing::Gt(0));
+        EXPECT_THAT(response.headers(),
+                    UnorderedElementsAreArray(expected_response_headers));
       }));
+}
+
+void SetUpGetRequestCallback(
+    StrictMock<MockHttpRequestCallback>* request_callback,
+    const std::string& request_uri,
+    const HeaderList& expected_request_extra_headers,
+    const HeaderList& expected_response_headers,
+    const std::string& expected_response_body, size_t& total_bytes_downloaded) {
+  SetUpOnResponseStarted(request_callback, request_uri,
+                         HttpRequest::Method::kGet,
+                         expected_request_extra_headers,
+                         /*has_body*/ false, expected_response_headers);
+  SetUpOnResponseBody(request_callback, request_uri, HttpRequest::Method::kGet,
+                      expected_request_extra_headers,
+                      /*has_body*/ false, expected_response_headers,
+                      expected_response_body, total_bytes_downloaded);
+
+  SetUpOnResponseCompleted(request_callback, request_uri,
+                           HttpRequest::Method::kGet,
+                           expected_request_extra_headers,
+                           /*has_body*/ false, expected_response_headers);
+}
+
+void SetUpPostRequestCallback(
+    StrictMock<MockHttpRequestCallback>* request_callback,
+    const std::string& request_uri,
+    const HeaderList& expected_request_extra_headers,
+    const HeaderList& expected_response_headers,
+    const std::string& expected_response_body, size_t& total_bytes_downloaded) {
+  SetUpOnResponseStarted(request_callback, request_uri,
+                         HttpRequest::Method::kPost,
+                         expected_request_extra_headers,
+                         /*has_body*/ true, expected_response_headers);
+
+  SetUpOnResponseBody(request_callback, request_uri, HttpRequest::Method::kPost,
+                      expected_request_extra_headers,
+                      /*has_body*/ true, expected_response_headers,
+                      expected_response_body, total_bytes_downloaded);
+
+  SetUpOnResponseCompleted(request_callback, request_uri,
+                           HttpRequest::Method::kPost,
+                           expected_request_extra_headers,
+                           /*has_body*/ true, expected_response_headers);
 }
 
 void PerformTwoRequests(CurlHttpClient* http_client, int port,
@@ -149,6 +195,12 @@ void PerformTwoRequests(CurlHttpClient* http_client, int port,
   size_t total_bytes_downloaded_handle1 = 0;
   size_t total_bytes_downloaded_handle2 = 0;
 
+  HeaderList expected_request_extra_headers{{"Content-Length", "12"}};
+  HeaderList expected_response_headers{
+      {"Content-Type", "text/html"},
+      {"Date",
+       absl::FormatTime("%a, %d %b %Y %H", absl::Now(), absl::UTCTimeZone())}};
+
   auto expected_response_body1 = absl::StrCat(
       "HTTP Method: GET\n", "Request Uri: /test\n", "Request Headers:\n",
       "Host: localhost:", port, "\nAccept: */*\n", "Accept-Encoding: gzip\n",
@@ -161,11 +213,13 @@ void PerformTwoRequests(CurlHttpClient* http_client, int port,
       "Content-Type: application/x-www-form-urlencoded\n",
       "Request Body:\ntest: 123-45");
 
-  SetUpGetRequestCallback(request_callback1.get(), port, request_uri1,
-                          expected_response_body1,
+  SetUpGetRequestCallback(request_callback1.get(), request_uri1,
+                          /*expected_request_extra_headers*/ {},
+                          expected_response_headers, expected_response_body1,
                           total_bytes_downloaded_handle1);
-  SetUpPostRequestCallback(request_callback2.get(), port, request_uri2,
-                           expected_response_body2,
+  SetUpPostRequestCallback(request_callback2.get(), request_uri2,
+                           expected_request_extra_headers,
+                           expected_response_headers, expected_response_body2,
                            total_bytes_downloaded_handle2);
 
   std::vector<std::pair<HttpRequestHandle*, HttpRequestCallback*>> requests{
@@ -193,9 +247,7 @@ TEST(CurlHttpClientTest, PerformTwoRequestsInParallelInOneThread) {
       absl::StrCat("http://localhost:", port, "/test");
 
   auto curl_api = std::make_unique<CurlApi>();
-
   auto http_client = std::make_unique<CurlHttpClient>(curl_api.get());
-
   auto http_server = CreateHttpTestServer("/test", port, /*num_threads*/ 5);
   EXPECT_THAT(http_server.ok(), true);
   EXPECT_THAT(http_server.value()->StartAcceptingRequests(), true);
@@ -214,9 +266,7 @@ TEST(CurlHttpClientTest, PerformTwoRequestsInParallelFiveTimesInFiveThreads) {
       absl::StrCat("http://localhost:", port, "/test");
 
   auto curl_api = std::make_unique<CurlApi>();
-
   auto http_client = std::make_unique<CurlHttpClient>(curl_api.get());
-
   auto http_server = CreateHttpTestServer("/test", port, /*num_threads*/ 10);
   EXPECT_THAT(http_server.ok(), true);
   EXPECT_THAT(http_server.value()->StartAcceptingRequests(), true);
@@ -253,12 +303,10 @@ TEST(CurlHttpClientTest, CancelRequest) {
   const std::string request_uri1 =
       absl::StrCat("http://localhost:", port, "/test");
   const std::string request_uri2 =
-      absl::StrCat("http://localhost:", port, "/test");  //"/wait-one-min");
+      absl::StrCat("http://localhost:", port, "/test");
 
   auto curl_api = std::make_unique<CurlApi>();
-
   auto http_client = std::make_unique<CurlHttpClient>(curl_api.get());
-
   auto http_server = CreateHttpTestServer("/test", port, /*num_threads*/ 5);
   EXPECT_THAT(http_server.ok(), true);
   EXPECT_THAT(http_server.value()->StartAcceptingRequests(), true);
@@ -286,13 +334,20 @@ TEST(CurlHttpClientTest, CancelRequest) {
 
   size_t total_bytes_downloaded_handle1 = 0;
 
+  HeaderList expected_request_extra_headers{{"Content-Length", "12"}};
+  HeaderList expected_response_headers{
+      {"Content-Type", "text/html"},
+      {"Date",
+       absl::FormatTime("%a, %d %b %Y %H", absl::Now(), absl::UTCTimeZone())}};
+
   auto expected_response_body = absl::StrCat(
       "HTTP Method: GET\n", "Request Uri: /test\n", "Request Headers:\n",
       "Host: localhost:", port, "\nAccept: */*\n", "Accept-Encoding: gzip\n",
       "Request Body:\n");
 
-  SetUpGetRequestCallback(request_callback1.get(), port, request_uri1,
-                          expected_response_body,
+  SetUpGetRequestCallback(request_callback1.get(), request_uri1,
+                          /*expected_request_extra_headers*/ {},
+                          expected_response_headers, expected_response_body,
                           total_bytes_downloaded_handle1);
 
   EXPECT_CALL(*request_callback2, OnResponseStarted(_, _))
@@ -302,25 +357,17 @@ TEST(CurlHttpClientTest, CancelRequest) {
             return absl::OkStatus();
           }));
 
-  EXPECT_CALL(*request_callback2, OnResponseBody(_, _, _))
-      .WillOnce(::testing::Invoke([&request_uri2](const HttpRequest& request,
-                                                  const HttpResponse& response,
-                                                  absl::string_view data) {
-        EXPECT_THAT(request.uri(), request_uri2);
-        EXPECT_THAT(request.method(), HttpRequest::Method::kPost);
-        EXPECT_THAT(request.extra_headers().size(), 1);
-        EXPECT_THAT(request.HasBody(), true);
+  auto expected_response_body2 = absl::StrCat(
+      "HTTP Method: POST\nRequest Uri: /test\n",
+      "Request Headers:\nHost: localhost:", port,
+      "\nAccept: */*\nAccept-Encoding: gzip\n", "Content-Length: 12\n",
+      "Content-Type: application/x-www-form-urlencoded\n",
+      "Request Body:\ntest: 123-45");
 
-        auto expected_response_body = absl::StrCat(
-            "HTTP Method: POST\nRequest Uri: /test\n",
-            "Request Headers:\nHost: localhost:", port,
-            "\nAccept: */*\nAccept-Encoding: gzip\n", "Content-Length: 12\n",
-            "Content-Type: application/x-www-form-urlencoded\n",
-            "Request Body:\ntest: 123-45");
-
-        EXPECT_THAT(data, expected_response_body);
-        return absl::OkStatus();
-      }));
+  SetUpOnResponseBody(
+      request_callback2.get(), request_uri2, HttpRequest::Method::kPost,
+      expected_request_extra_headers,
+      /*has_body*/ true, expected_response_headers, expected_response_body2);
 
   EXPECT_CALL(*request_callback2, OnResponseBodyError(_, _, _))
       .WillOnce(::testing::Invoke([&request_uri2](const HttpRequest& request,
@@ -347,6 +394,73 @@ TEST(CurlHttpClientTest, CancelRequest) {
 
   EXPECT_THAT(handle1->TotalSentBytes(), request1_body.size());
   EXPECT_THAT(handle1->TotalReceivedBytes(), total_bytes_downloaded_handle1);
+
+  curl_api.reset();
+  http_server.value()->Terminate();
+  http_server.value()->WaitForTermination();
+}
+
+// Runs PerformRequests once in one thread.
+TEST(CurlHttpClientTest, TestExtraHeaders) {
+  const int port = 4568;
+  const std::string request_uri =
+      absl::StrCat("http://localhost:", port, "/test");
+
+  auto curl_api = std::make_unique<CurlApi>();
+  auto http_client = std::make_unique<CurlHttpClient>(curl_api.get());
+
+  auto http_server = CreateHttpTestServer("/test", port, /*num_threads*/ 3);
+  EXPECT_THAT(http_server.ok(), true);
+  EXPECT_THAT(http_server.value()->StartAcceptingRequests(), true);
+
+  std::string request_body = "test: 123-45";
+  HeaderList extra_headers = {{"Content-Type", "application/x-protobuf"}};
+
+  auto request = InMemoryHttpRequest::Create(
+      request_uri, HttpRequest::Method::kPost, extra_headers, request_body,
+      /*use_compression*/ false);
+  ASSERT_OK(request);
+
+  auto handle = http_client->EnqueueRequest(std::move(request.value()));
+
+  auto request_callback =
+      std::make_unique<StrictMock<MockHttpRequestCallback>>();
+
+  HeaderList expected_request_extra_headers{
+      {"Content-Length", "12"},
+      {"Content-Type", "application/x-protobuf"},
+  };
+  HeaderList expected_response_headers{
+      {"Content-Type", "text/html"},
+      {"Date",
+       absl::FormatTime("%a, %d %b %Y %H", absl::Now(), absl::UTCTimeZone())}};
+  auto expected_response_body =
+      absl::StrCat("HTTP Method: POST\nRequest Uri: /test\n",
+                   "Request Headers:\nHost: localhost:", port,
+                   "\nAccept: */*\nAccept-Encoding: gzip\n",
+                   "Content-Type: application/x-protobuf\n",
+                   "Content-Length: 12\n", "Request Body:\ntest: 123-45");
+
+  SetUpOnResponseStarted(request_callback.get(), request_uri,
+                         HttpRequest::Method::kPost,
+                         expected_request_extra_headers,
+                         /*has_body*/ true, expected_response_headers);
+
+  SetUpOnResponseBody(
+      request_callback.get(), request_uri, HttpRequest::Method::kPost,
+      expected_request_extra_headers,
+      /*has_body*/ true, expected_response_headers, expected_response_body);
+
+  SetUpOnResponseCompleted(request_callback.get(), request_uri,
+                           HttpRequest::Method::kPost,
+                           expected_request_extra_headers,
+                           /*has_body*/ true, expected_response_headers);
+
+  std::vector<std::pair<HttpRequestHandle*, HttpRequestCallback*>> requests{
+      std::make_pair(handle.get(), request_callback.get())};
+
+  absl::Status status = http_client->PerformRequests(requests);
+  EXPECT_THAT(status, absl::OkStatus());
 
   curl_api.reset();
   http_server.value()->Terminate();

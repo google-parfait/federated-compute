@@ -21,6 +21,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/strings/match.h"
 #include "curl/curl.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/http/curl/curl_api.h"
@@ -129,7 +130,8 @@ CurlHttpRequestHandle::CurlHttpRequestHandle(
       callback_(nullptr),
       is_being_performed_(false),
       is_completed_(false),
-      is_cancelled_(false) {
+      is_cancelled_(false),
+      header_list_(nullptr) {
   FCP_CHECK(request_ != nullptr);
   FCP_CHECK(easy_handle_ != nullptr);
 
@@ -141,6 +143,10 @@ CurlHttpRequestHandle::CurlHttpRequestHandle(
     callback_->OnResponseError(*request_, absl::InternalError(error_buffer_));
     return;
   }
+}
+
+CurlHttpRequestHandle::~CurlHttpRequestHandle() {
+  curl_slist_free_all(header_list_);
 }
 
 void CurlHttpRequestHandle::Cancel() {
@@ -255,21 +261,6 @@ CURLcode CurlHttpRequestHandle::InitializeConnection() {
   CURL_RETURN_IF_ERROR(
       easy_handle_->SetOpt(CURLOPT_SUPPRESS_CONNECT_HEADERS, 1L));
 
-  // If no "Accept-Encoding" request header is explicitly specified
-  // advertise an "Accept-Encoding: gzip" else leave decoded.
-  std::optional<std::string> accept_encoding =
-      FindHeader(request_->extra_headers(), kAcceptEncodingHdr);
-  if (!accept_encoding.has_value()) {
-    // Libcurl is responsible for the encoding.
-    CURL_RETURN_IF_ERROR(
-        easy_handle_->SetOpt(CURLOPT_ACCEPT_ENCODING, kGzipEncodingHdrValue));
-    header_parser_.UseCurlEncoding();
-  } else {
-    // The caller is responsible for the encoding.
-    CURL_RETURN_IF_ERROR(
-        easy_handle_->SetOpt(CURLOPT_ACCEPT_ENCODING, nullptr));
-  }
-
   // Force curl to verify the ssl connection.
   CURL_RETURN_IF_ERROR(easy_handle_->SetOpt(CURLOPT_CAINFO, nullptr));
 
@@ -319,14 +310,6 @@ CURLcode CurlHttpRequestHandle::InitializeConnection() {
       CURL_RETURN_IF_ERROR(easy_handle_->SetOpt(CURLOPT_POST, 1L));
       // Forces curl to use the callback.
       CURL_RETURN_IF_ERROR(easy_handle_->SetOpt(CURLOPT_POSTFIELDS, nullptr));
-      {
-        std::optional<std::string> content_length =
-            FindHeader(request_->extra_headers(), kContentLengthHdr);
-        if (content_length.has_value()) {  // For post less than 2GB
-          CURL_RETURN_IF_ERROR(easy_handle_->SetOpt(
-              CURLOPT_POSTFIELDSIZE, std::stol(content_length.value())));
-        }
-      }
       break;
     case HttpRequest::Method::kPut:
     case HttpRequest::Method::kPatch:
@@ -336,6 +319,42 @@ CURLcode CurlHttpRequestHandle::InitializeConnection() {
       return CURLE_UNSUPPORTED_PROTOCOL;
   }
 
+  return InitializeHeaders(request_->extra_headers());
+}
+
+CURLcode CurlHttpRequestHandle::InitializeHeaders(
+    const HeaderList& extra_headers) {
+  // If no "Accept-Encoding" request header is explicitly specified
+  // advertise an "Accept-Encoding: gzip" else leave decoded.
+  std::optional<std::string> accept_encoding =
+      FindHeader(request_->extra_headers(), kAcceptEncodingHdr);
+  if (!accept_encoding.has_value()) {
+    // Libcurl is responsible for the encoding.
+    CURL_RETURN_IF_ERROR(
+        easy_handle_->SetOpt(CURLOPT_ACCEPT_ENCODING, kGzipEncodingHdrValue));
+    header_parser_.UseCurlEncoding();
+  } else {
+    // The caller is responsible for the encoding.
+    CURL_RETURN_IF_ERROR(
+        easy_handle_->SetOpt(CURLOPT_ACCEPT_ENCODING, nullptr));
+  }
+
+  for (auto& [key, value] : extra_headers) {
+    if (absl::EqualsIgnoreCase(key, kAcceptEncodingHdr)) {
+      continue;
+    } else if (absl::EqualsIgnoreCase(key, kContentLengthHdr)) {
+      // For post less than 2GB
+      CURL_RETURN_IF_ERROR(
+          easy_handle_->SetOpt(CURLOPT_POSTFIELDSIZE, std::stol(value)));
+    } else {
+      curl_slist* tmp = curl_slist_append(
+          header_list_, absl::StrCat(key, ": ", value).c_str());
+      FCP_CHECK(tmp != nullptr);
+      header_list_ = tmp;
+    }
+  }
+
+  CURL_RETURN_IF_ERROR(easy_handle_->SetOpt(CURLOPT_HTTPHEADER, header_list_));
   return CURLE_OK;
 }
 }  // namespace fcp::client::http::curl
