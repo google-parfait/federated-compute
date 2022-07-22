@@ -70,6 +70,7 @@ using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
 using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
 using ::google::internal::federatedcompute::v1::Resource;
+using ::google::internal::federatedcompute::v1::ResourceCompressionFormat;
 using ::google::internal::federatedcompute::v1::
     StartAggregationDataUploadRequest;
 using ::google::internal::federatedcompute::v1::
@@ -543,6 +544,11 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   request.mutable_client_version()->set_version_code(client_version_);
   // TODO(team): Populate an attestation_measurement value here.
 
+  if (flags_->client_decoded_http_resources()) {
+    request.mutable_resource_capabilities()->add_supported_compression_formats(
+        ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  }
+
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,
       CreateRequestEligibilityEvalTaskUriSuffix(population_name_));
@@ -676,6 +682,11 @@ HttpFederatedProtocol::PerformTaskAssignmentRequest(
 
   if (task_eligibility_info.has_value()) {
     *request.mutable_task_eligibility_info() = *task_eligibility_info;
+  }
+
+  if (flags_->client_decoded_http_resources()) {
+    request.mutable_resource_capabilities()->add_supported_compression_formats(
+        ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
   }
 
   // Construct the URI suffix.

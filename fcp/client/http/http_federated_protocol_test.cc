@@ -72,6 +72,7 @@ using ::google::internal::federatedcompute::v1::ForwardingInfo;
 using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
 using ::google::internal::federatedcompute::v1::ReportTaskResultResponse;
 using ::google::internal::federatedcompute::v1::Resource;
+using ::google::internal::federatedcompute::v1::ResourceCompressionFormat;
 using ::google::internal::federatedcompute::v1::RetryWindow;
 using ::google::internal::federatedcompute::v1::
     StartAggregationDataUploadRequest;
@@ -1930,6 +1931,78 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
       status.message(),
       AllOf(HasSubstr("ReportTaskResult request failed:"), HasSubstr("404")));
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestClientDecodedResourcesEnabledDeclaresSupport) {
+  EXPECT_CALL(mock_flags_, client_decoded_http_resources)
+      .WillRepeatedly(Return(true));
+
+  EligibilityEvalTaskRequest expected_eligibility_request;
+  expected_eligibility_request.mutable_client_version()->set_version_code(
+      kClientVersion);
+  // Make sure gzip support is declared in the eligibility eval checkin request.
+  expected_eligibility_request.mutable_resource_capabilities()
+      ->add_supported_compression_formats(
+          ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+
+  // Issue an eligibility eval checkin so we can validate the field is set.
+  Resource eligibility_plan_resource;
+  eligibility_plan_resource.set_data(kPlan);
+  Resource checkpoint_resource;
+  checkpoint_resource.set_data(kInitCheckpoint);
+
+  EligibilityEvalTaskResponse eval_task_response =
+      GetFakeEnabledEligibilityEvalTaskResponse(eligibility_plan_resource,
+                                                checkpoint_resource,
+                                                kEligibilityEvalExecutionId);
+  const std::string eligibility_request_uri =
+      "https://initial.uri/v1/eligibilityevaltasks/"
+      "TEST%2FPOPULATION:request?%24alt=proto";
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  eligibility_request_uri, HttpRequest::Method::kPost, _,
+                  EligibilityEvalTaskRequestMatcher(
+                      EqualsProto(expected_eligibility_request)))))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
+
+  ASSERT_OK(federated_protocol_->EligibilityEvalCheckin());
+
+  // Now issue a regular checkin and make sure the field is set there too.
+  const std::string plan_uri = "https://fake.uri/plan";
+  Resource plan_resource;
+  plan_resource.set_uri(plan_uri);
+  StartTaskAssignmentResponse task_assignment_response =
+      GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
+                                    kAggregationSessionId);
+  const std::string request_uri =
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto";
+  TaskEligibilityInfo expected_eligibility_info = GetFakeTaskEligibilityInfo();
+  StartTaskAssignmentRequest expected_request;
+  expected_request.mutable_client_version()->set_version_code(kClientVersion);
+  *expected_request.mutable_task_eligibility_info() = expected_eligibility_info;
+  // Make sure gzip support is declared in the regular checkin request.
+  expected_request.mutable_resource_capabilities()
+      ->add_supported_compression_formats(
+          ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          request_uri, HttpRequest::Method::kPost, _,
+          StartTaskAssignmentRequestMatcher(EqualsProto(expected_request)))))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreateDoneOperation(task_assignment_response).SerializeAsString())));
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  plan_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), kPlan)));
+
+  ASSERT_OK(federated_protocol_->Checkin(expected_eligibility_info));
 }
 
 TEST(ProtocolRequestCreatorTest, TestInvalidForwardingInfo) {
