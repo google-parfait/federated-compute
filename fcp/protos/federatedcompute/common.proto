@@ -72,6 +72,19 @@ message Resource {
     // The inlined data for the resource.
     bytes data = 2
         ;
+
+    // The inlined data for the resource. This will eventually replace `data`.
+    InlineResource inline_resource = 3;
+  }
+
+  message InlineResource {
+    // The inlined data for the resource.
+    bytes data = 1
+        ;
+
+    // The compression used for the inlined data, or unset if the data is
+    // uncompressed.
+    optional ResourceCompressionFormat compression_format = 2;
   }
 }
 
