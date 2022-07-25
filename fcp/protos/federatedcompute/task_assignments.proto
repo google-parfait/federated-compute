@@ -165,6 +165,29 @@ message TaskAssignment {
 
   // The plan to be used for execution.
   Resource plan = 4;
+
+  // Info for how to generate URIs for fetching slices at runtime.
+  FederatedSelectUriInfo federated_select_uri_info = 8;
+}
+
+// Info for how to generate URIs for fetching slices that the task might request
+// to be downloaded at runtime.
+//
+// When one or more slices are requested by the task, the template specified
+// here should be used to form a URI from which the client can download the
+// slice data, by replacing the "{served_at_id}" and "{key_base10}" substrings
+// with the `google.internal.federated.plan.SlicesSelector.served_at_id` and the
+// base-10 representation of the `SlicesSelector.keys` value. The client must
+// not perform any URI escaping to the values that the substrings are replaced
+// with.
+message FederatedSelectUriInfo {
+  // The URI template to use for fetching slices.
+  //
+  // This template must always start with "https://".
+  //
+  // This template must contain the following substrings: "{served_at_id}" and
+  // "{key_base10}", as per the above documentation.
+  string uri_template = 1;
 }
 
 message ReportTaskResultRequest {
