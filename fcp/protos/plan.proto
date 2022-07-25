@@ -891,6 +891,20 @@ message SlicesSelector {
   repeated int32 keys = 2;
 }
 
+// Represents slice data to be served as part of a `federated_select` operation.
+// This is used for testing.
+message SlicesTestDataset {
+  // The test data to use. The keys map to the `SlicesSelector.served_at_id`
+  // field.  E.g. test slice data for a slice with `served_at_id`="foo" and
+  // `keys`=2 would be store in `dataset["foo"].slice_data[2]`.
+  map<string, SlicesTestData> dataset = 1;
+}
+message SlicesTestData {
+  // The test slice data to serve. Each entry's index corresponds to the slice
+  // key it is the test data for.
+  repeated bytes slice_data = 2;
+}
+
 // Server Phase
 // ============
 
