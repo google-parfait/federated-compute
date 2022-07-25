@@ -69,10 +69,6 @@ message Resource {
     // URIs.
     string uri = 1;
 
-    // The inlined data for the resource.
-    bytes data = 2
-        ;
-
     // The inlined data for the resource. This will eventually replace `data`.
     InlineResource inline_resource = 3;
   }
@@ -86,6 +82,8 @@ message Resource {
     // uncompressed.
     optional ResourceCompressionFormat compression_format = 2;
   }
+
+  reserved 2;
 }
 
 // The client's capabilities for processing Resource messages, such as the

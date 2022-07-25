@@ -59,6 +59,7 @@
 namespace fcp {
 namespace client {
 
+using ::fcp::client::http::UriOrInlineData;
 using ::fcp::secagg::AesCtrPrngFactory;
 using ::fcp::secagg::ClientState;
 using ::fcp::secagg::ClientToServerWrapperMessage;
@@ -960,10 +961,10 @@ void GrpcFederatedProtocol::UpdateObjectStateIfPermanentError(
 absl::StatusOr<FederatedProtocol::PlanAndCheckpointPayloads>
 GrpcFederatedProtocol::FetchTaskResources(
     GrpcFederatedProtocol::TaskResources task_resources) {
-  FCP_ASSIGN_OR_RETURN(::fcp::client::http::UriOrInlineData plan_uri_or_data,
+  FCP_ASSIGN_OR_RETURN(UriOrInlineData plan_uri_or_data,
                        ConvertResourceToUriOrInlineData(task_resources.plan));
   FCP_ASSIGN_OR_RETURN(
-      ::fcp::client::http::UriOrInlineData checkpoint_uri_or_data,
+      UriOrInlineData checkpoint_uri_or_data,
       ConvertResourceToUriOrInlineData(task_resources.checkpoint));
 
   // Log a diag code if either resource is about to be downloaded via HTTP.
@@ -1027,7 +1028,7 @@ GrpcFederatedProtocol::FetchTaskResources(
 // `INVALID_ARGUMENT` error if the given `Resource` has the `uri` field set to
 // an empty value, or an `UNIMPLEMENTED` error if the `Resource` has an unknown
 // field set.
-absl::StatusOr<::fcp::client::http::UriOrInlineData>
+absl::StatusOr<UriOrInlineData>
 GrpcFederatedProtocol::ConvertResourceToUriOrInlineData(
     const GrpcFederatedProtocol::TaskResource& resource) {
   // We need to support 3 states:
@@ -1044,14 +1045,15 @@ GrpcFederatedProtocol::ConvertResourceToUriOrInlineData(
     // so this is ultimately approx. as efficient as the non-HTTP resource code
     // path where we also make a copy of the protobuf std::string into a new std::string
     // which is then returned.
-    return ::fcp::client::http::UriOrInlineData::CreateInlineData(
-        absl::Cord(resource.data));
+    return UriOrInlineData::CreateInlineData(
+        absl::Cord(resource.data),
+        UriOrInlineData::InlineData::CompressionFormat::kUncompressed);
   } else {
     if (resource.uri.empty()) {
       return absl::InvalidArgumentError(
           "Resource uri must be non-empty when set");
     }
-    return ::fcp::client::http::UriOrInlineData::CreateUri(resource.uri);
+    return UriOrInlineData::CreateUri(resource.uri);
   }
 }
 

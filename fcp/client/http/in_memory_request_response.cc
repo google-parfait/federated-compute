@@ -49,6 +49,9 @@ using ::google::protobuf::io::GzipInputStream;
 using ::google::protobuf::io::GzipOutputStream;
 using ::google::protobuf::io::StringOutputStream;
 
+using CompressionFormat =
+    ::fcp::client::http::UriOrInlineData::InlineData::CompressionFormat;
+
 static constexpr absl::string_view kClientDecodedGzipSuffix = "+gzip";
 
 absl::StatusOr<std::unique_ptr<HttpRequest>> InMemoryHttpRequest::Create(
@@ -382,10 +385,17 @@ FetchResourcesInMemory(HttpClient& http_client,
       // handling logic and doesn't have to know whether a resource was truly
       // fetched via HTTP or not). Because the inline_data field is an
       // absl::Cord, making a copy of it should be very cheap.
-      // TODO(team): if inline_data is gzipped, set the content_type to
-      // `application/octet-stream+gzip`.
       response_accessors.push_back([resource]() {
-        return InMemoryHttpResponse{kHttpOk, "", "", resource.inline_data()};
+        std::string content_type = "application/octet-stream";
+        switch (resource.inline_data().compression_format) {
+          case UriOrInlineData::InlineData::CompressionFormat::kUncompressed:
+            break;
+          case UriOrInlineData::InlineData::CompressionFormat::kGzip:
+            absl::StrAppend(&content_type, kClientDecodedGzipSuffix);
+            break;
+        }
+        return InMemoryHttpResponse{kHttpOk, "", content_type,
+                                    resource.inline_data().data};
       });
     }
   }

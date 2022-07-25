@@ -59,6 +59,7 @@
 namespace fcp {
 namespace client {
 namespace http {
+namespace {
 
 using ::fcp::client::GenerateRetryWindowFromRetryTime;
 using ::fcp::client::GenerateRetryWindowFromTargetDelay;
@@ -80,6 +81,9 @@ using ::google::internal::federatedcompute::v1::StartTaskAssignmentResponse;
 using ::google::internal::federatedcompute::v1::SubmitAggregationResultRequest;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 using ::google::longrunning::Operation;
+
+using CompressionFormat =
+    ::fcp::client::http::UriOrInlineData::InlineData::CompressionFormat;
 
 // A note on error handling:
 //
@@ -119,7 +123,6 @@ using ::google::longrunning::Operation;
 // server sent it and the permanent error retry period will be used. We consider
 // this a reasonable tradeoff.
 
-namespace {
 std::string CreateUriSuffixFromPathAndParams(absl::string_view path,
                                              const QueryParams& params) {
   return absl::StrCat(path, "?",
@@ -232,12 +235,26 @@ absl::StatusOr<UriOrInlineData> ConvertResourceToUriOrInlineData(
             "Resource.uri must be non-empty when set");
       }
       return UriOrInlineData::CreateUri(resource.uri());
-    case Resource::ResourceCase::kData:
-      return UriOrInlineData::CreateInlineData(absl::Cord(resource.data()));
+    case Resource::ResourceCase::kInlineResource: {
+      CompressionFormat compression_format = CompressionFormat::kUncompressed;
+      if (resource.inline_resource().has_compression_format()) {
+        switch (resource.inline_resource().compression_format()) {
+          case ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP:
+            compression_format = CompressionFormat::kGzip;
+            break;
+          default:
+            return absl::UnimplementedError(
+                "Unknown ResourceCompressionFormat");
+        }
+      }
+      return UriOrInlineData::CreateInlineData(
+          absl::Cord(resource.inline_resource().data()), compression_format);
+    }
     case Resource::ResourceCase::RESOURCE_NOT_SET:
       // If neither field is set at all, we'll just act as if we got an empty
       // inline data field.
-      return UriOrInlineData::CreateInlineData(absl::Cord());
+      return UriOrInlineData::CreateInlineData(
+          absl::Cord(), CompressionFormat::kUncompressed);
     default:
       return absl::UnimplementedError("Unknown Resource type");
   }

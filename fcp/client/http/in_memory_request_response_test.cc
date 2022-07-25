@@ -28,6 +28,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
@@ -63,6 +64,10 @@ using ::testing::Return;
 using ::testing::StrEq;
 using ::testing::StrictMock;
 
+using CompressionFormat =
+    ::fcp::client::http::UriOrInlineData::InlineData::CompressionFormat;
+
+constexpr absl::string_view kOctetStream = "application/octet-stream";
 
 TEST(InMemoryHttpRequestTest, NonHttpsUriFails) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
@@ -931,13 +936,15 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyInputVector) {
 TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyUriAndInline) {
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_,
-      {UriOrInlineData::CreateInlineData(absl::Cord())}, nullptr, nullptr,
+      {UriOrInlineData::CreateInlineData(absl::Cord(),
+                                         CompressionFormat::kUncompressed)},
+      nullptr, nullptr,
       /*client_decoded_http_resources=*/false);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0],
-              FieldsAre(kHttpOk, IsEmpty(), IsEmpty(), IsEmpty()));
+              FieldsAre(kHttpOk, IsEmpty(), kOctetStream, IsEmpty()));
 }
 
 // Tests the case where one of the URIs is invalid. The whole request should
@@ -1024,11 +1031,11 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemorySomeInlineData) {
   std::string expected_response_body2 = "response_body2";
   std::string expected_response_body4 = "response_body4";
   auto resource1 = UriOrInlineData::CreateUri(uri1);
-  auto resource2 =
-      UriOrInlineData::CreateInlineData(absl::Cord(expected_response_body2));
+  auto resource2 = UriOrInlineData::CreateInlineData(
+      absl::Cord(expected_response_body2), CompressionFormat::kUncompressed);
   auto resource3 = UriOrInlineData::CreateUri(uri3);
-  auto resource4 =
-      UriOrInlineData::CreateInlineData(absl::Cord(expected_response_body4));
+  auto resource4 = UriOrInlineData::CreateInlineData(
+      absl::Cord(expected_response_body4), CompressionFormat::kUncompressed);
 
   int expected_response_code1 = kHttpServiceUnavailable;
   int expected_response_code3 = 204;  // "204 No Content"
@@ -1054,14 +1061,14 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemorySomeInlineData) {
   EXPECT_THAT((*result)[0], IsCode(UNAVAILABLE));
   EXPECT_THAT((*result)[0].status().message(), HasSubstr("503"));
   ASSERT_OK((*result)[1]);
-  EXPECT_THAT(*(*result)[1], FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+  EXPECT_THAT(*(*result)[1], FieldsAre(kHttpOk, IsEmpty(), kOctetStream,
                                        StrEq(expected_response_body2)));
   ASSERT_OK((*result)[2]);
   EXPECT_THAT(*(*result)[2],
               FieldsAre(expected_response_code3, IsEmpty(), IsEmpty(),
                         StrEq(expected_response_body3)));
   ASSERT_OK((*result)[3]);
-  EXPECT_THAT(*(*result)[3], FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+  EXPECT_THAT(*(*result)[3], FieldsAre(kHttpOk, IsEmpty(), kOctetStream,
                                        StrEq(expected_response_body4)));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
@@ -1074,10 +1081,10 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemorySomeInlineData) {
 TEST_F(PerformRequestsTest, FetchResourcesInMemoryOnlyInlineData) {
   std::string expected_response_body1 = "response_body1";
   std::string expected_response_body2 = "response_body2";
-  auto resource1 =
-      UriOrInlineData::CreateInlineData(absl::Cord(expected_response_body1));
-  auto resource2 =
-      UriOrInlineData::CreateInlineData(absl::Cord(expected_response_body2));
+  auto resource1 = UriOrInlineData::CreateInlineData(
+      absl::Cord(expected_response_body1), CompressionFormat::kUncompressed);
+  auto resource2 = UriOrInlineData::CreateInlineData(
+      absl::Cord(expected_response_body2), CompressionFormat::kUncompressed);
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
@@ -1087,10 +1094,10 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryOnlyInlineData) {
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
-  EXPECT_THAT(*(*result)[0], FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+  EXPECT_THAT(*(*result)[0], FieldsAre(kHttpOk, IsEmpty(), kOctetStream,
                                        StrEq(expected_response_body1)));
   ASSERT_OK((*result)[1]);
-  EXPECT_THAT(*(*result)[1], FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+  EXPECT_THAT(*(*result)[1], FieldsAre(kHttpOk, IsEmpty(), kOctetStream,
                                        StrEq(expected_response_body2)));
 
   // The network stats should be untouched, since no network requests were
@@ -1152,9 +1159,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCancellation) {
   EXPECT_THAT(bytes_received, Ge(0));
 }
 
-TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedUriResource) {
+TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedResources) {
   const std::string uri = "https://valid.com/";
-  auto resource = UriOrInlineData::CreateUri(uri);
+  auto resource1 = UriOrInlineData::CreateUri(uri);
 
   int expected_response_code = kHttpOk;
   std::string content_type = "bytes+gzip";
@@ -1169,10 +1176,13 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedUriResource) {
                                         {{kContentTypeHdr, content_type}},
                                         *compressed_response_body)));
 
+  auto resource2 = UriOrInlineData::CreateInlineData(
+      absl::Cord(*compressed_response_body), CompressionFormat::kGzip);
+
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
   auto result = FetchResourcesInMemory(
-      mock_http_client_, interruptible_runner_, {resource},
+      mock_http_client_, interruptible_runner_, {resource1, resource2},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
       &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true);
@@ -1182,16 +1192,19 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedUriResource) {
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code, IsEmpty(), StrEq(content_type),
                         StrEq(expected_response_body)));
+  EXPECT_THAT(*(*result)[1],
+              FieldsAre(kHttpOk, IsEmpty(), absl::StrCat(kOctetStream, "+gzip"),
+                        StrEq(expected_response_body)));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
   EXPECT_THAT(bytes_sent, Ge(0));
-  EXPECT_THAT(bytes_received, Ge(compressed_response_body->size()));
+  EXPECT_THAT(bytes_received, Ge(2 * compressed_response_body->size()));
 }
 
 TEST_F(PerformRequestsTest,
-       FetchResourcesInMemoryFlagOnNotCompressedUriResource) {
+       FetchResourcesInMemoryFlagOnNotCompressedResources) {
   const std::string uri = "https://valid.com/";
-  auto resource = UriOrInlineData::CreateUri(uri);
+  auto resource1 = UriOrInlineData::CreateUri(uri);
 
   int expected_response_code = kHttpOk;
   std::string content_type = "uncompressed-bytes-yay";
@@ -1203,10 +1216,13 @@ TEST_F(PerformRequestsTest,
                                         {{kContentTypeHdr, content_type}},
                                         expected_response_body)));
 
+  auto resource2 = UriOrInlineData::CreateInlineData(
+      absl::Cord(expected_response_body), CompressionFormat::kUncompressed);
+
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
   auto result = FetchResourcesInMemory(
-      mock_http_client_, interruptible_runner_, {resource},
+      mock_http_client_, interruptible_runner_, {resource1, resource2},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
       &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true);
@@ -1216,16 +1232,18 @@ TEST_F(PerformRequestsTest,
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code, IsEmpty(), StrEq(content_type),
                         StrEq(expected_response_body)));
+  EXPECT_THAT(*(*result)[1], FieldsAre(kHttpOk, IsEmpty(), kOctetStream,
+                                       StrEq(expected_response_body)));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
   EXPECT_THAT(bytes_sent, Ge(0));
-  EXPECT_THAT(bytes_received, Ge(expected_response_body.size()));
+  EXPECT_THAT(bytes_received, Ge(2 * expected_response_body.size()));
 }
 
 TEST_F(PerformRequestsTest,
-       FetchResourcesInMemoryCompressedUriResourceFlagOffDoesNotDecompress) {
+       FetchResourcesInMemoryCompressedResourcesFlagOffDoesNotDecompress) {
   const std::string uri = "https://valid.com/";
-  auto resource = UriOrInlineData::CreateUri(uri);
+  auto resource1 = UriOrInlineData::CreateUri(uri);
 
   int expected_response_code = kHttpOk;
   std::string content_type = "bytes+gzip";
@@ -1240,10 +1258,13 @@ TEST_F(PerformRequestsTest,
                                         {{kContentTypeHdr, content_type}},
                                         *compressed_response_body)));
 
+  auto resource2 = UriOrInlineData::CreateInlineData(
+      absl::Cord(*compressed_response_body), CompressionFormat::kGzip);
+
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
   auto result = FetchResourcesInMemory(
-      mock_http_client_, interruptible_runner_, {resource},
+      mock_http_client_, interruptible_runner_, {resource1, resource2},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
       &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
@@ -1254,16 +1275,19 @@ TEST_F(PerformRequestsTest,
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code, IsEmpty(), StrEq(content_type),
                         StrEq(*compressed_response_body)));
+  EXPECT_THAT(*(*result)[1],
+              FieldsAre(kHttpOk, IsEmpty(), absl::StrCat(kOctetStream, "+gzip"),
+                        StrEq(*compressed_response_body)));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
   EXPECT_THAT(bytes_sent, Ge(0));
-  EXPECT_THAT(bytes_received, Ge(compressed_response_body->size()));
+  EXPECT_THAT(bytes_received, Ge(2 * compressed_response_body->size()));
 }
 
 TEST_F(PerformRequestsTest,
-       FetchResourcesInMemoryCompressedUriResourceFailsToDecode) {
+       FetchResourcesInMemoryCompressedResourcesFailToDecode) {
   const std::string uri = "https://valid.com/";
-  auto resource = UriOrInlineData::CreateUri(uri);
+  auto resource1 = UriOrInlineData::CreateUri(uri);
 
   int expected_response_code = kHttpOk;
   std::string content_type = "not-actually-gzipped+gzip";
@@ -1275,22 +1299,26 @@ TEST_F(PerformRequestsTest,
                                         {{kContentTypeHdr, content_type}},
                                         expected_response_body)));
 
+  auto resource2 = UriOrInlineData::CreateInlineData(
+      absl::Cord(expected_response_body), CompressionFormat::kGzip);
+
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
   auto result = FetchResourcesInMemory(
-      mock_http_client_, interruptible_runner_, {resource},
+      mock_http_client_, interruptible_runner_, {resource1, resource2},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
       &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true);
   // Fetching will succeed
   ASSERT_OK(result);
 
-  // ...but our first (and only) response will have failed to decode.
+  // ...but our responses will have failed to decode.
   EXPECT_THAT((*result)[0], IsCode(INTERNAL));
+  EXPECT_THAT((*result)[1], IsCode(INTERNAL));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
   EXPECT_THAT(bytes_sent, Ge(0));
-  EXPECT_THAT(bytes_received, Ge(expected_response_body.size()));
+  EXPECT_THAT(bytes_received, Ge(2 * expected_response_body.size()));
 }
 
 }  // namespace

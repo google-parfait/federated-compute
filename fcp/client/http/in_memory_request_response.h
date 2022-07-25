@@ -159,25 +159,37 @@ PerformMultipleRequestsInMemory(
 // nothing has to be fetched).
 class UriOrInlineData {
  public:
+  struct InlineData {
+    enum class CompressionFormat {
+      kUncompressed,
+      kGzip,
+    };
+
+    absl::Cord data;
+    CompressionFormat compression_format = CompressionFormat::kUncompressed;
+  };
+
   // Creates an instance representing a URI from which data has to be fetched.
   static UriOrInlineData CreateUri(std::string uri) {
-    return UriOrInlineData(std::move(uri), absl::Cord());
+    return UriOrInlineData(std::move(uri), {});
   }
   // Creates an instance representing a resource's already-available (or empty)
   // data.
-  static UriOrInlineData CreateInlineData(absl::Cord inline_data) {
-    return UriOrInlineData("", std::move(inline_data));
+  static UriOrInlineData CreateInlineData(
+      absl::Cord inline_data,
+      InlineData::CompressionFormat compression_format) {
+    return UriOrInlineData("", {std::move(inline_data), compression_format});
   }
 
-  std::string uri() const { return uri_; }
-  absl::Cord inline_data() const { return inline_data_; }
+  const std::string& uri() const { return uri_; }
+  const InlineData& inline_data() const { return inline_data_; }
 
  private:
-  UriOrInlineData(std::string uri, absl::Cord inline_data)
+  UriOrInlineData(std::string uri, InlineData inline_data)
       : uri_(std::move(uri)), inline_data_(std::move(inline_data)) {}
 
   const std::string uri_;
-  const absl::Cord inline_data_;
+  const InlineData inline_data_;
 };
 
 // Utility for (potentially) fetching multiple resources at once, each of which

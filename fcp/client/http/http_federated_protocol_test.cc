@@ -43,6 +43,7 @@
 #include "fcp/client/federated_protocol_util.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
+#include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/test_helpers.h"
@@ -490,10 +491,11 @@ class HttpFederatedProtocolTest : public ::testing::Test {
       // data inline, to keep things simple.
       std::string expected_plan = kPlan;
       Resource plan_resource;
-      plan_resource.set_data(kPlan);
+      plan_resource.mutable_inline_resource()->set_data(kPlan);
       std::string expected_checkpoint = kInitCheckpoint;
       Resource checkpoint_resource;
-      checkpoint_resource.set_data(expected_checkpoint);
+      checkpoint_resource.mutable_inline_resource()->set_data(
+          expected_checkpoint);
       eval_task_response = GetFakeEnabledEligibilityEvalTaskResponse(
           plan_resource, checkpoint_resource, kEligibilityEvalExecutionId);
     } else {
@@ -526,7 +528,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     plan_resource.set_uri(plan_uri);
     std::string expected_checkpoint = kInitCheckpoint;
     Resource checkpoint_resource;
-    checkpoint_resource.set_data(expected_checkpoint);
+    checkpoint_resource.mutable_inline_resource()->set_data(
+        expected_checkpoint);
     std::string expected_aggregation_session_id = kAggregationSessionId;
     StartTaskAssignmentResponse task_assignment_response =
         GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
@@ -824,7 +827,7 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   plan_resource.set_uri(plan_uri);
   std::string expected_checkpoint = kInitCheckpoint;
   Resource checkpoint_resource;
-  checkpoint_resource.set_data(expected_checkpoint);
+  checkpoint_resource.mutable_inline_resource()->set_data(expected_checkpoint);
   std::string expected_execution_id = kEligibilityEvalExecutionId;
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
@@ -843,6 +846,54 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   plan_uri, HttpRequest::Method::kGet, _, "")))
       .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan)));
+
+  auto eligibility_checkin_result =
+      federated_protocol_->EligibilityEvalCheckin();
+
+  ASSERT_OK(eligibility_checkin_result);
+  EXPECT_THAT(
+      *eligibility_checkin_result,
+      VariantWith<FederatedProtocol::EligibilityEvalTask>(FieldsAre(
+          AllOf(Field(&FederatedProtocol::PlanAndCheckpointPayloads::plan,
+                      absl::Cord(expected_plan)),
+                Field(&FederatedProtocol::PlanAndCheckpointPayloads::checkpoint,
+                      absl::Cord(expected_checkpoint))),
+          expected_execution_id)));
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestEligibilityEvalCheckinEnabledWithCompression) {
+  EXPECT_CALL(mock_flags_, client_decoded_http_resources)
+      .WillRepeatedly(Return(true));
+
+  std::string expected_plan = kPlan;
+  absl::StatusOr<std::string> compressed_plan =
+      internal::CompressWithGzip(expected_plan);
+  ASSERT_OK(compressed_plan);
+  Resource plan_resource;
+  plan_resource.mutable_inline_resource()->set_data(*compressed_plan);
+  plan_resource.mutable_inline_resource()->set_compression_format(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  std::string expected_checkpoint = kInitCheckpoint;
+  absl::StatusOr<std::string> compressed_checkpoint =
+      internal::CompressWithGzip(expected_checkpoint);
+  Resource checkpoint_resource;
+  checkpoint_resource.mutable_inline_resource()->set_data(
+      *compressed_checkpoint);
+  checkpoint_resource.mutable_inline_resource()->set_compression_format(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  std::string expected_execution_id = kEligibilityEvalExecutionId;
+  EligibilityEvalTaskResponse eval_task_response =
+      GetFakeEnabledEligibilityEvalTaskResponse(
+          plan_resource, checkpoint_resource, expected_execution_id);
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request?%24alt=proto",
+                  HttpRequest::Method::kPost, _, _)))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
 
   auto eligibility_checkin_result =
       federated_protocol_->EligibilityEvalCheckin();
@@ -1360,7 +1411,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   plan_resource.set_uri(plan_uri);
   std::string expected_checkpoint = kInitCheckpoint;
   Resource checkpoint_resource;
-  checkpoint_resource.set_data(expected_checkpoint);
+  checkpoint_resource.mutable_inline_resource()->set_data(expected_checkpoint);
   std::string expected_aggregation_session_id = kAggregationSessionId;
   // Note that in this particular test we check that the CheckinRequest is as
   // expected (in all prior tests we just use the '_' matcher, because the
@@ -1427,10 +1478,10 @@ TEST_F(HttpFederatedProtocolTest,
   // a fake response.
   std::string expected_plan = kPlan;
   Resource plan_resource;
-  plan_resource.set_data(expected_plan);
+  plan_resource.mutable_inline_resource()->set_data(expected_plan);
   std::string expected_checkpoint = kInitCheckpoint;
   Resource checkpoint_resource;
-  checkpoint_resource.set_data(expected_checkpoint);
+  checkpoint_resource.mutable_inline_resource()->set_data(expected_checkpoint);
   std::string expected_aggregation_session_id = kAggregationSessionId;
   EXPECT_CALL(
       mock_http_client_,
@@ -1948,9 +1999,9 @@ TEST_F(HttpFederatedProtocolTest,
 
   // Issue an eligibility eval checkin so we can validate the field is set.
   Resource eligibility_plan_resource;
-  eligibility_plan_resource.set_data(kPlan);
+  eligibility_plan_resource.mutable_inline_resource()->set_data(kPlan);
   Resource checkpoint_resource;
-  checkpoint_resource.set_data(kInitCheckpoint);
+  checkpoint_resource.mutable_inline_resource()->set_data(kInitCheckpoint);
 
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(eligibility_plan_resource,
