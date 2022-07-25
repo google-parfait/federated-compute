@@ -29,6 +29,9 @@
 namespace fcp::client::http::curl {
 namespace {
 using ::testing::_;
+using ::testing::AllOf;
+using ::testing::Field;
+using ::testing::FieldsAre;
 using ::testing::StrictMock;
 using ::testing::UnorderedElementsAreArray;
 
@@ -226,18 +229,22 @@ void PerformTwoRequests(CurlHttpClient* http_client, int port,
       std::make_pair(handle1.get(), request_callback1.get()),
       std::make_pair(handle2.get(), request_callback2.get())};
 
-  EXPECT_THAT(handle1->TotalSentBytes(), 0);
-  EXPECT_THAT(handle1->TotalReceivedBytes(), 0);
-  EXPECT_THAT(handle2->TotalSentBytes(), 0);
-  EXPECT_THAT(handle2->TotalReceivedBytes(), 0);
+  EXPECT_THAT(handle1->TotalSentReceivedBytes(), FieldsAre(0, 0));
+  EXPECT_THAT(handle2->TotalSentReceivedBytes(), FieldsAre(0, 0));
 
   absl::Status status = http_client->PerformRequests(requests);
 
   EXPECT_THAT(status, absl::OkStatus());
-  EXPECT_THAT(handle1->TotalSentBytes(), request1_body.size());
-  EXPECT_THAT(handle1->TotalReceivedBytes(), total_bytes_downloaded_handle1);
-  EXPECT_THAT(handle2->TotalSentBytes(), request2_body.size());
-  EXPECT_THAT(handle2->TotalReceivedBytes(), total_bytes_downloaded_handle2);
+  EXPECT_THAT(handle1->TotalSentReceivedBytes(),
+              AllOf(Field(&HttpRequestHandle::SentReceivedBytes::sent_bytes,
+                          request1_body.size()),
+                    Field(&HttpRequestHandle::SentReceivedBytes::received_bytes,
+                          total_bytes_downloaded_handle1)));
+  EXPECT_THAT(handle2->TotalSentReceivedBytes(),
+              AllOf(Field(&HttpRequestHandle::SentReceivedBytes::sent_bytes,
+                          request2_body.size()),
+                    Field(&HttpRequestHandle::SentReceivedBytes::received_bytes,
+                          total_bytes_downloaded_handle2)));
 }
 
 // Runs PerformRequests once in one thread.
@@ -392,8 +399,11 @@ TEST(CurlHttpClientTest, CancelRequest) {
 
   thread_pool_scheduler->WaitUntilIdle();
 
-  EXPECT_THAT(handle1->TotalSentBytes(), request1_body.size());
-  EXPECT_THAT(handle1->TotalReceivedBytes(), total_bytes_downloaded_handle1);
+  EXPECT_THAT(handle1->TotalSentReceivedBytes(),
+              AllOf(Field(&HttpRequestHandle::SentReceivedBytes::sent_bytes,
+                          request1_body.size()),
+                    Field(&HttpRequestHandle::SentReceivedBytes::received_bytes,
+                          total_bytes_downloaded_handle1)));
 
   curl_api.reset();
   http_server.value()->Terminate();

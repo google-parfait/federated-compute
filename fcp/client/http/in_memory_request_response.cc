@@ -325,11 +325,13 @@ PerformMultipleRequestsInMemory(
   // `PerformRequests` call caused some network traffic to have been sent
   // anyway).
   for (auto& [handle, callback] : handles_and_callbacks) {
+    HttpRequestHandle::SentReceivedBytes sent_received_bytes =
+        handle->TotalSentReceivedBytes();
     if (bytes_received_acc != nullptr) {
-      *bytes_received_acc += handle->TotalReceivedBytes();
+      *bytes_received_acc += sent_received_bytes.received_bytes;
     }
     if (bytes_sent_acc != nullptr) {
-      *bytes_sent_acc += handle->TotalSentBytes();
+      *bytes_sent_acc += sent_received_bytes.sent_bytes;
     }
   }
 

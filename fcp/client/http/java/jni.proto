@@ -53,3 +53,10 @@ message JniHttpResponse {
   int32 code = 1;
   repeated JniHttpHeader headers = 2;
 }
+
+// Represents a serialized
+// `fcp::client::http::HttpRequestHandle::SentReceivesBytes` object.
+message JniHttpSentReceivedBytes {
+  int64 sent_bytes = 1;
+  int64 received_bytes = 2;
+}

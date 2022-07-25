@@ -260,10 +260,11 @@ class HttpRequestHandle {
   // to this point. These numbers should reflect as close as possible the amount
   // of bytes sent "over the wire". This means, for example, that if the data is
   // compressed or if a `Transfer-Encoding` is used, the numbers should reflect
-  // the compressed and/or encoded size of the data. One exception to this rule
-  // applies to the use of TLS: implementations are allowed to account for the
+  // the compressed and/or encoded size of the data (if the implementation is
+  // able to account for that). Implementations are allowed to account for the
   // overhead of TLS encoding in these numbers, but are not required to (since
-  // many HTTP libraries do not provide stats at that level of granularity).
+  // many HTTP libraries also do not provide stats at that level of
+  // granularity).
   //
   // If the request was served from a cache then this should reflect only the
   // actual bytes sent over the network (e.g. 0 if returned from disk directly,
@@ -281,8 +282,17 @@ class HttpRequestHandle {
   // upload hasn't completed fully yet; similarly the 'received' number should
   // reflect the amount of response body data received so far, even if the
   // response hasn't been fully received yet).
-  virtual int64_t TotalSentBytes() const = 0;
-  virtual int64_t TotalReceivedBytes() const = 0;
+  //
+  // The numbers returned here are not required to increase monotonically
+  // between each call to the method. E.g. implementations are allowed to return
+  // best-available estimates while the request is still in flight, and then
+  // revise the numbers down to a more accurate number once the request has been
+  // completed.
+  struct SentReceivedBytes {
+    int64_t sent_bytes;
+    int64_t received_bytes;
+  };
+  virtual SentReceivedBytes TotalSentReceivedBytes() const = 0;
 
   // Used to indicate that the request should be cancelled and that
   // implementations may release resources associated with this request (e.g.

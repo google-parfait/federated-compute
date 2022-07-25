@@ -388,16 +388,18 @@ class GrpcFederatedProtocolTest
   }
 
   void TearDown() override {
+    fcp::client::http::HttpRequestHandle::SentReceivedBytes
+        sent_received_bytes = mock_http_client_.TotalSentReceivedBytes();
     EXPECT_THAT(federated_protocol_->bytes_downloaded(),
-                Ge(mock_http_client_.TotalReceivedBytes()));
+                Ge(sent_received_bytes.received_bytes));
     EXPECT_THAT(federated_protocol_->bytes_uploaded(),
-                Ge(mock_http_client_.TotalSentBytes()));
+                Ge(sent_received_bytes.sent_bytes));
     EXPECT_THAT(federated_protocol_->chunking_layer_bytes_received(),
                 Ge(mock_grpc_bidi_stream_->ChunkingLayerBytesReceived() +
-                   mock_http_client_.TotalReceivedBytes()));
+                   sent_received_bytes.received_bytes));
     EXPECT_THAT(federated_protocol_->chunking_layer_bytes_sent(),
                 Ge(mock_grpc_bidi_stream_->ChunkingLayerBytesSent() +
-                   mock_http_client_.TotalSentBytes()));
+                   sent_received_bytes.sent_bytes));
   }
 
   // This function runs a successful EligibilityEvalCheckin() that results in an

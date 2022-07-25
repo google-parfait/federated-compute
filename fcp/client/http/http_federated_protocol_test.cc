@@ -470,10 +470,12 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     // methods. We only check the chunking_layer_bytes_downloaded/upload
     // methods, since the legacy bytes_downloaded/uploaded methods will be
     // removed in the future.
+    HttpRequestHandle::SentReceivedBytes sent_received_bytes =
+        mock_http_client_.TotalSentReceivedBytes();
     EXPECT_THAT(federated_protocol_->chunking_layer_bytes_received(),
-                mock_http_client_.TotalReceivedBytes());
+                sent_received_bytes.received_bytes);
     EXPECT_THAT(federated_protocol_->chunking_layer_bytes_sent(),
-                mock_http_client_.TotalSentBytes());
+                sent_received_bytes.sent_bytes);
   }
 
   // This function runs a successful EligibilityEvalCheckin() that results in an
@@ -2164,8 +2166,10 @@ class ProtocolRequestHelperTest : public ::testing::Test {
   void TearDown() override {
     // Regardless of the outcome of the test (or the protocol interaction being
     // tested), network usage must always be reflected in the network stats.
-    EXPECT_THAT(bytes_downloaded_, mock_http_client_.TotalReceivedBytes());
-    EXPECT_THAT(bytes_uploaded_, mock_http_client_.TotalSentBytes());
+    HttpRequestHandle::SentReceivedBytes sent_received_bytes =
+        mock_http_client_.TotalSentReceivedBytes();
+    EXPECT_THAT(bytes_downloaded_, sent_received_bytes.received_bytes);
+    EXPECT_THAT(bytes_uploaded_, sent_received_bytes.sent_bytes);
   }
 
   StrictMock<MockHttpClient> mock_http_client_;

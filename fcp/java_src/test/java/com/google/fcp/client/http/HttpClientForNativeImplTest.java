@@ -70,6 +70,7 @@ import org.mockito.junit.MockitoRule;
 public final class HttpClientForNativeImplTest {
 
   private static final int DEFAULT_TEST_CHUNK_BUFFER_SIZE = 5;
+  private static final double ESTIMATED_HTTP2_HEADER_COMPRESSION_RATIO = 0.5;
   // We use an executor with real background threads, just to exercise a bit more of the code and
   // possibly spot any concurrency issues. The use of background threads is conveniently hidden
   // behind the performRequests interface anyway.
@@ -101,7 +102,9 @@ public final class HttpClientForNativeImplTest {
           /*responseBodyChunkSizeBytes=*/ DEFAULT_TEST_CHUNK_BUFFER_SIZE,
           /*responseBodyGzipBufferSizeBytes=*/ DEFAULT_TEST_CHUNK_BUFFER_SIZE,
           /*callDisconnectWhenCancelled=*/ true,
-          /*supportAcceptEncodingHeader=*/ supportAcceptEncodingHeader);
+          /*supportAcceptEncodingHeader=*/ supportAcceptEncodingHeader,
+          /*estimateSentReceivedBytes=*/ true,
+          /*estimatedHttp2HeaderCompressionRatio=*/ ESTIMATED_HTTP2_HEADER_COMPRESSION_RATIO);
     }
 
     // There should be no need for us to synchronize around these mutable fields, since the
@@ -356,6 +359,11 @@ public final class HttpClientForNativeImplTest {
                             .build())
                     .addExtraHeaders(
                         JniHttpHeader.newBuilder()
+                            .setName("Request-Header1")
+                            .setValue("Foobar")
+                            .build())
+                    .addExtraHeaders(
+                        JniHttpHeader.newBuilder()
                             .setName("Request-Header2")
                             .setValue("Bar")
                             .build())
@@ -376,13 +384,14 @@ public final class HttpClientForNativeImplTest {
 
     int expectedResponseCode = 200;
     when(mockConnection.getResponseCode()).thenReturn(expectedResponseCode);
-    when(mockConnection.getHeaderFields())
-        .thenReturn(
-            ImmutableMap.of(
-                "Response-Header1",
-                ImmutableList.of("Bar", "Baz"),
-                "Response-Header2",
-                ImmutableList.of("Barbaz")));
+    LinkedHashMap<String, List<String>> headerFields = new LinkedHashMap<>();
+    headerFields.put("Response-Header1", ImmutableList.of("Bar", "Baz"));
+    headerFields.put("Response-Header2", ImmutableList.of("Barbaz"));
+    headerFields.put(null, ImmutableList.of("HTTP/1.1 200 OK")); // Should be ignored.
+    when(mockConnection.getHeaderFields()).thenReturn(headerFields);
+
+    // Add the response message ("OK"), so that it gets included in the received bytes stats.
+    when(mockConnection.getResponseMessage()).thenReturn("OK");
 
     // Fake some response body data.
     String expectedResponseBody = "test_response_body";
@@ -396,7 +405,7 @@ public final class HttpClientForNativeImplTest {
 
     requestHandle.close();
 
-    // Verify the results..
+    // Verify the results.
     requestHandle.assertSuccessfulCompletion();
     assertThat(requestHandle.responseProto)
         .isEqualTo(
@@ -416,10 +425,37 @@ public final class HttpClientForNativeImplTest {
     assertThat(actualRequestBody.toString(UTF_8.name())).isEqualTo(expectedRequestBody);
     assertThat(requestHandle.responseBody.toString(UTF_8.name())).isEqualTo(expectedResponseBody);
 
+    // Verify the network stats are accurate (they should count the request headers, URL, request
+    // method, request body, response headers and response body).
+    assertThat(
+            JniHttpSentReceivedBytes.parseFrom(
+                requestHandle.getTotalSentReceivedBytes(),
+                ExtensionRegistryLite.getEmptyRegistry()))
+        .isEqualTo(
+            JniHttpSentReceivedBytes.newBuilder()
+                .setSentBytes(
+                    ("POST https://foo.com HTTP/1.1\r\n"
+                                + "Request-Header1: Foo\r\n"
+                                + "Request-Header1: Foobar\r\n"
+                                + "Request-Header2: Bar\r\n"
+                                + "\r\n")
+                            .length()
+                        + expectedRequestBody.length())
+                .setReceivedBytes(
+                    ("HTTP/1.1 200 OK\r\n"
+                                + "Response-Header1: Bar\r\n"
+                                + "Response-Header1: Baz\r\n"
+                                + "Response-Header2: Barbaz\r\n"
+                                + "\r\n")
+                            .length()
+                        + requestHandle.responseBody.size())
+                .build());
+
     // Verify various important request properties.
     verify(mockConnection).setRequestMethod("POST");
     InOrder requestHeadersOrder = inOrder(mockConnection);
     requestHeadersOrder.verify(mockConnection).addRequestProperty("Request-Header1", "Foo");
+    requestHeadersOrder.verify(mockConnection).addRequestProperty("Request-Header1", "Foobar");
     requestHeadersOrder.verify(mockConnection).addRequestProperty("Request-Header2", "Bar");
     verify(mockConnection).setConnectTimeout(123);
     verify(mockConnection).setReadTimeout(456);
@@ -725,6 +761,7 @@ public final class HttpClientForNativeImplTest {
 
     int expectedResponseCode = 200;
     when(mockConnection.getResponseCode()).thenReturn(expectedResponseCode);
+    when(mockConnection.getResponseMessage()).thenReturn("OK");
 
     // Fake some response body data.
     String expectedResponseBody = "test_response_body";
@@ -735,7 +772,7 @@ public final class HttpClientForNativeImplTest {
     compressedResponseBodyGzipStream.finish();
     when(mockConnection.getInputStream())
         .thenReturn(new ByteArrayInputStream(compressedResponseBody.toByteArray()));
-    // And add Content-Encoding and Content-Length headers (to check whether they are correctly
+    // And add Content-Encoding and Transfer-Encoding headers (to check whether they are correctly
     // redacted).
     when(mockConnection.getHeaderFields())
         .thenReturn(
@@ -745,9 +782,7 @@ public final class HttpClientForNativeImplTest {
                 "Content-Encoding",
                 ImmutableList.of("gzip"),
                 "Transfer-Encoding",
-                ImmutableList.of("chunked"),
-                "Content-Length",
-                ImmutableList.of("9999")));
+                ImmutableList.of("chunked")));
 
     // Run the request.
     byte[] result = httpClient.performRequests(new Object[] {requestHandle});
@@ -762,12 +797,34 @@ public final class HttpClientForNativeImplTest {
         .isEqualTo(
             JniHttpResponse.newBuilder()
                 .setCode(expectedResponseCode)
-                // The Content-Encoding and Content-Length headers should have been redacted.
+                // The Content-Encoding and Transfer-Encoding headers should have been redacted.
                 .addHeaders(
                     JniHttpHeader.newBuilder().setName("Response-Header1").setValue("Bar").build())
                 .build());
 
     assertThat(requestHandle.responseBody.toString(UTF_8.name())).isEqualTo(expectedResponseBody);
+
+    // Verify the network stats are accurate (they should count the request headers, URL, request
+    // method, request body, response headers and *compressed* response body, since decompression
+    // was performed by us and hence we were able to observe and count the compressed bytes).
+    assertThat(
+            JniHttpSentReceivedBytes.parseFrom(
+                requestHandle.getTotalSentReceivedBytes(),
+                ExtensionRegistryLite.getEmptyRegistry()))
+        .isEqualTo(
+            JniHttpSentReceivedBytes.newBuilder()
+                .setSentBytes(
+                    ("GET https://foo.com HTTP/1.1\r\n" + "Request-Header1: Foo\r\n" + "\r\n")
+                        .length())
+                .setReceivedBytes(
+                    ("HTTP/1.1 200 OK\r\n"
+                                + "Response-Header1: Bar\r\n"
+                                + "Content-Encoding: gzip\r\n"
+                                + "Transfer-Encoding: chunked\r\n"
+                                + "\r\n")
+                            .length()
+                        + compressedResponseBody.size())
+                .build());
 
     // Verify various important request properties.
     verify(mockConnection).setRequestMethod("GET");
@@ -908,6 +965,161 @@ public final class HttpClientForNativeImplTest {
                     JniHttpHeader.newBuilder().setName("Response-Header1").setValue("Bar").build())
                 .build());
     assertThat(requestHandle.responseBody.toString(UTF_8.name())).isEqualTo(expectedResponseBody);
+  }
+
+  @Test
+  public void testContentLengthResponseHeaderShouldDetermineReceivedBytesEstimate()
+      throws Exception {
+    TestHttpRequestHandleImpl requestHandle =
+        (TestHttpRequestHandleImpl)
+            httpClient.enqueueRequest(
+                JniHttpRequest.newBuilder()
+                    .setUri("https://foo.com")
+                    .setMethod(JniHttpMethod.HTTP_METHOD_GET)
+                    .setHasBody(false)
+                    .build()
+                    .toByteArray());
+
+    HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+    when(urlConnectionFactory.createUrlConnection("https://foo.com")).thenReturn(mockConnection);
+
+    int expectedResponseCode = 200;
+    when(mockConnection.getResponseCode()).thenReturn(expectedResponseCode);
+    when(mockConnection.getResponseMessage()).thenReturn("OK");
+
+    // Fake some response body data.
+    String expectedResponseBody = "another_test_response_body";
+    when(mockConnection.getInputStream())
+        .thenReturn(new ByteArrayInputStream(expectedResponseBody.getBytes(UTF_8)));
+
+    // And make the response headers include a "Content-Length" header. The header should be ignored
+    // for the most part, *but* it should be used to produce the final estimated 'received bytes'
+    // statistic, if the request completes successfully.
+    int expectedContentLength = 5;
+    when(mockConnection.getHeaderFields())
+        .thenReturn(
+            ImmutableMap.of(
+                "Response-Header1",
+                ImmutableList.of("Bar"),
+                // Simulate a Content-Length header that has value that is smaller than the length
+                // of the response body we actually observe (e.g. a Cronet-based implementation has
+                // decompressed the content for us, but still told us the original length).
+                "Content-Length",
+                ImmutableList.of(Integer.toString(expectedContentLength))));
+
+    // Run the request.
+    byte[] result = httpClient.performRequests(new Object[] {requestHandle});
+    assertThat(Status.parseFrom(result, ExtensionRegistryLite.getEmptyRegistry()).getCode())
+        .isEqualTo(Code.OK_VALUE);
+
+    requestHandle.close();
+
+    // Verify the results.
+    requestHandle.assertSuccessfulCompletion();
+    assertThat(requestHandle.responseProto)
+        .isEqualTo(
+            JniHttpResponse.newBuilder()
+                .setCode(expectedResponseCode)
+                // The Content-Length header should have been redacted.
+                .addHeaders(
+                    JniHttpHeader.newBuilder().setName("Response-Header1").setValue("Bar").build())
+                .build());
+    assertThat(requestHandle.responseBody.toString(UTF_8.name())).isEqualTo(expectedResponseBody);
+
+    // Verify the network stats are accurate (they should count the request headers, URL, request
+    // method, request body, response headers and the *content length* rather than the observed
+    // response body).
+    assertThat(
+            JniHttpSentReceivedBytes.parseFrom(
+                requestHandle.getTotalSentReceivedBytes(),
+                ExtensionRegistryLite.getEmptyRegistry()))
+        .isEqualTo(
+            JniHttpSentReceivedBytes.newBuilder()
+                .setSentBytes("GET https://foo.com HTTP/1.1\r\n\r\n".length())
+                .setReceivedBytes(
+                    ("HTTP/1.1 200 OK\r\n"
+                                + "Response-Header1: Bar\r\n"
+                                + "Content-Length: 5\r\n"
+                                + "\r\n")
+                            .length()
+                        + expectedContentLength)
+                .build());
+  }
+
+  @Test
+  public void testHttp2RequestsShouldUseEstimatedHeaderCompressionRatio() throws Exception {
+    TestHttpRequestHandleImpl requestHandle =
+        (TestHttpRequestHandleImpl)
+            httpClient.enqueueRequest(
+                JniHttpRequest.newBuilder()
+                    .setUri("https://foo.com")
+                    .setMethod(JniHttpMethod.HTTP_METHOD_GET)
+                    .setHasBody(false)
+                    .build()
+                    .toByteArray());
+
+    HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+    when(urlConnectionFactory.createUrlConnection("https://foo.com")).thenReturn(mockConnection);
+
+    int expectedResponseCode = 200;
+    when(mockConnection.getResponseCode()).thenReturn(expectedResponseCode);
+    // Return an empty response message, which is the heuristic that indicates HTTP/2 was likely
+    // used to service the request.
+    when(mockConnection.getResponseMessage()).thenReturn("");
+
+    // Fake some response body data.
+    String expectedResponseBody = "another_test_response_body";
+    when(mockConnection.getInputStream())
+        .thenReturn(new ByteArrayInputStream(expectedResponseBody.getBytes(UTF_8)));
+
+    // And make the response headers include a "Content-Length" header. The header should be ignored
+    // for the most part, *but* it should be used to produce the final estimated 'received bytes'
+    // statistic, if the request completes successfully.
+    when(mockConnection.getHeaderFields())
+        .thenReturn(ImmutableMap.of("Response-Header1", ImmutableList.of("Bar")));
+
+    // Run the request.
+    byte[] result = httpClient.performRequests(new Object[] {requestHandle});
+    assertThat(Status.parseFrom(result, ExtensionRegistryLite.getEmptyRegistry()).getCode())
+        .isEqualTo(Code.OK_VALUE);
+
+    requestHandle.close();
+
+    // Verify the results.
+    requestHandle.assertSuccessfulCompletion();
+    assertThat(requestHandle.responseProto)
+        .isEqualTo(
+            JniHttpResponse.newBuilder()
+                .setCode(expectedResponseCode)
+                .addHeaders(
+                    JniHttpHeader.newBuilder().setName("Response-Header1").setValue("Bar").build())
+                .build());
+    assertThat(requestHandle.responseBody.toString(UTF_8.name())).isEqualTo(expectedResponseBody);
+
+    // Verify the network stats are accurate (they should count the request headers, URL, request
+    // method, request body, response headers and the response body). Since HTTP/2 was used
+    // (according to the heuristic), the request/response headers should have a compression factor
+    // applied to them.
+    assertThat(
+            JniHttpSentReceivedBytes.parseFrom(
+                requestHandle.getTotalSentReceivedBytes(),
+                ExtensionRegistryLite.getEmptyRegistry()))
+        .isEqualTo(
+            JniHttpSentReceivedBytes.newBuilder()
+                // Even though HTTP/2 was used, our sent/received bytes estimates hardcode an
+                // assumption that HTTP/1.1-style status lines and CRLF-terminated headers were sent
+                // received (and then simply applies a compression factor over the length of those
+                // strings).
+                .setSentBytes(
+                    (long)
+                        ("GET https://foo.com HTTP/1.1\r\n\r\n".length()
+                            * ESTIMATED_HTTP2_HEADER_COMPRESSION_RATIO))
+                .setReceivedBytes(
+                    (long)
+                            (("HTTP/1.1 200 \r\n" + "Response-Header1: Bar\r\n" + "\r\n").length()
+                                * ESTIMATED_HTTP2_HEADER_COMPRESSION_RATIO)
+                        + expectedResponseBody.length())
+                .build());
   }
 
   @Test
@@ -1147,6 +1359,20 @@ public final class HttpClientForNativeImplTest {
     assertThat(requestHandle.responseError.getMessage()).contains("my error");
     assertThat(requestHandle.responseBodyError).isNull();
     assertThat(requestHandle.completedSuccessfully).isFalse();
+
+    // Verify that the request headers are counted in the network stats, since we can't really know
+    // whether the connect() method failed before any network connection was established, or whether
+    // it failed after we did already send our request onto the wire (each HttpURLConnection
+    // implementation can have slightly different behavior in this regard).
+    assertThat(
+            JniHttpSentReceivedBytes.parseFrom(
+                requestHandle.getTotalSentReceivedBytes(),
+                ExtensionRegistryLite.getEmptyRegistry()))
+        .isEqualTo(
+            JniHttpSentReceivedBytes.newBuilder()
+                .setSentBytes("GET https://foo.com HTTP/1.1\r\n\r\n".length())
+                .setReceivedBytes(0)
+                .build());
   }
 
   /**
@@ -1425,8 +1651,14 @@ public final class HttpClientForNativeImplTest {
 
     int expectedResponseCode = 300;
     when(mockConnection.getResponseCode()).thenReturn(expectedResponseCode);
+    when(mockConnection.getResponseMessage()).thenReturn("Multiple Choices");
     when(mockConnection.getHeaderFields())
-        .thenReturn(ImmutableMap.of("Response-Header1", ImmutableList.of("Bar")));
+        .thenReturn(
+            ImmutableMap.of(
+                "Response-Header1", ImmutableList.of("Bar"),
+                // The Content-Length header should be ignored, and should *not* be used to estimate
+                // the 'received bytes', since the request will not complete successfully.
+                "Content-Length", ImmutableList.of("9999")));
 
     // Make the response body contain some data. But when the data gets read, the request gets
     // cancelled.
@@ -1462,5 +1694,31 @@ public final class HttpClientForNativeImplTest {
     assertThat(requestHandle.responseBodyError).isNotNull();
     assertThat(requestHandle.responseBodyError.getCode()).isEqualTo(Code.CANCELLED_VALUE);
     assertThat(requestHandle.completedSuccessfully).isFalse();
+
+    // Verify the network stats are accurate (they should count the request headers, URL, request
+    // method, request body, response headers and the *content length* rather than the observed
+    // response body).
+    assertThat(
+            JniHttpSentReceivedBytes.parseFrom(
+                requestHandle.getTotalSentReceivedBytes(),
+                ExtensionRegistryLite.getEmptyRegistry()))
+        .isEqualTo(
+            JniHttpSentReceivedBytes.newBuilder()
+                .setSentBytes("GET https://foo.com HTTP/1.1\r\n\r\n".length())
+                // The Content-Length response header value should not be taken into account in the
+                // estimated 'received bytes' stat, since the request did not succeed. Instead,
+                // by the time the HttpRequestHandleImpl#close() method is called we will be in the
+                // process of having read a single buffer's worth of response body data, and hence
+                // that's the amount of response body data that should be accounted for. This
+                // ensures that we try as best as possible to only count bytes we actually received
+                // up until the point of cancellation.
+                .setReceivedBytes(
+                    ("HTTP/1.1 300 Multiple Choices\r\n"
+                                + "Response-Header1: Bar\r\n"
+                                + "Content-Length: 9999\r\n"
+                                + "\r\n")
+                            .length()
+                        + DEFAULT_TEST_CHUNK_BUFFER_SIZE)
+                .build());
   }
 }

@@ -104,9 +104,8 @@ class JavaHttpRequestHandle : public fcp::client::http::HttpRequestHandle {
   ~JavaHttpRequestHandle() override ABSL_LOCKS_EXCLUDED(lock_);
 
   // --- HttpRequestHandle methods
-  // TODO(team): Implement support for sent/received bytes stats.
-  int64_t TotalSentBytes() const override { return 0; }
-  int64_t TotalReceivedBytes() const override { return 0; }
+  fcp::client::http::HttpRequestHandle::SentReceivedBytes
+  TotalSentReceivedBytes() const override;
   void Cancel() override ABSL_LOCKS_EXCLUDED(lock_);
 
   // --- JNI handling methods
@@ -151,6 +150,7 @@ class JavaHttpRequestHandle : public fcp::client::http::HttpRequestHandle {
  private:
   JavaVM* const jvm_;
   jobject jthis_;
+  jmethodID get_total_sent_received_bytes_id_;
   jmethodID close_id_;
   jfieldID native_handle_id_;
 

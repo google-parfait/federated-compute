@@ -69,6 +69,8 @@ struct JavaHttpClientClassDesc {
 // The Java method and field signatures for the Java class corresponding to the
 // C++ `JavaHttpRequestHandle` class.
 struct JavaHttpRequestHandleClassDesc {
+  static constexpr JavaMethodSig kGetTotalSentReceivedBytes = {
+      "getTotalSentReceivedBytes", "()[B"};
   static constexpr JavaMethodSig kClose = {"close", "()V"};
   static constexpr JavaFieldSig kNativeHandle = {"nativeHandle", "J"};
 };
@@ -256,6 +258,10 @@ JavaHttpRequestHandle::JavaHttpRequestHandle(
   LocalRefDeleter java_http_request_handle_class_deleter(
       env, java_http_request_handle_class);
 
+  get_total_sent_received_bytes_id_ = GetMethodIdOrAbort(
+      *env, java_http_request_handle_class,
+      JavaHttpRequestHandleClassDesc::kGetTotalSentReceivedBytes);
+
   close_id_ = GetMethodIdOrAbort(*env, java_http_request_handle_class,
                                  JavaHttpRequestHandleClassDesc::kClose);
 
@@ -312,6 +318,25 @@ void JavaHttpRequestHandle::Cancel() {
   // no-op.
   env->CallVoidMethod(jthis_, close_id_);
   FCP_CHECK(!env->ExceptionCheck());
+}
+
+HttpRequestHandle::SentReceivedBytes
+JavaHttpRequestHandle::TotalSentReceivedBytes() const {
+  ScopedJniEnv scoped_env(jvm_);
+  JNIEnv* env = scoped_env.env();
+
+  jbyteArray sent_received_bytes_result = static_cast<jbyteArray>(
+      env->CallObjectMethod(jthis_, get_total_sent_received_bytes_id_));
+  FCP_CHECK(!env->ExceptionCheck());
+  FCP_CHECK(sent_received_bytes_result != nullptr);
+  LocalRefDeleter sent_received_bytes_result_deleter(
+      env, sent_received_bytes_result);
+
+  // Convert the return value from a Java byte[] to the expected proto.
+  auto sent_received_bytes = ParseProtoFromJByteArray<JniHttpSentReceivedBytes>(
+      env, sent_received_bytes_result);
+  return {.sent_bytes = sent_received_bytes.sent_bytes(),
+          .received_bytes = sent_received_bytes.received_bytes()};
 }
 
 fcp::client::http::HttpRequestCallback* JavaHttpRequestHandle::callback()

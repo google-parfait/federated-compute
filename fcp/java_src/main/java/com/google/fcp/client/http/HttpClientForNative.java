@@ -46,6 +46,16 @@ public abstract class HttpClientForNative implements Closeable {
    */
   public abstract static class HttpRequestHandle implements Closeable {
     /**
+     * Called by the native layer to get the request's latest total sent/received bytes stats. May
+     * be called multiple times, and from any thread.
+     *
+     * <p>See C++'s {@code HttpRequestHandle::TotalSentReceivedBytes}.
+     *
+     * @return a serialized {@link JniHttpSentReceivedBytes} proto.
+     */
+    public abstract byte[] getTotalSentReceivedBytes();
+
+    /**
      * Called by the native layer when the request isn't needed anymore. May be called multiple
      * times, and from any thread.
      */
@@ -83,7 +93,7 @@ public abstract class HttpClientForNative implements Closeable {
 
     /**
      * Signals to the native layer that the response headers (provided as a serialized {@link
-     * JniHttpResponse} have been received).
+     * JniHttpResponse}) have been received.
      *
      * <p>See C++'s {@code HttpRequestCallback::OnResponseStarted}.
      *

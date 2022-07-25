@@ -50,10 +50,8 @@ class CurlHttpRequestHandle : public HttpRequestHandle {
   void MarkAsCompleted() ABSL_LOCKS_EXCLUDED(mutex_);
 
   // HttpRequestHandle overrides:
-  ABSL_MUST_USE_RESULT int64_t TotalSentBytes() const override
-      ABSL_LOCKS_EXCLUDED(mutex_);
-  ABSL_MUST_USE_RESULT int64_t TotalReceivedBytes() const override
-      ABSL_LOCKS_EXCLUDED(mutex_);
+  ABSL_MUST_USE_RESULT HttpRequestHandle::SentReceivedBytes
+  TotalSentReceivedBytes() const override ABSL_LOCKS_EXCLUDED(mutex_);
   void Cancel() override ABSL_LOCKS_EXCLUDED(mutex_);
 
  private:

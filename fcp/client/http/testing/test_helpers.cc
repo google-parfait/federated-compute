@@ -53,10 +53,13 @@ class SimpleHttpRequestHandle : public HttpRequestHandle {
       : request_(std::move(request)),
         cancellation_listener_(cancellation_listener) {}
 
-  int64_t TotalSentBytes() const override { return sent_bytes_; }
-  void SetSentBytes(int64_t bytes) { sent_bytes_ = bytes; }
-  int64_t TotalReceivedBytes() const override { return received_bytes_; }
-  void SetReceivedBytes(int64_t bytes) { received_bytes_ = bytes; }
+  HttpRequestHandle::SentReceivedBytes TotalSentReceivedBytes() const override {
+    return sent_received_bytes_;
+  }
+  void SetSentBytes(int64_t bytes) { sent_received_bytes_.sent_bytes = bytes; }
+  void SetReceivedBytes(int64_t bytes) {
+    sent_received_bytes_.received_bytes = bytes;
+  }
 
   void Cancel() override { cancellation_listener_(); }
 
@@ -74,8 +77,7 @@ class SimpleHttpRequestHandle : public HttpRequestHandle {
   const std::unique_ptr<HttpRequest> request_;
   std::function<void()> cancellation_listener_;
   bool performed_ = false;
-  int64_t sent_bytes_ = 0;
-  int64_t received_bytes_ = 0;
+  HttpRequestHandle::SentReceivedBytes sent_received_bytes_ = {0, 0};
 };
 
 }  // namespace
@@ -155,7 +157,7 @@ absl::Status MockableHttpClient::PerformRequests(
     // `HttpClient` would send).
     int64_t fake_sent_bytes = request->uri().size() + request_body.size();
     handle->SetSentBytes(fake_sent_bytes);
-    sent_bytes_ += fake_sent_bytes;
+    sent_received_bytes_.sent_bytes += fake_sent_bytes;
 
     if (!response.ok()) {
       return absl::Status(
@@ -180,7 +182,7 @@ absl::Status MockableHttpClient::PerformRequests(
     // generally headers will always be received.
     int64_t fake_received_bytes = 100 + response->body().size();
     handle->SetReceivedBytes(fake_received_bytes);
-    received_bytes_ += fake_received_bytes;
+    sent_received_bytes_.received_bytes += fake_received_bytes;
 
     FCP_LOG(INFO) << "MockableHttpClient: Delivering response body for: "
                   << request->uri();

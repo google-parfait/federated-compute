@@ -13,6 +13,10 @@
 // limitations under the License.
 package com.google.fcp.client.http;
 
+import static com.google.common.base.Strings.nullToEmpty;
+
+import com.google.common.base.Ascii;
+import com.google.common.io.CountingInputStream;
 import com.google.fcp.client.CallFromNativeWrapper;
 import com.google.fcp.client.http.HttpClientForNative.HttpRequestHandle;
 import com.google.fcp.client.http.HttpClientForNativeImpl.UncheckedHttpClientForNativeException;
@@ -121,6 +125,8 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
   private final int responseBodyGzipBufferSizeBytes;
   private final boolean callDisconnectWhenCancelled;
   private final boolean supportAcceptEncodingHeader;
+  private final boolean estimateSentReceivedBytes;
+  private final double estimatedHttp2HeaderCompressionRatio;
 
   // Until we have an actual connection, this is a no-op.
   @GuardedBy("this")
@@ -132,6 +138,15 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
   @GuardedBy("this")
   @Nullable
   private Future<?> ongoingWork;
+
+  // These are "volatile" and not synchronized so that they can be read easily from any thread even
+  // if the lock is currently held. They're only incremented from a single thread, so their being
+  // volatile is sufficient to safely increment/update them.
+  private volatile long sentHeaderBytes = 0;
+  private volatile long sentBodyBytes = 0;
+  private volatile long receivedHeaderBytes = 0;
+  private volatile long receivedBodyBytes = 0;
+  private volatile boolean requestUsedHttp2Heuristic = false;
 
   /**
    * Creates a new handle representing a single request. See {@link HttpClientForNativeImpl} for a
@@ -172,6 +187,15 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
    *     flag allows turning that behavior off. When this setting is false, the assumption is that
    *     the implementation at the very least sets "Accept-Encoding: gzip" (as required by the C++
    *     `HttpClient` contract).
+   * @param estimateSentReceivedBytes whether to estimate the number of sent/received bytes as the
+   *     request is processed.
+   * @param estimatedHttp2HeaderCompressionRatio the compression ratio to account for in the
+   *     calculation of sent/received bytes estimates for the header data, in case HTTP/2 is used
+   *     for the request. HTTP/2 supports HPACK, and hence counting the header data in uncompressed
+   *     form likely results in over-estimates. This only affects requests that are determined to
+   *     have used HTTP/2, which is based on the somewhat fragile heuristic of whether {@link
+   *     HttpURLConnection#getResponseMessage()} is empty (since HTTP/2 does not support status line
+   *     'reason phrases').
    */
   public HttpRequestHandleImpl(
       JniHttpRequest request,
@@ -184,7 +208,9 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
       int responseBodyChunkSizeBytes,
       int responseBodyGzipBufferSizeBytes,
       boolean callDisconnectWhenCancelled,
-      boolean supportAcceptEncodingHeader) {
+      boolean supportAcceptEncodingHeader,
+      boolean estimateSentReceivedBytes,
+      double estimatedHttp2HeaderCompressionRatio) {
     this.request = request;
     this.callFromNativeWrapper = callFromNativeWrapper;
     this.executorService = executorService;
@@ -196,6 +222,8 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     this.responseBodyGzipBufferSizeBytes = responseBodyGzipBufferSizeBytes;
     this.callDisconnectWhenCancelled = callDisconnectWhenCancelled;
     this.supportAcceptEncodingHeader = supportAcceptEncodingHeader;
+    this.estimateSentReceivedBytes = estimateSentReceivedBytes;
+    this.estimatedHttp2HeaderCompressionRatio = estimatedHttp2HeaderCompressionRatio;
   }
 
   @Override
@@ -248,6 +276,35 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
             // connections will be cleaned up in their corresponding background threads.
           }
         });
+  }
+
+  @Override
+  public byte[] getTotalSentReceivedBytes() {
+    double headerCompressionRatio =
+        requestUsedHttp2Heuristic ? estimatedHttp2HeaderCompressionRatio : 1.0;
+    // Note that this estimate of sent/received bytes is not necessarily monotonically increasing:
+    // - We'll initially estimate the amount of received response body bytes based on the bytes we
+    //   observe in the response InputStream (which may count the uncompressed response bytes). This
+    //   will account, as best as possible, for how much has data been received so far (incl. in
+    //   case the request gets cancelled mid-flight), although it may be an over-estimate due to not
+    //   accounting for response body compression (depending on the HttpURLConnection
+    //   implementation, e.g. in case of Cronet's).
+    // - Once the request has completed successfully, we'll estimate the received response body
+    //   bytes based on the Content-Length response header, if there was one. This gives us a chance
+    //   to revise our estimate down to a more accurate value, if the HttpURLConnection
+    //   implementation exposes the original Content-Length header to us (e.g. in the case of
+    //   Cronet).
+    // - Once we know from the response headers that the request used HTTP/2, we'll apply the header
+    //   compression ratio. But before we know that, we don't apply it.
+    //
+    // Note that the estimates we provide here also won't take into account various other sources of
+    // network usage: the bytes transmitted to establish TLS channels, request/responses for
+    // followed HTTP redirects, HTTP/1.1-to-HTTP/2 upgrades etc.
+    return JniHttpSentReceivedBytes.newBuilder()
+        .setSentBytes((long) (sentHeaderBytes * headerCompressionRatio) + sentBodyBytes)
+        .setReceivedBytes((long) (receivedHeaderBytes * headerCompressionRatio) + receivedBodyBytes)
+        .build()
+        .toByteArray();
   }
 
   final synchronized void performRequest() {
@@ -373,10 +430,23 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
   }
 
   /** Calls the {@link #onResponseCompleted} callback, but only if the request isn't closed yet. */
-  private synchronized void doOnResponseCompleted() {
+  private synchronized void doOnResponseCompleted(long originalContentLengthHeader) {
     // If the request has already been closed, then we shouldn't issue any further callbacks.
     if (state == State.CLOSED) {
       return;
+    }
+    // If we did receive a Content-Length header, then once we've fully completed the request, we
+    // can use it to estimate the total received bytes (and it will be the most accurate estimate
+    // available to us).
+    //
+    // E.g. the Cronet HttpURLConnection implementation will return the original Content-Length
+    // header, even though it decompresses any response body Content-Encoding for us and doesn't let
+    // use see the original compressed bytes.
+    //
+    // If there was no Content-Length header at all, then we must go by our own calculation of the
+    // number of received bytes (i.e. based on the bytes we observed in the response InputStream).
+    if (estimateSentReceivedBytes && originalContentLengthHeader > -1) {
+      receivedBodyBytes = originalContentLengthHeader;
     }
     // If the request hadn't already been closed, it should be considered closed now (since we're
     // about to call the final callback).
@@ -483,7 +553,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
       // implementation will eventually reap the socket if doesn't end up being reused within a set
       // amount of time.
       doDisconnect = false;
-      doOnResponseCompleted();
+      doOnResponseCompleted(response.originalContentLengthHeader);
     } catch (AbortRequestException e) {
       // Nothing left for us to do.
     } finally {
@@ -528,7 +598,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
   @Nullable
   private String findRequestHeader(String name) {
     for (JniHttpHeader header : request.getExtraHeadersList()) {
-      if (name.equalsIgnoreCase(header.getName())) {
+      if (Ascii.equalsIgnoreCase(name, header.getName())) {
         return header.getValue();
       }
     }
@@ -556,13 +626,15 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
    * Configures the {@link HttpURLConnection} object before it is used to establish the actual
    * network connection.
    */
+  @SuppressWarnings("NonAtomicVolatileUpdate")
   private void configureConnection(
       HttpURLConnection connection,
       long requestContentLength,
       @Nullable String acceptEncodingHeader)
       throws InvalidHttpRequestException {
+    String requestMethod = getRequestMethod();
     try {
-      connection.setRequestMethod(getRequestMethod());
+      connection.setRequestMethod(requestMethod);
     } catch (ProtocolException e) {
       // This should never happen, as we take care to only call this method with appropriate
       // parameters.
@@ -622,6 +694,50 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     if (CookieHandler.getDefault() != null) {
       throw new IllegalStateException("must not set a CookieHandler");
     }
+
+    // Count the request headers as part of the sent bytes. We do this before we actually open the
+    // connection, so that if the connection fails to be established we still account for the
+    // possibly already-transmitted data.
+    //
+    // Note that if the implementation uses HTTP2 with HPACK header compression this could lead to
+    // an overestimation of the total bytes sent. The estimatedHttp2HeaderCompressionRatio parameter
+    // can be used to account for this heuristically.
+    //
+    // If HTTP/2 is used, then some of our estimates will also be overestimates since we assume that
+    // headers are terminated by \r\n lines etc., while HTTP/2 generally represents headers more
+    // compactly. To avoid complicating things too much, we don't account for that.
+    //
+    // Aside from not accounting for HTTP/2 and header compression, some request headers may also be
+    // set by the HttpUrlConnection implementation which we cannot observe here, and hence we won't
+    // be counting those either. Hence, this number could be both an over or under-estimate, and
+    // should really be considered a best-effort estimate.
+    //
+    // Note that while it might seem we could use getRequestProperties() to get the actual request
+    // headers (incl. implementation-specified ones), this isn't actually the case for most
+    // HttpURLConnection implementations (and some implementations don't return anything from
+    // getRequestProperties(), even if we've already called addRequestProperty()).
+    if (estimateSentReceivedBytes) {
+      // First, account for the HTTP request status line.
+      sentHeaderBytes +=
+          requestMethod.length()
+              + " ".length()
+              + request.getUri().length()
+              + " HTTP/1.1\r\n".length();
+      // Then account for each header we know is will be included.
+      for (JniHttpHeader header : request.getExtraHeadersList()) {
+        // Each entry should count the lengths of the header name + header value (rather than only
+        // counting the header name length once), since duplicated headers are likely to be sent in
+        // separate header lines (rather than being coalesced into a single header line by the
+        // HttpURLConnection implementation).
+        sentHeaderBytes +=
+            header.getName().length()
+                + ": ".length()
+                + header.getValue().length()
+                + "\r\n".length();
+      }
+      // Account for the \r\n characters at the end of the request headers.
+      sentHeaderBytes += "\r\n".length();
+    }
   }
 
   /**
@@ -633,11 +749,13 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
    * @param requestContentLength the length of the request body if it is known ahead of time, or -1
    *     if the request body's length is not known ahead of time.
    */
+  @SuppressWarnings("NonAtomicVolatileUpdate")
   private void sendRequestBody(HttpURLConnection connection, long requestContentLength)
       throws IOException, AbortRequestException {
     // Check one more time, before issuing the request, if it's already been cancelled (to avoid
     // starting any blocking network IO we can't easily interrupt).
     checkClosed();
+
     // Note that we don't wrap the OutputStream in a BufferedOutputStream, since we already write
     // data to the unbuffered OutputStream in fairly large chunks at a time, so adding another
     // buffering layer in between isn't helpful.
@@ -665,6 +783,13 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
         }
         // Otherwise, the native layer is required to have read at least 1 byte into our buffer at
         // this point (and hence actualBytesRead[0] will be >= 1).
+
+        // Account for the data we're about to send in our 'sent bytes' stats. We do this before we
+        // write it to the output stream (so that this over rather than under-estimates the number,
+        // in case we get interrupted mid-write).
+        if (estimateSentReceivedBytes) {
+          sentBodyBytes += actualBytesRead[0];
+        }
 
         // Write the data from the native layer to the network socket.
         outputStream.write(buffer, 0, actualBytesRead[0]);
@@ -695,10 +820,13 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
   private static final class ResponseHeadersWithMetadata {
     private final JniHttpResponse responseProto;
     private final boolean shouldDecodeGzip;
+    private final long originalContentLengthHeader;
 
-    ResponseHeadersWithMetadata(JniHttpResponse responseProto, boolean shouldDecodeGzip) {
+    ResponseHeadersWithMetadata(
+        JniHttpResponse responseProto, boolean shouldDecodeGzip, long originalContentLengthHeader) {
       this.responseProto = responseProto;
       this.shouldDecodeGzip = shouldDecodeGzip;
+      this.originalContentLengthHeader = originalContentLengthHeader;
     }
   }
 
@@ -706,6 +834,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
    * Receives the response headers from the server (blocking until that data is available, or an
    * error occurs), and passes it to the native layer via the JNI callbacks.
    */
+  @SuppressWarnings("NonAtomicVolatileUpdate")
   private ResponseHeadersWithMetadata receiveResponseHeaders(
       HttpURLConnection connection, String originalAcceptEncodingHeader) throws IOException {
     // This call will block until the response headers are received (or throw if an error occurred
@@ -725,9 +854,9 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
       // We need to strip the headers, if the body is encoded. Determine if it is encoded first.
       for (Map.Entry<String, List<String>> header : connection.getHeaderFields().entrySet()) {
         List<String> headerValues = header.getValue();
-        if (CONTENT_ENCODING_HEADER.equalsIgnoreCase(header.getKey())
+        if (Ascii.equalsIgnoreCase(CONTENT_ENCODING_HEADER, nullToEmpty(header.getKey()))
             && !headerValues.isEmpty()
-            && GZIP_ENCODING.equalsIgnoreCase(headerValues.get(0))) {
+            && Ascii.equalsIgnoreCase(GZIP_ENCODING, nullToEmpty(headerValues.get(0)))) {
           shouldDecodeGzip = true;
           break;
         }
@@ -736,38 +865,92 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
 
     JniHttpResponse.Builder response = JniHttpResponse.newBuilder();
     response.setCode(responseCode);
+
+    if (estimateSentReceivedBytes) {
+      // Account for the response status line in the 'received bytes' stats.
+      String responseMessage = connection.getResponseMessage();
+      // Note that responseMessage could be null or empty if an HTTP/2 implementation is used (since
+      // HTTP/2 doesn't have 'reason phrases' in the status line anymore, only codes).
+      responseMessage = nullToEmpty(responseMessage);
+      receivedHeaderBytes += "HTTP/1.1 XXX ".length() + responseMessage.length() + "\r\n".length();
+      // Add two bytes to account for the \r\n at the end of the response headers.
+      receivedHeaderBytes += "\r\n".length();
+
+      // If the response message was empty, then we assume that the request used HTTP/2. This is a
+      // flawed heuristic, but the best we have available.
+      requestUsedHttp2Heuristic = responseMessage.isEmpty();
+    }
+
+    // Now let's process the response headers.
+    long receivedContentLength = -1;
     for (Map.Entry<String, List<String>> header : connection.getHeaderFields().entrySet()) {
-      // The status line gets returned as a header field with a null key. We need to ignore that
-      // one (as we treat it as a separate field in JniHttpResponse, rather than a header).
+      // First, let's account for the received headers in our 'received bytes' stats. See note about
+      // counting bytes for request headers above, which applies similarly to response
+      // headers.
       //
-      // Also, the HttpURLConnection implementation generally unchunks response bodies that used
+      // Note that for some HttpURLConnection implementations the HTTP response status line may be
+      // included in the getHeadersField() result under the null header key, while others don't
+      // include it at all. We just skip counting the status line from getHeaderFields() sinec we
+      // already accounted for it above.
+      if (header.getKey() == null) {
+        continue;
+      }
+      if (estimateSentReceivedBytes) {
+        // Count the bytes for all the headers (including accounting for the colon, space, and
+        // newlines that would've been sent over the wire).
+        for (String headerValue : header.getValue()) {
+          receivedHeaderBytes +=
+              header.getKey() == null ? 0 : (header.getKey().length() + ": ".length());
+          receivedHeaderBytes += headerValue == null ? 0 : headerValue.length();
+          // Account for the \r\n chars at the end of the header.
+          receivedHeaderBytes += "\r\n".length();
+        }
+      }
+
+      // Now let's skip headers we shouldn't return to the C++ layer.
+      //
+      // The HttpURLConnection implementation generally unchunks response bodies that used
       // "Transfer-Encoding: chunked". However, while Android's implementation also then removes the
       // "Transfer-Encoding" header, the JDK implementation does not. Since the HttpClient contract
       // requires us to remove that header, we explicitly filter it out here.
       //
+      // Finally, if the response will automatically be gzip-decoded by us, then we must redact any
+      // Content-Encoding header too.
+      if ((Ascii.equalsIgnoreCase(TRANSFER_ENCODING_HEADER, header.getKey())
+              && header.getValue().size() == 1
+              && Ascii.equalsIgnoreCase(
+                  CHUNKED_TRANSFER_ENCODING, nullToEmpty(header.getValue().get(0))))
+          || (shouldDecodeGzip
+              && Ascii.equalsIgnoreCase(CONTENT_ENCODING_HEADER, header.getKey()))) {
+        continue;
+      }
       // Also, the "Content-Length" value returned by HttpURLConnection may or may not correspond to
-      // the response body data we will see via getInputStream() (e.g. it may reflect the length of
+      // the response body data we will see via  + " - " + receivedBodyBytesgetInputStream() (e.g.
+      // it may reflect the length of
       // the previously compressed data, even if the data is already decompressed for us when we
       // read it from the InputStream). Hence, we ignore it as well. We do so even though the C++
       // `HttpClient` asks us to leave it unredacted, because its value cannot be interpreted
-      // consistently.
-      //
-      // Finally, if the response will automatically be gzip-decoded by us, then we must redact any
-      // Content-Encoding header too.
-      if (header.getKey() == null
-          || (TRANSFER_ENCODING_HEADER.equalsIgnoreCase(header.getKey())
-              && header.getValue().size() == 1
-              && CHUNKED_TRANSFER_ENCODING.equalsIgnoreCase(header.getValue().get(0)))
-          || CONTENT_LENGTH_HEADER.equalsIgnoreCase(header.getKey())
-          || (shouldDecodeGzip && CONTENT_ENCODING_HEADER.equalsIgnoreCase(header.getKey()))) {
+      // consistently. However, if the "Content-Length" header *is* available, then we do use it to
+      // estimate the network bytes we've received (but only once the request has completed
+      // successfully).
+      if (Ascii.equalsIgnoreCase(CONTENT_LENGTH_HEADER, header.getKey())) {
+        if (estimateSentReceivedBytes && header.getValue().size() == 1) {
+          try {
+            receivedContentLength = Long.parseLong(header.getValue().get(0));
+          } catch (NumberFormatException e) {
+            // ignore
+          }
+        }
         continue;
       }
 
+      // Pass the remaining headers to the C++ layer.
       for (String headerValue : header.getValue()) {
         response.addHeaders(
             JniHttpHeader.newBuilder().setName(header.getKey()).setValue(headerValue));
       }
     }
+
     // If we receive a positive cache hit (i.e. HTTP_NOT_MODIFIED), then the response will not have
     // a body even though the "Content-Encoding" header may still be set. In such cases we shouldn't
     // try pass the InputStream to a GZIPInputStream (in the receiveResponseBody function below),
@@ -777,21 +960,24 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     // responses after all, and we should handle those correctly.
     shouldDecodeGzip =
         shouldDecodeGzip && connection.getResponseCode() != HttpURLConnection.HTTP_NOT_MODIFIED;
-    return new ResponseHeadersWithMetadata(response.build(), shouldDecodeGzip);
+    return new ResponseHeadersWithMetadata(
+        response.build(), shouldDecodeGzip, receivedContentLength);
   }
 
   /**
    * Receives the response body from the server and passes it to the native layer via the JNI
    * callbacks (blocking until all response body data has been received, or an error occurs).
    */
+  @SuppressWarnings("NonAtomicVolatileUpdate")
   private void receiveResponseBody(HttpURLConnection connection, boolean shouldDecodeGzip)
       throws IOException, AbortRequestException {
     // Check one more time, before blocking on the InputStream, if it request has already been
     // cancelled (to avoid starting any blocking network IO we can't easily interrupt).
     checkClosed();
 
-    try (InputStream networkStream = getResponseBodyStream(connection);
+    try (CountingInputStream networkStream = getResponseBodyStream(connection);
         InputStream inputStream = getDecodedResponseBodyStream(networkStream, shouldDecodeGzip)) {
+      long networkReceivedBytes = 0;
       // Allocate a buffer for reading the response body data into memory and passing it to JNI.
       int bufferSize = responseBodyChunkSizeBytes;
       byte[] buffer = new byte[bufferSize];
@@ -806,6 +992,21 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
         // buffer is full, the end of the data is reached, or we hit an error.
         while (cursor < buffer.length) {
           actualBytesRead = inputStream.read(buffer, cursor, buffer.length - cursor);
+
+          // Update the number of received bytes (at the network level, as best as we can measure).
+          // We must do this before we break out of the loop.
+          //
+          // Note that for some implementations like Cronet's, this would count uncompressed bytes
+          // even if the original response was compressed using a Content-Encoding. Hence, this
+          // would be an over-estimate of actual network data usage. We will, however, try to
+          // provide a more accurate value once the request is completed successfully, if a
+          // Content-Length response header was available. See doOnResponseCompleted.
+          if (estimateSentReceivedBytes) {
+            long newNetworkReceivedBytes = networkStream.getCount();
+            receivedBodyBytes += (newNetworkReceivedBytes - networkReceivedBytes);
+            networkReceivedBytes = newNetworkReceivedBytes;
+          }
+
           if (actualBytesRead == -1) {
             // End of data reached (successfully). Break out of inner loop.
             break;
@@ -834,7 +1035,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
   }
 
   /** Returns the {@link java.io.InputStream} that will return the response body data. */
-  private static InputStream getResponseBodyStream(HttpURLConnection connection)
+  private static CountingInputStream getResponseBodyStream(HttpURLConnection connection)
       throws IOException {
     // If the response was an error, then we need to call getErrorStream() to get the response
     // body. Otherwise we need to use getInputStream().
@@ -844,9 +1045,9 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     // in between isn't helpful.
     InputStream errorStream = connection.getErrorStream();
     if (errorStream == null) {
-      return connection.getInputStream();
+      return new CountingInputStream(connection.getInputStream());
     }
-    return errorStream;
+    return new CountingInputStream(errorStream);
   }
 
   /**

@@ -216,7 +216,8 @@ void CurlHttpRequestHandle::RemoveFromMulti(CurlMultiHandle* multi_handle) {
   }
 }
 
-int64_t CurlHttpRequestHandle::TotalSentBytes() const {
+HttpRequestHandle::SentReceivedBytes
+CurlHttpRequestHandle::TotalSentReceivedBytes() const {
   absl::MutexLock lock(&mutex_);
   curl_off_t total_sent_bytes = 0;
   CURLcode code =
@@ -224,22 +225,15 @@ int64_t CurlHttpRequestHandle::TotalSentBytes() const {
   if (code != CURLE_OK) {
     FCP_LOG(ERROR) << "TotalSentBytes failed with code " << code;
     FCP_LOG(ERROR) << error_buffer_;
-    return -1;
   }
-  return total_sent_bytes;
-}
-
-int64_t CurlHttpRequestHandle::TotalReceivedBytes() const {
-  absl::MutexLock lock(&mutex_);
   curl_off_t total_received_bytes = 0;
-  CURLcode code =
-      easy_handle_->GetInfo(CURLINFO_SIZE_DOWNLOAD_T, &total_received_bytes);
+  code = easy_handle_->GetInfo(CURLINFO_SIZE_DOWNLOAD_T, &total_received_bytes);
   if (code != CURLE_OK) {
     FCP_LOG(ERROR) << "TotalReceivedBytes failed with code " << code;
     FCP_LOG(ERROR) << error_buffer_;
-    return -1;
   }
-  return total_received_bytes;
+  return {.sent_bytes = total_sent_bytes,
+          .received_bytes = total_received_bytes};
 }
 
 CURLcode CurlHttpRequestHandle::InitializeConnection() {

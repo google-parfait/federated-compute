@@ -92,24 +92,20 @@ class MockableHttpClient : public HttpClient {
     cancellation_listener_ = listener;
   }
 
-  // Returns the (fake) number of bytes that the mock client has received. This
-  // number will match the sum of all `HttpRequestHandle`'s
-  // `TotalReceivedBytes()` methods after they were processed by the mock
+  // Returns the (fake) number of bytes that the mock client has sent/received.
+  // This number will match the sum of all `HttpRequestHandle`'s
+  // `TotalSentReceivedBytes()` methods after they were processed by the mock
   // client.
-  virtual int64_t TotalReceivedBytes() { return received_bytes_; }
-
-  // Returns the (fake) number of bytes that the mock client has sent. This
-  // number will match the sum of all `HttpRequestHandle`'s `TotalSentBytes()`
-  // methods after they were processed by the mock client.
-  virtual int64_t TotalSentBytes() { return sent_bytes_; }
+  virtual HttpRequestHandle::SentReceivedBytes TotalSentReceivedBytes() {
+    return sent_received_bytes_;
+  }
 
  private:
   std::function<void()> cancellation_listener_;
 
   // A running (fake) tally of the number of bytes that have been
   // downloaded/uploaded so far.
-  int64_t received_bytes_;
-  int64_t sent_bytes_;
+  HttpRequestHandle::SentReceivedBytes sent_received_bytes_;
 };
 
 // A convenient to use mock HttpClient implementation.
