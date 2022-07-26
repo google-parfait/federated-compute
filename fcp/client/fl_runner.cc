@@ -16,6 +16,7 @@
 #include "fcp/client/fl_runner.h"
 
 #include <fstream>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -30,6 +31,7 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/client/engine/engine.pb.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/simple_plan_engine.h"
 #include "openssl/digest.h"
@@ -50,6 +52,7 @@
 #include "fcp/client/http/http_federated_protocol.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/opstats/opstats_example_store.h"
 #include "fcp/client/phase_logger_impl.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
@@ -252,14 +255,36 @@ void UpdateRetryWindowAndNetworkStats(FederatedProtocol& federated_protocol,
       retry_window, GetNetworkStats(&federated_protocol));
 }
 
+// Creates an ExampleIteratorFactory that routes queries to the
+// SimpleTaskEnvironment::CreateExampleIterator() method.
+std::unique_ptr<engine::ExampleIteratorFactory>
+CreateSimpleTaskEnvironmentIteratorFactory(
+    SimpleTaskEnvironment* task_env, const SelectorContext& selector_context) {
+  return std::make_unique<engine::FunctionalExampleIteratorFactory>(
+      /*can_handle_func=*/
+      [](const google::internal::federated::plan::ExampleSelector&) {
+        // The SimpleTaskEnvironment-based ExampleIteratorFactory should
+        // be the catch-all factory that is able to handle all queries
+        // that no other ExampleIteratorFactory is able to handle.
+        return true;
+      },
+      /*create_iterator_func=*/
+      [task_env, selector_context](
+          const google::internal::federated::plan::ExampleSelector&
+              example_selector) {
+        return task_env->CreateExampleIterator(example_selector,
+                                               selector_context);
+      });
+}
+
 engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
-    SimpleTaskEnvironment* env_deps, LogManager* log_manager,
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+    std::function<bool()> should_abort, LogManager* log_manager,
     OpStatsLogger* opstats_logger, const Flags* flags,
     const ClientOnlyPlan& client_plan,
     const std::string& checkpoint_input_filename,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time run_plan_start_time, const absl::Time reference_time,
-    const SelectorContext& eligibility_selector_context) {
+    const absl::Time run_plan_start_time, const absl::Time reference_time) {
   // Check that this is a TensorflowSpec-based plan for federated eligibility
   // computation.
   if (!client_plan.phase().has_tensorflow_spec() ||
@@ -280,11 +305,12 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
     std::unique_ptr<TfLiteInputs> tflite_inputs =
         ConstructTfLiteInputsForEligibilityEvalPlan(io_router,
                                                     checkpoint_input_filename);
-    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
-                                         flags, &timing_config);
-    return plan_engine.RunPlan(
-        client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
-        std::move(tflite_inputs), output_names, eligibility_selector_context);
+    engine::TfLitePlanEngine plan_engine(example_iterator_factories,
+                                         should_abort, log_manager,
+                                         opstats_logger, flags, &timing_config);
+    return plan_engine.RunPlan(client_plan.phase().tensorflow_spec(),
+                               client_plan.tflite_graph(),
+                               std::move(tflite_inputs), output_names);
   }
 #endif
 
@@ -293,12 +319,12 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
   auto inputs = ConstructInputsForEligibilityEvalPlan(
       io_router, checkpoint_input_filename);
   // Run plan and get a set of output tensors back.
-  engine::SimplePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
+  engine::SimplePlanEngine plan_engine(example_iterator_factories, should_abort,
+                                       log_manager, opstats_logger,
                                        &timing_config);
   return plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
-      client_plan.tensorflow_config_proto(), std::move(inputs), output_names,
-      eligibility_selector_context);
+      client_plan.tensorflow_config_proto(), std::move(inputs), output_names);
 }
 
 // Validates the output tensors that resulted from executing the plan, and then
@@ -399,13 +425,13 @@ absl::StatusOr<std::vector<std::string>> ConstructOutputsWithDeterministicOrder(
 }
 
 PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
-    SimpleTaskEnvironment* env_deps, LogManager* log_manager,
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+    std::function<bool()> should_abort, LogManager* log_manager,
     OpStatsLogger* opstats_logger, const Flags* flags,
     const ClientOnlyPlan& client_plan,
     const std::string& checkpoint_input_filename,
     const std::string& checkpoint_output_filename,
-    const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const SelectorContext& selector_context) {
+    const fcp::client::InterruptibleRunner::TimingConfig& timing_config) {
   if (!client_plan.phase().has_tensorflow_spec()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
         engine::PlanOutcome::kInvalidArgument,
@@ -435,11 +461,12 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
         ConstructTFLiteInputsForTensorflowSpecPlan(
             client_plan.phase().federated_compute(), checkpoint_input_filename,
             checkpoint_output_filename);
-    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
-                                         flags, &timing_config);
+    engine::TfLitePlanEngine plan_engine(example_iterator_factories,
+                                         should_abort, log_manager,
+                                         opstats_logger, flags, &timing_config);
     engine::PlanResult plan_result = plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
-        std::move(tflite_inputs), *output_names, selector_context);
+        std::move(tflite_inputs), *output_names);
     PlanResultAndCheckpointFile result(std::move(plan_result));
     result.checkpoint_file = checkpoint_output_filename;
 
@@ -453,12 +480,12 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   auto inputs = ConstructInputsForTensorflowSpecPlan(
       client_plan.phase().federated_compute(), checkpoint_input_filename,
       checkpoint_output_filename);
-  engine::SimplePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
+  engine::SimplePlanEngine plan_engine(example_iterator_factories, should_abort,
+                                       log_manager, opstats_logger,
                                        &timing_config);
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
-      client_plan.tensorflow_config_proto(), std::move(inputs), *output_names,
-      selector_context);
+      client_plan.tensorflow_config_proto(), std::move(inputs), *output_names);
 
   PlanResultAndCheckpointFile result(std::move(plan_result));
   result.checkpoint_file = checkpoint_output_filename;
@@ -683,12 +710,12 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
 //   appropriately.
 absl::StatusOr<std::optional<TaskEligibilityInfo>>
 IssueEligibilityEvalCheckinAndRunPlan(
-    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger, Files* files,
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+    std::function<bool()> should_abort, PhaseLogger& phase_logger, Files* files,
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time reference_time, FLRunnerResult& fl_runner_result,
-    const SelectorContext& selector_context) {
+    const absl::Time reference_time, FLRunnerResult& fl_runner_result) {
   absl::Time time_before_eligibility_eval_checkin = absl::Now();
   // Log that we are about to check in with the server.
   phase_logger.LogEligibilityEvalCheckInStarted();
@@ -795,9 +822,9 @@ IssueEligibilityEvalCheckinAndRunPlan(
   absl::Time run_plan_start_time = absl::Now();
   phase_logger.LogEligibilityEvalComputationStarted();
   engine::PlanResult plan_result = RunEligibilityEvalPlanWithTensorflowSpec(
-      env_deps, log_manager, opstats_logger, flags, plan,
-      *checkpoint_input_filename, timing_config, run_plan_start_time,
-      reference_time, selector_context);
+      example_iterator_factories, should_abort, log_manager, opstats_logger,
+      flags, plan, *checkpoint_input_filename, timing_config,
+      run_plan_start_time, reference_time);
   absl::StatusOr<TaskEligibilityInfo> task_eligibility_info;
   if (plan_result.outcome == engine::PlanOutcome::kSuccess) {
     task_eligibility_info =
@@ -1046,9 +1073,10 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // Check if the device conditions allow for checking in with the server
   // and running a federated computation. If not, bail early with the
   // transient error retry window.
-  bool should_abort =
-      env_deps->ShouldAbort(absl::Now(), timing_config.polling_period);
-  if (should_abort) {
+  std::function<bool()> should_abort = [env_deps, &timing_config]() {
+    return env_deps->ShouldAbort(absl::Now(), timing_config.polling_period);
+  };
+  if (should_abort()) {
     std::string message =
         "Device conditions not satisfied, aborting federated computation";
     FCP_LOG(INFO) << message;
@@ -1056,13 +1084,26 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return fl_runner_result;
   }
 
+  // Eligibility eval plans can use example iterators from the
+  // SimpleTaskEnvironment and those reading the OpStats DB.
+  opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
+      opstats_logger, log_manager);
+  std::unique_ptr<engine::ExampleIteratorFactory>
+      env_eligibility_example_iterator_factory =
+          CreateSimpleTaskEnvironmentIteratorFactory(
+              env_deps, eligibility_selector_context);
+  std::vector<engine::ExampleIteratorFactory*>
+      eligibility_example_iterator_factories{
+          &opstats_example_iterator_factory,
+          env_eligibility_example_iterator_factory.get()};
+
   // Note that this method will update fl_runner_result's fields with values
   // received over the course of the eligibility eval protocol interaction.
   absl::StatusOr<std::optional<TaskEligibilityInfo>> eligibility_eval_result =
       IssueEligibilityEvalCheckinAndRunPlan(
-          env_deps, phase_logger, files, log_manager, opstats_logger, flags,
-          federated_protocol, timing_config, reference_time, fl_runner_result,
-          eligibility_selector_context);
+          eligibility_example_iterator_factories, should_abort, phase_logger,
+          files, log_manager, opstats_logger, flags, federated_protocol,
+          timing_config, reference_time, fl_runner_result);
   if (!eligibility_eval_result.ok()) {
     return fl_runner_result;
   }
@@ -1126,12 +1167,20 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
                                        run_plan_start_time);
     return fl_runner_result;
   }
+
+  // Regular plans can use example iterators from the SimpleTaskEnvironment and
+  // those reading the OpStats DB.
+  std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
+      CreateSimpleTaskEnvironmentIteratorFactory(
+          env_deps, federated_selector_context_with_task_name);
+  std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
+      &opstats_example_iterator_factory, env_example_iterator_factory.get()};
   PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
-      RunPlanWithTensorflowSpec(env_deps, log_manager, opstats_logger, flags,
+      RunPlanWithTensorflowSpec(example_iterator_factories, should_abort,
+                                log_manager, opstats_logger, flags,
                                 checkin_result->plan,
                                 checkin_result->checkpoint_input_filename,
-                                *checkpoint_output_filename, timing_config,
-                                federated_selector_context_with_task_name);
+                                *checkpoint_output_filename, timing_config);
   auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
   absl::StatusOr<ComputationResults> computation_results;
   if (outcome == engine::PlanOutcome::kSuccess) {
@@ -1170,12 +1219,25 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   result.set_outcome(engine::PhaseOutcome::ERROR);
   engine::PlanResult plan_result(engine::PlanOutcome::kTensorflowError,
                                  absl::UnknownError(""));
+  std::function<bool()> should_abort = [env_deps, &timing_config]() {
+    return env_deps->ShouldAbort(absl::Now(), timing_config.polling_period);
+  };
+
   auto opstats_logger =
       engine::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
                                   /*session_name=*/"", /*population_name=*/"");
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
                                log_manager, flags);
-  SelectorContext selector_context;
+
+  // Both regular and eligibility eval plans can use example iterators from the
+  // SimpleTaskEnvironment, and those reading the OpStats DB.
+  opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
+      opstats_logger.get(), log_manager);
+  std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
+      CreateSimpleTaskEnvironmentIteratorFactory(env_deps, SelectorContext());
+  std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
+      &opstats_example_iterator_factory, env_example_iterator_factory.get()};
+
   phase_logger.LogComputationStarted();
   if (client_plan.phase().has_federated_compute()) {
     absl::StatusOr<std::string> checkpoint_output_filename =
@@ -1188,19 +1250,19 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     }
     // Regular TensorflowSpec-based plans.
     PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
-        RunPlanWithTensorflowSpec(env_deps, log_manager, opstats_logger.get(),
-                                  flags, client_plan, checkpoint_input_filename,
-                                  *checkpoint_output_filename, timing_config,
-                                  selector_context);
+        RunPlanWithTensorflowSpec(example_iterator_factories, should_abort,
+                                  log_manager, opstats_logger.get(), flags,
+                                  client_plan, checkpoint_input_filename,
+                                  *checkpoint_output_filename, timing_config);
     result.set_checkpoint_output_filename(
         plan_result_and_checkpoint_file.checkpoint_file);
     plan_result = std::move(plan_result_and_checkpoint_file.plan_result);
   } else if (client_plan.phase().has_federated_compute_eligibility()) {
     // Eligibility eval plans.
     plan_result = RunEligibilityEvalPlanWithTensorflowSpec(
-        env_deps, log_manager, opstats_logger.get(), flags, client_plan,
-        checkpoint_input_filename, timing_config, run_plan_start_time,
-        reference_time, selector_context);
+        example_iterator_factories, should_abort, log_manager,
+        opstats_logger.get(), flags, client_plan, checkpoint_input_filename,
+        timing_config, run_plan_start_time, reference_time);
   } else {
     // This branch shouldn't be taken, unless we add an additional type of
     // TensorflowSpec-based plan in the future. We return a readable error so

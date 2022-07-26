@@ -15,6 +15,7 @@
  */
 #include "fcp/client/lc_runner.h"
 
+#include <functional>
 #include <map>
 #include <string>
 #include <utility>
@@ -24,8 +25,10 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/simple_plan_engine.h"
+#include "fcp/client/opstats/opstats_example_store.h"
 
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
 #include "fcp/client/engine/tflite_plan_engine.h"
@@ -108,14 +111,37 @@ void LogComputationOutcome(engine::PlanResult plan_result,
   }
 }
 
+// Creates an ExampleIteratorFactory that routes queries to the
+// SimpleTaskEnvironment::CreateExampleIterator() method.
+std::unique_ptr<engine::ExampleIteratorFactory>
+CreateSimpleTaskEnvironmentIteratorFactory(
+    SimpleTaskEnvironment* task_env, const SelectorContext& selector_context) {
+  return std::make_unique<engine::FunctionalExampleIteratorFactory>(
+      /*can_handle_func=*/
+      [](const google::internal::federated::plan::ExampleSelector&) {
+        // The SimpleTaskEnvironment-based ExampleIteratorFactory should
+        // be the catch-all factory that is able to handle all queries
+        // that no other ExampleIteratorFactory is able to handle.
+        return true;
+      },
+      /*create_iterator_func=*/
+      [task_env, selector_context](
+          const google::internal::federated::plan::ExampleSelector&
+              example_selector) {
+        return task_env->CreateExampleIterator(example_selector,
+                                               selector_context);
+      });
+}
+
 absl::Status RunPlanWithTensorflowSpec(
-    PhaseLogger& phase_logger, SimpleTaskEnvironment* env_deps,
-    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
+    PhaseLogger& phase_logger,
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+    std::function<bool()> should_abort, LogManager* log_manager,
+    OpStatsLogger* opstats_logger, const Flags* flags,
     const ClientOnlyPlan& client_plan, const std::string& input_dir_uri,
     const std::string& output_dir_uri,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time run_plan_start_time, const absl::Time reference_time,
-    const SelectorContext& selector_context) {
+    const absl::Time run_plan_start_time, const absl::Time reference_time) {
   // Check that this is a TensorflowSpec-based plan for local computation.
   if (!client_plan.phase().has_tensorflow_spec()) {
     absl::Status error_status =
@@ -142,11 +168,12 @@ absl::Status RunPlanWithTensorflowSpec(
   if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
     auto inputs = ConstructInputsForTFLitePlan(
         client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
-    engine::TfLitePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
-                                         flags, &timing_config);
+    engine::TfLitePlanEngine plan_engine(example_iterator_factories,
+                                         should_abort, log_manager,
+                                         opstats_logger, flags, &timing_config);
     engine::PlanResult plan_result = plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
-        std::move(inputs), output_names_unused, selector_context);
+        std::move(inputs), output_names_unused);
     engine::PlanOutcome outcome = plan_result.outcome;
     LogComputationOutcome(std::move(plan_result), phase_logger,
                           run_plan_start_time, reference_time);
@@ -158,12 +185,13 @@ absl::Status RunPlanWithTensorflowSpec(
   // message.
   auto inputs = ConstructInputsForTensorflowSpecPlan(
       client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
-  engine::SimplePlanEngine plan_engine(env_deps, log_manager, opstats_logger,
+  engine::SimplePlanEngine plan_engine(example_iterator_factories, should_abort,
+                                       log_manager, opstats_logger,
                                        &timing_config);
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs),
-      output_names_unused, selector_context);
+      output_names_unused);
   engine::PlanOutcome outcome = plan_result.outcome;
   LogComputationOutcome(std::move(plan_result), phase_logger,
                         run_plan_start_time, reference_time);
@@ -205,14 +233,26 @@ absl::Status RunLocalComputation(
   absl::Time reference_time = absl::Now();
   absl::Duration polling_period =
       absl::Milliseconds(flags->condition_polling_period_millis());
+  std::function<bool()> should_abort = [env_deps, polling_period]() {
+    return env_deps->ShouldAbort(absl::Now(), polling_period);
+  };
   // Check if the device conditions allow running a local computation.
-  if (env_deps->ShouldAbort(reference_time, polling_period)) {
+  if (should_abort()) {
     std::string message =
         "Device conditions not satisfied, aborting local computation";
     FCP_LOG(INFO) << message;
     phase_logger.LogTaskNotStarted(message);
     return absl::CancelledError("");
   }
+  // Local compute plans can use example iterators from the
+  // SimpleTaskEnvironment and those reading the OpStats DB.
+  opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
+      opstats_logger, log_manager);
+  std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
+      CreateSimpleTaskEnvironmentIteratorFactory(env_deps, selector_context);
+  std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
+      &opstats_example_iterator_factory, env_example_iterator_factory.get()};
+
   fcp::client::InterruptibleRunner::TimingConfig timing_config = {
       .polling_period = polling_period,
       .graceful_shutdown_period = absl::Milliseconds(
@@ -245,9 +285,9 @@ absl::Status RunLocalComputation(
   std::vector<std::string> output_names;
   std::vector<tensorflow::Tensor> output_tensors;
   return RunPlanWithTensorflowSpec(
-      phase_logger, env_deps, log_manager, opstats_logger, flags, plan,
-      input_dir_uri, output_dir_uri, timing_config, run_plan_start_time,
-      reference_time, selector_context);
+      phase_logger, example_iterator_factories, should_abort, log_manager,
+      opstats_logger, flags, plan, input_dir_uri, output_dir_uri, timing_config,
+      run_plan_start_time, reference_time);
 }
 
 }  // namespace client

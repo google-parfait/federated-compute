@@ -18,11 +18,13 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/common.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
@@ -92,11 +94,13 @@ class ExampleIteratorStatus {
 // Sets up a ExternalDatasetProvider that is registered with the global
 // HostObjectRegistry. Adds a tensor representing the HostObjectRegistration
 // token to the input tensors with the provided dataset_token_tensor_name key.
+//
+// For each example query issued by the plan at runtime, the given
+// `example_iterator_factories` parameter will be iterated and the first
+// iterator factory that can handle the given query will be used to create the
+// example iterator to handle that query.
 HostObjectRegistration AddDatasetTokenToInputs(
-    std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
-        const google::internal::federated::plan::ExampleSelector&)>
-        create_example_iterator,
-    LogManager* log_manager,
+    std::vector<ExampleIteratorFactory*> example_iterator_factories,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger,
     std::vector<std::pair<std::string, tensorflow::Tensor>>* inputs,
     const std::string& dataset_token_tensor_name,
@@ -108,27 +112,19 @@ HostObjectRegistration AddDatasetTokenToInputs(
 // HostObjectRegistry. Adds a std::string representing the HostObjectRegistration
 // token to the map of input tensor name and values with the provided
 // dataset_token_tensor_name key.
+//
+// For each example query issued by the plan at runtime, the given
+// `example_iterator_factories` parameter will be iterated and the first
+// iterator factory that can handle the given query will be used to create the
+// example iterator to handle that query.
 HostObjectRegistration AddDatasetTokenToInputsForTfLite(
-    std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
-        const google::internal::federated::plan::ExampleSelector&)>
-        create_example_iterator,
-    LogManager* log_manager,
+    std::vector<ExampleIteratorFactory*> example_iterator_factories,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger,
     absl::flat_hash_map<std::string, std::string>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes,
     ExampleIteratorStatus* example_iterator_status);
-
-// Helper for constructing the appropriate example iterator (opstats data or
-// user data) based on the provided selector.
-absl::StatusOr<std::unique_ptr<ExampleIterator>> GetExampleIterator(
-    const google::internal::federated::plan::ExampleSelector& selector,
-    LogManager* log_manager,
-    ::fcp::client::opstats::OpStatsLogger* opstats_logger,
-    std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
-        const google::internal::federated::plan::ExampleSelector&)>
-        create_example_iterator);
 
 // If opstats is enabled, this method attempts to create an opstats logger
 // backed by a database within base_dir and prepares to record information for a

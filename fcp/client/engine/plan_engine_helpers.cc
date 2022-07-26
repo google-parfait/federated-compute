@@ -18,13 +18,14 @@
 #include <functional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "fcp/client/diag_codes.pb.h"
-#include "fcp/client/opstats/opstats_example_store.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/opstats/opstats_logger_impl.h"
 #include "fcp/client/opstats/pds_backed_opstats_db.h"
+#include "fcp/protos/plan.pb.h"
 #include "fcp/tensorflow/external_dataset.h"
 
 namespace fcp {
@@ -117,19 +118,26 @@ class FailingDatasetIterator : public ExternalDatasetIterator {
   const absl::Status status_;
 };
 
+ExampleIteratorFactory* FindExampleIteratorFactory(
+    const ExampleSelector& selector,
+    std::vector<ExampleIteratorFactory*> example_iterator_factories) {
+  for (ExampleIteratorFactory* factory : example_iterator_factories) {
+    if (factory->CanHandle(selector)) {
+      return factory;
+    }
+  }
+  return nullptr;
+}
+
 class TrainingDatasetProvider
     : public ExternalDatasetProvider::UsingProtoSelector<ExampleSelector> {
  public:
   TrainingDatasetProvider(
-      std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
-          const google::internal::federated::plan::ExampleSelector&)>
-          create_example_iterator,
-      LogManager* log_manager, OpStatsLogger* opstats_logger,
-      std::atomic<int>* total_example_count,
+      std::vector<ExampleIteratorFactory*> example_iterator_factories,
+      OpStatsLogger* opstats_logger, std::atomic<int>* total_example_count,
       std::atomic<int64_t>* total_example_size_bytes,
       ExampleIteratorStatus* example_iterator_status)
-      : create_example_iterator_(create_example_iterator),
-        log_manager_(log_manager),
+      : example_iterator_factories_(example_iterator_factories),
         opstats_logger_(opstats_logger),
         total_example_count_(total_example_count),
         total_example_size_bytes_(total_example_size_bytes),
@@ -138,16 +146,25 @@ class TrainingDatasetProvider
   absl::StatusOr<std::unique_ptr<ExternalDataset>> MakeDataset(
       ExampleSelector selector) final {
     return ExternalDataset::FromFunction(
-        [create_example_iterator = create_example_iterator_,
-         log_manager = log_manager_, opstats_logger = opstats_logger_, selector,
+        [example_iterator_factories = example_iterator_factories_,
+         opstats_logger = opstats_logger_, selector,
          total_example_count = total_example_count_,
          total_example_size_bytes = total_example_size_bytes_,
          example_iterator_status = example_iterator_status_]()
             -> std::unique_ptr<ExternalDatasetIterator> {
-          auto example_iterator = GetExampleIterator(
-              selector, log_manager, opstats_logger, create_example_iterator);
-          // The DatasetOp requires a valid iterator at
-          // this stage so return an empty iterator if there was an error.
+          ExampleIteratorFactory* example_iterator_factory =
+              FindExampleIteratorFactory(selector, example_iterator_factories);
+          // The DatasetOp requires a valid iterator at this stage so return an
+          // empty iterator if there was an error.
+          if (example_iterator_factory == nullptr) {
+            absl::Status error(
+                absl::StatusCode::kInternal,
+                "Could not find suitable ExampleIteratorFactory");
+            example_iterator_status->SetStatus(error);
+            return std::make_unique<FailingDatasetIterator>(error);
+          }
+          absl::StatusOr<std::unique_ptr<ExampleIterator>> example_iterator =
+              example_iterator_factory->CreateExampleIterator(selector);
           if (!example_iterator.ok()) {
             example_iterator_status->SetStatus(example_iterator.status());
             return std::make_unique<FailingDatasetIterator>(
@@ -161,10 +178,7 @@ class TrainingDatasetProvider
   }
 
  private:
-  std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
-      const google::internal::federated::plan::ExampleSelector&)>
-      create_example_iterator_;
-  LogManager* log_manager_;
+  std::vector<ExampleIteratorFactory*> example_iterator_factories_;
   OpStatsLogger* opstats_logger_;
   std::atomic<int>* total_example_count_;
   std::atomic<int64_t>* total_example_size_bytes_;
@@ -190,10 +204,8 @@ absl::Status ExampleIteratorStatus::GetStatus() {
 }
 
 HostObjectRegistration AddDatasetTokenToInputs(
-    std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
-        const google::internal::federated::plan::ExampleSelector&)>
-        create_example_iterator,
-    LogManager* log_manager, OpStatsLogger* opstats_logger,
+    std::vector<ExampleIteratorFactory*> example_iterator_factories,
+    OpStatsLogger* opstats_logger,
     std::vector<std::pair<std::string, tensorflow::Tensor>>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
@@ -203,9 +215,8 @@ HostObjectRegistration AddDatasetTokenToInputs(
   // ExternalDatasetProviderRegistry.
   auto host_registration = fcp::ExternalDatasetProviderRegistry::Register(
       std::make_shared<TrainingDatasetProvider>(
-          create_example_iterator, log_manager, opstats_logger,
-          total_example_count, total_example_size_bytes,
-          example_iterator_status));
+          example_iterator_factories, opstats_logger, total_example_count,
+          total_example_size_bytes, example_iterator_status));
   // Pack the token returned from registering the provider into a std::string
   // tensor. TensorFlow will use that token via the ExternalDatasetOp to create
   // datasets and iterators.
@@ -219,10 +230,8 @@ HostObjectRegistration AddDatasetTokenToInputs(
 }
 
 HostObjectRegistration AddDatasetTokenToInputsForTfLite(
-    std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
-        const google::internal::federated::plan::ExampleSelector&)>
-        create_example_iterator,
-    LogManager* log_manager, OpStatsLogger* opstats_logger,
+    std::vector<ExampleIteratorFactory*> example_iterator_factories,
+    OpStatsLogger* opstats_logger,
     absl::flat_hash_map<std::string, std::string>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
@@ -232,35 +241,13 @@ HostObjectRegistration AddDatasetTokenToInputsForTfLite(
   // ExternalDatasetProviderRegistry.
   auto host_registration = fcp::ExternalDatasetProviderRegistry::Register(
       std::make_shared<TrainingDatasetProvider>(
-          create_example_iterator, log_manager, opstats_logger,
-          total_example_count, total_example_size_bytes,
-          example_iterator_status));
+          example_iterator_factories, opstats_logger, total_example_count,
+          total_example_size_bytes, example_iterator_status));
   // Adds the token returned from registering the provider to the map of inputs.
   // TfLite will use that token via the ExternalDatasetOp to create
   // datasets and iterators.
   (*inputs)[dataset_token_tensor_name] = host_registration.token().ToString();
   return host_registration;
-}
-
-absl::StatusOr<std::unique_ptr<ExampleIterator>> GetExampleIterator(
-    const ExampleSelector& selector, LogManager* log_manager,
-    OpStatsLogger* opstats_logger,
-    std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
-        const google::internal::federated::plan::ExampleSelector&)>
-        create_example_iterator) {
-  if (selector.collection_uri() == opstats::kOpStatsCollectionUri) {
-    if (!opstats_logger->IsOpStatsEnabled()) {
-      log_manager->LogDiag(
-          ProdDiagCode::OPSTATS_EXAMPLE_STORE_REQUESTED_NOT_ENABLED);
-      return absl::InvalidArgumentError(
-          "OpStats example store is not enabled.");
-    } else {
-      return opstats::CreateExampleIterator(
-          selector, *opstats_logger->GetOpStatsDb(), *log_manager);
-    }
-  } else {
-    return create_example_iterator(selector);
-  }
 }
 
 std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(

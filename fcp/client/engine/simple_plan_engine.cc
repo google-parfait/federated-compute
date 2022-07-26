@@ -18,12 +18,14 @@
 #include <functional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "google/protobuf/any.pb.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+#include "fcp/client/simple_task_environment.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 
 namespace fcp {
@@ -34,10 +36,12 @@ using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::TensorflowSpec;
 
 SimplePlanEngine::SimplePlanEngine(
-    SimpleTaskEnvironment* task_env, LogManager* log_manager,
+    std::vector<ExampleIteratorFactory*> example_iterator_factories,
+    std::function<bool()> should_abort, LogManager* log_manager,
     OpStatsLogger* opstats_logger,
     const InterruptibleRunner::TimingConfig* timing_config)
-    : task_env_(task_env),
+    : example_iterator_factories_(example_iterator_factories),
+      should_abort_(should_abort),
       log_manager_(log_manager),
       opstats_logger_(opstats_logger),
       timing_config_(timing_config) {}
@@ -47,8 +51,7 @@ PlanResult SimplePlanEngine::RunPlan(
     const ::google::protobuf::Any& config_proto,
     std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
         inputs,
-    const std::vector<std::string>& output_names,
-    const SelectorContext& selector_context) {
+    const std::vector<std::string>& output_names) {
   // Check that all inputs have corresponding TensorSpecProtos.
   absl::flat_hash_set<std::string> expected_input_tensor_names_set;
   for (const std::pair<std::string, tensorflow::Tensor>& input : *inputs) {
@@ -63,13 +66,8 @@ PlanResult SimplePlanEngine::RunPlan(
   }
 
   absl::StatusOr<std::unique_ptr<TensorFlowWrapper>> tf_wrapper_or =
-      TensorFlowWrapper::Create(
-          graph, config_proto,
-          [this]() {
-            return task_env_->ShouldAbort(absl::Now(),
-                                          timing_config_->polling_period);
-          },
-          *timing_config_, log_manager_);
+      TensorFlowWrapper::Create(graph, config_proto, should_abort_,
+                                *timing_config_, log_manager_);
   if (!tf_wrapper_or.ok()) {
     return PlanResult(PlanOutcome::kTensorflowError, tf_wrapper_or.status());
   }
@@ -79,10 +77,10 @@ PlanResult SimplePlanEngine::RunPlan(
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
   ExampleIteratorStatus example_iterator_status;
-  auto tf_result = RunPlanInternal(
-      tf_wrapper.get(), tensorflow_spec, std::move(inputs), output_names,
-      selector_context, &total_example_count, &total_example_size_bytes,
-      &example_iterator_status);
+  auto tf_result =
+      RunPlanInternal(tf_wrapper.get(), tensorflow_spec, std::move(inputs),
+                      output_names, &total_example_count,
+                      &total_example_size_bytes, &example_iterator_status);
   FCP_CHECK(tf_wrapper->CloseAndRelease().ok());
 
   switch (tf_result.status().code()) {
@@ -113,7 +111,6 @@ SimplePlanEngine::RunPlanInternal(
     std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
         inputs,
     const std::vector<std::string>& output_names,
-    const SelectorContext& selector_context,
     std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes,
     ExampleIteratorStatus* example_iterator_status) {
@@ -123,11 +120,7 @@ SimplePlanEngine::RunPlanInternal(
   // object. Hold onto the HostObjectRegistration object since it de-registers
   // upon destruction.
   HostObjectRegistration host_registration = AddDatasetTokenToInputs(
-      [this, selector_context](
-          const google::internal::federated::plan::ExampleSelector& selector) {
-        return task_env_->CreateExampleIterator(selector, selector_context);
-      },
-      log_manager_, opstats_logger_, inputs.get(),
+      example_iterator_factories_, opstats_logger_, inputs.get(),
       tensorflow_spec.dataset_token_tensor_name(), total_example_count,
       total_example_size_bytes, example_iterator_status);
 

@@ -16,12 +16,16 @@
 #ifndef FCP_CLIENT_OPSTATS_OPSTATS_EXAMPLE_STORE_H_
 #define FCP_CLIENT_OPSTATS_OPSTATS_EXAMPLE_STORE_H_
 
+#include <memory>
 #include <string>
 #include <utility>
 
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"
+#include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
+#include "fcp/protos/plan.pb.h"
 
 namespace fcp {
 namespace client {
@@ -51,26 +55,26 @@ inline static constexpr char kChunkingLayerBytesUploaded[] =
 inline static constexpr char kEarliestTrustWorthyTimeMillis[] =
     "earliest_trustworthy_time";
 
-class OpStatsExampleIterator : public ExampleIterator {
+class OpStatsExampleIteratorFactory
+    : public fcp::client::engine::ExampleIteratorFactory {
  public:
-  explicit OpStatsExampleIterator(std::vector<OperationalStats> op_stats,
-                                  int64_t earliest_trustworthy_time)
-      : next_(0),
-        data_(std::move(op_stats)),
-        earliest_trustworthy_time_millis_(earliest_trustworthy_time) {}
-  absl::StatusOr<std::string> Next() override;
-  void Close() override;
+  OpStatsExampleIteratorFactory(OpStatsLogger* op_stats_logger,
+                                LogManager* log_manager)
+      : op_stats_logger_(op_stats_logger), log_manager_(log_manager) {}
+
+  bool CanHandle(const google::internal::federated::plan::ExampleSelector&
+                     example_selector) override;
+
+  bool ShouldCollectStats() { return true; }
+
+  absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
+      const google::internal::federated::plan::ExampleSelector&
+          example_selector) override;
 
  private:
-  // The index for the next OperationalStats to be used.
-  int next_;
-  std::vector<OperationalStats> data_;
-  int64_t earliest_trustworthy_time_millis_;
+  OpStatsLogger* op_stats_logger_;
+  LogManager* log_manager_;
 };
-
-absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
-    const google::internal::federated::plan::ExampleSelector& example_selector,
-    OpStatsDb& op_stats_db, LogManager& log_manager);
 
 }  // namespace opstats
 }  // namespace client

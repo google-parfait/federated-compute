@@ -37,6 +37,7 @@ cc_library(
     ],
     deps = [
         ":common",
+        ":example_iterator_factory",
         ":plan_engine_helpers",
         ":tf_wrapper",
         "//fcp/base",
@@ -100,14 +101,15 @@ cc_library(
     ],
     deps = [
         ":common",
+        ":example_iterator_factory",
         "//fcp/base",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interfaces",
         "//fcp/client:simple_task_environment",
-        "//fcp/client/opstats:opstats_example_store",
         "//fcp/client/opstats:opstats_logger",
         "//fcp/client/opstats:opstats_logger_impl",
         "//fcp/client/opstats:pds_backed_opstats_db",
+        "//fcp/protos:plan_cc_proto",
         "//fcp/tensorflow:external_dataset",
         "//fcp/tensorflow:host_object",
         "@com_google_absl//absl/status",
@@ -166,6 +168,7 @@ cc_library(
     copts = FCP_COPTS,
     deps = [
         ":common",
+        ":example_iterator_factory",
         ":plan_engine_helpers",
         ":tflite_wrapper",
         "//fcp/client:interfaces",
@@ -212,6 +215,18 @@ cc_library(
         "@com_google_absl//absl/status",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
+    ],
+)
+
+cc_library(
+    name = "example_iterator_factory",
+    hdrs = ["example_iterator_factory.h"],
+    copts = FCP_COPTS,
+    visibility = default_visibility,
+    deps = [
+        "//fcp/client:simple_task_environment",
+        "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 

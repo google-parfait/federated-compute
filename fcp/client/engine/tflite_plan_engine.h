@@ -18,8 +18,10 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 #include "fcp/client/engine/common.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/interruptible_runner.h"
@@ -35,11 +37,17 @@ namespace engine {
 // Each instance should generally only be used once to run a plan.
 class TfLitePlanEngine {
  public:
-  TfLitePlanEngine(SimpleTaskEnvironment* task_env, LogManager* log_manager,
-                   ::fcp::client::opstats::OpStatsLogger* opstats_logger,
-                   const Flags* flags,
-                   const InterruptibleRunner::TimingConfig* timing_config)
-      : task_env_(task_env),
+  // For each example query issued by the plan at runtime, the given
+  // `example_iterator_factories` parameter will be iterated and the first
+  // iterator factory that can handle the given query will be used to create the
+  // example iterator for that query.
+  TfLitePlanEngine(
+      std::vector<ExampleIteratorFactory*> example_iterator_factories,
+      std::function<bool()> should_abort, LogManager* log_manager,
+      ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+      const InterruptibleRunner::TimingConfig* timing_config)
+      : example_iterator_factories_(example_iterator_factories),
+        should_abort_(should_abort),
         log_manager_(log_manager),
         opstats_logger_(opstats_logger),
         flags_(*flags),
@@ -54,11 +62,11 @@ class TfLitePlanEngine {
       const google::internal::federated::plan::TensorflowSpec& tensorflow_spec,
       const std::string& model,
       std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
-      const std::vector<std::string>& output_names,
-      const SelectorContext& selector_context);
+      const std::vector<std::string>& output_names);
 
  private:
-  SimpleTaskEnvironment* task_env_;
+  std::vector<ExampleIteratorFactory*> example_iterator_factories_;
+  std::function<bool()> should_abort_;
   LogManager* log_manager_;
   ::fcp::client::opstats::OpStatsLogger* opstats_logger_;
   const Flags& flags_;

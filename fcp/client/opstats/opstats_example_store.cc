@@ -15,6 +15,7 @@
  */
 #include "fcp/client/opstats/opstats_example_store.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -23,6 +24,7 @@
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
@@ -139,28 +141,53 @@ std::string CreateExample(const OperationalStats& op_stats,
 
   return example.SerializeAsString();
 }
+
+class OpStatsExampleIterator : public fcp::client::ExampleIterator {
+ public:
+  explicit OpStatsExampleIterator(std::vector<OperationalStats> op_stats,
+                                  int64_t earliest_trustworthy_time)
+      : next_(0),
+        data_(std::move(op_stats)),
+        earliest_trustworthy_time_millis_(earliest_trustworthy_time) {}
+  absl::StatusOr<std::string> Next() override {
+    if (next_ < 0 || next_ >= data_.size()) {
+      return absl::OutOfRangeError("The iterator is out of range.");
+    }
+    return CreateExample(data_[next_++], earliest_trustworthy_time_millis_);
+  }
+
+  void Close() override {
+    next_ = 0;
+    data_.clear();
+  }
+
+ private:
+  // The index for the next OperationalStats to be used.
+  int next_;
+  std::vector<OperationalStats> data_;
+  int64_t earliest_trustworthy_time_millis_;
+};
+
 }  // anonymous namespace
 
-absl::StatusOr<std::string> OpStatsExampleIterator::Next() {
-  if (next_ < 0 || next_ >= data_.size()) {
-    return absl::OutOfRangeError("The iterator is out of range.");
-  }
-  return CreateExample(data_[next_++], earliest_trustworthy_time_millis_);
+bool OpStatsExampleIteratorFactory::CanHandle(
+    const ExampleSelector& example_selector) {
+  return example_selector.collection_uri() == opstats::kOpStatsCollectionUri;
 }
 
-void OpStatsExampleIterator::Close() {
-  next_ = 0;
-  data_.clear();
-}
-
-absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
-    const ExampleSelector& example_selector, OpStatsDb& db,
-    LogManager& log_manager) {
+absl::StatusOr<std::unique_ptr<fcp::client::ExampleIterator>>
+OpStatsExampleIteratorFactory::CreateExampleIterator(
+    const ExampleSelector& example_selector) {
   if (example_selector.collection_uri() != kOpStatsCollectionUri) {
-    log_manager.LogDiag(ProdDiagCode::OPSTATS_INCORRECT_COLLECTION_URI);
+    log_manager_->LogDiag(ProdDiagCode::OPSTATS_INCORRECT_COLLECTION_URI);
     return absl::InvalidArgumentError(absl::StrCat(
         "The collection uri is ", example_selector.collection_uri(),
         ", which is not the expected uri: ", kOpStatsCollectionUri));
+  }
+  if (!op_stats_logger_->IsOpStatsEnabled()) {
+    log_manager_->LogDiag(
+        ProdDiagCode::OPSTATS_EXAMPLE_STORE_REQUESTED_NOT_ENABLED);
+    return absl::InvalidArgumentError("OpStats example store is not enabled.");
   }
 
   absl::Time lower_bound_time = absl::InfinitePast();
@@ -168,7 +195,7 @@ absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
   if (example_selector.has_criteria()) {
     OpStatsSelectionCriteria criteria;
     if (!example_selector.criteria().UnpackTo(&criteria)) {
-      log_manager.LogDiag(ProdDiagCode::OPSTATS_INVALID_SELECTION_CRITERIA);
+      log_manager_->LogDiag(ProdDiagCode::OPSTATS_INVALID_SELECTION_CRITERIA);
       return absl::InvalidArgumentError("Unable to parse selection criteria.");
     }
 
@@ -181,13 +208,14 @@ absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
           TimeUtil::TimestampToMilliseconds(criteria.end_time()));
     }
     if (lower_bound_time > upper_bound_time) {
-      log_manager.LogDiag(ProdDiagCode::OPSTATS_INVALID_SELECTION_CRITERIA);
+      log_manager_->LogDiag(ProdDiagCode::OPSTATS_INVALID_SELECTION_CRITERIA);
       return absl::InvalidArgumentError(
           "Invalid selection criteria: start_time is after end_time.");
     }
   }
 
-  FCP_ASSIGN_OR_RETURN(OpStatsSequence data, db.Read());
+  FCP_ASSIGN_OR_RETURN(OpStatsSequence data,
+                       op_stats_logger_->GetOpStatsDb()->Read());
   std::vector<OperationalStats> selected_data;
   for (auto it = data.opstats().rbegin(); it != data.opstats().rend(); ++it) {
     absl::Time last_update_time = GetLastUpdatedTime(*it);

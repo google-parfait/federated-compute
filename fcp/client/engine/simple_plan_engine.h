@@ -26,6 +26,7 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/common.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/tf_wrapper.h"
 #include "fcp/client/event_publisher.h"
@@ -46,17 +47,22 @@ namespace engine {
 // should generally only be used once to run a plan.
 class SimplePlanEngine {
  public:
-  SimplePlanEngine(SimpleTaskEnvironment* task_env, LogManager* log_manager,
-                   ::fcp::client::opstats::OpStatsLogger* opstats_logger,
-                   const InterruptibleRunner::TimingConfig* timing_config);
+  // For each example query issued by the plan at runtime, the given
+  // `example_iterator_factories` parameter will be iterated and the first
+  // iterator factory that can handle the given query will be used to create the
+  // example iterator for that query.
+  SimplePlanEngine(
+      std::vector<ExampleIteratorFactory*> example_iterator_factories,
+      std::function<bool()> should_abort, LogManager* log_manager,
+      ::fcp::client::opstats::OpStatsLogger* opstats_logger,
+      const InterruptibleRunner::TimingConfig* timing_config);
 
   PlanResult RunPlan(
       const google::internal::federated::plan::TensorflowSpec& tensorflow_spec,
       const std::string& graph, const ::google::protobuf::Any& config_proto,
       std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
           inputs,
-      const std::vector<std::string>& output_names,
-      const SelectorContext& selector_context);
+      const std::vector<std::string>& output_names);
 
  private:
   // Runs the plan. Returns one of three error codes:
@@ -67,7 +73,6 @@ class SimplePlanEngine {
       std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
           inputs,
       const std::vector<std::string>& output_names,
-      const SelectorContext& selector_context,
       std::atomic<int>* total_example_count,
       std::atomic<int64_t>* total_example_size_bytes,
       ExampleIteratorStatus* example_iterator_status);
@@ -85,7 +90,8 @@ class SimplePlanEngine {
       const std::vector<std::string>& output_tensor_names,
       const std::vector<std::string>& target_node_names);
 
-  SimpleTaskEnvironment* task_env_;
+  std::vector<ExampleIteratorFactory*> example_iterator_factories_;
+  std::function<bool()> should_abort_;
   LogManager* log_manager_;
   ::fcp::client::opstats::OpStatsLogger* opstats_logger_;
   const InterruptibleRunner::TimingConfig* timing_config_;

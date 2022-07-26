@@ -18,6 +18,7 @@
 #include <functional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/tflite_wrapper.h"
@@ -70,8 +71,7 @@ TfLiteInterpreterOptions CreateOptions(const Flags& flags) {
 PlanResult TfLitePlanEngine::RunPlan(
     const TensorflowSpec& tensorflow_spec, const std::string& model,
     std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
-    const std::vector<std::string>& output_names,
-    const SelectorContext& selector_context) {
+    const std::vector<std::string>& output_names) {
   log_manager_->LogDiag(ProdDiagCode::BACKGROUND_TRAINING_TFLITE_ENGINE_USED);
   // Check that all inputs have corresponding TensorSpecProtos.
   absl::flat_hash_set<std::string> expected_input_tensor_names_set;
@@ -89,22 +89,13 @@ PlanResult TfLitePlanEngine::RunPlan(
   std::atomic<int64_t> total_example_size_bytes = 0;
   ExampleIteratorStatus example_iterator_status;
   HostObjectRegistration host_registration = AddDatasetTokenToInputsForTfLite(
-      [this, selector_context](
-          const google::internal::federated::plan::ExampleSelector& selector) {
-        return task_env_->CreateExampleIterator(selector, selector_context);
-      },
-      log_manager_, opstats_logger_, inputs.get(),
+      example_iterator_factories_, opstats_logger_, inputs.get(),
       tensorflow_spec.dataset_token_tensor_name(), &total_example_count,
       &total_example_size_bytes, &example_iterator_status);
   absl::StatusOr<std::unique_ptr<TfLiteWrapper>> tflite_wrapper =
-      TfLiteWrapper::Create(
-          model,
-          [this]() {
-            return task_env_->ShouldAbort(absl::Now(),
-                                          timing_config_->polling_period);
-          },
-          *timing_config_, log_manager_, std::move(inputs), output_names,
-          CreateOptions(flags_));
+      TfLiteWrapper::Create(model, should_abort_, *timing_config_, log_manager_,
+                            std::move(inputs), output_names,
+                            CreateOptions(flags_));
   if (!tflite_wrapper.ok()) {
     return PlanResult(PlanOutcome::kTensorflowError, tflite_wrapper.status());
   }

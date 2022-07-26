@@ -40,6 +40,14 @@ using ::google::protobuf::util::TimeUtil;
 using ::testing::Return;
 
 class OpStatsExampleStoreTest : public testing::Test {
+ public:
+  OpStatsExampleStoreTest() {
+    EXPECT_CALL(mock_opstats_logger_, IsOpStatsEnabled())
+        .WillRepeatedly(Return(true));
+    EXPECT_CALL(mock_opstats_logger_, GetOpStatsDb())
+        .WillRepeatedly(Return(&mock_db_));
+  }
+
  protected:
   static OperationalStats::Event CreateEvent(
       OperationalStats::Event::EventKind event_kind, int64_t event_time_ms) {
@@ -58,8 +66,11 @@ class OpStatsExampleStoreTest : public testing::Test {
     return stats;
   }
 
+  testing::StrictMock<MockOpStatsLogger> mock_opstats_logger_;
   testing::StrictMock<MockOpStatsDb> mock_db_;
   testing::StrictMock<MockLogManager> mock_log_manager_;
+  OpStatsExampleIteratorFactory iterator_factory_ =
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
 };
 
 TEST_F(OpStatsExampleStoreTest, TestInvalidCollectionUrl) {
@@ -67,8 +78,11 @@ TEST_F(OpStatsExampleStoreTest, TestInvalidCollectionUrl) {
   selector.set_collection_uri("INVALID");
   EXPECT_CALL(mock_log_manager_,
               LogDiag(ProdDiagCode::OPSTATS_INCORRECT_COLLECTION_URI));
+
+  EXPECT_FALSE(iterator_factory_.CanHandle(selector));
+
   absl::StatusOr<std::unique_ptr<ExampleIterator>> status_or =
-      CreateExampleIterator(selector, mock_db_, mock_log_manager_);
+      iterator_factory_.CreateExampleIterator(selector);
   EXPECT_THAT(status_or.status(), IsCode(absl::StatusCode::kInvalidArgument));
 }
 
@@ -79,7 +93,7 @@ TEST_F(OpStatsExampleStoreTest, TestMalformedCriteria) {
   EXPECT_CALL(mock_log_manager_,
               LogDiag(ProdDiagCode::OPSTATS_INVALID_SELECTION_CRITERIA));
   absl::StatusOr<std::unique_ptr<ExampleIterator>> status_or =
-      CreateExampleIterator(selector, mock_db_, mock_log_manager_);
+      iterator_factory_.CreateExampleIterator(selector);
   EXPECT_THAT(status_or.status(), IsCode(absl::StatusCode::kInvalidArgument));
 }
 
@@ -93,7 +107,7 @@ TEST_F(OpStatsExampleStoreTest, TestInvalidCriteria) {
   EXPECT_CALL(mock_log_manager_,
               LogDiag(ProdDiagCode::OPSTATS_INVALID_SELECTION_CRITERIA));
   absl::StatusOr<std::unique_ptr<ExampleIterator>> status_or =
-      CreateExampleIterator(selector, mock_db_, mock_log_manager_);
+      iterator_factory_.CreateExampleIterator(selector);
   EXPECT_THAT(status_or.status(), IsCode(absl::StatusCode::kInvalidArgument));
 }
 
@@ -103,7 +117,7 @@ TEST_F(OpStatsExampleStoreTest, TestReadFromDbFailed) {
   EXPECT_CALL(mock_db_, Read())
       .WillOnce(Return(absl::InternalError("Something's wrong.")));
   absl::StatusOr<std::unique_ptr<ExampleIterator>> status_or =
-      CreateExampleIterator(selector, mock_db_, mock_log_manager_);
+      iterator_factory_.CreateExampleIterator(selector);
   EXPECT_THAT(status_or.status(), IsCode(absl::StatusCode::kInternal));
 }
 
@@ -128,7 +142,7 @@ TEST_F(OpStatsExampleStoreTest, Success) {
   ExampleSelector selector;
   selector.set_collection_uri(kOpStatsCollectionUri);
   absl::StatusOr<std::unique_ptr<ExampleIterator>> iterator_or =
-      CreateExampleIterator(selector, mock_db_, mock_log_manager_);
+      iterator_factory_.CreateExampleIterator(selector);
   ASSERT_TRUE(iterator_or.ok());
   std::unique_ptr<ExampleIterator> iterator = std::move(iterator_or.value());
   absl::StatusOr<std::string> example_or = iterator->Next();
@@ -176,7 +190,7 @@ TEST_F(OpStatsExampleStoreTest, EmptyData) {
   ExampleSelector selector;
   selector.set_collection_uri(kOpStatsCollectionUri);
   absl::StatusOr<std::unique_ptr<ExampleIterator>> iterator_or =
-      CreateExampleIterator(selector, mock_db_, mock_log_manager_);
+      iterator_factory_.CreateExampleIterator(selector);
   ASSERT_TRUE(iterator_or.ok());
   std::unique_ptr<ExampleIterator> iterator = std::move(iterator_or.value());
   absl::StatusOr<std::string> status_or = iterator->Next();
@@ -215,7 +229,7 @@ TEST_F(OpStatsExampleStoreTest, DataIsFilteredBySelectionCriteria) {
   *criteria.mutable_end_time() = TimeUtil::MillisecondsToTimestamp(2000L);
   selector.mutable_criteria()->PackFrom(criteria);
   absl::StatusOr<std::unique_ptr<ExampleIterator>> iterator_or =
-      CreateExampleIterator(selector, mock_db_, mock_log_manager_);
+      iterator_factory_.CreateExampleIterator(selector);
 
   ASSERT_TRUE(iterator_or.ok());
   std::unique_ptr<ExampleIterator> iterator = std::move(iterator_or.value());
@@ -262,7 +276,7 @@ TEST_F(OpStatsExampleStoreTest, SelectionCriteriaOnlyContainsBeginTime) {
   *criteria.mutable_start_time() = TimeUtil::MillisecondsToTimestamp(1000L);
   selector.mutable_criteria()->PackFrom(criteria);
   absl::StatusOr<std::unique_ptr<ExampleIterator>> iterator_or =
-      CreateExampleIterator(selector, mock_db_, mock_log_manager_);
+      iterator_factory_.CreateExampleIterator(selector);
 
   ASSERT_TRUE(iterator_or.ok());
   std::unique_ptr<ExampleIterator> iterator = std::move(iterator_or.value());
@@ -310,7 +324,7 @@ TEST_F(OpStatsExampleStoreTest, SelectionCriteriaOnlyContainsEndTime) {
   *criteria.mutable_end_time() = TimeUtil::MillisecondsToTimestamp(2000L);
   selector.mutable_criteria()->PackFrom(criteria);
   absl::StatusOr<std::unique_ptr<ExampleIterator>> iterator_or =
-      CreateExampleIterator(selector, mock_db_, mock_log_manager_);
+      iterator_factory_.CreateExampleIterator(selector);
 
   ASSERT_TRUE(iterator_or.ok());
   std::unique_ptr<ExampleIterator> iterator = std::move(iterator_or.value());
@@ -393,7 +407,7 @@ TEST_F(OpStatsExampleStoreTest, FullSerialization) {
   ExampleSelector selector;
   selector.set_collection_uri(kOpStatsCollectionUri);
   absl::StatusOr<std::unique_ptr<ExampleIterator>> iterator_or =
-      CreateExampleIterator(selector, mock_db_, mock_log_manager_);
+      iterator_factory_.CreateExampleIterator(selector);
 
   ASSERT_TRUE(iterator_or.ok());
   std::unique_ptr<ExampleIterator> iterator = std::move(iterator_or.value());
