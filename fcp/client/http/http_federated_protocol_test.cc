@@ -595,7 +595,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         mock_http_client_,
         PerformSingleRequest(SimpleHttpRequestMatcher(
             // Note that the '#' character is encoded as "%23".
-            "https://aggregation.uri/v1/operations/foo%23bar",
+            "https://aggregation.uri/v1/operations/foo%23bar?%24alt=proto",
             HttpRequest::Method::kGet, _,
             GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
         .WillOnce(Return(FakeHttpResponse(
@@ -1489,7 +1489,7 @@ TEST_F(HttpFederatedProtocolTest,
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
           // Note that the '#' character is encoded as "%23".
-          "https://taskassignment.uri/v1/operations/foo%23bar",
+          "https://taskassignment.uri/v1/operations/foo%23bar?%24alt=proto",
           HttpRequest::Method::kGet, _,
           GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
       .WillOnce(Return(FakeHttpResponse(
@@ -1765,7 +1765,7 @@ TEST_F(HttpFederatedProtocolTest,
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
           // Note that the '#' character is encoded as "%23".
-          "https://aggregation.uri/v1/operations/foo%23bar",
+          "https://aggregation.uri/v1/operations/foo%23bar?%24alt=proto",
           HttpRequest::Method::kGet, _,
           GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
       .WillOnce(Return(FakeHttpResponse(401, HeaderList())));
@@ -2133,7 +2133,8 @@ TEST(ProtocolRequestCreatorTest, CreateGetOperationRequest) {
   std::string operation_name = "my_operation";
   auto request = creator.CreateGetOperationRequest(operation_name);
   ASSERT_OK(request);
-  EXPECT_EQ((*request)->uri(), "https://initial.uri/v1/my_operation");
+  EXPECT_EQ((*request)->uri(),
+            "https://initial.uri/v1/my_operation?%24alt=proto");
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kGet);
   EXPECT_THAT((*request)->extra_headers(), IsEmpty());
   EXPECT_FALSE((*request)->HasBody());
@@ -2387,7 +2388,7 @@ TEST_F(ProtocolRequestHelperTest,
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   // Note that the '#' character is encoded as "%23".
-                  "https://initial.uri/v1/operations/foo%23bar",
+                  "https://initial.uri/v1/operations/foo%23bar?%24alt=proto",
                   HttpRequest::Method::kGet, _, IsEmpty())))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), pending_operation_response.SerializeAsString())))
@@ -2420,7 +2421,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseErrorAfterPolling) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   // Note that the '#' character is encoded as "%23".
-                  "https://initial.uri/v1/operations/foo%23bar",
+                  "https://initial.uri/v1/operations/foo%23bar?%24alt=proto",
                   HttpRequest::Method::kGet, _, IsEmpty())))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), pending_operation_response.SerializeAsString())))

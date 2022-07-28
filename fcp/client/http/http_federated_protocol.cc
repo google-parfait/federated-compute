@@ -350,7 +350,7 @@ ProtocolRequestCreator::CreateGetOperationRequest(
   FCP_ASSIGN_OR_RETURN(std::string uri_path_suffix,
                        CreateGetOperationUriSuffix(operation_name));
   return CreateHttpRequest(uri_path_suffix, {}, HttpRequest::Method::kGet, "",
-                           /*is_protobuf_encoded=*/false,
+                           /*is_protobuf_encoded=*/true,
                            /*use_compression=*/false);
 }
 
