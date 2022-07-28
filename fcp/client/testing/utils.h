@@ -80,6 +80,8 @@ class TestTaskEnvironment : public SimpleTaskEnvironment {
 
   std::string GetBaseDir() override { return base_dir_; }
 
+  std::string GetCacheDir() override { return base_dir_; }
+
  private:
   bool TrainingConditionsSatisfied() override { return true; }
 

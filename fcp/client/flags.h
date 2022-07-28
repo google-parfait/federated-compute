@@ -172,6 +172,10 @@ class Flags {
   // When true, the client supports encoded http payloads with `x+gzip`
   // Content-Type headers, and will decode them outside of the http engine.
   virtual bool client_decoded_http_resources() const { return false; }
+
+  // When true, native will use the passed in cache dir to store temporary files
+  // and create and manage its own subdirectories.
+  virtual bool enable_cache_dir() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

@@ -51,8 +51,23 @@ class SimpleTaskEnvironment {
  public:
   virtual ~SimpleTaskEnvironment() = default;
 
-  // Returns the path of a directory that may be used to store the opstats db.
+  // Returns the path of the directory that will be used to store persistent
+  // files that should not be deleted, such as Opstats.
   virtual std::string GetBaseDir() = 0;
+
+  // Returns the path of the directory that may be used to store
+  // temporary/cached files. The federated compute runtime will use this
+  // directory to cache data for re-use across multiple invocations, as well as
+  // for creating temporary files that are deleted at the end of each
+  // invocation. Implementers of this interface may also delete files in this
+  // directory (for example, in low storage situations) without adverse effects
+  // to the runtime.
+  virtual std::string GetCacheDir() {
+    // TODO(team): Replace this with a pure virtual version after other
+    // runtimes implement this method. Usage is guarded by a flag so we won't
+    // break existing runtimes unless they explicitly set the flag.
+    return "UNIMPLEMENTED!!";
+  }
 
   // TODO(team): factor out native implementations of this and delete.
   virtual absl::StatusOr<std::unique_ptr<ExampleIterator>>

@@ -226,5 +226,11 @@ enum ProdDiagCode {
    * `HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP`) succeeded. */
   HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_SUCCEEDED = 1797;
 
+  /**
+   * Codes reserved for logs related to temp files
+   * =============================================
+   */
+  TEMP_FILES_NATIVE_FAILED_TO_DELETE = 1090;
+
   reserved 25;
 }

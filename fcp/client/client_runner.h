@@ -400,6 +400,10 @@ class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
     return std::filesystem::path(testing::TempDir());
   }
 
+  std::string GetCacheDir() override {
+    return std::filesystem::path(testing::TempDir());
+  }
+
   absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
       const google::internal::federated::plan::ExampleSelector&
           example_selector) override {

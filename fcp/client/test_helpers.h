@@ -455,6 +455,7 @@ class MockOpStatsLogger : public ::fcp::client::opstats::OpStatsLogger {
 class MockSimpleTaskEnvironment : public SimpleTaskEnvironment {
  public:
   MOCK_METHOD(std::string, GetBaseDir, (), (override));
+  MOCK_METHOD(std::string, GetCacheDir, (), (override));
   MOCK_METHOD((absl::StatusOr<std::unique_ptr<ExampleIterator>>),
               CreateExampleIterator,
               (const google::internal::federated::plan::ExampleSelector&
@@ -537,6 +538,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(int32_t, waiting_period_sec_for_cancellation, (),
               (const, override));
   MOCK_METHOD(bool, client_decoded_http_resources, (), (const, override));
+  MOCK_METHOD(bool, enable_cache_dir, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
