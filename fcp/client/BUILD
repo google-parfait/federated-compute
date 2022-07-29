@@ -14,6 +14,7 @@
 
 load("//fcp:config.bzl", "FCP_COPTS")
 load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 
 package(
     default_visibility = [
@@ -270,13 +271,37 @@ cc_test(
     ],
 )
 
-OPTIONAL_DEPS = select({
+TFLITE_OPTIONAL_DEPS = select({
     "//conditions:default": [],
 })
 
-OPTIONAL_DEFINES = select({
+TFLITE_OPTIONAL_DEFINES = select({
     "//conditions:default": [],
 })
+
+bool_flag(
+    name = "disable_grpc",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "client_disable_grpc",
+    flag_values = {":disable_grpc": "True"},
+)
+
+GRPC_OPTIONAL_DEFINES = select(
+    {
+        ":client_disable_grpc": ["FCP_DISABLE_GRPC"],
+        "//conditions:default": [],
+    },
+)
+
+GRPC_OPTIONAL_DEPS = select(
+    {
+        ":client_disable_grpc": [],
+        "//conditions:default": [":grpc_federated_protocol"],
+    },
+)
 
 cc_library(
     name = "fl_runner",
@@ -285,12 +310,11 @@ cc_library(
         "fl_runner.h",
     ],
     copts = FCP_COPTS,
-    defines = OPTIONAL_DEFINES,
+    defines = TFLITE_OPTIONAL_DEFINES + GRPC_OPTIONAL_DEFINES,
     visibility = ["//fcp:public_api_visibility"],
     deps = [
         ":federated_protocol",
         ":federated_protocol_util",
-        ":grpc_federated_protocol",
         ":fl_runner_internal_cc_proto",
         ":fl_runner_cc_proto",
         ":histogram_counters_cc_proto",
@@ -319,7 +343,7 @@ cc_library(
         "@boringssl//:crypto",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
-    ] + OPTIONAL_DEPS,
+    ] + TFLITE_OPTIONAL_DEPS + GRPC_OPTIONAL_DEPS,
 )
 
 cc_library(
@@ -329,7 +353,7 @@ cc_library(
         "lc_runner.h",
     ],
     copts = FCP_COPTS,
-    defines = OPTIONAL_DEFINES,
+    defines = TFLITE_OPTIONAL_DEFINES,
     visibility = ["//fcp:public_api_visibility"],
     deps = [
         ":interfaces",
@@ -349,7 +373,7 @@ cc_library(
         "//fcp/protos:plan_cc_proto",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
-    ] + OPTIONAL_DEPS,
+    ] + TFLITE_OPTIONAL_DEPS,
 )
 
 cc_library(

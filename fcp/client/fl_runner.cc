@@ -48,8 +48,12 @@
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/fl_runner_internal.pb.h"
 #include "fcp/client/flags.h"
-#include "fcp/client/grpc_federated_protocol.h"
 #include "fcp/client/http/http_federated_protocol.h"
+
+#ifndef FCP_DISABLE_GRPC
+#include "fcp/client/grpc_federated_protocol.h"
+#endif
+
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_example_store.h"
@@ -996,15 +1000,6 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return env_deps->ShouldAbort(absl::Now(), timing_config.polling_period);
   };
 
-  // Check in with the server to either retrieve a plan + initial checkpoint, or
-  // get rejected with a RetryWindow.
-  auto grpc_channel_deadline = flags->grpc_channel_deadline_seconds();
-  if (grpc_channel_deadline <= 0) {
-    grpc_channel_deadline = 600;
-    FCP_LOG(INFO) << "Using default channel deadline of "
-                  << grpc_channel_deadline << " seconds.";
-  }
-
   std::unique_ptr<::fcp::client::http::HttpClient> http_client =
       flags->enable_grpc_with_http_resource_support() ||
               flags->use_http_federated_compute_protocol()
@@ -1018,11 +1013,24 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         population_name, retry_token, client_version, attestation_measurement,
         should_abort_protocol_callback, absl::BitGen(), timing_config);
   } else {
+#ifndef FCP_DISABLE_GRPC
+    // Check in with the server to either retrieve a plan + initial checkpoint,
+    // or get rejected with a RetryWindow.
+    auto grpc_channel_deadline = flags->grpc_channel_deadline_seconds();
+    if (grpc_channel_deadline <= 0) {
+      grpc_channel_deadline = 600;
+      FCP_LOG(INFO) << "Using default channel deadline of "
+                    << grpc_channel_deadline << " seconds.";
+    }
+
     federated_protocol = std::make_unique<GrpcFederatedProtocol>(
         event_publisher, log_manager, flags, http_client.get(),
         federated_service_uri, api_key, test_cert_path, population_name,
         retry_token, client_version, attestation_measurement,
         should_abort_protocol_callback, timing_config, grpc_channel_deadline);
+#else
+    return absl::InternalError("No FederatedProtocol enabled.");
+#endif
   }
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
                                log_manager, flags);
