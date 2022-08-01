@@ -33,7 +33,11 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+
+#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
 #include "fcp/client/engine/simple_plan_engine.h"
+#endif
+
 #include "openssl/digest.h"
 #include "openssl/evp.h"
 
@@ -50,7 +54,7 @@
 #include "fcp/client/flags.h"
 #include "fcp/client/http/http_federated_protocol.h"
 
-#ifndef FCP_DISABLE_GRPC
+#ifdef FCP_CLIENT_SUPPORT_GRPC
 #include "fcp/client/grpc_federated_protocol.h"
 #endif
 
@@ -79,6 +83,10 @@ using ::google::internal::federated::plan::FederatedComputeIORouter;
 using ::google::internal::federated::plan::TensorflowSpec;
 using ::google::internal::federatedml::v2::RetryWindow;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
+
+#ifdef FCP_CLIENT_SUPPORT_TFLITE
+using TfLiteInputs = absl::flat_hash_map<std::string, std::string>;
+#endif
 
 namespace {
 
@@ -210,6 +218,7 @@ absl::StatusOr<ComputationResults> CreateComputationResults(
   return computation_results;
 }
 
+#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
 std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
 ConstructInputsForEligibilityEvalPlan(
     const FederatedComputeEligibilityIORouter& io_router,
@@ -223,6 +232,7 @@ ConstructInputsForEligibilityEvalPlan(
   }
   return inputs;
 }
+#endif
 
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
 std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
@@ -344,6 +354,7 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
   }
 #endif
 
+#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
   // Construct input tensors and output tensor names based on the values in the
   // FederatedComputeEligibilityIORouter message.
   auto inputs = ConstructInputsForEligibilityEvalPlan(
@@ -355,6 +366,13 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
   return plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs), output_names);
+#else
+  FCP_CHECK(false) << "No plan engine enabled";
+  // Return a default result, but only to satisfy the compiler (since this
+  // statement will never actually be reached).
+  return engine::PlanResult(engine::PlanOutcome::kTensorflowError,
+                            absl::InternalError("No plan engine enabled"));
+#endif
 }
 
 // Validates the output tensors that resulted from executing the plan, and then
@@ -391,6 +409,7 @@ absl::StatusOr<TaskEligibilityInfo> ParseEligibilityEvalPlanOutput(
   return parsed_output;
 }
 
+#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
 std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
 ConstructInputsForTensorflowSpecPlan(
     const FederatedComputeIORouter& io_router,
@@ -414,6 +433,7 @@ ConstructInputsForTensorflowSpecPlan(
 
   return inputs;
 }
+#endif
 
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
 std::unique_ptr<TfLiteInputs> ConstructTFLiteInputsForTensorflowSpecPlan(
@@ -504,6 +524,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   }
 #endif
 
+#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
   // Construct input tensors based on the values in the
   // FederatedComputeIORouter message and create a temporary file for the output
   // checkpoint if needed.
@@ -521,6 +542,14 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   result.checkpoint_file = checkpoint_output_filename;
 
   return result;
+#else
+  FCP_CHECK(false) << "No plan engine enabled";
+  // Return a default result, but only to satisfy the compiler (since this
+  // statement will never actually be reached).
+  return PlanResultAndCheckpointFile(
+      engine::PlanResult(engine::PlanOutcome::kTensorflowError,
+                         absl::InternalError("No plan engine enabled")));
+#endif
 }
 
 void LogEligibilityEvalComputationOutcome(
@@ -1060,7 +1089,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         population_name, retry_token, client_version, attestation_measurement,
         should_abort_protocol_callback, absl::BitGen(), timing_config);
   } else {
-#ifndef FCP_DISABLE_GRPC
+#ifdef FCP_CLIENT_SUPPORT_GRPC
     // Check in with the server to either retrieve a plan + initial checkpoint,
     // or get rejected with a RetryWindow.
     auto grpc_channel_deadline = flags->grpc_channel_deadline_seconds();

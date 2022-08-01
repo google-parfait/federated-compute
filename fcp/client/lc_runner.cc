@@ -27,7 +27,11 @@
 #include "fcp/base/platform.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+
+#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
 #include "fcp/client/engine/simple_plan_engine.h"
+#endif
+
 #include "fcp/client/opstats/opstats_example_store.h"
 
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
@@ -49,7 +53,12 @@ using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federated::plan::LocalComputeIORouter;
 
+#ifdef FCP_CLIENT_SUPPORT_TFLITE
+using TfLiteInputs = absl::flat_hash_map<std::string, std::string>;
+#endif
+
 namespace {
+#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
 std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
 ConstructInputsForTensorflowSpecPlan(const LocalComputeIORouter& local_compute,
                                      const std::string& input_dir_uri,
@@ -64,6 +73,7 @@ ConstructInputsForTensorflowSpecPlan(const LocalComputeIORouter& local_compute,
   inputs->push_back({local_compute.output_dir_tensor_name(), output_dirpath});
   return inputs;
 }
+#endif
 
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
 std::unique_ptr<TfLiteInputs> ConstructInputsForTFLitePlan(
@@ -182,6 +192,7 @@ absl::Status RunPlanWithTensorflowSpec(
   }
 #endif
 
+#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
   // Construct input tensors based on the values in the LocalComputeIORouter
   // message.
   auto inputs = ConstructInputsForTensorflowSpecPlan(
@@ -197,6 +208,9 @@ absl::Status RunPlanWithTensorflowSpec(
   LogComputationOutcome(std::move(plan_result), phase_logger,
                         run_plan_start_time, reference_time);
   return ConvertPlanOutcomeToStatus(outcome);
+#else
+  return absl::InternalError("No plan engine enabled");
+#endif
 }
 }  // anonymous namespace
 

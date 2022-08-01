@@ -271,35 +271,71 @@ cc_test(
     ],
 )
 
-TFLITE_OPTIONAL_DEPS = select({
-    "//conditions:default": [],
-})
-
-TFLITE_OPTIONAL_DEFINES = select({
-    "//conditions:default": [],
-})
+bool_flag(
+    name = "support_tfmobile",
+    build_setting_default = True,
+)
 
 bool_flag(
-    name = "disable_grpc",
+    name = "support_tflite",
     build_setting_default = False,
 )
 
-config_setting(
-    name = "client_disable_grpc",
-    flag_values = {":disable_grpc": "True"},
+bool_flag(
+    name = "support_grpc",
+    build_setting_default = True,
 )
+
+config_setting(
+    name = "client_support_tflite",
+    flag_values = {":support_tflite": "True"},
+)
+
+config_setting(
+    name = "client_support_tfmobile",
+    flag_values = {":support_tfmobile": "True"},
+)
+
+config_setting(
+    name = "client_support_grpc",
+    flag_values = {":support_grpc": "True"},
+)
+
+TF_OPTIONAL_DEPS = select({
+    ":client_support_tflite": [
+        "//fcp/client/engine:tflite_plan_engine",
+    ],
+    "//conditions:default": [],
+}) + select({
+    ":client_support_tfmobile": [
+        "//fcp/client/engine:plan_engine",
+    ],
+    "//conditions:default": [],
+})
+
+TF_OPTIONAL_DEFINES = select({
+    ":client_support_tflite": [
+        "FCP_CLIENT_SUPPORT_TFLITE",
+    ],
+    "//conditions:default": [],
+}) + select({
+    ":client_support_tfmobile": [
+        "FCP_CLIENT_SUPPORT_TFMOBILE",
+    ],
+    "//conditions:default": [],
+})
 
 GRPC_OPTIONAL_DEFINES = select(
     {
-        ":client_disable_grpc": ["FCP_DISABLE_GRPC"],
+        ":client_support_grpc": ["FCP_CLIENT_SUPPORT_GRPC"],
         "//conditions:default": [],
     },
 )
 
 GRPC_OPTIONAL_DEPS = select(
     {
-        ":client_disable_grpc": [],
-        "//conditions:default": [":grpc_federated_protocol"],
+        ":client_support_grpc": [":grpc_federated_protocol"],
+        "//conditions:default": [],
     },
 )
 
@@ -310,7 +346,7 @@ cc_library(
         "fl_runner.h",
     ],
     copts = FCP_COPTS,
-    defines = TFLITE_OPTIONAL_DEFINES + GRPC_OPTIONAL_DEFINES,
+    defines = TF_OPTIONAL_DEFINES + GRPC_OPTIONAL_DEFINES,
     visibility = ["//fcp:public_api_visibility"],
     deps = [
         ":federated_protocol",
@@ -332,7 +368,6 @@ cc_library(
         "//fcp/base",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/client/engine:example_iterator_factory",
-        "//fcp/client/engine:plan_engine",
         "//fcp/client/engine:plan_engine_helpers",
         "//fcp/client/http:http_federated_protocol",
         "//fcp/client/http:http_client",
@@ -344,7 +379,7 @@ cc_library(
         "@boringssl//:crypto",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
-    ] + TFLITE_OPTIONAL_DEPS + GRPC_OPTIONAL_DEPS,
+    ] + TF_OPTIONAL_DEPS + GRPC_OPTIONAL_DEPS,
 )
 
 cc_library(
@@ -354,7 +389,7 @@ cc_library(
         "lc_runner.h",
     ],
     copts = FCP_COPTS,
-    defines = TFLITE_OPTIONAL_DEFINES,
+    defines = TF_OPTIONAL_DEFINES,
     visibility = ["//fcp:public_api_visibility"],
     deps = [
         ":interfaces",
@@ -367,14 +402,13 @@ cc_library(
         "@com_google_absl//absl/time",
         "//fcp/base",
         "//fcp/client/engine:example_iterator_factory",
-        "//fcp/client/engine:plan_engine",
         "//fcp/client/engine:plan_engine_helpers",
         "//fcp/client/opstats:opstats_example_store",
         "//fcp/client/opstats:opstats_logger",
         "//fcp/protos:plan_cc_proto",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
-    ] + TFLITE_OPTIONAL_DEPS,
+    ] + TF_OPTIONAL_DEPS,
 )
 
 cc_library(
