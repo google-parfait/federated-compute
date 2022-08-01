@@ -20,6 +20,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/container/node_hash_map.h"
 #include "fcp/base/monitoring.h"

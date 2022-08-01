@@ -18,29 +18,21 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/node_hash_map.h"
 #include "fcp/secagg/client/other_client_state.h"
-#include "fcp/secagg/client/secagg_client_aborted_state.h"
-#include "fcp/secagg/client/secagg_client_r2_masked_input_coll_base_state.h"
-#include "fcp/secagg/client/secagg_client_r3_unmasking_state.h"
-#include "fcp/secagg/client/send_to_server_interface.h"
-#include "fcp/secagg/client/state_transition_listener_interface.h"
 #include "fcp/secagg/shared/aes_ctr_prng_factory.h"
 #include "fcp/secagg/shared/aes_gcm_encryption.h"
 #include "fcp/secagg/shared/aes_key.h"
 #include "fcp/secagg/shared/compute_session_id.h"
 #include "fcp/secagg/shared/input_vector_specification.h"
-#include "fcp/secagg/shared/map_of_masks.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
-#include "fcp/secagg/shared/secagg_vector.h"
-#include "fcp/secagg/testing/fake_prng.h"
 #include "fcp/secagg/testing/mock_send_to_server_interface.h"
 #include "fcp/secagg/testing/mock_state_transition_listener.h"
 #include "fcp/testing/testing.h"
-
 namespace fcp {
 namespace secagg {
 namespace {

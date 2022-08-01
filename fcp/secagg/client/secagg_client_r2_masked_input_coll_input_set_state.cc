@@ -20,8 +20,8 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
-#include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/other_client_state.h"
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
@@ -35,7 +35,6 @@
 #include "fcp/secagg/shared/aes_prng_factory.h"
 #include "fcp/secagg/shared/compute_session_id.h"
 #include "fcp/secagg/shared/input_vector_specification.h"
-#include "fcp/secagg/shared/map_of_masks.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
 #include "fcp/secagg/shared/secagg_vector.h"
 #include "fcp/secagg/shared/shamir_secret_sharing.h"

@@ -21,6 +21,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/other_client_state.h"

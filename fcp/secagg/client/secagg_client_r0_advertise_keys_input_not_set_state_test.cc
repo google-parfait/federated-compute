@@ -28,7 +28,6 @@
 #include "absl/container/node_hash_map.h"
 #include "fcp/secagg/client/secagg_client_state.h"
 #include "fcp/secagg/shared/aes_ctr_prng_factory.h"
-#include "fcp/secagg/shared/ecdh_key_agreement.h"
 #include "fcp/secagg/shared/ecdh_keys.h"
 #include "fcp/secagg/shared/input_vector_specification.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"

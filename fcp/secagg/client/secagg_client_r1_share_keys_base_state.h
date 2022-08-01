@@ -17,12 +17,12 @@
 #ifndef FCP_SECAGG_CLIENT_SECAGG_CLIENT_R1_SHARE_KEYS_BASE_STATE_H_
 #define FCP_SECAGG_CLIENT_SECAGG_CLIENT_R1_SHARE_KEYS_BASE_STATE_H_
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "fcp/secagg/client/other_client_state.h"
 #include "fcp/secagg/client/secagg_client_alive_base_state.h"
-#include "fcp/secagg/client/secagg_client_state.h"
 #include "fcp/secagg/client/send_to_server_interface.h"
 #include "fcp/secagg/client/state_transition_listener_interface.h"
 #include "fcp/secagg/shared/aes_key.h"

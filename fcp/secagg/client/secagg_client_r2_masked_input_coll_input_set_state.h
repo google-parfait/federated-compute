@@ -21,6 +21,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/other_client_state.h"
@@ -32,7 +33,6 @@
 #include "fcp/secagg/shared/aes_prng_factory.h"
 #include "fcp/secagg/shared/compute_session_id.h"
 #include "fcp/secagg/shared/input_vector_specification.h"
-#include "fcp/secagg/shared/map_of_masks.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
 
 namespace fcp {

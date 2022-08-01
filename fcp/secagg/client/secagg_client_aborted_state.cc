@@ -16,6 +16,7 @@
 
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 

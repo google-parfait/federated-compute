@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/send_to_server_interface.h"

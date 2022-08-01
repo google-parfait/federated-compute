@@ -16,10 +16,10 @@
 
 #include "fcp/secagg/client/secagg_client_completed_state.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 
-#include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/secagg_client_state.h"
 #include "fcp/secagg/client/state_transition_listener_interface.h"
 

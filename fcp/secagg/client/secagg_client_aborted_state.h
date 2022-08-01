@@ -17,6 +17,7 @@
 #ifndef FCP_SECAGG_CLIENT_SECAGG_CLIENT_ABORTED_STATE_H_
 #define FCP_SECAGG_CLIENT_SECAGG_CLIENT_ABORTED_STATE_H_
 
+#include <memory>
 #include <string>
 
 #include "fcp/base/monitoring.h"

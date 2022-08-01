@@ -17,9 +17,9 @@
 #ifndef FCP_SECAGG_CLIENT_SECAGG_CLIENT_COMPLETED_STATE_H_
 #define FCP_SECAGG_CLIENT_SECAGG_CLIENT_COMPLETED_STATE_H_
 
+#include <memory>
 #include <string>
 
-#include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/secagg_client_state.h"
 #include "fcp/secagg/client/state_transition_listener_interface.h"
 
