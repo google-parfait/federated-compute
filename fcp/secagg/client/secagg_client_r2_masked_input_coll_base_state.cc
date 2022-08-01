@@ -59,7 +59,7 @@ std::unique_ptr<SecAggVectorMap>
 SecAggClientR2MaskedInputCollBaseState::HandleMaskedInputCollectionRequest(
     const MaskedInputCollectionRequest& request, uint32_t client_id,
     const std::vector<InputVectorSpecification>& input_vector_specs,
-    uint32_t minimum_surviving_clients_for_reconstruction,
+    uint32_t minimum_surviving_neighbors_for_reconstruction,
     uint32_t number_of_clients,
     const std::vector<AesKey>& other_client_enc_keys,
     const std::vector<AesKey>& other_client_prng_keys,
@@ -129,7 +129,8 @@ SecAggClientR2MaskedInputCollBaseState::HandleMaskedInputCollectionRequest(
     }
   }
 
-  if (*number_of_alive_clients < minimum_surviving_clients_for_reconstruction) {
+  if (*number_of_alive_clients <
+      minimum_surviving_neighbors_for_reconstruction) {
     *error_message =
         "There are not enough clients to complete this protocol session. "
         "Aborting.";

@@ -56,8 +56,8 @@ TEST(SecAggClientTest, ConstructedWithCorrectState) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClient client(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
@@ -75,8 +75,8 @@ TEST(SecAggClientTest, StartCausesStateTransition) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClient client(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
@@ -104,8 +104,8 @@ TEST(SecAggClientTest, ReceiveMessageReturnValuesAreCorrect) {
       new MockStateTransitionListener();
 
   SecAggClient client(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
@@ -160,8 +160,8 @@ TEST(SecAggClientTest, AbortMovesToCorrectStateAndSendsMessageToServer) {
       new MockStateTransitionListener();
 
   SecAggClient client(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
@@ -189,8 +189,8 @@ TEST(SecAggClientTest,
       new MockStateTransitionListener();
 
   SecAggClient client(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
@@ -217,8 +217,8 @@ TEST(SecAggClientTest, ErrorMessageRaisesErrorStatusIfNotAborted) {
       new MockStateTransitionListener();
 
   SecAggClient client(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),
@@ -236,8 +236,8 @@ TEST(SecAggClientTest, SetInputChangesStateOnlyOnce) {
       new MockStateTransitionListener();
 
   SecAggClient client(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       input_vector_specs, std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener),

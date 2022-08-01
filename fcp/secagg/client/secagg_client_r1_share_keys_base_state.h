@@ -69,8 +69,9 @@ class SecAggClientR1ShareKeysBaseState : public SecAggClientAliveBaseState {
   // be true and *error_message will be an empty std::string.
   bool HandleShareKeysRequest(
       const ShareKeysRequest& request,
-      const EcdhKeyAgreement& enc_key_agreement, uint32_t max_clients_expected,
-      uint32_t minimum_surviving_clients_for_reconstruction,
+      const EcdhKeyAgreement& enc_key_agreement,
+      uint32_t max_neighbors_expected,
+      uint32_t minimum_surviving_neighbors_for_reconstruction,
       const EcdhKeyAgreement& prng_key_agreement, const AesKey& self_prng_key,
       SecurePrng* prng, uint32_t* client_id, std::string* error_message,
       uint32_t* number_of_alive_clients, uint32_t* number_of_clients,

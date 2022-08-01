@@ -54,8 +54,8 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest, IsAbortedReturnsFalse) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR0AdvertiseKeysInputSetState r0_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
@@ -76,8 +76,8 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR0AdvertiseKeysInputSetState r0_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
@@ -107,8 +107,8 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR0AdvertiseKeysInputSetState r0_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
@@ -135,8 +135,8 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest, SetInputRaisesErrorStatus) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR0AdvertiseKeysInputSetState r0_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
@@ -157,8 +157,8 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR0AdvertiseKeysInputSetState r0_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
@@ -179,8 +179,8 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR0AdvertiseKeysInputSetState r0_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
@@ -211,8 +211,8 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR0AdvertiseKeysInputSetState r0_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
@@ -242,8 +242,8 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR0AdvertiseKeysInputSetState r0_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),
@@ -271,8 +271,8 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR0AdvertiseKeysInputSetState r0_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
       std::unique_ptr<SendToServerInterface>(sender),

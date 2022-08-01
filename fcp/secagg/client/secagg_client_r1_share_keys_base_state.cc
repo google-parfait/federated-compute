@@ -59,8 +59,8 @@ void SecAggClientR1ShareKeysBaseState::SetUpShares(
 
 bool SecAggClientR1ShareKeysBaseState::HandleShareKeysRequest(
     const ShareKeysRequest& request, const EcdhKeyAgreement& enc_key_agreement,
-    uint32_t max_clients_expected,
-    uint32_t minimum_surviving_clients_for_reconstruction,
+    uint32_t max_neighbors_expected,
+    uint32_t minimum_surviving_neighbors_for_reconstruction,
     const EcdhKeyAgreement& prng_key_agreement, const AesKey& self_prng_key,
     SecurePrng* prng, uint32_t* client_id, std::string* error_message,
     uint32_t* number_of_alive_clients, uint32_t* number_of_clients,
@@ -72,12 +72,12 @@ bool SecAggClientR1ShareKeysBaseState::HandleShareKeysRequest(
   transition_listener_->set_execution_session_id(
       request.sec_agg_execution_logging_id());
   if (request.pairs_of_public_keys().size() <
-      static_cast<int>(minimum_surviving_clients_for_reconstruction)) {
+      static_cast<int>(minimum_surviving_neighbors_for_reconstruction)) {
     *error_message =
         "The ShareKeysRequest received does not contain enough participants.";
     return false;
   } else if (request.pairs_of_public_keys().size() >
-             static_cast<int>(max_clients_expected)) {
+             static_cast<int>(max_neighbors_expected)) {
     *error_message =
         "The ShareKeysRequest received contains too many participants.";
     return false;
@@ -87,9 +87,9 @@ bool SecAggClientR1ShareKeysBaseState::HandleShareKeysRequest(
   *number_of_clients = request.pairs_of_public_keys().size();
   bool client_id_set = false;
 
-  SetUpShares(minimum_surviving_clients_for_reconstruction, *number_of_clients,
-              prng_key_agreement.PrivateKey(), self_prng_key,
-              self_prng_key_shares, pairwise_prng_key_shares);
+  SetUpShares(minimum_surviving_neighbors_for_reconstruction,
+              *number_of_clients, prng_key_agreement.PrivateKey(),
+              self_prng_key, self_prng_key_shares, pairwise_prng_key_shares);
 
   if (request.session_id().size() != kSha256Length) {
     *error_message =
@@ -153,7 +153,8 @@ bool SecAggClientR1ShareKeysBaseState::HandleShareKeysRequest(
     }
   }
 
-  if (*number_of_alive_clients < minimum_surviving_clients_for_reconstruction) {
+  if (*number_of_alive_clients <
+      minimum_surviving_neighbors_for_reconstruction) {
     *error_message =
         "There are not enough clients to complete this protocol session. "
         "Aborting.";

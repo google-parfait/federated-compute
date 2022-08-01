@@ -36,9 +36,9 @@ namespace fcp {
 namespace secagg {
 
 SecAggClientR3UnmaskingState::SecAggClientR3UnmaskingState(
-    uint32_t client_id, uint32_t number_of_alive_clients,
-    uint32_t minimum_surviving_clients_for_reconstruction,
-    uint32_t number_of_clients,
+    uint32_t client_id, uint32_t number_of_alive_neighbors,
+    uint32_t minimum_surviving_neighbors_for_reconstruction,
+    uint32_t number_of_neighbors,
     std::unique_ptr<std::vector<OtherClientState> > other_client_states,
     std::unique_ptr<std::vector<ShamirShare> > pairwise_key_shares,
     std::unique_ptr<std::vector<ShamirShare> > self_key_shares,
@@ -49,10 +49,10 @@ SecAggClientR3UnmaskingState::SecAggClientR3UnmaskingState(
                                  std::move(transition_listener),
                                  ClientState::R3_UNMASKING, async_abort),
       client_id_(client_id),
-      number_of_alive_clients_(number_of_alive_clients),
-      minimum_surviving_clients_for_reconstruction_(
-          minimum_surviving_clients_for_reconstruction),
-      number_of_clients_(number_of_clients),
+      number_of_alive_neighbors_(number_of_alive_neighbors),
+      minimum_surviving_neighbors_for_reconstruction_(
+          minimum_surviving_neighbors_for_reconstruction),
+      number_of_neighbors_(number_of_neighbors),
       other_client_states_(std::move(other_client_states)),
       pairwise_key_shares_(std::move(pairwise_key_shares)),
       self_key_shares_(std::move(self_key_shares)) {
@@ -93,7 +93,7 @@ SecAggClientR3UnmaskingState::HandleMessage(
       return AbortAndNotifyServer(
           "The received UnmaskingRequest states this client has aborted, but "
           "this client had not yet aborted.");
-    } else if (id >= number_of_clients_) {
+    } else if (id >= number_of_neighbors_) {
       return AbortAndNotifyServer(
           "The received UnmaskingRequest contains a client id that does not "
           "correspond to any client.");
@@ -101,7 +101,7 @@ SecAggClientR3UnmaskingState::HandleMessage(
     switch ((*other_client_states_)[id]) {
       case OtherClientState::kAlive:
         (*other_client_states_)[id] = OtherClientState::kDeadAtRound3;
-        --number_of_alive_clients_;
+        --number_of_alive_neighbors_;
         break;
       case OtherClientState::kDeadAtRound3:
         return AbortAndNotifyServer(
@@ -118,8 +118,8 @@ SecAggClientR3UnmaskingState::HandleMessage(
     }
   }
 
-  if (number_of_alive_clients_ <
-      minimum_surviving_clients_for_reconstruction_) {
+  if (number_of_alive_neighbors_ <
+      minimum_surviving_neighbors_for_reconstruction_) {
     return AbortAndNotifyServer(
         "Not enough clients survived. The server should not have sent this "
         "UnmaskingRequest.");
@@ -134,7 +134,7 @@ SecAggClientR3UnmaskingState::HandleMessage(
   ClientToServerWrapperMessage message_to_server;
   UnmaskingResponse* unmasking_response =
       message_to_server.mutable_unmasking_response();
-  for (uint32_t i = 0; i < number_of_clients_; ++i) {
+  for (uint32_t i = 0; i < number_of_neighbors_; ++i) {
     if (async_abort_ && async_abort_->Signalled())
       return AbortAndNotifyServer(async_abort_->Message());
     switch ((*other_client_states_)[i]) {

@@ -59,8 +59,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest, IsAbortedReturnsFalse) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
@@ -83,8 +83,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
@@ -106,8 +106,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest, StartRaisesErrorStatus) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
@@ -129,8 +129,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest, SetInputRaisesErrorStatus) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
@@ -153,8 +153,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest, ErrorMessageRaisesErrorStatus) {
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
@@ -177,8 +177,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
@@ -211,8 +211,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
@@ -245,8 +245,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
       new MockStateTransitionListener();
 
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromRandomKeys().value()),
       std::move(input_map), std::move(input_vector_specs),
       std::make_unique<FakePrng>(),
@@ -324,8 +324,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
@@ -455,8 +455,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
@@ -538,8 +538,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
       new MockStateTransitionListener();
 
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
@@ -593,8 +593,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
@@ -648,8 +648,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
@@ -703,8 +703,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      3,  // max_clients_expected
-      2,  // minimum_surviving_clients_for_reconstruction
+      3,  // max_neighbors_expected
+      2,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
@@ -752,8 +752,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
@@ -801,8 +801,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),
@@ -856,8 +856,8 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
   MockStateTransitionListener* transition_listener =
       new MockStateTransitionListener();
   SecAggClientR1ShareKeysInputSetState r1_state(
-      4,  // max_clients_expected
-      3,  // minimum_surviving_clients_for_reconstruction
+      4,  // max_neighbors_expected
+      3,  // minimum_surviving_neighbors_for_reconstruction
       std::move(EcdhKeyAgreement::CreateFromKeypair(ecdh_keys.GetPrivateKey(2),
                                                     ecdh_keys.GetPublicKey(2))
                     .value()),

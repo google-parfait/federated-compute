@@ -71,7 +71,7 @@ class SecAggClientR2MaskedInputCollBaseState
   std::unique_ptr<SecAggVectorMap> HandleMaskedInputCollectionRequest(
       const MaskedInputCollectionRequest& request, uint32_t client_id,
       const std::vector<InputVectorSpecification>& input_vector_specs,
-      uint32_t minimum_surviving_clients_for_reconstruction,
+      uint32_t minimum_surviving_neighbors_for_reconstruction,
       uint32_t number_of_clients,
       const std::vector<AesKey>& other_client_enc_keys,
       const std::vector<AesKey>& other_client_prng_keys,

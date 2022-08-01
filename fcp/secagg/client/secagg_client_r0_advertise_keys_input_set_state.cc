@@ -41,8 +41,8 @@ namespace secagg {
 
 SecAggClientR0AdvertiseKeysInputSetState::
     SecAggClientR0AdvertiseKeysInputSetState(
-        uint32_t max_clients_expected,
-        uint32_t minimum_surviving_clients_for_reconstruction,
+        uint32_t max_neighbors_expected,
+        uint32_t minimum_surviving_neighbors_for_reconstruction,
         std::unique_ptr<SecAggVectorMap> input_map,
         std::unique_ptr<std::vector<InputVectorSpecification> >
             input_vector_specs,
@@ -54,9 +54,9 @@ SecAggClientR0AdvertiseKeysInputSetState::
     : SecAggClientAliveBaseState(std::move(sender),
                                  std::move(transition_listener),
                                  ClientState::R0_ADVERTISE_KEYS, async_abort),
-      max_clients_expected_(max_clients_expected),
-      minimum_surviving_clients_for_reconstruction_(
-          minimum_surviving_clients_for_reconstruction),
+      max_neighbors_expected_(max_neighbors_expected),
+      minimum_surviving_neighbors_for_reconstruction_(
+          minimum_surviving_neighbors_for_reconstruction),
       input_map_(std::move(input_map)),
       input_vector_specs_(std::move(input_vector_specs)),
       prng_(std::move(prng)),
@@ -78,7 +78,7 @@ SecAggClientR0AdvertiseKeysInputSetState::Start() {
 
   sender_->Send(&message);
   return {std::make_unique<SecAggClientR1ShareKeysInputSetState>(
-      max_clients_expected_, minimum_surviving_clients_for_reconstruction_,
+      max_neighbors_expected_, minimum_surviving_neighbors_for_reconstruction_,
       std::move(enc_key_agreement), std::move(input_map_),
       std::move(input_vector_specs_), std::move(prng_),
       std::move(prng_key_agreement), std::move(sender_),

@@ -44,8 +44,8 @@ class SecAggClientR0AdvertiseKeysInputSetState
     : public SecAggClientAliveBaseState {
  public:
   SecAggClientR0AdvertiseKeysInputSetState(
-      uint32_t max_clients_expected,
-      uint32_t minimum_surviving_clients_for_reconstruction,
+      uint32_t max_neighbors_expected,
+      uint32_t minimum_surviving_neighbors_for_reconstruction,
       std::unique_ptr<SecAggVectorMap> input_map,
       std::unique_ptr<std::vector<InputVectorSpecification> >
           input_vector_specs,
@@ -67,8 +67,8 @@ class SecAggClientR0AdvertiseKeysInputSetState
   std::string StateName() const override;
 
  private:
-  const uint32_t max_clients_expected_;
-  const uint32_t minimum_surviving_clients_for_reconstruction_;
+  const uint32_t max_neighbors_expected_;
+  const uint32_t minimum_surviving_neighbors_for_reconstruction_;
   std::unique_ptr<SecAggVectorMap> input_map_;
   std::unique_ptr<std::vector<InputVectorSpecification> > input_vector_specs_;
   std::unique_ptr<SecurePrng> prng_;

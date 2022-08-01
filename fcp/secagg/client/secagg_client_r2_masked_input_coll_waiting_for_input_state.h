@@ -47,8 +47,9 @@ class SecAggClientR2MaskedInputCollWaitingForInputState
     : public SecAggClientR2MaskedInputCollBaseState {
  public:
   SecAggClientR2MaskedInputCollWaitingForInputState(
-      uint32_t client_id, uint32_t minimum_surviving_clients_for_reconstruction,
-      uint32_t number_of_alive_clients, uint32_t number_of_clients,
+      uint32_t client_id,
+      uint32_t minimum_surviving_neighbors_for_reconstruction,
+      uint32_t number_of_alive_neighbors, uint32_t number_of_neighbors,
       std::unique_ptr<std::vector<InputVectorSpecification> >
           input_vector_specs,
       std::unique_ptr<SecAggVectorMap> map_of_masks,
@@ -75,9 +76,9 @@ class SecAggClientR2MaskedInputCollWaitingForInputState
 
  private:
   const uint32_t client_id_;
-  const uint32_t minimum_surviving_clients_for_reconstruction_;
-  uint32_t number_of_alive_clients_;
-  const uint32_t number_of_clients_;
+  const uint32_t minimum_surviving_neighbors_for_reconstruction_;
+  uint32_t number_of_alive_neighbors_;
+  const uint32_t number_of_neighbors_;
   std::unique_ptr<std::vector<InputVectorSpecification> > input_vector_specs_;
   std::unique_ptr<SecAggVectorMap> map_of_masks_;
   std::unique_ptr<std::vector<OtherClientState> > other_client_states_;

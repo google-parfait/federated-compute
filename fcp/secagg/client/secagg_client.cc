@@ -39,7 +39,8 @@ namespace fcp {
 namespace secagg {
 
 SecAggClient::SecAggClient(
-    int max_clients_expected, int minimum_surviving_clients_for_reconstruction,
+    int max_neighbors_expected,
+    int minimum_surviving_neighbors_for_reconstruction,
     std::vector<InputVectorSpecification> input_vector_specs,
     std::unique_ptr<SecurePrng> prng,
     std::unique_ptr<SendToServerInterface> sender,
@@ -51,7 +52,8 @@ SecAggClient::SecAggClient(
       async_abort_(abort_signal_for_test ? abort_signal_for_test
                                          : &abort_signal_),
       state_(std::make_unique<SecAggClientR0AdvertiseKeysInputNotSetState>(
-          max_clients_expected, minimum_surviving_clients_for_reconstruction,
+          max_neighbors_expected,
+          minimum_surviving_neighbors_for_reconstruction,
           std::make_unique<std::vector<InputVectorSpecification> >(
               std::move(input_vector_specs)),
           std::move(prng), std::move(sender), std::move(transition_listener),

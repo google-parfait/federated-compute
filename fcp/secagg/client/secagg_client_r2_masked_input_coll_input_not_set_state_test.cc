@@ -58,9 +58,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest, IsAbortedReturnsFalse) {
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -88,9 +88,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -118,9 +118,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -148,9 +148,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -178,9 +178,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -218,9 +218,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -257,9 +257,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -294,9 +294,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -332,9 +332,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -370,9 +370,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -407,9 +407,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -445,9 +445,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -485,9 +485,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       new MockStateTransitionListener();
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_alive_clients
-      6,  // number_of_clients
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_alive_neighbors
+      6,  // number_of_neighbors
       std::move(input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
@@ -534,9 +534,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       MakeAesKey("other client pairwise prng key 3")};
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      3,  // minimum_surviving_clients_for_reconstruction
-      4,  // number_of_alive_clients
-      4,  // number_of_clients
+      3,  // minimum_surviving_neighbors_for_reconstruction
+      4,  // number_of_alive_neighbors
+      4,  // number_of_neighbors
       std::make_unique<std::vector<InputVectorSpecification> >(
           input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
@@ -605,9 +605,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       MakeAesKey("other client pairwise prng key 3")};
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      3,  // minimum_surviving_clients_for_reconstruction
-      4,  // number_of_alive_clients
-      4,  // number_of_clients
+      3,  // minimum_surviving_neighbors_for_reconstruction
+      4,  // number_of_alive_neighbors
+      4,  // number_of_neighbors
       std::make_unique<std::vector<InputVectorSpecification> >(
           input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(
@@ -676,9 +676,9 @@ TEST(SecAggClientR2MaskedInputCollInputNotSetStateTest,
       MakeAesKey("other client pairwise prng key 3")};
   SecAggClientR2MaskedInputCollInputNotSetState r2_state(
       1,  // client_id
-      3,  // minimum_surviving_clients_for_reconstruction
-      4,  // number_of_alive_clients
-      4,  // number_of_clients
+      3,  // minimum_surviving_neighbors_for_reconstruction
+      4,  // number_of_alive_neighbors
+      4,  // number_of_neighbors
       std::make_unique<std::vector<InputVectorSpecification> >(
           input_vector_specs),
       std::make_unique<std::vector<OtherClientState> >(

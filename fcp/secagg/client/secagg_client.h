@@ -54,13 +54,13 @@ class SecAggClient {
  public:
   // Creates a new instance of the client.
   //
-  // max_clients_expected is the upper bound on the total number of clients who
-  // may participate. If the server tries to start a protocol session with more
-  // than this many clients, this client will abort.
+  // max_neighbors_expected is the upper bound on the total number of neighbors
+  // this client may interact with. If the server tries to start a protocol
+  // session with more than this many neighbors, this client will abort.
   //
-  // minimum_surviving_clients_for_reconstruction is the threshold lower bound
-  // on the total number of clients participating. If there are ever fewer than
-  // this number of clients in the protocol, this client will abort.
+  // minimum_surviving_neighbors_for_reconstruction is the threshold lower bound
+  // on the number of neighbors participating. If there are ever fewer than this
+  // number of remaining neighbors in the protocol, this client will abort.
   //
   // input_vector_specs must contain one InputVectorSpecification for each input
   // vector which the protocol will aggregate.  This may optionally be moved
@@ -82,11 +82,11 @@ class SecAggClient {
   // async_abort_for_test, optionally, allows the caller to reset the abort
   // signal. This is used to exhaustively test all abort paths, and should not
   // be used in production; specifically, if this paramter is not nullptr,
-  // Abort() will no longer abort an state-in-progress; it will only abort
-  // across state transitions.
+  // Abort() will no longer abort a state-in-progress; it will only abort across
+  // state transitions.
   SecAggClient(
-      int max_clients_expected,
-      int minimum_surviving_clients_for_reconstruction,
+      int max_neighbors_expected,
+      int minimum_surviving_neighbors_for_reconstruction,
       std::vector<InputVectorSpecification> input_vector_specs,
       std::unique_ptr<SecurePrng> prng,
       std::unique_ptr<SendToServerInterface> sender,

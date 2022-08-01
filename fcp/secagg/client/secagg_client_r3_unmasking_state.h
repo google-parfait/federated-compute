@@ -41,9 +41,9 @@ namespace secagg {
 class SecAggClientR3UnmaskingState : public SecAggClientAliveBaseState {
  public:
   SecAggClientR3UnmaskingState(
-      uint32_t client_id, uint32_t number_of_alive_clients,
-      uint32_t minimum_surviving_clients_for_reconstruction,
-      uint32_t number_of_clients,
+      uint32_t client_id, uint32_t number_of_alive_neighbors,
+      uint32_t minimum_surviving_neighbors_for_reconstruction,
+      uint32_t number_of_neighbors,
       std::unique_ptr<std::vector<OtherClientState> > other_client_states,
       std::unique_ptr<std::vector<ShamirShare> > pairwise_key_shares,
       std::unique_ptr<std::vector<ShamirShare> > self_key_shares,
@@ -62,9 +62,9 @@ class SecAggClientR3UnmaskingState : public SecAggClientAliveBaseState {
 
  private:
   const uint32_t client_id_;
-  uint32_t number_of_alive_clients_;
-  const uint32_t minimum_surviving_clients_for_reconstruction_;
-  const uint32_t number_of_clients_;
+  uint32_t number_of_alive_neighbors_;
+  const uint32_t minimum_surviving_neighbors_for_reconstruction_;
+  const uint32_t number_of_neighbors_;
   std::unique_ptr<std::vector<OtherClientState> > other_client_states_;
   std::unique_ptr<std::vector<ShamirShare> > pairwise_key_shares_;
   std::unique_ptr<std::vector<ShamirShare> > self_key_shares_;

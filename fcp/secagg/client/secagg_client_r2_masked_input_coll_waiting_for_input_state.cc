@@ -42,8 +42,8 @@ namespace secagg {
 SecAggClientR2MaskedInputCollWaitingForInputState::
     SecAggClientR2MaskedInputCollWaitingForInputState(
         uint32_t client_id,
-        uint32_t minimum_surviving_clients_for_reconstruction,
-        uint32_t number_of_alive_clients, uint32_t number_of_clients,
+        uint32_t minimum_surviving_neighbors_for_reconstruction,
+        uint32_t number_of_alive_neighbors, uint32_t number_of_neighbors,
         std::unique_ptr<std::vector<InputVectorSpecification> >
             input_vector_specs,
         std::unique_ptr<SecAggVectorMap> map_of_masks,
@@ -57,10 +57,10 @@ SecAggClientR2MaskedInputCollWaitingForInputState::
     : SecAggClientR2MaskedInputCollBaseState(
           std::move(sender), std::move(transition_listener), async_abort),
       client_id_(client_id),
-      minimum_surviving_clients_for_reconstruction_(
-          minimum_surviving_clients_for_reconstruction),
-      number_of_alive_clients_(number_of_alive_clients),
-      number_of_clients_(number_of_clients),
+      minimum_surviving_neighbors_for_reconstruction_(
+          minimum_surviving_neighbors_for_reconstruction),
+      number_of_alive_neighbors_(number_of_alive_neighbors),
+      number_of_neighbors_(number_of_neighbors),
       input_vector_specs_(std::move(input_vector_specs)),
       map_of_masks_(std::move(map_of_masks)),
       other_client_states_(std::move(other_client_states)),
@@ -106,8 +106,8 @@ SecAggClientR2MaskedInputCollWaitingForInputState::SetInput(
   SendMaskedInput(std::move(input_map), std::move(map_of_masks_));
 
   return {std::make_unique<SecAggClientR3UnmaskingState>(
-      client_id_, number_of_alive_clients_,
-      minimum_surviving_clients_for_reconstruction_, number_of_clients_,
+      client_id_, number_of_alive_neighbors_,
+      minimum_surviving_neighbors_for_reconstruction_, number_of_neighbors_,
       std::move(other_client_states_), std::move(pairwise_key_shares_),
       std::move(self_key_shares_), std::move(sender_),
       std::move(transition_listener_), async_abort_)};

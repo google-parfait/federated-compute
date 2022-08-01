@@ -45,8 +45,8 @@ class SecAggClientR1ShareKeysInputSetState
     : public SecAggClientR1ShareKeysBaseState {
  public:
   SecAggClientR1ShareKeysInputSetState(
-      uint32_t max_clients_expected,
-      uint32_t minimum_surviving_clients_for_reconstruction,
+      uint32_t max_neighbors_expected,
+      uint32_t minimum_surviving_neighbors_for_reconstruction,
       std::unique_ptr<EcdhKeyAgreement> enc_key_agreement,
       std::unique_ptr<SecAggVectorMap> input_map,
       std::unique_ptr<std::vector<InputVectorSpecification> >
@@ -69,8 +69,8 @@ class SecAggClientR1ShareKeysInputSetState
  private:
   friend class SecAggClientR1ShareKeysInputSetStateTest_ShareKeysRequestIsHandledCorrectlyWithDeadClient_Test;  // NOLINT
 
-  const uint32_t max_clients_expected_;
-  const uint32_t minimum_surviving_clients_for_reconstruction_;
+  const uint32_t max_neighbors_expected_;
+  const uint32_t minimum_surviving_neighbors_for_reconstruction_;
   std::unique_ptr<EcdhKeyAgreement> enc_key_agreement_;
   std::unique_ptr<SecAggVectorMap> input_map_;
   std::unique_ptr<std::vector<InputVectorSpecification> > input_vector_specs_;

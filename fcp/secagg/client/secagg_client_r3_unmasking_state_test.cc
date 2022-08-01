@@ -143,9 +143,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
       new MockStateTransitionListener();
   SecAggClientR3UnmaskingState r3_state(
       1,  // client_id
-      6,  // number_of_alive_clients
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_clients
+      6,  // number_of_alive_neighbors
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_neighbors
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
       std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
@@ -172,9 +172,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
       new MockStateTransitionListener();
   SecAggClientR3UnmaskingState r3_state(
       1,  // client_id
-      6,  // number_of_alive_clients
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_clients
+      6,  // number_of_alive_neighbors
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_neighbors
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
       std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
@@ -201,9 +201,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
       new MockStateTransitionListener();
   SecAggClientR3UnmaskingState r3_state(
       1,  // client_id
-      6,  // number_of_alive_clients
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_clients
+      6,  // number_of_alive_neighbors
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_neighbors
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
       std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
@@ -241,9 +241,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
 
   SecAggClientR3UnmaskingState r3_state(
       1,  // client_id
-      5,  // number_of_alive_clients
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_clients
+      5,  // number_of_alive_neighbors
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_neighbors
       std::make_unique<std::vector<OtherClientState> >(other_clients_states),
       std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
       std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
@@ -291,9 +291,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
 
   SecAggClientR3UnmaskingState r3_state(
       1,  // client_id
-      5,  // number_of_alive_clients
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_clients
+      5,  // number_of_alive_neighbors
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_neighbors
       std::make_unique<std::vector<OtherClientState> >(other_clients_states),
       std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
       std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
@@ -330,9 +330,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
 
   SecAggClientR3UnmaskingState r3_state(
       1,  // client_id
-      6,  // number_of_alive_clients
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_clients
+      6,  // number_of_alive_neighbors
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_neighbors
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
       std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
@@ -368,9 +368,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
 
   SecAggClientR3UnmaskingState r3_state(
       1,  // client_id
-      6,  // number_of_alive_clients
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_clients
+      6,  // number_of_alive_neighbors
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_neighbors
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
       std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
@@ -410,9 +410,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
 
   SecAggClientR3UnmaskingState r3_state(
       1,  // client_id
-      5,  // number_of_alive_clients
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_clients
+      5,  // number_of_alive_neighbors
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_neighbors
       std::make_unique<std::vector<OtherClientState> >(other_clients_states),
       std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),
       std::make_unique<std::vector<ShamirShare> >(6, test_self_share),
@@ -447,9 +447,9 @@ TEST(SecAggClientR3UnmaskingStateTest,
 
   SecAggClientR3UnmaskingState r3_state(
       1,  // client_id
-      6,  // number_of_alive_clients
-      4,  // minimum_surviving_clients_for_reconstruction
-      6,  // number_of_clients
+      6,  // number_of_alive_neighbors
+      4,  // minimum_surviving_neighbors_for_reconstruction
+      6,  // number_of_neighbors
       std::make_unique<std::vector<OtherClientState> >(
           6, OtherClientState::kAlive),
       std::make_unique<std::vector<ShamirShare> >(6, test_pairwise_share),

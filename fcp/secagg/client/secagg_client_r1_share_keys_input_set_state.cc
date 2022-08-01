@@ -37,8 +37,8 @@
 namespace fcp {
 namespace secagg {
 SecAggClientR1ShareKeysInputSetState::SecAggClientR1ShareKeysInputSetState(
-    uint32_t max_clients_expected,
-    uint32_t minimum_surviving_clients_for_reconstruction,
+    uint32_t max_neighbors_expected,
+    uint32_t minimum_surviving_neighbors_for_reconstruction,
     std::unique_ptr<EcdhKeyAgreement> enc_key_agreement,
     std::unique_ptr<SecAggVectorMap> input_map,
     std::unique_ptr<std::vector<InputVectorSpecification> > input_vector_specs,
@@ -49,9 +49,9 @@ SecAggClientR1ShareKeysInputSetState::SecAggClientR1ShareKeysInputSetState(
     std::unique_ptr<AesPrngFactory> prng_factory, AsyncAbort* async_abort)
     : SecAggClientR1ShareKeysBaseState(
           std::move(sender), std::move(transition_listener), async_abort),
-      max_clients_expected_(max_clients_expected),
-      minimum_surviving_clients_for_reconstruction_(
-          minimum_surviving_clients_for_reconstruction),
+      max_neighbors_expected_(max_neighbors_expected),
+      minimum_surviving_neighbors_for_reconstruction_(
+          minimum_surviving_neighbors_for_reconstruction),
       enc_key_agreement_(std::move(enc_key_agreement)),
       input_map_(std::move(input_map)),
       input_vector_specs_(std::move(input_vector_specs)),
@@ -93,12 +93,13 @@ SecAggClientR1ShareKeysInputSetState::HandleMessage(
   auto self_prng_key = std::make_unique<AesKey>(self_prng_key_buffer);
 
   bool success = HandleShareKeysRequest(
-      message.share_keys_request(), *enc_key_agreement_, max_clients_expected_,
-      minimum_surviving_clients_for_reconstruction_, *prng_key_agreement_,
-      *self_prng_key, prng_.get(), &client_id, &error_message,
-      &number_of_alive_clients, &number_of_clients, other_client_enc_keys.get(),
-      other_client_prng_keys.get(), other_client_states.get(),
-      &self_prng_key_shares_, &pairwise_prng_key_shares_, session_id.get());
+      message.share_keys_request(), *enc_key_agreement_,
+      max_neighbors_expected_, minimum_surviving_neighbors_for_reconstruction_,
+      *prng_key_agreement_, *self_prng_key, prng_.get(), &client_id,
+      &error_message, &number_of_alive_clients, &number_of_clients,
+      other_client_enc_keys.get(), other_client_prng_keys.get(),
+      other_client_states.get(), &self_prng_key_shares_,
+      &pairwise_prng_key_shares_, session_id.get());
 
   if (!success) {
     return AbortAndNotifyServer(error_message);
@@ -115,7 +116,7 @@ SecAggClientR1ShareKeysInputSetState::HandleMessage(
 
   *own_self_key_share = self_prng_key_shares_[client_id];
   return {std::make_unique<SecAggClientR2MaskedInputCollInputSetState>(
-      client_id, minimum_surviving_clients_for_reconstruction_,
+      client_id, minimum_surviving_neighbors_for_reconstruction_,
       number_of_alive_clients, number_of_clients, std::move(input_map_),
       std::move(input_vector_specs_), std::move(other_client_states),
       std::move(other_client_enc_keys), std::move(other_client_prng_keys),
