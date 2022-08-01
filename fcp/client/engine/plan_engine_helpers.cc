@@ -33,7 +33,6 @@ namespace client {
 namespace engine {
 namespace {
 
-using ::fcp::client::opstats::OperationalStats;
 using ::fcp::client::opstats::OpStatsLogger;
 using ::fcp::client::opstats::OpStatsLoggerImpl;
 using ::fcp::client::opstats::PdsBackedOpStatsDb;
@@ -46,7 +45,7 @@ class DatasetIterator : public ExternalDatasetIterator {
                   std::atomic<int>* total_example_count,
                   std::atomic<int64_t>* total_example_size_bytes,
                   ExampleIteratorStatus* example_iterator_status,
-                  const std::string& collection_uri)
+                  const std::string& collection_uri, bool collect_stats)
       : example_iterator_(std::move(example_iterator)),
         opstats_logger_(opstats_logger),
         iterator_start_time_(absl::Now()),
@@ -56,11 +55,14 @@ class DatasetIterator : public ExternalDatasetIterator {
         example_count_(0),
         example_size_bytes_(0),
         collection_uri_(collection_uri),
-        iterator_finished_(false) {}
+        iterator_finished_(false),
+        collect_stats_(collect_stats) {}
 
   ~DatasetIterator() override {
-    opstats_logger_->UpdateDatasetStats(collection_uri_, example_count_,
-                                        example_size_bytes_);
+    if (collect_stats_) {
+      opstats_logger_->UpdateDatasetStats(collection_uri_, example_count_,
+                                          example_size_bytes_);
+    }
   }
 
   absl::StatusOr<std::string> GetNext() final {
@@ -78,14 +80,14 @@ class DatasetIterator : public ExternalDatasetIterator {
       }
     // If we're not forwarding an OUT_OF_RANGE to the caller, record example
     // stats for metrics logging.
-    if (example.ok()) {
-      // TODO(team): Consider reducing logic duplication in cross-dataset
-      // and single-dataset example stat variables.
-      *total_example_count_ += 1;
-      *total_example_size_bytes_ += example->size();
-      example_count_ += 1;
-      example_size_bytes_ += example->size();
-    }
+      if (collect_stats_ && example.ok()) {
+        // TODO(team): Consider reducing logic duplication in
+        // cross-dataset and single-dataset example stat variables.
+        *total_example_count_ += 1;
+        *total_example_size_bytes_ += example->size();
+        example_count_ += 1;
+        example_size_bytes_ += example->size();
+      }
     return example;
   }
 
@@ -103,6 +105,7 @@ class DatasetIterator : public ExternalDatasetIterator {
   std::atomic<int64_t> example_size_bytes_;
   const std::string collection_uri_;
   bool iterator_finished_ ABSL_GUARDED_BY(iterator_lock_);
+  const bool collect_stats_;
   absl::Mutex iterator_lock_;
 };
 
@@ -123,7 +126,7 @@ ExampleIteratorFactory* FindExampleIteratorFactory(
     std::vector<ExampleIteratorFactory*> example_iterator_factories) {
   for (ExampleIteratorFactory* factory : example_iterator_factories) {
     if (factory->CanHandle(selector)) {
-      return factory;
+        return factory;
     }
   }
   return nullptr;
@@ -173,7 +176,8 @@ class TrainingDatasetProvider
           return std::make_unique<DatasetIterator>(
               std::move(*example_iterator), opstats_logger, total_example_count,
               total_example_size_bytes, example_iterator_status,
-              selector.collection_uri());
+              selector.collection_uri(),
+              /*collect_stats=*/example_iterator_factory->ShouldCollectStats());
         });
   }
 

@@ -319,6 +319,7 @@ cc_library(
         ":fl_runner_cc_proto",
         ":histogram_counters_cc_proto",
         ":interfaces",
+        ":federated_select",
         ":interruptible_runner",
         ":simple_task_environment",
         ":selector_context_cc_proto",
@@ -437,6 +438,53 @@ cc_test(
 )
 
 cc_library(
+    name = "federated_select",
+    srcs = ["federated_select.cc"],
+    hdrs = ["federated_select.h"],
+    deps = [
+        ":diag_codes_cc_proto",
+        ":interfaces",
+        ":interruptible_runner",
+        ":simple_task_environment",
+        "//fcp/base",
+        "//fcp/client/engine:example_iterator_factory",
+        "//fcp/client/http:http_client",
+        "//fcp/client/http:http_client_util",
+        "//fcp/client/http:in_memory_request_response",
+        "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_protobuf//:cc_wkt_protos",
+    ],
+)
+
+cc_test(
+    name = "federated_select_test",
+    srcs = ["federated_select_test.cc"],
+    deps = [
+        ":client_runner",
+        ":diag_codes_cc_proto",
+        ":federated_select",
+        ":interruptible_runner",
+        ":test_helpers",
+        "//fcp/base",
+        "//fcp/client/engine:example_iterator_factory",
+        "//fcp/client/http:http_client",
+        "//fcp/client/http:in_memory_request_response",
+        "//fcp/client/http/testing:test_helpers",
+        "//fcp/protos:plan_cc_proto",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:cc_wkt_protos",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
     name = "interruptible_runner",
     srcs = ["interruptible_runner.cc"],
     hdrs = ["interruptible_runner.h"],
@@ -546,11 +594,13 @@ cc_library(
     hdrs = ["test_helpers.h"],
     deps = [
         ":federated_protocol",
+        ":federated_select",
         ":interfaces",
         ":phase_logger",
         ":secagg_state_transition_listener_impl",
         ":simple_task_environment",
         "//fcp/base",
+        "//fcp/client/engine:example_iterator_factory",
         "//fcp/client/http:http_client",
         "//fcp/client/opstats:opstats_db",
         "//fcp/client/opstats:opstats_logger",

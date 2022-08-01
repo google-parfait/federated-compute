@@ -419,6 +419,7 @@ MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS = ["make_slices_selector_example_s
 MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS = [
     "@com_google_absl//absl/strings:str_format",
     "//fcp/protos:plan_cc_proto",
+    "//fcp/client:federated_select",
 ]
 
 # Custom op to serialize an ExampleSelector containing a SlicesSelector proto.

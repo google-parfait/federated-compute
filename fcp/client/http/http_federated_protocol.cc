@@ -791,6 +791,8 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
 
   return TaskAssignment{
       .payloads = std::move(payloads),
+      .federated_select_uri_template =
+          task_assignment.federated_select_uri_info().uri_template(),
       .aggregation_session_id = task_assignment.aggregation_id(),
       // TODO(team): Populate this field with the actual values
       // provided by the server, once we support Secure Aggregation in the

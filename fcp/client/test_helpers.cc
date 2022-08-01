@@ -19,6 +19,7 @@
 
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -28,6 +29,14 @@ namespace fcp {
 namespace client {
 
 using ::google::internal::federated::plan::Dataset;
+
+SimpleExampleIterator::SimpleExampleIterator(
+    std::vector<const char*> examples) {
+  for (const auto& example : examples) {
+    examples_.push_back(std::string(example));
+  }
+  FCP_CHECK(!examples_.empty()) << "No data was loaded";
+}
 
 SimpleExampleIterator::SimpleExampleIterator(Dataset dataset) {
   for (const Dataset::ClientDataset& client_dataset : dataset.client_data()) {

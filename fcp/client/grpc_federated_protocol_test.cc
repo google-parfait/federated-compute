@@ -90,6 +90,7 @@ using ::testing::StrictMock;
 using ::testing::VariantWith;
 
 constexpr char kPopulationName[] = "TEST/POPULATION";
+constexpr char kFederatedSelectUriTemplate[] = "https://federated.select";
 constexpr char kExecutionPhaseId[] = "TEST/POPULATION/TEST_TASK#1234.ab35";
 constexpr char kPlan[] = "CLIENT_ONLY_PLAN";
 constexpr char kInitCheckpoint[] = "INIT_CHECKPOINT";
@@ -243,6 +244,7 @@ ServerStreamMessage GetFakeRejectedCheckinResponse() {
 
 ServerStreamMessage GetFakeAcceptedCheckinResponse(
     const std::string& plan, const std::string& init_checkpoint,
+    const std::string& federated_select_uri_template,
     const std::string& phase_id, bool use_secure_aggregation) {
   ServerStreamMessage checkin_response_message;
   AcceptanceInfo* acceptance_info =
@@ -251,6 +253,8 @@ ServerStreamMessage GetFakeAcceptedCheckinResponse(
   acceptance_info->set_plan(plan);
   acceptance_info->set_execution_phase_id(phase_id);
   acceptance_info->set_init_checkpoint(init_checkpoint);
+  acceptance_info->mutable_federated_select_uri_info()->set_uri_template(
+      federated_select_uri_template);
   if (use_secure_aggregation) {
     auto sec_agg =
         acceptance_info->mutable_side_channel_protocol_execution_info()
@@ -451,10 +455,11 @@ class GrpcFederatedProtocolTest
     {
       InSequence seq;
       EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
-          .WillOnce(DoAll(SetArgPointee<0>(GetFakeAcceptedCheckinResponse(
-                              kPlan, kInitCheckpoint, kExecutionPhaseId,
-                              use_secure_aggregation)),
-                          Return(absl::OkStatus())))
+          .WillOnce(
+              DoAll(SetArgPointee<0>(GetFakeAcceptedCheckinResponse(
+                        kPlan, kInitCheckpoint, kFederatedSelectUriTemplate,
+                        kExecutionPhaseId, use_secure_aggregation)),
+                    Return(absl::OkStatus())))
           .RetiresOnSaturation();
     }
 
@@ -1166,7 +1171,8 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
   std::string expected_checkpoint = kInitCheckpoint;
   EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
       .WillOnce(DoAll(SetArgPointee<0>(GetFakeAcceptedCheckinResponse(
-                          expected_plan, expected_checkpoint, kExecutionPhaseId,
+                          expected_plan, expected_checkpoint,
+                          kFederatedSelectUriTemplate, kExecutionPhaseId,
                           /* use_secure_aggregation=*/true)),
                       Return(absl::OkStatus())));
 
@@ -1183,7 +1189,7 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
         VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
             FieldsAre(absl::Cord(expected_plan),
                       absl::Cord(expected_checkpoint)),
-            kExecutionPhaseId,
+            kFederatedSelectUriTemplate, kExecutionPhaseId,
             Optional(AllOf(
                 Field(
                     &FederatedProtocol::SecAggInfo::expected_number_of_clients,
@@ -1195,7 +1201,8 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
     EXPECT_THAT(
         *checkin_result,
         VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
-            FieldsAre(expected_plan, expected_checkpoint), kExecutionPhaseId,
+            FieldsAre(expected_plan, expected_checkpoint),
+            kFederatedSelectUriTemplate, kExecutionPhaseId,
             Optional(AllOf(
                 Field(
                     &FederatedProtocol::SecAggInfo::expected_number_of_clients,
@@ -1243,7 +1250,8 @@ TEST_P(GrpcFederatedProtocolTest,
   std::string expected_checkpoint = kInitCheckpoint;
   std::string checkpoint_uri = "https://fake.uri/checkpoint";
   ServerStreamMessage fake_checkin_response = GetFakeAcceptedCheckinResponse(
-      /*plan=*/"", /*init_checkpoint=*/"", kExecutionPhaseId,
+      /*plan=*/"", /*init_checkpoint=*/"", kFederatedSelectUriTemplate,
+      kExecutionPhaseId,
       /* use_secure_aggregation=*/true);
   AcceptanceInfo* acceptance_info =
       fake_checkin_response.mutable_checkin_response()
@@ -1285,7 +1293,7 @@ TEST_P(GrpcFederatedProtocolTest,
       *checkin_result,
       VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
           FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
-          kExecutionPhaseId,
+          kFederatedSelectUriTemplate, kExecutionPhaseId,
           Optional(AllOf(
               Field(&FederatedProtocol::SecAggInfo::expected_number_of_clients,
                     kSecAggExpectedNumberOfClients),
@@ -1321,7 +1329,8 @@ TEST_P(GrpcFederatedProtocolTest,
   std::string plan_uri = "https://fake.uri/plan";
   std::string expected_checkpoint = kInitCheckpoint;
   ServerStreamMessage fake_checkin_response = GetFakeAcceptedCheckinResponse(
-      /*plan=*/"", expected_checkpoint, kExecutionPhaseId,
+      /*plan=*/"", expected_checkpoint, kFederatedSelectUriTemplate,
+      kExecutionPhaseId,
       /* use_secure_aggregation=*/true);
   AcceptanceInfo* acceptance_info =
       fake_checkin_response.mutable_checkin_response()
@@ -1386,7 +1395,8 @@ TEST_P(GrpcFederatedProtocolTest,
   std::string expected_checkpoint = kInitCheckpoint;
   std::string checkpoint_uri = "https://fake.uri/checkpoint";
   ServerStreamMessage fake_checkin_response = GetFakeAcceptedCheckinResponse(
-      expected_plan, /*init_checkpoint=*/"", kExecutionPhaseId,
+      expected_plan, /*init_checkpoint=*/"", kFederatedSelectUriTemplate,
+      kExecutionPhaseId,
       /* use_secure_aggregation=*/true);
   AcceptanceInfo* acceptance_info =
       fake_checkin_response.mutable_checkin_response()
@@ -1440,15 +1450,16 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAcceptNonSecAgg) {
     EXPECT_THAT(*checkin_result,
                 VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
                     FieldsAre(absl::Cord(kPlan), absl::Cord(kInitCheckpoint)),
-                    kExecutionPhaseId,
+                    kFederatedSelectUriTemplate, kExecutionPhaseId,
                     // There should be no SecAggInfo in the result.
                     Eq(std::nullopt))));
   } else {
     EXPECT_THAT(*checkin_result,
-                VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
-                    FieldsAre(kPlan, kInitCheckpoint), kExecutionPhaseId,
-                    // There should be no SecAggInfo in the result.
-                    Eq(std::nullopt))));
+                VariantWith<FederatedProtocol::TaskAssignment>(
+                    FieldsAre(FieldsAre(kPlan, kInitCheckpoint),
+                              kFederatedSelectUriTemplate, kExecutionPhaseId,
+                              // There should be no SecAggInfo in the result.
+                              Eq(std::nullopt))));
   }
 }
 
@@ -1695,7 +1706,8 @@ TEST_P(GrpcFederatedProtocolTest,
     InSequence seq;
     EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
         .WillOnce(DoAll(SetArgPointee<0>(GetFakeAcceptedCheckinResponse(
-                            kPlan, kInitCheckpoint, kExecutionPhaseId,
+                            kPlan, kInitCheckpoint, kFederatedSelectUriTemplate,
+                            kExecutionPhaseId,
                             /*use_secure_aggregation=*/false)),
                         Return(absl::OkStatus())))
         .RetiresOnSaturation();

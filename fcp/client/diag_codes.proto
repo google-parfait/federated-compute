@@ -232,5 +232,22 @@ enum ProdDiagCode {
    */
   TEMP_FILES_NATIVE_FAILED_TO_DELETE = 1090;
 
+  /**
+   * Codes reserved for logs related to Federated Select
+   * =======================================
+   */
+  /* Logged when a task tries to use Federated Select to fetch one or more
+   * slices but the feature is disabled. */
+  FEDSELECT_SLICE_HTTP_FETCH_REQUESTED_BUT_DISABLED = 1899;
+  /* Logged when a regular (non-eligibility eval) task uses Federated Select to
+   * fetch one or more slices via HTTP. */
+  FEDSELECT_SLICE_HTTP_FETCH_REQUESTED = 1898;
+  /* Logged when the attempt to fetch one or more slices via HTTP (as per
+   * `FEDSELECT_SLICE_HTTP_FETCH_REQUESTED`) failed. */
+  FEDSELECT_SLICE_HTTP_FETCH_FAILED = 1897;
+  /* Logged when the attempt to fetch one or more slices via HTTP (as per
+   * `FEDSELECT_SLICE_HTTP_FETCH_REQUESTED`) succeeded. */
+  FEDSELECT_SLICE_HTTP_FETCH_SUCCEEDED = 1896;
+
   reserved 25;
 }

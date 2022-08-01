@@ -45,6 +45,10 @@ class ExampleIteratorFactory {
       const google::internal::federated::plan::ExampleSelector&
           example_selector) = 0;
 
+  // Whether stats should be generated and logged into the OpStats database for
+  // iterators created by this factory.
+  virtual bool ShouldCollectStats() = 0;
+
   virtual ~ExampleIteratorFactory() {}
 };
 
@@ -65,7 +69,8 @@ class FunctionalExampleIteratorFactory : public ExampleIteratorFactory {
             [](const google::internal::federated::plan::ExampleSelector&) {
               return true;
             }),
-        create_iterator_func_(create_iterator_func) {}
+        create_iterator_func_(create_iterator_func),
+        should_collect_stats_(true) {}
 
   // Creates an `ExampleIteratorFactory` that delegates to an std::function to
   // determine if a given query can be handled, and delegates the creation of
@@ -78,9 +83,11 @@ class FunctionalExampleIteratorFactory : public ExampleIteratorFactory {
           const google::internal::federated::plan::ExampleSelector&
 
           )>
-          create_iterator_func)
+          create_iterator_func,
+      bool should_collect_stats)
       : can_handle_func_(can_handle_func),
-        create_iterator_func_(create_iterator_func) {}
+        create_iterator_func_(create_iterator_func),
+        should_collect_stats_(should_collect_stats) {}
 
   bool CanHandle(const google::internal::federated::plan::ExampleSelector&
                      example_selector) override {
@@ -93,12 +100,15 @@ class FunctionalExampleIteratorFactory : public ExampleIteratorFactory {
     return create_iterator_func_(example_selector);
   }
 
+  bool ShouldCollectStats() override { return should_collect_stats_; }
+
  private:
   std::function<bool(const google::internal::federated::plan::ExampleSelector&)>
       can_handle_func_;
   std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
       const google::internal::federated::plan::ExampleSelector&)>
       create_iterator_func_;
+  bool should_collect_stats_;
 };
 
 }  // namespace engine

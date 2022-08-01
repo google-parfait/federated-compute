@@ -19,6 +19,7 @@
 
 #include "google/protobuf/any.pb.h"
 #include "absl/strings/str_format.h"
+#include "fcp/client/federated_select.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op.h"
@@ -64,7 +65,8 @@ class MakeSlicesSelectorExampleSelectorOp : public tensorflow::OpKernel {
 
     google::internal::federated::plan::ExampleSelector example_selector;
     example_selector.mutable_criteria()->PackFrom(slices_selector);
-    example_selector.set_collection_uri("slice_fetching_uri");
+    example_selector.set_collection_uri(
+        fcp::client::kFederatedSelectCollectionUri);
     // `resumption_token` not set.
 
     tensorflow::Tensor* output_tensor;

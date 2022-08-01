@@ -458,6 +458,8 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
       object_state_ = ObjectState::kCheckinAccepted;
       return TaskAssignment{
           .payloads = std::move(payloads),
+          .federated_select_uri_template =
+              acceptance_info.federated_select_uri_info().uri_template(),
           .aggregation_session_id = acceptance_info.execution_phase_id(),
           .sec_agg_info = sec_agg_info};
     }

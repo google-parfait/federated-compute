@@ -135,6 +135,7 @@ constexpr char kClientSessionId[] = "CLIENT_SESSION_ID";
 constexpr char kAggregationSessionId[] = "AGGREGATION_SESSION_ID";
 constexpr char kClientToken[] = "CLIENT_TOKEN";
 constexpr char kResourceName[] = "CHECKPOINT_RESOURCE";
+constexpr char kFederatedSelectUriTemplate[] = "https://federated.select";
 
 MATCHER_P(EligibilityEvalTaskRequestMatcher, matcher,
           absl::StrCat(negation ? "doesn't parse" : "parses",
@@ -370,6 +371,7 @@ StartTaskAssignmentResponse GetFakeRejectedTaskAssignmentResponse() {
 
 StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
     const Resource& plan, const Resource& checkpoint,
+    const std::string& federated_select_uri_template,
     const std::string& aggregation_session_id) {
   StartTaskAssignmentResponse response;
   TaskAssignment* task_assignment = response.mutable_task_assignment();
@@ -381,6 +383,8 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
   task_assignment->set_client_token(kClientToken);
   *task_assignment->mutable_plan() = plan;
   *task_assignment->mutable_init_checkpoint() = checkpoint;
+  task_assignment->mutable_federated_select_uri_info()->set_uri_template(
+      federated_select_uri_template);
   return response;
 }
 
@@ -535,6 +539,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     std::string expected_aggregation_session_id = kAggregationSessionId;
     StartTaskAssignmentResponse task_assignment_response =
         GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
+                                      kFederatedSelectUriTemplate,
                                       expected_aggregation_session_id);
 
     std::string request_uri =
@@ -1414,6 +1419,8 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   std::string expected_checkpoint = kInitCheckpoint;
   Resource checkpoint_resource;
   checkpoint_resource.mutable_inline_resource()->set_data(expected_checkpoint);
+  std::string expected_federated_select_uri_template =
+      kFederatedSelectUriTemplate;
   std::string expected_aggregation_session_id = kAggregationSessionId;
   // Note that in this particular test we check that the CheckinRequest is as
   // expected (in all prior tests we just use the '_' matcher, because the
@@ -1429,9 +1436,10 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
                   expected_eligibility_info))))))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
-          CreateDoneOperation(
-              GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
-                                            expected_aggregation_session_id))
+          CreateDoneOperation(GetFakeTaskAssignmentResponse(
+                                  plan_resource, checkpoint_resource,
+                                  expected_federated_select_uri_template,
+                                  expected_aggregation_session_id))
               .SerializeAsString())));
 
   EXPECT_CALL(mock_http_client_,
@@ -1447,6 +1455,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
       *checkin_result,
       VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
           FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
+          expected_federated_select_uri_template,
           expected_aggregation_session_id, Eq(std::nullopt))));
   // The Checkin call is expected to return the accepted retry window from the
   // response to the first eligibility eval request.
@@ -1484,6 +1493,8 @@ TEST_F(HttpFederatedProtocolTest,
   std::string expected_checkpoint = kInitCheckpoint;
   Resource checkpoint_resource;
   checkpoint_resource.mutable_inline_resource()->set_data(expected_checkpoint);
+  std::string expected_federated_select_uri_template =
+      kFederatedSelectUriTemplate;
   std::string expected_aggregation_session_id = kAggregationSessionId;
   EXPECT_CALL(
       mock_http_client_,
@@ -1498,9 +1509,10 @@ TEST_F(HttpFederatedProtocolTest,
           200, HeaderList(), pending_operation_response.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
-          CreateDoneOperation(
-              GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
-                                            expected_aggregation_session_id))
+          CreateDoneOperation(GetFakeTaskAssignmentResponse(
+                                  plan_resource, checkpoint_resource,
+                                  expected_federated_select_uri_template,
+                                  expected_aggregation_session_id))
               .SerializeAsString())));
 
   // Issue the regular checkin.
@@ -1512,6 +1524,7 @@ TEST_F(HttpFederatedProtocolTest,
       *checkin_result,
       VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
           FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
+          expected_federated_select_uri_template,
           expected_aggregation_session_id, Eq(std::nullopt))));
   // The Checkin call is expected to return the accepted retry window from the
   // response to the first eligibility eval request.
@@ -1540,6 +1553,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedPlanDataFetchFailed) {
           200, HeaderList(),
           CreateDoneOperation(
               GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
+                                            kFederatedSelectUriTemplate,
                                             kAggregationSessionId))
               .SerializeAsString())));
 
@@ -1592,6 +1606,7 @@ TEST_F(HttpFederatedProtocolTest,
           200, HeaderList(),
           CreateDoneOperation(
               GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
+                                            kFederatedSelectUriTemplate,
                                             kAggregationSessionId))
               .SerializeAsString())));
 
@@ -2028,6 +2043,7 @@ TEST_F(HttpFederatedProtocolTest,
   plan_resource.set_uri(plan_uri);
   StartTaskAssignmentResponse task_assignment_response =
       GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
+                                    kFederatedSelectUriTemplate,
                                     kAggregationSessionId);
   const std::string request_uri =
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"

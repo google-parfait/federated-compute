@@ -130,7 +130,8 @@ CreateSimpleTaskEnvironmentIteratorFactory(
               example_selector) {
         return task_env->CreateExampleIterator(example_selector,
                                                selector_context);
-      });
+      },
+      /*should_collect_stats=*/true);
 }
 
 absl::Status RunPlanWithTensorflowSpec(

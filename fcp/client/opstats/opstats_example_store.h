@@ -65,7 +65,7 @@ class OpStatsExampleIteratorFactory
   bool CanHandle(const google::internal::federated::plan::ExampleSelector&
                      example_selector) override;
 
-  bool ShouldCollectStats() { return true; }
+  bool ShouldCollectStats() override { return true; }
 
   absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
       const google::internal::federated::plan::ExampleSelector&

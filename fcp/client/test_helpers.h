@@ -25,8 +25,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
+#include "fcp/client/federated_select.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/log_manager.h"
@@ -481,6 +483,8 @@ class MockExampleIterator : public ExampleIterator {
 // An iterator that passes through each example in the dataset once.
 class SimpleExampleIterator : public ExampleIterator {
  public:
+  // Uses the given bytes as the examples to return.
+  explicit SimpleExampleIterator(std::vector<const char*> examples);
   // Passes through each of the examples in the `Dataset.client_data.example`
   // field.
   explicit SimpleExampleIterator(
@@ -539,6 +543,7 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, client_decoded_http_resources, (), (const, override));
   MOCK_METHOD(bool, enable_cache_dir, (), (const, override));
+  MOCK_METHOD(bool, enable_federated_select, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
@@ -721,6 +726,26 @@ class MockPhaseLogger : public PhaseLogger {
 
 class MockSecAggSendToServerBase : public SecAggSendToServerBase {
   MOCK_METHOD(void, Send, (secagg::ClientToServerWrapperMessage * message),
+              (override));
+};
+
+class MockFederatedSelectManager : public FederatedSelectManager {
+ public:
+  MOCK_METHOD(std::unique_ptr<engine::ExampleIteratorFactory>,
+              CreateExampleIteratorFactoryForUriTemplate,
+              (absl::string_view uri_template), (override));
+
+  MOCK_METHOD(int64_t, NetworkTotalSentBytes, (), (override));
+  MOCK_METHOD(int64_t, NetworkTotalReceivedBytes, (), (override));
+};
+
+class MockFederatedSelectExampleIteratorFactory
+    : public FederatedSelectExampleIteratorFactory {
+ public:
+  MOCK_METHOD(absl::StatusOr<std::unique_ptr<ExampleIterator>>,
+              CreateExampleIterator,
+              (const ::google::internal::federated::plan::ExampleSelector&
+                   example_selector),
               (override));
 };
 

@@ -23,10 +23,12 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
+#include "fcp/client/federated_select.h"
 #include "fcp/client/files.h"
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/fl_runner_internal.pb.h"
 #include "fcp/client/flags.h"
+#include "fcp/client/http/http_client.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -90,6 +92,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     EventPublisher* event_publisher, Files* files, LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
+    FederatedSelectManager* fedselect_manager,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, const std::string& session_name,
     const std::string& population_name);

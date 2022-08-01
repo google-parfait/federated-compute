@@ -152,10 +152,12 @@ class FederatedProtocol {
     int32_t minimum_clients_in_server_visible_aggregate;
   };
 
-  // A task assignment, consisting of task payloads, a session identifier, and
-  // SecAgg-related metadata.
+  // A task assignment, consisting of task payloads, a URI template to download
+  // federated select task slices with (if the plan uses federated select), a
+  // session identifier, and SecAgg-related metadata.
   struct TaskAssignment {
     PlanAndCheckpointPayloads payloads;
+    std::string federated_select_uri_template;
     std::string aggregation_session_id;
     std::optional<SecAggInfo> sec_agg_info;
   };
