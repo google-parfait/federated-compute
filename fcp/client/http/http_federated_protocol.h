@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "google/longrunning/operations.pb.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -95,6 +96,13 @@ class ProtocolRequestCreator {
   absl::StatusOr<std::unique_ptr<HttpRequest>> CreateGetOperationRequest(
       absl::string_view operation_name) const;
 
+  // Creates an `HttpRequest` for canceling a `google.longrunning.operation`.
+  // Note that the request body is empty, because its only field (`name`) is
+  // included in the URI instead. Also note that the `next_request_headers_`
+  // will be attached to this request.
+  absl::StatusOr<std::unique_ptr<HttpRequest>> CreateCancelOperationRequest(
+      absl::string_view operation_name) const;
+
  private:
   absl::StatusOr<std::unique_ptr<HttpRequest>> CreateHttpRequest(
       absl::string_view uri_path_suffix, QueryParams params,
@@ -141,7 +149,13 @@ class ProtocolRequestHelper {
   // returned instead.
   absl::StatusOr<::google::longrunning::Operation>
   PollOperationResponseUntilDone(
-      absl::StatusOr<InMemoryHttpResponse> http_response,
+      const ::google::longrunning::Operation& initial_operation,
+      const ProtocolRequestCreator& request_creator,
+      InterruptibleRunner& runner);
+
+  // Helper function for cancelling an operation.
+  absl::StatusOr<InMemoryHttpResponse> CancelOperation(
+      absl::string_view operation_name,
       const ProtocolRequestCreator& request_creator,
       InterruptibleRunner& runner);
 

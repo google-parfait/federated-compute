@@ -163,6 +163,15 @@ absl::StatusOr<std::string> CreateGetOperationUriSuffix(
   return absl::Substitute(kGetOperationUriSuffix, encoded_operation_name);
 }
 
+// Creates the URI suffix for a CancelOperation protocol request.
+absl::StatusOr<std::string> CreateCancelOperationUriSuffix(
+    absl::string_view operation_name) {
+  constexpr absl::string_view kCancelOperationUriSuffix = "/v1/$0:cancel";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_operation_name,
+                       EncodeUriMultiplePathSegments(operation_name));
+  return absl::Substitute(kCancelOperationUriSuffix, encoded_operation_name);
+}
+
 // Creates he URI suffix for a ReportTaskResult protocol request.
 absl::StatusOr<std::string> CreateReportTaskResultUriSuffix(
     absl::string_view population_name, absl::string_view session_id) {
@@ -324,6 +333,28 @@ std::unique_ptr<InterruptibleRunner> CreateDelayedInterruptibleRunner(
               BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT});
 }
 
+absl::StatusOr<Operation> ParseOperationProtoFromHttpResponse(
+    absl::StatusOr<InMemoryHttpResponse> http_response) {
+  // If the HTTP response indicates an error then return that error.
+  FCP_RETURN_IF_ERROR(http_response);
+  Operation response_operation_proto;
+  // Parse the response.
+    if
+    (!response_operation_proto.ParseFromString(std::string(http_response->body)))
+    {
+    return absl::InvalidArgumentError("could not parse Operation proto");
+  }
+  return response_operation_proto;
+}
+
+absl::StatusOr<std::string> ExtractOperationName(const Operation& operation) {
+  if (!absl::StartsWith(operation.name(), "operations/")) {
+    return absl::InvalidArgumentError(
+        "Cannot cancel an Operation with an invalid name");
+  }
+  return operation.name();
+}
+
 }  // namespace
 
 ProtocolRequestCreator::ProtocolRequestCreator(
@@ -349,6 +380,16 @@ ProtocolRequestCreator::CreateGetOperationRequest(
     absl::string_view operation_name) const {
   FCP_ASSIGN_OR_RETURN(std::string uri_path_suffix,
                        CreateGetOperationUriSuffix(operation_name));
+  return CreateHttpRequest(uri_path_suffix, {}, HttpRequest::Method::kGet, "",
+                           /*is_protobuf_encoded=*/true,
+                           /*use_compression=*/false);
+}
+
+absl::StatusOr<std::unique_ptr<HttpRequest>>
+ProtocolRequestCreator::CreateCancelOperationRequest(
+    absl::string_view operation_name) const {
+  FCP_ASSIGN_OR_RETURN(std::string uri_path_suffix,
+                       CreateCancelOperationUriSuffix(operation_name));
   return CreateHttpRequest(uri_path_suffix, {}, HttpRequest::Method::kGet, "",
                            /*is_protobuf_encoded=*/true,
                            /*use_compression=*/false);
@@ -437,7 +478,7 @@ ProtocolRequestHelper::PerformMultipleProtocolRequests(
 
 absl::StatusOr<::google::longrunning::Operation>
 ProtocolRequestHelper::PollOperationResponseUntilDone(
-    absl::StatusOr<InMemoryHttpResponse> http_response,
+    const Operation& initial_operation,
     const ProtocolRequestCreator& request_creator,
     InterruptibleRunner& runner) {
   // There are three cases that lead to this method returning:
@@ -447,27 +488,15 @@ ProtocolRequestHelper::PollOperationResponseUntilDone(
   //
   // In all other cases we continue to poll the Operation via a subsequent
   // GetOperationRequest.
-  Operation response_operation_proto;
+  Operation response_operation_proto = initial_operation;
   while (true) {
-    // If the HTTP response indicates an error then return that error.
-    FCP_RETURN_IF_ERROR(http_response);
-
-    // Parse the response.
-      if
-      (!response_operation_proto.ParseFromString(std::string(http_response->body)))
-      {
-      return absl::InvalidArgumentError("could not parse Operation proto");
-    }
-
     // If the Operation is done then return it.
     if (response_operation_proto.done()) {
       return std::move(response_operation_proto);
     }
 
-    if (!absl::StartsWith(response_operation_proto.name(), "operations/")) {
-      return absl::InvalidArgumentError(
-          "cannot poll an Operation with an invalid name");
-    }
+    FCP_ASSIGN_OR_RETURN(std::string operation_name,
+                         ExtractOperationName(response_operation_proto));
 
     // TODO(team): Add a minimum amount of time between each request,
     // and/or use Operation.metadata to allow server to steer the client's retry
@@ -475,12 +504,24 @@ ProtocolRequestHelper::PollOperationResponseUntilDone(
 
     // The response Operation indicates that the result isn't ready yet. Poll
     // again.
-    FCP_ASSIGN_OR_RETURN(std::unique_ptr<HttpRequest> get_operation_request,
-                         request_creator.CreateGetOperationRequest(
-                             response_operation_proto.name()));
-    http_response =
+    FCP_ASSIGN_OR_RETURN(
+        std::unique_ptr<HttpRequest> get_operation_request,
+        request_creator.CreateGetOperationRequest(operation_name));
+    absl::StatusOr<InMemoryHttpResponse> http_response =
         PerformProtocolRequest(std::move(get_operation_request), runner);
+    FCP_ASSIGN_OR_RETURN(response_operation_proto,
+                         ParseOperationProtoFromHttpResponse(http_response));
   }
+}
+
+absl::StatusOr<InMemoryHttpResponse> ProtocolRequestHelper::CancelOperation(
+    absl::string_view operation_name,
+    const ProtocolRequestCreator& request_creator,
+    InterruptibleRunner& runner) {
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> cancel_operation_request,
+      request_creator.CreateCancelOperationRequest(operation_name));
+  return PerformProtocolRequest(std::move(cancel_operation_request), runner);
 }
 
 HttpFederatedProtocol::HttpFederatedProtocol(
@@ -520,7 +561,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       bit_gen_(std::move(bit_gen)),
       timing_config_(timing_config),
       waiting_period_for_cancellation_(
-          absl::Minutes(flags->waiting_period_sec_for_cancellation())) {
+          absl::Seconds(flags->waiting_period_sec_for_cancellation())) {
   // Note that we could cast the provided error codes to absl::StatusCode
   // values here. However, that means we'd have to handle the case when
   // invalid integers that don't map to a StatusCode enum are provided in the
@@ -680,6 +721,7 @@ absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
   // Send the request and parse the response.
   auto response = HandleTaskAssignmentOperationResponse(
       PerformTaskAssignmentRequest(task_eligibility_info));
+
   // Update the object state to ensure we return the correct retry delay.
   UpdateObjectStateIfPermanentError(
       response.status(),
@@ -724,10 +766,42 @@ HttpFederatedProtocol::PerformTaskAssignmentRequest(
 absl::StatusOr<FederatedProtocol::CheckinResult>
 HttpFederatedProtocol::HandleTaskAssignmentOperationResponse(
     absl::StatusOr<InMemoryHttpResponse> http_response) {
+  // If the initial response was not successful, then return immediately, even
+  // if the result was CANCELLED, since we won't have received an operation name
+  // to issue a CancelOperationRequest with anyway.
+  absl::StatusOr<Operation> initial_operation =
+      ParseOperationProtoFromHttpResponse(http_response);
+  if (!initial_operation.ok()) {
+    return absl::Status(initial_operation.status().code(),
+                        absl::StrCat("protocol request failed: ",
+                                     initial_operation.status().ToString()));
+  }
   absl::StatusOr<Operation> response_operation_proto =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          http_response, *task_assignment_request_creator_,
+          *initial_operation, *task_assignment_request_creator_,
           *interruptible_runner_);
+  if (response_operation_proto.status().code() ==
+      absl::StatusCode::kCancelled) {
+    // If the error code is CANCELLED,  this indicates that the request was
+    // interrupted from the client side, in which case we should issue a
+    // cancellation request to let the server know the operation will be
+    // abandoned.
+    FCP_ASSIGN_OR_RETURN(std::string operation_name,
+                         ExtractOperationName(*initial_operation));
+    // Client interruption
+    std::unique_ptr<InterruptibleRunner> cancellation_runner =
+        CreateDelayedInterruptibleRunner(
+            log_manager_, should_abort_, timing_config_,
+            absl::Now() + waiting_period_for_cancellation_);
+    if (!protocol_request_helper_
+             .CancelOperation(operation_name, *task_assignment_request_creator_,
+                              *cancellation_runner)
+             .ok()) {
+      log_manager_->LogDiag(
+          ProdDiagCode::HTTP_CANCELLATION_OR_ABORT_REQUEST_FAILED);
+    }
+    return response_operation_proto.status();
+  }
   if (!response_operation_proto.ok()) {
     // If the protocol request failed then forward the error, but add a prefix
     // to the error message to ensure we can easily distinguish an HTTP error
@@ -818,21 +892,24 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
       PerformStartDataUploadRequestAndReportTaskResult(plan_duration));
   if (!start_upload_status.ok()) {
     object_state_ = ObjectState::kReportFailedPermanentError;
-    FCP_LOG_IF(WARNING, !AbortAggregation(start_upload_status,
-                                          "StartDataAggregationUpload failed.")
-                             .ok())
-        << "Failed to signal the server to abort upload.";
+    if (!AbortAggregation(start_upload_status,
+                          "StartDataAggregationUpload failed.")
+             .ok()) {
+      log_manager_->LogDiag(
+          ProdDiagCode::HTTP_CANCELLATION_OR_ABORT_REQUEST_FAILED);
+    }
     return start_upload_status;
   }
   auto upload_status = UploadDataViaSimpleAgg(
       std::get<TFCheckpoint>(std::move(results.begin()->second)));
   if (!upload_status.ok()) {
     object_state_ = ObjectState::kReportFailedPermanentError;
-    FCP_LOG_IF(WARNING,
-               !AbortAggregation(upload_status,
-                                 "Upload data via simple aggregation failed.")
-                    .ok())
-        << "Failed to signal the server to abort upload.";
+    if (!AbortAggregation(upload_status,
+                          "Upload data via simple aggregation failed.")
+             .ok()) {
+      log_manager_->LogDiag(
+          ProdDiagCode::HTTP_CANCELLATION_OR_ABORT_REQUEST_FAILED);
+    }
     return upload_status;
   }
   return SubmitAggregationResult();
@@ -885,14 +962,23 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
 absl::Status
 HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
     absl::StatusOr<InMemoryHttpResponse> http_response) {
-  absl::StatusOr<Operation> response_operation_proto =
-      protocol_request_helper_.PollOperationResponseUntilDone(
-          http_response, *aggregation_request_creator_, *interruptible_runner_);
-  if (!response_operation_proto.ok()) {
+  absl::StatusOr<Operation> operation =
+      ParseOperationProtoFromHttpResponse(http_response);
+  if (!operation.ok()) {
     // If the protocol request failed then forward the error, but add a prefix
     // to the error message to ensure we can easily distinguish an HTTP error
     // occurring in response to the protocol request from HTTP errors
     // occurring during upload requests later on.
+    return absl::Status(
+        operation.status().code(),
+        absl::StrCat(
+            "StartAggregationDataUpload request failed during polling: ",
+            operation.status().ToString()));
+  }
+  absl::StatusOr<Operation> response_operation_proto =
+      protocol_request_helper_.PollOperationResponseUntilDone(
+          *operation, *aggregation_request_creator_, *interruptible_runner_);
+  if (!response_operation_proto.ok()) {
     return absl::Status(
         response_operation_proto.status().code(),
         absl::StrCat("StartAggregationDataUpload request failed: ",

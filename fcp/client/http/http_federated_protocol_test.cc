@@ -137,6 +137,8 @@ constexpr char kClientToken[] = "CLIENT_TOKEN";
 constexpr char kResourceName[] = "CHECKPOINT_RESOURCE";
 constexpr char kFederatedSelectUriTemplate[] = "https://federated.select";
 
+const int32_t kCancellationWaitingPeriodSec = 1;
+
 MATCHER_P(EligibilityEvalTaskRequestMatcher, matcher,
           absl::StrCat(negation ? "doesn't parse" : "parses",
                        " as an EligibilityEvalTaskRequest, and that ",
@@ -449,7 +451,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     EXPECT_CALL(mock_flags_, disable_http_request_body_compression)
         .WillRepeatedly(Return(true));
     EXPECT_CALL(mock_flags_, waiting_period_sec_for_cancellation)
-        .WillRepeatedly(Return(10));
+        .WillRepeatedly(Return(kCancellationWaitingPeriodSec));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -647,7 +649,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
 
   StrictMock<MockHttpClient> mock_http_client_;
 
-  NiceMock<MockLogManager> mock_log_manager_;
+  StrictMock<MockLogManager> mock_log_manager_;
   NiceMock<MockFlags> mock_flags_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
 
@@ -1215,8 +1217,6 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsTransientError) {
       federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
 
   EXPECT_THAT(checkin_result.status(), IsCode(UNAVAILABLE));
-  EXPECT_THAT(checkin_result.status().message(),
-              HasSubstr("protocol request failed"));
   // The original 503 HTTP response code should be included in the message as
   // well.
   EXPECT_THAT(checkin_result.status().message(), HasSubstr("503"));
@@ -1246,8 +1246,6 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromHttp) {
       federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
 
   EXPECT_THAT(checkin_result.status(), IsCode(NOT_FOUND));
-  EXPECT_THAT(checkin_result.status().message(),
-              HasSubstr("protocol request failed"));
   // The original 503 HTTP response code should be included in the message as
   // well.
   EXPECT_THAT(checkin_result.status().message(), HasSubstr("404"));
@@ -1335,6 +1333,163 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterrupted) {
 
   EXPECT_CALL(mock_log_manager_,
               LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP));
+
+  auto checkin_result =
+      federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
+  EXPECT_THAT(checkin_result.status(), IsCode(CANCELLED));
+  // RetryWindows were already received from the server during the eligibility
+  // eval checkin, so we expect to get a 'rejected' retry window.
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+// Tests the case where we get interrupted during polling of the long running
+// operation.
+TEST_F(HttpFederatedProtocolTest,
+       TestCheckinInterruptedDuringLongRunningOperation) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+
+  absl::Notification request_issued;
+  absl::Notification request_cancelled;
+
+  Operation pending_operation = CreatePendingOperation("operations/foo#bar");
+  // Make HttpClient::PerformRequests() block until the counter is decremented.
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _, _)))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), pending_operation.SerializeAsString())));
+
+  // Make should_abort return false until we know that the request was issued
+  // (i.e. once InterruptibleRunner has actually started running the code it
+  // was given), and then make it return true, triggering an abort sequence and
+  // unblocking the PerformRequests()() call we caused to block above.
+  EXPECT_CALL(mock_should_abort_, Call()).WillRepeatedly([&request_issued] {
+    return request_issued.HasBeenNotified();
+  });
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          // Note that the '#' character is encoded as "%23".
+          "https://taskassignment.uri/v1/operations/foo%23bar?%24alt=proto",
+          HttpRequest::Method::kGet, _,
+          GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
+      .WillRepeatedly([&request_issued, &request_cancelled, pending_operation](
+                          MockableHttpClient::SimpleHttpRequest ignored) {
+        if (!request_issued.HasBeenNotified()) {
+          request_issued.Notify();
+        }
+        request_cancelled.WaitForNotification();
+        return FakeHttpResponse(200, HeaderList(),
+                                pending_operation.SerializeAsString());
+      });
+
+  // Once the client is cancelled, a CancelOperationRequest should still be sent
+  // out before returning to the caller."
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          // Note that the '#' character is encoded as "%23".
+          "https://taskassignment.uri/v1/operations/"
+          "foo%23bar:cancel?%24alt=proto",
+          HttpRequest::Method::kGet, _,
+          GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "")));
+
+  // When the HttpClient receives a HttpRequestHandle::Cancel call, we let the
+  // request complete.
+  mock_http_client_.SetCancellationListener(
+      [&request_cancelled]() { request_cancelled.Notify(); });
+
+  EXPECT_CALL(mock_log_manager_,
+              LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP));
+
+  auto checkin_result =
+      federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
+  EXPECT_THAT(checkin_result.status(), IsCode(CANCELLED));
+  // RetryWindows were already received from the server during the eligibility
+  // eval checkin, so we expect to get a 'rejected' retry window.
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+// Tests the case where we get interrupted during polling of the long-running
+// operation, and the issued cancellation request timed out.
+TEST_F(HttpFederatedProtocolTest, TestCheckinInterruptedCancellationTimeout) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+
+  absl::Notification request_issued;
+  absl::Notification request_cancelled;
+
+  Operation pending_operation = CreatePendingOperation("operations/foo#bar");
+  // Make HttpClient::PerformRequests() block until the counter is decremented.
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto",
+          HttpRequest::Method::kPost, _, _)))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), pending_operation.SerializeAsString())));
+
+  // Make should_abort return false until we know that the request was issued
+  // (i.e. once InterruptibleRunner has actually started running the code it
+  // was given), and then make it return true, triggering an abort sequence and
+  // unblocking the PerformRequests()() call we caused to block above.
+  EXPECT_CALL(mock_should_abort_, Call()).WillRepeatedly([&request_issued] {
+    return request_issued.HasBeenNotified();
+  });
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          // Note that the '#' character is encoded as "%23".
+          "https://taskassignment.uri/v1/operations/foo%23bar?%24alt=proto",
+          HttpRequest::Method::kGet, _,
+          GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
+      .WillRepeatedly([&request_issued, &request_cancelled, pending_operation](
+                          MockableHttpClient::SimpleHttpRequest ignored) {
+        if (!request_issued.HasBeenNotified()) {
+          request_issued.Notify();
+        }
+        request_cancelled.WaitForNotification();
+        return FakeHttpResponse(200, HeaderList(),
+                                pending_operation.SerializeAsString());
+      });
+
+  // Once the client is cancelled, a CancelOperationRequest should still be sent
+  // out before returning to the caller."
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          // Note that the '#' character is encoded as "%23".
+          "https://taskassignment.uri/v1/operations/"
+          "foo%23bar:cancel?%24alt=proto",
+          HttpRequest::Method::kGet, _,
+          GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
+      .WillOnce([](MockableHttpClient::SimpleHttpRequest ignored) {
+        // Sleep for 2 seconds before returning the response.
+        absl::SleepFor(absl::Seconds(2));
+        return FakeHttpResponse(200, HeaderList(), "");
+      });
+
+  // When the HttpClient receives a HttpRequestHandle::Cancel call, we let the
+  // request complete.
+  mock_http_client_.SetCancellationListener([&request_cancelled]() {
+    if (!request_cancelled.HasBeenNotified()) {
+      request_cancelled.Notify();
+    }
+  });
+
+  // The Interruption log will be logged twice, one for Get operation, the other
+  // for Cancel operation.
+  EXPECT_CALL(mock_log_manager_,
+              LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP))
+      .Times(2);
+  EXPECT_CALL(mock_log_manager_,
+              LogDiag(ProdDiagCode::HTTP_CANCELLATION_OR_ABORT_REQUEST_FAILED));
 
   auto checkin_result =
       federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
@@ -1874,8 +2029,11 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadInterrupted) {
 
   // When the HttpClient receives a HttpRequestHandle::Cancel call, we let the
   // request complete.
-  mock_http_client_.SetCancellationListener(
-      [&request_cancelled]() { request_cancelled.Notify(); });
+  mock_http_client_.SetCancellationListener([&request_cancelled]() {
+    if (!request_cancelled.HasBeenNotified()) {
+      request_cancelled.Notify();
+    }
+  });
 
   EXPECT_CALL(mock_log_manager_,
               LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP));
@@ -2156,6 +2314,19 @@ TEST(ProtocolRequestCreatorTest, CreateGetOperationRequest) {
   EXPECT_FALSE((*request)->HasBody());
 }
 
+TEST(ProtocolRequestCreatorTest, CreateCancelOperationRequest) {
+  ProtocolRequestCreator creator("https://initial.uri", HeaderList(),
+                                 /*use_compression=*/false);
+  std::string operation_name = "my_operation";
+  auto request = creator.CreateCancelOperationRequest(operation_name);
+  ASSERT_OK(request);
+  EXPECT_EQ((*request)->uri(),
+            "https://initial.uri/v1/my_operation:cancel?%24alt=proto");
+  EXPECT_EQ((*request)->method(), HttpRequest::Method::kGet);
+  EXPECT_THAT((*request)->extra_headers(), IsEmpty());
+  EXPECT_FALSE((*request)->HasBody());
+}
+
 class ProtocolRequestHelperTest : public ::testing::Test {
  public:
   ProtocolRequestHelperTest()
@@ -2315,62 +2486,20 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
   EXPECT_EQ(result->body, "response4");
 }
 
-TEST_F(ProtocolRequestHelperTest, TestPollOperationInvalidResponse) {
-  absl::StatusOr<Operation> result =
-      protocol_request_helper_.PollOperationResponseUntilDone(
-          InMemoryHttpResponse{.code = 200,
-                               .content_encoding = "",
-                               .body = absl::Cord("im_not_an_operation_proto")},
-          initial_request_creator_, interruptible_runner_);
-  EXPECT_THAT(result.status(), IsCode(INVALID_ARGUMENT));
-  EXPECT_THAT(result.status().message(),
-              HasSubstr("could not parse Operation"));
-}
-
 TEST_F(ProtocolRequestHelperTest, TestPollOperationInvalidOperationName) {
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          InMemoryHttpResponse{.code = 200,
-                               .content_encoding = "",
-                               .body = absl::Cord(CreatePendingOperation(
-                                                      "invalid_operation_name")
-                                                      .SerializeAsString())},
+          CreatePendingOperation("invalid_operation_name"),
           initial_request_creator_, interruptible_runner_);
   EXPECT_THAT(result.status(), IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("invalid name"));
-}
-
-TEST_F(ProtocolRequestHelperTest, TestPollOperationImmediateHttpError) {
-  absl::StatusOr<Operation> result =
-      protocol_request_helper_.PollOperationResponseUntilDone(
-          absl::Status(absl::StatusCode::kNotFound, "foo"),
-          initial_request_creator_, interruptible_runner_);
-  EXPECT_THAT(result.status(), IsCode(NOT_FOUND));
-  EXPECT_THAT(result.status().message(), HasSubstr("foo"));
-}
-
-// Ensures that if the very first HTTP response we receive indicates that the
-// request was interrupted, we don't try to issue a cancellation request (since
-// we haven't even received an Operation response with a name yet at that
-// point).
-TEST_F(ProtocolRequestHelperTest, TestPollOperationImmediateInterruptedError) {
-  absl::StatusOr<Operation> result =
-      protocol_request_helper_.PollOperationResponseUntilDone(
-          absl::Status(absl::StatusCode::kCancelled, "foo"),
-          initial_request_creator_, interruptible_runner_);
-  EXPECT_THAT(result.status(), IsCode(CANCELLED));
-  EXPECT_THAT(result.status().message(), HasSubstr("foo"));
 }
 
 TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseImmediateSuccess) {
   Operation expected_response = CreateDoneOperation(GetFakeAnyProto());
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          InMemoryHttpResponse{
-              .code = 200,
-              .content_encoding = "",
-              .body = absl::Cord(expected_response.SerializeAsString())},
-          initial_request_creator_, interruptible_runner_);
+          expected_response, initial_request_creator_, interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
@@ -2381,11 +2510,7 @@ TEST_F(ProtocolRequestHelperTest,
       CreateErrorOperation(ALREADY_EXISTS, "some error");
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          InMemoryHttpResponse{
-              .code = 200,
-              .content_encoding = "",
-              .body = absl::Cord(expected_response.SerializeAsString())},
-          initial_request_creator_, interruptible_runner_);
+          expected_response, initial_request_creator_, interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
@@ -2415,12 +2540,8 @@ TEST_F(ProtocolRequestHelperTest,
 
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          InMemoryHttpResponse{
-              .code = 200,
-              .content_encoding = "",
-              .body =
-                  absl::Cord(pending_operation_response.SerializeAsString())},
-          initial_request_creator_, interruptible_runner_);
+          pending_operation_response, initial_request_creator_,
+          interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
@@ -2448,12 +2569,8 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseErrorAfterPolling) {
 
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          InMemoryHttpResponse{
-              .code = 200,
-              .content_encoding = "",
-              .body =
-                  absl::Cord(pending_operation_response.SerializeAsString())},
-          initial_request_creator_, interruptible_runner_);
+          pending_operation_response, initial_request_creator_,
+          interruptible_runner_);
   ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
