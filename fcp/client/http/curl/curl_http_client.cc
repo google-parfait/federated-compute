@@ -34,6 +34,7 @@ void ReadCompleteMessages(CurlMultiHandle* multi_handle) {
   int messages_in_queue = 0;
   while ((msg = multi_handle->InfoRead(&messages_in_queue))) {
     if (msg->msg == CURLMSG_DONE) {
+      FCP_LOG(INFO) << CurlEasyHandle::StrError(msg->data.result);
       void* user_data;
       curl_easy_getinfo(msg->easy_handle, CURLINFO_PRIVATE, &user_data);
       FCP_CHECK(user_data != nullptr);
