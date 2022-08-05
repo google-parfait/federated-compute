@@ -246,6 +246,5 @@ java_proto_library(
 alias(
     name = "engine_cc_proto",
     actual = "engine_proto_cc",
-    visibility = default_visibility + [
-    ],
+    visibility = default_visibility,
 )
