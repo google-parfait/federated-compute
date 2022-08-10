@@ -153,15 +153,6 @@ class LoggingEventPublisher : public EventPublisher {
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
 
-  void PublishStats(
-      int, int,
-      const absl::flat_hash_map<std::string, double>& stats) override {
-    FCP_CLIENT_LOG_FUNCTION_NAME;
-    for (const auto& [name, value] : stats) {
-      FCP_LOG(INFO) << "  " << name << ":" << value;
-    }
-  }
-
   void PublishPlanCompleted(int total_example_count, int64_t,
                             absl::Time) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << ":\ttotal_example_count="

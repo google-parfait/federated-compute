@@ -116,11 +116,6 @@ class EventPublisher {
                                      int64_t epoch_example_size_bytes,
                                      absl::Time epoch_start_time) = 0;
 
-  // Publishes model statistics.
-  virtual void PublishStats(
-      int execution_index, int epoch_index,
-      const absl::flat_hash_map<std::string, double>& stats) = 0;
-
   // Publishes an event that plan execution is complete.
   virtual void PublishPlanCompleted(int total_example_count,
                                     int64_t total_example_size_bytes,

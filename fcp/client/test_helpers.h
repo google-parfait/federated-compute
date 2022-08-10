@@ -111,10 +111,6 @@ class MockEventPublisher : public EventPublisher {
               (int execution_index, int epoch_index, int epoch_example_index,
                int64_t epoch_example_size_bytes, absl::Time epoch_start_time),
               (override));
-  MOCK_METHOD(void, PublishStats,
-              (int execution_index, int epoch_index,
-               (const absl::flat_hash_map<std::string, double>& stats)),
-              (override));
   MOCK_METHOD(void, PublishPlanCompleted,
               (int total_example_count, int64_t total_example_size_bytes,
                absl::Time start_time),
