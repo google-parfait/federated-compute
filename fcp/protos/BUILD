@@ -43,7 +43,6 @@ proto_library(
 
 java_proto_library(
     name = "federated_api_java_proto",
-    has_services = True,  # b/241918504
     deps = [":federated_api_proto"],
 )
 
