@@ -1983,6 +1983,44 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
   EXPECT_THAT(report_result.message(), HasSubstr("501"));
 }
 
+TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadAbortedByServer) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  std::string checkpoint_str;
+  const size_t kTFCheckpointSize = 32;
+  checkpoint_str.resize(kTFCheckpointSize, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  StrEq("https://bytestream.uri/upload/v1/media/"
+                        "CHECKPOINT_RESOURCE?upload_protocol=raw"),
+                  HttpRequest::Method::kPost, _, std::string(checkpoint_str))))
+      .WillOnce(Return(FakeHttpResponse(
+          409, HeaderList(),
+          CreateErrorOperation(absl::StatusCode::kAborted,
+                               "The client update is no longer needed.")
+              .SerializeAsString())));
+  absl::Status report_result =
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  ASSERT_THAT(report_result, IsCode(absl::StatusCode::kAborted));
+  EXPECT_THAT(report_result.message(), HasSubstr("Data upload failed"));
+  EXPECT_THAT(report_result.message(), HasSubstr("409"));
+}
+
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadInterrupted) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());

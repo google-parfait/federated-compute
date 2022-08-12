@@ -39,7 +39,8 @@ service TaskAssignments {
   // the response.
   //
   // If the client no longer needs a task assignment because it is interrupted
-  // or drops out, the client should make a best effort to call CancelOperation.
+  // or drops out or an error occurs during polling the long running operation,
+  // the client should make a best effort to call CancelOperation.
   rpc StartTaskAssignment(StartTaskAssignmentRequest)
       returns (google.longrunning.Operation) {
     option (google.api.http) = {

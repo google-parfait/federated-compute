@@ -65,6 +65,9 @@ service Aggregations {
   // Clients must only call this if they've previously called
   // `StartAggregationDataUpload`.
   //
+  // Clients should not call this if one of the requests returned an Aborted
+  // status.
+  //
   // If clients have already received a `StartAggregationDataUploadResponse`
   // they should use the `ForwardingInfo` from the
   // `StartAggregationDataUploadResponse.aggregation_protocol_forwarding_info`

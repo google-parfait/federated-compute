@@ -780,12 +780,12 @@ HttpFederatedProtocol::HandleTaskAssignmentOperationResponse(
       protocol_request_helper_.PollOperationResponseUntilDone(
           *initial_operation, *task_assignment_request_creator_,
           *interruptible_runner_);
-  if (response_operation_proto.status().code() ==
-      absl::StatusCode::kCancelled) {
-    // If the error code is CANCELLED,  this indicates that the request was
-    // interrupted from the client side, in which case we should issue a
-    // cancellation request to let the server know the operation will be
-    // abandoned.
+  if (!response_operation_proto.ok()) {
+    // If the protocol request failed then issue a cancellation request to let
+    // the server know the operation will be abandoned, and forward the error,
+    // but add a prefix to the error message to ensure we can easily distinguish
+    // an HTTP error occurring in response to the protocol request from HTTP
+    // errors occurring during checkpoint/plan resource fetch requests later on.
     FCP_ASSIGN_OR_RETURN(std::string operation_name,
                          ExtractOperationName(*initial_operation));
     // Client interruption
@@ -800,13 +800,6 @@ HttpFederatedProtocol::HandleTaskAssignmentOperationResponse(
       log_manager_->LogDiag(
           ProdDiagCode::HTTP_CANCELLATION_OR_ABORT_REQUEST_FAILED);
     }
-    return response_operation_proto.status();
-  }
-  if (!response_operation_proto.ok()) {
-    // If the protocol request failed then forward the error, but add a prefix
-    // to the error message to ensure we can easily distinguish an HTTP error
-    // occurring in response to the protocol request from HTTP errors
-    // occurring during checkpoint/plan resource fetch requests later on.
     return absl::Status(
         response_operation_proto.status().code(),
         absl::StrCat("protocol request failed: ",
@@ -892,7 +885,13 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
       PerformStartDataUploadRequestAndReportTaskResult(plan_duration));
   if (!start_upload_status.ok()) {
     object_state_ = ObjectState::kReportFailedPermanentError;
-    if (!AbortAggregation(start_upload_status,
+    // We only issue AbortAggregation when the error is not kAborted, which
+    // means the server did not need our data anymore and won't expect any more
+    // requests from this client. In all other cases we assume that the server
+    // should still be informed that this client is about to terminate its
+    // protocol and won't send any further requests.
+    if (start_upload_status.code() != absl::StatusCode::kAborted &&
+        !AbortAggregation(start_upload_status,
                           "StartDataAggregationUpload failed.")
              .ok()) {
       log_manager_->LogDiag(
@@ -904,7 +903,8 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
       std::get<TFCheckpoint>(std::move(results.begin()->second)));
   if (!upload_status.ok()) {
     object_state_ = ObjectState::kReportFailedPermanentError;
-    if (!AbortAggregation(upload_status,
+    if (upload_status.code() != absl::StatusCode::kAborted &&
+        !AbortAggregation(upload_status,
                           "Upload data via simple aggregation failed.")
              .ok()) {
       log_manager_->LogDiag(
