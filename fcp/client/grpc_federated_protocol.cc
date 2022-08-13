@@ -502,6 +502,10 @@ GrpcFederatedProtocol::EligibilityEvalCheckin() {
   return response;
 }
 
+// This is not supported in gRPC federated protocol, we'll do nothing.
+void GrpcFederatedProtocol::ReportEligibilityEvalError(
+    absl::Status error_status) {}
+
 absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
     const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
   // Checkin(...) must follow an earlier call to EligibilityEvalCheckin() that

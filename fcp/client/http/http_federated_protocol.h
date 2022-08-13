@@ -183,6 +183,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   absl::StatusOr<fcp::client::FederatedProtocol::EligibilityEvalCheckinResult>
   EligibilityEvalCheckin() override;
 
+  void ReportEligibilityEvalError(absl::Status error_status) override;
+
   absl::StatusOr<fcp::client::FederatedProtocol::CheckinResult> Checkin(
       const std::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&
@@ -220,7 +222,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::StatusOr<InMemoryHttpResponse> http_response);
 
   // Helper function to perform a task assignment request and get its response.
-  absl::StatusOr<InMemoryHttpResponse> PerformTaskAssignmentRequest(
+  absl::StatusOr<InMemoryHttpResponse>
+  PerformTaskAssignmentAndReportEligibilityEvalResultRequests(
       const std::optional<
           ::google::internal::federatedml::v2::TaskEligibilityInfo>&
           task_eligibility_info);
@@ -261,6 +264,12 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // We only provide the server with a simplified error message.
   absl::Status AbortAggregation(absl::Status original_error_status,
                                 absl::string_view error_message_for_server);
+
+  absl::StatusOr<std::unique_ptr<HttpRequest>>
+  CreateReportEligibilityEvalTaskResultRequest(absl::Status status);
+
+  // Helper function to perform an ReportEligibilityEvalResult request.
+  absl::Status ReportEligibilityEvalErrorInternal(absl::Status error_status);
 
   struct TaskResources {
     const ::google::internal::federatedcompute::v1::Resource& plan;
@@ -324,6 +333,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   std::string aggregation_client_token_;
   // Resource name for the checkpoint in simple aggregation.
   std::string aggregation_resource_name_;
+  // Set this field to true if an eligibility eval task was received from the
+  // server in the EligibilityEvalTaskResponse.
+  bool eligibility_eval_enabled_ = false;
 };
 
 }  // namespace http

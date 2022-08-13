@@ -22,6 +22,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "google/longrunning/operations.pb.h"
@@ -69,6 +70,8 @@ using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
+using ::google::internal::federatedcompute::v1::
+    ReportEligibilityEvalTaskResultRequest;
 using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
 using ::google::internal::federatedcompute::v1::Resource;
 using ::google::internal::federatedcompute::v1::ResourceCompressionFormat;
@@ -139,6 +142,20 @@ absl::StatusOr<std::string> CreateRequestEligibilityEvalTaskUriSuffix(
                        EncodeUriSinglePathSegment(population_name));
   return absl::Substitute(kRequestEligibilityEvalTaskUriSuffix,
                           encoded_population_name);
+}
+
+// Creates the URI suffix for a ReportEligibilityEvalTaskResult protocol
+// request.
+absl::StatusOr<std::string> CreateReportEligibilityEvalTaskResultUriSuffix(
+    absl::string_view population_name, absl::string_view session_id) {
+  constexpr absl::string_view kReportEligibilityEvalTaskResultUriSuffix =
+      "/v1/populations/$0/eligibilityevaltasks/$1:reportresult";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                       EncodeUriSinglePathSegment(population_name));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
+                       EncodeUriSinglePathSegment(session_id));
+  return absl::Substitute(kReportEligibilityEvalTaskResultUriSuffix,
+                          encoded_population_name, encoded_session_id);
 }
 
 // Creates the URI suffix for a StartTaskAssignment protocol request.
@@ -591,6 +608,9 @@ HttpFederatedProtocol::EligibilityEvalCheckin() {
   UpdateObjectStateIfPermanentError(
       response.status(),
       ObjectState::kEligibilityEvalCheckinFailedPermanentError);
+  if (response.ok() && std::holds_alternative<EligibilityEvalTask>(*response)) {
+    eligibility_eval_enabled_ = true;
+  }
   return response;
 }
 
@@ -699,6 +719,38 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
   }
 }
 
+absl::StatusOr<std::unique_ptr<HttpRequest>>
+HttpFederatedProtocol::CreateReportEligibilityEvalTaskResultRequest(
+    absl::Status status) {
+  ReportEligibilityEvalTaskResultRequest request;
+  request.set_status_code(static_cast<google::rpc::Code>(status.code()));
+  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
+                       CreateReportEligibilityEvalTaskResultUriSuffix(
+                           population_name_, session_id_));
+  return eligibility_eval_request_creator_->CreateProtocolRequest(
+      uri_suffix, QueryParams(), HttpRequest::Method::kPost,
+      request.SerializeAsString(),
+      /*is_protobuf_encoded=*/true);
+}
+
+void HttpFederatedProtocol::ReportEligibilityEvalError(
+    absl::Status error_status) {
+  if (!ReportEligibilityEvalErrorInternal(error_status).ok()) {
+    log_manager_->LogDiag(
+        ProdDiagCode::HTTP_REPORT_ELIGIBILITY_EVAL_RESULT_REQUEST_FAILED);
+  }
+}
+
+absl::Status HttpFederatedProtocol::ReportEligibilityEvalErrorInternal(
+    absl::Status error_status) {
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> request,
+      CreateReportEligibilityEvalTaskResultRequest(error_status));
+  return protocol_request_helper_
+      .PerformProtocolRequest(std::move(request), *interruptible_runner_)
+      .status();
+}
+
 absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
     const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
   // Checkin(...) must follow an earlier call to EligibilityEvalCheckin() that
@@ -720,7 +772,8 @@ absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
 
   // Send the request and parse the response.
   auto response = HandleTaskAssignmentOperationResponse(
-      PerformTaskAssignmentRequest(task_eligibility_info));
+      PerformTaskAssignmentAndReportEligibilityEvalResultRequests(
+          task_eligibility_info));
 
   // Update the object state to ensure we return the correct retry delay.
   UpdateObjectStateIfPermanentError(
@@ -729,9 +782,9 @@ absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
   return response;
 }
 
-absl::StatusOr<InMemoryHttpResponse>
-HttpFederatedProtocol::PerformTaskAssignmentRequest(
-    const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
+absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
+    PerformTaskAssignmentAndReportEligibilityEvalResultRequests(
+        const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
   // Create and serialize the request body. Note that the `population_name`
   // and `session_id` fields are set in the URI instead of in this request
   // proto message.
@@ -748,19 +801,40 @@ HttpFederatedProtocol::PerformTaskAssignmentRequest(
         ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
   }
 
+  std::vector<std::unique_ptr<HttpRequest>> requests;
+
   // Construct the URI suffix.
   FCP_ASSIGN_OR_RETURN(
-      std::string uri_suffix,
+      std::string task_assignment_uri_suffix,
       CreateStartTaskAssignmentUriSuffix(population_name_, session_id_));
   FCP_ASSIGN_OR_RETURN(
-      std::unique_ptr<HttpRequest> http_request,
+      std::unique_ptr<HttpRequest> task_assignment_http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
-          uri_suffix, {}, HttpRequest::Method::kPost,
+          task_assignment_uri_suffix, {}, HttpRequest::Method::kPost,
           request.SerializeAsString(), /*is_protobuf_encoded=*/true));
+  requests.push_back(std::move(task_assignment_http_request));
+
+  if (eligibility_eval_enabled_) {
+    FCP_ASSIGN_OR_RETURN(
+        std::unique_ptr<HttpRequest>
+            report_eligibility_eval_result_http_request,
+        CreateReportEligibilityEvalTaskResultRequest(absl::OkStatus()));
+    requests.push_back(std::move(report_eligibility_eval_result_http_request));
+  }
 
   // Issue the request.
-  return protocol_request_helper_.PerformProtocolRequest(
-      std::move(http_request), *interruptible_runner_);
+  FCP_ASSIGN_OR_RETURN(
+      std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
+      protocol_request_helper_.PerformMultipleProtocolRequests(
+          std::move(requests), *interruptible_runner_));
+  // The responses are returned in order. The first one is for the task
+  // assignment request. The second one (optional) is for the report eligibility
+  // eval task result request.  We only care about the first one.
+  if (eligibility_eval_enabled_ && !responses[1].ok()) {
+    log_manager_->LogDiag(
+        ProdDiagCode::HTTP_REPORT_ELIGIBILITY_EVAL_RESULT_REQUEST_FAILED);
+  }
+  return responses[0];
 }
 
 absl::StatusOr<FederatedProtocol::CheckinResult>
@@ -956,6 +1030,9 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
   // the ReportTaskResult request is just a best effort to report client metrics
   // to the server, and we don't want to abort the aggregation even if it
   // failed.
+  if (!responses[1].ok()) {
+    log_manager_->LogDiag(ProdDiagCode::HTTP_REPORT_TASK_RESULT_REQUEST_FAILED);
+  }
   return responses[0];
 }
 

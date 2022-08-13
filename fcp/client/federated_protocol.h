@@ -145,6 +145,15 @@ class FederatedProtocol {
   virtual absl::StatusOr<EligibilityEvalCheckinResult>
   EligibilityEvalCheckin() = 0;
 
+  // Report an eligibility eval task error to the federated server.
+  // Must only be called once and after a successful call to
+  // EligibilityEvalCheckin() which returns an eligibility eval task. This
+  // method is only used to report an error happened during the computation of
+  // the eligibility eval task. If the eligibility eval computation succeeds,
+  // the success will be reported during task assignment.
+  // @param status the outcome of the eligibility eval computation.
+  virtual void ReportEligibilityEvalError(absl::Status error_status) = 0;
+
   // SecAgg metadata, e.g. see SecureAggregationProtocolExecutionInfo in
   // federated_api.proto.
   struct SecAggInfo {

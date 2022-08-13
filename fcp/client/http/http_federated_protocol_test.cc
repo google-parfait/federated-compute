@@ -70,6 +70,8 @@ using ::google::internal::federatedcompute::v1::EligibilityEvalTask;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
+using ::google::internal::federatedcompute::v1::
+    ReportEligibilityEvalTaskResultRequest;
 using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
 using ::google::internal::federatedcompute::v1::ReportTaskResultResponse;
 using ::google::internal::federatedcompute::v1::Resource;
@@ -145,6 +147,19 @@ MATCHER_P(EligibilityEvalTaskRequestMatcher, matcher,
                        DescribeMatcher<EligibilityEvalTaskRequest>(matcher,
                                                                    negation))) {
   EligibilityEvalTaskRequest request;
+  if (!request.ParseFromString(arg)) {
+    return false;
+  }
+  return ExplainMatchResult(matcher, request, result_listener);
+}
+
+MATCHER_P(
+    ReportEligibilityEvalTaskResultRequestMatcher, matcher,
+    absl::StrCat(negation ? "doesn't parse" : "parses",
+                 " as a ReportEligibilityEvalTaskResultRequest, and that ",
+                 DescribeMatcher<ReportEligibilityEvalTaskResultRequest>(
+                     matcher, negation))) {
+  ReportEligibilityEvalTaskResultRequest request;
   if (!request.ParseFromString(arg)) {
     return false;
   }
@@ -527,7 +542,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // utility function used by Report*() tests that depend on a prior,
   // successful execution of Checkin(). It returns a
   // absl::Status, which the caller should verify is OK using ASSERT_OK.
-  absl::Status RunSuccessfulCheckin() {
+  absl::Status RunSuccessfulCheckin(bool eligibility_eval_enabled = true) {
     // We return a fake response which returns the plan/initial checkpoint
     // data inline, to keep things simple.
     std::string expected_plan = kPlan;
@@ -565,7 +580,30 @@ class HttpFederatedProtocolTest : public ::testing::Test {
                     plan_uri, HttpRequest::Method::kGet, _, "")))
         .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan)));
 
+    if (eligibility_eval_enabled) {
+      std::string report_eet_request_uri =
+          "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+          "eligibilityevaltasks/"
+          "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+      ExpectSuccessfulReportEligibilityEvalTaskResultRequest(
+          report_eet_request_uri, absl::OkStatus());
+    }
+
     return federated_protocol_->Checkin(expected_eligibility_info).status();
+  }
+
+  void ExpectSuccessfulReportEligibilityEvalTaskResultRequest(
+      absl::string_view expected_request_uri, absl::Status eet_status) {
+    ReportEligibilityEvalTaskResultRequest report_eet_request;
+    report_eet_request.set_status_code(
+        static_cast<google::rpc::Code>(eet_status.code()));
+    EXPECT_CALL(
+        mock_http_client_,
+        PerformSingleRequest(SimpleHttpRequestMatcher(
+            std::string(expected_request_uri), HttpRequest::Method::kPost, _,
+            ReportEligibilityEvalTaskResultRequestMatcher(
+                EqualsProto(report_eet_request)))))
+        .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "")));
   }
 
   void ExpectSuccessfulReportTaskResultRequest(
@@ -1018,6 +1056,25 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
+TEST_F(HttpFederatedProtocolTest, TestReportEligibilityEvalTaskResult) {
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ReportEligibilityEvalTaskResultRequest report_eet_request;
+  report_eet_request.set_status_code(
+      static_cast<google::rpc::Code>(absl::StatusCode::kCancelled));
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  report_eet_request_uri, HttpRequest::Method::kPost, _,
+                  ReportEligibilityEvalTaskResultRequestMatcher(
+                      EqualsProto(report_eet_request)))))
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "")));
+
+  federated_protocol_->ReportEligibilityEvalError(absl::CancelledError());
+}
+
 // Tests that the protocol correctly sanitizes any invalid values it may have
 // received from the server.
 TEST_F(HttpFederatedProtocolTest,
@@ -1201,6 +1258,12 @@ TEST_F(HttpFederatedProtocolDeathTest,
 TEST_F(HttpFederatedProtocolTest, TestCheckinFailsTransientError) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   // Make the HTTP request return an 503 Service Unavailable error when the
   // Checkin(...) code tries to send its first request. This should result in
@@ -1230,6 +1293,12 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsTransientError) {
 TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromHttp) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   // Make the HTTP request return an 404 Not Found error when the Checkin(...)
   // code tries to send its first request. This should result in the error being
@@ -1263,6 +1332,12 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromHttp) {
 TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromOperation) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   // Make the HTTP request return successfully, but make it contain an Operation
   // proto that itself contains a permanent error. This should result in the
@@ -1300,6 +1375,12 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromOperation) {
 TEST_F(HttpFederatedProtocolTest, TestCheckinInterrupted) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   absl::Notification request_issued;
   absl::Notification request_cancelled;
@@ -1328,8 +1409,11 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterrupted) {
 
   // When the HttpClient receives a HttpRequestHandle::Cancel call, we let the
   // request complete.
-  mock_http_client_.SetCancellationListener(
-      [&request_cancelled]() { request_cancelled.Notify(); });
+  mock_http_client_.SetCancellationListener([&request_cancelled]() {
+    if (!request_cancelled.HasBeenNotified()) {
+      request_cancelled.Notify();
+    }
+  });
 
   EXPECT_CALL(mock_log_manager_,
               LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP));
@@ -1348,6 +1432,12 @@ TEST_F(HttpFederatedProtocolTest,
        TestCheckinInterruptedDuringLongRunningOperation) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   absl::Notification request_issued;
   absl::Notification request_cancelled;
@@ -1420,6 +1510,12 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest, TestCheckinInterruptedCancellationTimeout) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   absl::Notification request_issued;
   absl::Notification request_cancelled;
@@ -1504,6 +1600,12 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterruptedCancellationTimeout) {
 TEST_F(HttpFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   TaskEligibilityInfo expected_eligibility_info = GetFakeTaskEligibilityInfo();
   EXPECT_CALL(
@@ -1563,6 +1665,12 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   TaskEligibilityInfo expected_eligibility_info = GetFakeTaskEligibilityInfo();
   // We return a fake response which requires fetching the plan via HTTP, but
@@ -1625,6 +1733,12 @@ TEST_F(HttpFederatedProtocolTest,
        TestCheckinTaskAssignedAfterOperationPolling) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   // Make the initial StartTaskAssignmentRequest return a pending Operation
   // result. Note that we use a '#' character in the operation name to allow us
@@ -1691,6 +1805,12 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedPlanDataFetchFailed) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   std::string plan_uri = "https://fake.uri/plan";
   Resource plan_resource;
@@ -1744,6 +1864,12 @@ TEST_F(HttpFederatedProtocolTest,
        TestCheckinTaskAssignedCheckpointDataFetchFailed) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   std::string plan_uri = "https://fake.uri/plan";
   Resource plan_resource;
@@ -1847,6 +1973,8 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
                           kAggregationSessionId, google::rpc::Code::OK,
                           plan_duration))))))
       .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
+  EXPECT_CALL(mock_log_manager_,
+              LogDiag(ProdDiagCode::HTTP_REPORT_TASK_RESULT_REQUEST_FAILED));
 
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
@@ -2266,6 +2394,13 @@ TEST_F(HttpFederatedProtocolTest,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   plan_uri, HttpRequest::Method::kGet, _, "")))
       .WillOnce(Return(FakeHttpResponse(200, HeaderList(), kPlan)));
+
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
 
   ASSERT_OK(federated_protocol_->Checkin(expected_eligibility_info));
 }

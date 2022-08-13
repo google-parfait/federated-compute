@@ -38,9 +38,6 @@
 #include "fcp/client/engine/simple_plan_engine.h"
 #endif
 
-#include "openssl/digest.h"
-#include "openssl/evp.h"
-
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
 #include "fcp/client/engine/tflite_plan_engine.h"
 #endif
@@ -67,6 +64,8 @@
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/plan.pb.h"
+#include "openssl/digest.h"
+#include "openssl/evp.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
@@ -756,6 +755,64 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
   return filename;
 }
 
+absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
+    const FederatedProtocol::EligibilityEvalTask& eligibility_eval_task,
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+    std::function<bool()> should_abort, PhaseLogger& phase_logger, Files* files,
+    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
+    FederatedProtocol* federated_protocol,
+    const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
+    const absl::Time reference_time,
+    const absl::Time time_before_eligibility_eval_checkin) {
+  ClientOnlyPlan plan;
+  if (!ParseFromStringOrCord(plan, eligibility_eval_task.payloads.plan)) {
+    auto message = "Failed to parse received eligibility eval plan";
+    phase_logger.LogEligibilityEvalCheckInInvalidPayloadError(
+        message,
+        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+        time_before_eligibility_eval_checkin);
+
+    FCP_LOG(ERROR) << message;
+    return absl::InternalError(message);
+  }
+
+  absl::StatusOr<std::string> checkpoint_input_filename =
+      CreateInputCheckpointFile(files,
+                                eligibility_eval_task.payloads.checkpoint);
+  if (!checkpoint_input_filename.ok()) {
+    auto status = checkpoint_input_filename.status();
+    auto message = absl::StrCat(
+        "Failed to create eligibility eval checkpoint input file: code: ",
+        status.code(), ", message: ", status.message());
+    phase_logger.LogEligibilityEvalCheckInIOError(
+        status,
+        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+        time_before_eligibility_eval_checkin);
+    FCP_LOG(ERROR) << message;
+    return absl::InternalError("");
+  }
+
+  phase_logger.LogEligibilityEvalCheckInCompleted(
+      GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+      time_before_eligibility_eval_checkin);
+
+  absl::Time run_plan_start_time = absl::Now();
+  phase_logger.LogEligibilityEvalComputationStarted();
+  engine::PlanResult plan_result = RunEligibilityEvalPlanWithTensorflowSpec(
+      example_iterator_factories, should_abort, log_manager, opstats_logger,
+      flags, plan, *checkpoint_input_filename, timing_config,
+      run_plan_start_time, reference_time);
+  absl::StatusOr<TaskEligibilityInfo> task_eligibility_info;
+  if (plan_result.outcome == engine::PlanOutcome::kSuccess) {
+    task_eligibility_info =
+        ParseEligibilityEvalPlanOutput(plan_result.output_tensors);
+  }
+  LogEligibilityEvalComputationOutcome(phase_logger, std::move(plan_result),
+                                       task_eligibility_info.status(),
+                                       run_plan_start_time, reference_time);
+  return task_eligibility_info;
+}
+
 // Issues an eligibility eval checkin request and executes the eligibility eval
 // task if the server returns one.
 //
@@ -852,55 +909,26 @@ IssueEligibilityEvalCheckinAndRunPlan(
   }
 
   // Parse and run the eligibility eval task if the server returned one.
+  // Now we have a EligibilityEvalTask, if an error happens, we will report to
+  // the server via the ReportEligibilityEvalError.
   auto eligibility_eval_task =
       absl::get<FederatedProtocol::EligibilityEvalTask>(
           *eligibility_checkin_result);
-
-  ClientOnlyPlan plan;
-  if (!ParseFromStringOrCord(plan, eligibility_eval_task.payloads.plan)) {
-    auto message = "Failed to parse received eligibility eval plan";
-    phase_logger.LogEligibilityEvalCheckInInvalidPayloadError(
-        message,
-        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
-        time_before_eligibility_eval_checkin);
-    FCP_LOG(ERROR) << message;
-    return absl::InternalError("");
+  absl::StatusOr<std::optional<TaskEligibilityInfo>> task_eligibility_info =
+      RunEligibilityEvalPlan(eligibility_eval_task, example_iterator_factories,
+                             should_abort, phase_logger, files, log_manager,
+                             opstats_logger, flags, federated_protocol,
+                             timing_config, reference_time,
+                             time_before_eligibility_eval_checkin);
+  if (!task_eligibility_info.ok()) {
+    federated_protocol->ReportEligibilityEvalError(
+        absl::Status(task_eligibility_info.status().code(),
+                     "Failed to compute eligibility info"));
+    UpdateRetryWindowAndNetworkStats(*federated_protocol,
+                                     /*fedselect_manager=*/nullptr,
+                                     phase_logger, fl_runner_result);
+    return task_eligibility_info.status();
   }
-
-  absl::StatusOr<std::string> checkpoint_input_filename =
-      CreateInputCheckpointFile(files,
-                                eligibility_eval_task.payloads.checkpoint);
-  if (!checkpoint_input_filename.ok()) {
-    auto status = checkpoint_input_filename.status();
-    auto message = absl::StrCat(
-        "Failed to create eligibility eval checkpoint input file: code: ",
-        status.code(), ", message: ", status.message());
-    phase_logger.LogEligibilityEvalCheckInIOError(
-        status,
-        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
-        time_before_eligibility_eval_checkin);
-    FCP_LOG(ERROR) << message;
-    return absl::InternalError("");
-  }
-
-  phase_logger.LogEligibilityEvalCheckInCompleted(
-      GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
-      time_before_eligibility_eval_checkin);
-
-  absl::Time run_plan_start_time = absl::Now();
-  phase_logger.LogEligibilityEvalComputationStarted();
-  engine::PlanResult plan_result = RunEligibilityEvalPlanWithTensorflowSpec(
-      example_iterator_factories, should_abort, log_manager, opstats_logger,
-      flags, plan, *checkpoint_input_filename, timing_config,
-      run_plan_start_time, reference_time);
-  absl::StatusOr<TaskEligibilityInfo> task_eligibility_info;
-  if (plan_result.outcome == engine::PlanOutcome::kSuccess) {
-    task_eligibility_info =
-        ParseEligibilityEvalPlanOutput(plan_result.output_tensors);
-  }
-  LogEligibilityEvalComputationOutcome(phase_logger, std::move(plan_result),
-                                       task_eligibility_info.status(),
-                                       run_plan_start_time, reference_time);
   return task_eligibility_info;
 }
 

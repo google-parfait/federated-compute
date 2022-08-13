@@ -225,8 +225,12 @@ enum ProdDiagCode {
   /* Logged when the attempt to fetch HTTP resources (as per
    * `HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP`) succeeded. */
   HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_HTTP_FETCH_SUCCEEDED = 1797;
-  /* Logged when a cancellation request or an abort request failed.*/
+  /* Logged when a cancellation request or an abort request failed. */
   HTTP_CANCELLATION_OR_ABORT_REQUEST_FAILED = 1790;
+  /* Logged when a ReportEligibilityEvalTaskResult request failed. */
+  HTTP_REPORT_ELIGIBILITY_EVAL_RESULT_REQUEST_FAILED = 1789;
+  /* Logged when a ReportTaskResult request failed. */
+  HTTP_REPORT_TASK_RESULT_REQUEST_FAILED = 1788;
 
   /**
    * Codes reserved for logs related to temp files

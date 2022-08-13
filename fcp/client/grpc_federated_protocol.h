@@ -83,6 +83,8 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   absl::StatusOr<::fcp::client::FederatedProtocol::EligibilityEvalCheckinResult>
   EligibilityEvalCheckin() override;
 
+  void ReportEligibilityEvalError(absl::Status error_status) override;
+
   absl::StatusOr<::fcp::client::FederatedProtocol::CheckinResult> Checkin(
       const std::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&

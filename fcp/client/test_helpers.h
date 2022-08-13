@@ -278,6 +278,12 @@ class MockFederatedProtocol : public FederatedProtocol {
       .chunking_layer_bytes_received = 300,
       .chunking_layer_bytes_sent = 400,
       .report_size_bytes = 0};
+  constexpr static NetworkStats kPostReportEligibilityEvalErrorStats = {
+      .bytes_downloaded = 200,
+      .bytes_uploaded = 300,
+      .chunking_layer_bytes_received = 400,
+      .chunking_layer_bytes_sent = 500,
+      .report_size_bytes = 0};
   constexpr static NetworkStats kPostCheckinStats = {
       .bytes_downloaded = 1000,
       .bytes_uploaded = 2000,
@@ -354,6 +360,14 @@ class MockFederatedProtocol : public FederatedProtocol {
   };
   MOCK_METHOD(absl::StatusOr<EligibilityEvalCheckinResult>,
               MockEligibilityEvalCheckin, ());
+
+  void ReportEligibilityEvalError(absl::Status error_status) final {
+    network_stats_ = kPostReportEligibilityEvalErrorStats;
+    retry_window_ = GetPostEligibilityCheckinRetryWindow();
+    MockReportEligibilityEvalError(error_status);
+  }
+  MOCK_METHOD(void, MockReportEligibilityEvalError,
+              (absl::Status error_status));
 
   absl::StatusOr<CheckinResult> Checkin(
       const std::optional<
