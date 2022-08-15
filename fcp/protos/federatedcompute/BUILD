@@ -12,13 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-default_visibility = [
-    "//fcp:internal",
-    "//fcp:public_api_visibility",
-]
-
 package(
-    default_visibility = default_visibility,
+    default_visibility = [
+        "//visibility:public",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 

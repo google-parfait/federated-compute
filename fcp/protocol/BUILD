@@ -16,8 +16,7 @@ load("//fcp:config.bzl", "FCP_COPTS")
 
 package(
     default_visibility = [
-        "//fcp:internal",
-        "//fcp:public_api_visibility",
+        "//visibility:public",
     ],
     licenses = ["notice"],  # Apache 2.0
 )

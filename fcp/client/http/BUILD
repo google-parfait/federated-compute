@@ -22,7 +22,7 @@ package(
 cc_library(
     name = "http_client",
     hdrs = ["http_client.h"],
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",

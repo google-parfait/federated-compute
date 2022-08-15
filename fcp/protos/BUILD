@@ -17,8 +17,7 @@ load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_lib
 load("@com_google_protobuf//:protobuf.bzl", "py_proto_library")
 
 default_visibility = [
-    "//fcp:internal",
-    "//fcp:public_api_visibility",
+    "//visibility:public",
 ]
 
 package(
@@ -70,7 +69,6 @@ tf_proto_library(
     protodeps = [
         "@org_tensorflow//tensorflow/core:protos_all",
     ],
-    # Needed by TFLite on-device training tests.
     visibility = default_visibility,
 )
 

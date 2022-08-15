@@ -20,10 +20,3 @@ package_group(
         "//fcp/...",
     ],
 )
-
-package_group(
-    name = "public_api_visibility",
-    includes = [":internal"],
-    packages = [
-    ],
-)

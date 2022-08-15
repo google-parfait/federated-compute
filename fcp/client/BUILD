@@ -93,7 +93,7 @@ cc_library(
     srcs = ["fake_server.cc"],
     hdrs = ["fake_server.h"],
     copts = FCP_COPTS,
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         ":grpc_bidi_stream",
         "//fcp/base",
@@ -121,7 +121,7 @@ cc_library(
         "log_manager.h",
         "secagg_event_publisher.h",
     ],
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         ":diag_codes_cc_proto",
         ":histogram_counters_cc_proto",
@@ -248,7 +248,7 @@ cc_library(
     srcs = ["simple_task_environment.cc"],
     hdrs = ["simple_task_environment.h"],
     copts = FCP_COPTS,
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         ":selector_context_cc_proto",
         "//fcp/base",
@@ -347,7 +347,7 @@ cc_library(
     ],
     copts = FCP_COPTS,
     defines = TF_OPTIONAL_DEFINES + GRPC_OPTIONAL_DEFINES,
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         ":federated_protocol",
         ":federated_protocol_util",
@@ -390,7 +390,7 @@ cc_library(
     ],
     copts = FCP_COPTS,
     defines = TF_OPTIONAL_DEFINES,
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         ":interfaces",
         ":selector_context_cc_proto",
@@ -522,7 +522,7 @@ cc_library(
     name = "interruptible_runner",
     srcs = ["interruptible_runner.cc"],
     hdrs = ["interruptible_runner.h"],
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         ":diag_codes_cc_proto",
         ":interfaces",
@@ -537,7 +537,7 @@ cc_library(
 cc_library(
     name = "fake_log_manager",
     hdrs = ["fake_log_manager.h"],
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         ":diag_codes_cc_proto",
         ":interfaces",
@@ -548,7 +548,7 @@ cc_library(
 cc_library(
     name = "fake_event_publisher",
     hdrs = ["fake_event_publisher.h"],
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         ":interfaces",
         "//fcp/base",
@@ -667,7 +667,7 @@ cc_proto_library(
 proto_library(
     name = "fl_runner_proto",
     srcs = ["fl_runner.proto"],
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         "//fcp/protos:federated_api_proto",
     ],
@@ -675,13 +675,13 @@ proto_library(
 
 java_proto_library(
     name = "fl_runner_java_proto",
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [":fl_runner_proto"],
 )
 
 cc_proto_library(
     name = "fl_runner_cc_proto",
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [":fl_runner_proto"],
 )
 
@@ -732,12 +732,12 @@ proto_library(
 
 cc_proto_library(
     name = "selector_context_cc_proto",
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [":selector_context_proto"],
 )
 
 java_proto_library(
     name = "selector_context_java_proto",
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [":selector_context_proto"],
 )

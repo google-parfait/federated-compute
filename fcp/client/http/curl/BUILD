@@ -38,7 +38,7 @@ cc_library(
         "curl_http_response.h",
     ],
     copts = FCP_COPTS,
-    visibility = ["//fcp:public_api_visibility"],
+    visibility = ["//visibility:public"],
     deps = [
         "//fcp/base",
         "//fcp/client/http:http_client",
