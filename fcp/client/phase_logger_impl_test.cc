@@ -824,7 +824,7 @@ TEST_P(PhaseLoggerImplTest, LogComputationInterrupted) {
       EXPECT_CALL(mock_opstats_logger_,
                   AddEventWithErrorMessage(
                       OperationalStats::Event::
-                          EVENT_KIND_ELIGIBILITY_COMPUTATION_CLIENT_INTERRUPTED,
+                          EVENT_KIND_COMPUTATION_CLIENT_INTERRUPTED,
                       expected_error_message));
     } else {
       EXPECT_CALL(
