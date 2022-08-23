@@ -552,6 +552,7 @@ cc_library(
     deps = [
         ":interfaces",
         "//fcp/base",
+        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -578,11 +579,11 @@ cc_library(
     hdrs = ["client_runner.h"],
     deps = [
         ":diag_codes_cc_proto",
+        ":fake_event_publisher",
         ":histogram_counters_cc_proto",
         ":interfaces",
         ":simple_task_environment",
         "//fcp/base",
-        "//fcp/client/http:http_client",
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",
@@ -601,6 +602,7 @@ cc_library(
     srcs = ["client_runner_main.cc"],
     deps = [
         ":client_runner",
+        ":fake_event_publisher",
         ":fl_runner",
         "//fcp/base",
         "//fcp/tensorflow:external_dataset_op_lib",

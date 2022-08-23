@@ -23,6 +23,7 @@
 #include "absl/strings/str_split.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/client_runner.h"
+#include "fcp/client/fake_event_publisher.h"
 #include "fcp/client/fl_runner.h"
 
 ABSL_FLAG(std::string, server, "",
@@ -66,13 +67,13 @@ int main(int argc, char** argv) {
   for (auto i = 0; i < num_rounds || num_rounds < 0; ++i) {
     fcp::client::FederatedTaskEnvDepsImpl federated_task_env_deps_impl(
         absl::GetFlag(FLAGS_num_examples));
-    fcp::client::LoggingEventPublisher logging_event_publisher;
+    fcp::client::FakeEventPublisher event_publisher(/*quiet=*/false);
     fcp::client::FilesImpl files_impl;
     fcp::client::LogManagerImpl log_manager_impl;
     const fcp::client::FlagsImpl flags;
 
     auto fl_runner_result = RunFederatedComputation(
-        &federated_task_env_deps_impl, &logging_event_publisher, &files_impl,
+        &federated_task_env_deps_impl, &event_publisher, &files_impl,
         &log_manager_impl, &flags, server, absl::GetFlag(FLAGS_api_key),
         absl::GetFlag(FLAGS_test_cert), session, population,
         absl::GetFlag(FLAGS_retry_token), client_version,
