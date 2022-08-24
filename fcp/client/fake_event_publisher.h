@@ -125,12 +125,8 @@ class FakeEventPublisher : public EventPublisher {
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
 
-  void PublishEpochStarted(int, int) override {
-    if (quiet_) return;
-    FCP_CLIENT_LOG_FUNCTION_NAME;
-  }
-
-  void PublishTensorFlowError(int execution_index, int epoch_index, int,
+  void PublishTensorFlowError(int execution_index, int epoch_index,
+                              int epoch_example_index,
                               absl::string_view error_message) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << "exec " << execution_index << ", epoch "
                                  << epoch_index << ": " << error_message;
@@ -149,11 +145,6 @@ class FakeEventPublisher : public EventPublisher {
   }
 
   void PublishInterruption(int, int, int, int64_t, absl::Time) override {
-    if (quiet_) return;
-    FCP_CLIENT_LOG_FUNCTION_NAME;
-  }
-
-  void PublishEpochCompleted(int, int, int, int64_t, absl::Time) override {
     if (quiet_) return;
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }

@@ -86,9 +86,6 @@ class EventPublisher {
   // Publishes that plan execution has started.
   virtual void PublishPlanExecutionStarted() = 0;
 
-  // Publishes that an epoch has started.
-  virtual void PublishEpochStarted(int execution_index, int epoch_index) = 0;
-
   // Publishes a TensorFlow error that happened in the given ClientExecution.
   virtual void PublishTensorFlowError(int execution_index, int epoch_index,
                                       int epoch_example_index,
@@ -109,12 +106,6 @@ class EventPublisher {
                                    int epoch_example_index,
                                    int64_t total_example_size_bytes,
                                    absl::Time start_time) = 0;
-
-  // Publishes a completion event for the current epoch.
-  virtual void PublishEpochCompleted(int execution_index, int epoch_index,
-                                     int epoch_example_index,
-                                     int64_t epoch_example_size_bytes,
-                                     absl::Time epoch_start_time) = 0;
 
   // Publishes an event that plan execution is complete.
   virtual void PublishPlanCompleted(int total_example_count,

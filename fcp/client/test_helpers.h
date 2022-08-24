@@ -90,8 +90,6 @@ class MockEventPublisher : public EventPublisher {
                absl::Duration report_duration),
               (override));
   MOCK_METHOD(void, PublishPlanExecutionStarted, (), (override));
-  MOCK_METHOD(void, PublishEpochStarted, (int execution_index, int epoch_index),
-              (override));
   MOCK_METHOD(void, PublishTensorFlowError,
               (int execution_index, int epoch_index, int epoch_example_index,
                absl::string_view error_message),
@@ -106,10 +104,6 @@ class MockEventPublisher : public EventPublisher {
   MOCK_METHOD(void, PublishInterruption,
               (int execution_index, int epoch_index, int epoch_example_index,
                int64_t total_example_size_bytes, absl::Time start_time),
-              (override));
-  MOCK_METHOD(void, PublishEpochCompleted,
-              (int execution_index, int epoch_index, int epoch_example_index,
-               int64_t epoch_example_size_bytes, absl::Time epoch_start_time),
               (override));
   MOCK_METHOD(void, PublishPlanCompleted,
               (int total_example_count, int64_t total_example_size_bytes,
