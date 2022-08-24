@@ -948,7 +948,21 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
   FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)
       << "Invalid call sequence";
   object_state_ = ObjectState::kReportCalled;
+  auto find_secagg_tensor_lambda = [](const auto& item) {
+    return std::holds_alternative<QuantizedTensor>(item.second);
+  };
 
+  if (std::find_if(results.begin(), results.end(), find_secagg_tensor_lambda) ==
+      results.end()) {
+    return ReportViaSimpleAggregation(std::move(results), plan_duration);
+  } else {
+    return absl::UnimplementedError(
+        "Report via secure aggregation is not yet implemented.");
+  }
+}
+
+absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(
+    ComputationResults results, absl::Duration plan_duration) {
   if (results.size() != 1 ||
       !std::holds_alternative<TFCheckpoint>(results.begin()->second)) {
     return absl::InternalError(

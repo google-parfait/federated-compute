@@ -1917,7 +1917,7 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-TEST_F(HttpFederatedProtocolTest, TestReportCompletedSuccess) {
+TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSimpleAggSuccess) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin
@@ -1947,6 +1947,24 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedSuccess) {
 
   EXPECT_OK(
       federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+}
+
+TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  results.emplace("secagg_tensor", QuantizedTensor());
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  EXPECT_THAT(
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration),
+      IsCode(absl::StatusCode::kUnimplemented));
 }
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {

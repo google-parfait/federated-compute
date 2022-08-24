@@ -242,6 +242,10 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   HandleTaskAssignmentInnerResponse(
       const ::google::protobuf::Any& operation_response);
 
+  // Helper function for reporting result via simple aggregation.
+  absl::Status ReportViaSimpleAggregation(ComputationResults results,
+                                          absl::Duration plan_duration);
+
   // Helper function to perform a StartDataUploadRequest and a ReportTaskResult
   // request concurrently.
   // This method will only return the response from the StartDataUploadRequest.
