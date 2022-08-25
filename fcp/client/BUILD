@@ -155,11 +155,12 @@ cc_library(
         ":diag_codes_cc_proto",
         ":interfaces",
         "//fcp/base",
+        "//fcp/base:time_util",
         "//fcp/protos:federated_api_cc_proto",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:cc_wkt_protos",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -211,7 +212,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
-        "@com_google_protobuf//:cc_wkt_protos",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -489,7 +490,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
-        "@com_google_protobuf//:cc_wkt_protos",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -513,7 +514,6 @@ cc_test(
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:cc_wkt_protos",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -590,7 +590,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
-        "@com_google_protobuf//:cc_wkt_protos",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -644,7 +644,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:cc_wkt_protos",
+        "@com_google_protobuf//:protobuf",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
     ],
 )

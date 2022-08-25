@@ -39,6 +39,7 @@
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/base/time_util.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
@@ -309,7 +310,7 @@ absl::StatusOr<ReportTaskResultRequest> CreateReportTaskResultRequest(
       ConvertPhaseOutcomeToRpcCode(phase_outcome));
   ClientStats* client_stats = request.mutable_client_stats();
   *client_stats->mutable_computation_execution_duration() =
-      ConvertAbslToProtoDuration(plan_duration);
+      TimeUtil::ConvertAbslToProtoDuration(plan_duration);
   return request;
 }
 

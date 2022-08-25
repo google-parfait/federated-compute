@@ -24,6 +24,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/base/time_util.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -73,7 +74,7 @@ GenerateRetryWindowFromTargetDelay(absl::Duration target_delay,
                               target_delay * (1.0 + jitter_percent), bit_gen);
   ::google::internal::federatedml::v2::RetryWindow result;
   *result.mutable_delay_min() = *result.mutable_delay_max() =
-      ConvertAbslToProtoDuration(retry_delay);
+      TimeUtil::ConvertAbslToProtoDuration(retry_delay);
   return result;
 }
 
@@ -92,7 +93,7 @@ GenerateRetryWindowFromRetryTime(absl::Time retry_time) {
   // value.
   ::google::internal::federatedml::v2::RetryWindow retry_window;
   *retry_window.mutable_delay_min() = *retry_window.mutable_delay_max() =
-      ConvertAbslToProtoDuration(retry_delay);
+      TimeUtil::ConvertAbslToProtoDuration(retry_delay);
   return retry_window;
 }
 
@@ -109,27 +110,6 @@ std::string ExtractTaskNameFromAggregationSessionId(
     return session_id.substr(population_name.length() + 1,
                              task_end - population_name.length() - 1);
   }
-}
-
-google::protobuf::Duration ConvertAbslToProtoDuration(
-    absl::Duration absl_duration) {
-  google::protobuf::Duration proto_duration;
-  if (absl_duration == absl::InfiniteDuration()) {
-    proto_duration.set_seconds(std::numeric_limits<int64_t>::max());
-    proto_duration.set_nanos(static_cast<int32_t>(999999999));
-  } else if (absl_duration == -absl::InfiniteDuration()) {
-    proto_duration.set_seconds(std::numeric_limits<int64_t>::min());
-    proto_duration.set_nanos(static_cast<int32_t>(-999999999));
-  } else {
-    // s and n may both be negative, per the Duration proto spec.
-    const int64_t s =
-        absl::IDivDuration(absl_duration, absl::Seconds(1), &absl_duration);
-    const int64_t n =
-        absl::IDivDuration(absl_duration, absl::Nanoseconds(1), &absl_duration);
-    proto_duration.set_seconds(s);
-    proto_duration.set_nanos(static_cast<int32_t>(n));
-  }
-  return proto_duration;
 }
 
 }  // namespace client

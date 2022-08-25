@@ -60,13 +60,6 @@ std::string ExtractTaskNameFromAggregationSessionId(
     const std::string& session_id, const std::string& population_name,
     fcp::client::LogManager& log_manager);
 
-// Converts an absl::Duration to a google::protobuf::Duration.
-// Note that we assume the durations we deal with here are representable by
-// both formats.  If the resulted google::protobuf::Duration is invalid, it will
-// lead to undefined behavior.
-google::protobuf::Duration ConvertAbslToProtoDuration(
-    absl::Duration absl_duration);
-
 }  // namespace client
 }  // namespace fcp
 

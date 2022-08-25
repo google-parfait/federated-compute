@@ -113,6 +113,7 @@ cc_library(
         ":http_client_util",
         ":in_memory_request_response",
         "//fcp/base",
+        "//fcp/base:time_util",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:federated_protocol",
         "//fcp/client:federated_protocol_util",
@@ -133,7 +134,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
         "@com_google_googleapis//google/rpc:code_cc_proto",
-        "@com_google_protobuf//:cc_wkt_protos",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -146,6 +147,7 @@ cc_test(
         ":http_federated_protocol",
         ":in_memory_request_response",
         "//fcp/base",
+        "//fcp/base:time_util",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:federated_protocol",
         "//fcp/client:federated_protocol_util",
@@ -167,6 +169,6 @@ cc_test(
         "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:cc_wkt_protos",
+        "@com_google_protobuf//:protobuf",
     ],
 )

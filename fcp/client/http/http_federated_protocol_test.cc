@@ -37,6 +37,7 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
+#include "fcp/base/time_util.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
@@ -413,7 +414,7 @@ ReportTaskResultRequest GetExpectedReportTaskResultRequest(
   request.set_computation_status_code(code);
   ClientStats client_stats;
   *client_stats.mutable_computation_execution_duration() =
-      ConvertAbslToProtoDuration(train_duration);
+      TimeUtil::ConvertAbslToProtoDuration(train_duration);
   *request.mutable_client_stats() = client_stats;
   return request;
 }

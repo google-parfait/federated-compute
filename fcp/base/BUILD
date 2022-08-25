@@ -539,3 +539,23 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "time_util",
+    srcs = ["time_util.cc"],
+    hdrs = ["time_util.h"],
+    deps = [
+        "@com_google_absl//absl/time",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "time_util_test",
+    srcs = ["time_util_test.cc"],
+    deps = [
+        ":time_util",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

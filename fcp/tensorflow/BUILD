@@ -326,7 +326,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//fcp/protos:plan_cc_proto",
-        "@com_google_protobuf//:cc_wkt_protos",
+        "@com_google_protobuf//:protobuf",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:lib",
     ],
@@ -428,7 +428,7 @@ cc_library(
     srcs = MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS,
     copts = FCP_TF_COPTS,
     visibility = ["//visibility:public"],
-    deps = ["@com_google_protobuf//:cc_wkt_protos"] + MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS + [
+    deps = ["@com_google_protobuf//:protobuf"] + MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:lib",
     ],
@@ -440,7 +440,7 @@ tf_custom_op_library(
     name = "_make_slices_selector_example_selector_op.so",
     srcs = MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS,
     copts = FCP_TF_COPTS,
-    deps = ["@com_google_protobuf//:cc_wkt_protos"] + MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS,
+    deps = ["@com_google_protobuf//:protobuf"] + MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS,
 )
 
 # Generates the basic op wrapper for use in Python.
