@@ -27,7 +27,6 @@ cc_library(
         "platform.cc",
     ],
     hdrs = [
-        "container.h",
         "monitoring.h",
         "move_to_lambda.h",
         "platform.h",
@@ -43,7 +42,6 @@ cc_library(
     deps = [
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/base:log_severity",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
