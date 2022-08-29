@@ -31,7 +31,6 @@ class CurlEasyHandle {
   CurlEasyHandle(const CurlEasyHandle&) = delete;
   CurlEasyHandle& operator=(const CurlEasyHandle&) = delete;
 
-  CURLcode GetInfo(CURLINFO info, std::string* value) const;
   CURLcode GetInfo(CURLINFO info, curl_off_t* value) const;
 
   CURLcode SetOpt(CURLoption option, const std::string& value);

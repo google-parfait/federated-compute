@@ -48,15 +48,6 @@ CURLcode CurlEasyHandle::GetInfo(CURLINFO info, curl_off_t* value) const {
   return code;
 }
 
-CURLcode CurlEasyHandle::GetInfo(CURLINFO info, std::string* value) const {
-  char* data = nullptr;
-  CURLcode code = curl_easy_getinfo(easy_handle_, info, &data);
-  if (code == CURLE_OK && data != nullptr) {
-    *value = data;
-  }
-  return code;
-}
-
 std::string CurlEasyHandle::StrError(CURLcode code) {
   return curl_easy_strerror(code);
 }
