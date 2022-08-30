@@ -41,6 +41,7 @@
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/selector_context.pb.h"
+#include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
@@ -200,15 +201,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   google::internal::federatedml::v2::RetryWindow GetLatestRetryWindow()
       override;
 
-  int64_t bytes_downloaded() override;
-
-  int64_t bytes_uploaded() override;
-
-  int64_t chunking_layer_bytes_received() override;
-
-  int64_t chunking_layer_bytes_sent() override;
-
-  int64_t report_request_size_bytes() override;
+  NetworkStats GetNetworkStats() override;
 
  private:
   // Helper function to perform an eligibility eval task request and get its
@@ -316,7 +309,6 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   absl::flat_hash_set<int32_t> federated_training_permanent_error_codes_;
   int64_t bytes_downloaded_ = 0;
   int64_t bytes_uploaded_ = 0;
-  int64_t report_request_size_bytes_ = 0;
   // Represents 2 absolute retry timestamps to use when the device is rejected
   // or accepted. The retry timestamps will have been generated based on the
   // retry windows specified in the server's EligibilityEvalTaskResponse message

@@ -406,14 +406,14 @@ TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
 
   auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
-  opstats_logger->SetNetworkStats(/*bytes_downloaded=*/100,
-                                  /*bytes_uploaded=*/101,
-                                  /*chunking_layer_bytes_downloaded=*/102,
-                                  /*chunking_layer_bytes_uploaded=*/103);
-  opstats_logger->SetNetworkStats(/*bytes_downloaded=*/200,
-                                  /*bytes_uploaded=*/201,
-                                  /*chunking_layer_bytes_downloaded=*/202,
-                                  /*chunking_layer_bytes_uploaded=*/203);
+  opstats_logger->SetNetworkStats({.bytes_downloaded = 100,
+                                   .bytes_uploaded = 101,
+                                   .chunking_layer_bytes_received = 102,
+                                   .chunking_layer_bytes_sent = 103});
+  opstats_logger->SetNetworkStats({.bytes_downloaded = 200,
+                                   .bytes_uploaded = 201,
+                                   .chunking_layer_bytes_received = 202,
+                                   .chunking_layer_bytes_sent = 203});
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(

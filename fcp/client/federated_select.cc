@@ -38,6 +38,7 @@
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/stats.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp {

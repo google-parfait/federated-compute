@@ -51,6 +51,7 @@
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
@@ -1328,26 +1329,16 @@ void HttpFederatedProtocol::UpdateObjectStateIfPermanentError(
   }
 }
 
-int64_t HttpFederatedProtocol::chunking_layer_bytes_sent() {
+NetworkStats HttpFederatedProtocol::GetNetworkStats() {
   // Note: we don't distinguish between 'chunking' and 'non-chunking' layers
   // like the legacy protocol, as there is no concept of 'chunking' with the
   // HTTP protocol like there was with the gRPC protocol. Instead we simply
   // report our best estimate of the over-the-wire network usage.
-  return bytes_uploaded_;
-}
-
-int64_t HttpFederatedProtocol::chunking_layer_bytes_received() {
-  // See note about 'chunking' vs. 'non-chunking' layer in
-  // `chunking_layer_bytes_sent`.
-  return bytes_downloaded_;
-}
-
-int64_t HttpFederatedProtocol::bytes_downloaded() { return bytes_downloaded_; }
-
-int64_t HttpFederatedProtocol::bytes_uploaded() { return bytes_uploaded_; }
-
-int64_t HttpFederatedProtocol::report_request_size_bytes() {
-  return report_request_size_bytes_;
+  return {.bytes_downloaded = bytes_downloaded_,
+          .bytes_uploaded = bytes_uploaded_,
+          .chunking_layer_bytes_received = bytes_downloaded_,
+          .chunking_layer_bytes_sent = bytes_uploaded_,
+          .report_size_bytes = 0};
 }
 
 }  // namespace http

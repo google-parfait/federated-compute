@@ -33,6 +33,7 @@
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
+#include "fcp/client/stats.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/secagg/client/secagg_client.h"
@@ -394,14 +395,16 @@ class GrpcFederatedProtocolTest
   void TearDown() override {
     fcp::client::http::HttpRequestHandle::SentReceivedBytes
         sent_received_bytes = mock_http_client_.TotalSentReceivedBytes();
-    EXPECT_THAT(federated_protocol_->bytes_downloaded(),
+
+    NetworkStats network_stats = federated_protocol_->GetNetworkStats();
+    EXPECT_THAT(network_stats.bytes_downloaded,
                 Ge(sent_received_bytes.received_bytes));
-    EXPECT_THAT(federated_protocol_->bytes_uploaded(),
+    EXPECT_THAT(network_stats.bytes_uploaded,
                 Ge(sent_received_bytes.sent_bytes));
-    EXPECT_THAT(federated_protocol_->chunking_layer_bytes_received(),
+    EXPECT_THAT(network_stats.chunking_layer_bytes_received,
                 Ge(mock_grpc_bidi_stream_->ChunkingLayerBytesReceived() +
                    sent_received_bytes.received_bytes));
-    EXPECT_THAT(federated_protocol_->chunking_layer_bytes_sent(),
+    EXPECT_THAT(network_stats.chunking_layer_bytes_sent,
                 Ge(mock_grpc_bidi_stream_->ChunkingLayerBytesSent() +
                    sent_received_bytes.sent_bytes));
   }

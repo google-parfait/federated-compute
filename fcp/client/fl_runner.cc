@@ -246,32 +246,16 @@ std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
 }
 #endif
 
+// Returns the cumulative network stats (those incurred up until this point in
+// time).
+//
 // The `FederatedSelectManager` object may be null, if it is know that there has
 // been no network usage from it yet.
 NetworkStats GetNetworkStats(FederatedProtocol* federated_protocol,
                              FederatedSelectManager* fedselect_manager) {
-  NetworkStats result = {
-      .bytes_downloaded = federated_protocol->bytes_downloaded(),
-      .bytes_uploaded = federated_protocol->bytes_uploaded(),
-      .chunking_layer_bytes_received =
-          federated_protocol->chunking_layer_bytes_received(),
-      .chunking_layer_bytes_sent =
-          federated_protocol->chunking_layer_bytes_sent(),
-      .report_size_bytes = federated_protocol->report_request_size_bytes()};
+  NetworkStats result = federated_protocol->GetNetworkStats();
   if (fedselect_manager != nullptr) {
-    // Note: we don't distinguish between 'chunking' and 'non-chunking' network
-    // usage like the legacy gRPC protocol does when downloading things via
-    // HTTP,  as there is no concept of 'chunking' with the HTTP requests we
-    // issue to fetch slices like there was with the gRPC protocol. Instead we
-    // simply report our best estimate of the over-the-wire network usage in
-    // both the 'chunking' and 'non-chunking' stats, as that's the only thing we
-    // can measure.
-    result.bytes_downloaded += fedselect_manager->NetworkTotalReceivedBytes();
-    result.bytes_uploaded += fedselect_manager->NetworkTotalSentBytes();
-    result.chunking_layer_bytes_received +=
-        fedselect_manager->NetworkTotalReceivedBytes();
-    result.chunking_layer_bytes_sent +=
-        fedselect_manager->NetworkTotalSentBytes();
+    result = result + fedselect_manager->GetNetworkStats();
   }
   return result;
 }
@@ -559,39 +543,34 @@ void LogEligibilityEvalComputationOutcome(
     case engine::PlanOutcome::kSuccess: {
       if (eligibility_info_parsing_status.ok()) {
         phase_logger.LogEligibilityEvalComputationCompleted(
-            plan_result.total_example_count,
-            plan_result.total_example_size_bytes, run_plan_start_time,
-            reference_time);
+            plan_result.example_stats, run_plan_start_time, reference_time);
       } else {
         phase_logger.LogEligibilityEvalComputationTensorflowError(
-            eligibility_info_parsing_status, plan_result.total_example_count,
-            plan_result.total_example_size_bytes, run_plan_start_time,
-            reference_time);
+            eligibility_info_parsing_status, plan_result.example_stats,
+            run_plan_start_time, reference_time);
         FCP_LOG(ERROR) << eligibility_info_parsing_status.message();
       }
       break;
     }
     case engine::PlanOutcome::kInterrupted:
       phase_logger.LogEligibilityEvalComputationInterrupted(
-          plan_result.original_status, plan_result.total_example_count,
-          plan_result.total_example_size_bytes, run_plan_start_time,
-          reference_time);
+          plan_result.original_status, plan_result.example_stats,
+          run_plan_start_time, reference_time);
       break;
     case engine::PlanOutcome::kInvalidArgument:
       phase_logger.LogEligibilityEvalComputationInvalidArgument(
-          plan_result.original_status, plan_result.total_example_count,
-          plan_result.total_example_size_bytes, run_plan_start_time);
+          plan_result.original_status, plan_result.example_stats,
+          run_plan_start_time);
       break;
     case engine::PlanOutcome::kTensorflowError:
       phase_logger.LogEligibilityEvalComputationTensorflowError(
-          plan_result.original_status, plan_result.total_example_count,
-          plan_result.total_example_size_bytes, run_plan_start_time,
-          reference_time);
+          plan_result.original_status, plan_result.example_stats,
+          run_plan_start_time, reference_time);
       break;
     case engine::PlanOutcome::kExampleIteratorError:
       phase_logger.LogEligibilityEvalComputationExampleIteratorError(
-          plan_result.original_status, plan_result.total_example_count,
-          plan_result.total_example_size_bytes, run_plan_start_time);
+          plan_result.original_status, plan_result.example_stats,
+          run_plan_start_time);
       break;
   }
 }
@@ -603,51 +582,46 @@ void LogComputationOutcome(const engine::PlanResult& plan_result,
                            absl::Time reference_time) {
   switch (plan_result.outcome) {
     case engine::PlanOutcome::kSuccess: {
-      int total_example_count = plan_result.total_example_count;
-      int64_t total_example_size_bytes = plan_result.total_example_size_bytes;
       if (computation_results_parsing_status.ok()) {
         phase_logger.LogComputationCompleted(
-            total_example_count, total_example_size_bytes, run_plan_start_time,
-            reference_time);
+            plan_result.example_stats, run_plan_start_time, reference_time);
       } else {
         phase_logger.LogComputationTensorflowError(
-            computation_results_parsing_status, total_example_count,
-            total_example_size_bytes, run_plan_start_time, reference_time);
+            computation_results_parsing_status, plan_result.example_stats,
+            run_plan_start_time, reference_time);
       }
       break;
     }
     case engine::PlanOutcome::kInterrupted:
       phase_logger.LogComputationInterrupted(
-          plan_result.original_status, plan_result.total_example_count,
-          plan_result.total_example_size_bytes, run_plan_start_time,
-          reference_time);
+          plan_result.original_status, plan_result.example_stats,
+          run_plan_start_time, reference_time);
       break;
     case engine::PlanOutcome::kInvalidArgument:
-      phase_logger.LogComputationInvalidArgument(
-          plan_result.original_status, plan_result.total_example_count,
-          plan_result.total_example_size_bytes, run_plan_start_time);
+      phase_logger.LogComputationInvalidArgument(plan_result.original_status,
+                                                 plan_result.example_stats,
+                                                 run_plan_start_time);
       break;
     case engine::PlanOutcome::kTensorflowError:
       phase_logger.LogComputationTensorflowError(
-          plan_result.original_status, plan_result.total_example_count,
-          plan_result.total_example_size_bytes, run_plan_start_time,
-          reference_time);
+          plan_result.original_status, plan_result.example_stats,
+          run_plan_start_time, reference_time);
       break;
     case engine::PlanOutcome::kExampleIteratorError:
       phase_logger.LogComputationExampleIteratorError(
-          plan_result.original_status, plan_result.total_example_count,
-          plan_result.total_example_size_bytes, run_plan_start_time);
+          plan_result.original_status, plan_result.example_stats,
+          run_plan_start_time);
       break;
   }
 }
 
 void LogResultUploadStatus(PhaseLogger& phase_logger, absl::Status result,
-                           NetworkStats stats,
+                           const NetworkStats& network_stats,
                            absl::Time time_before_result_upload,
                            absl::Time reference_time) {
   if (result.ok()) {
-    phase_logger.LogResultUploadCompleted(stats, time_before_result_upload,
-                                          reference_time);
+    phase_logger.LogResultUploadCompleted(
+        network_stats, time_before_result_upload, reference_time);
   } else {
     auto message =
         absl::StrCat("Error reporting results: code: ", result.code(),
@@ -655,37 +629,37 @@ void LogResultUploadStatus(PhaseLogger& phase_logger, absl::Status result,
     FCP_LOG(INFO) << message;
     if (result.code() == absl::StatusCode::kAborted) {
       phase_logger.LogResultUploadServerAborted(
-          result, stats, time_before_result_upload, reference_time);
+          result, network_stats, time_before_result_upload, reference_time);
     } else if (result.code() == absl::StatusCode::kCancelled) {
       phase_logger.LogResultUploadClientInterrupted(
-          result, stats, time_before_result_upload, reference_time);
+          result, network_stats, time_before_result_upload, reference_time);
     } else {
       phase_logger.LogResultUploadIOError(
-          result, stats, time_before_result_upload, reference_time);
+          result, network_stats, time_before_result_upload, reference_time);
     }
   }
 }
 
 void LogFailureUploadStatus(PhaseLogger& phase_logger, absl::Status result,
-                            NetworkStats stats,
+                            const NetworkStats& network_stats,
                             absl::Time time_before_failure_upload,
                             absl::Time reference_time) {
   if (result.ok()) {
-    phase_logger.LogFailureUploadCompleted(stats, time_before_failure_upload,
-                                           reference_time);
+    phase_logger.LogFailureUploadCompleted(
+        network_stats, time_before_failure_upload, reference_time);
   } else {
     auto message = absl::StrCat("Error reporting computation failure: code: ",
                                 result.code(), ", message: ", result.message());
     FCP_LOG(INFO) << message;
     if (result.code() == absl::StatusCode::kAborted) {
       phase_logger.LogFailureUploadServerAborted(
-          result, stats, time_before_failure_upload, reference_time);
+          result, network_stats, time_before_failure_upload, reference_time);
     } else if (result.code() == absl::StatusCode::kCancelled) {
       phase_logger.LogFailureUploadClientInterrupted(
-          result, stats, time_before_failure_upload, reference_time);
+          result, network_stats, time_before_failure_upload, reference_time);
     } else {
       phase_logger.LogFailureUploadIOError(
-          result, stats, time_before_failure_upload, reference_time);
+          result, network_stats, time_before_failure_upload, reference_time);
     }
   }
 }
@@ -767,7 +741,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
   ClientOnlyPlan plan;
   if (!ParseFromStringOrCord(plan, eligibility_eval_task.payloads.plan)) {
     auto message = "Failed to parse received eligibility eval plan";
-    phase_logger.LogEligibilityEvalCheckInInvalidPayloadError(
+    phase_logger.LogEligibilityEvalCheckinInvalidPayloadError(
         message,
         GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
         time_before_eligibility_eval_checkin);
@@ -784,7 +758,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     auto message = absl::StrCat(
         "Failed to create eligibility eval checkpoint input file: code: ",
         status.code(), ", message: ", status.message());
-    phase_logger.LogEligibilityEvalCheckInIOError(
+    phase_logger.LogEligibilityEvalCheckinIOError(
         status,
         GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
         time_before_eligibility_eval_checkin);
@@ -792,7 +766,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     return absl::InternalError("");
   }
 
-  phase_logger.LogEligibilityEvalCheckInCompleted(
+  phase_logger.LogEligibilityEvalCheckinCompleted(
       GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
       time_before_eligibility_eval_checkin);
 
@@ -837,7 +811,7 @@ IssueEligibilityEvalCheckinAndRunPlan(
     const absl::Time reference_time, FLRunnerResult& fl_runner_result) {
   absl::Time time_before_eligibility_eval_checkin = absl::Now();
   // Log that we are about to check in with the server.
-  phase_logger.LogEligibilityEvalCheckInStarted();
+  phase_logger.LogEligibilityEvalCheckinStarted();
   // Issue the eligibility eval checkin request.
   // The EligibilityEvalCheckin(...) method will call SetModelIdentifier() with
   // the name of whatever task it receives, ensuring that subsequent events will
@@ -867,17 +841,17 @@ IssueEligibilityEvalCheckinAndRunPlan(
     auto message = absl::StrCat("Error during eligibility eval checkin: code: ",
                                 status.code(), ", message: ", status.message());
     if (status.code() == absl::StatusCode::kAborted) {
-      phase_logger.LogEligibilityEvalCheckInServerAborted(
+      phase_logger.LogEligibilityEvalCheckinServerAborted(
           status,
           GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
           time_before_eligibility_eval_checkin);
     } else if (status.code() == absl::StatusCode::kCancelled) {
-      phase_logger.LogEligibilityEvalCheckInClientInterrupted(
+      phase_logger.LogEligibilityEvalCheckinClientInterrupted(
           status,
           GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
           time_before_eligibility_eval_checkin);
     } else if (!status.ok()) {
-      phase_logger.LogEligibilityEvalCheckInIOError(
+      phase_logger.LogEligibilityEvalCheckinIOError(
           status,
           GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
           time_before_eligibility_eval_checkin);
@@ -888,7 +862,7 @@ IssueEligibilityEvalCheckinAndRunPlan(
 
   if (std::holds_alternative<FederatedProtocol::Rejection>(
           *eligibility_checkin_result)) {
-    phase_logger.LogEligibilityEvalCheckInTurnedAway(
+    phase_logger.LogEligibilityEvalCheckinTurnedAway(
         GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
         time_before_eligibility_eval_checkin);
     // If the server explicitly rejected our request, then we must abort and
@@ -950,7 +924,7 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   // Clear the model identifier before check-in, to ensure that the any prior
   // eligibility eval task name isn't used any longer.
   phase_logger.SetModelIdentifier("");
-  phase_logger.LogCheckInStarted();
+  phase_logger.LogCheckinStarted();
 
   // The Checkin(...) method will call SetModelIdentifier() with the name of
   // whatever task it receives, ensuring that subsequent events will be tagged
@@ -980,17 +954,17 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     auto message = absl::StrCat("Error during checkin: code: ", status.code(),
                                 ", message: ", status.message());
     if (status.code() == absl::StatusCode::kAborted) {
-      phase_logger.LogCheckInServerAborted(
+      phase_logger.LogCheckinServerAborted(
           status,
           GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
           time_before_checkin, reference_time);
     } else if (status.code() == absl::StatusCode::kCancelled) {
-      phase_logger.LogCheckInClientInterrupted(
+      phase_logger.LogCheckinClientInterrupted(
           status,
           GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
           time_before_checkin, reference_time);
     } else if (!status.ok()) {
-      phase_logger.LogCheckInIOError(
+      phase_logger.LogCheckinIOError(
           status,
           GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
           time_before_checkin, reference_time);
@@ -1001,7 +975,7 @@ absl::StatusOr<CheckinResult> IssueCheckin(
 
   // Server rejected us? Return the fl_runner_results as-is.
   if (std::holds_alternative<FederatedProtocol::Rejection>(*checkin_result)) {
-    phase_logger.LogCheckInTurnedAway(
+    phase_logger.LogCheckinTurnedAway(
         GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
         time_before_checkin, reference_time);
     FCP_LOG(INFO) << "Device rejected by server during checkin; aborting";
@@ -1015,7 +989,7 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   auto plan_bytes = task_assignment.payloads.plan;
   if (!ParseFromStringOrCord(plan, plan_bytes)) {
     auto message = "Failed to parse received plan";
-    phase_logger.LogCheckInInvalidPayload(
+    phase_logger.LogCheckinInvalidPayload(
         message,
         GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
         time_before_checkin, reference_time);
@@ -1050,7 +1024,7 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     auto message = absl::StrCat(
         "Failed to create checkpoint input file: code: ", status.code(),
         ", message: ", status.message());
-    phase_logger.LogCheckInIOError(
+    phase_logger.LogCheckinIOError(
         status,
         GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
         time_before_checkin, reference_time);
@@ -1059,7 +1033,7 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   }
   std::string task_name = ExtractTaskNameFromAggregationSessionId(
       task_assignment.aggregation_session_id, population_name, *log_manager);
-  phase_logger.LogCheckInCompleted(
+  phase_logger.LogCheckinCompleted(
       task_name,
       GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
       time_before_checkin, reference_time);
@@ -1285,8 +1259,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     auto message = absl::StrCat(
         "Could not create temporary output checkpoint file: code: ",
         status.code(), ", message: ", status.message());
-    phase_logger.LogComputationIOError(status, /*total_example_count=*/0,
-                                       /*total_example_size_bytes=*/0,
+    phase_logger.LogComputationIOError(status, ExampleStats(),
                                        run_plan_start_time);
     return fl_runner_result;
   }
@@ -1386,9 +1359,8 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     absl::StatusOr<std::string> checkpoint_output_filename =
         files->CreateTempFile("output", ".ckp");
     if (!checkpoint_output_filename.ok()) {
-      phase_logger.LogComputationIOError(
-          checkpoint_output_filename.status(), /*total_example_count=*/0,
-          /*total_example_size_bytes=*/0, run_plan_start_time);
+      phase_logger.LogComputationIOError(checkpoint_output_filename.status(),
+                                         ExampleStats(), run_plan_start_time);
       return result;
     }
     // Regular TensorflowSpec-based plans.
@@ -1412,7 +1384,7 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     // that when such new plan types *are* added, they result in clear
     // compatibility test failures when such plans are erroneously targeted at
     // old releases that don't support them yet.
-    event_publisher->PublishIoError(0, "Unsupported TensorflowSpec-based plan");
+    event_publisher->PublishIoError("Unsupported TensorflowSpec-based plan");
     return result;
   }
 
@@ -1426,14 +1398,12 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
       (*result.mutable_output_tensors())[plan_result.output_names[i]] =
           std::move(output_tensor_proto);
     }
-    phase_logger.LogComputationCompleted(plan_result.total_example_count,
-                                         plan_result.total_example_size_bytes,
+    phase_logger.LogComputationCompleted(plan_result.example_stats,
                                          run_plan_start_time, reference_time);
   } else {
     phase_logger.LogComputationTensorflowError(
-        plan_result.original_status, plan_result.total_example_count,
-        plan_result.total_example_size_bytes, run_plan_start_time,
-        reference_time);
+        plan_result.original_status, plan_result.example_stats,
+        run_plan_start_time, reference_time);
   }
 
   return result;

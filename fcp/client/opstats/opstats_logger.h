@@ -19,6 +19,7 @@
 #include <string>
 
 #include "fcp/client/opstats/opstats_db.h"
+#include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 
@@ -56,9 +57,7 @@ class OpStatsLogger {
                                   int64_t additional_example_size_bytes) {}
 
   // Log network stats, replacing any old stats for the run.
-  virtual void SetNetworkStats(int64_t bytes_downloaded, int64_t bytes_uploaded,
-                               int64_t chunking_layer_bytes_downloaded,
-                               int64_t chunking_layer_bytes_uploaded) {}
+  virtual void SetNetworkStats(const NetworkStats& network_stats) {}
 
   // Log the retry window, replacing any old retry window. Ignore any retry
   // token in the retry window message.

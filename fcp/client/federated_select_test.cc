@@ -36,6 +36,7 @@
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
+#include "fcp/client/stats.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"
@@ -110,10 +111,14 @@ class HttpFederatedSelectManagerTest : public ::testing::Test {
     // methods.
     HttpRequestHandle::SentReceivedBytes sent_received_bytes =
         mock_http_client_.TotalSentReceivedBytes();
-    EXPECT_THAT(fedselect_manager_.NetworkTotalReceivedBytes(),
-                sent_received_bytes.received_bytes);
-    EXPECT_THAT(fedselect_manager_.NetworkTotalSentBytes(),
-                sent_received_bytes.sent_bytes);
+    NetworkStats network_stats = fedselect_manager_.GetNetworkStats();
+    EXPECT_EQ(network_stats.bytes_downloaded,
+              sent_received_bytes.received_bytes);
+    EXPECT_EQ(network_stats.bytes_uploaded, sent_received_bytes.sent_bytes);
+    EXPECT_EQ(network_stats.chunking_layer_bytes_received,
+              sent_received_bytes.received_bytes);
+    EXPECT_EQ(network_stats.chunking_layer_bytes_sent,
+              sent_received_bytes.sent_bytes);
   }
 
   NiceMock<MockLogManager> mock_log_manager_;

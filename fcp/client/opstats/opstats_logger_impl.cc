@@ -83,15 +83,14 @@ void OpStatsLoggerImpl::UpdateDatasetStats(
                                    additional_example_size_bytes);
 }
 
-void OpStatsLoggerImpl::SetNetworkStats(int64_t bytes_downloaded,
-                                        int64_t bytes_uploaded,
-                                        int64_t chunking_layer_bytes_downloaded,
-                                        int64_t chunking_layer_bytes_uploaded) {
+void OpStatsLoggerImpl::SetNetworkStats(const NetworkStats& network_stats) {
   absl::MutexLock lock(&mutex_);
-  stats_.set_bytes_downloaded(bytes_downloaded);
-  stats_.set_bytes_uploaded(bytes_uploaded);
-  stats_.set_chunking_layer_bytes_downloaded(chunking_layer_bytes_downloaded);
-  stats_.set_chunking_layer_bytes_uploaded(chunking_layer_bytes_uploaded);
+  stats_.set_bytes_downloaded(network_stats.bytes_downloaded);
+  stats_.set_bytes_uploaded(network_stats.bytes_uploaded);
+  stats_.set_chunking_layer_bytes_downloaded(
+      network_stats.chunking_layer_bytes_received);
+  stats_.set_chunking_layer_bytes_uploaded(
+      network_stats.chunking_layer_bytes_sent);
 }
 
 void OpStatsLoggerImpl::SetRetryWindow(RetryWindow retry_window) {

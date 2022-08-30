@@ -29,6 +29,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/client/engine/engine.pb.h"
+#include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
 
@@ -259,20 +260,20 @@ class FederatedProtocol {
   virtual google::internal::federatedml::v2::RetryWindow
   GetLatestRetryWindow() = 0;
 
-  // Returns the number of bytes downloaded.
-  virtual int64_t bytes_downloaded() = 0;
-
-  // Returns the number of bytes uploaded.
-  virtual int64_t bytes_uploaded() = 0;
-
-  // Returns the number of bytes received in the chunking layer.
-  virtual int64_t chunking_layer_bytes_received() = 0;
-
-  // Returns the number of bytes sent in the chunking layer.
-  virtual int64_t chunking_layer_bytes_sent() = 0;
-
-  // Returns the size of the report request in bytes.
-  virtual int64_t report_request_size_bytes() = 0;
+  // Returns the best estimate of the total bytes downloaded and uploaded over
+  // the network, plus the best estimate of the duration of wall clock time
+  // spent waiting for network requests to finish (but, for example, excluding
+  // any idle time spent waiting between issuing polling requests).
+  //
+  // Note that this estimate may still include time spent simply waiting for a
+  // server response, even if no data was being sent or received during that
+  // time. E.g. in the case of the legacy gRPC protocol where the single checkin
+  // request blocks until a task is assigned to the client.
+  //
+  // If possible, this estimate should also include time spent
+  // compressing/decompressing payloads before writing them to or after reading
+  // them from the network.
+  virtual NetworkStats GetNetworkStats() = 0;
 
  protected:
   // A list of states representing the sequence of calls we expect to receive

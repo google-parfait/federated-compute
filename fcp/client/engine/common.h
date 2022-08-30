@@ -23,6 +23,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "fcp/client/engine/engine.pb.h"
+#include "fcp/client/stats.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/tensor.h"
 
@@ -56,8 +57,7 @@ struct PlanResult {
   // When the outcome is `kSuccess`, the status is ok. Otherwise, this status
   // contain the original error status which leads to the PlanOutcome.
   absl::Status original_status;
-  int total_example_count = 0;
-  int64_t total_example_size_bytes = 0;
+  ::fcp::client::ExampleStats example_stats;
 
   PlanResult(PlanResult&&) = default;
   PlanResult& operator=(PlanResult&&) = default;

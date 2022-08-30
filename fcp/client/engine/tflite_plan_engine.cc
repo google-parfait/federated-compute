@@ -43,8 +43,9 @@ PlanResult CreatePlanResultFromOutput(
       PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
       plan_result.output_names = std::move(output->output_tensor_names);
       plan_result.output_tensors = std::move(output->output_tensors);
-      plan_result.total_example_count = *total_example_count;
-      plan_result.total_example_size_bytes = *total_example_size_bytes;
+      plan_result.example_stats = {
+          .example_count = *total_example_count,
+          .example_size_bytes = *total_example_size_bytes};
       return plan_result;
     }
     case absl::StatusCode::kCancelled:

@@ -23,6 +23,7 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"
 #include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/stats.h"
 #include "fcp/protos/opstats.pb.h"
 
 namespace fcp {
@@ -66,9 +67,7 @@ class OpStatsLoggerImpl : public OpStatsLogger {
 
   // Adds network stats, replacing any old stats for the run, to the cumulative
   // internal message.
-  void SetNetworkStats(int64_t bytes_downloaded, int64_t bytes_uploaded,
-                       int64_t chunking_layer_bytes_downloaded,
-                       int64_t chunking_layer_bytes_uploaded)
+  void SetNetworkStats(const NetworkStats& network_stats)
       ABSL_LOCKS_EXCLUDED(mutex_) override;
 
   // Sets the retry window, replacing any old retry window, in the cumulative

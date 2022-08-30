@@ -42,147 +42,142 @@ class PhaseLoggerImpl : public PhaseLogger {
 
   void UpdateRetryWindowAndNetworkStats(
       const ::google::internal::federatedml::v2::RetryWindow& retry_window,
-      NetworkStats stats) override;
+      const NetworkStats& network_stats) override;
   void SetModelIdentifier(absl::string_view model_identifier) override;
   void LogTaskNotStarted(absl::string_view error_message) override;
 
   // Eligibility eval check-in phase.
-  void LogEligibilityEvalCheckInStarted() override;
-  void LogEligibilityEvalCheckInIOError(
-      absl::Status error_status, NetworkStats stats,
-      absl::Time time_before_eligibility_eval_checkin) override;
-  void LogEligibilityEvalCheckInInvalidPayloadError(
-      absl::string_view error_message, NetworkStats stats,
-      absl::Time time_before_eligibility_eval_checkin) override;
-  void LogEligibilityEvalCheckInClientInterrupted(
-      absl::Status error_status, NetworkStats stats,
-      absl::Time time_before_eligibility_eval_checkin) override;
-  void LogEligibilityEvalCheckInServerAborted(
-      absl::Status error_status, NetworkStats stats,
-      absl::Time time_before_eligibility_eval_checkin) override;
-  void LogEligibilityEvalNotConfigured(
-      NetworkStats stats,
-      absl::Time time_before_eligibility_eval_checkin) override;
-  void LogEligibilityEvalCheckInTurnedAway(
-      NetworkStats stats,
-      absl::Time time_before_eligibility_eval_checkin) override;
-  void LogEligibilityEvalCheckInCompleted(
-      NetworkStats stats,
-      absl::Time time_before_eligibility_eval_checkin) override;
+  void LogEligibilityEvalCheckinStarted() override;
+  void LogEligibilityEvalCheckinIOError(
+      absl::Status error_status, const NetworkStats& network_stats,
+      absl::Time time_before_checkin) override;
+  void LogEligibilityEvalCheckinInvalidPayloadError(
+      absl::string_view error_message, const NetworkStats& network_stats,
+      absl::Time time_before_checkin) override;
+  void LogEligibilityEvalCheckinClientInterrupted(
+      absl::Status error_status, const NetworkStats& network_stats,
+      absl::Time time_before_checkin) override;
+  void LogEligibilityEvalCheckinServerAborted(
+      absl::Status error_status, const NetworkStats& network_stats,
+      absl::Time time_before_checkin) override;
+  void LogEligibilityEvalNotConfigured(const NetworkStats& network_stats,
+                                       absl::Time time_before_checkin) override;
+  void LogEligibilityEvalCheckinTurnedAway(
+      const NetworkStats& network_stats,
+      absl::Time time_before_checkin) override;
+  void LogEligibilityEvalCheckinCompleted(
+      const NetworkStats& network_stats,
+      absl::Time time_before_checkin) override;
 
   // Eligibility eval computation phase.
   void LogEligibilityEvalComputationStarted() override;
   void LogEligibilityEvalComputationInvalidArgument(
-      absl::Status error_status, int total_example_count,
-      int64_t total_example_size_bytes,
+      absl::Status error_status, const ExampleStats& example_stats,
       absl::Time run_plan_start_time) override;
   void LogEligibilityEvalComputationExampleIteratorError(
-      absl::Status error_status, int total_example_count,
-      int64_t total_example_size_bytes,
+      absl::Status error_status, const ExampleStats& example_stats,
       absl::Time run_plan_start_time) override;
   void LogEligibilityEvalComputationTensorflowError(
-      absl::Status error_status, int total_example_count,
-      int64_t total_example_size_bytes, absl::Time run_plan_start_time,
-      absl::Time reference_time) override;
-  void LogEligibilityEvalComputationInterrupted(
-      absl::Status error_status, int total_example_count,
-      int64_t total_example_size_bytes, absl::Time run_plan_start_time,
-      absl::Time reference_time) override;
-  void LogEligibilityEvalComputationCompleted(
-      int total_example_count, int64_t total_example_size_bytes,
+      absl::Status error_status, const ExampleStats& example_stats,
       absl::Time run_plan_start_time, absl::Time reference_time) override;
+  void LogEligibilityEvalComputationInterrupted(
+      absl::Status error_status, const ExampleStats& example_stats,
+      absl::Time run_plan_start_time, absl::Time reference_time) override;
+  void LogEligibilityEvalComputationCompleted(
+      const ExampleStats& example_stats, absl::Time run_plan_start_time,
+      absl::Time reference_time) override;
 
   // Check-in phase.
-  void LogCheckInStarted() override;
-  void LogCheckInIOError(absl::Status error_status, NetworkStats stats,
+  void LogCheckinStarted() override;
+  void LogCheckinIOError(absl::Status error_status,
+                         const NetworkStats& network_stats,
                          absl::Time time_before_checkin,
                          absl::Time reference_time) override;
-  void LogCheckInInvalidPayload(absl::string_view error_message,
-                                NetworkStats stats,
+  void LogCheckinInvalidPayload(absl::string_view error_message,
+                                const NetworkStats& network_stats,
                                 absl::Time time_before_checkin,
                                 absl::Time reference_time) override;
-  void LogCheckInClientInterrupted(absl::Status error_status,
-                                   NetworkStats stats,
+  void LogCheckinClientInterrupted(absl::Status error_status,
+                                   const NetworkStats& network_stats,
                                    absl::Time time_before_checkin,
                                    absl::Time reference_time) override;
-  void LogCheckInServerAborted(absl::Status error_status, NetworkStats stats,
+  void LogCheckinServerAborted(absl::Status error_status,
+                               const NetworkStats& network_stats,
                                absl::Time time_before_checkin,
                                absl::Time reference_time) override;
-  void LogCheckInTurnedAway(NetworkStats stats, absl::Time time_before_checkin,
+  void LogCheckinTurnedAway(const NetworkStats& network_stats,
+                            absl::Time time_before_checkin,
                             absl::Time reference_time) override;
-  void LogCheckInCompleted(absl::string_view task_name, NetworkStats stats,
+  void LogCheckinCompleted(absl::string_view task_name,
+                           const NetworkStats& network_stats,
                            absl::Time time_before_checkin,
                            absl::Time reference_time) override;
 
   // Computation phase.
   void LogComputationStarted() override;
   void LogComputationInvalidArgument(absl::Status error_status,
-                                     int total_example_count,
-                                     int64_t total_example_size_bytes,
+                                     const ExampleStats& example_stats,
                                      absl::Time run_plan_start_time) override;
   void LogComputationExampleIteratorError(
-      absl::Status error_status, int total_example_count,
-      int64_t total_example_size_bytes,
+      absl::Status error_status, const ExampleStats& example_stats,
       absl::Time run_plan_start_time) override;
-  void LogComputationIOError(absl::Status error_status, int total_example_count,
-                             int64_t total_example_size_bytes,
+  void LogComputationIOError(absl::Status error_status,
+                             const ExampleStats& example_stats,
                              absl::Time run_plan_start_time) override;
   void LogComputationTensorflowError(absl::Status error_status,
-                                     int total_example_count,
-                                     int64_t total_example_size_bytes,
+                                     const ExampleStats& example_stats,
                                      absl::Time run_plan_start_time,
                                      absl::Time reference_time) override;
   void LogComputationInterrupted(absl::Status error_status,
-                                 int total_example_count,
-                                 int64_t total_example_size_bytes,
+                                 const ExampleStats& example_stats,
                                  absl::Time run_plan_start_time,
                                  absl::Time reference_time) override;
-  void LogComputationCompleted(int total_example_count,
-                               int64_t total_example_size_bytes,
+  void LogComputationCompleted(const ExampleStats& example_stats,
                                absl::Time run_plan_start_time,
                                absl::Time reference_time) override;
 
   absl::Status LogResultUploadStarted() override;
-  void LogResultUploadIOError(absl::Status error_status, NetworkStats stats,
+  void LogResultUploadIOError(absl::Status error_status,
+                              const NetworkStats& network_stats,
                               absl::Time time_before_result_upload,
                               absl::Time reference_time) override;
   void LogResultUploadClientInterrupted(absl::Status error_status,
-                                        NetworkStats stats,
+                                        const NetworkStats& network_stats,
                                         absl::Time time_before_result_upload,
                                         absl::Time reference_time) override;
   void LogResultUploadServerAborted(absl::Status error_status,
-                                    NetworkStats stats,
+                                    const NetworkStats& network_stats,
                                     absl::Time time_before_result_upload,
                                     absl::Time reference_time) override;
-  void LogResultUploadCompleted(NetworkStats stats,
+  void LogResultUploadCompleted(const NetworkStats& network_stats,
                                 absl::Time time_before_result_upload,
                                 absl::Time reference_time) override;
 
   // Failure upload phase.
   absl::Status LogFailureUploadStarted() override;
-  void LogFailureUploadIOError(absl::Status error_status, NetworkStats stats,
+  void LogFailureUploadIOError(absl::Status error_status,
+                               const NetworkStats& network_stats,
                                absl::Time time_before_failure_upload,
                                absl::Time reference_time) override;
   void LogFailureUploadClientInterrupted(absl::Status error_status,
-                                         NetworkStats stats,
+                                         const NetworkStats& network_stats,
                                          absl::Time time_before_failure_upload,
                                          absl::Time reference_time) override;
   void LogFailureUploadServerAborted(absl::Status error_status,
-                                     NetworkStats stats,
+                                     const NetworkStats& network_stats,
                                      absl::Time time_before_failure_upload,
                                      absl::Time reference_time) override;
-  void LogFailureUploadCompleted(NetworkStats stats,
+  void LogFailureUploadCompleted(const NetworkStats& network_stats,
                                  absl::Time time_before_failure_upload,
                                  absl::Time reference_time) override;
 
  private:
   void LogTimeSince(HistogramCounters histogram_counter,
                     absl::Time reference_time);
-  void LogEligibilityEvalCheckInLatency(
-      absl::Time time_before_eligibility_eval_checkin);
+  void LogEligibilityEvalCheckinLatency(absl::Time time_before_checkin);
   void LogEligibilityEvalComputationLatency(absl::Time run_plan_start_time,
                                             absl::Time reference_time);
-  void LogCheckInLatency(absl::Time time_before_checkin,
+  void LogCheckinLatency(absl::Time time_before_checkin,
                          absl::Time reference_time);
   void LogComputationLatency(absl::Time run_plan_start_time,
                              absl::Time reference_time);

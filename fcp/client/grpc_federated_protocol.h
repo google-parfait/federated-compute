@@ -44,6 +44,7 @@
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/selector_context.pb.h"
+#include "fcp/client/stats.h"
 #include "fcp/protocol/grpc_chunked_bidi_stream.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -100,15 +101,7 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   google::internal::federatedml::v2::RetryWindow GetLatestRetryWindow()
       override;
 
-  int64_t bytes_downloaded() override;
-
-  int64_t bytes_uploaded() override;
-
-  int64_t chunking_layer_bytes_received() override;
-
-  int64_t chunking_layer_bytes_sent() override;
-
-  int64_t report_request_size_bytes() override;
+  NetworkStats GetNetworkStats() override;
 
  private:
   // Internal implementation of reporting for use by ReportCompleted() and

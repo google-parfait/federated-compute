@@ -120,6 +120,7 @@ cc_library(
         "flags.h",
         "log_manager.h",
         "secagg_event_publisher.h",
+        "stats.h",
     ],
     visibility = ["//visibility:public"],
     deps = [
@@ -138,6 +139,7 @@ cc_library(
     name = "federated_protocol",
     hdrs = ["federated_protocol.h"],
     deps = [
+        ":interfaces",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
@@ -223,6 +225,7 @@ cc_test(
         ":diag_codes_cc_proto",
         ":grpc_bidi_stream",
         ":grpc_federated_protocol",
+        ":interfaces",
         ":interruptible_runner",
         ":test_helpers",
         "//fcp/base",
@@ -416,6 +419,7 @@ cc_library(
     name = "phase_logger",
     hdrs = ["phase_logger.h"],
     deps = [
+        ":interfaces",
         "//fcp/client/opstats:opstats_logger",
         "//fcp/protos:federated_api_cc_proto",
         "@com_google_absl//absl/strings",
@@ -433,6 +437,7 @@ cc_library(
         "//fcp/client/opstats:opstats_logger",
         "//fcp/protos:federated_api_cc_proto",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
     ],
 )
 
@@ -501,6 +506,7 @@ cc_test(
         ":client_runner",
         ":diag_codes_cc_proto",
         ":federated_select",
+        ":interfaces",
         ":interruptible_runner",
         ":test_helpers",
         "//fcp/base",
@@ -553,6 +559,7 @@ cc_library(
         ":interfaces",
         "//fcp/base",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
     ],
 )
 

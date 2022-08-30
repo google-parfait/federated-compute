@@ -44,6 +44,7 @@
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/secagg_state_transition_listener_impl.h"
+#include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/secagg/client/secagg_client.h"
@@ -543,8 +544,7 @@ absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
 }
 
 absl::Status GrpcFederatedProtocol::ReportCompleted(
-    ComputationResults results,
-    absl::Duration plan_duration) {
+    ComputationResults results, absl::Duration plan_duration) {
   FCP_LOG(INFO) << "Reporting outcome: " << static_cast<int>(engine::COMPLETED);
   FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)
       << "Invalid call sequence";
@@ -1063,31 +1063,22 @@ GrpcFederatedProtocol::ConvertResourceToUriOrInlineData(
   }
 }
 
-// Note: the `HttpClient` bandwidth stats are most similar to the gRPC
-// protocol's chunking layer stats, in that they reflect as closely as possible
-// the amount of data sent on the wire. Because the `HttpClient` layer doesn't
-// track 'uncompressed' bandwidth (i.e. more similar to our other
-// `bytes_downloaded/uploaded` stats), we simply use the same HTTP bandwidth
-// stats in both cases.
-int64_t GrpcFederatedProtocol::chunking_layer_bytes_sent() {
-  return grpc_bidi_stream_->ChunkingLayerBytesSent() + http_bytes_uploaded_;
-}
-
-int64_t GrpcFederatedProtocol::chunking_layer_bytes_received() {
-  return grpc_bidi_stream_->ChunkingLayerBytesReceived() +
-         http_bytes_downloaded_;
-}
-
-int64_t GrpcFederatedProtocol::bytes_downloaded() {
-  return bytes_downloaded_ + http_bytes_downloaded_;
-}
-
-int64_t GrpcFederatedProtocol::bytes_uploaded() {
-  return bytes_uploaded_ + http_bytes_uploaded_;
-}
-
-int64_t GrpcFederatedProtocol::report_request_size_bytes() {
-  return report_request_size_bytes_;
+NetworkStats GrpcFederatedProtocol::GetNetworkStats() {
+  // Note: the `HttpClient` bandwidth stats are most similar to the gRPC
+  // protocol's chunking layer stats, in that they reflect as closely as
+  // possible the amount of data sent on the wire. Because the `HttpClient`
+  // layer doesn't track 'uncompressed' bandwidth (i.e. more similar to our
+  // other `bytes_downloaded/uploaded` stats), we simply use the same HTTP
+  // bandwidth stats in both cases.
+  return {
+      .bytes_downloaded = bytes_downloaded_ + http_bytes_downloaded_,
+      .bytes_uploaded = bytes_uploaded_ + http_bytes_uploaded_,
+      .chunking_layer_bytes_received =
+          grpc_bidi_stream_->ChunkingLayerBytesReceived() +
+          http_bytes_downloaded_,
+      .chunking_layer_bytes_sent =
+          grpc_bidi_stream_->ChunkingLayerBytesSent() + http_bytes_uploaded_,
+      .report_size_bytes = report_request_size_bytes_};
 }
 
 }  // namespace client

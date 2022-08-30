@@ -36,6 +36,7 @@ cc_library(
     hdrs = ["opstats_logger.h"],
     deps = [
         ":opstats_db",
+        "//fcp/client:interfaces",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
     ],
