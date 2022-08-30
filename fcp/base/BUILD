@@ -557,3 +557,28 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "wall_clock_stopwatch",
+    srcs = ["wall_clock_stopwatch.cc"],
+    hdrs = ["wall_clock_stopwatch.h"],
+    copts = FCP_COPTS,
+    deps = [
+        ":base",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "wall_clock_stopwatch_test",
+    srcs = ["wall_clock_stopwatch_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":clock",
+        ":scheduler",
+        ":wall_clock_stopwatch",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
