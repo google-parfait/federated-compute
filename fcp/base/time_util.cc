@@ -31,6 +31,11 @@ google::protobuf::Timestamp TimeUtil::ConvertAbslToProtoTimestamp(
   return proto_timestamp;
 }
 
+absl::Time TimeUtil::ConvertProtoToAbslTime(google::protobuf::Timestamp proto) {
+  return absl::FromUnixSeconds(proto.seconds()) +
+         absl::Nanoseconds(proto.nanos());
+}
+
 google::protobuf::Duration TimeUtil::ConvertAbslToProtoDuration(
     absl::Duration absl_duration) {
   google::protobuf::Duration proto_duration;

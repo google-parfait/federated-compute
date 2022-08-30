@@ -31,6 +31,14 @@ TEST(ConvertAbslToProtoTimestampTest, ConvertSuccessfully) {
               EqualsProto(expected_timestamp));
 }
 
+TEST(ConvertProtoToAbslTimeTest, ConvertSuccessfully) {
+  google::protobuf::Timestamp timestamp;
+  timestamp.set_seconds(1000L);
+  timestamp.set_nanos(3);
+  absl::Time expected_time = absl::FromUnixSeconds(1000) + absl::Nanoseconds(3);
+  EXPECT_EQ(TimeUtil::ConvertProtoToAbslTime(timestamp), expected_time);
+}
+
 TEST(ConvertAbslToProtoDurationTest, ConvertSuccessfully) {
   absl::Duration duration = absl::Seconds(1000) + absl::Nanoseconds(3);
   google::protobuf::Duration expected_duration;

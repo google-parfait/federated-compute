@@ -30,6 +30,12 @@ class TimeUtil {
   // will lead to undefined behavior.
   static google::protobuf::Timestamp ConvertAbslToProtoTimestamp(absl::Time t);
 
+  // Converts a google::protobuf::Timestamp to an absl::Time.
+  // Note that we assume the timestamps we deal with here are representable by
+  // both formats.  If the resulted google::protobuf::Timestamp is invalid, it
+  // will lead to undefined behavior.
+  static absl::Time ConvertProtoToAbslTime(google::protobuf::Timestamp proto);
+
   // Converts an absl::Duration to a google::protobuf::Duration.
   // Note that we assume the durations we deal with here are representable by
   // both formats.  If the resulted google::protobuf::Duration is invalid, it
