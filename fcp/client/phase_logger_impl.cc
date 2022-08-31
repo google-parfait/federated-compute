@@ -424,7 +424,7 @@ void PhaseLoggerImpl::LogComputationStarted() {
 
 void PhaseLoggerImpl::LogComputationInvalidArgument(
     absl::Status error_status, const ExampleStats& example_stats,
-    absl::Time run_plan_start_time) {
+    const NetworkStats& network_stats, absl::Time run_plan_start_time) {
   std::string error_message =
       GetErrorMessage(error_status, kComputationErrorPrefix,
                       /* keep_error_message= */ true);
@@ -432,7 +432,8 @@ void PhaseLoggerImpl::LogComputationInvalidArgument(
       ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
   if (granular_per_phase_logs_) {
     event_publisher_->PublishComputationInvalidArgument(
-        error_message, example_stats, absl::Now() - run_plan_start_time);
+        error_message, example_stats, network_stats,
+        absl::Now() - run_plan_start_time);
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_INVALID_ARGUMENT,
         error_message);
@@ -445,13 +446,15 @@ void PhaseLoggerImpl::LogComputationInvalidArgument(
 
 void PhaseLoggerImpl::LogComputationIOError(absl::Status error_status,
                                             const ExampleStats& example_stats,
+                                            const NetworkStats& network_stats,
                                             absl::Time run_plan_start_time) {
   std::string error_message =
       GetErrorMessage(error_status, kComputationErrorPrefix,
                       /* keep_error_message= */ true);
   if (granular_per_phase_logs_) {
     event_publisher_->PublishComputationIOError(
-        error_message, example_stats, absl::Now() - run_plan_start_time);
+        error_message, example_stats, network_stats,
+        absl::Now() - run_plan_start_time);
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_IO,
         error_message);
@@ -464,12 +467,13 @@ void PhaseLoggerImpl::LogComputationIOError(absl::Status error_status,
 
 void PhaseLoggerImpl::LogComputationExampleIteratorError(
     absl::Status error_status, const ExampleStats& example_stats,
-    absl::Time run_plan_start_time) {
+    const NetworkStats& network_stats, absl::Time run_plan_start_time) {
   std::string error_message = GetErrorMessage(
       error_status, kComputationErrorPrefix, /* keep_error_message= */ true);
   if (granular_per_phase_logs_) {
     event_publisher_->PublishComputationExampleIteratorError(
-        error_message, example_stats, absl::Now() - run_plan_start_time);
+        error_message, example_stats, network_stats,
+        absl::Now() - run_plan_start_time);
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_EXAMPLE_ITERATOR,
         error_message);
@@ -483,12 +487,14 @@ void PhaseLoggerImpl::LogComputationExampleIteratorError(
 
 void PhaseLoggerImpl::LogComputationTensorflowError(
     absl::Status error_status, const ExampleStats& example_stats,
-    absl::Time run_plan_start_time, absl::Time reference_time) {
+    const NetworkStats& network_stats, absl::Time run_plan_start_time,
+    absl::Time reference_time) {
   std::string error_message = GetErrorMessage(
       error_status, kComputationErrorPrefix, log_tensorflow_error_messages_);
   if (granular_per_phase_logs_) {
     event_publisher_->PublishComputationTensorflowError(
-        error_message, example_stats, absl::Now() - run_plan_start_time);
+        error_message, example_stats, network_stats,
+        absl::Now() - run_plan_start_time);
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_TENSORFLOW,
         error_message);
@@ -503,13 +509,15 @@ void PhaseLoggerImpl::LogComputationTensorflowError(
 
 void PhaseLoggerImpl::LogComputationInterrupted(
     absl::Status error_status, const ExampleStats& example_stats,
-    absl::Time run_plan_start_time, absl::Time reference_time) {
+    const NetworkStats& network_stats, absl::Time run_plan_start_time,
+    absl::Time reference_time) {
   std::string error_message =
       GetErrorMessage(error_status, kComputationErrorPrefix,
                       /* keep_error_message= */ true);
   if (granular_per_phase_logs_) {
     event_publisher_->PublishComputationInterrupted(
-        error_message, example_stats, absl::Now() - run_plan_start_time);
+        error_message, example_stats, network_stats,
+        absl::Now() - run_plan_start_time);
     opstats_logger_->AddEventWithErrorMessage(
         OperationalStats::Event::EVENT_KIND_COMPUTATION_CLIENT_INTERRUPTED,
         error_message);
@@ -522,11 +530,12 @@ void PhaseLoggerImpl::LogComputationInterrupted(
 }
 
 void PhaseLoggerImpl::LogComputationCompleted(const ExampleStats& example_stats,
+                                              const NetworkStats& network_stats,
                                               absl::Time run_plan_start_time,
                                               absl::Time reference_time) {
   if (granular_per_phase_logs_) {
-    event_publisher_->PublishComputationCompleted(example_stats,
-                                                  run_plan_start_time);
+    event_publisher_->PublishComputationCompleted(
+        example_stats, network_stats, absl::Now() - run_plan_start_time);
   } else {
     event_publisher_->PublishPlanCompleted(example_stats, run_plan_start_time);
   }

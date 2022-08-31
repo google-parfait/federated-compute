@@ -38,6 +38,7 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/base/time_util.h"
+#include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
@@ -104,6 +105,7 @@ using ::testing::ExplainMatchResult;
 using ::testing::Field;
 using ::testing::FieldsAre;
 using ::testing::Ge;
+using ::testing::Gt;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Lt;
@@ -469,6 +471,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillRepeatedly(Return(true));
     EXPECT_CALL(mock_flags_, waiting_period_sec_for_cancellation)
         .WillRepeatedly(Return(kCancellationWaitingPeriodSec));
+    EXPECT_CALL(mock_flags_, enable_per_phase_network_stats)
+        .WillRepeatedly(Return(true));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -497,13 +501,17 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         mock_http_client_.TotalSentReceivedBytes();
 
     NetworkStats network_stats = federated_protocol_->GetNetworkStats();
-    EXPECT_EQ(network_stats.bytes_downloaded,
-              sent_received_bytes.received_bytes);
-    EXPECT_EQ(network_stats.bytes_uploaded, sent_received_bytes.sent_bytes);
+    EXPECT_EQ(network_stats.bytes_downloaded, 0);
+    EXPECT_EQ(network_stats.bytes_uploaded, 0);
     EXPECT_EQ(network_stats.chunking_layer_bytes_received,
               sent_received_bytes.received_bytes);
     EXPECT_EQ(network_stats.chunking_layer_bytes_sent,
               sent_received_bytes.sent_bytes);
+    // If any network traffic occurred, we expect to see some time reflected in
+    // the duration.
+    if (network_stats.chunking_layer_bytes_sent > 0) {
+      EXPECT_THAT(network_stats.network_duration, Gt(absl::ZeroDuration()));
+    }
   }
 
   // This function runs a successful EligibilityEvalCheckin() that results in an
@@ -2545,7 +2553,7 @@ class ProtocolRequestHelperTest : public ::testing::Test {
         initial_request_creator_("https://initial.uri", HeaderList(),
                                  /*use_compression=*/false),
         protocol_request_helper_(&mock_http_client_, &bytes_downloaded_,
-                                 &bytes_uploaded_,
+                                 &bytes_uploaded_, network_stopwatch_.get(),
                                  /*client_decoded_http_resources=*/false) {}
 
  protected:
@@ -2565,6 +2573,8 @@ class ProtocolRequestHelperTest : public ::testing::Test {
 
   int64_t bytes_downloaded_ = 0;
   int64_t bytes_uploaded_ = 0;
+  std::unique_ptr<WallClockStopwatch> network_stopwatch_ =
+      WallClockStopwatch::Create();
 
   InterruptibleRunner interruptible_runner_;
   ProtocolRequestCreator initial_request_creator_;

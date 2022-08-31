@@ -42,6 +42,10 @@ struct NetworkStats {
   // wire").
   int64_t chunking_layer_bytes_sent = 0;
   int64_t report_size_bytes = 0;
+  // The best estimate of the duration of wall clock time spent waiting for
+  // network requests to finish (but, for example, excluding any idle time spent
+  // waiting between issuing polling requests).
+  absl::Duration network_duration = absl::ZeroDuration();
 
   // Returns the difference between two sets of network stats.
   NetworkStats operator-(const NetworkStats& other) const {
@@ -52,7 +56,8 @@ struct NetworkStats {
             chunking_layer_bytes_received - other.chunking_layer_bytes_received,
         .chunking_layer_bytes_sent =
             chunking_layer_bytes_sent - other.chunking_layer_bytes_sent,
-        .report_size_bytes = report_size_bytes - other.report_size_bytes};
+        .report_size_bytes = report_size_bytes - other.report_size_bytes,
+        .network_duration = network_duration - other.network_duration};
   }
 
   NetworkStats operator+(const NetworkStats& other) const {
@@ -63,7 +68,8 @@ struct NetworkStats {
             chunking_layer_bytes_received + other.chunking_layer_bytes_received,
         .chunking_layer_bytes_sent =
             chunking_layer_bytes_sent + other.chunking_layer_bytes_sent,
-        .report_size_bytes = report_size_bytes + other.report_size_bytes};
+        .report_size_bytes = report_size_bytes + other.report_size_bytes,
+        .network_duration = network_duration + other.network_duration};
   }
 };
 
@@ -72,7 +78,8 @@ inline bool operator==(const NetworkStats& s1, const NetworkStats& s2) {
          s1.bytes_uploaded == s2.bytes_uploaded &&
          s1.chunking_layer_bytes_received == s2.chunking_layer_bytes_received &&
          s1.chunking_layer_bytes_sent == s2.chunking_layer_bytes_sent &&
-         s1.report_size_bytes == s2.report_size_bytes;
+         s1.report_size_bytes == s2.report_size_bytes &&
+         s1.network_duration == s2.network_duration;
 }
 
 struct ExampleStats {

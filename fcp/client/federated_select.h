@@ -24,6 +24,8 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/time/time.h"
+#include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/files.h"
 #include "fcp/client/flags.h"
@@ -51,6 +53,17 @@ class FederatedSelectManager {
   CreateExampleIteratorFactoryForUriTemplate(
       absl::string_view uri_template) = 0;
 
+  // The best estimate of the over-the-wire bytes downloaded and uploadeded over
+  // the network, and the total duration of wall clock time spent waiting on
+  // network requests.
+
+  // Note that if two different slice fetches are in flight from different
+  // threads, this should measure just the wall clock time spent completing both
+  // sets of fetches (i.e. it should not double-count the wall clock time by
+  // summing each per-thread duration individually).
+  //
+  // If possible, this estimate should also include time spent decompressing
+  // payloads after reading them from the network.
   virtual NetworkStats GetNetworkStats() = 0;
 
   virtual ~FederatedSelectManager() {}
@@ -115,7 +128,8 @@ class HttpFederatedSelectManager : public FederatedSelectManager {
     return {.bytes_downloaded = bytes_downloaded,
             .bytes_uploaded = bytes_uploaded,
             .chunking_layer_bytes_received = bytes_downloaded,
-            .chunking_layer_bytes_sent = bytes_uploaded};
+            .chunking_layer_bytes_sent = bytes_uploaded,
+            .network_duration = network_stopwatch_->GetTotalDuration()};
   }
 
  private:
@@ -124,6 +138,8 @@ class HttpFederatedSelectManager : public FederatedSelectManager {
   Files& files_;
   std::atomic<int64_t> bytes_sent_ = 0;
   std::atomic<int64_t> bytes_received_ = 0;
+  std::unique_ptr<WallClockStopwatch> network_stopwatch_ =
+      WallClockStopwatch::Create();
   fcp::client::http::HttpClient& http_client_;
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
 };

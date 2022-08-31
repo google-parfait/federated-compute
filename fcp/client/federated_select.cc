@@ -30,6 +30,7 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/str_replace.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/files.h"
@@ -126,7 +127,8 @@ class HttpFederatedSelectExampleIteratorFactory
       LogManager* log_manager, const Flags* flags, Files* files,
       HttpClient* http_client, InterruptibleRunner* interruptible_runner,
       absl::string_view uri_template, std::atomic<int64_t>& bytes_sent_acc,
-      std::atomic<int64_t>& bytes_received_acc)
+      std::atomic<int64_t>& bytes_received_acc,
+      WallClockStopwatch* network_stopwatch)
       : log_manager_(*log_manager),
         flags_(*flags),
         files_(*files),
@@ -134,7 +136,8 @@ class HttpFederatedSelectExampleIteratorFactory
         interruptible_runner_(*interruptible_runner),
         uri_template_(uri_template),
         bytes_sent_acc_(bytes_sent_acc),
-        bytes_received_acc_(bytes_received_acc) {}
+        bytes_received_acc_(bytes_received_acc),
+        network_stopwatch_(*network_stopwatch) {}
 
   // Will fetch the slice data via HTTP and return an error if any of the slice
   // fetch requests failed.
@@ -151,6 +154,7 @@ class HttpFederatedSelectExampleIteratorFactory
   std::string uri_template_;
   std::atomic<int64_t>& bytes_sent_acc_;
   std::atomic<int64_t>& bytes_received_acc_;
+  WallClockStopwatch& network_stopwatch_;
 };
 
 absl::StatusOr<std::unique_ptr<ExampleIterator>>
@@ -183,11 +187,15 @@ HttpFederatedSelectExampleIteratorFactory::CreateExampleIterator(
   // Fetch the slices.
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
-  absl::StatusOr<std::deque<absl::Cord>> slices = FetchSlicesViaHttp(
-      slices_selector, uri_template_, http_client_, interruptible_runner_,
-      flags_.client_decoded_http_resources(),
-      /*bytes_received_acc=*/&bytes_received,
-      /*bytes_sent_acc=*/&bytes_sent);
+  absl::StatusOr<std::deque<absl::Cord>> slices;
+  {
+    auto started_stopwatch = network_stopwatch_.Start();
+    slices = FetchSlicesViaHttp(slices_selector, uri_template_, http_client_,
+                                interruptible_runner_,
+                                flags_.client_decoded_http_resources(),
+                                /*bytes_received_acc=*/&bytes_received,
+                                /*bytes_sent_acc=*/&bytes_sent);
+  }
   bytes_sent_acc_ += bytes_sent;
   bytes_received_acc_ += bytes_received;
   if (!slices.ok()) {
@@ -245,7 +253,8 @@ HttpFederatedSelectManager::CreateExampleIteratorFactoryForUriTemplate(
   return std::make_unique<HttpFederatedSelectExampleIteratorFactory>(
       &log_manager_, &flags_, &files_, &http_client_,
       interruptible_runner_.get(), uri_template,
-      /*bytes_sent_acc=*/bytes_sent_, /*bytes_received_acc=*/bytes_received_);
+      /*bytes_sent_acc=*/bytes_sent_, /*bytes_received_acc=*/bytes_received_,
+      network_stopwatch_.get());
 }
 
 absl::StatusOr<std::string> InMemoryFederatedSelectExampleIterator::Next() {

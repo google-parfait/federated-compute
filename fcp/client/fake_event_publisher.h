@@ -17,8 +17,6 @@
 #ifndef FCP_CLIENT_FAKE_EVENT_PUBLISHER_H_
 #define FCP_CLIENT_FAKE_EVENT_PUBLISHER_H_
 
-#include <string>
-
 #include "absl/strings/str_split.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
@@ -106,7 +104,7 @@ class FakeEventPublisher : public EventPublisher {
   }
 
   void PublishCheckinFinished(const NetworkStats& network_stats,
-                              absl::Duration download_duration) override {
+                              absl::Duration phase_duration) override {
     if (quiet_) return;
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
@@ -161,25 +159,25 @@ class FakeEventPublisher : public EventPublisher {
 
   void PublishEligibilityEvalCheckinIoError(
       absl::string_view error_message, const NetworkStats& network_stats,
-      absl::Duration download_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishEligibilityEvalCheckinClientInterrupted(
       absl::string_view error_message, const NetworkStats& network_stats,
-      absl::Duration download_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishEligibilityEvalCheckinServerAborted(
       absl::string_view error_message, const NetworkStats& network_stats,
-      absl::Duration download_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishEligibilityEvalCheckinErrorInvalidPayload(
       absl::string_view error_message, const NetworkStats& network_stats,
-      absl::Duration download_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
@@ -190,66 +188,66 @@ class FakeEventPublisher : public EventPublisher {
 
   void PublishEligibilityEvalComputationInvalidArgument(
       absl::string_view error_message, const ExampleStats& example_stats,
-      absl::Duration computation_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishEligibilityEvalComputationExampleIteratorError(
       absl::string_view error_message, const ExampleStats& example_stats,
-      absl::Duration computation_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishEligibilityEvalComputationTensorflowError(
       absl::string_view error_message, const ExampleStats& example_stats,
-      absl::Duration computation_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishEligibilityEvalComputationInterrupted(
       absl::string_view error_message, const ExampleStats& example_stats,
-      absl::Duration computation_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishEligibilityEvalComputationCompleted(
       const ExampleStats& example_stats,
-      absl::Duration computation_duration) override {
+      absl::Duration phase_duration) override {
     if (quiet_) return;
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
 
   void PublishCheckinIoError(absl::string_view error_message,
                              const NetworkStats& network_stats,
-                             absl::Duration download_duration) override {
+                             absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
-  void PublishCheckinClientInterrupted(
-      absl::string_view error_message, const NetworkStats& network_stats,
-      absl::Duration download_duration) override {
+  void PublishCheckinClientInterrupted(absl::string_view error_message,
+                                       const NetworkStats& network_stats,
+                                       absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishCheckinServerAborted(absl::string_view error_message,
                                    const NetworkStats& network_stats,
-                                   absl::Duration download_duration) override {
+                                   absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishCheckinInvalidPayload(absl::string_view error_message,
                                     const NetworkStats& network_stats,
-                                    absl::Duration download_duration) override {
+                                    absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishRejected(const NetworkStats& network_stats,
-                       absl::Duration download_duration) override {
+                       absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
 
   void PublishCheckinFinishedV2(const NetworkStats& network_stats,
-                                absl::Duration download_duration) override {
+                                absl::Duration phase_duration) override {
     if (quiet_) return;
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
@@ -261,36 +259,42 @@ class FakeEventPublisher : public EventPublisher {
 
   void PublishComputationInvalidArgument(
       absl::string_view error_message, const ExampleStats& example_stats,
-      absl::Duration computation_duration) override {
+      const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishComputationIOError(absl::string_view error_message,
                                  const ExampleStats& example_stats,
-                                 absl::Duration computation_duration) override {
+                                 const NetworkStats& network_stats,
+                                 absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishComputationExampleIteratorError(
       absl::string_view error_message, const ExampleStats& example_stats,
-      absl::Duration computation_duration) override {
+      const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishComputationTensorflowError(
       absl::string_view error_message, const ExampleStats& example_stats,
-      absl::Duration computation_duration) override {
+      const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
-  void PublishComputationInterrupted(
-      absl::string_view error_message, const ExampleStats& example_stats,
-      absl::Duration computation_duration) override {
+  void PublishComputationInterrupted(absl::string_view error_message,
+                                     const ExampleStats& example_stats,
+                                     const NetworkStats& network_stats,
+                                     absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishComputationCompleted(const ExampleStats& example_stats,
-                                   absl::Time start_time) override {
+                                   const NetworkStats& network_stats,
+                                   absl::Duration phase_duration) override {
     if (quiet_) return;
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
@@ -302,24 +306,24 @@ class FakeEventPublisher : public EventPublisher {
 
   void PublishResultUploadIOError(absl::string_view error_message,
                                   const NetworkStats& network_stats,
-                                  absl::Duration upload_duration) override {
+                                  absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishResultUploadClientInterrupted(
       absl::string_view error_message, const NetworkStats& network_stats,
-      absl::Duration upload_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishResultUploadServerAborted(
       absl::string_view error_message, const NetworkStats& network_stats,
-      absl::Duration upload_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishResultUploadCompleted(const NetworkStats& network_stats,
-                                    absl::Duration upload_duration) override {
+                                    absl::Duration phase_duration) override {
     if (quiet_) return;
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
@@ -331,24 +335,24 @@ class FakeEventPublisher : public EventPublisher {
 
   void PublishFailureUploadIOError(absl::string_view error_message,
                                    const NetworkStats& network_stats,
-                                   absl::Duration upload_duration) override {
+                                   absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishFailureUploadClientInterrupted(
       absl::string_view error_message, const NetworkStats& network_stats,
-      absl::Duration upload_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishFailureUploadServerAborted(
       absl::string_view error_message, const NetworkStats& network_stats,
-      absl::Duration upload_duration) override {
+      absl::Duration phase_duration) override {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
   void PublishFailureUploadCompleted(const NetworkStats& network_stats,
-                                     absl::Duration upload_duration) override {
+                                     absl::Duration phase_duration) override {
     if (quiet_) return;
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }

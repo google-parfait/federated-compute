@@ -195,6 +195,7 @@ cc_library(
         ":secagg_state_transition_listener_impl",
         ":selector_context_cc_proto",
         "//fcp/base",
+        "//fcp/base:wall_clock_stopwatch",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/client/http:http_client",
         "//fcp/client/http:in_memory_request_response",
@@ -487,6 +488,7 @@ cc_library(
         ":interruptible_runner",
         ":simple_task_environment",
         "//fcp/base",
+        "//fcp/base:wall_clock_stopwatch",
         "//fcp/client/engine:example_iterator_factory",
         "//fcp/client/http:http_client",
         "//fcp/client/http:http_client_util",
@@ -495,6 +497,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
     ],
 )

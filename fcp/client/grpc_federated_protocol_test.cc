@@ -17,6 +17,7 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "google/protobuf/text_format.h"
@@ -77,6 +78,7 @@ using ::testing::Eq;
 using ::testing::Field;
 using ::testing::FieldsAre;
 using ::testing::Ge;
+using ::testing::Gt;
 using ::testing::HasSubstr;
 using ::testing::InSequence;
 using ::testing::Lt;
@@ -331,9 +333,11 @@ ClientStreamMessage GetExpectedCheckinRequest(
 }
 
 class GrpcFederatedProtocolTest
-    // The parameter indicates whether support for HTTP task resources
+    // The first parameter indicates whether support for HTTP task resources
     // should be enabled.
-    : public testing::TestWithParam<bool> {
+    // The second parameter indicates whether network requests should be
+    // measured with a WallClockStopwatch.
+    : public testing::TestWithParam<std::tuple<bool, bool>> {
  public:
   GrpcFederatedProtocolTest() {
     // The gRPC stream should always be closed at the end of all tests.
@@ -342,7 +346,8 @@ class GrpcFederatedProtocolTest
 
  protected:
   void SetUp() override {
-    enable_http_resource_support_ = GetParam();
+    enable_http_resource_support_ = std::get<0>(GetParam());
+    enable_per_phase_network_stats_ = std::get<1>(GetParam());
     EXPECT_CALL(*mock_grpc_bidi_stream_, ChunkingLayerBytesReceived())
         .WillRepeatedly(Return(0));
     EXPECT_CALL(*mock_grpc_bidi_stream_, ChunkingLayerBytesSent())
@@ -367,6 +372,8 @@ class GrpcFederatedProtocolTest
     EXPECT_CALL(mock_flags_,
                 enable_grpc_with_eligibility_eval_http_resource_support)
         .WillRepeatedly(Return(enable_http_resource_support_));
+    EXPECT_CALL(mock_flags_, enable_per_phase_network_stats)
+        .WillRepeatedly(Return(enable_per_phase_network_stats_));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -397,16 +404,32 @@ class GrpcFederatedProtocolTest
         sent_received_bytes = mock_http_client_.TotalSentReceivedBytes();
 
     NetworkStats network_stats = federated_protocol_->GetNetworkStats();
-    EXPECT_THAT(network_stats.bytes_downloaded,
-                Ge(sent_received_bytes.received_bytes));
-    EXPECT_THAT(network_stats.bytes_uploaded,
-                Ge(sent_received_bytes.sent_bytes));
+    // If the following flag is on then the bytes_downloaded fields should not
+    // be populated anymore.
+    if (enable_per_phase_network_stats_) {
+      EXPECT_EQ(network_stats.bytes_downloaded, 0);
+      EXPECT_EQ(network_stats.bytes_uploaded, 0);
+    } else {
+      EXPECT_THAT(network_stats.bytes_downloaded,
+                  Ge(sent_received_bytes.received_bytes));
+      EXPECT_THAT(network_stats.bytes_uploaded,
+                  Ge(sent_received_bytes.sent_bytes));
+    }
     EXPECT_THAT(network_stats.chunking_layer_bytes_received,
                 Ge(mock_grpc_bidi_stream_->ChunkingLayerBytesReceived() +
                    sent_received_bytes.received_bytes));
     EXPECT_THAT(network_stats.chunking_layer_bytes_sent,
                 Ge(mock_grpc_bidi_stream_->ChunkingLayerBytesSent() +
                    sent_received_bytes.sent_bytes));
+    // If any network traffic occurred, we expect to see some time reflected in
+    // the duration (if the flag is on).
+    if (network_stats.chunking_layer_bytes_sent > 0) {
+      if (enable_per_phase_network_stats_) {
+        EXPECT_THAT(network_stats.network_duration, Gt(absl::ZeroDuration()));
+      } else {
+        EXPECT_EQ(network_stats.network_duration, absl::ZeroDuration());
+      }
+    }
   }
 
   // This function runs a successful EligibilityEvalCheckin() that results in an
@@ -484,20 +507,27 @@ class GrpcFederatedProtocolTest
   // The class under test.
   std::unique_ptr<GrpcFederatedProtocol> federated_protocol_;
   bool enable_http_resource_support_;
+  bool enable_per_phase_network_stats_;
 };
 
 std::string GenerateTestName(
     const testing::TestParamInfo<GrpcFederatedProtocolTest::ParamType>& info) {
-  return info.param ? "Http_resource_support_enabled"
-                    : "Http_resource_support_disabled";
+  std::string name = absl::StrCat(
+      std::get<0>(info.param) ? "Http_resource_support_enabled"
+                              : "Http_resource_support_disabled",
+      std::get<1>(info.param) ? "Per_phase_network_stats_enabled"
+                              : "Per_phase_network_stats_disabled");
+  return name;
 }
 
 INSTANTIATE_TEST_SUITE_P(NewVsOldBehavior, GrpcFederatedProtocolTest,
-                         testing::Bool(), GenerateTestName);
+                         testing::Combine(testing::Bool(), testing::Bool()),
+                         GenerateTestName);
 
 using GrpcFederatedProtocolDeathTest = GrpcFederatedProtocolTest;
 INSTANTIATE_TEST_SUITE_P(NewVsOldBehavior, GrpcFederatedProtocolDeathTest,
-                         testing::Bool(), GenerateTestName);
+                         testing::Combine(testing::Bool(), testing::Bool()),
+                         GenerateTestName);
 
 TEST_P(GrpcFederatedProtocolTest,
        TestTransientErrorRetryWindowDifferentAcrossDifferentInstances) {

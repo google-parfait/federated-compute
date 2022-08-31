@@ -40,6 +40,7 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
+#include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
@@ -458,13 +459,13 @@ ProtocolRequestCreator::Create(const ForwardingInfo& forwarding_info,
       HeaderList(new_headers.begin(), new_headers.end()), use_compression));
 }
 
-ProtocolRequestHelper::ProtocolRequestHelper(HttpClient* http_client,
-                                             int64_t* bytes_downloaded,
-                                             int64_t* bytes_uploaded,
-                                             bool client_decoded_http_resources)
+ProtocolRequestHelper::ProtocolRequestHelper(
+    HttpClient* http_client, int64_t* bytes_downloaded, int64_t* bytes_uploaded,
+    WallClockStopwatch* network_stopwatch, bool client_decoded_http_resources)
     : http_client_(*http_client),
       bytes_downloaded_(*bytes_downloaded),
       bytes_uploaded_(*bytes_uploaded),
+      network_stopwatch_(*network_stopwatch),
       client_decoded_http_resources_(client_decoded_http_resources) {}
 
 absl::StatusOr<InMemoryHttpResponse>
@@ -484,11 +485,15 @@ ProtocolRequestHelper::PerformMultipleProtocolRequests(
     InterruptibleRunner& runner) {
   // Check whether issuing the request failed as a whole (generally indicating
   // a programming error).
-  FCP_ASSIGN_OR_RETURN(
-      std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
-      PerformMultipleRequestsInMemory(http_client_, runner, std::move(requests),
-                                      &bytes_downloaded_, &bytes_uploaded_,
-                                      client_decoded_http_resources_));
+  std::vector<absl::StatusOr<InMemoryHttpResponse>> responses;
+  {
+    auto started_stopwatch = network_stopwatch_.Start();
+    FCP_ASSIGN_OR_RETURN(
+        responses,
+        PerformMultipleRequestsInMemory(
+            http_client_, runner, std::move(requests), &bytes_downloaded_,
+            &bytes_uploaded_, client_decoded_http_resources_));
+  }
   std::vector<absl::StatusOr<InMemoryHttpResponse>> results;
   std::transform(responses.begin(), responses.end(),
                  std::back_inserter(results), CheckResponseContentEncoding);
@@ -569,7 +574,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
               entry_point_uri, HeaderList{},
               !flags->disable_http_request_body_compression())),
       protocol_request_helper_(http_client, &bytes_downloaded_,
-                               &bytes_uploaded_,
+                               &bytes_uploaded_, network_stopwatch_.get(),
                                flags_->client_decoded_http_resources()),
       api_key_(api_key),
       population_name_(population_name),
@@ -1292,10 +1297,14 @@ HttpFederatedProtocol::FetchTaskResources(
   // Fetch the plan and init checkpoint resources if they need to be fetched
   // (using the inline data instead if available).
   absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
-      resource_responses = FetchResourcesInMemory(
-          *http_client_, *interruptible_runner_,
-          {plan_uri_or_data, checkpoint_uri_or_data}, &bytes_downloaded_,
-          &bytes_uploaded_, flags_->client_decoded_http_resources());
+      resource_responses;
+  {
+    auto started_stopwatch = network_stopwatch_->Start();
+    resource_responses = FetchResourcesInMemory(
+        *http_client_, *interruptible_runner_,
+        {plan_uri_or_data, checkpoint_uri_or_data}, &bytes_downloaded_,
+        &bytes_uploaded_, flags_->client_decoded_http_resources());
+  }
   FCP_RETURN_IF_ERROR(resource_responses);
   auto& plan_data_response = (*resource_responses)[0];
   auto& checkpoint_data_response = (*resource_responses)[1];
@@ -1334,11 +1343,18 @@ NetworkStats HttpFederatedProtocol::GetNetworkStats() {
   // like the legacy protocol, as there is no concept of 'chunking' with the
   // HTTP protocol like there was with the gRPC protocol. Instead we simply
   // report our best estimate of the over-the-wire network usage.
-  return {.bytes_downloaded = bytes_downloaded_,
-          .bytes_uploaded = bytes_uploaded_,
-          .chunking_layer_bytes_received = bytes_downloaded_,
-          .chunking_layer_bytes_sent = bytes_uploaded_,
-          .report_size_bytes = 0};
+  return {
+      // When this flag is turned on then these first two fields will be
+      // ignored, so we set them to zero. The fields will be deleted once the
+      // flag is rolled out.
+      .bytes_downloaded =
+          flags_->enable_per_phase_network_stats() ? 0 : bytes_downloaded_,
+      .bytes_uploaded =
+          flags_->enable_per_phase_network_stats() ? 0 : bytes_uploaded_,
+      .chunking_layer_bytes_received = bytes_downloaded_,
+      .chunking_layer_bytes_sent = bytes_uploaded_,
+      .report_size_bytes = 0,
+      .network_duration = network_stopwatch_->GetTotalDuration()};
 }
 
 }  // namespace http

@@ -93,27 +93,28 @@ void LogComputationOutcome(engine::PlanResult plan_result,
   switch (plan_result.outcome) {
     case engine::PlanOutcome::kSuccess:
       phase_logger.LogComputationCompleted(plan_result.example_stats,
-                                           run_plan_start_time, reference_time);
+                                           NetworkStats(), run_plan_start_time,
+                                           reference_time);
       break;
     case engine::PlanOutcome::kInterrupted:
       phase_logger.LogComputationInterrupted(
           plan_result.original_status, plan_result.example_stats,
-          run_plan_start_time, reference_time);
+          NetworkStats(), run_plan_start_time, reference_time);
       break;
     case engine::PlanOutcome::kInvalidArgument:
-      phase_logger.LogComputationInvalidArgument(plan_result.original_status,
-                                                 plan_result.example_stats,
-                                                 run_plan_start_time);
+      phase_logger.LogComputationInvalidArgument(
+          plan_result.original_status, plan_result.example_stats,
+          NetworkStats(), run_plan_start_time);
       break;
     case engine::PlanOutcome::kTensorflowError:
       phase_logger.LogComputationTensorflowError(
           std::move(plan_result.original_status), plan_result.example_stats,
-          run_plan_start_time, reference_time);
+          NetworkStats(), run_plan_start_time, reference_time);
       break;
     case engine::PlanOutcome::kExampleIteratorError:
       phase_logger.LogComputationExampleIteratorError(
           plan_result.original_status, plan_result.example_stats,
-          run_plan_start_time);
+          NetworkStats(), run_plan_start_time);
       break;
   }
 }
@@ -154,16 +155,16 @@ absl::Status RunPlanWithTensorflowSpec(
   if (!client_plan.phase().has_tensorflow_spec()) {
     absl::Status error_status =
         absl::InvalidArgumentError("Plan without TensorflowSpec");
-    phase_logger.LogComputationInvalidArgument(error_status, ExampleStats(),
-                                               run_plan_start_time);
+    phase_logger.LogComputationInvalidArgument(
+        error_status, ExampleStats(), NetworkStats(), run_plan_start_time);
     return error_status;
   }
   if (!client_plan.phase().has_local_compute() ||
       client_plan.phase().execution_size() > 0) {
     absl::Status error_status =
         absl::InvalidArgumentError("Invalid TensorflowSpec-based plan");
-    phase_logger.LogComputationInvalidArgument(error_status, ExampleStats(),
-                                               run_plan_start_time);
+    phase_logger.LogComputationInvalidArgument(
+        error_status, ExampleStats(), NetworkStats(), run_plan_start_time);
     return error_status;
   }
 
@@ -257,7 +258,7 @@ absl::Status RunLocalComputation(
   // Local compute plans can use example iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger, log_manager);
+      opstats_logger, log_manager, flags->enable_per_phase_network_stats());
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(env_deps, selector_context);
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
@@ -277,7 +278,7 @@ absl::Status RunLocalComputation(
   absl::StatusOr<std::string> plan_str = fcp::ReadFileToString(plan_uri);
   if (!plan_str.ok()) {
     phase_logger.LogComputationIOError(plan_str.status(), ExampleStats(),
-                                       run_plan_start_time);
+                                       NetworkStats(), run_plan_start_time);
     return plan_str.status();
   }
 
@@ -285,8 +286,8 @@ absl::Status RunLocalComputation(
   if (!plan.ParseFromString(*plan_str)) {
     absl::Status error_status =
         absl::InvalidArgumentError("could not parse received plan");
-    phase_logger.LogComputationInvalidArgument(error_status, ExampleStats(),
-                                               run_plan_start_time);
+    phase_logger.LogComputationInvalidArgument(
+        error_status, ExampleStats(), NetworkStats(), run_plan_start_time);
     return error_status;
   }
 

@@ -63,20 +63,20 @@ class MockEventPublisher : public EventPublisher {
   MOCK_METHOD(void, PublishEligibilityEvalCheckin, (), (override));
   MOCK_METHOD(void, PublishEligibilityEvalPlanReceived,
               (const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalNotConfigured,
               (const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalRejected,
               (const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishCheckin, (), (override));
   MOCK_METHOD(void, PublishCheckinFinished,
               (const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishRejected, (), (override));
   MOCK_METHOD(void, PublishReportStarted, (int64_t report_size_bytes),
@@ -105,144 +105,151 @@ class MockEventPublisher : public EventPublisher {
   MOCK_METHOD(void, PublishEligibilityEvalCheckinIoError,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalCheckinClientInterrupted,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalCheckinServerAborted,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalCheckinErrorInvalidPayload,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalComputationStarted, (), (override));
   MOCK_METHOD(void, PublishEligibilityEvalComputationInvalidArgument,
               (absl::string_view error_message,
                const ExampleStats& example_stats,
-               absl::Duration computation_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalComputationExampleIteratorError,
               (absl::string_view error_message,
                const ExampleStats& example_stats,
-               absl::Duration computation_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalComputationTensorflowError,
               (absl::string_view error_message,
                const ExampleStats& example_stats,
-               absl::Duration computation_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalComputationInterrupted,
               (absl::string_view error_message,
                const ExampleStats& example_stats,
-               absl::Duration computation_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishEligibilityEvalComputationCompleted,
               (const ExampleStats& example_stats,
-               absl::Duration computation_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishCheckinIoError,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishCheckinClientInterrupted,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishCheckinServerAborted,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishCheckinInvalidPayload,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishRejected,
               (const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishCheckinFinishedV2,
               (const NetworkStats& network_stats,
-               absl::Duration download_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishComputationStarted, (), (override));
   MOCK_METHOD(void, PublishComputationInvalidArgument,
               (absl::string_view error_message,
                const ExampleStats& example_stats,
-               absl::Duration computation_duration),
+               const NetworkStats& network_stats,
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishComputationIOError,
               (absl::string_view error_message,
                const ExampleStats& example_stats,
-               absl::Duration computation_duration),
+               const NetworkStats& network_stats,
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishComputationExampleIteratorError,
               (absl::string_view error_message,
                const ExampleStats& example_stats,
-               absl::Duration computation_duration),
+               const NetworkStats& network_stats,
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishComputationTensorflowError,
               (absl::string_view error_message,
                const ExampleStats& example_stats,
-               absl::Duration computation_duration),
+               const NetworkStats& network_stats,
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishComputationInterrupted,
               (absl::string_view error_message,
                const ExampleStats& example_stats,
-               absl::Duration computation_duration),
+               const NetworkStats& network_stats,
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishComputationCompleted,
-              (const ExampleStats& example_stats, absl::Time start_time),
+              (const ExampleStats& example_stats,
+               const NetworkStats& network_stats,
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishResultUploadStarted, (), (override));
   MOCK_METHOD(void, PublishResultUploadIOError,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration upload_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishResultUploadClientInterrupted,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration upload_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishResultUploadServerAborted,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration upload_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishResultUploadCompleted,
               (const NetworkStats& network_stats,
-               absl::Duration upload_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishFailureUploadStarted, (), (override));
   MOCK_METHOD(void, PublishFailureUploadIOError,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration upload_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishFailureUploadClientInterrupted,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration upload_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishFailureUploadServerAborted,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
-               absl::Duration upload_duration),
+               absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishFailureUploadCompleted,
               (const NetworkStats& network_stats,
-               absl::Duration upload_duration),
+               absl::Duration phase_duration),
               (override));
 
   SecAggEventPublisher* secagg_event_publisher() override {
@@ -258,36 +265,41 @@ class MockEventPublisher : public EventPublisher {
 // each stage, making it easier to write accurate assertions in unit tests.
 class MockFederatedProtocol : public FederatedProtocol {
  public:
-  constexpr static NetworkStats kPostEligibilityCheckinStats = {
+  constexpr static NetworkStats kPostEligibilityCheckinNetworkStats = {
       .bytes_downloaded = 100,
       .bytes_uploaded = 200,
       .chunking_layer_bytes_received = 300,
       .chunking_layer_bytes_sent = 400,
-      .report_size_bytes = 0};
-  constexpr static NetworkStats kPostReportEligibilityEvalErrorStats = {
+      .report_size_bytes = 0,
+      .network_duration = absl::Milliseconds(50)};
+  constexpr static NetworkStats kPostReportEligibilityEvalErrorNetworkStats = {
       .bytes_downloaded = 200,
       .bytes_uploaded = 300,
       .chunking_layer_bytes_received = 400,
       .chunking_layer_bytes_sent = 500,
-      .report_size_bytes = 0};
-  constexpr static NetworkStats kPostCheckinStats = {
+      .report_size_bytes = 0,
+      .network_duration = absl::Milliseconds(150)};
+  constexpr static NetworkStats kPostCheckinNetworkStats = {
       .bytes_downloaded = 1000,
       .bytes_uploaded = 2000,
       .chunking_layer_bytes_received = 3000,
       .chunking_layer_bytes_sent = 4000,
-      .report_size_bytes = 0};
-  constexpr static NetworkStats kPostReportCompletedStats = {
+      .report_size_bytes = 0,
+      .network_duration = absl::Milliseconds(250)};
+  constexpr static NetworkStats kPostReportCompletedNetworkStats = {
       .bytes_downloaded = 10000,
       .bytes_uploaded = 20000,
       .chunking_layer_bytes_received = 30000,
       .chunking_layer_bytes_sent = 40000,
-      .report_size_bytes = 555};
-  constexpr static NetworkStats kPostReportNotCompletedStats = {
+      .report_size_bytes = 555,
+      .network_duration = absl::Milliseconds(350)};
+  constexpr static NetworkStats kPostReportNotCompletedNetworkStats = {
       .bytes_downloaded = 9999,
       .bytes_uploaded = 19999,
       .chunking_layer_bytes_received = 29999,
       .chunking_layer_bytes_sent = 39999,
-      .report_size_bytes = 111};
+      .report_size_bytes = 111,
+      .network_duration = absl::Milliseconds(450)};
 
   static google::internal::federatedml::v2::RetryWindow
   GetInitialRetryWindow() {
@@ -340,7 +352,7 @@ class MockFederatedProtocol : public FederatedProtocol {
   // progression of protocol stages, and expose dedicate gMock-overridable
   // methods for use in tests.
   absl::StatusOr<EligibilityEvalCheckinResult> EligibilityEvalCheckin() final {
-    network_stats_ = kPostEligibilityCheckinStats;
+    network_stats_ = kPostEligibilityCheckinNetworkStats;
     retry_window_ = GetPostEligibilityCheckinRetryWindow();
     return MockEligibilityEvalCheckin();
   };
@@ -348,7 +360,7 @@ class MockFederatedProtocol : public FederatedProtocol {
               MockEligibilityEvalCheckin, ());
 
   void ReportEligibilityEvalError(absl::Status error_status) final {
-    network_stats_ = kPostReportEligibilityEvalErrorStats;
+    network_stats_ = kPostReportEligibilityEvalErrorNetworkStats;
     retry_window_ = GetPostEligibilityCheckinRetryWindow();
     MockReportEligibilityEvalError(error_status);
   }
@@ -359,8 +371,8 @@ class MockFederatedProtocol : public FederatedProtocol {
       const std::optional<
           ::google::internal::federatedml::v2::TaskEligibilityInfo>&
           task_eligibility_info) final {
-    network_stats_ = kPostCheckinStats;
     retry_window_ = GetPostCheckinRetryWindow();
+    network_stats_ = kPostCheckinNetworkStats;
     return MockCheckin(task_eligibility_info);
   };
   MOCK_METHOD(absl::StatusOr<CheckinResult>, MockCheckin,
@@ -370,7 +382,7 @@ class MockFederatedProtocol : public FederatedProtocol {
 
   absl::Status ReportCompleted(ComputationResults results,
                                absl::Duration plan_duration) final {
-    network_stats_ = kPostReportCompletedStats;
+    network_stats_ = kPostReportCompletedNetworkStats;
     retry_window_ = GetPostReportCompletedRetryWindow();
     return MockReportCompleted(std::move(results), plan_duration);
   };
@@ -379,7 +391,7 @@ class MockFederatedProtocol : public FederatedProtocol {
 
   absl::Status ReportNotCompleted(engine::PhaseOutcome phase_outcome,
                                   absl::Duration plan_duration) final {
-    network_stats_ = kPostReportNotCompletedStats;
+    network_stats_ = kPostReportNotCompletedNetworkStats;
     retry_window_ = GetPostReportNotCompletedRetryWindow();
     return MockReportNotCompleted(phase_outcome, plan_duration);
   };
@@ -527,6 +539,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, client_decoded_http_resources, (), (const, override));
   MOCK_METHOD(bool, enable_cache_dir, (), (const, override));
   MOCK_METHOD(bool, enable_federated_select, (), (const, override));
+  MOCK_METHOD(bool, enable_per_phase_network_stats, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
@@ -639,26 +652,32 @@ class MockPhaseLogger : public PhaseLogger {
   MOCK_METHOD(void, LogComputationStarted, (), (override));
   MOCK_METHOD(void, LogComputationInvalidArgument,
               (absl::Status error_status, const ExampleStats& example_stats,
+               const NetworkStats& network_stats,
                absl::Time run_plan_start_time),
               (override));
   MOCK_METHOD(void, LogComputationExampleIteratorError,
               (absl::Status error_status, const ExampleStats& example_stats,
+               const NetworkStats& network_stats,
                absl::Time run_plan_start_time),
               (override));
   MOCK_METHOD(void, LogComputationIOError,
               (absl::Status error_status, const ExampleStats& example_stats,
+               const NetworkStats& network_stats,
                absl::Time run_plan_start_time),
               (override));
   MOCK_METHOD(void, LogComputationTensorflowError,
               (absl::Status error_status, const ExampleStats& example_stats,
+               const NetworkStats& network_stats,
                absl::Time run_plan_start_time, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogComputationInterrupted,
               (absl::Status error_status, const ExampleStats& example_stats,
+               const NetworkStats& network_stats,
                absl::Time run_plan_start_time, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogComputationCompleted,
               (const ExampleStats& example_stats,
+               const NetworkStats& network_stats,
                absl::Time run_plan_start_time, absl::Time reference_time),
               (override));
   MOCK_METHOD(absl::Status, LogResultUploadStarted, (), (override));

@@ -32,6 +32,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/fl_runner.pb.h"
@@ -122,6 +123,7 @@ class ProtocolRequestHelper {
  public:
   ProtocolRequestHelper(HttpClient* http_client, int64_t* bytes_downloaded,
                         int64_t* bytes_uploaded,
+                        WallClockStopwatch* network_stopwatch,
                         bool client_decoded_http_resources);
 
   // Performs the given request (handling any interruptions that may occur) and
@@ -164,6 +166,7 @@ class ProtocolRequestHelper {
   HttpClient& http_client_;
   int64_t& bytes_downloaded_;
   int64_t& bytes_uploaded_;
+  WallClockStopwatch& network_stopwatch_;
   const bool client_decoded_http_resources_;
 };
 
@@ -292,6 +295,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   std::unique_ptr<ProtocolRequestCreator> task_assignment_request_creator_;
   std::unique_ptr<ProtocolRequestCreator> aggregation_request_creator_;
   std::unique_ptr<ProtocolRequestCreator> data_upload_request_creator_;
+  std::unique_ptr<WallClockStopwatch> network_stopwatch_ =
+      WallClockStopwatch::Create();
   ProtocolRequestHelper protocol_request_helper_;
   const std::string api_key_;
   const std::string population_name_;

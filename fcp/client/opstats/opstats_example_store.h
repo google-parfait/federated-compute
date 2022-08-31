@@ -52,6 +52,7 @@ inline static constexpr char kChunkingLayerBytesDownloaded[] =
     "chunking_layer_bytes_downloaded";
 inline static constexpr char kChunkingLayerBytesUploaded[] =
     "chunking_layer_bytes_uploaded";
+inline static constexpr char kNetworkDuration[] = "network_duration";
 inline static constexpr char kEarliestTrustWorthyTimeMillis[] =
     "earliest_trustworthy_time";
 
@@ -59,8 +60,11 @@ class OpStatsExampleIteratorFactory
     : public fcp::client::engine::ExampleIteratorFactory {
  public:
   OpStatsExampleIteratorFactory(OpStatsLogger* op_stats_logger,
-                                LogManager* log_manager)
-      : op_stats_logger_(op_stats_logger), log_manager_(log_manager) {}
+                                LogManager* log_manager,
+                                bool enable_per_phase_network_stats)
+      : op_stats_logger_(op_stats_logger),
+        log_manager_(log_manager),
+        enable_per_phase_network_stats_(enable_per_phase_network_stats) {}
 
   bool CanHandle(const google::internal::federated::plan::ExampleSelector&
                      example_selector) override;
@@ -74,6 +78,7 @@ class OpStatsExampleIteratorFactory
  private:
   OpStatsLogger* op_stats_logger_;
   LogManager* log_manager_;
+  bool enable_per_phase_network_stats_;
 };
 
 }  // namespace opstats

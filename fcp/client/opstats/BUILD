@@ -50,6 +50,7 @@ cc_library(
     deps = [
         ":opstats_db",
         ":opstats_logger",
+        "//fcp/base:time_util",
         "//fcp/client:interfaces",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",

@@ -50,10 +50,12 @@ constexpr char kTaskName[] = "TASK";
 class OpStatsLoggerImplTest : public testing::Test {
  protected:
   void SetUp() override {
-    EXPECT_CALL(mock_flags_, enable_opstats()).WillRepeatedly(Return(true));
-    EXPECT_CALL(mock_flags_, opstats_ttl_days()).WillRepeatedly(Return(1));
-    EXPECT_CALL(mock_flags_, opstats_db_size_limit_bytes())
-        .WillRepeatedly(Return(1 * 1024 * 1024));
+    ON_CALL(mock_flags_, enable_opstats()).WillByDefault(Return(true));
+    ON_CALL(mock_flags_, opstats_ttl_days()).WillByDefault(Return(1));
+    ON_CALL(mock_flags_, opstats_db_size_limit_bytes())
+        .WillByDefault(Return(1 * 1024 * 1024));
+    ON_CALL(mock_flags_, enable_per_phase_network_stats())
+        .WillByDefault(Return(true));
     base_dir_ = testing::TempDir();
   }
 
@@ -82,8 +84,9 @@ class OpStatsLoggerImplTest : public testing::Test {
         base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
         mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
     FCP_CHECK(db.ok());
-    return std::make_unique<OpStatsLoggerImpl>(
-        std::move(*db), &mock_log_manager_, session_name, population_name);
+    return std::make_unique<OpStatsLoggerImpl>(std::move(*db),
+                                               &mock_log_manager_, &mock_flags_,
+                                               session_name, population_name);
   }
 
   // Checks that the expected and actual protos are equivalent, ignoring the
@@ -151,7 +154,7 @@ class OpStatsLoggerImplTest : public testing::Test {
   }
 
   std::string base_dir_;
-  StrictMock<MockFlags> mock_flags_;
+  MockFlags mock_flags_;
   StrictMock<MockLogManager> mock_log_manager_;
 };
 
@@ -402,18 +405,26 @@ TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
   EXPECT_THAT(*data, EqualsProto(expected));
 }
 
-TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
+TEST_F(OpStatsLoggerImplTest, SetNetworkStatsWithPerPhaseStatsOff) {
+  // Force the flag to be off for this test.
+  EXPECT_CALL(mock_flags_, enable_per_phase_network_stats())
+      .WillRepeatedly(Return(false));
+
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
 
   auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
-  opstats_logger->SetNetworkStats({.bytes_downloaded = 100,
-                                   .bytes_uploaded = 101,
-                                   .chunking_layer_bytes_received = 102,
-                                   .chunking_layer_bytes_sent = 103});
-  opstats_logger->SetNetworkStats({.bytes_downloaded = 200,
-                                   .bytes_uploaded = 201,
-                                   .chunking_layer_bytes_received = 202,
-                                   .chunking_layer_bytes_sent = 203});
+  opstats_logger->SetNetworkStats(
+      {.bytes_downloaded = 100,
+       .bytes_uploaded = 101,
+       .chunking_layer_bytes_received = 102,
+       .chunking_layer_bytes_sent = 103,
+       .network_duration = absl::Milliseconds(104)});
+  opstats_logger->SetNetworkStats(
+      {.bytes_downloaded = 200,
+       .bytes_uploaded = 201,
+       .chunking_layer_bytes_received = 202,
+       .chunking_layer_bytes_sent = 203,
+       .network_duration = absl::Milliseconds(204)});
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
@@ -431,6 +442,46 @@ TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
   new_opstats->set_bytes_uploaded(201);
   new_opstats->set_chunking_layer_bytes_downloaded(202);
   new_opstats->set_chunking_layer_bytes_uploaded(203);
+
+  (*data).clear_earliest_trustworthy_time();
+  EXPECT_THAT(*data, EqualsProto(expected));
+}
+
+TEST_F(OpStatsLoggerImplTest, SetNetworkStatsWithPerPhaseStatsOn) {
+  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
+
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
+  opstats_logger->SetNetworkStats(
+      {.bytes_downloaded = 100,
+       .bytes_uploaded = 101,
+       .chunking_layer_bytes_received = 102,
+       .chunking_layer_bytes_sent = 103,
+       .network_duration = absl::Milliseconds(104)});
+  opstats_logger->SetNetworkStats(
+      {.bytes_downloaded = 200,
+       .bytes_uploaded = 201,
+       .chunking_layer_bytes_received = 202,
+       .chunking_layer_bytes_sent = 203,
+       .network_duration = absl::Milliseconds(204)});
+  opstats_logger.reset();
+
+  auto db = PdsBackedOpStatsDb::Create(
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
+  ASSERT_OK(data);
+
+  OpStatsSequence expected;
+  auto new_opstats = expected.add_opstats();
+  new_opstats->set_session_name(kSessionName);
+  new_opstats->set_population_name(kPopulationName);
+  // The bytes_downloaded/bytes_uploaded fields should not be set anymore
+  new_opstats->set_chunking_layer_bytes_downloaded(202);
+  new_opstats->set_chunking_layer_bytes_uploaded(203);
+  // The new network_duration field should be set now.
+  new_opstats->mutable_network_duration()->set_nanos(
+      static_cast<int32_t>(absl::ToInt64Nanoseconds(absl::Milliseconds(204))));
 
   (*data).clear_earliest_trustworthy_time();
   EXPECT_THAT(*data, EqualsProto(expected));
@@ -520,7 +571,7 @@ TEST_F(OpStatsLoggerImplTest, MisconfiguredTtlMultipleCommit) {
                          mock_flags_.opstats_db_size_limit_bytes())
                          .value();
   auto opstats_logger = std::make_unique<OpStatsLoggerImpl>(
-      std::move(db_zero_ttl), &mock_log_manager_, kSessionName,
+      std::move(db_zero_ttl), &mock_log_manager_, &mock_flags_, kSessionName,
       kPopulationName);
 
   opstats_logger->AddEvent(

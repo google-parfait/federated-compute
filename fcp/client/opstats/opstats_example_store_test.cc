@@ -70,7 +70,8 @@ class OpStatsExampleStoreTest : public testing::Test {
   testing::StrictMock<MockOpStatsDb> mock_db_;
   testing::StrictMock<MockLogManager> mock_log_manager_;
   OpStatsExampleIteratorFactory iterator_factory_ =
-      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_,
+                                    /*enable_per_phase_network_stats=*/true);
 };
 
 TEST_F(OpStatsExampleStoreTest, TestInvalidCollectionUrl) {
@@ -358,6 +359,7 @@ TEST_F(OpStatsExampleStoreTest, FullSerialization) {
   int64_t bytes_uploaded = 1200;
   int64_t chunking_layer_bytes_downloaded = 200;
   int64_t chunking_layer_bytes_uploaded = 600;
+  int64_t network_duration_ms = 700;
   stats.set_session_name(session);
   stats.set_population_name(population);
   stats.set_task_name(task_name);
@@ -366,6 +368,8 @@ TEST_F(OpStatsExampleStoreTest, FullSerialization) {
   stats.set_bytes_uploaded(bytes_uploaded);
   stats.set_chunking_layer_bytes_downloaded(chunking_layer_bytes_downloaded);
   stats.set_chunking_layer_bytes_uploaded(chunking_layer_bytes_uploaded);
+  *stats.mutable_network_duration() =
+      TimeUtil::MillisecondsToDuration(network_duration_ms);
 
   // Set two events
   OperationalStats::Event::EventKind event_kind_a =
@@ -428,6 +432,7 @@ TEST_F(OpStatsExampleStoreTest, FullSerialization) {
             chunking_layer_bytes_downloaded);
   ASSERT_EQ(ExtractSingleInt64(example, kChunkingLayerBytesUploaded),
             chunking_layer_bytes_uploaded);
+  ASSERT_EQ(ExtractSingleInt64(example, kNetworkDuration), network_duration_ms);
   ASSERT_EQ(ExtractSingleInt64(example, kEarliestTrustWorthyTimeMillis),
             TimeUtil::TimestampToMilliseconds(currentTime));
 

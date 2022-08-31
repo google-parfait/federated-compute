@@ -130,27 +130,31 @@ class PhaseLogger {
   // Called when the input parameters are invalid.
   virtual void LogComputationInvalidArgument(
       absl::Status error_status, const ExampleStats& example_stats,
-      absl::Time run_plan_start_time) = 0;
+      const NetworkStats& network_stats, absl::Time run_plan_start_time) = 0;
   // Called when an example store error occurred during computation.
   virtual void LogComputationExampleIteratorError(
       absl::Status error_status, const ExampleStats& example_stats,
-      absl::Time run_plan_start_time) = 0;
+      const NetworkStats& network_stats, absl::Time run_plan_start_time) = 0;
   // Called when an IO error happened during computation
   virtual void LogComputationIOError(absl::Status error_status,
                                      const ExampleStats& example_stats,
+                                     const NetworkStats& network_stats,
                                      absl::Time run_plan_start_time) = 0;
   // Called when a tensorflow error happened during computation.
   virtual void LogComputationTensorflowError(absl::Status error_status,
                                              const ExampleStats& example_stats,
+                                             const NetworkStats& network_stats,
                                              absl::Time run_plan_start_time,
                                              absl::Time reference_time) = 0;
   // Called when computation is interrupted.
   virtual void LogComputationInterrupted(absl::Status error_status,
                                          const ExampleStats& example_stats,
+                                         const NetworkStats& network_stats,
                                          absl::Time run_plan_start_time,
                                          absl::Time reference_time) = 0;
   // Called when computation is completed.
   virtual void LogComputationCompleted(const ExampleStats& example_stats,
+                                       const NetworkStats& network_stats,
                                        absl::Time run_plan_start_time,
                                        absl::Time reference_time) = 0;
 

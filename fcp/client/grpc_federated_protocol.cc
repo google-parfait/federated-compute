@@ -159,7 +159,10 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
       retry_token_(retry_token),
       client_version_(client_version),
       attestation_measurement_(attestation_measurement),
-      bit_gen_(std::move(bit_gen)) {
+      bit_gen_(std::move(bit_gen)),
+      network_stopwatch_(flags->enable_per_phase_network_stats()
+                             ? WallClockStopwatch::Create()
+                             : WallClockStopwatch::CreateNoop()) {
   interruptible_runner_ = std::make_unique<InterruptibleRunner>(
       log_manager, should_abort, timing_config,
       InterruptibleRunner::DiagnosticsConfig{
@@ -189,24 +192,41 @@ GrpcFederatedProtocol::~GrpcFederatedProtocol() { grpc_bidi_stream_->Close(); }
 absl::Status GrpcFederatedProtocol::Send(
     google::internal::federatedml::v2::ClientStreamMessage*
         client_stream_message) {
+  // Note that this stopwatch measurement may not fully measure the time it
+  // takes to send all of the data, as it may return before all data was written
+  // to the network socket. It's the best estimate we can provide though.
+  auto started_stopwatch = network_stopwatch_->Start();
   FCP_RETURN_IF_ERROR(interruptible_runner_->Run(
       [this, &client_stream_message]() {
         return this->grpc_bidi_stream_->Send(client_stream_message);
       },
       [this]() { this->grpc_bidi_stream_->Close(); }));
-  bytes_uploaded_ += client_stream_message->ByteSizeLong();
+  // When this flag is turned on the bytes_uploaded_ field will be
+  // ignored, so we avoid calculating it.
+  if (!flags_->enable_per_phase_network_stats()) {
+    bytes_uploaded_ += client_stream_message->ByteSizeLong();
+  }
   return absl::OkStatus();
 }
 
 absl::Status GrpcFederatedProtocol::Receive(
     google::internal::federatedml::v2::ServerStreamMessage*
         server_stream_message) {
+  // Note that this stopwatch measurement will generally include time spent
+  // waiting for the server to return a response (i.e. idle time rather than the
+  // true time it takes to send/receive data on the network). It's the best
+  // estimate we can provide though.
+  auto started_stopwatch = network_stopwatch_->Start();
   FCP_RETURN_IF_ERROR(interruptible_runner_->Run(
       [this, &server_stream_message]() {
         return grpc_bidi_stream_->Receive(server_stream_message);
       },
       [this]() { this->grpc_bidi_stream_->Close(); }));
-  bytes_downloaded_ += server_stream_message->ByteSizeLong();
+  // When this flag is turned on the bytes_downloaded_ field will be
+  // ignored, so we avoid calculating it.
+  if (!flags_->enable_per_phase_network_stats()) {
+    bytes_downloaded_ += server_stream_message->ByteSizeLong();
+  }
   return absl::OkStatus();
 }
 
@@ -644,7 +664,11 @@ absl::Status GrpcFederatedProtocol::ReportInternal(
   report->add_serialized_train_event()->PackFrom(client_execution_stats);
 
   // 4. Send ReportRequest.
-  report_request_size_bytes_ += client_stream_message.ByteSizeLong();
+  // When this flag is turned on the report_request_size_bytes_ field will be
+  // ignored, so we avoid calculating it.
+  if (!flags_->enable_per_phase_network_stats()) {
+    report_request_size_bytes_ += client_stream_message.ByteSizeLong();
+  }
 
   // Note that we do not use the GrpcFederatedProtocol::Send(...) helper method
   // here, since we are already running within a call to
@@ -655,7 +679,11 @@ absl::Status GrpcFederatedProtocol::ReportInternal(
         status.code(),
         absl::StrCat("Error sending ReportRequest: ", status.message()));
   }
-  bytes_uploaded_ += report_request_size_bytes_;
+  // When this flag is turned on the report_request_size_bytes_ field will be
+  // ignored, so we avoid doing anything with it.
+  if (!flags_->enable_per_phase_network_stats()) {
+    bytes_uploaded_ += report_request_size_bytes_;
+  }
 
   return absl::OkStatus();
 }
@@ -794,7 +822,11 @@ absl::Status GrpcFederatedProtocol::Report(ComputationResults results,
                                                receive_status.message()));
             }
             last_received_message_size = server_stream_message.ByteSizeLong();
-            this->bytes_downloaded_ += last_received_message_size;
+            // When this flag is turned on the bytes_downloaded_ field will be
+            // ignored, so we avoid calculating it.
+            if (!flags_->enable_per_phase_network_stats()) {
+              this->bytes_downloaded_ += last_received_message_size;
+            }
             if (!server_stream_message
                      .has_secure_aggregation_server_message()) {
               return absl::InternalError(
@@ -838,7 +870,11 @@ absl::Status GrpcFederatedProtocol::Report(ComputationResults results,
           // What about event_publisher_ and log_manager_?
         }));
     if (send_to_server_impl_raw_ptr) {
-      bytes_uploaded_ += send_to_server_impl_raw_ptr->total_bytes_uploaded();
+      // When this flag is turned on the bytes_uploaded_ field will be
+      // ignored, so we avoid calculating it.
+      if (!flags_->enable_per_phase_network_stats()) {
+        bytes_uploaded_ += send_to_server_impl_raw_ptr->total_bytes_uploaded();
+      }
     }
   } else {
     // Report without secure aggregation.
@@ -984,10 +1020,14 @@ GrpcFederatedProtocol::FetchTaskResources(
   // (using the inline data instead if available).
   absl::StatusOr<
       std::vector<absl::StatusOr<::fcp::client::http::InMemoryHttpResponse>>>
-      resource_responses = ::fcp::client::http::FetchResourcesInMemory(
-          *http_client_, *interruptible_runner_,
-          {plan_uri_or_data, checkpoint_uri_or_data}, &http_bytes_downloaded_,
-          &http_bytes_uploaded_, flags_->client_decoded_http_resources());
+      resource_responses;
+  {
+    auto started_stopwatch = network_stopwatch_->Start();
+    resource_responses = ::fcp::client::http::FetchResourcesInMemory(
+        *http_client_, *interruptible_runner_,
+        {plan_uri_or_data, checkpoint_uri_or_data}, &http_bytes_downloaded_,
+        &http_bytes_uploaded_, flags_->client_decoded_http_resources());
+  }
   if (!resource_responses.ok()) {
     log_manager_->LogDiag(
         ProdDiagCode::
@@ -1071,14 +1111,24 @@ NetworkStats GrpcFederatedProtocol::GetNetworkStats() {
   // other `bytes_downloaded/uploaded` stats), we simply use the same HTTP
   // bandwidth stats in both cases.
   return {
-      .bytes_downloaded = bytes_downloaded_ + http_bytes_downloaded_,
-      .bytes_uploaded = bytes_uploaded_ + http_bytes_uploaded_,
+      // When this flag is turned on then some fields will be ignored, so we set
+      // them to zero. The fields will be deleted once the
+      // flag is rolled out.
+      .bytes_downloaded = flags_->enable_per_phase_network_stats()
+                              ? 0
+                              : bytes_downloaded_ + http_bytes_downloaded_,
+      .bytes_uploaded = flags_->enable_per_phase_network_stats()
+                            ? 0
+                            : bytes_uploaded_ + http_bytes_uploaded_,
       .chunking_layer_bytes_received =
           grpc_bidi_stream_->ChunkingLayerBytesReceived() +
           http_bytes_downloaded_,
       .chunking_layer_bytes_sent =
           grpc_bidi_stream_->ChunkingLayerBytesSent() + http_bytes_uploaded_,
-      .report_size_bytes = report_request_size_bytes_};
+      .report_size_bytes = flags_->enable_per_phase_network_stats()
+                               ? 0
+                               : report_request_size_bytes_,
+      .network_duration = network_stopwatch_->GetTotalDuration()};
 }
 
 }  // namespace client

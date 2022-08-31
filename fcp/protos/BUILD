@@ -93,6 +93,7 @@ proto_library(
     srcs = ["opstats.proto"],
     deps = [
         ":federated_api_proto",
+        "@com_google_protobuf//:duration_proto",
         "@com_google_protobuf//:timestamp_proto",
     ],
 )

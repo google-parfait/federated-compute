@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package fcp.client.opstats;
 
+import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "fcp/protos/federated_api.proto";
 
@@ -287,6 +288,10 @@ message OperationalStats {
   // The number of bytes uploaded (payload size via the chunking layer, which
   // may be compressed) from the server while executing the task thus far.
   int64 chunking_layer_bytes_uploaded = 11;
+
+  // The duration of time spent waiting on the network (but excluding idle time
+  // like the time between polling the server).
+  google.protobuf.Duration network_duration = 12;
 }
 
 // Top level op stats message.

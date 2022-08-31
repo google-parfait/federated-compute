@@ -33,6 +33,7 @@
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
@@ -214,6 +215,7 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   int64_t bytes_uploaded_ = 0;
   int64_t http_bytes_downloaded_ = 0;
   int64_t http_bytes_uploaded_ = 0;
+  std::unique_ptr<WallClockStopwatch> network_stopwatch_;
   int64_t report_request_size_bytes_ = 0;
   // Represents 2 absolute retry timestamps and their corresponding retry
   // tokens, to use when the device is rejected or accepted. The retry

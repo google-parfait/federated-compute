@@ -117,22 +117,28 @@ class PhaseLoggerImpl : public PhaseLogger {
   void LogComputationStarted() override;
   void LogComputationInvalidArgument(absl::Status error_status,
                                      const ExampleStats& example_stats,
+                                     const NetworkStats& network_stats,
                                      absl::Time run_plan_start_time) override;
   void LogComputationExampleIteratorError(
       absl::Status error_status, const ExampleStats& example_stats,
+      const NetworkStats& network_stats,
       absl::Time run_plan_start_time) override;
   void LogComputationIOError(absl::Status error_status,
                              const ExampleStats& example_stats,
+                             const NetworkStats& network_stats,
                              absl::Time run_plan_start_time) override;
   void LogComputationTensorflowError(absl::Status error_status,
                                      const ExampleStats& example_stats,
+                                     const NetworkStats& network_stats,
                                      absl::Time run_plan_start_time,
                                      absl::Time reference_time) override;
   void LogComputationInterrupted(absl::Status error_status,
                                  const ExampleStats& example_stats,
+                                 const NetworkStats& network_stats,
                                  absl::Time run_plan_start_time,
                                  absl::Time reference_time) override;
   void LogComputationCompleted(const ExampleStats& example_stats,
+                               const NetworkStats& network_stats,
                                absl::Time run_plan_start_time,
                                absl::Time reference_time) override;
 

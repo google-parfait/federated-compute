@@ -36,7 +36,7 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   // Creates a logger backed by an actual database. Populates the internal
   // message with the provided session and population names.
   OpStatsLoggerImpl(std::unique_ptr<OpStatsDb> db, LogManager* log_manager,
-                    const std::string& session_name,
+                    const Flags* flags, const std::string& session_name,
                     const std::string& population_name);
 
   // Commits the cumulative message to the db.
@@ -97,6 +97,7 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   bool already_committed_ ABSL_GUARDED_BY(mutex_) = false;
   std::unique_ptr<OpStatsDb> db_;
   LogManager* log_manager_;
+  const bool enable_per_phase_network_stats_;
   absl::Mutex mutex_;
 };
 

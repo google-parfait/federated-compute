@@ -57,6 +57,7 @@ using ::fcp::client::http::internal::CompressWithGzip;
 using ::google::internal::federated::plan::ExampleSelector;
 using ::google::internal::federated::plan::SlicesSelector;
 using ::testing::_;
+using ::testing::Gt;
 using ::testing::HasSubstr;
 using ::testing::InSequence;
 using ::testing::MockFunction;
@@ -119,6 +120,11 @@ class HttpFederatedSelectManagerTest : public ::testing::Test {
               sent_received_bytes.received_bytes);
     EXPECT_EQ(network_stats.chunking_layer_bytes_sent,
               sent_received_bytes.sent_bytes);
+    // If any network traffic occurred, we expect to see some time reflected in
+    // the duration.
+    if (network_stats.chunking_layer_bytes_sent > 0) {
+      EXPECT_THAT(network_stats.network_duration, Gt(absl::ZeroDuration()));
+    }
   }
 
   NiceMock<MockLogManager> mock_log_manager_;

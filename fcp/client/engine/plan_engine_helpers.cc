@@ -262,8 +262,9 @@ std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
         base_dir, flags->opstats_ttl_days() * absl::Hours(24), *log_manager,
         flags->opstats_db_size_limit_bytes());
     if (db_or.ok()) {
-      return std::make_unique<OpStatsLoggerImpl>(
-          std::move(db_or).value(), log_manager, session_name, population_name);
+        return std::make_unique<OpStatsLoggerImpl>(
+            std::move(db_or).value(), log_manager, flags, session_name,
+            population_name);
     }
   }
   return std::make_unique<OpStatsLogger>(

@@ -251,13 +251,23 @@ std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
 //
 // The `FederatedSelectManager` object may be null, if it is know that there has
 // been no network usage from it yet.
-NetworkStats GetNetworkStats(FederatedProtocol* federated_protocol,
-                             FederatedSelectManager* fedselect_manager) {
+NetworkStats GetCumulativeNetworkStats(
+    FederatedProtocol* federated_protocol,
+    FederatedSelectManager* fedselect_manager) {
   NetworkStats result = federated_protocol->GetNetworkStats();
   if (fedselect_manager != nullptr) {
     result = result + fedselect_manager->GetNetworkStats();
   }
   return result;
+}
+
+// Returns the newly incurred network stats since the previous snapshot of stats
+// (the `reference_point` argument).
+NetworkStats GetNetworkStatsSince(FederatedProtocol* federated_protocol,
+                                  FederatedSelectManager* fedselect_manager,
+                                  const NetworkStats& reference_point) {
+  return GetCumulativeNetworkStats(federated_protocol, fedselect_manager) -
+         reference_point;
 }
 
 // Updates the fields of `FLRunnerResult` that should always be updated after
@@ -274,7 +284,8 @@ void UpdateRetryWindowAndNetworkStats(FederatedProtocol& federated_protocol,
   auto retry_window = federated_protocol.GetLatestRetryWindow();
   *fl_runner_result.mutable_retry_window() = retry_window;
   phase_logger.UpdateRetryWindowAndNetworkStats(
-      retry_window, GetNetworkStats(&federated_protocol, fedselect_manager));
+      retry_window,
+      GetCumulativeNetworkStats(&federated_protocol, fedselect_manager));
 }
 
 // Creates an ExampleIteratorFactory that routes queries to the
@@ -578,38 +589,40 @@ void LogEligibilityEvalComputationOutcome(
 void LogComputationOutcome(const engine::PlanResult& plan_result,
                            absl::Status computation_results_parsing_status,
                            PhaseLogger& phase_logger,
+                           const NetworkStats& network_stats,
                            absl::Time run_plan_start_time,
                            absl::Time reference_time) {
   switch (plan_result.outcome) {
     case engine::PlanOutcome::kSuccess: {
       if (computation_results_parsing_status.ok()) {
-        phase_logger.LogComputationCompleted(
-            plan_result.example_stats, run_plan_start_time, reference_time);
+        phase_logger.LogComputationCompleted(plan_result.example_stats,
+                                             network_stats, run_plan_start_time,
+                                             reference_time);
       } else {
         phase_logger.LogComputationTensorflowError(
             computation_results_parsing_status, plan_result.example_stats,
-            run_plan_start_time, reference_time);
+            network_stats, run_plan_start_time, reference_time);
       }
       break;
     }
     case engine::PlanOutcome::kInterrupted:
       phase_logger.LogComputationInterrupted(
-          plan_result.original_status, plan_result.example_stats,
+          plan_result.original_status, plan_result.example_stats, network_stats,
           run_plan_start_time, reference_time);
       break;
     case engine::PlanOutcome::kInvalidArgument:
-      phase_logger.LogComputationInvalidArgument(plan_result.original_status,
-                                                 plan_result.example_stats,
-                                                 run_plan_start_time);
+      phase_logger.LogComputationInvalidArgument(
+          plan_result.original_status, plan_result.example_stats, network_stats,
+          run_plan_start_time);
       break;
     case engine::PlanOutcome::kTensorflowError:
       phase_logger.LogComputationTensorflowError(
-          plan_result.original_status, plan_result.example_stats,
+          plan_result.original_status, plan_result.example_stats, network_stats,
           run_plan_start_time, reference_time);
       break;
     case engine::PlanOutcome::kExampleIteratorError:
       phase_logger.LogComputationExampleIteratorError(
-          plan_result.original_status, plan_result.example_stats,
+          plan_result.original_status, plan_result.example_stats, network_stats,
           run_plan_start_time);
       break;
   }
@@ -665,11 +678,27 @@ void LogFailureUploadStatus(PhaseLogger& phase_logger, absl::Status result,
 }
 
 absl::Status ReportTensorflowSpecPlanResult(
-    FederatedProtocol* federated_protocol,
-    FederatedSelectManager* fedselect_manager, PhaseLogger& phase_logger,
+    FederatedProtocol* federated_protocol, PhaseLogger& phase_logger,
     absl::StatusOr<ComputationResults> computation_results,
-    absl::Time run_plan_start_time, absl::Time reference_time) {
+    absl::Time run_plan_start_time, absl::Time reference_time,
+    bool enable_per_phase_network_stats) {
   const absl::Time before_report_time = absl::Now();
+
+  // Note that the FederatedSelectManager shouldn't be active anymore during the
+  // reporting of results, so we don't bother passing it to
+  // GetNetworkStatsSince.
+  //
+  // If the flag is on, we must return only stats that cover the report phase,
+  // for the log events below. If the flag is off we must return cumulative
+  // stats (incl. any stats before this point). We achieve the latter by using
+  // an empty/zero NetworkStats() as the "before" point (since
+  // GetNetworkStatsSince(..., NetworkStats()) is equivalent to
+  // GetCumulativeNetworkStats(...)).
+  const NetworkStats before_report_stats =
+      enable_per_phase_network_stats
+          ? GetCumulativeNetworkStats(federated_protocol,
+                                      /*fedselect_manager=*/nullptr)
+          : NetworkStats();
   absl::Status result = absl::InternalError("");
   if (computation_results.ok()) {
     FCP_RETURN_IF_ERROR(phase_logger.LogResultUploadStarted());
@@ -678,7 +707,8 @@ absl::Status ReportTensorflowSpecPlanResult(
         /*plan_duration=*/absl::Now() - run_plan_start_time);
     LogResultUploadStatus(
         phase_logger, result,
-        GetNetworkStats(federated_protocol, fedselect_manager),
+        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                             before_report_stats),
         before_report_time, reference_time);
   } else {
     FCP_RETURN_IF_ERROR(phase_logger.LogFailureUploadStarted());
@@ -687,7 +717,8 @@ absl::Status ReportTensorflowSpecPlanResult(
         /*plan_duration=*/absl::Now() - run_plan_start_time);
     LogFailureUploadStatus(
         phase_logger, result,
-        GetNetworkStats(federated_protocol, fedselect_manager),
+        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                             before_report_stats),
         before_report_time, reference_time);
   }
   return result;
@@ -743,7 +774,8 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     auto message = "Failed to parse received eligibility eval plan";
     phase_logger.LogEligibilityEvalCheckinInvalidPayloadError(
         message,
-        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+        GetCumulativeNetworkStats(federated_protocol,
+                                  /*fedselect_manager=*/nullptr),
         time_before_eligibility_eval_checkin);
 
     FCP_LOG(ERROR) << message;
@@ -760,14 +792,16 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
         status.code(), ", message: ", status.message());
     phase_logger.LogEligibilityEvalCheckinIOError(
         status,
-        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+        GetCumulativeNetworkStats(federated_protocol,
+                                  /*fedselect_manager=*/nullptr),
         time_before_eligibility_eval_checkin);
     FCP_LOG(ERROR) << message;
     return absl::InternalError("");
   }
 
   phase_logger.LogEligibilityEvalCheckinCompleted(
-      GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+      GetCumulativeNetworkStats(federated_protocol,
+                                /*fedselect_manager=*/nullptr),
       time_before_eligibility_eval_checkin);
 
   absl::Time run_plan_start_time = absl::Now();
@@ -843,17 +877,20 @@ IssueEligibilityEvalCheckinAndRunPlan(
     if (status.code() == absl::StatusCode::kAborted) {
       phase_logger.LogEligibilityEvalCheckinServerAborted(
           status,
-          GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+          GetCumulativeNetworkStats(federated_protocol,
+                                    /*fedselect_manager=*/nullptr),
           time_before_eligibility_eval_checkin);
     } else if (status.code() == absl::StatusCode::kCancelled) {
       phase_logger.LogEligibilityEvalCheckinClientInterrupted(
           status,
-          GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+          GetCumulativeNetworkStats(federated_protocol,
+                                    /*fedselect_manager=*/nullptr),
           time_before_eligibility_eval_checkin);
     } else if (!status.ok()) {
       phase_logger.LogEligibilityEvalCheckinIOError(
           status,
-          GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+          GetCumulativeNetworkStats(federated_protocol,
+                                    /*fedselect_manager=*/nullptr),
           time_before_eligibility_eval_checkin);
     }
     FCP_LOG(INFO) << message;
@@ -863,7 +900,8 @@ IssueEligibilityEvalCheckinAndRunPlan(
   if (std::holds_alternative<FederatedProtocol::Rejection>(
           *eligibility_checkin_result)) {
     phase_logger.LogEligibilityEvalCheckinTurnedAway(
-        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+        GetCumulativeNetworkStats(federated_protocol,
+                                  /*fedselect_manager=*/nullptr),
         time_before_eligibility_eval_checkin);
     // If the server explicitly rejected our request, then we must abort and
     // we must not proceed to the "checkin" phase below.
@@ -873,7 +911,8 @@ IssueEligibilityEvalCheckinAndRunPlan(
   } else if (std::holds_alternative<FederatedProtocol::EligibilityEvalDisabled>(
                  *eligibility_checkin_result)) {
     phase_logger.LogEligibilityEvalNotConfigured(
-        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+        GetCumulativeNetworkStats(federated_protocol,
+                                  /*fedselect_manager=*/nullptr),
         time_before_eligibility_eval_checkin);
     // If the server indicates that no eligibility eval task is configured for
     // the population then there is nothing more to do. We simply proceed to
@@ -895,6 +934,11 @@ IssueEligibilityEvalCheckinAndRunPlan(
                              timing_config, reference_time,
                              time_before_eligibility_eval_checkin);
   if (!task_eligibility_info.ok()) {
+    // Note that none of the PhaseLogger methods will reflect the very little
+    // amount of network usage the will be incurred by this protocol request.
+    // We consider this to be OK to keep things simple, and because this should
+    // use such a limited amount of network bandwidth. Do note that the network
+    // usage *will* be correctly reported in the OpStats database.
     federated_protocol->ReportEligibilityEvalError(
         absl::Status(task_eligibility_info.status().code(),
                      "Failed to compute eligibility info"));
@@ -921,6 +965,18 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     absl::Time reference_time, const std::string& population_name,
     FLRunnerResult& fl_runner_result, const Flags* flags) {
   absl::Time time_before_checkin = absl::Now();
+  // If the flag is on, we must return only stats that cover the check in phase,
+  // for the log events below. If the flag is off we must return cumulative
+  // stats (incl. any stats before this point). We achieve the latter by using
+  // an empty/zero NetworkStats() as the "before" point (since
+  // GetNetworkStatsSince(..., NetworkStats()) is equivalent to
+  // GetCumulativeNetworkStats(...)).
+  const NetworkStats network_stats_before_checkin =
+      flags->enable_per_phase_network_stats()
+          ? GetCumulativeNetworkStats(federated_protocol,
+                                      /*fedselect_manager=*/nullptr)
+          : NetworkStats();
+
   // Clear the model identifier before check-in, to ensure that the any prior
   // eligibility eval task name isn't used any longer.
   phase_logger.SetModelIdentifier("");
@@ -956,17 +1012,23 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     if (status.code() == absl::StatusCode::kAborted) {
       phase_logger.LogCheckinServerAborted(
           status,
-          GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_checkin),
           time_before_checkin, reference_time);
     } else if (status.code() == absl::StatusCode::kCancelled) {
       phase_logger.LogCheckinClientInterrupted(
           status,
-          GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_checkin),
           time_before_checkin, reference_time);
     } else if (!status.ok()) {
       phase_logger.LogCheckinIOError(
           status,
-          GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_checkin),
           time_before_checkin, reference_time);
     }
     FCP_LOG(INFO) << message;
@@ -976,7 +1038,8 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   // Server rejected us? Return the fl_runner_results as-is.
   if (std::holds_alternative<FederatedProtocol::Rejection>(*checkin_result)) {
     phase_logger.LogCheckinTurnedAway(
-        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                             network_stats_before_checkin),
         time_before_checkin, reference_time);
     FCP_LOG(INFO) << "Device rejected by server during checkin; aborting";
     return absl::InternalError("Device rejected by server.");
@@ -991,7 +1054,8 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     auto message = "Failed to parse received plan";
     phase_logger.LogCheckinInvalidPayload(
         message,
-        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                             network_stats_before_checkin),
         time_before_checkin, reference_time);
     FCP_LOG(ERROR) << message;
     return absl::InternalError("");
@@ -1026,7 +1090,8 @@ absl::StatusOr<CheckinResult> IssueCheckin(
         ", message: ", status.message());
     phase_logger.LogCheckinIOError(
         status,
-        GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                             network_stats_before_checkin),
         time_before_checkin, reference_time);
     FCP_LOG(ERROR) << message;
     return status;
@@ -1035,7 +1100,8 @@ absl::StatusOr<CheckinResult> IssueCheckin(
       task_assignment.aggregation_session_id, population_name, *log_manager);
   phase_logger.LogCheckinCompleted(
       task_name,
-      GetNetworkStats(federated_protocol, /*fedselect_manager=*/nullptr),
+      GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                           network_stats_before_checkin),
       time_before_checkin, reference_time);
   return CheckinResult{
       .task_name = std::move(task_name),
@@ -1184,7 +1250,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // Eligibility eval plans can use example iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger, log_manager);
+      opstats_logger, log_manager, flags->enable_per_phase_network_stats());
   std::unique_ptr<engine::ExampleIteratorFactory>
       env_eligibility_example_iterator_factory =
           CreateSimpleTaskEnvironmentIteratorFactory(
@@ -1252,6 +1318,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   RetryWindow report_retry_window;
   phase_logger.LogComputationStarted();
   absl::Time run_plan_start_time = absl::Now();
+  NetworkStats run_plan_start_network_stats =
+      GetCumulativeNetworkStats(federated_protocol, fedselect_manager);
   absl::StatusOr<std::string> checkpoint_output_filename =
       files->CreateTempFile("output", ".ckp");
   if (!checkpoint_output_filename.ok()) {
@@ -1259,8 +1327,13 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     auto message = absl::StrCat(
         "Could not create temporary output checkpoint file: code: ",
         status.code(), ", message: ", status.message());
-    phase_logger.LogComputationIOError(status, ExampleStats(),
-                                       run_plan_start_time);
+    phase_logger.LogComputationIOError(
+        status, ExampleStats(),
+        flags->enable_per_phase_network_stats()
+            ? GetNetworkStatsSince(federated_protocol, fedselect_manager,
+                                   run_plan_start_network_stats)
+            : NetworkStats(),
+        run_plan_start_time);
     return fl_runner_result;
   }
 
@@ -1295,14 +1368,18 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         CreateComputationResults(checkin_result->plan.phase().tensorflow_spec(),
                                  plan_result_and_checkpoint_file);
   }
-  // TODO(team): Log Federated Select network usage in the
-  // `LogComputationOutcome` method (it doesn't log any network stats for now).
-  LogComputationOutcome(plan_result_and_checkpoint_file.plan_result,
-                        computation_results.status(), phase_logger,
-                        run_plan_start_time, reference_time);
+  LogComputationOutcome(
+      plan_result_and_checkpoint_file.plan_result, computation_results.status(),
+      phase_logger,
+      flags->enable_per_phase_network_stats()
+          ? GetNetworkStatsSince(federated_protocol, fedselect_manager,
+                                 run_plan_start_network_stats)
+          : NetworkStats(),
+      run_plan_start_time, reference_time);
   absl::Status report_result = ReportTensorflowSpecPlanResult(
-      federated_protocol, fedselect_manager, phase_logger,
-      std::move(computation_results), run_plan_start_time, reference_time);
+      federated_protocol, phase_logger, std::move(computation_results),
+      run_plan_start_time, reference_time,
+      flags->enable_per_phase_network_stats());
   if (outcome == engine::PlanOutcome::kSuccess && report_result.ok()) {
     // Only if training succeeded *and* reporting succeeded do we consider
     // the device to have contributed successfully.
@@ -1348,7 +1425,8 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   // Eligibility eval plans can only use iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger.get(), log_manager);
+      opstats_logger.get(), log_manager,
+      flags->enable_per_phase_network_stats());
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(env_deps, SelectorContext());
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
@@ -1359,8 +1437,11 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     absl::StatusOr<std::string> checkpoint_output_filename =
         files->CreateTempFile("output", ".ckp");
     if (!checkpoint_output_filename.ok()) {
-      phase_logger.LogComputationIOError(checkpoint_output_filename.status(),
-                                         ExampleStats(), run_plan_start_time);
+      phase_logger.LogComputationIOError(
+          checkpoint_output_filename.status(), ExampleStats(),
+          // Empty network stats, since no network protocol is actually used
+          // in this method.
+          NetworkStats(), run_plan_start_time);
       return result;
     }
     // Regular TensorflowSpec-based plans.
@@ -1398,11 +1479,14 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
       (*result.mutable_output_tensors())[plan_result.output_names[i]] =
           std::move(output_tensor_proto);
     }
-    phase_logger.LogComputationCompleted(plan_result.example_stats,
-                                         run_plan_start_time, reference_time);
+    phase_logger.LogComputationCompleted(
+        plan_result.example_stats,
+        // Empty network stats, since no network protocol is actually used in
+        // this method.
+        NetworkStats(), run_plan_start_time, reference_time);
   } else {
     phase_logger.LogComputationTensorflowError(
-        plan_result.original_status, plan_result.example_stats,
+        plan_result.original_status, plan_result.example_stats, NetworkStats(),
         run_plan_start_time, reference_time);
   }
 
