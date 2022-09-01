@@ -282,7 +282,10 @@ void UpdateRetryWindowAndNetworkStats(FederatedProtocol& federated_protocol,
                                       FLRunnerResult& fl_runner_result) {
   // Update the result's retry window to the most recent one.
   auto retry_window = federated_protocol.GetLatestRetryWindow();
-  *fl_runner_result.mutable_retry_window() = retry_window;
+  RetryInfo retry_info;
+  *retry_info.mutable_retry_token() = retry_window.retry_token();
+  *retry_info.mutable_minimum_delay() = retry_window.delay_min();
+  *fl_runner_result.mutable_retry_info() = retry_info;
   phase_logger.UpdateRetryWindowAndNetworkStats(
       retry_window,
       GetCumulativeNetworkStats(&federated_protocol, fedselect_manager));

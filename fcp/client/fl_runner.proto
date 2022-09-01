@@ -17,7 +17,7 @@ syntax = "proto3";
 
 package fcp.client;
 
-import "fcp/protos/federated_api.proto";
+import "google/protobuf/duration.proto";
 
 option java_package = "com.google.intelligence.fcp.client";
 option java_multiple_files = true;
@@ -30,11 +30,9 @@ option java_multiple_files = true;
  */
 message FLRunnerResult {
   reserved 1;
-  // A RetryWindow returned to the caller for consideration in scheduling future
+  // A RetryInfo returned to the caller for consideration in scheduling future
   // runs of this task.
-  // TODO(team): Replace this type with a new type that only contains a
-  // single concrete retry period value rather than a (min,max) range.
-  google.internal.federatedml.v2.RetryWindow retry_window = 4;
+  RetryInfo retry_info = 4;
   // An enum that summarizes whether the client has contributed to an FL/FA
   // round.
   enum ContributionResult {
@@ -46,4 +44,16 @@ message FLRunnerResult {
 
   ContributionResult contribution_result = 5;
   reserved 2, 3;
+}
+
+// A suggestion to the client when to retry the connection to the service next
+// time
+message RetryInfo {
+  // Optional. If set, should be provided back to the next
+  // RunFederatedComputation invocation.
+  string retry_token = 1;
+
+  // The suggested delay duration after which the client should
+  // retry. Clients should ideally not retry any earlier than this.
+  google.protobuf.Duration minimum_delay = 2;
 }

@@ -681,7 +681,7 @@ proto_library(
     srcs = ["fl_runner.proto"],
     visibility = ["//visibility:public"],
     deps = [
-        "//fcp/protos:federated_api_proto",
+        "@com_google_protobuf//:duration_proto",
     ],
 )
 
