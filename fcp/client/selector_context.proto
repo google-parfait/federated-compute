@@ -42,6 +42,9 @@ message QueryTimeComputationProperties {
 
   // A unique ID identifying the computation run.
   int64 run_id = 5;
+
+  // Additional context data.
+  bytes context_data = 6;
 }
 
 // On-device, local computation only. No aggregation.
