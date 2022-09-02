@@ -26,7 +26,6 @@
 #include "fcp/client/federated_select.h"
 #include "fcp/client/files.h"
 #include "fcp/client/fl_runner.pb.h"
-#include "fcp/client/fl_runner_internal.pb.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/interruptible_runner.h"

@@ -235,7 +235,7 @@ cc_library(
 tf_proto_library(
     name = "engine_proto",
     srcs = ["engine.proto"],
-    visibility = default_visibility,
+    visibility = ["//visibility:public"],
 )
 
 java_proto_library(

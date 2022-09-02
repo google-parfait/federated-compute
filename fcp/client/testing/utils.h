@@ -32,13 +32,11 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
-#include "fcp/base/result.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/files.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
-#include "fcp/testing/testing.h"
 
 namespace fcp::client::testing {
 

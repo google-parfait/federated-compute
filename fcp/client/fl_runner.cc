@@ -15,6 +15,8 @@
  */
 #include "fcp/client/fl_runner.h"
 
+#include <fcntl.h>
+
 #include <fstream>
 #include <functional>
 #include <map>
@@ -47,7 +49,6 @@
 #include "fcp/client/federated_protocol_util.h"
 #include "fcp/client/files.h"
 #include "fcp/client/fl_runner.pb.h"
-#include "fcp/client/fl_runner_internal.pb.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/http/http_federated_protocol.h"
 

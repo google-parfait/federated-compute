@@ -25,13 +25,11 @@ cc_library(
     hdrs = ["utils.h"],
     deps = [
         "//fcp/base",
-        "//fcp/base:result",
         "//fcp/client:interfaces",
         "//fcp/client:simple_task_environment",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_proto_cc",
-        "//fcp/testing",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
