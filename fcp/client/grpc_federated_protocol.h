@@ -44,7 +44,6 @@
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
-#include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/stats.h"
 #include "fcp/protocol/grpc_chunked_bidi_stream.h"
@@ -60,8 +59,7 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
  public:
   GrpcFederatedProtocol(
       EventPublisher* event_publisher, LogManager* log_manager,
-      SecAggRunnerFactory* secagg_runner_factory, const Flags* flags,
-      ::fcp::client::http::HttpClient* http_client,
+      const Flags* flags, ::fcp::client::http::HttpClient* http_client,
       const std::string& federated_service_uri, const std::string& api_key,
       const std::string& test_cert_path, absl::string_view population_name,
       absl::string_view retry_token, absl::string_view client_version,
@@ -73,9 +71,9 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   // Test c'tor.
   GrpcFederatedProtocol(
       EventPublisher* event_publisher, LogManager* log_manager,
-      SecAggRunnerFactory* secagg_runner_factory, const Flags* flags,
-      ::fcp::client::http::HttpClient* http_client,
+      const Flags* flags, ::fcp::client::http::HttpClient* http_client,
       std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream,
+      std::unique_ptr<secagg::SecAggClient> secagg_client,
       absl::string_view population_name, absl::string_view retry_token,
       absl::string_view client_version,
       absl::string_view attestation_measurement,
@@ -199,10 +197,10 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   ObjectState object_state_;
   EventPublisher* const event_publisher_;
   LogManager* const log_manager_;
-  SecAggRunnerFactory& secagg_runner_factory_;
   const Flags* const flags_;
   ::fcp::client::http::HttpClient* const http_client_;
   std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream_;
+  std::unique_ptr<secagg::SecAggClient> secagg_client_;
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
   const std::string population_name_;
   const std::string retry_token_;

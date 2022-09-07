@@ -36,7 +36,7 @@
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/phase_logger.h"
 #include "fcp/client/secagg_event_publisher.h"
-#include "fcp/client/secagg_runner.h"
+#include "fcp/client/secagg_state_transition_listener_impl.h"
 #include "fcp/client/simple_task_environment.h"
 #include "tensorflow/core/example/example.pb.h"
 #include "tensorflow/core/example/feature.pb.h"
@@ -719,6 +719,11 @@ class MockPhaseLogger : public PhaseLogger {
               (override));
 };
 
+class MockSecAggSendToServerBase : public SecAggSendToServerBase {
+  MOCK_METHOD(void, Send, (secagg::ClientToServerWrapperMessage * message),
+              (override));
+};
+
 class MockFederatedSelectManager : public FederatedSelectManager {
  public:
   MOCK_METHOD(std::unique_ptr<engine::ExampleIteratorFactory>,
@@ -736,39 +741,6 @@ class MockFederatedSelectExampleIteratorFactory
               (const ::google::internal::federated::plan::ExampleSelector&
                    example_selector),
               (override));
-};
-
-class MockSecAggRunnerFactory : public SecAggRunnerFactory {
- public:
-  MOCK_METHOD(std::unique_ptr<SecAggRunner>, CreateSecAggRunner,
-              (std::unique_ptr<SecAggSendToServerBase> send_to_server_impl,
-               std::unique_ptr<SecAggProtocolDelegate> protocol_delegate,
-               SecAggEventPublisher* secagg_event_publisher,
-               LogManager* log_manager,
-               InterruptibleRunner* interruptible_runner,
-               int64_t expected_number_of_clients,
-               int64_t minimum_surviving_clients_for_reconstruction,
-               int64_t* bytes_downloaded, int64_t* bytes_uploaded),
-              (override));
-};
-
-class MockSecAggRunner : public SecAggRunner {
- public:
-  MOCK_METHOD(absl::Status, Run, (ComputationResults results), (override));
-};
-
-class MockSecAggSendToServerBase : public SecAggSendToServerBase {
-  MOCK_METHOD(void, Send, (secagg::ClientToServerWrapperMessage * message),
-              (override));
-};
-
-class MockSecAggProtocolDelegate : public SecAggProtocolDelegate {
- public:
-  MOCK_METHOD(absl::StatusOr<uint64_t>, GetModulus, (const std::string& key),
-              (override));
-  MOCK_METHOD(absl::StatusOr<secagg::ServerToClientWrapperMessage>,
-              ReceiveServerMessage, (), (override));
-  MOCK_METHOD(void, Abort, (), (override));
 };
 
 }  // namespace client
