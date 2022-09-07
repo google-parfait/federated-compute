@@ -123,7 +123,8 @@ size_t CurlHttpRequestHandle::ProgressCallback(void* user_data,
 
 CurlHttpRequestHandle::CurlHttpRequestHandle(
     std::unique_ptr<HttpRequest> request,
-    std::unique_ptr<CurlEasyHandle> easy_handle)
+    std::unique_ptr<CurlEasyHandle> easy_handle,
+    const std::string& test_cert_path)
     : request_(std::move(request)),
       response_(nullptr),
       easy_handle_(std::move(easy_handle)),
@@ -135,7 +136,7 @@ CurlHttpRequestHandle::CurlHttpRequestHandle(
   FCP_CHECK(request_ != nullptr);
   FCP_CHECK(easy_handle_ != nullptr);
 
-  CURLcode code = InitializeConnection();
+  CURLcode code = InitializeConnection(test_cert_path);
   if (code != CURLE_OK) {
     FCP_LOG(ERROR) << "easy_handle initialization failed with code "
                    << CurlEasyHandle::StrError(code);
@@ -236,7 +237,8 @@ CurlHttpRequestHandle::TotalSentReceivedBytes() const {
           .received_bytes = total_received_bytes};
 }
 
-CURLcode CurlHttpRequestHandle::InitializeConnection() {
+CURLcode CurlHttpRequestHandle::InitializeConnection(
+    const std::string& test_cert_path) {
   error_buffer_[0] = 0;
   // Needed to read an error message.
   CURL_RETURN_IF_ERROR(
@@ -256,7 +258,10 @@ CURLcode CurlHttpRequestHandle::InitializeConnection() {
       easy_handle_->SetOpt(CURLOPT_SUPPRESS_CONNECT_HEADERS, 1L));
 
   // Force curl to verify the ssl connection.
-  CURL_RETURN_IF_ERROR(easy_handle_->SetOpt(CURLOPT_CAINFO, nullptr));
+  CURL_RETURN_IF_ERROR(
+      test_cert_path.empty()
+          ? easy_handle_->SetOpt(CURLOPT_CAINFO, nullptr)
+          : easy_handle_->SetOpt(CURLOPT_CAINFO, test_cert_path));
 
   CURL_RETURN_IF_ERROR(easy_handle_->SetOpt(CURLOPT_SSL_VERIFYPEER, 2L));
 

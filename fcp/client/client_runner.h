@@ -32,6 +32,7 @@
 #include <string>
 #include <string_view>
 #include <typeinfo>
+#include <utility>
 #include <vector>
 
 #include "google/protobuf/any.pb.h"
@@ -47,6 +48,8 @@
 #include "fcp/client/files.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/histogram_counters.pb.h"
+#include "fcp/client/http/curl/curl_api.h"
+#include "fcp/client/http/curl/curl_http_client.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
@@ -57,8 +60,10 @@ namespace fcp::client {
 // to stderr and returns empty example iterators.
 class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
  public:
-  explicit FederatedTaskEnvDepsImpl(int num_examples)
-      : num_examples_(num_examples) {}
+  explicit FederatedTaskEnvDepsImpl(int num_examples,
+                                    std::string test_cert_path = "")
+      : num_examples_(num_examples),
+        test_cert_path_(std::move(test_cert_path)) {}
 
   std::string GetBaseDir() override {
     return std::filesystem::path(testing::TempDir());
@@ -103,6 +108,11 @@ class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
         std::make_unique<EmptyExampleIterator>(num_examples_));
   }
 
+  std::unique_ptr<fcp::client::http::HttpClient> CreateHttpClient() override {
+    return std::make_unique<fcp::client::http::curl::CurlHttpClient>(
+        &curl_api_, test_cert_path_);
+  }
+
  private:
   bool TrainingConditionsSatisfied() override {
     FCP_CLIENT_LOG_FUNCTION_NAME;
@@ -110,6 +120,8 @@ class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
   }
 
   const int num_examples_;
+  const std::string test_cert_path_;
+  fcp::client::http::curl::CurlApi curl_api_;
 };
 
 // An implementation of the Files interface that attempts to create a temporary
@@ -169,6 +181,10 @@ class LogManagerImpl : public LogManager {
 
 class FlagsImpl : public Flags {
  public:
+  void set_use_http_federated_compute_protocol(bool value) {
+    use_http_federated_compute_protocol_ = value;
+  }
+
   int64_t condition_polling_period_millis() const override { return 1000; }
   int64_t tf_execution_teardown_grace_period_millis() const override {
     return 1000;
@@ -178,6 +194,13 @@ class FlagsImpl : public Flags {
   }
   int64_t grpc_channel_deadline_seconds() const override { return 0; }
   bool log_tensorflow_error_messages() const override { return true; }
+  bool use_http_federated_compute_protocol() const override {
+    return use_http_federated_compute_protocol_;
+  }
+  bool client_decoded_http_resources() const override { return true; }
+
+ private:
+  bool use_http_federated_compute_protocol_ = false;
 };
 
 }  // namespace fcp::client

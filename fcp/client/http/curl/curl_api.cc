@@ -29,18 +29,6 @@ CurlEasyHandle::CurlEasyHandle() : easy_handle_(curl_easy_init()) {
 
 CurlEasyHandle::~CurlEasyHandle() { curl_easy_cleanup(easy_handle_); }
 
-CURLcode CurlEasyHandle::SetOpt(CURLoption option, const std::string& value) {
-  return curl_easy_setopt(easy_handle_, option, value.c_str());
-}
-
-CURLcode CurlEasyHandle::SetOpt(CURLoption option, void* value) {
-  return curl_easy_setopt(easy_handle_, option, value);
-}
-
-CURLcode CurlEasyHandle::SetOpt(CURLoption option, curl_off_t value) {
-  return curl_easy_setopt(easy_handle_, option, value);
-}
-
 CURLcode CurlEasyHandle::GetInfo(CURLINFO info, curl_off_t* value) const {
   curl_off_t data = 0;
   CURLcode code = curl_easy_getinfo(easy_handle_, info, &data);

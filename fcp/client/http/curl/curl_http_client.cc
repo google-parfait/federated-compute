@@ -17,6 +17,7 @@
 #include "fcp/client/http/curl/curl_http_client.h"
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -70,7 +71,8 @@ absl::Status PerformMultiHandlesBlocked(CurlMultiHandle* multi_handle) {
 }
 }  // namespace
 
-CurlHttpClient::CurlHttpClient(CurlApi* curl_api) : curl_api_(curl_api) {
+CurlHttpClient::CurlHttpClient(CurlApi* curl_api, std::string test_cert_path)
+    : curl_api_(curl_api), test_cert_path_(std::move(test_cert_path)) {
   FCP_CHECK(curl_api_ != nullptr);
 }
 
@@ -84,8 +86,8 @@ std::unique_ptr<HttpRequestHandle> CurlHttpClient::EnqueueRequest(
     FCP_LOG(INFO) << key << ": " << value;
   }
 
-  return std::make_unique<CurlHttpRequestHandle>(std::move(request),
-                                                 curl_api_->CreateEasyHandle());
+  return std::make_unique<CurlHttpRequestHandle>(
+      std::move(request), curl_api_->CreateEasyHandle(), test_cert_path_);
 }
 
 absl::Status CurlHttpClient::PerformRequests(

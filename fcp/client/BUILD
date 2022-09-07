@@ -593,6 +593,7 @@ cc_library(
         ":interfaces",
         ":simple_task_environment",
         "//fcp/base",
+        "//fcp/client/http/curl:curl_http_client",
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",

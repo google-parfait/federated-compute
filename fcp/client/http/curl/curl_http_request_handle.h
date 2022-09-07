@@ -18,6 +18,7 @@
 #define FCP_CLIENT_HTTP_CURL_CURL_HTTP_REQUEST_HANDLE_H_
 
 #include <memory>
+#include <string>
 
 #include "absl/synchronization/mutex.h"
 #include "curl/curl.h"
@@ -31,8 +32,11 @@ namespace fcp::client::http::curl {
 // CurlHttpClient.
 class CurlHttpRequestHandle : public HttpRequestHandle {
  public:
+  // If non-empty, `test_cert_path` specifies the path to the Certificate
+  // Authority (CA) bundle to use instead of the system defaults.
   CurlHttpRequestHandle(std::unique_ptr<HttpRequest> request,
-                        std::unique_ptr<CurlEasyHandle> easy_handle);
+                        std::unique_ptr<CurlEasyHandle> easy_handle,
+                        const std::string& test_cert_path);
   ~CurlHttpRequestHandle() override;
   CurlHttpRequestHandle(const CurlHttpRequestHandle&) = delete;
   CurlHttpRequestHandle& operator=(const CurlHttpRequestHandle&) = delete;
@@ -56,7 +60,8 @@ class CurlHttpRequestHandle : public HttpRequestHandle {
 
  private:
   // Initializes the easy_handle_ in the constructor.
-  CURLcode InitializeConnection() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  CURLcode InitializeConnection(const std::string& test_cert_path)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   // Initializes headers from external_headers
   CURLcode InitializeHeaders(const HeaderList& extra_headers)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);

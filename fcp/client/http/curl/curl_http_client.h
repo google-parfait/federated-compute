@@ -18,6 +18,7 @@
 #define FCP_CLIENT_HTTP_CURL_CURL_HTTP_CLIENT_H_
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -33,7 +34,7 @@ namespace fcp::client::http::curl {
 // CurlApi lives longer than CurlHttpClient
 class CurlHttpClient : public HttpClient {
  public:
-  explicit CurlHttpClient(CurlApi* curl_api);
+  explicit CurlHttpClient(CurlApi* curl_api, std::string test_cert_path = "");
   ~CurlHttpClient() override = default;
   CurlHttpClient(const CurlHttpClient&) = delete;
   CurlHttpClient& operator=(const CurlHttpClient&) = delete;
@@ -51,6 +52,7 @@ class CurlHttpClient : public HttpClient {
  private:
   // Owned by the caller
   const CurlApi* const curl_api_;
+  const std::string test_cert_path_;
 };
 
 }  // namespace fcp::client::http::curl

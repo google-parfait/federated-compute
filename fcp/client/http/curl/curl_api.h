@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <string>
+#include <type_traits>
 
 #include "absl/synchronization/mutex.h"
 #include "curl/curl.h"
@@ -33,12 +34,12 @@ class CurlEasyHandle {
 
   CURLcode GetInfo(CURLINFO info, curl_off_t* value) const;
 
-  CURLcode SetOpt(CURLoption option, const std::string& value);
-  CURLcode SetOpt(CURLoption option, void* value);
-  CURLcode SetOpt(CURLoption option, curl_off_t value);
-  template <typename ReturnValue, typename... Args>
-  inline CURLcode SetOpt(CURLoption option, ReturnValue (*callback)(Args...)) {
-    return curl_easy_setopt(easy_handle_, option, callback);
+  template <typename T, typename = std::enable_if_t<std::is_trivial_v<T>>>
+  CURLcode SetOpt(CURLoption option, T value) {
+    return curl_easy_setopt(easy_handle_, option, value);
+  }
+  CURLcode SetOpt(CURLoption option, const std::string& value) {
+    return SetOpt(option, value.c_str());
   }
 
   // Converts the curl code into a human-readable form.

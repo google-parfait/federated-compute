@@ -41,6 +41,9 @@ ABSL_FLAG(int, num_examples, 0,
 ABSL_FLAG(int, num_rounds, 1, "Number of rounds to train");
 ABSL_FLAG(int, sleep_after_round_secs, 3,
           "Number of seconds to sleep after each round.");
+ABSL_FLAG(bool, use_http_federated_compute_protocol, false,
+          "Whether to enable the HTTP FederatedCompute protocol instead "
+          "of the gRPC FederatedTrainingApi protocol.");
 
 static constexpr char kUsageString[] =
     "Stand-alone Federated Client Executable.\n\n"
@@ -66,11 +69,13 @@ int main(int argc, char** argv) {
   bool success = false;
   for (auto i = 0; i < num_rounds || num_rounds < 0; ++i) {
     fcp::client::FederatedTaskEnvDepsImpl federated_task_env_deps_impl(
-        absl::GetFlag(FLAGS_num_examples));
+        absl::GetFlag(FLAGS_num_examples), absl::GetFlag(FLAGS_test_cert));
     fcp::client::FakeEventPublisher event_publisher(/*quiet=*/false);
     fcp::client::FilesImpl files_impl;
     fcp::client::LogManagerImpl log_manager_impl;
-    const fcp::client::FlagsImpl flags;
+    fcp::client::FlagsImpl flags;
+    flags.set_use_http_federated_compute_protocol(
+        absl::GetFlag(FLAGS_use_http_federated_compute_protocol));
 
     auto fl_runner_result = RunFederatedComputation(
         &federated_task_env_deps_impl, &event_publisher, &files_impl,
