@@ -546,6 +546,7 @@ cc_library(
     name = "task_eligibility_info_ops_lib",
     srcs = ["task_eligibility_info_ops.cc"],
     copts = FCP_TF_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         "//fcp/protos:federated_api_cc_proto",
         "@org_tensorflow//tensorflow/core:framework",
