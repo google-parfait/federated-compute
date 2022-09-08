@@ -43,7 +43,7 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/secagg_event_publisher.h"
-#include "fcp/client/secagg_state_transition_listener_impl.h"
+#include "fcp/client/secagg_runner.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -83,6 +83,7 @@ using ::google::internal::federatedml::v2::HttpCompressionFormat;
 using ::google::internal::federatedml::v2::ProtocolOptionsRequest;
 using ::google::internal::federatedml::v2::RetryWindow;
 using ::google::internal::federatedml::v2::ServerStreamMessage;
+using ::google::internal::federatedml::v2::SideChannelExecutionInfo;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 
 // A note on error handling:
@@ -122,7 +123,8 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 
 GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
-    const Flags* flags, ::fcp::client::http::HttpClient* http_client,
+    SecAggRunnerFactory* secagg_runner_factory, const Flags* flags,
+    ::fcp::client::http::HttpClient* http_client,
     const std::string& federated_service_uri, const std::string& api_key,
     const std::string& test_cert_path, absl::string_view population_name,
     absl::string_view retry_token, absl::string_view client_version,
@@ -131,19 +133,19 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
     const InterruptibleRunner::TimingConfig& timing_config,
     const int64_t grpc_channel_deadline_seconds)
     : GrpcFederatedProtocol(
-          event_publisher, log_manager, flags, http_client,
+          event_publisher, log_manager, secagg_runner_factory, flags,
+          http_client,
           std::make_unique<GrpcBidiStream>(
               federated_service_uri, api_key, std::string(population_name),
               grpc_channel_deadline_seconds, test_cert_path),
-          nullptr, population_name, retry_token, client_version,
-          attestation_measurement, should_abort, absl::BitGen(),
-          timing_config) {}
+          population_name, retry_token, client_version, attestation_measurement,
+          should_abort, absl::BitGen(), timing_config) {}
 
 GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
-    const Flags* flags, ::fcp::client::http::HttpClient* http_client,
+    SecAggRunnerFactory* secagg_runner_factory, const Flags* flags,
+    ::fcp::client::http::HttpClient* http_client,
     std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream,
-    std::unique_ptr<SecAggClient> secagg_client,
     absl::string_view population_name, absl::string_view retry_token,
     absl::string_view client_version, absl::string_view attestation_measurement,
     std::function<bool()> should_abort, absl::BitGen bit_gen,
@@ -151,10 +153,10 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
     : object_state_(ObjectState::kInitialized),
       event_publisher_(event_publisher),
       log_manager_(log_manager),
+      secagg_runner_factory_(*secagg_runner_factory),
       flags_(flags),
       http_client_(http_client),
       grpc_bidi_stream_(std::move(grpc_bidi_stream)),
-      secagg_client_(std::move(secagg_client)),
       population_name_(population_name),
       retry_token_(retry_token),
       client_version_(client_version),
@@ -633,6 +635,67 @@ class GrpcSecAggSendToServerImpl : public SecAggSendToServerBase {
       report_func_;
 };
 
+class GrpcSecAggProtocolDelegate : public SecAggProtocolDelegate {
+ public:
+  GrpcSecAggProtocolDelegate(
+      absl::flat_hash_map<std::string, SideChannelExecutionInfo> side_channels,
+      GrpcBidiStreamInterface* grpc_bidi_stream)
+      : side_channels_(std::move(side_channels)),
+        grpc_bidi_stream_(grpc_bidi_stream) {}
+
+  absl::StatusOr<uint64_t> GetModulus(const std::string& key) override {
+    auto execution_info = side_channels_.find(key);
+    if (execution_info == side_channels_.end())
+      return absl::InternalError(
+          absl::StrCat("Execution not found for aggregand: ", key));
+    uint64_t modulus;
+    auto secure_aggregand = execution_info->second.secure_aggregand();
+    // TODO(team): Delete output_bitwidth support once
+    // modulus is fully rolled out.
+    if (secure_aggregand.modulus() > 0) {
+      modulus = secure_aggregand.modulus();
+    } else {
+      // Note: we ignore vector.get_bitwidth() here, because (1)
+      // it is only an upper bound on the *input* bitwidth,
+      // based on the Tensorflow dtype, but (2) we have exact
+      // *output* bitwidth information from the execution_info,
+      // and that is what SecAgg needs.
+      modulus = 1ULL << secure_aggregand.output_bitwidth();
+    }
+    return modulus;
+  }
+
+  absl::StatusOr<secagg::ServerToClientWrapperMessage> ReceiveServerMessage()
+      override {
+    ServerStreamMessage server_stream_message;
+    absl::Status receive_status =
+        grpc_bidi_stream_->Receive(&server_stream_message);
+    if (!receive_status.ok()) {
+      return absl::Status(receive_status.code(),
+                          absl::StrCat("Error during SecAgg receive: ",
+                                       receive_status.message()));
+    }
+    last_received_message_size_ = server_stream_message.ByteSizeLong();
+    if (!server_stream_message.has_secure_aggregation_server_message()) {
+      return absl::InternalError(
+          absl::StrCat("Bad response to SecAgg protocol; Expected "
+                       "ServerToClientWrapperMessage but got ",
+                       server_stream_message.kind_case(), "."));
+    }
+    return server_stream_message.secure_aggregation_server_message();
+  }
+
+  void Abort() override { grpc_bidi_stream_->Close(); }
+  size_t last_received_message_size() override {
+    return last_received_message_size_;
+  };
+
+ private:
+  absl::flat_hash_map<std::string, SideChannelExecutionInfo> side_channels_;
+  GrpcBidiStreamInterface* grpc_bidi_stream_;
+  size_t last_received_message_size_;
+};
+
 absl::Status GrpcFederatedProtocol::ReportInternal(
     std::string tf_checkpoint, engine::PhaseOutcome phase_outcome,
     absl::Duration plan_duration,
@@ -692,6 +755,14 @@ absl::Status GrpcFederatedProtocol::Report(ComputationResults results,
                                            engine::PhaseOutcome phase_outcome,
                                            absl::Duration plan_duration) {
   std::string tf_checkpoint;
+  bool has_checkpoint;
+  for (auto& [k, v] : results) {
+    if (std::holds_alternative<TFCheckpoint>(v)) {
+      tf_checkpoint = std::get<TFCheckpoint>(std::move(v));
+      has_checkpoint = true;
+      break;
+    }
+  }
 
   // This lambda allows for convenient reporting from within SecAgg's
   // SendToServerInterface::Send().
@@ -723,168 +794,31 @@ absl::Status GrpcFederatedProtocol::Report(ComputationResults results,
               .client_variant()));
     }
 
-    GrpcSecAggSendToServerImpl* send_to_server_impl_raw_ptr = nullptr;
-    auto input_map = std::make_unique<SecAggVectorMap>();
-    auto send_to_server_impl_unique_ptr =
-        std::make_unique<GrpcSecAggSendToServerImpl>(grpc_bidi_stream_.get(),
-                                                     report_lambda);
-    send_to_server_impl_raw_ptr = send_to_server_impl_unique_ptr.get();
-    size_t last_received_message_size = 0;
+    auto send_to_server_impl = std::make_unique<GrpcSecAggSendToServerImpl>(
+        grpc_bidi_stream_.get(), report_lambda);
     auto secagg_event_publisher = event_publisher_->secagg_event_publisher();
     FCP_CHECK(secagg_event_publisher)
         << "An implementation of "
         << "SecAggEventPublisher must be provided.";
-    auto secagg_state_transition_listener =
-        std::make_unique<SecAggStateTransitionListenerImpl>(
-            secagg_event_publisher, log_manager_, *send_to_server_impl_raw_ptr,
-            last_received_message_size);
-    if (!secagg_client_) {  // non-test code.
-      std::vector<InputVectorSpecification> input_vector_specification;
-      for (auto& [k, v] : results) {
-        if (std::holds_alternative<TFCheckpoint>(v)) {
-          tf_checkpoint = absl::get<TFCheckpoint>(std::move(v));
-        } else if (std::holds_alternative<QuantizedTensor>(v)) {
-          auto execution_info = side_channels_.find(k);
-          if (execution_info == side_channels_.end())
-            return absl::InternalError(
-                absl::StrCat("Execution not found for aggregand: ", k));
-          // Note: std::move is used below to ensure that each QuantizedTensor
-          // is consumed when converted to SecAggVector and that we don't
-          // continue having both in memory for longer than needed.
-          auto vector = absl::get<QuantizedTensor>(std::move(v));
-          uint64_t modulus;
-          auto secure_aggregand = execution_info->second.secure_aggregand();
-          // TODO(team): Delete output_bitwidth support once modulus is
-          // fully rolled out.
-          if (secure_aggregand.modulus() > 0) {
-            modulus = secure_aggregand.modulus();
-          } else {
-            // Note: we ignore vector.get_bitwidth() here, because (1) it is
-            // only an upper bound on the *input* bitwidth, based on the
-            // Tensorflow dtype, but (2) we have exact *output* bitwidth
-            // information from the execution_info, and that is what SecAgg
-            // needs.
-            modulus = 1ULL << secure_aggregand.output_bitwidth();
-          }
-          if (modulus <= 1 || modulus > SecAggVector::kMaxModulus) {
-            return absl::InternalError(absl::StrCat(
-                "Invalid SecAgg modulus configuration: ", modulus));
-          }
-          if (vector.values.empty())
-            return absl::InternalError(
-                absl::StrCat("Zero sized vector found: ", k));
-          int64_t flattened_length = 1;
-          for (const auto& size : vector.dimensions) flattened_length *= size;
-          auto data_length = vector.values.size();
-          if (flattened_length != data_length)
-            return absl::InternalError(
-                absl::StrCat("Flattened length: ", flattened_length,
-                             " does not match vector size: ", data_length));
-          for (const auto& v : vector.values) {
-            if (v >= modulus) {
-              return absl::InternalError(absl::StrCat(
-                  "The input SecAgg vector doesn't have the appropriate "
-                  "modulus: element with value ",
-                  v, " found, max value allowed ", (modulus - 1ULL)));
-            }
-          }
-          input_vector_specification.emplace_back(k, flattened_length, modulus);
-          input_map->try_emplace(
-              k, absl::MakeConstSpan(vector.values.data(), data_length),
-              modulus);
-        }
-      }
-      secagg_client_ = std::make_unique<SecAggClient>(
-          expected_number_of_clients,
-          secure_aggregation_protocol_execution_info
-              .minimum_surviving_clients_for_reconstruction(),
-          std::move(input_vector_specification),
-          std::make_unique<CryptoRandPrng>(),
-          std::move(send_to_server_impl_unique_ptr),
-          std::move(secagg_state_transition_listener),
-          std::make_unique<AesCtrPrngFactory>());
-    }
-    FCP_RETURN_IF_ERROR(interruptible_runner_->Run(
-        [this, &input_map, &last_received_message_size,
-         &secagg_event_publisher]() -> absl::Status {
-          FCP_RETURN_IF_ERROR(secagg_client_->Start());
-          FCP_RETURN_IF_ERROR(secagg_client_->SetInput(std::move(input_map)));
-          while (!secagg_client_->IsCompletedSuccessfully()) {
-            ServerStreamMessage server_stream_message;
-            // Note that we do not use the GrpcFederatedProtocol::Receive(...)
-            // helper method here, since we are already running within a call to
-            // InterruptibleRunner::Run.
-            absl::Status receive_status =
-                this->grpc_bidi_stream_->Receive(&server_stream_message);
-            if (!receive_status.ok()) {
-              return absl::Status(receive_status.code(),
-                                  absl::StrCat("Error during SecAgg receive: ",
-                                               receive_status.message()));
-            }
-            last_received_message_size = server_stream_message.ByteSizeLong();
-            // When this flag is turned on the bytes_downloaded_ field will be
-            // ignored, so we avoid calculating it.
-            if (!flags_->enable_per_phase_network_stats()) {
-              this->bytes_downloaded_ += last_received_message_size;
-            }
-            if (!server_stream_message
-                     .has_secure_aggregation_server_message()) {
-              return absl::InternalError(
-                  absl::StrCat("Bad response to SecAgg protocol; Expected "
-                               "ServerToClientWrapperMessage but got ",
-                               server_stream_message.kind_case(), "."));
-            }
-            auto result = secagg_client_->ReceiveMessage(
-                server_stream_message.secure_aggregation_server_message());
-            if (!result.ok()) {
-              secagg_event_publisher->PublishError();
-              return absl::Status(
-                  result.status().code(),
-                  absl::StrCat("Error receiving SecAgg message: ",
-                               result.status().message()));
-            }
-            if (secagg_client_->IsAborted()) {
-              std::string error_message = "error message not found.";
-              if (secagg_client_->ErrorMessage().ok())
-                error_message = secagg_client_->ErrorMessage().value();
-              secagg_event_publisher->PublishAbort(false, error_message);
-              return absl::CancelledError("SecAgg aborted: " + error_message);
-            }
-          }
-          return absl::OkStatus();
-        },
-        [this, &secagg_event_publisher]() {
-          log_manager_->LogDiag(
-              ProdDiagCode::SECAGG_CLIENT_NATIVE_ERROR_GENERIC);
-          auto abort_message = "Client-initiated abort.";
-          auto result = secagg_client_->Abort(abort_message);
-          if (!result.ok()) {
-            FCP_LOG(ERROR) << "Could not initiate client abort, code: "
-                           << result.code() << " message: " << result.message();
-          }
-          // Note: the implementation assumes that secagg_event_publisher
-          // cannot hang indefinitely, i.e. does not need its own interruption
-          // trigger.
-          secagg_event_publisher->PublishAbort(true, abort_message);
-          grpc_bidi_stream_->Close();
-          // What about event_publisher_ and log_manager_?
-        }));
-    if (send_to_server_impl_raw_ptr) {
-      // When this flag is turned on the bytes_uploaded_ field will be
-      // ignored, so we avoid calculating it.
-      if (!flags_->enable_per_phase_network_stats()) {
-        bytes_uploaded_ += send_to_server_impl_raw_ptr->total_bytes_uploaded();
-      }
-    }
+    auto delegate = std::make_unique<GrpcSecAggProtocolDelegate>(
+        side_channels_, grpc_bidi_stream_.get());
+    std::unique_ptr<SecAggRunner> secagg_runner =
+        secagg_runner_factory_.CreateSecAggRunner(
+            std::move(send_to_server_impl), std::move(delegate),
+            secagg_event_publisher, log_manager_, interruptible_runner_.get(),
+            expected_number_of_clients,
+            secure_aggregation_protocol_execution_info
+                .minimum_surviving_clients_for_reconstruction(),
+            &bytes_downloaded_, &bytes_uploaded_);
+
+    FCP_RETURN_IF_ERROR(secagg_runner->Run(std::move(results)));
   } else {
     // Report without secure aggregation.
     FCP_LOG(INFO) << "Reporting via Simple Aggregation";
-    if (results.size() != 1 ||
-        !std::holds_alternative<TFCheckpoint>(results.begin()->second)) {
+    if (results.size() != 1 || !has_checkpoint) {
       return absl::InternalError(
           "Simple Aggregation aggregands have unexpected format.");
     }
-    tf_checkpoint = absl::get<TFCheckpoint>(std::move(results.begin()->second));
     FCP_RETURN_IF_ERROR(interruptible_runner_->Run(
         [&report_lambda]() { return report_lambda(nullptr); },
         [this]() {

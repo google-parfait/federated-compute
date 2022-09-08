@@ -66,6 +66,7 @@ using ::google::internal::federatedml::v2::EligibilityEvalCheckinRequest;
 using ::google::internal::federatedml::v2::EligibilityEvalPayload;
 using ::google::internal::federatedml::v2::HttpCompressionFormat;
 using ::google::internal::federatedml::v2::RetryWindow;
+using ::google::internal::federatedml::v2::ReportResponse;
 using ::google::internal::federatedml::v2::ServerStreamMessage;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 using ::google::internal::federatedml::v2::TaskWeight;
@@ -81,15 +82,18 @@ using ::testing::Ge;
 using ::testing::Gt;
 using ::testing::HasSubstr;
 using ::testing::InSequence;
+using ::testing::IsEmpty;
 using ::testing::Lt;
 using ::testing::MockFunction;
 using ::testing::NiceMock;
 using ::testing::Not;
 using ::testing::Optional;
+using ::testing::Pair;
 using ::testing::Pointee;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::StrictMock;
+using ::testing::UnorderedElementsAre;
 using ::testing::VariantWith;
 
 constexpr char kPopulationName[] = "TEST/POPULATION";
@@ -101,6 +105,7 @@ constexpr char kRetryToken[] = "OLD_RETRY_TOKEN";
 constexpr char kClientVersion[] = "CLIENT_VERSION";
 constexpr char kAttestationMeasurement[] = "ATTESTATION_MEASUREMENT";
 constexpr int kSecAggExpectedNumberOfClients = 10;
+constexpr int kSecAggMinSurvivingClientsForReconstruction = 8;
 constexpr int kSecAggMinClientsInServerVisibleAggregate = 4;
 
 class MockGrpcBidiStream : public GrpcBidiStreamInterface {
@@ -110,19 +115,6 @@ class MockGrpcBidiStream : public GrpcBidiStreamInterface {
   MOCK_METHOD(void, Close, (), (override));
   MOCK_METHOD(int64_t, ChunkingLayerBytesSent, (), (override));
   MOCK_METHOD(int64_t, ChunkingLayerBytesReceived, (), (override));
-};
-
-class MockSecAggClient : public SecAggClient {
- public:
-  MockSecAggClient()
-      : SecAggClient(2,  // max_clients_expected
-                     2,  // minimum_surviving_clients_for_reconstruction
-                     {InputVectorSpecification("placeholder", 4, 32)},
-                     std::make_unique<FakePrng>(),
-                     std::make_unique<MockSendToServerInterface>(),
-                     std::make_unique<NiceMock<MockStateTransitionListener>>(),
-                     std::make_unique<AesCtrPrngFactory>()) {}
-  MOCK_METHOD(absl::Status, Start, (), (override));
 };
 
 constexpr int kTransientErrorsRetryPeriodSecs = 10;
@@ -263,6 +255,8 @@ ServerStreamMessage GetFakeAcceptedCheckinResponse(
         acceptance_info->mutable_side_channel_protocol_execution_info()
             ->mutable_secure_aggregation();
     sec_agg->set_expected_number_of_clients(kSecAggExpectedNumberOfClients);
+    sec_agg->set_minimum_surviving_clients_for_reconstruction(
+        kSecAggMinSurvivingClientsForReconstruction);
     sec_agg->set_minimum_clients_in_server_visible_aggregate(
         kSecAggMinClientsInServerVisibleAggregate);
     checkin_response_message.mutable_checkin_response()
@@ -272,6 +266,12 @@ ServerStreamMessage GetFakeAcceptedCheckinResponse(
         ->set_client_variant(secagg::SECAGG_CLIENT_VARIANT_NATIVE_V1);
   }
   return checkin_response_message;
+}
+
+ServerStreamMessage GetFakeReportResponse() {
+  ServerStreamMessage report_response_message;
+  *report_response_message.mutable_report_response() = ReportResponse();
+  return report_response_message;
 }
 
 ClientStreamMessage GetExpectedEligibilityEvalCheckinRequest(
@@ -382,15 +382,15 @@ class GrpcFederatedProtocolTest
     // after construction (which we could not do if the field's type was
     // GrpcFederatedProtocol, since it doesn't have copy or move constructors).
     federated_protocol_ = std::make_unique<GrpcFederatedProtocol>(
-        &mock_event_publisher_, &mock_log_manager_, &mock_flags_,
+        &mock_event_publisher_, &mock_log_manager_,
+        &mock_secagg_runner_factory_, &mock_flags_,
         /*http_client=*/
         enable_http_resource_support_ ? &mock_http_client_ : nullptr,
         // We want to inject mocks stored in unique_ptrs to the
         // class-under-test, hence we transfer ownership via WrapUnique. To
         // write expectations for the mock, we retain the raw pointer to it,
         // which will be valid until GrpcFederatedProtocol's d'tor is called.
-        absl::WrapUnique(mock_grpc_bidi_stream_),
-        absl::WrapUnique(mock_secagg_client_), kPopulationName, kRetryToken,
+        absl::WrapUnique(mock_grpc_bidi_stream_), kPopulationName, kRetryToken,
         kClientVersion, kAttestationMeasurement,
         mock_should_abort_.AsStdFunction(), absl::BitGen(),
         InterruptibleRunner::TimingConfig{
@@ -495,11 +495,11 @@ class GrpcFederatedProtocolTest
   // See note in the constructor for why these are pointers.
   StrictMock<MockGrpcBidiStream>* mock_grpc_bidi_stream_ =
       new StrictMock<MockGrpcBidiStream>();
-  StrictMock<MockSecAggClient>* mock_secagg_client_ =
-      new StrictMock<MockSecAggClient>();
 
   StrictMock<MockEventPublisher> mock_event_publisher_;
   NiceMock<MockLogManager> mock_log_manager_;
+  StrictMock<MockSecAggRunnerFactory> mock_secagg_runner_factory_;
+  StrictMock<MockSecAggRunner>* mock_secagg_runner_;
   NiceMock<MockFlags> mock_flags_;
   StrictMock<MockHttpClient> mock_http_client_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
@@ -542,17 +542,16 @@ TEST_P(GrpcFederatedProtocolTest,
   EXPECT_CALL(*mock_grpc_bidi_stream_, ChunkingLayerBytesSent())
       .WillRepeatedly(Return(0));
   EXPECT_CALL(*mock_grpc_bidi_stream_, Close());
-  mock_secagg_client_ = new StrictMock<MockSecAggClient>();
 
   // Create a new GrpcFederatedProtocol instance. It should not produce the same
   // retry window value as the one we just got. This is a simple correctness
   // check to ensure that the value is at least randomly generated (and that we
   // don't accidentally use the random number generator incorrectly).
   federated_protocol_ = std::make_unique<GrpcFederatedProtocol>(
-      &mock_event_publisher_, &mock_log_manager_, &mock_flags_,
+      &mock_event_publisher_, &mock_log_manager_, &mock_secagg_runner_factory_,
+      &mock_flags_,
       /*http_client=*/nullptr, absl::WrapUnique(mock_grpc_bidi_stream_),
-      absl::WrapUnique(mock_secagg_client_), kPopulationName, kRetryToken,
-      kClientVersion, kAttestationMeasurement,
+      kPopulationName, kRetryToken, kClientVersion, kAttestationMeasurement,
       mock_should_abort_.AsStdFunction(), absl::BitGen(),
       InterruptibleRunner::TimingConfig{
           .polling_period = absl::ZeroDuration(),
@@ -1496,48 +1495,62 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAcceptNonSecAgg) {
   }
 }
 
-TEST_P(GrpcFederatedProtocolTest,
-       TestReportWithSecAggReachesSecAggClientStart) {
+TEST_P(GrpcFederatedProtocolTest, TestReportWithSecAgg) {
   // Issue an eligibility eval checkin first, followed by a successful checkin.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/true));
-
   // Create a SecAgg like Checkpoint - a combination of a TF checkpoint, and
   // one or more SecAgg quantized aggregands.
   ComputationResults results;
   results.emplace("tensorflow_checkpoint", "");
   results.emplace("some_tensor", QuantizedTensor{{}, 0, {}});
 
-  // Because the SecAgg client library is hard to fake or mock, we just test
-  // whether the Report(...) call ends up initiating the SecAgg protocol, at
-  // which point we stop the test by having the SecAgg client return an error.
-  // This way we at least cover the first part of the SecAgg-related code path
-  // in Report(...).
-  EXPECT_CALL(*mock_secagg_client_, Start())
-      .WillOnce(Return(absl::UnimplementedError("foo")));
-  auto report_result = federated_protocol_->ReportCompleted(
-      std::move(results), absl::ZeroDuration());
-  EXPECT_THAT(report_result, IsCode(UNIMPLEMENTED));
-  EXPECT_THAT(report_result.message(), "foo");
+  mock_secagg_runner_ = new StrictMock<MockSecAggRunner>();
+  EXPECT_CALL(
+      mock_secagg_runner_factory_,
+      CreateSecAggRunner(_, _, _, _, _, kSecAggExpectedNumberOfClients,
+                         kSecAggMinSurvivingClientsForReconstruction, _, _))
+      .WillOnce(Return(ByMove(absl::WrapUnique(mock_secagg_runner_))));
+  EXPECT_CALL(
+      *mock_secagg_runner_,
+      Run(UnorderedElementsAre(
+          Pair("tensorflow_checkpoint", VariantWith<TFCheckpoint>(IsEmpty())),
+          Pair("some_tensor", VariantWith<QuantizedTensor>(
+                                  FieldsAre(IsEmpty(), 0, IsEmpty()))))))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
+          .WillOnce(
+              DoAll(SetArgPointee<0>(GetFakeReportResponse()),
+                    Return(absl::OkStatus())));
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 absl::ZeroDuration()));
 }
 
-TEST_P(GrpcFederatedProtocolTest,
-       TestReportWithSecAggWithoutTFCheckpointReachesSecAggClientStart) {
+TEST_P(GrpcFederatedProtocolTest, TestReportWithSecAggWithoutTFCheckpoint) {
   // Issue an eligibility eval checkin first, followed by a successful checkin.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/true));
 
-  // Similar to the above one, this tests whether the Report(...) call ends up
-  // initiating the SecAgg protocol and then stops the test. This particular
-  // test checks whether this happens correctly, even if the ComputationResults
-  // are empty.
   ComputationResults results;
-  EXPECT_CALL(*mock_secagg_client_, Start())
-      .WillOnce(Return(absl::UnimplementedError("foo")));
-  auto report_result = federated_protocol_->ReportCompleted(
-      std::move(results), absl::ZeroDuration());
-  EXPECT_THAT(report_result, IsCode(UNIMPLEMENTED));
-  EXPECT_THAT(report_result.message(), "foo");
+  results.emplace("some_tensor", QuantizedTensor{{}, 0, {}});
+
+  mock_secagg_runner_ = new StrictMock<MockSecAggRunner>();
+  EXPECT_CALL(
+      mock_secagg_runner_factory_,
+      CreateSecAggRunner(_, _, _, _, _, kSecAggExpectedNumberOfClients,
+                         kSecAggMinSurvivingClientsForReconstruction, _, _))
+      .WillOnce(Return(ByMove(absl::WrapUnique(mock_secagg_runner_))));
+  EXPECT_CALL(*mock_secagg_runner_,
+              Run(UnorderedElementsAre(
+                  Pair("some_tensor", VariantWith<QuantizedTensor>(FieldsAre(
+                                          IsEmpty(), 0, IsEmpty()))))))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
+          .WillOnce(
+              DoAll(SetArgPointee<0>(GetFakeReportResponse()),
+                    Return(absl::OkStatus())));
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 absl::ZeroDuration()));
 }
 
 // This function tests the Report(...) method's Send code path, ensuring the
