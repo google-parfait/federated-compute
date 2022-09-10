@@ -60,8 +60,8 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
  public:
   GrpcFederatedProtocol(
       EventPublisher* event_publisher, LogManager* log_manager,
-      SecAggRunnerFactory* secagg_runner_factory, const Flags* flags,
-      ::fcp::client::http::HttpClient* http_client,
+      std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
+      const Flags* flags, ::fcp::client::http::HttpClient* http_client,
       const std::string& federated_service_uri, const std::string& api_key,
       const std::string& test_cert_path, absl::string_view population_name,
       absl::string_view retry_token, absl::string_view client_version,
@@ -73,8 +73,8 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   // Test c'tor.
   GrpcFederatedProtocol(
       EventPublisher* event_publisher, LogManager* log_manager,
-      SecAggRunnerFactory* secagg_runner_factory, const Flags* flags,
-      ::fcp::client::http::HttpClient* http_client,
+      std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
+      const Flags* flags, ::fcp::client::http::HttpClient* http_client,
       std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream,
       absl::string_view population_name, absl::string_view retry_token,
       absl::string_view client_version,
@@ -199,7 +199,7 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   ObjectState object_state_;
   EventPublisher* const event_publisher_;
   LogManager* const log_manager_;
-  SecAggRunnerFactory& secagg_runner_factory_;
+  std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory_;
   const Flags* const flags_;
   ::fcp::client::http::HttpClient* const http_client_;
   std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream_;

@@ -383,7 +383,7 @@ class GrpcFederatedProtocolTest
     // GrpcFederatedProtocol, since it doesn't have copy or move constructors).
     federated_protocol_ = std::make_unique<GrpcFederatedProtocol>(
         &mock_event_publisher_, &mock_log_manager_,
-        &mock_secagg_runner_factory_, &mock_flags_,
+        absl::WrapUnique(mock_secagg_runner_factory_), &mock_flags_,
         /*http_client=*/
         enable_http_resource_support_ ? &mock_http_client_ : nullptr,
         // We want to inject mocks stored in unique_ptrs to the
@@ -498,7 +498,8 @@ class GrpcFederatedProtocolTest
 
   StrictMock<MockEventPublisher> mock_event_publisher_;
   NiceMock<MockLogManager> mock_log_manager_;
-  StrictMock<MockSecAggRunnerFactory> mock_secagg_runner_factory_;
+  StrictMock<MockSecAggRunnerFactory>* mock_secagg_runner_factory_ =
+      new StrictMock<MockSecAggRunnerFactory>();
   StrictMock<MockSecAggRunner>* mock_secagg_runner_;
   NiceMock<MockFlags> mock_flags_;
   StrictMock<MockHttpClient> mock_http_client_;
@@ -542,14 +543,14 @@ TEST_P(GrpcFederatedProtocolTest,
   EXPECT_CALL(*mock_grpc_bidi_stream_, ChunkingLayerBytesSent())
       .WillRepeatedly(Return(0));
   EXPECT_CALL(*mock_grpc_bidi_stream_, Close());
-
+  mock_secagg_runner_factory_ = new StrictMock<MockSecAggRunnerFactory>();
   // Create a new GrpcFederatedProtocol instance. It should not produce the same
   // retry window value as the one we just got. This is a simple correctness
   // check to ensure that the value is at least randomly generated (and that we
   // don't accidentally use the random number generator incorrectly).
   federated_protocol_ = std::make_unique<GrpcFederatedProtocol>(
-      &mock_event_publisher_, &mock_log_manager_, &mock_secagg_runner_factory_,
-      &mock_flags_,
+      &mock_event_publisher_, &mock_log_manager_,
+      absl::WrapUnique(mock_secagg_runner_factory_), &mock_flags_,
       /*http_client=*/nullptr, absl::WrapUnique(mock_grpc_bidi_stream_),
       kPopulationName, kRetryToken, kClientVersion, kAttestationMeasurement,
       mock_should_abort_.AsStdFunction(), absl::BitGen(),
@@ -1507,7 +1508,7 @@ TEST_P(GrpcFederatedProtocolTest, TestReportWithSecAgg) {
 
   mock_secagg_runner_ = new StrictMock<MockSecAggRunner>();
   EXPECT_CALL(
-      mock_secagg_runner_factory_,
+      *mock_secagg_runner_factory_,
       CreateSecAggRunner(_, _, _, _, _, kSecAggExpectedNumberOfClients,
                          kSecAggMinSurvivingClientsForReconstruction, _, _))
       .WillOnce(Return(ByMove(absl::WrapUnique(mock_secagg_runner_))));
@@ -1536,7 +1537,7 @@ TEST_P(GrpcFederatedProtocolTest, TestReportWithSecAggWithoutTFCheckpoint) {
 
   mock_secagg_runner_ = new StrictMock<MockSecAggRunner>();
   EXPECT_CALL(
-      mock_secagg_runner_factory_,
+      *mock_secagg_runner_factory_,
       CreateSecAggRunner(_, _, _, _, _, kSecAggExpectedNumberOfClients,
                          kSecAggMinSurvivingClientsForReconstruction, _, _))
       .WillOnce(Return(ByMove(absl::WrapUnique(mock_secagg_runner_))));

@@ -1172,11 +1172,11 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
                     << grpc_channel_deadline << " seconds.";
     }
 
-    SecAggRunnerFactoryImpl secagg_runner_factory;
     federated_protocol = std::make_unique<GrpcFederatedProtocol>(
-        event_publisher, log_manager, &secagg_runner_factory, flags,
-        http_client.get(), federated_service_uri, api_key, test_cert_path,
-        population_name, retry_token, client_version, attestation_measurement,
+        event_publisher, log_manager,
+        std::make_unique<SecAggRunnerFactoryImpl>(), flags, http_client.get(),
+        federated_service_uri, api_key, test_cert_path, population_name,
+        retry_token, client_version, attestation_measurement,
         should_abort_protocol_callback, timing_config, grpc_channel_deadline);
 #else
     return absl::InternalError("No FederatedProtocol enabled.");

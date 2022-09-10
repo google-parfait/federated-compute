@@ -123,8 +123,8 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 
 GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
-    SecAggRunnerFactory* secagg_runner_factory, const Flags* flags,
-    ::fcp::client::http::HttpClient* http_client,
+    std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
+    const Flags* flags, ::fcp::client::http::HttpClient* http_client,
     const std::string& federated_service_uri, const std::string& api_key,
     const std::string& test_cert_path, absl::string_view population_name,
     absl::string_view retry_token, absl::string_view client_version,
@@ -133,7 +133,7 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
     const InterruptibleRunner::TimingConfig& timing_config,
     const int64_t grpc_channel_deadline_seconds)
     : GrpcFederatedProtocol(
-          event_publisher, log_manager, secagg_runner_factory, flags,
+          event_publisher, log_manager, std::move(secagg_runner_factory), flags,
           http_client,
           std::make_unique<GrpcBidiStream>(
               federated_service_uri, api_key, std::string(population_name),
@@ -143,8 +143,8 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
 
 GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
-    SecAggRunnerFactory* secagg_runner_factory, const Flags* flags,
-    ::fcp::client::http::HttpClient* http_client,
+    std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
+    const Flags* flags, ::fcp::client::http::HttpClient* http_client,
     std::unique_ptr<GrpcBidiStreamInterface> grpc_bidi_stream,
     absl::string_view population_name, absl::string_view retry_token,
     absl::string_view client_version, absl::string_view attestation_measurement,
@@ -153,7 +153,7 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
     : object_state_(ObjectState::kInitialized),
       event_publisher_(event_publisher),
       log_manager_(log_manager),
-      secagg_runner_factory_(*secagg_runner_factory),
+      secagg_runner_factory_(std::move(secagg_runner_factory)),
       flags_(flags),
       http_client_(http_client),
       grpc_bidi_stream_(std::move(grpc_bidi_stream)),
@@ -803,7 +803,7 @@ absl::Status GrpcFederatedProtocol::Report(ComputationResults results,
     auto delegate = std::make_unique<GrpcSecAggProtocolDelegate>(
         side_channels_, grpc_bidi_stream_.get());
     std::unique_ptr<SecAggRunner> secagg_runner =
-        secagg_runner_factory_.CreateSecAggRunner(
+        secagg_runner_factory_->CreateSecAggRunner(
             std::move(send_to_server_impl), std::move(delegate),
             secagg_event_publisher, log_manager_, interruptible_runner_.get(),
             expected_number_of_clients,
