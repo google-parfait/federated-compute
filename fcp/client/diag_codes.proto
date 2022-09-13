@@ -255,5 +255,23 @@ enum ProdDiagCode {
    * `FEDSELECT_SLICE_HTTP_FETCH_REQUESTED`) succeeded. */
   FEDSELECT_SLICE_HTTP_FETCH_SUCCEEDED = 1896;
 
+  /**
+   * Codes for logs related to the resource cache
+   * ========================================
+   */
+
+  /* Logged when a FileBackedResourceCache fails to read the CacheManifest
+   * proto db. */
+  RESOURCE_CACHE_MANIFEST_READ_FAILED = 1999;
+  /* Logged when a FileBackedResourceCache fails to write the CacheManifest to
+   * storage. */
+  RESOURCE_CACHE_MANIFEST_WRITE_FAILED = 1998;
+  /* Logged when a FileBackedResourceCache fails to read the cached resource to
+   * storage. */
+  RESOURCE_CACHE_RESOURCE_READ_FAILED = 1997;
+  /* Logged when a FileBackedResourceCache fails to write the cached resource to
+   * storage. */
+  RESOURCE_CACHE_RESOURCE_WRITE_FAILED = 1996;
+
   reserved 25;
 }

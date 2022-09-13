@@ -43,3 +43,71 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+proto_library(
+    name = "cache_manifest_proto",
+    srcs = ["cache_manifest.proto"],
+    deps = [
+        "@com_google_protobuf//:any_proto",
+        "@com_google_protobuf//:timestamp_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "cache_manifest_cc_proto",
+    deps = [":cache_manifest_proto"],
+)
+
+cc_library(
+    name = "resource_cache",
+    hdrs = ["resource_cache.h"],
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "file_backed_resource_cache",
+    srcs = [
+        "file_backed_resource_cache.cc",
+    ],
+    hdrs = [
+        "file_backed_resource_cache.h",
+    ],
+    deps = [
+        ":cache_manifest_cc_proto",
+        ":resource_cache",
+        "//fcp/base",
+        "//fcp/base:clock",
+        "//fcp/base:time_util",
+        "//fcp/client:diag_codes_cc_proto",
+        "//fcp/client:interfaces",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/time",
+        "@com_google_protobuf//:protobuf",
+        "@protodatastore_cpp//protostore:file-storage",
+        "@protodatastore_cpp//protostore:proto-data-store",
+    ],
+)
+
+cc_test(
+    name = "file_backed_resource_cache_test",
+    srcs = ["file_backed_resource_cache_test.cc"],
+    deps = [
+        ":file_backed_resource_cache",
+        "//fcp/base",
+        "//fcp/base:simulated_clock",
+        "//fcp/client:selector_context_cc_proto",
+        "//fcp/client:test_helpers",
+        "//fcp/testing",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
