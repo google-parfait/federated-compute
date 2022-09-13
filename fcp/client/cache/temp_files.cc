@@ -24,6 +24,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <system_error>  // NOLINT
 
 #include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
