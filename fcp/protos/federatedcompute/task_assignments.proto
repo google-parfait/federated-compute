@@ -86,14 +86,7 @@ message StartTaskAssignmentRequest {
   string session_id = 2
       ;
 
-  // The attestation measurement providing evidence of integrity for this
-  // client. The measurement is bound to the population_name and session_id
-  // values in this request.
-  //
-  // Note that this must be the same as the value of this field in the previous
-  // `EligibilityEvalTaskRequest`, since this request is considered part of the
-  // same logical protocol session as the previous `EligibilityEvalTaskRequest`.
-  AttestationMeasurement attestation_measurement = 3;
+  reserved 3;
 
   ClientVersion client_version = 4;
 
