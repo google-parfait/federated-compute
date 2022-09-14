@@ -112,6 +112,7 @@ cc_library(
         ":http_client",
         ":http_client_util",
         ":in_memory_request_response",
+        ":protocol_request_helper",
         "//fcp/base",
         "//fcp/base:time_util",
         "//fcp/base:wall_clock_stopwatch",
@@ -172,6 +173,36 @@ cc_test(
         "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "protocol_request_helper",
+    srcs = ["protocol_request_helper.cc"],
+    hdrs = ["protocol_request_helper.h"],
+    deps = [
+        ":http_client",
+        ":http_client_util",
+        ":in_memory_request_response",
+        "//fcp/base:wall_clock_stopwatch",
+        "//fcp/protos/federatedcompute:federated_compute_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "protocol_request_helper_test",
+    srcs = ["protocol_request_helper_test.cc"],
+    deps = [
+        ":protocol_request_helper",
+        "//fcp/client:test_helpers",
+        "//fcp/client/http/testing:test_helpers",
+        "//fcp/testing",
         "@com_google_protobuf//:protobuf",
     ],
 )

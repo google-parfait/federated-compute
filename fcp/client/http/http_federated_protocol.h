@@ -24,7 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include "google/longrunning/operations.pb.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -39,6 +38,7 @@
 #include "fcp/client/flags.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/in_memory_request_response.h"
+#include "fcp/client/http/protocol_request_helper.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/selector_context.pb.h"
@@ -52,123 +52,6 @@
 namespace fcp {
 namespace client {
 namespace http {
-
-// Note the uri query parameters should be percent encoded.
-using QueryParams = absl::flat_hash_map<std::string, std::string>;
-
-// A helper for creating HTTP request with base uri, request headers and
-// compression setting.
-class ProtocolRequestCreator {
- public:
-  ProtocolRequestCreator(absl::string_view request_base_uri,
-                         HeaderList request_headers, bool use_compression);
-
-  // Creates a `ProtocolRequestCreator` based on the forwarding info.
-  // Validates and extracts the base URI and headers to use for the subsequent
-  // request(s).
-  static absl::StatusOr<std::unique_ptr<ProtocolRequestCreator>> Create(
-      const ::google::internal::federatedcompute::v1::ForwardingInfo&
-          forwarding_info,
-      bool use_compression);
-
-  // Creates an `HttpRequest` with base uri, request headers and compression
-  // setting. The `uri_path_suffix` argument must always either be empty or
-  // start with a leading '/'. The method will return `InvalidArgumentError` if
-  // this isn't the case.  The `uri_path_suffix` should not contain any query
-  // parameters, instead, query parameters should be specified in `params`.
-  //
-  // The URI to which the protocol request will be sent will be constructed by
-  // joining `next_request_base_uri_` with `uri_path_suffix` (see
-  // `JoinBaseUriWithSuffix` for details), and any query parameters if `params`
-  // is not empty.
-  //
-  // When `is_protobuf_encoded` is true, `%24alt=proto` will be added to the uri
-  // as a query parameter to indicate that the proto encoded payload is
-  // expected. When the `request_body` is not empty, a `Content-Type` header
-  // will also be added to the request
-  absl::StatusOr<std::unique_ptr<HttpRequest>> CreateProtocolRequest(
-      absl::string_view uri_path_suffix, QueryParams params,
-      HttpRequest::Method method, std::string request_body,
-      bool is_protobuf_encoded) const;
-
-  // Creates an `HttpRequest` for getting the result of a
-  // `google.longrunning.operation`. Note that the request body is empty,
-  // because its only field (`name`) is included in the URI instead. Also note
-  // that the `next_request_headers_` will be attached to this request.
-  absl::StatusOr<std::unique_ptr<HttpRequest>> CreateGetOperationRequest(
-      absl::string_view operation_name) const;
-
-  // Creates an `HttpRequest` for canceling a `google.longrunning.operation`.
-  // Note that the request body is empty, because its only field (`name`) is
-  // included in the URI instead. Also note that the `next_request_headers_`
-  // will be attached to this request.
-  absl::StatusOr<std::unique_ptr<HttpRequest>> CreateCancelOperationRequest(
-      absl::string_view operation_name) const;
-
- private:
-  absl::StatusOr<std::unique_ptr<HttpRequest>> CreateHttpRequest(
-      absl::string_view uri_path_suffix, QueryParams params,
-      HttpRequest::Method method, std::string request_body,
-      bool is_protobuf_encoded, bool use_compression) const;
-  // The URI to use for the next protocol request. See `ForwardingInfo`.
-  std::string next_request_base_uri_;
-  // The set of headers to attach to the next protocol request. See
-  // `ForwardingInfo`.
-  HeaderList next_request_headers_;
-  const bool use_compression_;
-};
-
-// A helper for issuing protocol requests.
-class ProtocolRequestHelper {
- public:
-  ProtocolRequestHelper(HttpClient* http_client, int64_t* bytes_downloaded,
-                        int64_t* bytes_uploaded,
-                        WallClockStopwatch* network_stopwatch,
-                        bool client_decoded_http_resources);
-
-  // Performs the given request (handling any interruptions that may occur) and
-  // updates the network stats.
-  absl::StatusOr<InMemoryHttpResponse> PerformProtocolRequest(
-      std::unique_ptr<HttpRequest> request, InterruptibleRunner& runner);
-
-  // Performs the vector of requests (handling any interruptions that may occur)
-  // concurrently and updates the network stats.
-  // The returned vector of responses has the same order of the issued requests.
-  absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
-  PerformMultipleProtocolRequests(
-      std::vector<std::unique_ptr<HttpRequest>> requests,
-      InterruptibleRunner& runner);
-
-  // Helper function for handling an HTTP response that contains an `Operation`
-  // proto.
-  //
-  // Takes an HTTP response (which must have been produced by a call to
-  // `PerformRequestInMemory`), parses the proto, and returns it if its
-  // `Operation.done` field is true. If the field is false then this method
-  // keeps polling the Operation via performing requests created by
-  // `CreateGetOperationRequest` until it a response is received where the field
-  // is true, at which point that most recent response is returned. If at any
-  // point an HTTP or response parsing error is encountered, then that error is
-  // returned instead.
-  absl::StatusOr<::google::longrunning::Operation>
-  PollOperationResponseUntilDone(
-      const ::google::longrunning::Operation& initial_operation,
-      const ProtocolRequestCreator& request_creator,
-      InterruptibleRunner& runner);
-
-  // Helper function for cancelling an operation.
-  absl::StatusOr<InMemoryHttpResponse> CancelOperation(
-      absl::string_view operation_name,
-      const ProtocolRequestCreator& request_creator,
-      InterruptibleRunner& runner);
-
- private:
-  HttpClient& http_client_;
-  int64_t& bytes_downloaded_;
-  int64_t& bytes_uploaded_;
-  WallClockStopwatch& network_stopwatch_;
-  const bool client_decoded_http_resources_;
-};
 
 // Implements a single session of the HTTP-based Federated Compute protocol.
 class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
