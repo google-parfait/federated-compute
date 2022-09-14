@@ -57,4 +57,9 @@ google::protobuf::Duration TimeUtil::ConvertAbslToProtoDuration(
   return proto_duration;
 }
 
+absl::Duration TimeUtil::ConvertProtoToAbslDuration(
+    google::protobuf::Duration proto) {
+  return absl::Seconds(proto.seconds()) + absl::Nanoseconds(proto.nanos());
+}
+
 }  // namespace fcp

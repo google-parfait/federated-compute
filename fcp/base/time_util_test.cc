@@ -48,5 +48,13 @@ TEST(ConvertAbslToProtoDurationTest, ConvertSuccessfully) {
               EqualsProto(expected_duration));
 }
 
+TEST(ConvertProtoToAbslDurationTest, ConvertSuccessfully) {
+  google::protobuf::Duration duration;
+  duration.set_seconds(1000L);
+  duration.set_nanos(3);
+  absl::Duration expected_duration = absl::Seconds(1000) + absl::Nanoseconds(3);
+  EXPECT_EQ(TimeUtil::ConvertProtoToAbslDuration(duration), expected_duration);
+}
+
 }  // anonymous namespace
 }  // namespace fcp
