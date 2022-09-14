@@ -55,6 +55,12 @@ build --experimental_cc_shared_library
 build --cxxopt=-std=c++17
 build --host_cxxopt=-std=c++17
 
+# Use the most hermetic, available sandboxing strategy. This helps ensures all
+# rules explicit declare their dependencies etc.
+build --spawn_strategy=sandboxed
+
+# The version of TensorFlow we use requires this
+common --experimental_repo_remote_exec
 
 # We avoid building with --compilation_mode=dbg usually, since the artifacts can
 # be very large (a binary with TensorFlow linked in is >2GiB); it costs several
