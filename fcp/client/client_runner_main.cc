@@ -14,15 +14,21 @@
  * limitations under the License.
  */
 
+#include <fstream>
+#include <optional>
 #include <string>
+#include <utility>
 
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_split.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/client_runner.h"
+#include "fcp/client/client_runner_example_data.pb.h"
 #include "fcp/client/fake_event_publisher.h"
 #include "fcp/client/fl_runner.h"
 
@@ -36,8 +42,12 @@ ABSL_FLAG(std::string, population, "", "Population name");
 ABSL_FLAG(std::string, retry_token, "", "Retry token");
 ABSL_FLAG(std::string, client_version, "", "Client version");
 ABSL_FLAG(std::string, attestation_string, "", "Attestation string");
+ABSL_FLAG(std::string, example_data_path, "",
+          "Path to a serialized ClientRunnerExampleData proto with client "
+          "example data. Falls back to --num_examples if unset.");
 ABSL_FLAG(int, num_examples, 0,
-          "Number of (empty) examples each created iterator serves");
+          "Number of (empty) examples each created iterator serves. Ignored if "
+          "--example_store_path is set.");
 ABSL_FLAG(int, num_rounds, 1, "Number of rounds to train");
 ABSL_FLAG(int, sleep_after_round_secs, 3,
           "Number of seconds to sleep after each round.");
@@ -51,6 +61,17 @@ static constexpr char kUsageString[] =
     "plan (feeding the specified number of empty examples), and report the\n"
     "results of the computation back to the server.";
 
+static absl::StatusOr<fcp::client::ClientRunnerExampleData> LoadExampleData(
+    const std::string& examples_path) {
+  std::ifstream examples_file(examples_path);
+  fcp::client::ClientRunnerExampleData data;
+  if (!data.ParseFromIstream(&examples_file) || !examples_file.eof()) {
+    return absl::InvalidArgumentError(
+        "Failed to parse ClientRunnerExampleData");
+  }
+  return data;
+}
+
 int main(int argc, char** argv) {
   absl::SetProgramUsageMessage(kUsageString);
   absl::ParseCommandLine(argc, argv);
@@ -60,16 +81,31 @@ int main(int argc, char** argv) {
   std::string session = absl::GetFlag(FLAGS_session);
   std::string population = absl::GetFlag(FLAGS_population);
   std::string client_version = absl::GetFlag(FLAGS_client_version);
+  std::string test_cert = absl::GetFlag(FLAGS_test_cert);
   FCP_LOG(INFO) << "Running for " << num_rounds << " rounds:";
   FCP_LOG(INFO) << " - server:         " << server;
   FCP_LOG(INFO) << " - session:        " << session;
   FCP_LOG(INFO) << " - population:     " << population;
   FCP_LOG(INFO) << " - client_version: " << client_version;
 
+  std::optional<fcp::client::ClientRunnerExampleData> example_data;
+  if (std::string path = absl::GetFlag(FLAGS_example_data_path);
+      !path.empty()) {
+    auto statusor = LoadExampleData(path);
+    if (!statusor.ok()) {
+      FCP_LOG(ERROR) << "Failed to load example data: " << statusor.status();
+      return 1;
+    }
+    example_data = *std::move(statusor);
+  }
+
   bool success = false;
   for (auto i = 0; i < num_rounds || num_rounds < 0; ++i) {
-    fcp::client::FederatedTaskEnvDepsImpl federated_task_env_deps_impl(
-        absl::GetFlag(FLAGS_num_examples), absl::GetFlag(FLAGS_test_cert));
+    fcp::client::FederatedTaskEnvDepsImpl federated_task_env_deps_impl =
+        example_data ? fcp::client::FederatedTaskEnvDepsImpl(
+                           *std::move(example_data), test_cert)
+                     : fcp::client::FederatedTaskEnvDepsImpl(
+                           absl::GetFlag(FLAGS_num_examples), test_cert);
     fcp::client::FakeEventPublisher event_publisher(/*quiet=*/false);
     fcp::client::FilesImpl files_impl;
     fcp::client::LogManagerImpl log_manager_impl;
@@ -80,9 +116,8 @@ int main(int argc, char** argv) {
     auto fl_runner_result = RunFederatedComputation(
         &federated_task_env_deps_impl, &event_publisher, &files_impl,
         &log_manager_impl, &flags, server, absl::GetFlag(FLAGS_api_key),
-        absl::GetFlag(FLAGS_test_cert), session, population,
-        absl::GetFlag(FLAGS_retry_token), client_version,
-        absl::GetFlag(FLAGS_attestation_string));
+        test_cert, session, population, absl::GetFlag(FLAGS_retry_token),
+        client_version, absl::GetFlag(FLAGS_attestation_string));
     if (fl_runner_result.ok()) {
       FCP_LOG(INFO) << "Run finished successfully; result: "
                     << fl_runner_result.value().DebugString();

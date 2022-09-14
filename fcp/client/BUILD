@@ -580,6 +580,7 @@ cc_library(
     testonly = True,
     hdrs = ["client_runner.h"],
     deps = [
+        ":client_runner_example_data_cc_proto",
         ":diag_codes_cc_proto",
         ":fake_event_publisher",
         ":histogram_counters_cc_proto",
@@ -605,6 +606,7 @@ cc_library(
     srcs = ["client_runner_main.cc"],
     deps = [
         ":client_runner",
+        ":client_runner_example_data_cc_proto",
         ":fake_event_publisher",
         ":fl_runner",
         "//fcp/base",
@@ -613,6 +615,8 @@ cc_library(
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/flags:usage",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
 )
@@ -706,6 +710,19 @@ java_proto_library(
 cc_proto_library(
     name = "diag_codes_cc_proto",
     deps = [":diag_codes_proto"],
+)
+
+# Protocol buffers for providing example data to client_runner_main.
+proto_library(
+    name = "client_runner_example_data_proto",
+    testonly = True,
+    srcs = ["client_runner_example_data.proto"],
+)
+
+cc_proto_library(
+    name = "client_runner_example_data_cc_proto",
+    testonly = True,
+    deps = [":client_runner_example_data_proto"],
 )
 
 # --------------------------------------------------------------------

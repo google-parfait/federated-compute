@@ -33,6 +33,7 @@
 #include <string_view>
 #include <typeinfo>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "google/protobuf/any.pb.h"
@@ -43,6 +44,7 @@
 #include "absl/strings/str_split.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/client_runner_example_data.pb.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/fake_event_publisher.h"
 #include "fcp/client/files.h"
@@ -57,12 +59,21 @@
 namespace fcp::client {
 
 // A stub implementation of the SimpleTaskEnvironment interface that logs calls
-// to stderr and returns empty example iterators.
+// to stderr and returns canned example data.
 class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
  public:
-  explicit FederatedTaskEnvDepsImpl(int num_examples,
+  // Constructs a SimpleTaskEnvironment that will return an example iterator
+  // with `num_empty_examples` empty examples.
+  explicit FederatedTaskEnvDepsImpl(int num_empty_examples,
                                     std::string test_cert_path = "")
-      : num_examples_(num_examples),
+      : examples_(num_empty_examples),
+        test_cert_path_(std::move(test_cert_path)) {}
+
+  // Constructs a SimpleTaskEnvironment that will return an example iterator
+  // with examples determined by the collection URI.
+  explicit FederatedTaskEnvDepsImpl(ClientRunnerExampleData example_data,
+                                    std::string test_cert_path = "")
+      : examples_(std::move(example_data)),
         test_cert_path_(std::move(test_cert_path)) {}
 
   std::string GetBaseDir() override {
@@ -84,28 +95,20 @@ class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
       const google::internal::federated::plan::ExampleSelector&
           example_selector,
       const SelectorContext& selector_context) override {
-    class EmptyExampleIterator : public ExampleIterator {
-     public:
-      explicit EmptyExampleIterator(int num_examples)
-          : num_examples_(num_examples), num_examples_served_(0) {}
-      absl::StatusOr<std::string> Next() override {
-        if (num_examples_served_ >= num_examples_) {
-          return absl::OutOfRangeError("");
-        }
-        num_examples_served_++;
-        return std::string("");
-      }
-      void Close() override {}
-
-     private:
-      const int num_examples_;
-      int num_examples_served_;
-    };
     FCP_CLIENT_LOG_FUNCTION_NAME
         << ":\n\turi: " << example_selector.collection_uri()
         << "\n\ttype: " << example_selector.criteria().type_url();
-    return absl::StatusOr<std::unique_ptr<ExampleIterator>>(
-        std::make_unique<EmptyExampleIterator>(num_examples_));
+    if (auto* num_empty_examples = std::get_if<int>(&examples_)) {
+      return std::make_unique<FakeExampleIterator>(*num_empty_examples);
+    } else if (auto* store = std::get_if<ClientRunnerExampleData>(&examples_)) {
+      const auto& examples_map = store->examples_by_collection_uri();
+      if (auto it = examples_map.find(example_selector.collection_uri());
+          it != examples_map.end()) {
+        return std::make_unique<FakeExampleIterator>(&it->second);
+      }
+      return absl::InvalidArgumentError("no examples for collection_uri");
+    }
+    return absl::InternalError("unsupported examples variant type");
   }
 
   std::unique_ptr<fcp::client::http::HttpClient> CreateHttpClient() override {
@@ -114,12 +117,36 @@ class FederatedTaskEnvDepsImpl : public SimpleTaskEnvironment {
   }
 
  private:
+  class FakeExampleIterator : public ExampleIterator {
+   public:
+    explicit FakeExampleIterator(int num_examples)
+        : example_list_(nullptr), num_examples_(num_examples) {}
+    explicit FakeExampleIterator(
+        const ClientRunnerExampleData::ExampleList* examples)
+        : example_list_(examples), num_examples_(examples->examples_size()) {}
+    absl::StatusOr<std::string> Next() override {
+      if (num_examples_served_ >= num_examples_) {
+        return absl::OutOfRangeError("");
+      }
+      std::string example =
+          example_list_ ? example_list_->examples(num_examples_served_) : "";
+      num_examples_served_++;
+      return example;
+    }
+    void Close() override {}
+
+   private:
+    const ClientRunnerExampleData::ExampleList* const example_list_;
+    const int num_examples_;
+    int num_examples_served_ = 0;
+  };
+
   bool TrainingConditionsSatisfied() override {
     FCP_CLIENT_LOG_FUNCTION_NAME;
     return true;
   }
 
-  const int num_examples_;
+  const std::variant<int, ClientRunnerExampleData> examples_;
   const std::string test_cert_path_;
   fcp::client::http::curl::CurlApi curl_api_;
 };
