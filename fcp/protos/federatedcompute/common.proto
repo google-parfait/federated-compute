@@ -52,8 +52,9 @@ message ForwardingInfo {
 }
 
 // The attestation measurement providing evidence of integrity for a client.
-// TODO(team): Determine source of attestation.
-message AttestationMeasurement {}
+message AttestationMeasurement {
+  string value = 1;
+}
 
 message ClientVersion {
   // Version code identifying the client release.
