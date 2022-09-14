@@ -41,6 +41,9 @@ service TaskAssignments {
   // If the client no longer needs a task assignment because it is interrupted
   // or drops out or an error occurs during polling the long running operation,
   // the client should make a best effort to call CancelOperation.
+  //
+  // If the returned operation is not complete, clients should poll for status
+  // at the rate specified in the StartTaskAssignmentMetadata.
   rpc StartTaskAssignment(StartTaskAssignmentRequest)
       returns (google.longrunning.Operation) {
     option (google.api.http) = {
@@ -118,7 +121,11 @@ message StartTaskAssignmentRequest {
   ResourceCapabilities resource_capabilities = 6;
 }
 
-message StartTaskAssignmentMetadata {}
+message StartTaskAssignmentMetadata {
+  // The suggested duration between instances of polling the StartTaskAssignment
+  // LRO.
+  google.protobuf.Duration polling_interval = 1;
+}
 
 message StartTaskAssignmentResponse {
   // One of two outcomes, depending on server's decision on participation of the

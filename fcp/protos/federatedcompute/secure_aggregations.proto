@@ -18,6 +18,7 @@ package google.internal.federatedcompute.v1;
 
 import "google/api/annotations.proto";
 import "google/longrunning/operations.proto";
+import "google/protobuf/duration.proto";
 import "google/rpc/status.proto";
 import "fcp/protos/federatedcompute/common.proto";
 import "fcp/secagg/shared/secagg_messages.proto";
@@ -72,6 +73,9 @@ service SecureAggregations {
   // Clients should use the `ForwardingInfo` from the
   // `StartSecureAggregationResponse.secagg_protocol_forwarding_info`
   // response field to construct the URI for this request.
+  //
+  // If the returned operation is not complete, clients should poll for status
+  // at the rate specified in the AdvertiseKeysMetadata.
   rpc AdvertiseKeys(AdvertiseKeysRequest)
       returns (google.longrunning.Operation) {
     option (google.api.http) = {
@@ -92,6 +96,9 @@ service SecureAggregations {
   // Clients should use the `ForwardingInfo` from the
   // `StartSecureAggregationResponse.secagg_protocol_forwarding_info`
   // response field to construct the URI for this request.
+  //
+  // If the returned operation is not complete, clients should poll for status
+  // at the rate specified in the ShareKeysMetadata.
   rpc ShareKeys(ShareKeysRequest) returns (google.longrunning.Operation) {
     option (google.api.http) = {
       post: "/v1/secureaggregations/{aggregation_id}/clients/{client_token}:sharekeys"
@@ -111,6 +118,9 @@ service SecureAggregations {
   // Clients should use the `ForwardingInfo` from the
   // `StartSecureAggregationResponse.secagg_protocol_forwarding_info`
   // response field to construct the URI for this request.
+  //
+  // If the returned operation is not complete, clients should poll for status
+  // at the rate specified in the SubmitSecureAggregationResultMetadata.
   rpc SubmitSecureAggregationResult(SubmitSecureAggregationResultRequest)
       returns (google.longrunning.Operation) {
     option (google.api.http) = {
@@ -259,7 +269,10 @@ message AdvertiseKeysRequest {
   fcp.secagg.AdvertiseKeys advertise_keys = 3;
 }
 
-message AdvertiseKeysMetadata {}
+message AdvertiseKeysMetadata {
+  // The suggested duration between instances of polling the AdvertiseKeys LRO.
+  google.protobuf.Duration polling_interval = 1;
+}
 
 message AdvertiseKeysResponse {
   // Information from the server so that the client can participate in the
@@ -292,7 +305,10 @@ message ShareKeysRequest {
   fcp.secagg.ShareKeysResponse share_keys_client_response = 3;
 }
 
-message ShareKeysMetadata {}
+message ShareKeysMetadata {
+  // The suggested duration between instances of polling the ShareKeys LRO.
+  google.protobuf.Duration polling_interval = 1;
+}
 
 message ShareKeysResponse {
   // Information from the server so that the client can submit its masked
@@ -329,7 +345,11 @@ message SubmitSecureAggregationResultRequest {
   string nonmasked_result_resource_name = 4;
 }
 
-message SubmitSecureAggregationResultMetadata {}
+message SubmitSecureAggregationResultMetadata {
+  // The suggested duration between instances of polling the
+  // SubmitSecureAggregationResult LRO.
+  google.protobuf.Duration polling_interval = 1;
+}
 
 message SubmitSecureAggregationResultResponse {
   // Information from the server so that the client can participate in the
