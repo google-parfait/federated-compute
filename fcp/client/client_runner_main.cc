@@ -44,8 +44,8 @@ ABSL_FLAG(std::string, client_version, "", "Client version");
 ABSL_FLAG(std::string, attestation_string, "", "Attestation string");
 ABSL_FLAG(std::string, example_data_path, "",
           "Path to a serialized ClientRunnerExampleData proto with client "
-          "example data. Falls back to --num_examples if unset.");
-ABSL_FLAG(int, num_examples, 0,
+          "example data. Falls back to --num_empty_examples if unset.");
+ABSL_FLAG(int, num_empty_examples, 0,
           "Number of (empty) examples each created iterator serves. Ignored if "
           "--example_store_path is set.");
 ABSL_FLAG(int, num_rounds, 1, "Number of rounds to train");
@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
         example_data ? fcp::client::FederatedTaskEnvDepsImpl(
                            *std::move(example_data), test_cert)
                      : fcp::client::FederatedTaskEnvDepsImpl(
-                           absl::GetFlag(FLAGS_num_examples), test_cert);
+                           absl::GetFlag(FLAGS_num_empty_examples), test_cert);
     fcp::client::FakeEventPublisher event_publisher(/*quiet=*/false);
     fcp::client::FilesImpl files_impl;
     fcp::client::LogManagerImpl log_manager_impl;
