@@ -280,6 +280,7 @@ EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest() {
   // Note: we don't expect population_name to be set, since it should be set in
   // the URI instead.
   request.mutable_client_version()->set_version_code(kClientVersion);
+  request.mutable_attestation_measurement()->set_value(kAttestationMeasurement);
 
   return request;
 }
@@ -2349,6 +2350,8 @@ TEST_F(HttpFederatedProtocolTest,
   EligibilityEvalTaskRequest expected_eligibility_request;
   expected_eligibility_request.mutable_client_version()->set_version_code(
       kClientVersion);
+  expected_eligibility_request.mutable_attestation_measurement()->set_value(
+      kAttestationMeasurement);
   // Make sure gzip support is declared in the eligibility eval checkin request.
   expected_eligibility_request.mutable_resource_capabilities()
       ->add_supported_compression_formats(

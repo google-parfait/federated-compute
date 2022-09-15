@@ -356,7 +356,8 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   // field is set in the URI instead of in this request proto message.
   EligibilityEvalTaskRequest request;
   request.mutable_client_version()->set_version_code(client_version_);
-  // TODO(team): Populate an attestation_measurement value here.
+  request.mutable_attestation_measurement()->set_value(
+      attestation_measurement_);
 
   if (flags_->client_decoded_http_resources()) {
     request.mutable_resource_capabilities()->add_supported_compression_formats(
@@ -526,7 +527,6 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   // proto message.
   StartTaskAssignmentRequest request;
   request.mutable_client_version()->set_version_code(client_version_);
-  // TODO(team): Populate an attestation_measurement value here.
 
   if (task_eligibility_info.has_value()) {
     *request.mutable_task_eligibility_info() = *task_eligibility_info;
