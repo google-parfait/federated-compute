@@ -55,7 +55,7 @@ tensorflow::Status get_scalar_input(tensorflow::OpKernelContext* context,
   const tensorflow::Tensor* tensor;
   TF_RETURN_IF_ERROR(context->input(name, &tensor));
   *scalar_out = tensor->scalar<T>()();
-  return tensorflow::Status::OK();
+  return tensorflow::OkStatus();
 }
 
 tensorflow::Status get_arbitrary_input_list_as_tensor_vector(
@@ -67,7 +67,7 @@ tensorflow::Status get_arbitrary_input_list_as_tensor_vector(
   for (const tensorflow::Tensor& tensor : input_list) {
     out->push_back(tensor);
   }
-  return tensorflow::Status::OK();
+  return tensorflow::OkStatus();
 }
 
 tensorflow::Status get_string_list_input(tensorflow::OpKernelContext* context,
@@ -79,7 +79,7 @@ tensorflow::Status get_string_list_input(tensorflow::OpKernelContext* context,
   for (const tensorflow::Tensor& tensor : input_list) {
     out->emplace_back(tensor.scalar<tensorflow::tstring>()());
   }
-  return tensorflow::Status::OK();
+  return tensorflow::OkStatus();
 }
 
 // ServeSlices op-kernel.

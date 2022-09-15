@@ -25,7 +25,7 @@ using ::testing::Eq;
 
 TEST(StatusTest, ToTensorFlow_Ok) {
   EXPECT_THAT(ConvertToTensorFlowStatus(FCP_STATUS(OK)),
-              Eq(tensorflow::Status::OK()));
+              Eq(tensorflow::OkStatus()));
 }
 
 TEST(StatusTest, ToTensorFlow_Error) {

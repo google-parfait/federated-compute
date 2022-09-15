@@ -202,7 +202,7 @@ class AppendedFileWithStartPosFooter : public tensorflow::WritableFile {
     // Note: cannot use `make_unique` due to private constructor.
     wrapped_file_out = std::unique_ptr<tensorflow::WritableFile>(
         new AppendedFileWithStartPosFooter(std::move(file), body_start));
-    return tensorflow::Status::OK();
+    return tensorflow::OkStatus();
   }
   tensorflow::Status Append(tensorflow::StringPiece data) override {
     return file_->Append(data);
@@ -217,7 +217,7 @@ class AppendedFileWithStartPosFooter : public tensorflow::WritableFile {
     int64_t internal_position;
     TF_RETURN_IF_ERROR(file_->Tell(&internal_position));
     *position = internal_position - body_start_;
-    return tensorflow::Status::OK();
+    return tensorflow::OkStatus();
   }
 
  private:
@@ -291,7 +291,7 @@ tensorflow::Status CreateAppendingTensorSliceBuilder(
   TF_RETURN_IF_ERROR(
       AppendedFileWithStartPosFooter::FromFile(std::move(file), wrapped_file));
   *builder = new TableBuilder(filename, std::move(wrapped_file));
-  return tensorflow::Status::OK();
+  return tensorflow::OkStatus();
 }
 
 // A `RandomAccessFile` which wraps another `RandomAccessFile`, providing access
@@ -322,7 +322,7 @@ class PartialRandomAccessFile : public tensorflow::RandomAccessFile {
       return tensorflow::Status(tensorflow::error::OUT_OF_RANGE,
                                 "Attempted to read past end of file chunk.");
     }
-    return tensorflow::Status::OK();
+    return tensorflow::OkStatus();
   }
 
  private:
@@ -373,7 +373,7 @@ tensorflow::Status MetadataFromString(absl::string_view serialized,
         absl::StrCat("Failed to parse table entry as `SavedTensorSlices`: ",
                      serialized));
   }
-  return tensorflow::Status::OK();
+  return tensorflow::OkStatus();
 }
 
 // Merges appended checkpoints in `filename` into a single checkpoint.
@@ -389,7 +389,7 @@ tensorflow::Status LoadAndMergeAppendedSlices(const std::string& filename) {
   // Short-circuit on empty files so that we can assume at least a single entry
   // below.
   if (file_size == 0) {
-    return tensorflow::Status::OK();
+    return tensorflow::OkStatus();
   }
   std::unique_ptr<tensorflow::RandomAccessFile> file;
   TF_RETURN_IF_ERROR(env->NewRandomAccessFile(filename, &file));
@@ -500,7 +500,7 @@ tensorflow::Status LoadAndMergeAppendedSlices(const std::string& filename) {
   int64_t resulting_file_size;
   TF_RETURN_WITH_CONTEXT_IF_ERROR(builder->Finish(&resulting_file_size),
                                   "Finishing TensorSliceWriter::Builder");
-  return tensorflow::Status::OK();
+  return tensorflow::OkStatus();
 }
 
 ABSL_CONST_INIT absl::Mutex append_mutex(absl::kConstInit);

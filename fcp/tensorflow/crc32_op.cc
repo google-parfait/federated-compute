@@ -40,7 +40,7 @@ REGISTER_OP("CRC32")
     .Output("checksum: uint32")
     .SetShapeFn([](InferenceContext* c) {
       c->set_output(0, c->Scalar());
-      return ::tensorflow::Status::OK();
+      return ::tensorflow::OkStatus();
     });
 
 class CRC32Op : public OpKernel {
