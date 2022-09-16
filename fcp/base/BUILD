@@ -1,6 +1,7 @@
 # Description:
 # Base component, containing common functionality used by other FCP components.
 
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 load("//fcp/tracing:build_defs.bzl", "tracing_schema_cc_library")
 

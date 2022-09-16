@@ -1,6 +1,7 @@
 # Description:
 #   SecAgg client-specific components.
 
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 
 package(

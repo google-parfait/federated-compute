@@ -70,6 +70,11 @@ build --compilation_mode=opt
 # Without this, bazel doesn't print all Java compilation errors.
 build --javacopt="-verbose"
 
+# Disable automatic creation of `__init__.py` files, which prevent multiple
+# workspaces from providing files with the same package prefix (e.g., "google").
+# See https://github.com/bazelbuild/rules_python/issues/330.
+build --incompatible_default_to_explicit_init_py
+
 build:asan --compilation_mode=dbg
 build:asan --strip=never
 build:asan --copt=-fsanitize=address

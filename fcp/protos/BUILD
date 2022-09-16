@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
 load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
 load("@com_google_protobuf//:protobuf.bzl", "py_proto_library")
