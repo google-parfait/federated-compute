@@ -507,30 +507,6 @@ ABSL_CONST_INIT absl::Mutex append_mutex(absl::kConstInit);
 
 }  // namespace
 
-class DeleteFileIfExistsOp : public OpKernel {
- public:
-  explicit DeleteFileIfExistsOp(OpKernelConstruction* context)
-      : OpKernel(context) {}
-
-  void Compute(OpKernelContext* context) override {
-    absl::MutexLock lock(&append_mutex);
-    const tensorflow::Tensor& filename_t = context->input(0);
-    {
-      const int64_t size = filename_t.NumElements();
-      OP_REQUIRES(
-          context, size == 1,
-          tensorflow::errors::InvalidArgument(
-              "Input 0 (filename) must be a std::string scalar; got a tensor of ",
-              size, "elements"));
-    }
-    const tensorflow::tstring& filename =
-        filename_t.scalar<tensorflow::tstring>()();
-    if (context->env()->FileExists(filename).ok()) {
-      OP_REQUIRES_OK(context, context->env()->DeleteFile(filename));
-    }
-  }
-};
-
 class AppendSlicesOp : public OpKernel {
  public:
   explicit AppendSlicesOp(OpKernelConstruction* context) : OpKernel(context) {}
@@ -582,11 +558,6 @@ class MergeAppendedSlicesOp : public OpKernel {
     OP_REQUIRES_OK(context, LoadAndMergeAppendedSlices(filename));
   }
 };
-
-REGISTER_OP("DeleteFileIfExists").Input("filename: string").SetIsStateful();
-REGISTER_KERNEL_BUILDER(
-    Name("DeleteFileIfExists").Device(tensorflow::DEVICE_CPU),
-    DeleteFileIfExistsOp);
 
 // Note: `key` *must* come last so that the indices of the other arguments are
 // as expected by `SaveTensors`.
