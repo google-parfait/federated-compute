@@ -61,13 +61,8 @@ class SimpleTaskEnvironment {
   // for creating temporary files that are deleted at the end of each
   // invocation. Implementers of this interface may also delete files in this
   // directory (for example, in low storage situations) without adverse effects
-  // to the runtime.
-  virtual std::string GetCacheDir() {
-    // TODO(team): Replace this with a pure virtual version after other
-    // runtimes implement this method. Usage is guarded by a flag so we won't
-    // break existing runtimes unless they explicitly set the flag.
-    return "UNIMPLEMENTED!!";
-  }
+  // to the runtime. GetCacheDir() may return the same path as GetBaseDir().
+  virtual std::string GetCacheDir() = 0;
 
   // TODO(team): factor out native implementations of this and delete.
   virtual absl::StatusOr<std::unique_ptr<ExampleIterator>>
