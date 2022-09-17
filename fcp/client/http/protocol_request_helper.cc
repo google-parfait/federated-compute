@@ -15,14 +15,41 @@
  */
 #include "fcp/client/http/protocol_request_helper.h"
 
+#include "google/protobuf/any.pb.h"
 #include "absl/strings/substitute.h"
+#include "fcp/base/time_util.h"
 #include "fcp/client/http/http_client_util.h"
+#include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
+#include "fcp/protos/federatedcompute/task_assignments.pb.h"
 
 namespace fcp {
 namespace client {
 namespace http {
 
+// The default interval when polling pending operations.
+const absl::Duration kDefaultLroPollingInterval = absl::Milliseconds(500);
+// The maximum interval when polling pending operations.
+const absl::Duration kMaxLroPollingInterval = absl::Minutes(1);
+
+constexpr absl::string_view kStartTaskAssignmentMetadata =
+    "type.googleapis.com/"
+    "google.internal.federatedcompute.v1.StartTaskAssignmentMetadata";  // NOLINT
+constexpr absl::string_view kAdvertiseKeysMetadata =
+    "type.googleapis.com/"
+    "google.internal.federatedcompute.v1.AdvertiseKeysMetadata";  // NOLINT
+constexpr absl::string_view kShareKeysMetadata =
+    "type.googleapis.com/google.internal.federatedcompute.v1.ShareKeysMetadata";
+constexpr absl::string_view kSubmitSecureAggregationResultMetadata =
+    "type.googleapis.com/"
+    "google.internal.federatedcompute.v1."
+    "SubmitSecureAggregationResultMetadata";  // NOLINT
+
+using ::google::internal::federatedcompute::v1::AdvertiseKeysMetadata;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
+using ::google::internal::federatedcompute::v1::ShareKeysMetadata;
+using ::google::internal::federatedcompute::v1::StartTaskAssignmentMetadata;
+using ::google::internal::federatedcompute::v1::
+    SubmitSecureAggregationResultMetadata;
 using ::google::longrunning::Operation;
 
 namespace {
@@ -101,6 +128,54 @@ absl::StatusOr<InMemoryHttpResponse> CheckResponseContentEncoding(
         "HTTP response unexpectedly has a Content-Encoding");
   }
   return response;
+}
+
+// Extract polling interval from the operation proto.
+// The returned polling interval will be within the range of [1ms, 1min]. If
+// the polling interval inside the operation proto is outside this range, it'll
+// be clipped to the nearest boundary. If the polling interval is unset, 1ms
+// will be returned.
+absl::Duration GetPollingInterval(Operation operation) {
+  absl::string_view type_url = operation.metadata().type_url();
+  google::protobuf::Duration polling_interval_proto;
+  if (type_url == kStartTaskAssignmentMetadata) {
+    StartTaskAssignmentMetadata metadata;
+    if (!operation.metadata().UnpackTo(&metadata)) {
+      return kDefaultLroPollingInterval;
+    }
+    polling_interval_proto = metadata.polling_interval();
+  } else if (type_url == kAdvertiseKeysMetadata) {
+    AdvertiseKeysMetadata metadata;
+    if (!operation.metadata().UnpackTo(&metadata)) {
+      return kDefaultLroPollingInterval;
+    }
+    polling_interval_proto = metadata.polling_interval();
+  } else if (type_url == kShareKeysMetadata) {
+    ShareKeysMetadata metadata;
+    if (!operation.metadata().UnpackTo(&metadata)) {
+      return kDefaultLroPollingInterval;
+    }
+    polling_interval_proto = metadata.polling_interval();
+  } else if (type_url == kSubmitSecureAggregationResultMetadata) {
+    SubmitSecureAggregationResultMetadata metadata;
+    if (!operation.metadata().UnpackTo(&metadata)) {
+      return kDefaultLroPollingInterval;
+    }
+    polling_interval_proto = metadata.polling_interval();
+  } else {
+    // Unknown type
+    return kDefaultLroPollingInterval;
+  }
+
+  absl::Duration polling_interval =
+      TimeUtil::ConvertProtoToAbslDuration(polling_interval_proto);
+  if (polling_interval < absl::ZeroDuration()) {
+    return kDefaultLroPollingInterval;
+  } else if (polling_interval > kMaxLroPollingInterval) {
+    return kMaxLroPollingInterval;
+  } else {
+    return polling_interval;
+  }
 }
 
 }  // anonymous namespace
@@ -189,11 +264,13 @@ ProtocolRequestCreator::Create(const ForwardingInfo& forwarding_info,
 
 ProtocolRequestHelper::ProtocolRequestHelper(
     HttpClient* http_client, int64_t* bytes_downloaded, int64_t* bytes_uploaded,
-    WallClockStopwatch* network_stopwatch, bool client_decoded_http_resources)
+    WallClockStopwatch* network_stopwatch, Clock* clock,
+    bool client_decoded_http_resources)
     : http_client_(*http_client),
       bytes_downloaded_(*bytes_downloaded),
       bytes_uploaded_(*bytes_uploaded),
       network_stopwatch_(*network_stopwatch),
+      clock_(*clock),
       client_decoded_http_resources_(client_decoded_http_resources) {}
 
 absl::StatusOr<InMemoryHttpResponse>
@@ -250,10 +327,8 @@ ProtocolRequestHelper::PollOperationResponseUntilDone(
     FCP_ASSIGN_OR_RETURN(std::string operation_name,
                          ExtractOperationName(response_operation_proto));
 
-    // TODO(team): Add a minimum amount of time between each request,
-    // and/or use Operation.metadata to allow server to steer the client's retry
-    // delays.
-
+    // Wait for server returned polling interval before sending next request.
+    clock_.Sleep(GetPollingInterval(response_operation_proto));
     // The response Operation indicates that the result isn't ready yet. Poll
     // again.
     FCP_ASSIGN_OR_RETURN(

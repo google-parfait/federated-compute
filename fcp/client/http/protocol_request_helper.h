@@ -20,6 +20,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "fcp/base/clock.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/in_memory_request_response.h"
@@ -99,7 +100,7 @@ class ProtocolRequestHelper {
  public:
   ProtocolRequestHelper(HttpClient* http_client, int64_t* bytes_downloaded,
                         int64_t* bytes_uploaded,
-                        WallClockStopwatch* network_stopwatch,
+                        WallClockStopwatch* network_stopwatch, Clock* clock,
                         bool client_decoded_http_resources);
 
   // Performs the given request (handling any interruptions that may occur) and
@@ -143,6 +144,7 @@ class ProtocolRequestHelper {
   int64_t& bytes_downloaded_;
   int64_t& bytes_uploaded_;
   WallClockStopwatch& network_stopwatch_;
+  Clock& clock_;
   const bool client_decoded_http_resources_;
 };
 

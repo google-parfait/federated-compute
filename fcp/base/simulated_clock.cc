@@ -28,6 +28,24 @@ absl::Time SimulatedClock::NowLocked() {
   return now_;
 }
 
+void SimulatedClock::Sleep(absl::Duration d) {
+  absl::Time current;
+  {
+    absl::MutexLock lock(mutex());
+    current = now_;
+  }
+  absl::Time deadline = current + d;
+  while (true) {
+    {
+      absl::MutexLock lock(mutex());
+      current = now_;
+    }
+    if (current >= deadline) {
+      return;
+    }
+  }
+}
+
 void SimulatedClock::SetTime(absl::Time t) {
   {
     absl::MutexLock lock(mutex());

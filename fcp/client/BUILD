@@ -372,6 +372,7 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/time",
         "//fcp/base",
+        "//fcp/base:clock",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/client/engine:example_iterator_factory",
         "//fcp/client/engine:plan_engine_helpers",

@@ -43,6 +43,9 @@ class Clock {
   // Returns current time.
   virtual absl::Time Now() = 0;
 
+  // Sleeps for the specified duration.
+  virtual void Sleep(absl::Duration d) = 0;
+
   // An abstract interface for a waiter class that is passed to
   // WakeupWithDeadline and is responsible for handling a timer wake-up.
   // Waiter interface doesn't support a cancellation mechanism which means

@@ -40,6 +40,9 @@ class RealTimeClock : public Clock {
   absl::Time Now() override { return absl::Now(); }
   absl::Time NowLocked() override { return absl::Now(); }
 
+  // Sleeps for the specified duration.
+  void Sleep(absl::Duration d) override { absl::SleepFor(d); }
+
   // Schedules wakeup at the specified wakeup_time.
   void ScheduleWakeup(absl::Time wakeup_time) override;
 

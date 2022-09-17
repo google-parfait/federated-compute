@@ -35,6 +35,7 @@
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
+#include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/base/time_util.h"
@@ -465,8 +466,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     // after construction (which we could not do if the field's type was
     // HttpFederatedProtocol, since it doesn't have copy or move constructors).
     federated_protocol_ = std::make_unique<HttpFederatedProtocol>(
-        &mock_log_manager_, &mock_flags_, &mock_http_client_, kEntryPointUri,
-        kApiKey, kPopulationName, kRetryToken, kClientVersion,
+        clock_, &mock_log_manager_, &mock_flags_, &mock_http_client_,
+        kEntryPointUri, kApiKey, kPopulationName, kRetryToken, kClientVersion,
         kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
         absl::BitGen(),
         InterruptibleRunner::TimingConfig{
@@ -689,6 +690,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   StrictMock<MockLogManager> mock_log_manager_;
   NiceMock<MockFlags> mock_flags_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
+  Clock* clock_ = Clock::RealClock();
 
   // The class under test.
   std::unique_ptr<HttpFederatedProtocol> federated_protocol_;
@@ -708,8 +710,8 @@ TEST_F(HttpFederatedProtocolTest,
   // check to ensure that the value is at least randomly generated (and that we
   // don't accidentally use the random number generator incorrectly).
   federated_protocol_ = std::make_unique<HttpFederatedProtocol>(
-      &mock_log_manager_, &mock_flags_, &mock_http_client_, kEntryPointUri,
-      kApiKey, kPopulationName, kRetryToken, kClientVersion,
+      clock_, &mock_log_manager_, &mock_flags_, &mock_http_client_,
+      kEntryPointUri, kApiKey, kPopulationName, kRetryToken, kClientVersion,
       kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
       absl::BitGen(),
       InterruptibleRunner::TimingConfig{

@@ -38,6 +38,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
+#include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
 #include "fcp/base/wall_clock_stopwatch.h"
@@ -278,10 +279,11 @@ std::unique_ptr<InterruptibleRunner> CreateDelayedInterruptibleRunner(
 }  // namespace
 
 HttpFederatedProtocol::HttpFederatedProtocol(
-    LogManager* log_manager, const Flags* flags, HttpClient* http_client,
-    absl::string_view entry_point_uri, absl::string_view api_key,
-    absl::string_view population_name, absl::string_view retry_token,
-    absl::string_view client_version, absl::string_view attestation_measurement,
+    Clock* clock, LogManager* log_manager, const Flags* flags,
+    HttpClient* http_client, absl::string_view entry_point_uri,
+    absl::string_view api_key, absl::string_view population_name,
+    absl::string_view retry_token, absl::string_view client_version,
+    absl::string_view attestation_measurement,
     std::function<bool()> should_abort, absl::BitGen bit_gen,
     const InterruptibleRunner::TimingConfig& timing_config)
     : object_state_(ObjectState::kInitialized),
@@ -304,7 +306,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
               !flags->disable_http_request_body_compression())),
       protocol_request_helper_(http_client, &bytes_downloaded_,
                                &bytes_uploaded_, network_stopwatch_.get(),
-                               flags_->client_decoded_http_resources()),
+                               clock, flags_->client_decoded_http_resources()),
       api_key_(api_key),
       population_name_(population_name),
       retry_token_(retry_token),

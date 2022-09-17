@@ -30,6 +30,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/time/time.h"
+#include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -1156,11 +1157,13 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           : nullptr;
 
   std::unique_ptr<FederatedProtocol> federated_protocol;
+  Clock* clock = Clock::RealClock();
   if (flags->use_http_federated_compute_protocol()) {
     federated_protocol = std::make_unique<http::HttpFederatedProtocol>(
-        log_manager, flags, http_client.get(), federated_service_uri, api_key,
-        population_name, retry_token, client_version, attestation_measurement,
-        should_abort_protocol_callback, absl::BitGen(), timing_config);
+        clock, log_manager, flags, http_client.get(), federated_service_uri,
+        api_key, population_name, retry_token, client_version,
+        attestation_measurement, should_abort_protocol_callback, absl::BitGen(),
+        timing_config);
   } else {
 #ifdef FCP_CLIENT_SUPPORT_GRPC
     // Check in with the server to either retrieve a plan + initial checkpoint,

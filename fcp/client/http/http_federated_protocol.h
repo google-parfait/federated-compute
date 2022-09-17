@@ -30,6 +30,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
+#include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -57,10 +58,10 @@ namespace http {
 class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
  public:
   HttpFederatedProtocol(
-      LogManager* log_manager, const Flags* flags, HttpClient* http_client,
-      absl::string_view entry_point_uri, absl::string_view api_key,
-      absl::string_view population_name, absl::string_view retry_token,
-      absl::string_view client_version,
+      Clock* clock, LogManager* log_manager, const Flags* flags,
+      HttpClient* http_client, absl::string_view entry_point_uri,
+      absl::string_view api_key, absl::string_view population_name,
+      absl::string_view retry_token, absl::string_view client_version,
       absl::string_view attestation_measurement,
       std::function<bool()> should_abort, absl::BitGen bit_gen,
       const InterruptibleRunner::TimingConfig& timing_config);

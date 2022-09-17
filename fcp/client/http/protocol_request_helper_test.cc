@@ -16,8 +16,11 @@
 #include "fcp/client/http/protocol_request_helper.h"
 
 #include "google/protobuf/any.pb.h"
+#include "fcp/base/time_util.h"
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/test_helpers.h"
+#include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
+#include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp {
@@ -25,7 +28,12 @@ namespace client {
 namespace http {
 namespace {
 
+using ::google::internal::federatedcompute::v1::AdvertiseKeysMetadata;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
+using ::google::internal::federatedcompute::v1::ShareKeysMetadata;
+using ::google::internal::federatedcompute::v1::StartTaskAssignmentMetadata;
+using ::google::internal::federatedcompute::v1::
+    SubmitSecureAggregationResultMetadata;
 using ::google::longrunning::Operation;
 using ::google::protobuf::Any;
 using ::google::protobuf::Message;
@@ -39,6 +47,16 @@ using ::testing::Return;
 using ::testing::StrictMock;
 using ::testing::UnorderedElementsAre;
 
+class MockClock : public Clock {
+ public:
+  MOCK_METHOD(absl::Time, Now, (), (override));
+  MOCK_METHOD(void, Sleep, (absl::Duration duration), (override));
+
+ protected:
+  MOCK_METHOD(absl::Time, NowLocked, (), (override));
+  MOCK_METHOD(void, ScheduleWakeup, (absl::Time wakeup_time), (override));
+};
+
 void VerifyInMemoryHttpResponse(const InMemoryHttpResponse& response, int code,
                                 absl::string_view content_encoding,
                                 absl::string_view body) {
@@ -51,6 +69,15 @@ Operation CreatePendingOperation(const std::string operation_name) {
   Operation operation;
   operation.set_done(false);
   operation.set_name(operation_name);
+  return operation;
+}
+
+Operation CreatePendingOperation(const std::string operation_name,
+                                 const Any& metadata) {
+  Operation operation;
+  operation.set_done(false);
+  operation.set_name(operation_name);
+  *operation.mutable_metadata() = metadata;
   return operation;
 }
 
@@ -188,6 +215,7 @@ class ProtocolRequestHelperTest : public ::testing::Test {
                                  /*use_compression=*/false),
         protocol_request_helper_(&mock_http_client_, &bytes_downloaded_,
                                  &bytes_uploaded_, network_stopwatch_.get(),
+                                 &mock_clock_,
                                  /*client_decoded_http_resources=*/false) {}
 
  protected:
@@ -200,6 +228,7 @@ class ProtocolRequestHelperTest : public ::testing::Test {
     EXPECT_THAT(bytes_uploaded_, sent_received_bytes.sent_bytes);
   }
 
+  StrictMock<MockClock> mock_clock_;
   StrictMock<MockHttpClient> mock_http_client_;
 
   NiceMock<MockLogManager> mock_log_manager_;
@@ -379,7 +408,7 @@ TEST_F(ProtocolRequestHelperTest,
           200, HeaderList(), pending_operation_response.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), expected_response.SerializeAsString())));
-
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(500))).Times(3);
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
           pending_operation_response, initial_request_creator_,
@@ -408,7 +437,212 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseErrorAfterPolling) {
           200, HeaderList(), pending_operation_response.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), expected_response.SerializeAsString())));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(500))).Times(3);
 
+  absl::StatusOr<Operation> result =
+      protocol_request_helper_.PollOperationResponseUntilDone(
+          pending_operation_response, initial_request_creator_,
+          interruptible_runner_);
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, EqualsProto(expected_response));
+}
+
+TEST_F(ProtocolRequestHelperTest,
+       TestPollOperationResponseDifferentPollingIntervals) {
+  StartTaskAssignmentMetadata metadata;
+  *metadata.mutable_polling_interval() =
+      TimeUtil::ConvertAbslToProtoDuration(absl::Milliseconds(2));
+  Any packed_metadata;
+  ASSERT_TRUE(packed_metadata.PackFrom(metadata));
+  StartTaskAssignmentMetadata metadata_2;
+  *metadata_2.mutable_polling_interval() =
+      TimeUtil::ConvertAbslToProtoDuration(absl::Milliseconds(3));
+  Any packed_metadata_2;
+  ASSERT_TRUE(packed_metadata_2.PackFrom(metadata_2));
+
+  // Make the initial request return a pending Operation result. Note that we
+  // use a '#' character in the operation name to allow us to verify that it
+  // is properly URL-encoded.
+  Operation pending_operation_response =
+      CreatePendingOperation("operations/foo#bar");
+
+  // Then, after letting the operation get polled twice more, eventually
+  // return a fake response.
+  Operation expected_response = CreateDoneOperation(GetFakeAnyProto());
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  // Note that the '#' character is encoded as "%23".
+                  "https://initial.uri/v1/operations/foo%23bar?%24alt=proto",
+                  HttpRequest::Method::kGet, _, IsEmpty())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreatePendingOperation("operations/foo#bar", packed_metadata)
+              .SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreatePendingOperation("operations/foo#bar", packed_metadata_2)
+              .SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), expected_response.SerializeAsString())));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(500)));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(2)));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(3)));
+  absl::StatusOr<Operation> result =
+      protocol_request_helper_.PollOperationResponseUntilDone(
+          pending_operation_response, initial_request_creator_,
+          interruptible_runner_);
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, EqualsProto(expected_response));
+}
+
+TEST_F(ProtocolRequestHelperTest,
+       TestPollOperationResponsePollingIntervalTooHigh) {
+  StartTaskAssignmentMetadata metadata;
+  *metadata.mutable_polling_interval() =
+      TimeUtil::ConvertAbslToProtoDuration(absl::Hours(1));
+  Any packed_metadata;
+  ASSERT_TRUE(packed_metadata.PackFrom(metadata));
+
+  // Make the initial request return a pending Operation result. Note that we
+  // use a '#' character in the operation name to allow us to verify that it
+  // is properly URL-encoded.
+  Operation pending_operation_response =
+      CreatePendingOperation("operations/foo#bar");
+
+  // Then, after letting the operation get polled twice more, eventually
+  // return a fake response.
+  Operation expected_response = CreateDoneOperation(GetFakeAnyProto());
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  // Note that the '#' character is encoded as "%23".
+                  "https://initial.uri/v1/operations/foo%23bar?%24alt=proto",
+                  HttpRequest::Method::kGet, _, IsEmpty())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreatePendingOperation("operations/foo#bar", packed_metadata)
+              .SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), expected_response.SerializeAsString())));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(500)));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Minutes(1)));
+  absl::StatusOr<Operation> result =
+      protocol_request_helper_.PollOperationResponseUntilDone(
+          pending_operation_response, initial_request_creator_,
+          interruptible_runner_);
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, EqualsProto(expected_response));
+}
+
+TEST_F(ProtocolRequestHelperTest,
+       TestPollOperationResponseAdvertiseKeysMetadata) {
+  AdvertiseKeysMetadata metadata;
+  *metadata.mutable_polling_interval() =
+      TimeUtil::ConvertAbslToProtoDuration(absl::Milliseconds(2));
+  Any packed_metadata;
+  ASSERT_TRUE(packed_metadata.PackFrom(metadata));
+
+  // Make the initial request return a pending Operation result. Note that we
+  // use a '#' character in the operation name to allow us to verify that it
+  // is properly URL-encoded.
+  Operation pending_operation_response =
+      CreatePendingOperation("operations/foo#bar");
+
+  // Then, after letting the operation get polled twice more, eventually
+  // return a fake response.
+  Operation expected_response = CreateDoneOperation(GetFakeAnyProto());
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  // Note that the '#' character is encoded as "%23".
+                  "https://initial.uri/v1/operations/foo%23bar?%24alt=proto",
+                  HttpRequest::Method::kGet, _, IsEmpty())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreatePendingOperation("operations/foo#bar", packed_metadata)
+              .SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), expected_response.SerializeAsString())));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(500)));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(2)));
+  absl::StatusOr<Operation> result =
+      protocol_request_helper_.PollOperationResponseUntilDone(
+          pending_operation_response, initial_request_creator_,
+          interruptible_runner_);
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, EqualsProto(expected_response));
+}
+
+TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseShareKeysMetadata) {
+  ShareKeysMetadata metadata;
+  *metadata.mutable_polling_interval() =
+      TimeUtil::ConvertAbslToProtoDuration(absl::Milliseconds(2));
+  Any packed_metadata;
+  ASSERT_TRUE(packed_metadata.PackFrom(metadata));
+
+  // Make the initial request return a pending Operation result. Note that we
+  // use a '#' character in the operation name to allow us to verify that it
+  // is properly URL-encoded.
+  Operation pending_operation_response =
+      CreatePendingOperation("operations/foo#bar");
+
+  // Then, after letting the operation get polled twice more, eventually
+  // return a fake response.
+  Operation expected_response = CreateDoneOperation(GetFakeAnyProto());
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  // Note that the '#' character is encoded as "%23".
+                  "https://initial.uri/v1/operations/foo%23bar?%24alt=proto",
+                  HttpRequest::Method::kGet, _, IsEmpty())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreatePendingOperation("operations/foo#bar", packed_metadata)
+              .SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), expected_response.SerializeAsString())));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(500)));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(2)));
+  absl::StatusOr<Operation> result =
+      protocol_request_helper_.PollOperationResponseUntilDone(
+          pending_operation_response, initial_request_creator_,
+          interruptible_runner_);
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, EqualsProto(expected_response));
+}
+
+TEST_F(ProtocolRequestHelperTest,
+       TestPollOperationResponseSubmitSecureAggregationResultMetadata) {
+  SubmitSecureAggregationResultMetadata metadata;
+  *metadata.mutable_polling_interval() =
+      TimeUtil::ConvertAbslToProtoDuration(absl::Milliseconds(2));
+  Any packed_metadata;
+  ASSERT_TRUE(packed_metadata.PackFrom(metadata));
+
+  // Make the initial request return a pending Operation result. Note that we
+  // use a '#' character in the operation name to allow us to verify that it
+  // is properly URL-encoded.
+  Operation pending_operation_response =
+      CreatePendingOperation("operations/foo#bar");
+
+  // Then, after letting the operation get polled twice more, eventually
+  // return a fake response.
+  Operation expected_response = CreateDoneOperation(GetFakeAnyProto());
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  // Note that the '#' character is encoded as "%23".
+                  "https://initial.uri/v1/operations/foo%23bar?%24alt=proto",
+                  HttpRequest::Method::kGet, _, IsEmpty())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreatePendingOperation("operations/foo#bar", packed_metadata)
+              .SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), expected_response.SerializeAsString())));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(500)));
+  EXPECT_CALL(mock_clock_, Sleep(absl::Milliseconds(2)));
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
           pending_operation_response, initial_request_creator_,

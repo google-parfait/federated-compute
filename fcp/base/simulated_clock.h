@@ -37,6 +37,9 @@ class SimulatedClock : public Clock {
   // Returns the simulated time.
   absl::Time Now() override;
 
+  // Sleeps until the specified duration has elapsed according to this clock.
+  void Sleep(absl::Duration d) override;
+
   // Sets the simulated time. Wakes up any waiters whose deadlines have now
   // expired.
   void SetTime(absl::Time t);
