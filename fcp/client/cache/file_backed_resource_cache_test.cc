@@ -61,6 +61,14 @@ google::protobuf::Any Metadata() {
 absl::Duration kMaxAge = absl::Hours(1);
 int64_t kMaxCacheSizeBytes = 10000000;
 
+int NumFilesInDir(std::filesystem::path dir) {
+  int num_files_in_dir = 0;
+  for ([[maybe_unused]] auto& de : std::filesystem::directory_iterator(dir)) {
+    num_files_in_dir++;
+  }
+  return num_files_in_dir;
+}
+
 class FileBackedResourceCacheTest : public testing::Test {
  protected:
   void SetUp() override {
@@ -161,6 +169,105 @@ TEST_F(FileBackedResourceCacheTest, CacheFileCloseReinitializeFileStillCached) {
         cached_resource = (*resource_cache)->Get(kKey1, std::nullopt);
     ASSERT_OK(cached_resource);
     ASSERT_EQ(Resource1(), (*cached_resource).resource);
+  }
+}
+
+TEST_F(FileBackedResourceCacheTest, CacheTooBigFileReturnsResourceExhausted) {
+  auto resource_cache = FileBackedResourceCache::Create(
+      root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+      (int64_t)(Resource1().size() / 2));
+  ASSERT_OK(resource_cache);
+  ASSERT_THAT(
+      (*resource_cache)->Put(kKey1, Resource1(), Metadata(), absl::Hours(1)),
+      IsCode(RESOURCE_EXHAUSTED));
+}
+
+TEST_F(FileBackedResourceCacheTest,
+       UnreadableManifestReturnsInternalButIsThenReadable) {
+  {
+    auto resource_cache = FileBackedResourceCache::Create(
+        root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+        kMaxCacheSizeBytes);
+    ASSERT_OK(resource_cache);
+    ASSERT_OK(
+        (*resource_cache)->Put(kKey1, Resource1(), Metadata(), absl::Hours(1)));
+  }
+
+  // There should be the one file we cached.
+  ASSERT_EQ(NumFilesInDir(cache_dir_), 1);
+
+  // Write some garbage to the manifest.
+  {
+    std::ofstream ofs(manifest_path_, std::ofstream::trunc);
+    ofs << "garbage garbage garbage";
+  }
+
+  {
+    EXPECT_CALL(log_manager_,
+                LogDiag(ProdDiagCode::RESOURCE_CACHE_MANIFEST_READ_FAILED));
+    auto resource_cache = FileBackedResourceCache::Create(
+        root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+        kMaxCacheSizeBytes);
+    ASSERT_THAT(resource_cache, IsCode(INTERNAL));
+  }
+
+  // Failing to read the manifest should have reset it and cleaned up the cache
+  // dir.
+  ASSERT_EQ(NumFilesInDir(cache_dir_), 0);
+
+  // We should be able to create a new FileBackedResourceCache successfully
+  // since it was reset.
+  {
+    auto resource_cache = FileBackedResourceCache::Create(
+        root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+        kMaxCacheSizeBytes);
+    ASSERT_OK(resource_cache);
+    ASSERT_THAT((*resource_cache)->Get(kKey1, std::nullopt), IsCode(NOT_FOUND));
+  }
+}
+
+TEST_F(FileBackedResourceCacheTest,
+       UnreadableManifestReturnsInternalButIsThenWritable) {
+  {
+    auto resource_cache = FileBackedResourceCache::Create(
+        root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+        kMaxCacheSizeBytes);
+    ASSERT_OK(resource_cache);
+    ASSERT_OK(
+        (*resource_cache)->Put(kKey1, Resource1(), Metadata(), absl::Hours(1)));
+  }
+
+  // There should be the one file we cached.
+  ASSERT_EQ(NumFilesInDir(cache_dir_), 1);
+
+  // Write some garbage to the manifest.
+  {
+    std::ofstream ofs(manifest_path_, std::ofstream::trunc);
+    ofs << "garbage garbage garbage";
+  }
+
+  {
+    EXPECT_CALL(log_manager_,
+                LogDiag(ProdDiagCode::RESOURCE_CACHE_MANIFEST_READ_FAILED));
+    auto resource_cache = FileBackedResourceCache::Create(
+        root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+        kMaxCacheSizeBytes);
+    ASSERT_THAT(resource_cache, IsCode(INTERNAL));
+  }
+
+  // Failing to read the manifest should have reset it and cleaned up the cache
+  // dir.
+  ASSERT_EQ(NumFilesInDir(cache_dir_), 0);
+
+  // We should be able to create a new FileBackedResourceCache successfully
+  // since it was reset.
+  {
+    auto resource_cache = FileBackedResourceCache::Create(
+        root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+        kMaxCacheSizeBytes);
+    ASSERT_OK(resource_cache);
+    ASSERT_OK(
+        (*resource_cache)->Put(kKey1, Resource1(), Metadata(), absl::Hours(1)));
   }
 }
 
@@ -342,12 +449,7 @@ TEST_F(FileBackedResourceCacheTest, FileInCacheDirButNotInManifest) {
   std::filesystem::remove(manifest_path_);
 
   // There should be the one file we cached.
-  int num_files_in_cache_dir = 0;
-  for ([[maybe_unused]] auto& de :
-       std::filesystem::directory_iterator(cache_dir_)) {
-    num_files_in_cache_dir++;
-  }
-  ASSERT_EQ(num_files_in_cache_dir, 1);
+  ASSERT_EQ(NumFilesInDir(cache_dir_), 1);
 
   {
     auto resource_cache = FileBackedResourceCache::Create(
@@ -359,12 +461,7 @@ TEST_F(FileBackedResourceCacheTest, FileInCacheDirButNotInManifest) {
     ASSERT_THAT(cached_resource, IsCode(NOT_FOUND));
     // The cache dir should also be empty, because we reinitialized the cache
     // and there was an untracked file in it.
-    num_files_in_cache_dir = 0;
-    for ([[maybe_unused]] auto& de :
-         std::filesystem::directory_iterator(cache_dir_)) {
-      num_files_in_cache_dir++;
-    }
-    ASSERT_EQ(num_files_in_cache_dir, 0);
+    ASSERT_EQ(NumFilesInDir(cache_dir_), 0);
   }
 }
 

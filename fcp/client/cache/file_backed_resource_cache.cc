@@ -60,6 +60,7 @@ absl::StatusOr<CacheManifest> FileBackedResourceCache::ReadInternal() {
     return *data.value();
   }
   log_manager_.LogDiag(ProdDiagCode::RESOURCE_CACHE_MANIFEST_READ_FAILED);
+  FCP_RETURN_IF_ERROR(Initialize(/*reset=*/true));
   return absl::InternalError(
       absl::StrCat("Failed to read from database, with error message: ",
                    data.status().message()));
@@ -70,6 +71,7 @@ absl::Status FileBackedResourceCache::WriteInternal(
   absl::Status status = pds_->Write(std::move(manifest));
   if (!status.ok()) {
     log_manager_.LogDiag(ProdDiagCode::RESOURCE_CACHE_MANIFEST_WRITE_FAILED);
+    FCP_RETURN_IF_ERROR(Initialize(/*reset=*/true));
   }
   return status;
 }
@@ -117,8 +119,10 @@ FileBackedResourceCache::Create(absl::string_view base_dir,
       absl::WrapUnique(new FileBackedResourceCache(
           std::move(pds), std::move(file_storage), cache_dir_path,
           manifest_path, log_manager, clock, max_cache_size_bytes));
-
-  FCP_RETURN_IF_ERROR(resource_cache->Initialize());
+  {
+    absl::MutexLock lock(&resource_cache->mutex_);
+    FCP_RETURN_IF_ERROR(resource_cache->Initialize(/*reset=*/false));
+  }
 
   return resource_cache;
 }
@@ -134,7 +138,6 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
   }
 
   FCP_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
-
   FCP_RETURN_IF_ERROR(CleanUp(resource.size(), manifest));
 
   std::filesystem::path cached_file_path = cache_dir_path_ / cache_id;
@@ -150,8 +153,8 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
 
   // Write the manifest back to disk before we write the file.
   manifest.mutable_cache()->insert({std::string(cache_id), cached_resource});
-  absl::Status status =
-      WriteInternal(std::make_unique<CacheManifest>(std::move(manifest)));
+  FCP_RETURN_IF_ERROR(
+      WriteInternal(std::make_unique<CacheManifest>(std::move(manifest))));
 
   // Write file if it doesn't exist.
   if (!std::filesystem::exists(cached_file_path)) {
@@ -211,8 +214,16 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
   return FileBackedResourceCache::ResourceAndMetadata{*contents, metadata};
 }
 
-absl::Status FileBackedResourceCache::Initialize() {
-  absl::MutexLock lock(&mutex_);
+absl::Status FileBackedResourceCache::Initialize(bool reset) {
+  // Delete the manifest, forcing re-initialization and all cached resources to
+  // be cleaned up.
+  if (reset && std::filesystem::exists(manifest_path_)) {
+    std::error_code error;
+    std::filesystem::remove(manifest_path_, error);
+    if (error.value() != 0) {
+      return absl::InternalError("Failed to reset manifest!");
+    }
+  }
   std::string pds_path = manifest_path_.string();
   if (!std::filesystem::exists(pds_path)) {
     std::ofstream ofs(pds_path);
