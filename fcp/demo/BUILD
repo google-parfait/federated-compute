@@ -49,3 +49,26 @@ py_test(
         "@com_google_absl_py//absl/testing:absltest",
     ],
 )
+
+py_library(
+    name = "media",
+    srcs = ["media.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":http_actions",
+        "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+    ],
+)
+
+py_test(
+    name = "media_test",
+    srcs = ["media_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":http_actions",
+        ":media",
+        "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+        "@com_google_absl_py//absl/testing:absltest",
+    ],
+)
