@@ -19,3 +19,10 @@
 
 FCP_COPTS = [
 ]
+
+FCP_BAREMETAL_COPTS = FCP_COPTS + [
+    "-D_FCP_BAREMETAL",
+    "-nostdlib",
+    "-fno-exceptions",
+    "-ffreestanding",
+]

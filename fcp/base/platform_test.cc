@@ -18,6 +18,7 @@
 
 #include "gtest/gtest.h"
 #include "absl/strings/cord.h"
+#include "fcp/base/base_name.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
 

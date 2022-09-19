@@ -16,12 +16,23 @@
 
 #include "fcp/base/monitoring.h"
 
+#include <stdio.h>
+
 #include <string>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/base/log_severity.h"
+#include "absl/strings/str_format.h"
+#include "fcp/base/base_name.h"
 
 namespace fcp {
+
+namespace internal {
+// Baremetal tests don't write to stderr, so allow setting a custom
+// logger compatible with the non-baremetal version.
+extern Logger* logger;
+}  // namespace internal
 
 namespace {
 
@@ -35,53 +46,90 @@ MATCHER_P(IsOkAndHolds, m, "") {
          testing::ExplainMatchResult(m, arg.value(), result_listener);
 }
 
-TEST(MonitoringTest, LogInfo) {
+class BaremetalLogger final : public internal::Logger {
+ public:
+  void Log(const char* file, int line, LogSeverity severity,
+           const char* message) override {
+    absl::FPrintF(stderr, "%c %s:%d %s\n",
+                  absl::LogSeverityName(static_cast<absl::LogSeverity>(
+                      static_cast<int>(severity)))[0],
+                  BaseName(file), line, message);
+  }
+};
+
+class MonitoringTest : public ::testing::TestWithParam<bool> {
+ public:
+  void SetUp() override {
+    if (replace_logger_) {
+      prev_logger_ = internal::logger;
+      internal::logger = &logger_;
+    }
+  }
+  void TearDown() override {
+    if (replace_logger_) {
+      internal::logger = prev_logger_;
+    }
+  }
+
+ private:
+  const bool replace_logger_ = GetParam();
+  internal::Logger* prev_logger_ = nullptr;
+  BaremetalLogger logger_;
+};
+
+#ifdef _FCP_BAREMETAL
+INSTANTIATE_TEST_SUITE_P(Baremetal, MonitoringTest, testing::Values(true));
+#else
+INSTANTIATE_TEST_SUITE_P(Base, MonitoringTest, testing::Values(false));
+#endif
+
+TEST_P(MonitoringTest, LogInfo) {
   testing::internal::CaptureStderr();
   FCP_LOG(INFO) << "info log of something happening";
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("I.*info log of something happening\n"));
 }
 
-TEST(MonitoringTest, LogWarning) {
+TEST_P(MonitoringTest, LogWarning) {
   testing::internal::CaptureStderr();
   FCP_LOG(WARNING) << "warning log of something happening";
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("W.*warning log of something happening\n"));
 }
 
-TEST(MonitoringTest, LogError) {
+TEST_P(MonitoringTest, LogError) {
   testing::internal::CaptureStderr();
   FCP_LOG(ERROR) << "error log of something happening";
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("E.*error log of something happening\n"));
 }
 
-TEST(MonitoringDeathTest, LogFatal) {
+TEST_P(MonitoringTest, LogFatal) {
   ASSERT_DEATH({ FCP_LOG(FATAL) << "fatal log"; }, "fatal log");
 }
 
-TEST(MonitoringTest, StatusBuilderLogInfo) {
+TEST_P(MonitoringTest, StatusBuilderLogInfo) {
   testing::internal::CaptureStderr();
   Status status = (FCP_STATUS(ABORTED) << "something happened").LogInfo();
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("I.*something happened\n"));
 }
 
-TEST(MonitoringTest, StatusBuilderLogWarning) {
+TEST_P(MonitoringTest, StatusBuilderLogWarning) {
   testing::internal::CaptureStderr();
   Status status = (FCP_STATUS(ABORTED) << "something happened").LogWarning();
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("W.*something happened\n"));
 }
 
-TEST(MonitoringTest, StatusBuilderLogError) {
+TEST_P(MonitoringTest, StatusBuilderLogError) {
   testing::internal::CaptureStderr();
   Status status = (FCP_STATUS(ABORTED) << "something happened").LogError();
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("E.*something happened\n"));
 }
 
-TEST(MonitoringDeathTest, StatusBuilderLogFatal) {
+TEST_P(MonitoringTest, StatusBuilderLogFatal) {
   ASSERT_DEATH(
       {
         Status status =
@@ -90,27 +138,27 @@ TEST(MonitoringDeathTest, StatusBuilderLogFatal) {
       "something happened");
 }
 
-TEST(MonitoringTest, LogIfTrue) {
+TEST_P(MonitoringTest, LogIfTrue) {
   testing::internal::CaptureStderr();
   FCP_LOG_IF(INFO, true) << "some log";
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("I.*some log\n"));
 }
 
-TEST(MonitoringTest, LogIfFalse) {
+TEST_P(MonitoringTest, LogIfFalse) {
   testing::internal::CaptureStderr();
   FCP_LOG_IF(INFO, false) << "some log";
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_EQ(output, "");
 }
 
-TEST(MonitoringTest, CheckSucceeds) { FCP_CHECK(1 < 2); }
+TEST_P(MonitoringTest, CheckSucceeds) { FCP_CHECK(1 < 2); }
 
-TEST(MonitoringDeathTest, CheckFails) {
+TEST_P(MonitoringTest, CheckFails) {
   ASSERT_DEATH({ FCP_CHECK(1 < 0); }, "Check failed: 1 < 0.");
 }
 
-TEST(MonitoringTest, StatusOr) {
+TEST_P(MonitoringTest, StatusOr) {
   StatusOr<int> fail_status = FCP_STATUS(ABORTED) << "operation aborted";
   ASSERT_FALSE(fail_status.ok());
   ASSERT_EQ(fail_status.status().code(), ABORTED);
@@ -120,12 +168,12 @@ TEST(MonitoringTest, StatusOr) {
               MatchesRegex(".*operation aborted"));
 }
 
-TEST(MonitoringTest, StatusBuilder) {
+TEST_P(MonitoringTest, StatusBuilder) {
   ASSERT_FALSE(FCP_STATUS(ABORTED).ok());
   ASSERT_EQ(FCP_STATUS(ABORTED).code(), ABORTED);
 }
 
-TEST(MonitoringTest, FcpReturnIfError) {
+TEST_P(MonitoringTest, FcpReturnIfError) {
   ASSERT_THAT(
       []() -> StatusOr<int> {
         Status fail_status = FCP_STATUS(ABORTED);

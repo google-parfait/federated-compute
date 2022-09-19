@@ -37,11 +37,13 @@
 
 namespace fcp {
 
+namespace {
 #ifdef _WIN32
-const char* kPathSeparator = "\\";
+constexpr char kPathSeparator[] = "\\";
 #else
-const char* kPathSeparator = "/";
+constexpr char kPathSeparator[] = "/";
 #endif
+}  // namespace
 
 std::string ConcatPath(absl::string_view path1, absl::string_view path2) {
   if (path1.empty()) {
@@ -135,12 +137,6 @@ absl::Status ReadFileToMessage(absl::string_view file_name,
 bool FileExists(absl::string_view file_name) {
   struct stat info;
   return stat(std::string(file_name).c_str(), &info) == 0;
-}
-
-std::string BaseName(absl::string_view path) {
-  // Note that find_last_of returns npos if not found, and npos+1 is guaranteed
-  // to be zero.
-  return std::string(path.substr(path.find_last_of(kPathSeparator) + 1));
 }
 
 std::string GetDataPath(absl::string_view relative_path) {

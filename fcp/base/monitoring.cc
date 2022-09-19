@@ -16,21 +16,24 @@
 
 #include "fcp/base/monitoring.h"
 
+#include <stdlib.h> /* for abort() */
+
+#include <string>
+
+#ifndef _FCP_BAREMETAL
 #include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h> /* for abort() */
-#include <string.h>
 
 #ifdef __ANDROID__
 #include <android/log.h>
 #endif
 
 #include <cstring>
-#include <string>
 
-#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
-#include "fcp/base/platform.h"
+#endif  // _FCP_BAREMETAL
+
+#include "fcp/base/base_name.h"
 
 namespace fcp {
 
@@ -40,25 +43,27 @@ namespace {
 #ifdef __ANDROID__
 constexpr char kAndroidLogTag[] = "fcp";
 
-int AndroidLogLevel(absl::LogSeverity severity) {
+int AndroidLogLevel(LogSeverity severity) {
   switch (severity) {
-    case absl::LogSeverity::kFatal:
+    case LogSeverity::kFatal:
       return ANDROID_LOG_FATAL;
-    case absl::LogSeverity::kError:
+    case LogSeverity::kError:
       return ANDROID_LOG_ERROR;
-    case absl::LogSeverity::kWarning:
+    case LogSeverity::kWarning:
       return ANDROID_LOG_WARN;
     default:
       return ANDROID_LOG_INFO;
   }
 }
 #endif
+
 }  // namespace
 
 Logger* logger = new Logger();
 
-void Logger::Log(const char* file, int line, absl::LogSeverity severity,
+void Logger::Log(const char* file, int line, LogSeverity severity,
                  const char* message) {
+#ifndef _FCP_BAREMETAL
   auto base_file_name = BaseName(file);
 #ifdef __ANDROID__
   bool log_to_logcat = true;
@@ -69,20 +74,21 @@ void Logger::Log(const char* file, int line, absl::LogSeverity severity,
   // __android_log_is_loggable, but that function isn't available until Android
   // API level 30. So to keep things simple we only log warnings or above,
   // unless this is a debug build.
-  log_to_logcat = severity != absl::LogSeverity::kInfo;
-#endif
+  log_to_logcat = severity != LogSeverity::kInfo;
+#endif  // NDEBUG
   if (log_to_logcat) {
     int level = AndroidLogLevel(severity);
     __android_log_print(level, kAndroidLogTag, "%c %s:%d %s\n",
                         absl::LogSeverityName(severity)[0],
                         base_file_name.c_str(), line, message);
   }
-#endif
+#endif  // __ANDROID__
   // Note that on Android we print both to logcat *and* stderr. This allows
   // tests to use ASSERT_DEATH to test for fatal error messages, among other
   // uses.
   absl::FPrintF(stderr, "%c %s:%d %s\n", absl::LogSeverityName(severity)[0],
                 base_file_name, line, message);
+#endif  // _FCP_BAREMETAL
 }
 
 StatusBuilder::StatusBuilder(StatusCode code, const char* file, int line)
@@ -97,18 +103,25 @@ StatusBuilder::StatusBuilder(StatusBuilder const& other)
 StatusBuilder::operator Status() {
   auto message_str = message_.str();
   if (code_ != OK) {
-    message_str = absl::StrCat("(at ", BaseName(file_), ":",
-                               std::to_string(line_), ") ", message_str);
+    StringStream status_message;
+    status_message << "(at " << BaseName(file_) << ":" << line_ << message_str;
+    message_str = status_message.str();
     if (log_severity_ != kNoLog) {
-      logger->Log(file_, line_, log_severity_,
-                  absl::StrCat("[", code_, "] ", message_str).c_str());
-      if (log_severity_ == absl::LogSeverity::kFatal) {
+      StringStream log_message;
+      log_message << "[" << code_ << "] " << message_str;
+      logger->Log(file_, line_, log_severity_, log_message.str().c_str());
+      if (log_severity_ == LogSeverity::kFatal) {
         abort();
       }
     }
   }
   return Status(code_, message_str);
 }
+
+#ifdef _FCP_BAREMETAL
+const Status* kOkStatus = new Status();
+Status const* OkStatus() { return kOkStatus; }
+#endif
 
 }  // namespace internal
 

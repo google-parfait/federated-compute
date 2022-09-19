@@ -16,17 +16,25 @@
 #ifndef FCP_BASE_MONITORING_H_
 #define FCP_BASE_MONITORING_H_
 
-#include <cstdlib>
-#include <iostream>
-#include <sstream>
 #include <string>
 #include <utility>
+
+#ifdef _FCP_BAREMETAL
+#include <variant>
+
+#include "fcp/base/string_stream.h"
+#else
+#include <cstdlib>
+#include <iostream>
+#include <ostream>
+#include <sstream>
 
 #include "absl/base/attributes.h"
 #include "absl/base/log_severity.h"
 #include "absl/base/optimization.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#endif  // _FCP_BAREMETAL
 
 namespace fcp {
 
@@ -59,14 +67,36 @@ constexpr bool fcp_debug = false;
   !(condition) ? (void)0                \
                : ::fcp::internal::LogMessageVoidify() & _FCP_LOG_##severity
 
+/**
+ * Log Severity
+ */
+#ifdef _FCP_BAREMETAL
+enum class LogSeverity : int {
+  kInfo = 0,
+  kWarning = 1,
+  kError = 2,
+  kFatal = 3,
+};
+#else
+using LogSeverity = absl::LogSeverity;
+#endif  // _FCP_BAREMETAL
+
 #define _FCP_LOG_INFO \
-  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::absl::LogSeverity::kInfo)
+  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kInfo)
 #define _FCP_LOG_WARNING \
-  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::absl::LogSeverity::kWarning)
+  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kWarning)
 #define _FCP_LOG_ERROR \
-  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::absl::LogSeverity::kError)
+  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kError)
 #define _FCP_LOG_FATAL \
-  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::absl::LogSeverity::kFatal)
+  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kFatal)
+
+#ifdef _FCP_BAREMETAL
+#define FCP_PREDICT_FALSE(x) (x)
+#define FCP_PREDICT_TRUE(x) (x)
+#else
+#define FCP_PREDICT_FALSE(x) ABSL_PREDICT_FALSE(x)
+#define FCP_PREDICT_TRUE(x) ABSL_PREDICT_TRUE(x)
+#endif
 
 /**
  * Check that the condition holds, otherwise die. Any additional messages can
@@ -74,18 +104,18 @@ constexpr bool fcp_debug = false;
  *
  *     FCP_CHECK(condition) << "stuff went wrong";
  */
-#define FCP_CHECK(condition)                          \
-  FCP_LOG_IF(FATAL, ABSL_PREDICT_FALSE(!(condition))) \
+#define FCP_CHECK(condition)                         \
+  FCP_LOG_IF(FATAL, FCP_PREDICT_FALSE(!(condition))) \
       << ("Check failed: " #condition ". ")
 
 /**
  * Check that the expression generating a status code is OK, otherwise die.
  * Any additional messages can be streamed into the invocation.
  */
-#define FCP_CHECK_STATUS(status)                                    \
-  for (auto __check_status = (status);                              \
-       __check_status.code() != absl::StatusCode::kOk;)             \
-  FCP_LOG_IF(FATAL, __check_status.code() != absl::StatusCode::kOk) \
+#define FCP_CHECK_STATUS(status)                                     \
+  for (auto __check_status = (status);                               \
+       __check_status.code() != ::fcp::StatusCode::kOk;)             \
+  FCP_LOG_IF(FATAL, __check_status.code() != ::fcp::StatusCode::kOk) \
       << "status not OK: " << __check_status
 
 // Logging Implementation Details
@@ -109,7 +139,7 @@ class Logger {
    * @param severity  Severity of the log message.
    * @param message  The message to log.
    */
-  virtual void Log(const char* file, int line, absl::LogSeverity severity,
+  virtual void Log(const char* file, int line, LogSeverity severity,
                    const char* message);
 };
 
@@ -120,13 +150,17 @@ class Logger {
  */
 extern Logger* logger;
 
+#ifndef _FCP_BAREMETAL
+using StringStream = std::ostringstream;
+#endif  // _FCP_BAREMETAL
+
 /**
  * Object allowing to construct a log message by streaming into it. This is
  * used by the macro LOG(severity).
  */
 class LogMessage {
  public:
-  LogMessage(const char* file, int line, absl::LogSeverity severity)
+  LogMessage(const char* file, int line, LogSeverity severity)
       : file_(file), line_(line), severity_(severity) {}
 
   template <typename T>
@@ -135,14 +169,16 @@ class LogMessage {
     return *this;
   }
 
+#ifndef _FCP_BAREMETAL
   LogMessage& operator<<(std::ostream& (*pf)(std::ostream&)) {
     message_ << pf;
     return *this;
   }
+#endif
 
   ~LogMessage() {
     logger->Log(file_, line_, severity_, message_.str().c_str());
-    if (severity_ == absl::LogSeverity::kFatal) {
+    if (severity_ == LogSeverity::kFatal) {
       abort();
     }
   }
@@ -150,8 +186,8 @@ class LogMessage {
  private:
   const char* file_;
   int line_;
-  absl::LogSeverity severity_;
-  std::ostringstream message_;
+  LogSeverity severity_;
+  StringStream message_;
 };
 
 /**
@@ -168,11 +204,8 @@ class LogMessageVoidify {
 
 }  // namespace internal
 
-// Status
-// ======
-
-// Note that the type Status is currently a proto defined in status.proto.
-// This proto is re-exported by this header.
+// Status and StatusOr
+// ===================
 
 /**
  * Constructor for a status. A status message can be streamed into it. This
@@ -199,15 +232,161 @@ class LogMessageVoidify {
 #define FCP_STATUS(code) \
   ::fcp::internal::MakeStatusBuilder(code, __FILE__, __LINE__)
 
-// TODO(team): Remove compatibility aliases below once transition to
-// absl::Status is complete.
+#ifdef _FCP_BAREMETAL
+#define FCP_MUST_USE_RESULT __attribute__((warn_unused_result))
+#else
+#define FCP_MUST_USE_RESULT ABSL_MUST_USE_RESULT
+#endif
+
+#ifdef _FCP_BAREMETAL
+
+// The bare-metal implementation doesn't depend on Abseil library and
+// provides its own implementations of StatusCode, Status and StatusOr that are
+// source code compatible with absl::StatusCode, absl::Status,
+// and absl::StatusOr.
+
+// See absl::StatusCode for details.
+enum StatusCode : int {
+  kOk = 0,
+  kCancelled = 1,
+  kUnknown = 2,
+  kInvalidArgument = 3,
+  kDeadlineExceeded = 4,
+  kNotFound = 5,
+  kAlreadyExists = 6,
+  kPermissionDenied = 7,
+  kResourceExhausted = 8,
+  kFailedPrecondition = 9,
+  kAborted = 10,
+  kOutOfRange = 11,
+  kUnimplemented = 12,
+  kInternal = 13,
+  kUnavailable = 14,
+  kDataLoss = 15,
+  kUnauthenticated = 16,
+};
+
+class FCP_MUST_USE_RESULT Status final {
+ public:
+  Status() : code_(StatusCode::kOk) {}
+  Status(StatusCode code, const std::string& message)
+      : code_(code), message_(message) {}
+
+  // Status is copyable and moveable.
+  Status(const Status&) = default;
+  Status& operator=(const Status&) = default;
+  Status(Status&&) = default;
+  Status& operator=(Status&&) = default;
+
+  // Tests whether this status is OK.
+  bool ok() const { return code_ == StatusCode::kOk; }
+
+  // Gets this status code.
+  StatusCode code() const { return code_; }
+
+  // Gets this status message.
+  const std::string& message() const { return message_; }
+
+ private:
+  StatusCode code_;
+  std::string message_;
+};
+
+namespace internal {
+Status const* OkStatus();
+}
+
+template <typename T>
+class FCP_MUST_USE_RESULT StatusOr final {
+ public:
+  // Constructs a StatusOr from a failed status. The passed status must not be
+  // OK. This constructor is expected to be implicitly called.
+  StatusOr(Status status)  // NOLINT
+      : impl_(Impl(std::in_place_index_t<kStatusIndex>(), std::move(status))) {
+    FCP_CHECK(!this->status().ok());
+  }
+
+  // Constructs a StatusOr from a status code.
+  explicit StatusOr(StatusCode code) : StatusOr(code, "") {}
+
+  // Constructs a StatusOr from a status code and a message.
+  StatusOr(StatusCode code, const std::string& message)
+      : impl_(Impl(std::in_place_index_t<kStatusIndex>(),
+                   Status(code, message))) {
+    FCP_CHECK(!this->status().ok());
+  }
+
+  // Construct a StatusOr from a value.
+  StatusOr(const T& value)  // NOLINT
+      : impl_(Impl(std::in_place_index_t<kValueIndex>(), value)) {}
+
+  // Construct a StatusOr from an R-value.
+  StatusOr(T&& value)  // NOLINT
+      : impl_(Impl(std::in_place_index_t<kValueIndex>(), std::move(value))) {}
+
+  // StatusOr is copyable and moveable.
+  StatusOr(const StatusOr& other) = default;
+  StatusOr(StatusOr&& other) = default;
+  StatusOr& operator=(const StatusOr& other) = default;
+  StatusOr& operator=(StatusOr&& other) = default;
+
+  // Tests whether this StatusOr is OK and has a value.
+  bool ok() const { return impl_.index() == kValueIndex; }
+
+  // Returns the status.
+  const Status& status() const {
+    return impl_.index() == kValueIndex ? *internal::OkStatus()
+                                        : std::get<kStatusIndex>(impl_);
+  }
+
+  // Returns the value if the StatusOr is OK.
+  const T& value() const& {
+    CheckOk();
+    return std::get<kValueIndex>(impl_);
+  }
+  T& value() & {
+    CheckOk();
+    return std::get<kValueIndex>(impl_);
+  }
+  T&& value() && {
+    CheckOk();
+    return std::get<kValueIndex>(std::move(impl_));
+  }
+
+  // Operator *
+  const T& operator*() const& { return value(); }
+  T& operator*() & { return value(); }
+  T&& operator*() && { return value(); }
+
+  // Operator ->
+  const T* operator->() const { return &value(); }
+  T* operator->() { return &value(); }
+
+  // Used to explicitly ignore a StatusOr (avoiding unused-result warnings).
+  void Ignore() const {}
+
+ private:
+  void CheckOk() const { FCP_CHECK(ok()) << "StatusOr has no value"; }
+
+  enum Indices : std::size_t {
+    kStatusIndex = 0,
+    kValueIndex = 1,
+  };
+  using Impl = std::variant<Status, T>;
+
+  Impl impl_{};
+};
+
+#else
+
+// By default absl::Status and absl::StatusOr classes are used.
 using Status = absl::Status;
 using StatusCode = absl::StatusCode;
 template <typename T>
 using StatusOr = absl::StatusOr<T>;
 
-// TODO(team): Remove compatibility status code definitions below once
-// transition to absl::Status is complete.
+#endif  // _FCP_BAREMETAL
+
 constexpr auto OK = StatusCode::kOk;
 constexpr auto CANCELLED = StatusCode::kCancelled;
 constexpr auto UNKNOWN = StatusCode::kUnknown;
@@ -216,7 +395,6 @@ constexpr auto DEADLINE_EXCEEDED = StatusCode::kDeadlineExceeded;
 constexpr auto NOT_FOUND = StatusCode::kNotFound;
 constexpr auto ALREADY_EXISTS = StatusCode::kAlreadyExists;
 constexpr auto PERMISSION_DENIED = StatusCode::kPermissionDenied;
-constexpr auto UNAUTHENTICATED = StatusCode::kUnauthenticated;
 constexpr auto RESOURCE_EXHAUSTED = StatusCode::kResourceExhausted;
 constexpr auto FAILED_PRECONDITION = StatusCode::kFailedPrecondition;
 constexpr auto ABORTED = StatusCode::kAborted;
@@ -225,6 +403,7 @@ constexpr auto UNIMPLEMENTED = StatusCode::kUnimplemented;
 constexpr auto INTERNAL = StatusCode::kInternal;
 constexpr auto UNAVAILABLE = StatusCode::kUnavailable;
 constexpr auto DATA_LOSS = StatusCode::kDataLoss;
+constexpr auto UNAUTHENTICATED = StatusCode::kUnauthenticated;
 
 namespace internal {
 /** Functions to assist with FCP_RETURN_IF_ERROR() */
@@ -245,12 +424,12 @@ inline const Status AsStatus(const StatusOr<T>& status_or) {
  *       return FCP_STATUS(OK);
  *     }
  */
-#define FCP_RETURN_IF_ERROR(expr)                            \
-  do {                                                       \
-    absl::Status __status = ::fcp::internal::AsStatus(expr); \
-    if (__status.code() != absl::StatusCode::kOk) {          \
-      return (__status);                                     \
-    }                                                        \
+#define FCP_RETURN_IF_ERROR(expr)                             \
+  do {                                                        \
+    ::fcp::Status __status = ::fcp::internal::AsStatus(expr); \
+    if (__status.code() != ::fcp::StatusCode::kOk) {          \
+      return (__status);                                      \
+    }                                                         \
   } while (false)
 
 /**
@@ -291,7 +470,7 @@ namespace internal {
  * into it. Implicitly converts to Status and StatusOr so can be used as a drop
  * in replacement when those types are expected.
  */
-class ABSL_MUST_USE_RESULT StatusBuilder {
+class FCP_MUST_USE_RESULT StatusBuilder {
  public:
   /** Construct a StatusBuilder from status code. */
   StatusBuilder(StatusCode code, const char* file, int line);
@@ -316,25 +495,25 @@ class ABSL_MUST_USE_RESULT StatusBuilder {
 
   /** Mark this builder to emit a log message when the result is constructed. */
   inline StatusBuilder& LogInfo() {
-    log_severity_ = absl::LogSeverity::kInfo;
+    log_severity_ = LogSeverity::kInfo;
     return *this;
   }
 
   /** Mark this builder to emit a log message when the result is constructed. */
   inline StatusBuilder& LogWarning() {
-    log_severity_ = absl::LogSeverity::kWarning;
+    log_severity_ = LogSeverity::kWarning;
     return *this;
   }
 
   /** Mark this builder to emit a log message when the result is constructed. */
   inline StatusBuilder& LogError() {
-    log_severity_ = absl::LogSeverity::kError;
+    log_severity_ = LogSeverity::kError;
     return *this;
   }
 
   /** Mark this builder to emit a log message when the result is constructed. */
   inline StatusBuilder& LogFatal() {
-    log_severity_ = absl::LogSeverity::kFatal;
+    log_severity_ = LogSeverity::kFatal;
     return *this;
   }
 
@@ -348,17 +527,14 @@ class ABSL_MUST_USE_RESULT StatusBuilder {
   }
 
  private:
-  static constexpr absl::LogSeverity kNoLog =
-      static_cast<absl::LogSeverity>(-1);
+  static constexpr LogSeverity kNoLog = static_cast<LogSeverity>(-1);
   const char* const file_;
   const int line_;
   const StatusCode code_;
-  std::ostringstream message_;
-  absl::LogSeverity log_severity_ =
-      fcp_debug ? absl::LogSeverity::kInfo : kNoLog;
+  StringStream message_;
+  LogSeverity log_severity_ = fcp_debug ? LogSeverity::kInfo : kNoLog;
 };
 
-/** Workaround for ABSL_MUST_USE_RESULT ignoring constructors */
 inline StatusBuilder MakeStatusBuilder(StatusCode code, const char* file,
                                        int line) {
   return StatusBuilder(code, file, line);

@@ -20,9 +20,10 @@
 #include <string>
 
 #include "google/protobuf/message.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
-#include "fcp/base/monitoring.h"
 
 // This file defines platform dependent utilities.
 
@@ -66,11 +67,6 @@ absl::Status WriteStringToFile(absl::string_view file_name,
  */
 absl::Status WriteCordToFile(absl::string_view file_name,
                              const absl::Cord& content);
-
-/**
- * Returns the file base name of a path.
- */
-std::string BaseName(absl::string_view path);
 
 /**
  * Returns true if the file exists.
