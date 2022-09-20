@@ -201,32 +201,6 @@ cc_test(
 )
 
 cc_library(
-    name = "type",
-    srcs = [
-        "type.cc",
-    ],
-    hdrs = [
-        "type.h",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":base",
-        "@com_google_absl//absl/meta:type_traits",
-    ],
-)
-
-cc_test(
-    name = "type_test",
-    srcs = ["type_test.cc"],
-    copts = FCP_COPTS,
-    deps = [
-        ":type",
-        "@com_google_absl//absl/hash:hash_testing",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
     name = "future",
     srcs = [
         "future.cc",
