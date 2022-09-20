@@ -1,0 +1,8 @@
+# Requirements for the Federated Compute development environment.
+#
+# Note: There is bug in `pip` when multiple packages use the compatible release
+# operator `~=` to specify a version and one of those versions ends in `0`. See
+# https://github.com/pypa/pip/issues/9613 for more information. In this case,
+# use the equivalent clause `>=x.0,==x.*` instead of `~=x.0`.
+
+tensorflow~=2.10.0

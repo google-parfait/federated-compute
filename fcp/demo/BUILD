@@ -72,3 +72,28 @@ py_test(
         "@com_google_absl_py//absl/testing:absltest",
     ],
 )
+
+py_library(
+    name = "plan_utils",
+    srcs = ["plan_utils.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//fcp/protos:plan_py_pb2",
+        "@com_google_protobuf//:protobuf_python",
+        "@pip//pypi__tensorflow",
+    ],
+)
+
+py_test(
+    name = "plan_utils_test",
+    size = "medium",
+    srcs = ["plan_utils_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":plan_utils",
+        "//fcp/protos:plan_py_pb2",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@pip//pypi__tensorflow",
+    ],
+)

@@ -82,6 +82,13 @@ http_archive(
     urls = ["https://github.com/google/glog/archive/v0.5.0.zip"],
 )
 
+http_archive(
+    name = "rules_python",
+    sha256 = "b593d13bb43c94ce94b483c2858e53a9b811f6f10e1e0eedc61073bd90e58d9c",
+    strip_prefix = "rules_python-0.12.0",
+    url = "https://github.com/bazelbuild/rules_python/archive/refs/tags/0.12.0.tar.gz",
+)
+
 # Define the @io_grpc_grpc_java repository, which is used by the
 # @com_google_googleapis repository to define the Java protobuf targets such as
 # @com_google_googleapis//google/rpc:rpc_java_proto). The pattern we use here is
@@ -242,4 +249,10 @@ http_archive(
     sha256 = "320366665d19027cda87b2368c03939006a37e0388bfd1091c8d2a96fbc93bd8",
     strip_prefix = "grpc-1.48.1",
     url = "https://github.com/grpc/grpc/archive/v1.48.1.tar.gz",
+)
+
+load("@rules_python//python:pip.bzl", "pip_install")
+
+pip_install(
+    requirements = "//fcp:requirements.txt",
 )

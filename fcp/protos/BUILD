@@ -73,6 +73,11 @@ tf_proto_library(
     visibility = default_visibility,
 )
 
+alias(
+    name = "plan_py_pb2",
+    actual = "plan_proto_py",
+)
+
 java_proto_library(
     name = "plan_java_proto",
     deps = [":plan_proto"],
