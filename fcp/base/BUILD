@@ -170,34 +170,6 @@ cc_test(
 )
 
 cc_library(
-    name = "dispatch",
-    srcs = [
-    ],
-    hdrs = [
-        "dispatch.h",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":meta",
-        ":proxy",
-        "@com_google_absl//absl/types:span",
-        "@com_google_absl//absl/utility",
-    ],
-)
-
-cc_test(
-    name = "dispatch_test",
-    srcs = [
-        "dispatch_test.cc",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":dispatch",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
     name = "random_token",
     srcs = [
         "random_token.cc",
