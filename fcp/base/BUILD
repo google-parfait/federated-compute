@@ -119,32 +119,6 @@ cc_test(
 )
 
 cc_library(
-    name = "proxy",
-    srcs = [
-    ],
-    hdrs = [
-        "proxy.h",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":meta",
-    ],
-)
-
-cc_test(
-    name = "proxy_test",
-    srcs = [
-        "proxy_test.cc",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":proxy",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
     name = "reentrancy_guard",
     hdrs = [
         "reentrancy_guard.h",
