@@ -1,0 +1,16 @@
+--- google/longrunning/BUILD.bazel
++++ google/longrunning/BUILD.bazel
+@@ -209,3 +209,13 @@
+         ":longrunning_php_proto",
+     ],
+ )
++
++##############################################################################
++# Python
++##############################################################################
++load("@com_google_googleapis_imports//:imports.bzl", "py_proto_library")
++
++py_proto_library(
++    name = "longrunning_py_proto",
++    deps = [":operations_proto"],
++)

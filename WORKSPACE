@@ -251,6 +251,18 @@ http_archive(
     url = "https://github.com/grpc/grpc/archive/v1.48.1.tar.gz",
 )
 
+# The version of googleapis imported by TensorFlow doesn't provide
+# `py_proto_library` targets for //google/longrunning.
+http_archive(
+    name = "googleapis_for_longrunning",
+    patches = [
+        "//fcp/patches:googleapis_longrunning.patch",
+    ],
+    sha256 = "c1db0b022cdfc5b5ce5f05b0f00568e2d927c9890429ec9c35bda12f52d93065",
+    strip_prefix = "googleapis-2d8030c4102f97bc6be4ddab74c7cbfe88d8c016",
+    url = "https://github.com/googleapis/googleapis/archive/2d8030c4102f97bc6be4ddab74c7cbfe88d8c016.tar.gz",
+)
+
 load("@rules_python//python:pip.bzl", "pip_install")
 
 pip_install(
