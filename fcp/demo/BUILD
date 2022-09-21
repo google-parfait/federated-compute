@@ -128,3 +128,33 @@ py_test(
         "@pip//pypi__tensorflow",
     ],
 )
+
+py_library(
+    name = "task_assignments",
+    srcs = ["task_assignments.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":aggregations",
+        ":http_actions",
+        "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+        "@com_google_absl_py//absl/logging",
+        "@com_google_googleapis//google/rpc:code_py_proto",
+        "@com_google_protobuf//:protobuf_python",
+        "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
+    ],
+)
+
+py_test(
+    name = "task_assignments_test",
+    srcs = ["task_assignments_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":aggregations",
+        ":http_actions",
+        ":task_assignments",
+        "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_googleapis//google/rpc:code_py_proto",
+    ],
+)

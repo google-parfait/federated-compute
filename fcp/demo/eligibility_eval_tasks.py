@@ -43,6 +43,9 @@ class Service:
     """Handles a RequestEligibilityEvalTask request."""
     if request.population_name != self._population_name:
       raise http_actions.HttpError(http.HTTPStatus.NOT_FOUND)
+    # NOTE: A production implementation should use
+    # `request.attestation_measurement` to verify the device is valid, e.g.
+    # using the SafetyNet Attestation API.
     session_id = str(uuid.uuid4())
     logging.debug('[%s] RequestEligibilityEvalTask', session_id)
 
