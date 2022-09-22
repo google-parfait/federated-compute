@@ -187,10 +187,10 @@ struct AddModOptAdapter {
   }
 };
 
-// Templated implementation of MapOfMask that allows substituting
+// Templated implementation of MapOfMasks that allows substituting
 // AddMod and SubtractMod implementations.
-template <typename TAdapter>
-inline std::unique_ptr<SecAggVectorMap> MapOfMasksImpl(
+template <typename TAdapter, typename TVector, typename TVectorMap>
+inline std::unique_ptr<TVectorMap> MapOfMasksImpl(
     const std::vector<AesKey>& prng_keys_to_add,
     const std::vector<AesKey>& prng_keys_to_subtract,
     const std::vector<InputVectorSpecification>& input_vector_specs,
@@ -198,7 +198,7 @@ inline std::unique_ptr<SecAggVectorMap> MapOfMasksImpl(
     AsyncAbort* async_abort) {
   FCP_CHECK(prng_factory.SupportsBatchMode());
 
-  auto map_of_masks = std::make_unique<SecAggVectorMap>();
+  auto map_of_masks = std::make_unique<TVectorMap>();
   std::unique_ptr<EVP_MD_CTX, void (*)(EVP_MD_CTX*)> mdctx(EVP_MD_CTX_create(),
                                                            EVP_MD_CTX_destroy);
   FCP_CHECK(mdctx.get());
@@ -304,9 +304,8 @@ inline std::unique_ptr<SecAggVectorMap> MapOfMasksImpl(
     }
 
     if (async_abort && async_abort->Signalled()) return nullptr;
-    map_of_masks->emplace(
-        vector_spec.name(),
-        SecAggVector(mask_vector_buffer, vector_spec.modulus()));
+    map_of_masks->emplace(vector_spec.name(),
+                          TVector(mask_vector_buffer, vector_spec.modulus()));
   }
   return map_of_masks;
 }
@@ -317,9 +316,9 @@ std::unique_ptr<SecAggVectorMap> MapOfMasks(
     const std::vector<InputVectorSpecification>& input_vector_specs,
     const SessionId& session_id, const AesPrngFactory& prng_factory,
     AsyncAbort* async_abort) {
-  return MapOfMasksImpl<AddModAdapter>(prng_keys_to_add, prng_keys_to_subtract,
-                                       input_vector_specs, session_id,
-                                       prng_factory, async_abort);
+  return MapOfMasksImpl<AddModAdapter, SecAggVector, SecAggVectorMap>(
+      prng_keys_to_add, prng_keys_to_subtract, input_vector_specs, session_id,
+      prng_factory, async_abort);
 }
 
 std::unique_ptr<SecAggVectorMap> MapOfMasksV3(
@@ -328,7 +327,7 @@ std::unique_ptr<SecAggVectorMap> MapOfMasksV3(
     const std::vector<InputVectorSpecification>& input_vector_specs,
     const SessionId& session_id, const AesPrngFactory& prng_factory,
     AsyncAbort* async_abort) {
-  return MapOfMasksImpl<AddModOptAdapter>(
+  return MapOfMasksImpl<AddModOptAdapter, SecAggVector, SecAggVectorMap>(
       prng_keys_to_add, prng_keys_to_subtract, input_vector_specs, session_id,
       prng_factory, async_abort);
 }
@@ -355,6 +354,18 @@ std::unique_ptr<SecAggVectorMap> AddMaps(const SecAggVectorMap& a,
     result->emplace(item.first, AddVectors(item.second, b.at(item.first)));
   }
   return result;
+}
+
+std::unique_ptr<SecAggUnpackedVectorMap> UnpackedMapOfMasks(
+    const std::vector<AesKey>& prng_keys_to_add,
+    const std::vector<AesKey>& prng_keys_to_subtract,
+    const std::vector<InputVectorSpecification>& input_vector_specs,
+    const SessionId& session_id, const AesPrngFactory& prng_factory,
+    AsyncAbort* async_abort) {
+  return MapOfMasksImpl<AddModOptAdapter, SecAggUnpackedVector,
+                        SecAggUnpackedVectorMap>(
+      prng_keys_to_add, prng_keys_to_subtract, input_vector_specs, session_id,
+      prng_factory, async_abort);
 }
 
 }  // namespace secagg

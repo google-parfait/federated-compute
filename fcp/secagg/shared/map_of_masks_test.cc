@@ -16,8 +16,11 @@
 
 #include "fcp/secagg/shared/map_of_masks.h"
 
+#include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -159,24 +162,50 @@ TEST(AddMapsTest, AddMapsExhaustiveTest_ArbitraryModuli) {
   }
 }
 
-enum MapOfMasksVersion { CURRENT, V3 };
+enum MapOfMasksVersion { CURRENT, V3, UNPACKED };
 
 class MapOfMasksTest : public ::testing::TestWithParam<MapOfMasksVersion> {
  public:
-  std::unique_ptr<SecAggVectorMap> MapOfMasks(
+  using Uint64VectorMap =
+      absl::node_hash_map<std::string, std::vector<uint64_t>>;
+
+  std::unique_ptr<Uint64VectorMap> MapOfMasks(
       const std::vector<AesKey>& prng_keys_to_add,
       const std::vector<AesKey>& prng_keys_to_subtract,
       const std::vector<InputVectorSpecification>& input_vector_specs,
       const SessionId& session_id, const AesPrngFactory& prng_factory) {
-    if (GetParam() == MapOfMasksVersion::V3) {
-      return fcp::secagg::MapOfMasksV3(prng_keys_to_add, prng_keys_to_subtract,
-                                       input_vector_specs, session_id,
-                                       prng_factory);
+    if (GetParam() == MapOfMasksVersion::UNPACKED) {
+      return ToUint64VectorMap(fcp::secagg::UnpackedMapOfMasks(
+          prng_keys_to_add, prng_keys_to_subtract, input_vector_specs,
+          session_id, prng_factory));
+    } else if (GetParam() == MapOfMasksVersion::V3) {
+      return ToUint64VectorMap(fcp::secagg::MapOfMasksV3(
+          prng_keys_to_add, prng_keys_to_subtract, input_vector_specs,
+          session_id, prng_factory));
     } else {
-      return fcp::secagg::MapOfMasks(prng_keys_to_add, prng_keys_to_subtract,
-                                     input_vector_specs, session_id,
-                                     prng_factory);
+      return ToUint64VectorMap(fcp::secagg::MapOfMasks(
+          prng_keys_to_add, prng_keys_to_subtract, input_vector_specs,
+          session_id, prng_factory));
     }
+  }
+
+ private:
+  std::unique_ptr<Uint64VectorMap> ToUint64VectorMap(
+      std::unique_ptr<SecAggVectorMap> map) {
+    auto result = std::make_unique<Uint64VectorMap>();
+    for (auto& [name, vec] : *map) {
+      result->emplace(name, vec.GetAsUint64Vector());
+    }
+    return result;
+  }
+
+  std::unique_ptr<Uint64VectorMap> ToUint64VectorMap(
+      std::unique_ptr<SecAggUnpackedVectorMap> map) {
+    auto result = std::make_unique<Uint64VectorMap>();
+    for (auto& [name, vec] : *map) {
+      result->emplace(name, std::move(vec));
+    }
+    return result;
   }
 };
 
@@ -194,8 +223,7 @@ TEST_P(MapOfMasksTest, ReturnsZeroIfNoKeysSpecified_PowerOfTwo) {
 
   EXPECT_THAT(masks->size(), Eq(1));
   std::vector<uint64_t> zeroes(10, 0);
-  EXPECT_THAT(masks->at("test").GetAsUint64Vector(),
-              Eq(std::vector<uint64_t>(10, 0)));
+  EXPECT_THAT(masks->at("test"), Eq(std::vector<uint64_t>(10, 0)));
 }
 
 TEST_P(MapOfMasksTest, ReturnsNonZeroIfOneKeySpecified_PowerOfTwo) {
@@ -212,8 +240,7 @@ TEST_P(MapOfMasksTest, ReturnsNonZeroIfOneKeySpecified_PowerOfTwo) {
                           session_id, AesCtrPrngFactory());
 
   EXPECT_THAT(masks->size(), Eq(1));
-  EXPECT_THAT(masks->at("test").GetAsUint64Vector(),
-              Ne(std::vector<uint64_t>(10, 0)));
+  EXPECT_THAT(masks->at("test"), Ne(std::vector<uint64_t>(10, 0)));
 }
 
 TEST_P(MapOfMasksTest, MapWithOneKeyDiffersFromMapWithTwoKeys_PowerOfTwo) {
@@ -237,8 +264,7 @@ TEST_P(MapOfMasksTest, MapWithOneKeyDiffersFromMapWithTwoKeys_PowerOfTwo) {
 
   EXPECT_THAT(masks1->size(), Eq(1));
   EXPECT_THAT(masks2->size(), Eq(1));
-  EXPECT_THAT(masks2->at("test").GetAsUint64Vector(),
-              Ne(masks1->at("test").GetAsUint64Vector()));
+  EXPECT_THAT(masks2->at("test"), Ne(masks1->at("test")));
 }
 
 TEST_P(MapOfMasksTest, MapsWithOppositeMasksCancel_PowerOfTwo) {
@@ -261,8 +287,8 @@ TEST_P(MapOfMasksTest, MapsWithOppositeMasksCancel_PowerOfTwo) {
 
   EXPECT_THAT(masks1->size(), Eq(1));
   EXPECT_THAT(masks2->size(), Eq(1));
-  std::vector<uint64_t> mask_vector1 = masks1->at("test").GetAsUint64Vector();
-  std::vector<uint64_t> mask_vector2 = masks2->at("test").GetAsUint64Vector();
+  std::vector<uint64_t> mask_vector1 = masks1->at("test");
+  std::vector<uint64_t> mask_vector2 = masks2->at("test");
   for (int i = 0; i < 10; ++i) {
     EXPECT_THAT(AddMod(mask_vector1[i], mask_vector2[i], 1ULL << 20), Eq(0));
   }
@@ -288,8 +314,8 @@ TEST_P(MapOfMasksTest, MapsWithMixedOppositeMasksCancel_PowerOfTwo) {
 
   EXPECT_THAT(masks1->size(), Eq(1));
   EXPECT_THAT(masks2->size(), Eq(1));
-  std::vector<uint64_t> mask_vector1 = masks1->at("test").GetAsUint64Vector();
-  std::vector<uint64_t> mask_vector2 = masks2->at("test").GetAsUint64Vector();
+  std::vector<uint64_t> mask_vector1 = masks1->at("test");
+  std::vector<uint64_t> mask_vector2 = masks2->at("test");
   for (int i = 0; i < 10; ++i) {
     EXPECT_THAT(AddMod(mask_vector1[i], mask_vector2[i], 1ULL << 20), Eq(0));
   }
@@ -318,7 +344,7 @@ TEST_P(MapOfMasksTest, PrngMaskGeneratesCorrectBitwidthMasks_PowerOfTwo) {
   // Make sure all elements are less than the bound, and also at least one of
   // them has the highest-allowed bit set.
   for (uint64_t modulus : moduli) {
-    auto vec = masks->at(absl::StrCat("test", modulus)).GetAsUint64Vector();
+    auto vec = masks->at(absl::StrCat("test", modulus));
     bool high_order_bit_set = false;
     for (uint64_t mask : vec) {
       EXPECT_THAT(mask, Lt(modulus));
@@ -345,8 +371,7 @@ TEST_P(MapOfMasksTest, ReturnsZeroIfNoKeysSpecified_ArbitraryModuli) {
 
   EXPECT_THAT(masks->size(), Eq(1));
   std::vector<uint64_t> zeroes(10, 0);
-  EXPECT_THAT(masks->at("test").GetAsUint64Vector(),
-              Eq(std::vector<uint64_t>(10, 0)));
+  EXPECT_THAT(masks->at("test"), Eq(std::vector<uint64_t>(10, 0)));
 }
 
 TEST_P(MapOfMasksTest, ReturnsNonZeroIfOneKeySpecified_ArbitraryModuli) {
@@ -364,8 +389,7 @@ TEST_P(MapOfMasksTest, ReturnsNonZeroIfOneKeySpecified_ArbitraryModuli) {
                           session_id, AesCtrPrngFactory());
 
   EXPECT_THAT(masks->size(), Eq(1));
-  EXPECT_THAT(masks->at("test").GetAsUint64Vector(),
-              Ne(std::vector<uint64_t>(10, 0)));
+  EXPECT_THAT(masks->at("test"), Ne(std::vector<uint64_t>(10, 0)));
 }
 
 TEST_P(MapOfMasksTest, MapWithOneKeyDiffersFromMapWithTwoKeys_ArbitraryModuli) {
@@ -390,8 +414,7 @@ TEST_P(MapOfMasksTest, MapWithOneKeyDiffersFromMapWithTwoKeys_ArbitraryModuli) {
 
   EXPECT_THAT(masks1->size(), Eq(1));
   EXPECT_THAT(masks2->size(), Eq(1));
-  EXPECT_THAT(masks2->at("test").GetAsUint64Vector(),
-              Ne(masks1->at("test").GetAsUint64Vector()));
+  EXPECT_THAT(masks2->at("test"), Ne(masks1->at("test")));
 }
 
 TEST_P(MapOfMasksTest, MapsAreDeterministic_KeysToAdd_ArbitraryModuli) {
@@ -419,8 +442,8 @@ TEST_P(MapOfMasksTest, MapsAreDeterministic_KeysToAdd_ArbitraryModuli) {
 
   EXPECT_THAT(masks1->size(), Eq(1));
   EXPECT_THAT(masks2->size(), Eq(1));
-  std::vector<uint64_t> mask_vector1 = masks1->at("test").GetAsUint64Vector();
-  std::vector<uint64_t> mask_vector2 = masks2->at("test").GetAsUint64Vector();
+  std::vector<uint64_t> mask_vector1 = masks1->at("test");
+  std::vector<uint64_t> mask_vector2 = masks2->at("test");
   for (int i = 0; i < 10; ++i) {
     EXPECT_THAT(mask_vector1[i], Eq(mask_vector2[i]));
   }
@@ -450,8 +473,8 @@ TEST_P(MapOfMasksTest, MapsWithOppositeMasksCancel_ArbitraryModuli) {
 
   EXPECT_THAT(masks1->size(), Eq(1));
   EXPECT_THAT(masks2->size(), Eq(1));
-  std::vector<uint64_t> mask_vector1 = masks1->at("test").GetAsUint64Vector();
-  std::vector<uint64_t> mask_vector2 = masks2->at("test").GetAsUint64Vector();
+  std::vector<uint64_t> mask_vector1 = masks1->at("test");
+  std::vector<uint64_t> mask_vector2 = masks2->at("test");
   for (int i = 0; i < 10; ++i) {
     EXPECT_THAT(AddMod(mask_vector1[i], mask_vector2[i], modulus), Eq(0));
   }
@@ -481,8 +504,8 @@ TEST_P(MapOfMasksTest, MapsWithMixedOppositeMasksCancel_ArbitraryModuli) {
 
   EXPECT_THAT(masks1->size(), Eq(1));
   EXPECT_THAT(masks2->size(), Eq(1));
-  std::vector<uint64_t> mask_vector1 = masks1->at("test").GetAsUint64Vector();
-  std::vector<uint64_t> mask_vector2 = masks2->at("test").GetAsUint64Vector();
+  std::vector<uint64_t> mask_vector1 = masks1->at("test");
+  std::vector<uint64_t> mask_vector2 = masks2->at("test");
   for (int i = 0; i < 10; ++i) {
     EXPECT_THAT(AddMod(mask_vector1[i], mask_vector2[i], modulus), Eq(0));
   }
@@ -509,7 +532,7 @@ TEST_P(MapOfMasksTest, PrngMaskGeneratesCorrectBitwidthMasks_ArbitraryModuli) {
   // Make sure all elements are less than the bound, and also at least one of
   // them has the highest-allowed bit set.
   for (uint64_t modulus : kArbitraryModuli) {
-    auto vec = masks->at(absl::StrCat("test", modulus)).GetAsUint64Vector();
+    auto vec = masks->at(absl::StrCat("test", modulus));
     bool high_order_bit_set = false;
     for (uint64_t mask : vec) {
       EXPECT_THAT(mask, Lt(modulus));
@@ -522,7 +545,8 @@ TEST_P(MapOfMasksTest, PrngMaskGeneratesCorrectBitwidthMasks_ArbitraryModuli) {
 }
 
 INSTANTIATE_TEST_SUITE_P(MapOfMasksTest, MapOfMasksTest,
-                         ::testing::Values<MapOfMasksVersion>(CURRENT, V3));
+                         ::testing::Values<MapOfMasksVersion>(CURRENT, V3,
+                                                              UNPACKED));
 
 }  // namespace
 }  // namespace secagg

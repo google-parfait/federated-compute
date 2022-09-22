@@ -61,6 +61,15 @@ std::unique_ptr<SecAggVectorMap> MapOfMasksV3(
     const SessionId& session_id, const AesPrngFactory& prng_factory,
     AsyncAbort* async_abort = nullptr);
 
+// Optimized version of MapOfMasks that uses optimized AddMapOpt and
+// SubtractMapOpt modululs operations and produces map of unpacked vectors.
+std::unique_ptr<SecAggUnpackedVectorMap> UnpackedMapOfMasks(
+    const std::vector<AesKey>& prng_keys_to_add,
+    const std::vector<AesKey>& prng_keys_to_subtract,
+    const std::vector<InputVectorSpecification>& input_vector_specs,
+    const SessionId& session_id, const AesPrngFactory& prng_factory,
+    AsyncAbort* async_abort = nullptr);
+
 // Adds two vectors together and returns a new sum vector.
 SecAggVector AddVectors(const SecAggVector& a, const SecAggVector& b);
 
