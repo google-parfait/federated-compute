@@ -14,12 +14,13 @@
 """Tests for plan_utils."""
 
 import tempfile
-from typing import Any, Mapping, Optional
+from typing import Any, Optional
 
 from absl.testing import absltest
 import tensorflow as tf
 
 from fcp.demo import plan_utils
+from fcp.demo import test_utils
 from fcp.protos import plan_pb2
 
 DEFAULT_INITIAL_CHECKPOINT = b'initial'
@@ -168,19 +169,6 @@ def create_plan(log_file: Optional[str] = None) -> plan_pb2.Plan:
   return plan
 
 
-def create_checkpoint(data: Mapping[str, Any]) -> bytes:
-  """Creates a TensorFlow checkpoint."""
-  with tempfile.NamedTemporaryFile() as tmpfile:
-    with tf.compat.v1.Session() as session:
-      session.run(
-          tf.raw_ops.Save(
-              filename=tmpfile.name,
-              tensor_names=list(data.keys()),
-              data=list(data.values())))
-    with open(tmpfile.name, 'rb') as f:
-      return f.read()
-
-
 class PlanUtilsTest(absltest.TestCase):
 
   def test_intermediate_aggregation_session_enter_exit(self):
@@ -212,7 +200,7 @@ class PlanUtilsTest(absltest.TestCase):
       with plan_utils.IntermediateAggregationSession(create_plan(
           tmpfile.name)) as session:
         session.accumulate_client_update(
-            create_checkpoint({CLIENT_TENSOR_NAME: 3}))
+            test_utils.create_checkpoint({CLIENT_TENSOR_NAME: 3}))
         aggregate = session.finalize()
       self.assertSequenceEqual(tmpfile.read().splitlines(), [
           'phase_init',
@@ -225,15 +213,9 @@ class PlanUtilsTest(absltest.TestCase):
           'write_intermediate_update/after_save',
       ])
 
-    with tempfile.NamedTemporaryFile('wb') as tmpfile:
-      tmpfile.write(aggregate)
-      tmpfile.flush()
-      with tf.compat.v1.Session() as session:
-        result = session.run(
-            tf.raw_ops.Restore(
-                file_pattern=tmpfile.name,
-                tensor_name=INTERMEDIATE_TENSOR_NAME,
-                dt=tf.int32))
+    result = test_utils.read_tensor_from_checkpoint(aggregate,
+                                                    INTERMEDIATE_TENSOR_NAME,
+                                                    tf.int32)
     self.assertEqual(result, 3)
 
   def test_intermediate_aggregation_session_with_multiple_clients(self):
@@ -242,7 +224,7 @@ class PlanUtilsTest(absltest.TestCase):
           tmpfile.name)) as session:
         for i in range(3):
           session.accumulate_client_update(
-              create_checkpoint({CLIENT_TENSOR_NAME: 1 << i}))
+              test_utils.create_checkpoint({CLIENT_TENSOR_NAME: 1 << i}))
         checkpoint = session.finalize()
       self.assertSequenceEqual(tmpfile.read().splitlines(), [
           'phase_init',
@@ -263,15 +245,9 @@ class PlanUtilsTest(absltest.TestCase):
           'write_intermediate_update/after_save',
       ])
 
-    with tempfile.NamedTemporaryFile('wb') as tmpfile:
-      tmpfile.write(checkpoint)
-      tmpfile.flush()
-      with tf.compat.v1.Session() as session:
-        result = session.run(
-            tf.raw_ops.Restore(
-                file_pattern=tmpfile.name,
-                tensor_name=INTERMEDIATE_TENSOR_NAME,
-                dt=tf.int32))
+    result = test_utils.read_tensor_from_checkpoint(checkpoint,
+                                                    INTERMEDIATE_TENSOR_NAME,
+                                                    tf.int32)
     # The values from all client updates should be summed.
     self.assertEqual(result, 7)
 
@@ -329,7 +305,8 @@ class PlanUtilsTest(absltest.TestCase):
     expected = b'test-client-checkpoint'
     with plan_utils.Session(
         create_plan(),
-        create_checkpoint({CHECKPOINT_TENSOR_NAME: expected})) as session:
+        test_utils.create_checkpoint({CHECKPOINT_TENSOR_NAME: expected
+                                     })) as session:
       self.assertEqual(session.client_checkpoint, expected)
 
   def test_session_client_checkpoint_without_checkpoint(self):
@@ -338,18 +315,19 @@ class PlanUtilsTest(absltest.TestCase):
 
   def test_session_client_checkpoint_without_server_savepoint(self):
     plan = create_plan()
-    checkpoint = create_checkpoint({CHECKPOINT_TENSOR_NAME: b'unused'})
+    checkpoint = test_utils.create_checkpoint(
+        {CHECKPOINT_TENSOR_NAME: b'unused'})
     # If server_savepoint isn't set, the checkpoint shouldn't be loaded.
     plan.ClearField('server_savepoint')
     with plan_utils.Session(plan, checkpoint) as session:
       self.assertEqual(session.client_checkpoint, DEFAULT_INITIAL_CHECKPOINT)
 
   def test_session_finalize(self):
-    checkpoint = create_checkpoint({CHECKPOINT_TENSOR_NAME: b''})
+    checkpoint = test_utils.create_checkpoint({CHECKPOINT_TENSOR_NAME: b''})
     with tempfile.NamedTemporaryFile('r') as tmpfile:
       with plan_utils.Session(create_plan(tmpfile.name), checkpoint) as session:
         checkpoint = session.finalize(
-            create_checkpoint({INTERMEDIATE_TENSOR_NAME: 3}))
+            test_utils.create_checkpoint({INTERMEDIATE_TENSOR_NAME: 3}))
       self.assertSequenceEqual(tmpfile.read().splitlines(), [
           'server_savepoint/before_restore',
           'server_savepoint/restore',
@@ -367,15 +345,8 @@ class PlanUtilsTest(absltest.TestCase):
           'server_savepoint/after_save',
       ])
 
-    with tempfile.NamedTemporaryFile('wb') as tmpfile:
-      tmpfile.write(checkpoint)
-      tmpfile.flush()
-      with tf.compat.v1.Session() as session:
-        result = session.run(
-            tf.raw_ops.Restore(
-                file_pattern=tmpfile.name,
-                tensor_name=FINAL_TENSOR_NAME,
-                dt=tf.int32))
+    result = test_utils.read_tensor_from_checkpoint(checkpoint,
+                                                    FINAL_TENSOR_NAME, tf.int32)
     # The value should be propagated from the intermediate aggregate.
     self.assertEqual(result, 3)
 

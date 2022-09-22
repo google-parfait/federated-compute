@@ -123,6 +123,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":plan_utils",
+        ":test_utils",
         "//fcp/protos:plan_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
         "@pip//pypi__tensorflow",
@@ -156,5 +157,27 @@ py_test(
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_googleapis//google/rpc:code_py_proto",
+    ],
+)
+
+py_library(
+    name = "test_utils",
+    testonly = True,
+    srcs = ["test_utils.py"],
+    deps = [
+        "@pip//pypi__tensorflow",
+    ],
+)
+
+py_test(
+    name = "test_utils_test",
+    size = "medium",
+    srcs = ["test_utils_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":test_utils",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@pip//pypi__tensorflow",
     ],
 )
