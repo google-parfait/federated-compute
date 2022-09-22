@@ -501,6 +501,48 @@ tf_gen_op_wrapper_py(
 
 # Public: Python library for the `AppendSlices` and `MergeAppendedSlices` ops.
 
+DELETE_FILE_OP_SRCS = ["delete_file_op.cc"]
+
+DELETE_FILE_OP_DEPS = [
+    "@com_google_absl//absl/base:core_headers",
+    "@com_google_absl//absl/synchronization",
+]
+
+# Custom op to serialize an ExampleSelector containing a SlicesSelector proto.
+cc_library(
+    name = "delete_file_op_lib",
+    srcs = DELETE_FILE_OP_SRCS,
+    copts = FCP_TF_COPTS,
+    visibility = ["//visibility:public"],
+    deps = DELETE_FILE_OP_DEPS + [
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:lib",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+    ],
+    # Uses TensorFlow's registration macros
+    alwayslink = 1,
+)
+
+tf_custom_op_library(
+    name = "_delete_file_op.so",
+    srcs = DELETE_FILE_OP_SRCS,
+    copts = FCP_TF_COPTS,
+    deps = DELETE_FILE_OP_DEPS,
+)
+
+# Generates the basic op wrapper for use in Python.
+# Don't use this directly: use `:delete_file_py` to ensure that the
+# appropriate shared libraries are loaded.
+tf_gen_op_wrapper_py(
+    name = "gen_delete_file_py",
+    out = "gen_delete_file_py.py",
+    deps = [
+        ":delete_file_op_lib",
+    ],
+)
+
+# Public: Python library for the `DeleteFile` ops.
+
 TENSOR_NAME_OP_SRCS = ["tensor_name_op.cc"]
 
 TENSOR_NAME_OP_DEPS = [
