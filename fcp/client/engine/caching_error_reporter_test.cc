@@ -28,7 +28,6 @@ namespace engine {
 namespace {
 
 using ::testing::IsEmpty;
-using ::testing::StrEq;
 
 TEST(CachingErrorReporterTest, CachingMultiple) {
   CachingErrorReporter reporter;
@@ -36,14 +35,12 @@ TEST(CachingErrorReporterTest, CachingMultiple) {
   TF_LITE_REPORT_ERROR(&reporter, "%s%d", first_error.c_str(), 1);
   std::string second_error = "Op b is not found.";
   TF_LITE_REPORT_ERROR(&reporter, "%s%d", second_error.c_str(), 2);
-  EXPECT_THAT(reporter.error_messages(),
-              ElementsAre(StrEq(absl::StrCat(first_error, "1")),
-                          StrEq(absl::StrCat(second_error, "2"))));
+  EXPECT_THAT(reporter.GetFirstErrorMessage(), absl::StrCat(first_error, "1"));
 }
 
 TEST(CachingErrorReporterTest, Empty) {
   CachingErrorReporter reporter;
-  EXPECT_THAT(reporter.error_messages(), IsEmpty());
+  EXPECT_THAT(reporter.GetFirstErrorMessage(), IsEmpty());
 }
 
 }  // anonymous namespace

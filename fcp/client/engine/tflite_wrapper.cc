@@ -75,14 +75,19 @@ absl::StatusOr<std::unique_ptr<TfLiteWrapper>> TfLiteWrapper::Create(
   if (tflite::InterpreterBuilder(
           flat_buffer_model->GetModel(), BuiltinOpResolver(),
           error_reporter.get())(&interpreter) != kTfLiteOk) {
-    return absl::InvalidArgumentError("Failed to initiate interpreter.");
+    return absl::InvalidArgumentError(
+        absl::StrCat("Failed to initiate interpreter: ",
+                     error_reporter->GetFirstErrorMessage()));
   }
   if (interpreter->ModifyGraphWithDelegate(delegate.get()) != kTfLiteOk) {
     return absl::InvalidArgumentError(
-        "Failed to modify graph with TrainingFlexDelegate.");
+        absl::StrCat("Failed to modify graph with TrainingFlexDelegate: ",
+                     error_reporter->GetFirstErrorMessage()));
   }
   if (interpreter->AllocateTensors() != kTfLiteOk) {
-    return absl::InvalidArgumentError("Failed to allocate tensors.");
+    return absl::InvalidArgumentError(
+        absl::StrCat("Failed to allocate tensors: ",
+                     error_reporter->GetFirstErrorMessage()));
   }
   interpreter->SetCancellationFunction(delegate->data_,
                                        tflite::FlexDelegate::HasCancelled);
@@ -142,12 +147,12 @@ absl::Status TfLiteWrapper::ConvertTfLiteStatus(TfLiteStatus status) {
       if (tflite::FlexDelegate::HasCancelled(delegate_->data_)) {
         return absl::CancelledError("Training is cancelled.");
       }
-      std::vector<std::string> errors = error_reporter_->error_messages();
-      if (errors.empty()) {
+      std::string error = error_reporter_->GetFirstErrorMessage();
+      if (error.empty()) {
         return absl::InvalidArgumentError("Empty error messages returned.");
       }
       // Use the first error we encountered.
-      return absl::InvalidArgumentError(errors.at(0));
+      return absl::InvalidArgumentError(error);
     }
     case kTfLiteDelegateError:
       return absl::InvalidArgumentError("TfLite delegate error.");

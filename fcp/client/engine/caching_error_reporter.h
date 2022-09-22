@@ -31,7 +31,7 @@ class CachingErrorReporter : public tflite::ErrorReporter {
  public:
   int Report(const char* format, va_list args) override
       ABSL_LOCKS_EXCLUDED(mutex_);
-  std::vector<std::string> error_messages() ABSL_LOCKS_EXCLUDED(mutex_);
+  std::string GetFirstErrorMessage() ABSL_LOCKS_EXCLUDED(mutex_);
 
  private:
   absl::Mutex mutex_;

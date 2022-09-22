@@ -39,9 +39,13 @@ int CachingErrorReporter::Report(const char* format, va_list args) {
   return num_characters;
 }
 
-std::vector<std::string> CachingErrorReporter::error_messages() {
+std::string CachingErrorReporter::GetFirstErrorMessage() {
   absl::MutexLock lock(&mutex_);
-  return error_messages_;
+  if (error_messages_.empty()) {
+    return "";
+  } else {
+    return error_messages_[0];
+  }
 }
 
 }  // namespace engine
