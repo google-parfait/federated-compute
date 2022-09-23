@@ -131,6 +131,43 @@ py_test(
 )
 
 py_library(
+    name = "server",
+    srcs = ["server.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":aggregations",
+        ":eligibility_eval_tasks",
+        ":http_actions",
+        ":media",
+        ":plan_utils",
+        ":task_assignments",
+        "//fcp/protos:plan_py_pb2",
+        "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+        "@com_google_absl_py//absl/logging",
+    ],
+)
+
+py_test(
+    name = "server_test",
+    size = "medium",
+    srcs = ["server_test.py"],
+    data = ["//fcp/client:client_runner_main"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":server",
+        ":test_utils",
+        "//fcp/protos:plan_py_pb2",
+        "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+        "@com_google_absl_py//absl/flags",
+        "@com_google_absl_py//absl/logging",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
+        "@pip//pypi__tensorflow",
+    ],
+)
+
+py_library(
     name = "task_assignments",
     srcs = ["task_assignments.py"],
     srcs_version = "PY3",
