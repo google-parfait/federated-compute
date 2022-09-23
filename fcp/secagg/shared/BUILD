@@ -1,7 +1,7 @@
 # Description:
 #   SecAgg components shared between client and server.
 
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 
 package(

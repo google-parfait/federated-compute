@@ -1,4 +1,4 @@
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 
 py_library(
     name = "aggregations",
@@ -164,6 +164,18 @@ py_test(
         "@com_google_absl_py//absl/testing:absltest",
         "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
         "@pip//pypi__tensorflow",
+    ],
+)
+
+py_binary(
+    name = "server_runner",
+    srcs = ["server_runner.py"],
+    deps = [
+        ":server",
+        "//fcp/protos:plan_py_pb2",
+        "@com_google_absl_py//absl:app",
+        "@com_google_absl_py//absl/flags",
+        "@com_google_absl_py//absl/logging",
     ],
 )
 
