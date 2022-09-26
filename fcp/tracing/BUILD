@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@flatbuffers//:build_defs.bzl", "flatbuffer_cc_library")
 load("//fcp:config.bzl", "FCP_COPTS")
 
@@ -21,15 +20,12 @@ package(
     licenses = ["notice"],  # Apache 2.0
 )
 
-exports_files(
-    [
-        "tracing_severity.h",
-        "tracing_tag.h",
-        "tracing_traits.h",
-        "tracing_schema_common.fbs",
-    ],
-    visibility = ["//fcp:internal"],
-)
+exports_files([
+    "tracing_schema_common.fbs",
+    "tracing_severity.h",
+    "tracing_tag.h",
+    "tracing_traits.h",
+])
 
 flatbuffer_cc_library(
     name = "tracing_schema_common",

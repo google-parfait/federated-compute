@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 
 package(
@@ -39,8 +38,8 @@ cc_test(
     args = ["--codegen_tool_path=$(location :test_codegen_runner.sh)"],
     copts = FCP_COPTS,
     data = glob([
-        "testdata/*.fbs",
         "testdata/*.baseline",
+        "testdata/*.fbs",
     ]) + [
         ":tracing_traits_generator",
         ":test_codegen_runner.sh",

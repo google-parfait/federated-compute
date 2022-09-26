@@ -1,5 +1,3 @@
-load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
-
 # Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
