@@ -17,10 +17,12 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "google/protobuf/any.pb.h"
 #include "google/protobuf/io/gzip_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "gmock/gmock.h"
@@ -28,14 +30,19 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/base/simulated_clock.h"
+#include "fcp/client/cache/file_backed_resource_cache.h"
+#include "fcp/client/cache/test_helpers.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
+#include "fcp/client/http/http_resource_metadata.pb.h"
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/test_helpers.h"
@@ -52,6 +59,7 @@ using ::testing::_;
 using ::testing::ContainerEq;
 using ::testing::Contains;
 using ::testing::ElementsAre;
+using ::testing::Eq;
 using ::testing::FieldsAre;
 using ::testing::Ge;
 using ::testing::HasSubstr;
@@ -68,6 +76,23 @@ using CompressionFormat =
     ::fcp::client::http::UriOrInlineData::InlineData::CompressionFormat;
 
 constexpr absl::string_view kOctetStream = "application/octet-stream";
+int64_t kMaxCacheSizeBytes = 10000000;
+
+google::protobuf::Any MetadataForUncompressedResource() {
+  HttpResourceMetadata metadata;
+  google::protobuf::Any any;
+  any.PackFrom(metadata);
+  return any;
+}
+
+google::protobuf::Any MetadataForCompressedResource() {
+  HttpResourceMetadata metadata;
+  metadata.set_compression_format(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  google::protobuf::Any any;
+  any.PackFrom(metadata);
+  return any;
+}
 
 TEST(InMemoryHttpRequestTest, NonHttpsUriFails) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
@@ -141,7 +166,8 @@ TEST(InMemoryHttpRequestTest, ValidPostRequestWithBody) {
   const std::string expected_body = "request_body";
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create(expected_uri, HttpRequest::Method::kPost, {},
-                                  expected_body, /*use_compression=*/false);
+                                  expected_body,
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
   EXPECT_THAT((*request)->uri(), StrEq(expected_uri));
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
@@ -164,7 +190,8 @@ TEST(InMemoryHttpRequestTest, ValidPostRequestWithBodyAndHeaders) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kPost, original_headers,
-                                  expected_body, /*use_compression=*/false);
+                                  expected_body,
+                                  /*use_compression=*/false);
   ASSERT_OK(request);
 
   EXPECT_THAT((*request)->extra_headers(), ContainerEq(expected_headers));
@@ -240,7 +267,8 @@ TEST(InMemoryHttpRequestTest, RequestWithCompressedBody) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kPost, {},
-                                  uncompressed_body, /*use_compression=*/true);
+                                  uncompressed_body,
+                                  /*use_compression=*/true);
   ASSERT_OK(request);
   auto content_encoding_header =
       FindHeader((*request)->extra_headers(), kContentEncodingHdr);
@@ -638,12 +666,24 @@ class PerformRequestsTest : public ::testing::Test {
                     BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
                 .interrupt_timeout_extended = ProdDiagCode::
                     BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT}) {}
-  void SetUp() override {}
+  void SetUp() override {
+    root_cache_dir_ = testing::TempDir();
+    root_files_dir_ = testing::TempDir();
+  }
+
+  void TearDown() override {
+    std::filesystem::remove_all(root_cache_dir_);
+    std::filesystem::remove_all(root_files_dir_);
+  }
 
   NiceMock<MockLogManager> mock_log_manager_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
   InterruptibleRunner interruptible_runner_;
   StrictMock<MockHttpClient> mock_http_client_;
+  testing::StrictMock<MockLogManager> log_manager_;
+  SimulatedClock clock_;
+  std::string root_cache_dir_;
+  std::string root_files_dir_;
 };
 
 TEST_F(PerformRequestsTest, PerformRequestInMemoryOk) {
@@ -800,10 +840,11 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsInMemoryOk) {
   ASSERT_OK(request);
   std::string another_expected_request_body = "request_body_2";
   absl::StatusOr<std::unique_ptr<HttpRequest>> another_request =
-      InMemoryHttpRequest::Create(
-          "https://valid.com", HttpRequest::Method::kPost,
-          {{"Some-Other-Request-Header", "foo2"}},
-          another_expected_request_body, /*use_compression=*/false);
+      InMemoryHttpRequest::Create("https://valid.com",
+                                  HttpRequest::Method::kPost,
+                                  {{"Some-Other-Request-Header", "foo2"}},
+                                  another_expected_request_body,
+                                  /*use_compression=*/false);
   ASSERT_OK(another_request);
 
   std::string expected_response_body = "response_body";
@@ -924,9 +965,9 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailedOneSuccess) {
 // should result in a zero-length result vector (as opposed to an error or a
 // crash).
 TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyInputVector) {
-  auto result = FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                                       {}, nullptr, nullptr,
-                                       /*client_decoded_http_resources=*/false);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {}, nullptr, nullptr,
+      /*client_decoded_http_resources=*/false, /*resource_cache=*/nullptr);
   ASSERT_OK(result);
   EXPECT_THAT(*result, IsEmpty());
 }
@@ -939,7 +980,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyUriAndInline) {
       {UriOrInlineData::CreateInlineData(absl::Cord(),
                                          CompressionFormat::kUncompressed)},
       nullptr, nullptr,
-      /*client_decoded_http_resources=*/false);
+      /*client_decoded_http_resources=*/false, /*resource_cache=*/nullptr);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -952,9 +993,12 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyUriAndInline) {
 TEST_F(PerformRequestsTest, FetchResourcesInMemoryInvalidUri) {
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_,
-      {UriOrInlineData::CreateUri("https://valid.com"),
-       UriOrInlineData::CreateUri("http://invalid.com")},
-      nullptr, nullptr, /*client_decoded_http_resources=*/false);
+      {UriOrInlineData::CreateUri("https://valid.com", "",
+                                  absl::ZeroDuration()),
+       UriOrInlineData::CreateUri("http://invalid.com", "",
+                                  absl::ZeroDuration())},
+      nullptr, nullptr, /*client_decoded_http_resources=*/false,
+      /*resource_cache=*/nullptr);
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("Non-HTTPS"));
 }
@@ -965,10 +1009,10 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryAllUris) {
   const std::string uri2 = "https://valid.com/2";
   const std::string uri3 = "https://valid.com/3";
   const std::string uri4 = "https://valid.com/4";
-  auto resource1 = UriOrInlineData::CreateUri(uri1);
-  auto resource2 = UriOrInlineData::CreateUri(uri2);
-  auto resource3 = UriOrInlineData::CreateUri(uri3);
-  auto resource4 = UriOrInlineData::CreateUri(uri4);
+  auto resource1 = UriOrInlineData::CreateUri(uri1, "", absl::ZeroDuration());
+  auto resource2 = UriOrInlineData::CreateUri(uri2, "", absl::ZeroDuration());
+  auto resource3 = UriOrInlineData::CreateUri(uri3, "", absl::ZeroDuration());
+  auto resource4 = UriOrInlineData::CreateUri(uri4, "", absl::ZeroDuration());
 
   int expected_response_code1 = kHttpOk;
   int expected_response_code2 = kHttpNotFound;
@@ -1002,7 +1046,8 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryAllUris) {
       {resource1, resource2, resource3, resource4},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
+      &bytes_received, &bytes_sent,
+      /*client_decoded_http_resources=*/false, /*resource_cache=*/nullptr);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1030,10 +1075,10 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemorySomeInlineData) {
   const std::string uri3 = "https://valid.com/3";
   std::string expected_response_body2 = "response_body2";
   std::string expected_response_body4 = "response_body4";
-  auto resource1 = UriOrInlineData::CreateUri(uri1);
+  auto resource1 = UriOrInlineData::CreateUri(uri1, "", absl::ZeroDuration());
   auto resource2 = UriOrInlineData::CreateInlineData(
       absl::Cord(expected_response_body2), CompressionFormat::kUncompressed);
-  auto resource3 = UriOrInlineData::CreateUri(uri3);
+  auto resource3 = UriOrInlineData::CreateUri(uri3, "", absl::ZeroDuration());
   auto resource4 = UriOrInlineData::CreateInlineData(
       absl::Cord(expected_response_body4), CompressionFormat::kUncompressed);
 
@@ -1055,7 +1100,8 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemorySomeInlineData) {
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_,
       {resource1, resource2, resource3, resource4}, &bytes_received,
-      &bytes_sent, /*client_decoded_http_resources=*/false);
+      &bytes_sent, /*client_decoded_http_resources=*/false,
+      /*resource_cache=*/nullptr);
   ASSERT_OK(result);
 
   EXPECT_THAT((*result)[0], IsCode(UNAVAILABLE));
@@ -1090,7 +1136,8 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryOnlyInlineData) {
   int64_t bytes_sent = 0;
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_, {resource1, resource2},
-      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false,
+      /*resource_cache=*/nullptr);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1110,8 +1157,8 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryOnlyInlineData) {
 TEST_F(PerformRequestsTest, FetchResourcesInMemoryCancellation) {
   const std::string uri1 = "https://valid.com/1";
   const std::string uri2 = "https://valid.com/2";
-  auto resource1 = UriOrInlineData::CreateUri(uri1);
-  auto resource2 = UriOrInlineData::CreateUri(uri2);
+  auto resource1 = UriOrInlineData::CreateUri(uri1, "", absl::ZeroDuration());
+  auto resource2 = UriOrInlineData::CreateUri(uri2, "", absl::ZeroDuration());
 
   EXPECT_CALL(mock_http_client_, PerformSingleRequest(FieldsAre(uri1, _, _, _)))
       .WillOnce(Return(FakeHttpResponse(kHttpOk, {}, "")));
@@ -1148,7 +1195,8 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCancellation) {
   // The request should result in an overall CANCELLED outcome.
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_, {resource1, resource2},
-      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false,
+      /*resource_cache=*/nullptr);
   EXPECT_THAT(result, IsCode(CANCELLED));
   EXPECT_THAT(result.status().message(),
               HasSubstr("cancelled after graceful wait"));
@@ -1161,7 +1209,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCancellation) {
 
 TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedResources) {
   const std::string uri = "https://valid.com/";
-  auto resource1 = UriOrInlineData::CreateUri(uri);
+  auto resource1 = UriOrInlineData::CreateUri(uri, "", absl::ZeroDuration());
 
   int expected_response_code = kHttpOk;
   std::string content_type = "bytes+gzip";
@@ -1185,7 +1233,8 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedResources) {
       mock_http_client_, interruptible_runner_, {resource1, resource2},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true);
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true,
+      /*resource_cache=*/nullptr);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1204,7 +1253,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedResources) {
 TEST_F(PerformRequestsTest,
        FetchResourcesInMemoryFlagOnNotCompressedResources) {
   const std::string uri = "https://valid.com/";
-  auto resource1 = UriOrInlineData::CreateUri(uri);
+  auto resource1 = UriOrInlineData::CreateUri(uri, "", absl::ZeroDuration());
 
   int expected_response_code = kHttpOk;
   std::string content_type = "uncompressed-bytes-yay";
@@ -1225,7 +1274,8 @@ TEST_F(PerformRequestsTest,
       mock_http_client_, interruptible_runner_, {resource1, resource2},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true);
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true,
+      /*resource_cache=*/nullptr);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1243,7 +1293,7 @@ TEST_F(PerformRequestsTest,
 TEST_F(PerformRequestsTest,
        FetchResourcesInMemoryCompressedResourcesFlagOffDoesNotDecompress) {
   const std::string uri = "https://valid.com/";
-  auto resource1 = UriOrInlineData::CreateUri(uri);
+  auto resource1 = UriOrInlineData::CreateUri(uri, "", absl::ZeroDuration());
 
   int expected_response_code = kHttpOk;
   std::string content_type = "bytes+gzip";
@@ -1267,7 +1317,8 @@ TEST_F(PerformRequestsTest,
       mock_http_client_, interruptible_runner_, {resource1, resource2},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false);
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/false,
+      /*resource_cache=*/nullptr);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1287,7 +1338,7 @@ TEST_F(PerformRequestsTest,
 TEST_F(PerformRequestsTest,
        FetchResourcesInMemoryCompressedResourcesFailToDecode) {
   const std::string uri = "https://valid.com/";
-  auto resource1 = UriOrInlineData::CreateUri(uri);
+  auto resource1 = UriOrInlineData::CreateUri(uri, "", absl::ZeroDuration());
 
   int expected_response_code = kHttpOk;
   std::string content_type = "not-actually-gzipped+gzip";
@@ -1308,7 +1359,8 @@ TEST_F(PerformRequestsTest,
       mock_http_client_, interruptible_runner_, {resource1, resource2},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true);
+      &bytes_received, &bytes_sent, /*client_decoded_http_resources=*/true,
+      /*resource_cache=*/nullptr);
   // Fetching will succeed
   ASSERT_OK(result);
 
@@ -1319,6 +1371,292 @@ TEST_F(PerformRequestsTest,
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
   EXPECT_THAT(bytes_sent, Ge(0));
   EXPECT_THAT(bytes_received, Ge(2 * expected_response_body.size()));
+}
+
+TEST_F(PerformRequestsTest, FetchResourcesInMemoryCachedResourceOk) {
+  const std::string uri = "https://valid.com/1";
+  const std::string cache_id = "(^˵◕ω◕˵^)";
+  absl::Cord cached_resource("(((*°▽°*)八(*°▽°*)))");
+  absl::Duration max_age = absl::Hours(1);
+  int expected_response_code = kHttpOk;
+  auto resource = UriOrInlineData::CreateUri(uri, cache_id, max_age);
+  auto resource_cache = cache::FileBackedResourceCache::Create(
+      root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+      kMaxCacheSizeBytes);
+  ASSERT_OK(resource_cache);
+  ASSERT_OK((*resource_cache)
+                ->Put(cache_id, cached_resource,
+                      MetadataForUncompressedResource(), max_age));
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent,
+      /*client_decoded_http_resources=*/true, resource_cache->get());
+  ASSERT_OK(result);
+
+  ASSERT_OK((*result)[0]);
+  EXPECT_THAT(*(*result)[0], FieldsAre(expected_response_code, IsEmpty(),
+                                       kOctetStream, StrEq(cached_resource)));
+
+  // Fully from the cache!
+  EXPECT_THAT(bytes_sent, Eq(0));
+  EXPECT_THAT(bytes_received, Eq(0));
+}
+
+TEST_F(PerformRequestsTest,
+       FetchResourcesInMemoryCachedResourceOkAndCompressed) {
+  const std::string uri = "https://valid.com/1";
+  const std::string cache_id = "(^˵◕ω◕˵^)";
+  absl::Cord cached_resource("(((*°▽°*)八(*°▽°*)))");
+  absl::Cord compressed_cached_resource(
+      *internal::CompressWithGzip(std::string(cached_resource)));
+  absl::Duration max_age = absl::Hours(1);
+  int expected_response_code = kHttpOk;
+  auto resource = UriOrInlineData::CreateUri(uri, cache_id, max_age);
+  auto resource_cache = cache::FileBackedResourceCache::Create(
+      root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+      kMaxCacheSizeBytes);
+  ASSERT_OK(resource_cache);
+  ASSERT_OK((*resource_cache)
+                ->Put(cache_id, compressed_cached_resource,
+                      MetadataForCompressedResource(), max_age));
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent,
+      /*client_decoded_http_resources=*/true, resource_cache->get());
+  ASSERT_OK(result);
+
+  ASSERT_OK((*result)[0]);
+  EXPECT_THAT(*(*result)[0], FieldsAre(expected_response_code, IsEmpty(),
+                                       kOctetStream, StrEq(cached_resource)));
+
+  // Fully from the cache!
+  EXPECT_THAT(bytes_sent, Eq(0));
+  EXPECT_THAT(bytes_received, Eq(0));
+}
+
+TEST_F(PerformRequestsTest, FetchResourcesInMemoryNotCachedButThenPutInCache) {
+  const std::string uri = "https://valid.com/1";
+  const std::string cache_id = "(^˵◕ω◕˵^)";
+  absl::Cord expected_response_body("(((*°▽°*)八(*°▽°*)))");
+  absl::Duration max_age = absl::Hours(1);
+  int expected_response_code = kHttpOk;
+  std::string content_type = "bytes";
+  auto resource = UriOrInlineData::CreateUri(uri, cache_id, max_age);
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre(uri, HttpRequest::Method::kGet, HeaderList{}, "")))
+      .WillOnce(Return(FakeHttpResponse(expected_response_code,
+                                        {{kContentTypeHdr, content_type}},
+                                        std::string(expected_response_body))));
+
+  auto resource_cache = cache::FileBackedResourceCache::Create(
+      root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+      kMaxCacheSizeBytes);
+  ASSERT_OK(resource_cache);
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent,
+      /*client_decoded_http_resources=*/true, resource_cache->get());
+  ASSERT_OK(result);
+
+  ASSERT_OK((*result)[0]);
+  EXPECT_THAT(*(*result)[0],
+              FieldsAre(expected_response_code, IsEmpty(), content_type,
+                        StrEq(expected_response_body)));
+
+  auto stored_resource = (*resource_cache)->Get(cache_id, std::nullopt);
+  ASSERT_OK(stored_resource);
+  EXPECT_THAT(*stored_resource,
+              FieldsAre(StrEq(expected_response_body),
+                        EqualsProto(MetadataForUncompressedResource())));
+}
+
+TEST_F(PerformRequestsTest,
+       FetchResourcesInMemoryNotCachedButThenPutInCacheCompressed) {
+  const std::string uri = "https://valid.com/1";
+  const std::string cache_id = "(^˵◕ω◕˵^)";
+  absl::Cord expected_response_body("(((*°▽°*)八(*°▽°*)))");
+  absl::Duration max_age = absl::Hours(1);
+  int expected_response_code = kHttpOk;
+  std::string content_type = "bytes+gzip";
+  absl::Cord compressed_response_body(
+      *internal::CompressWithGzip(std::string(expected_response_body)));
+  auto resource = UriOrInlineData::CreateUri(uri, cache_id, max_age);
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre(uri, HttpRequest::Method::kGet, HeaderList{}, "")))
+      .WillOnce(Return(FakeHttpResponse(
+          expected_response_code, {{kContentTypeHdr, content_type}},
+          std::string(compressed_response_body))));
+
+  auto resource_cache = cache::FileBackedResourceCache::Create(
+      root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+      kMaxCacheSizeBytes);
+  ASSERT_OK(resource_cache);
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent,
+      /*client_decoded_http_resources=*/true, resource_cache->get());
+  ASSERT_OK(result);
+
+  ASSERT_OK((*result)[0]);
+  EXPECT_THAT(*(*result)[0],
+              FieldsAre(expected_response_code, IsEmpty(), content_type,
+                        StrEq(expected_response_body)));
+
+  auto stored_resource = (*resource_cache)->Get(cache_id, std::nullopt);
+  ASSERT_OK(stored_resource);
+  EXPECT_THAT(*stored_resource,
+              FieldsAre(StrEq(compressed_response_body),
+                        EqualsProto(MetadataForCompressedResource())));
+}
+
+TEST_F(PerformRequestsTest,
+       FetchResourcesInMemoryNotCachedPutInCacheWithZeroMaxAgeDoesntCrash) {
+  const std::string uri = "https://valid.com/1";
+  const std::string cache_id = "(^˵◕ω◕˵^)";
+  absl::Cord expected_response_body("(((*°▽°*)八(*°▽°*)))");
+  absl::Duration max_age = absl::ZeroDuration();
+  int expected_response_code = kHttpOk;
+  std::string content_type = "bytes";
+  auto resource = UriOrInlineData::CreateUri(uri, cache_id, max_age);
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre(uri, HttpRequest::Method::kGet, HeaderList{}, "")))
+      .WillOnce(Return(FakeHttpResponse(expected_response_code,
+                                        {{kContentTypeHdr, content_type}},
+                                        std::string(expected_response_body))));
+
+  auto resource_cache = cache::FileBackedResourceCache::Create(
+      root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+      kMaxCacheSizeBytes);
+  ASSERT_OK(resource_cache);
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent,
+      /*client_decoded_http_resources=*/true, resource_cache->get());
+  ASSERT_OK(result);
+
+  ASSERT_OK((*result)[0]);
+  EXPECT_THAT(*(*result)[0],
+              FieldsAre(expected_response_code, IsEmpty(), content_type,
+                        StrEq(expected_response_body)));
+
+  auto stored_resource = (*resource_cache)->Get(cache_id, std::nullopt);
+  ASSERT_OK(stored_resource);
+  EXPECT_THAT(*stored_resource,
+              FieldsAre(StrEq(expected_response_body),
+                        EqualsProto(MetadataForUncompressedResource())));
+}
+
+TEST_F(PerformRequestsTest,
+       FetchResourcesInMemoryCachedResourceGetReturnsInternal) {
+  const std::string uri = "https://valid.com/1";
+  const std::string cache_id = "(^˵◕ω◕˵^)";
+  absl::Cord expected_response_body("(((*°▽°*)八(*°▽°*)))");
+  absl::Duration max_age = absl::Hours(1);
+  int expected_response_code = kHttpOk;
+  std::string content_type = "bytes";
+  auto resource = UriOrInlineData::CreateUri(uri, cache_id, max_age);
+  StrictMock<cache::MockResourceCache> resource_cache;
+
+  EXPECT_CALL(resource_cache, Get(cache_id, std::make_optional(max_age)))
+      .WillOnce(Return(absl::InternalError("the cache exploded -_-")));
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre(uri, HttpRequest::Method::kGet, HeaderList{}, "")))
+      .WillOnce(Return(FakeHttpResponse(expected_response_code,
+                                        {{kContentTypeHdr, content_type}},
+                                        std::string(expected_response_body))));
+
+  EXPECT_CALL(resource_cache, Put(cache_id, expected_response_body, _, max_age))
+      .WillOnce(Return(absl::OkStatus()));
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent,
+      /*client_decoded_http_resources=*/true, &resource_cache);
+  ASSERT_OK(result);
+
+  ASSERT_OK((*result)[0]);
+  EXPECT_THAT(*(*result)[0],
+              FieldsAre(expected_response_code, IsEmpty(), content_type,
+                        StrEq(expected_response_body)));
+}
+
+TEST_F(PerformRequestsTest,
+       FetchResourcesInMemoryPutInCacheReturnsInternalDoesntCrash) {
+  const std::string uri = "https://valid.com/1";
+  const std::string cache_id = "(^˵◕ω◕˵^)";
+  absl::Cord expected_response_body("(((*°▽°*)八(*°▽°*)))");
+  absl::Duration max_age = absl::Hours(1);
+  int expected_response_code = kHttpOk;
+  std::string content_type = "bytes";
+  auto resource = UriOrInlineData::CreateUri(uri, cache_id, max_age);
+  StrictMock<cache::MockResourceCache> resource_cache;
+
+  EXPECT_CALL(resource_cache, Get(cache_id, std::make_optional(max_age)))
+      .WillOnce(Return(absl::NotFoundError("not in the cache sorry!")));
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre(uri, HttpRequest::Method::kGet, HeaderList{}, "")))
+      .WillOnce(Return(FakeHttpResponse(expected_response_code,
+                                        {{kContentTypeHdr, content_type}},
+                                        std::string(expected_response_body))));
+
+  EXPECT_CALL(resource_cache,
+              Put(cache_id, expected_response_body,
+                  EqualsProto(MetadataForUncompressedResource()), max_age))
+      .WillOnce(Return(absl::InternalError("the cache exploded -_-")));
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent,
+      /*client_decoded_http_resources=*/true, &resource_cache);
+  ASSERT_OK(result);
+
+  ASSERT_OK((*result)[0]);
+  EXPECT_THAT(*(*result)[0],
+              FieldsAre(expected_response_code, IsEmpty(), content_type,
+                        StrEq(expected_response_body)));
 }
 
 }  // namespace

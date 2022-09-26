@@ -36,13 +36,61 @@
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
+#include "fcp/client/http/http_resource_metadata.pb.h"
 #include "fcp/client/interruptible_runner.h"
 
 namespace fcp {
 namespace client {
 namespace http {
+namespace {
+
+// Returns the resource from the cache, or NOT_FOUND if it was not in the cache.
+// If the resource was compressed, it will be decompressed.
+absl::StatusOr<absl::Cord> TryGetResourceFromCache(
+    absl::string_view client_cache_id,
+    const std::optional<absl::Duration>& max_age,
+    cache::ResourceCache& resource_cache) {
+  FCP_ASSIGN_OR_RETURN(
+      cache::ResourceCache::ResourceAndMetadata cached_resource_and_metadata,
+      resource_cache.Get(client_cache_id, max_age));
+  HttpResourceMetadata metadata;
+  if (!cached_resource_and_metadata.metadata.UnpackTo(&metadata)) {
+    return absl::InternalError("Failed to unpack metadata!");
+  }
+  absl::Cord cached_resource = cached_resource_and_metadata.resource;
+  if (metadata.compression_format() ==
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP) {
+    FCP_ASSIGN_OR_RETURN(cached_resource, internal::UncompressWithGzip(
+                                              std::string(cached_resource)));
+  }
+  return cached_resource;
+}
+
+absl::Status TryPutResourceInCache(absl::string_view client_cache_id,
+                                   const absl::Cord& response_body,
+                                   bool response_encoded_with_gzip,
+                                   absl::Duration max_age,
+                                   cache::ResourceCache& resource_cache) {
+  // We fetched a resource that has a client_cache_id and was not
+  // loaded from the cache, put it in the cache.
+  HttpResourceMetadata metadata;
+  if (response_encoded_with_gzip) {
+    metadata.set_compression_format(
+        ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  } else {
+    metadata.set_compression_format(
+        ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_UNSPECIFIED);
+  }
+  google::protobuf::Any metadata_wrapper;
+  metadata_wrapper.PackFrom(metadata);
+  return resource_cache.Put(client_cache_id, response_body, metadata_wrapper,
+                            max_age);
+}
+
+}  // namespace
 
 using ::google::protobuf::io::ArrayInputStream;
 using ::google::protobuf::io::GzipInputStream;
@@ -52,10 +100,11 @@ using ::google::protobuf::io::StringOutputStream;
 using CompressionFormat =
     ::fcp::client::http::UriOrInlineData::InlineData::CompressionFormat;
 
-static constexpr absl::string_view kClientDecodedGzipSuffix = "+gzip";
+static constexpr char kOctetStream[] = "application/octet-stream";
+constexpr absl::string_view kClientDecodedGzipSuffix = "+gzip";
 
 absl::StatusOr<std::unique_ptr<HttpRequest>> InMemoryHttpRequest::Create(
-    absl::string_view uri, HttpRequest::Method method, HeaderList extra_headers,
+    absl::string_view uri, Method method, HeaderList extra_headers,
     std::string body, bool use_compression) {
   // Allow http://localhost:xxxx as an exception to the https-only policy,
   // so that we can use a local http test server.
@@ -351,44 +400,84 @@ FetchResourcesInMemory(HttpClient& http_client,
                        InterruptibleRunner& interruptible_runner,
                        const std::vector<UriOrInlineData>& resources,
                        int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
-                       bool client_decoded_http_resources) {
+                       bool client_decoded_http_resources,
+                       cache::ResourceCache* resource_cache) {
   // Each resource may have the data already available (by having been included
   // in a prior response inline), or may need to be fetched.
 
   // We'll create an 'accessor' for each resource, providing access to that
   // resource's data by the end of this function (either the fetched data, or
-  // the inline data).
-  std::vector<std::function<absl::StatusOr<InMemoryHttpResponse>()>>
-      response_accessors;
+  // the inline data). Additionally, this struct will contain the
+  // client_cache_id and max_age for the resource if the resource should be put
+  // in the cache. If the resource should not be put in the cache,
+  // client_cache_id will be an empty std::string.
+  struct AccessorAndCacheMetadata {
+    std::function<absl::StatusOr<InMemoryHttpResponse>()> accessor;
+    std::string client_cache_id;
+    absl::Duration max_age;
+  };
+  std::vector<AccessorAndCacheMetadata> response_accessors;
 
   // We'll compile HttpRequest instances for those resources that do need to be
   // fetched, then we'll fire them off all at once, and then we'll gather their
   // responses once all requests have finished.
   std::vector<std::unique_ptr<http::HttpRequest>> http_requests;
   std::vector<absl::StatusOr<InMemoryHttpResponse>> http_responses;
+  bool caching_enabled = resource_cache != nullptr;
 
   for (const UriOrInlineData& resource : resources) {
-    if (!resource.uri().empty()) {
+    if (!resource.uri().uri.empty()) {
+      // If the resource has a cache_id, try getting it out of the cache. If any
+      // condition happens outside the happy path, fetch the resource normally.
+      if (caching_enabled && !resource.uri().client_cache_id.empty()) {
+        absl::StatusOr<absl::Cord> cached_resource =
+            TryGetResourceFromCache(resource.uri().client_cache_id,
+                                    resource.uri().max_age, *resource_cache);
+        if (cached_resource.ok()) {
+          // Resource was successfully fetched from the cache, so we do not set
+          // the client_cache_id or the max_age.
+          response_accessors.push_back({.accessor =
+                                            [cached_resource]() {
+                                              return InMemoryHttpResponse{
+                                                  kHttpOk, "", kOctetStream,
+                                                  *cached_resource};
+                                            },
+                                        .client_cache_id = "",
+                                        .max_age = absl::ZeroDuration()});
+          continue;
+        }
+      }
       // If the resource URI is set, then create a request to fetch the data for
       // it, and point the accessor at the slot in http_responses where that
       // request's response will eventually live.
-      FCP_ASSIGN_OR_RETURN(
-          std::unique_ptr<http::HttpRequest> request,
-          InMemoryHttpRequest::Create(resource.uri(), HttpRequest::Method::kGet,
-                                      {}, "", /*use_compression=*/false));
+      FCP_ASSIGN_OR_RETURN(std::unique_ptr<http::HttpRequest> request,
+                           InMemoryHttpRequest::Create(
+                               resource.uri().uri, HttpRequest::Method::kGet,
+                               {}, "", /*use_compression=*/
+                               false));
       http_requests.push_back(std::move(request));
       int64_t response_index = http_requests.end() - http_requests.begin() - 1;
-      response_accessors.push_back([&http_responses, response_index]() {
+      auto response_accessing_fn = [&http_responses, response_index]() {
         return std::move(http_responses.at(response_index));
-      });
+      };
+      if (caching_enabled) {
+        // We didn't load the resource from the cache, so set the
+        // client_cache_id and max_age in the response_accessor.
+        response_accessors.push_back(
+            {.accessor = response_accessing_fn,
+             .client_cache_id = std::string(resource.uri().client_cache_id),
+             .max_age = resource.uri().max_age});
+      } else {
+        response_accessors.push_back({.accessor = response_accessing_fn});
+      }
     } else {
       // The data is available inline. Make the accessor just return a "fake"
       // successful HTTP response (that way the caller can have unified error
       // handling logic and doesn't have to know whether a resource was truly
       // fetched via HTTP or not). Because the inline_data field is an
       // absl::Cord, making a copy of it should be very cheap.
-      response_accessors.push_back([resource]() {
-        std::string content_type = "application/octet-stream";
+      response_accessors.push_back({.accessor = [resource]() {
+        std::string content_type(kOctetStream);
         switch (resource.inline_data().compression_format) {
           case UriOrInlineData::InlineData::CompressionFormat::kUncompressed:
             break;
@@ -398,7 +487,7 @@ FetchResourcesInMemory(HttpClient& http_client,
         }
         return InMemoryHttpResponse{kHttpOk, "", content_type,
                                     resource.inline_data().data};
-      });
+      }});
     }
   }
 
@@ -418,25 +507,35 @@ FetchResourcesInMemory(HttpClient& http_client,
   std::vector<absl::StatusOr<InMemoryHttpResponse>> result;
   result.reserve(response_accessors.size());
   for (const auto& response_accessor : response_accessors) {
+    absl::StatusOr<InMemoryHttpResponse> response =
+        response_accessor.accessor();
     if (client_decoded_http_resources) {
-      absl::StatusOr<InMemoryHttpResponse> response = response_accessor();
-      if (response.ok() && absl::EndsWithIgnoreCase(response->content_type,
-                                                    kClientDecodedGzipSuffix)) {
-        std::string response_body_temp(response->body);
-        // We're going to overwrite the response body with the decoded contents
-        // shortly, no need to keep an extra copy of it in memory.
-        response->body.Clear();
-        absl::StatusOr<absl::Cord> decoded_response_body =
-            internal::UncompressWithGzip(response_body_temp);
-        if (!decoded_response_body.ok()) {
-          response = decoded_response_body.status();
-        } else {
-          response->body = *std::move(decoded_response_body);
+      if (response.ok()) {
+        bool encoded_with_gzip = absl::EndsWithIgnoreCase(
+            response->content_type, kClientDecodedGzipSuffix);
+        if (!response_accessor.client_cache_id.empty()) {
+          TryPutResourceInCache(response_accessor.client_cache_id,
+                                response->body, encoded_with_gzip,
+                                response_accessor.max_age, *resource_cache)
+              .IgnoreError();
+        }
+        if (encoded_with_gzip) {
+          std::string response_body_temp(response->body);
+          // We're going to overwrite the response body with the decoded
+          // contents shortly, no need to keep an extra copy of it in memory.
+          response->body.Clear();
+          absl::StatusOr<absl::Cord> decoded_response_body =
+              internal::UncompressWithGzip(response_body_temp);
+          if (!decoded_response_body.ok()) {
+            response = decoded_response_body.status();
+          } else {
+            response->body = *std::move(decoded_response_body);
+          }
         }
       }
       result.push_back(response);
     } else {
-      result.push_back(response_accessor());
+      result.push_back(response);
     }
   }
   return result;

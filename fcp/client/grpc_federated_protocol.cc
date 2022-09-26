@@ -29,6 +29,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/base/time_util.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
@@ -131,7 +132,8 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
     absl::string_view attestation_measurement,
     std::function<bool()> should_abort,
     const InterruptibleRunner::TimingConfig& timing_config,
-    const int64_t grpc_channel_deadline_seconds)
+    const int64_t grpc_channel_deadline_seconds,
+    cache::ResourceCache* resource_cache)
     : GrpcFederatedProtocol(
           event_publisher, log_manager, std::move(secagg_runner_factory), flags,
           http_client,
@@ -139,7 +141,7 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
               federated_service_uri, api_key, std::string(population_name),
               grpc_channel_deadline_seconds, test_cert_path),
           population_name, retry_token, client_version, attestation_measurement,
-          should_abort, absl::BitGen(), timing_config) {}
+          should_abort, absl::BitGen(), timing_config, resource_cache) {}
 
 GrpcFederatedProtocol::GrpcFederatedProtocol(
     EventPublisher* event_publisher, LogManager* log_manager,
@@ -149,7 +151,8 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
     absl::string_view population_name, absl::string_view retry_token,
     absl::string_view client_version, absl::string_view attestation_measurement,
     std::function<bool()> should_abort, absl::BitGen bit_gen,
-    const InterruptibleRunner::TimingConfig& timing_config)
+    const InterruptibleRunner::TimingConfig& timing_config,
+    cache::ResourceCache* resource_cache)
     : object_state_(ObjectState::kInitialized),
       event_publisher_(event_publisher),
       log_manager_(log_manager),
@@ -164,7 +167,8 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
       bit_gen_(std::move(bit_gen)),
       network_stopwatch_(flags->enable_per_phase_network_stats()
                              ? WallClockStopwatch::Create()
-                             : WallClockStopwatch::CreateNoop()) {
+                             : WallClockStopwatch::CreateNoop()),
+      resource_cache_(resource_cache) {
   interruptible_runner_ = std::make_unique<InterruptibleRunner>(
       log_manager, should_abort, timing_config,
       InterruptibleRunner::DiagnosticsConfig{
@@ -386,6 +390,12 @@ GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
                              eligibility_eval_payload.has_plan_resource(),
                          .uri = eligibility_eval_payload.plan_resource().uri(),
                          .data = eligibility_eval_payload.plan(),
+                         .client_cache_id =
+                             eligibility_eval_payload.plan_resource()
+                                 .client_cache_id(),
+                         .max_age = TimeUtil::ConvertProtoToAbslDuration(
+                             eligibility_eval_payload.plan_resource()
+                                 .max_age()),
                      },
                  .checkpoint = {
                      .has_uri = eligibility_eval_payload
@@ -393,6 +403,10 @@ GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
                      .uri = eligibility_eval_payload.init_checkpoint_resource()
                                 .uri(),
                      .data = eligibility_eval_payload.init_checkpoint(),
+                     .client_cache_id = eligibility_eval_payload.plan_resource()
+                                            .client_cache_id(),
+                     .max_age = TimeUtil::ConvertProtoToAbslDuration(
+                         eligibility_eval_payload.plan_resource().max_age()),
                  }}));
       }
       return EligibilityEvalTask{
@@ -470,11 +484,19 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
                          .has_uri = acceptance_info.has_plan_resource(),
                          .uri = acceptance_info.plan_resource().uri(),
                          .data = acceptance_info.plan(),
+                         .client_cache_id =
+                             acceptance_info.plan_resource().client_cache_id(),
+                         .max_age = TimeUtil::ConvertProtoToAbslDuration(
+                             acceptance_info.plan_resource().max_age()),
                      },
                  .checkpoint = {
                      .has_uri = acceptance_info.has_init_checkpoint_resource(),
                      .uri = acceptance_info.init_checkpoint_resource().uri(),
                      .data = acceptance_info.init_checkpoint(),
+                     .client_cache_id =
+                         acceptance_info.plan_resource().client_cache_id(),
+                     .max_age = TimeUtil::ConvertProtoToAbslDuration(
+                         acceptance_info.plan_resource().max_age()),
                  }}));
       }
 
@@ -944,8 +966,8 @@ GrpcFederatedProtocol::FetchTaskResources(
       ConvertResourceToUriOrInlineData(task_resources.checkpoint));
 
   // Log a diag code if either resource is about to be downloaded via HTTP.
-  if (!plan_uri_or_data.uri().empty() ||
-      !checkpoint_uri_or_data.uri().empty()) {
+  if (!plan_uri_or_data.uri().uri.empty() ||
+      !checkpoint_uri_or_data.uri().uri.empty()) {
     log_manager_->LogDiag(
         ProdDiagCode::HTTP_GRPC_PROTOCOL_REGULAR_TASK_RESOURCE_USES_HTTP);
   }
@@ -960,7 +982,8 @@ GrpcFederatedProtocol::FetchTaskResources(
     resource_responses = ::fcp::client::http::FetchResourcesInMemory(
         *http_client_, *interruptible_runner_,
         {plan_uri_or_data, checkpoint_uri_or_data}, &http_bytes_downloaded_,
-        &http_bytes_uploaded_, flags_->client_decoded_http_resources());
+        &http_bytes_uploaded_, flags_->client_decoded_http_resources(),
+        resource_cache_);
   }
   if (!resource_responses.ok()) {
     log_manager_->LogDiag(
@@ -991,8 +1014,8 @@ GrpcFederatedProtocol::FetchTaskResources(
         absl::StrCat("checkpoint fetch failed: ",
                      checkpoint_data_response.status().ToString()));
   }
-  if (!plan_uri_or_data.uri().empty() ||
-      !checkpoint_uri_or_data.uri().empty()) {
+  if (!plan_uri_or_data.uri().uri.empty() ||
+      !checkpoint_uri_or_data.uri().uri.empty()) {
     // We only want to log this diag code when we actually did fetch something
     // via HTTP.
     log_manager_->LogDiag(
@@ -1028,13 +1051,13 @@ GrpcFederatedProtocol::ConvertResourceToUriOrInlineData(
     return UriOrInlineData::CreateInlineData(
         absl::Cord(resource.data),
         UriOrInlineData::InlineData::CompressionFormat::kUncompressed);
-  } else {
-    if (resource.uri.empty()) {
-      return absl::InvalidArgumentError(
-          "Resource uri must be non-empty when set");
-    }
-    return UriOrInlineData::CreateUri(resource.uri);
   }
+  if (resource.uri.empty()) {
+    return absl::InvalidArgumentError(
+        "Resource uri must be non-empty when set");
+  }
+  return UriOrInlineData::CreateUri(resource.uri, resource.client_cache_id,
+                                    resource.max_age);
 }
 
 NetworkStats GrpcFederatedProtocol::GetNetworkStats() {

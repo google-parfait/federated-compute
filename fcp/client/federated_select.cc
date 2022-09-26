@@ -87,14 +87,17 @@ absl::StatusOr<std::deque<absl::Cord>> FetchSlicesViaHttp(
         uri_template, {{"{served_at_id}", slices_selector.served_at_id()},
                        {"{key_base10}", absl::StrCat(slice_key)}});
 
-    resources.push_back(UriOrInlineData::CreateUri(slice_uri));
+    resources.push_back(
+        UriOrInlineData::CreateUri(slice_uri, "", absl::ZeroDuration()));
   }
 
   // Perform the requests.
   absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
       slice_fetch_result = http::FetchResourcesInMemory(
           http_client, interruptible_runner, std::move(resources),
-          bytes_received_acc, bytes_sent_acc, client_decoded_http_resources);
+          bytes_received_acc, bytes_sent_acc, client_decoded_http_resources,
+          // TODO(team): Enable caching for federated select slices.
+          /*resource_cache=*/nullptr);
 
   // Check whether issuing the requests failed as a whole (generally indicating
   // a programming error).

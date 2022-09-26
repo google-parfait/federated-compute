@@ -17,6 +17,8 @@
 
 #include <limits>
 
+#include "absl/time/time.h"
+
 namespace fcp {
 
 google::protobuf::Timestamp TimeUtil::ConvertAbslToProtoTimestamp(

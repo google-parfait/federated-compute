@@ -49,10 +49,10 @@ namespace fcp {
 namespace client {
 namespace cache {
 
-constexpr absl::string_view kCacheManifestFileName = "cache_manifest.pb";
-constexpr absl::string_view kParentDir = "fcp";
+constexpr char kCacheManifestFileName[] = "cache_manifest.pb";
+constexpr char kParentDir[] = "fcp";
 // Cached files will be saved in <cache directory>/fcp/cache.
-constexpr absl::string_view kCacheDir = "cache";
+constexpr char kCacheDir[] = "cache";
 
 absl::StatusOr<CacheManifest> FileBackedResourceCache::ReadInternal() {
   absl::StatusOr<const CacheManifest*> data = pds_->Read();
@@ -82,7 +82,9 @@ FileBackedResourceCache::Create(absl::string_view base_dir,
                                 LogManager* log_manager, fcp::Clock* clock,
                                 int64_t max_cache_size_bytes) {
   // Create <cache root>/fcp.
-  std::filesystem::path cache_root_path(cache_dir);
+  // Unfortunately NDK's flavor of std::filesystem::path does not support using
+  // absl::string_view.
+  std::filesystem::path cache_root_path((std::string(cache_dir)));
   if (!cache_root_path.is_absolute()) {
     return absl::InvalidArgumentError(
         absl::StrCat("The provided path: ", cache_dir,
@@ -97,8 +99,8 @@ FileBackedResourceCache::Create(absl::string_view base_dir,
         "Failed to create FileBackedResourceCache cache directory ",
         cache_dir_path.string()));
   }
-  // Create <files root>/fcp/cache_manifest.pb.
-  std::filesystem::path manifest_path(base_dir);
+  // Create <files root>/fcp/cache_manifest.pb.s
+  std::filesystem::path manifest_path((std::string(base_dir)));
   if (!manifest_path.is_absolute()) {
     return absl::InvalidArgumentError(
         absl::StrCat("The provided path: ", manifest_path.string(),
@@ -140,11 +142,12 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
   FCP_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
   FCP_RETURN_IF_ERROR(CleanUp(resource.size(), manifest));
 
-  std::filesystem::path cached_file_path = cache_dir_path_ / cache_id;
+  std::string cache_id_str(cache_id);
+  std::filesystem::path cached_file_path = cache_dir_path_ / cache_id_str;
   absl::Time now = clock_.Now();
   absl::Time expiry = now + max_age;
   CachedResource cached_resource;
-  cached_resource.set_file_name(std::string(cache_id));
+  cached_resource.set_file_name(cache_id_str);
   *cached_resource.mutable_metadata() = metadata;
   *cached_resource.mutable_expiry_time() =
       TimeUtil::ConvertAbslToProtoTimestamp(expiry);
@@ -152,7 +155,7 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
       TimeUtil::ConvertAbslToProtoTimestamp(now);
 
   // Write the manifest back to disk before we write the file.
-  manifest.mutable_cache()->insert({std::string(cache_id), cached_resource});
+  manifest.mutable_cache()->insert({cache_id_str, cached_resource});
   FCP_RETURN_IF_ERROR(
       WriteInternal(std::make_unique<CacheManifest>(std::move(manifest))));
 
@@ -174,11 +177,12 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
   absl::MutexLock lock(&mutex_);
   FCP_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
 
-  if (!manifest.cache().contains(cache_id)) {
+  std::string cache_id_str(cache_id);
+  if (!manifest.cache().contains(cache_id_str)) {
     return absl::NotFoundError(absl::StrCat(cache_id, " not found"));
   }
-  CachedResource cached_resource = manifest.cache().at(cache_id);
-  std::filesystem::path cached_file_path = cache_dir_path_ / cache_id;
+  CachedResource cached_resource = manifest.cache().at(cache_id_str);
+  std::filesystem::path cached_file_path = cache_dir_path_ / cache_id_str;
   google::protobuf::Any metadata = cached_resource.metadata();
   absl::Time now = clock_.Now();
   *cached_resource.mutable_last_accessed_time() =
@@ -193,7 +197,7 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
       ReadFileToCord(cached_file_path.string());
   if (!contents.ok()) {
     log_manager_.LogDiag(ProdDiagCode::RESOURCE_CACHE_RESOURCE_READ_FAILED);
-    manifest.mutable_cache()->erase(cache_id);
+    manifest.mutable_cache()->erase(cache_id_str);
     std::error_code error;
     std::filesystem::remove(cached_file_path, error);
     if (error.value() != 0) {
@@ -203,9 +207,8 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
     return absl::NotFoundError(absl::StrCat(cache_id, " not found"));
   }
 
-  std::string cache_id_string(cache_id);
-  manifest.mutable_cache()->erase(cache_id_string);
-  manifest.mutable_cache()->insert({cache_id_string, cached_resource});
+  manifest.mutable_cache()->erase(cache_id_str);
+  manifest.mutable_cache()->insert({cache_id_str, cached_resource});
 
   absl::Status status =
       WriteInternal(std::make_unique<CacheManifest>(std::move(manifest)));

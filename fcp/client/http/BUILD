@@ -59,6 +59,16 @@ cc_test(
     ],
 )
 
+proto_library(
+    name = "http_resource_metadata_proto",
+    srcs = ["http_resource_metadata.proto"],
+)
+
+cc_proto_library(
+    name = "http_resource_metadata_cc_proto",
+    deps = [":http_resource_metadata_proto"],
+)
+
 cc_library(
     name = "in_memory_request_response",
     srcs = ["in_memory_request_response.cc"],
@@ -66,14 +76,17 @@ cc_library(
     deps = [
         ":http_client",
         ":http_client_util",
+        ":http_resource_metadata_cc_proto",
         "//fcp/base",
         "//fcp/client:interruptible_runner",
+        "//fcp/client/cache:resource_cache",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -84,11 +97,15 @@ cc_test(
     deps = [
         ":http_client",
         ":http_client_util",
+        ":http_resource_metadata_cc_proto",
         ":in_memory_request_response",
         "//fcp/base",
+        "//fcp/base:simulated_clock",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interruptible_runner",
         "//fcp/client:test_helpers",
+        "//fcp/client/cache:file_backed_resource_cache",
+        "//fcp/client/cache:test_helpers",
         "//fcp/client/http/testing:test_helpers",
         "//fcp/testing",
         "@com_google_absl//absl/status",
@@ -124,6 +141,7 @@ cc_library(
         "//fcp/client:interfaces",
         "//fcp/client:interruptible_runner",
         "//fcp/client:selector_context_cc_proto",
+        "//fcp/client/cache:resource_cache",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
@@ -159,6 +177,7 @@ cc_test(
         "//fcp/client:interfaces",
         "//fcp/client:interruptible_runner",
         "//fcp/client:test_helpers",
+        "//fcp/client/cache:test_helpers",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/client/http/testing:test_helpers",
         "//fcp/protos:federated_api_cc_proto",

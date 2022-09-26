@@ -28,6 +28,7 @@
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/cache/test_helpers.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/grpc_bidi_stream.h"
@@ -396,7 +397,8 @@ class GrpcFederatedProtocolTest
         InterruptibleRunner::TimingConfig{
             .polling_period = absl::ZeroDuration(),
             .graceful_shutdown_period = absl::InfiniteDuration(),
-            .extended_shutdown_period = absl::InfiniteDuration()});
+            .extended_shutdown_period = absl::InfiniteDuration()},
+        &mock_resource_cache_);
   }
 
   void TearDown() override {
@@ -504,6 +506,7 @@ class GrpcFederatedProtocolTest
   NiceMock<MockFlags> mock_flags_;
   StrictMock<MockHttpClient> mock_http_client_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
+  StrictMock<cache::MockResourceCache> mock_resource_cache_;
 
   // The class under test.
   std::unique_ptr<GrpcFederatedProtocol> federated_protocol_;
@@ -557,7 +560,8 @@ TEST_P(GrpcFederatedProtocolTest,
       InterruptibleRunner::TimingConfig{
           .polling_period = absl::ZeroDuration(),
           .graceful_shutdown_period = absl::InfiniteDuration(),
-          .extended_shutdown_period = absl::InfiniteDuration()});
+          .extended_shutdown_period = absl::InfiniteDuration()},
+      &mock_resource_cache_);
 
   const RetryWindow& retry_window2 =
       federated_protocol_->GetLatestRetryWindow();

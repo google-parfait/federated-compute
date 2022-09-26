@@ -40,6 +40,7 @@
 #include "fcp/base/platform.h"
 #include "fcp/base/time_util.h"
 #include "fcp/base/wall_clock_stopwatch.h"
+#include "fcp/client/cache/test_helpers.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
@@ -473,7 +474,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         InterruptibleRunner::TimingConfig{
             .polling_period = absl::ZeroDuration(),
             .graceful_shutdown_period = absl::InfiniteDuration(),
-            .extended_shutdown_period = absl::InfiniteDuration()});
+            .extended_shutdown_period = absl::InfiniteDuration()},
+        &mock_resource_cache_);
   }
 
   void TearDown() override {
@@ -690,6 +692,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   StrictMock<MockLogManager> mock_log_manager_;
   NiceMock<MockFlags> mock_flags_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
+  StrictMock<cache::MockResourceCache> mock_resource_cache_;
   Clock* clock_ = Clock::RealClock();
 
   // The class under test.
@@ -717,7 +720,8 @@ TEST_F(HttpFederatedProtocolTest,
       InterruptibleRunner::TimingConfig{
           .polling_period = absl::ZeroDuration(),
           .graceful_shutdown_period = absl::InfiniteDuration(),
-          .extended_shutdown_period = absl::InfiniteDuration()});
+          .extended_shutdown_period = absl::InfiniteDuration()},
+      &mock_resource_cache_);
 
   const ::google::internal::federatedml::v2::RetryWindow& retry_window2 =
       federated_protocol_->GetLatestRetryWindow();

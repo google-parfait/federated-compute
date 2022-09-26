@@ -201,7 +201,9 @@ absl::StatusOr<UriOrInlineData> ConvertResourceToUriOrInlineData(
         return absl::InvalidArgumentError(
             "Resource.uri must be non-empty when set");
       }
-      return UriOrInlineData::CreateUri(resource.uri());
+      return UriOrInlineData::CreateUri(
+          resource.uri(), resource.client_cache_id(),
+          TimeUtil::ConvertProtoToAbslDuration(resource.max_age()));
     case Resource::ResourceCase::kInlineResource: {
       CompressionFormat compression_format = CompressionFormat::kUncompressed;
       if (resource.inline_resource().has_compression_format()) {
@@ -285,7 +287,8 @@ HttpFederatedProtocol::HttpFederatedProtocol(
     absl::string_view retry_token, absl::string_view client_version,
     absl::string_view attestation_measurement,
     std::function<bool()> should_abort, absl::BitGen bit_gen,
-    const InterruptibleRunner::TimingConfig& timing_config)
+    const InterruptibleRunner::TimingConfig& timing_config,
+    cache::ResourceCache* resource_cache)
     : object_state_(ObjectState::kInitialized),
       log_manager_(log_manager),
       flags_(flags),
@@ -316,7 +319,8 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       bit_gen_(std::move(bit_gen)),
       timing_config_(timing_config),
       waiting_period_for_cancellation_(
-          absl::Seconds(flags->waiting_period_sec_for_cancellation())) {
+          absl::Seconds(flags->waiting_period_sec_for_cancellation())),
+      resource_cache_(resource_cache) {
   // Note that we could cast the provided error codes to absl::StatusCode
   // values here. However, that means we'd have to handle the case when
   // invalid integers that don't map to a StatusCode enum are provided in the
@@ -1034,7 +1038,8 @@ HttpFederatedProtocol::FetchTaskResources(
     resource_responses = FetchResourcesInMemory(
         *http_client_, *interruptible_runner_,
         {plan_uri_or_data, checkpoint_uri_or_data}, &bytes_downloaded_,
-        &bytes_uploaded_, flags_->client_decoded_http_resources());
+        &bytes_uploaded_, flags_->client_decoded_http_resources(),
+        resource_cache_);
   }
   FCP_RETURN_IF_ERROR(resource_responses);
   auto& plan_data_response = (*resource_responses)[0];

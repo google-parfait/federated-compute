@@ -29,6 +29,8 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
+#include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/interruptible_runner.h"
 
@@ -83,7 +85,7 @@ class InMemoryHttpRequest : public HttpRequest {
 };
 
 // Simple container class for holding an HTTP response code, headers, and
-// in-memory request body.
+// in-memory request body, as well as metadata for the client-side cache.
 struct InMemoryHttpResponse {
   int code;
   // This is empty if no "Content-Encoding" header was present in the response
@@ -124,6 +126,7 @@ class InMemoryHttpRequestCallback : public HttpRequestCallback {
   std::optional<int64_t> expected_content_length_ ABSL_GUARDED_BY(mutex_);
   absl::Cord response_buffer_ ABSL_GUARDED_BY(mutex_);
   mutable absl::Mutex mutex_;
+  std::string client_cache_id_;
 };
 
 // Utility for performing a single HTTP request and returning the results (incl.
@@ -169,26 +172,39 @@ class UriOrInlineData {
     CompressionFormat compression_format = CompressionFormat::kUncompressed;
   };
 
+  struct Uri {
+    std::string uri;
+    std::string client_cache_id;
+    absl::Duration max_age;
+  };
+
   // Creates an instance representing a URI from which data has to be fetched.
-  static UriOrInlineData CreateUri(std::string uri) {
-    return UriOrInlineData(std::move(uri), {});
+  // If the resource represented by the uri should be cached, both
+  // `client_cache_id` and `max_age` must be set, otherwise they may be
+  // empty/zero.
+  static UriOrInlineData CreateUri(std::string uri, std::string client_cache_id,
+                                   absl::Duration max_age) {
+    return UriOrInlineData({.uri = std::move(uri),
+                            .client_cache_id = std::move(client_cache_id),
+                            .max_age = max_age},
+                           {});
   }
   // Creates an instance representing a resource's already-available (or empty)
   // data.
   static UriOrInlineData CreateInlineData(
       absl::Cord inline_data,
       InlineData::CompressionFormat compression_format) {
-    return UriOrInlineData("", {std::move(inline_data), compression_format});
+    return UriOrInlineData({}, {std::move(inline_data), compression_format});
   }
 
-  const std::string& uri() const { return uri_; }
+  const Uri& uri() const { return uri_; }
   const InlineData& inline_data() const { return inline_data_; }
 
  private:
-  UriOrInlineData(std::string uri, InlineData inline_data)
+  UriOrInlineData(Uri uri, InlineData inline_data)
       : uri_(std::move(uri)), inline_data_(std::move(inline_data)) {}
 
-  const std::string uri_;
+  const Uri uri_;
   const InlineData inline_data_;
 };
 
@@ -219,7 +235,8 @@ FetchResourcesInMemory(HttpClient& http_client,
                        InterruptibleRunner& interruptible_runner,
                        const std::vector<UriOrInlineData>& resources,
                        int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
-                       bool client_decoded_http_resources);
+                       bool client_decoded_http_resources,
+                       cache::ResourceCache* resource_cache);
 
 // Used by the class and in tests only.
 namespace internal {

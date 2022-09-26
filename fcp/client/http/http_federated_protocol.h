@@ -33,6 +33,7 @@
 #include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/wall_clock_stopwatch.h"
+#include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/fl_runner.pb.h"
@@ -64,7 +65,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::string_view retry_token, absl::string_view client_version,
       absl::string_view attestation_measurement,
       std::function<bool()> should_abort, absl::BitGen bit_gen,
-      const InterruptibleRunner::TimingConfig& timing_config);
+      const InterruptibleRunner::TimingConfig& timing_config,
+      cache::ResourceCache* resource_cache);
 
   ~HttpFederatedProtocol() override = default;
 
@@ -221,6 +223,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // Set this field to true if an eligibility eval task was received from the
   // server in the EligibilityEvalTaskResponse.
   bool eligibility_eval_enabled_ = false;
+  // `nullptr` if the feature is disabled.
+  cache::ResourceCache* resource_cache_;
 };
 
 }  // namespace http

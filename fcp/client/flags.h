@@ -189,6 +189,14 @@ class Flags {
   // stats will be somewhat incomplete and the period the stats cover will be
   // less defined.
   virtual bool enable_per_phase_network_stats() const { return false; }
+
+  // The max size in bytes of resources that the ResourceCache is allowed to
+  // store. If greater than 0, the client will attempt to cache resources sent
+  // by uri via the hybrid grpc-with-http-resources and the full http stack. If
+  // this value is reduced from some previous greater value, the cache dir will
+  // be reduced appropriately the next time it is initialized at the start of
+  // the next run.
+  virtual int64_t max_resource_cache_size_bytes() const { return 0; }
 };
 }  // namespace client
 }  // namespace fcp

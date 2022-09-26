@@ -34,6 +34,7 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/wall_clock_stopwatch.h"
+#include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
@@ -68,7 +69,8 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
       absl::string_view attestation_measurement,
       std::function<bool()> should_abort,
       const InterruptibleRunner::TimingConfig& timing_config,
-      const int64_t grpc_channel_deadline_seconds);
+      const int64_t grpc_channel_deadline_seconds,
+      cache::ResourceCache* resource_cache);
 
   // Test c'tor.
   GrpcFederatedProtocol(
@@ -80,7 +82,8 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
       absl::string_view client_version,
       absl::string_view attestation_measurement,
       std::function<bool()> should_abort, absl::BitGen bit_gen,
-      const InterruptibleRunner::TimingConfig& timing_config);
+      const InterruptibleRunner::TimingConfig& timing_config,
+      cache::ResourceCache* resource_cache);
 
   ~GrpcFederatedProtocol() override;
 
@@ -178,6 +181,10 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
     bool has_uri;
     const std::string& uri;
     const std::string& data;
+    // The following fields will be set if the client should attempt to cache
+    // the resource.
+    const std::string& client_cache_id;
+    const absl::Duration max_age;
   };
   // Represents the common set of resources a task may have.
   struct TaskResources {
@@ -242,6 +249,8 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
       side_channel_protocol_execution_info_;
   google::internal::federatedml::v2::SideChannelProtocolOptionsResponse
       side_channel_protocol_options_response_;
+  // `nullptr` if the feature is disabled.
+  cache::ResourceCache* resource_cache_;
 };
 
 }  // namespace client

@@ -33,6 +33,8 @@
 #include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
+#include "fcp/client/cache/file_backed_resource_cache.h"
+#include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
@@ -1150,6 +1152,18 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return env_deps->ShouldAbort(absl::Now(), timing_config.polling_period);
   };
 
+  Clock* clock = Clock::RealClock();
+  std::unique_ptr<cache::ResourceCache> resource_cache;
+  if (flags->enable_cache_dir() && flags->max_resource_cache_size_bytes() > 0) {
+    // Anything that goes wrong in FileBackedResourceCache::Create is a
+    // programmer error.
+    FCP_ASSIGN_OR_RETURN(
+        resource_cache,
+        cache::FileBackedResourceCache::Create(
+            env_deps->GetBaseDir(), env_deps->GetCacheDir(), log_manager, clock,
+            flags->max_resource_cache_size_bytes()));
+  }
+
   std::unique_ptr<::fcp::client::http::HttpClient> http_client =
       flags->enable_grpc_with_http_resource_support() ||
               flags->use_http_federated_compute_protocol()
@@ -1157,13 +1171,12 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           : nullptr;
 
   std::unique_ptr<FederatedProtocol> federated_protocol;
-  Clock* clock = Clock::RealClock();
   if (flags->use_http_federated_compute_protocol()) {
     federated_protocol = std::make_unique<http::HttpFederatedProtocol>(
         clock, log_manager, flags, http_client.get(), federated_service_uri,
         api_key, population_name, retry_token, client_version,
         attestation_measurement, should_abort_protocol_callback, absl::BitGen(),
-        timing_config);
+        timing_config, resource_cache.get());
   } else {
 #ifdef FCP_CLIENT_SUPPORT_GRPC
     // Check in with the server to either retrieve a plan + initial checkpoint,
@@ -1180,7 +1193,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         std::make_unique<SecAggRunnerFactoryImpl>(), flags, http_client.get(),
         federated_service_uri, api_key, test_cert_path, population_name,
         retry_token, client_version, attestation_measurement,
-        should_abort_protocol_callback, timing_config, grpc_channel_deadline);
+        should_abort_protocol_callback, timing_config, grpc_channel_deadline,
+        resource_cache.get());
 #else
     return absl::InternalError("No FederatedProtocol enabled.");
 #endif
