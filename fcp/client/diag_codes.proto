@@ -136,6 +136,11 @@ enum ProdDiagCode {
   BACKGROUND_TRAINING_TFLITE_ENGINE_USED = 20;
 
   /**
+   * Sent when TFLite model flatbuffer is not empty.
+   */
+  BACKGROUND_TRAINING_TFLITE_MODEL_INCLUDED = 18;
+
+  /**
    * A generic SecAgg client error.
    */
   SECAGG_CLIENT_NATIVE_ERROR_GENERIC = 1369;

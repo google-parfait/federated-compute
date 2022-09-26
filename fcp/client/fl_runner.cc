@@ -342,6 +342,11 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
   std::vector<std::string> output_names = {
       io_router.task_eligibility_info_tensor_name()};
 
+  if (!client_plan.tflite_graph().empty()) {
+    log_manager->LogDiag(
+        ProdDiagCode::BACKGROUND_TRAINING_TFLITE_MODEL_INCLUDED);
+  }
+
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
   if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
     std::unique_ptr<TfLiteInputs> tflite_inputs =

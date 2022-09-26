@@ -171,6 +171,11 @@ absl::Status RunPlanWithTensorflowSpec(
   // Run plan
   std::vector<std::string> output_names_unused;
 
+  if (!client_plan.tflite_graph().empty()) {
+    log_manager->LogDiag(
+        ProdDiagCode::BACKGROUND_TRAINING_TFLITE_MODEL_INCLUDED);
+  }
+
 #ifdef FCP_CLIENT_SUPPORT_TFLITE
   if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
     auto inputs = ConstructInputsForTFLitePlan(
