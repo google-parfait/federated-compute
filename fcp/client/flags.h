@@ -197,6 +197,9 @@ class Flags {
   // be reduced appropriately the next time it is initialized at the start of
   // the next run.
   virtual int64_t max_resource_cache_size_bytes() const { return 0; }
+
+  // The number of threads that TFLite interpreter will use.
+  virtual int32_t num_threads_for_tflite() const { return 1; }
 };
 }  // namespace client
 }  // namespace fcp

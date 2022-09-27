@@ -61,7 +61,7 @@ absl::StatusOr<std::unique_ptr<TfLiteWrapper>> TfLiteWrapper::Create(
     LogManager* log_manager,
     std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
     std::vector<std::string> output_names,
-    const TfLiteInterpreterOptions& interpreter_options) {
+    const TfLiteInterpreterOptions& interpreter_options, int32_t num_threads) {
   std::unique_ptr<tflite::FlatBufferModel> flat_buffer_model =
       tflite::FlatBufferModel::BuildFromBuffer(model.c_str(), model.size());
   if (flat_buffer_model == nullptr) {
@@ -79,6 +79,7 @@ absl::StatusOr<std::unique_ptr<TfLiteWrapper>> TfLiteWrapper::Create(
         absl::StrCat("Failed to initiate interpreter: ",
                      error_reporter->GetFirstErrorMessage()));
   }
+  interpreter->SetNumThreads(num_threads);
   if (interpreter->ModifyGraphWithDelegate(delegate.get()) != kTfLiteOk) {
     return absl::InvalidArgumentError(
         absl::StrCat("Failed to modify graph with TrainingFlexDelegate: ",

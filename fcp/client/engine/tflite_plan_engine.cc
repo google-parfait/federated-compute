@@ -96,7 +96,8 @@ PlanResult TfLitePlanEngine::RunPlan(
   absl::StatusOr<std::unique_ptr<TfLiteWrapper>> tflite_wrapper =
       TfLiteWrapper::Create(model, should_abort_, *timing_config_, log_manager_,
                             std::move(inputs), output_names,
-                            CreateOptions(flags_));
+                            CreateOptions(flags_),
+                            flags_.num_threads_for_tflite());
   if (!tflite_wrapper.ok()) {
     return PlanResult(PlanOutcome::kTensorflowError, tflite_wrapper.status());
   }

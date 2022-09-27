@@ -79,7 +79,7 @@ class TfLiteWrapper {
       LogManager* log_manager,
       std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
       std::vector<std::string> output_names,
-      const TfLiteInterpreterOptions& interpreter_options);
+      const TfLiteInterpreterOptions& interpreter_options, int32_t num_threads);
 
   // Wrapper around TfLite's Interpreter::Invoke method.
   // If the run succeeds, a vector of output tensors (empty if there's no

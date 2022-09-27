@@ -32,6 +32,8 @@ namespace {
 const absl::string_view kAssetsPath = "fcp/client/engine/data/";
 const absl::string_view kJoinModelFile = "join_model.flatbuffer";
 
+const int32_t kNumThreads = 4;
+
 class TfLiteWrapperTest : public testing::Test {
  protected:
   absl::StatusOr<std::string> ReadFileAsString(const std::string& path) {
@@ -63,7 +65,7 @@ TEST_F(TfLiteWrapperTest, InvalidModel) {
           "INVALID_FLATBUFFER", []() { return false; }, default_timing_config_,
           &mock_log_manager_,
           std::make_unique<absl::flat_hash_map<std::string, std::string>>(),
-          output_names_, options_),
+          output_names_, options_, kNumThreads),
       IsCode(INVALID_ARGUMENT));
 }
 
@@ -78,7 +80,7 @@ TEST_F(TfLiteWrapperTest, InputNotSet) {
           *plan, []() { return false; }, default_timing_config_,
           &mock_log_manager_,
           std::make_unique<absl::flat_hash_map<std::string, std::string>>(),
-          output_names_, options_),
+          output_names_, options_, kNumThreads),
       IsCode(INVALID_ARGUMENT));
 }
 
@@ -93,7 +95,7 @@ TEST_F(TfLiteWrapperTest, WrongNumberOfOutputs) {
           *plan, []() { return false; }, default_timing_config_,
           &mock_log_manager_,
           std::make_unique<absl::flat_hash_map<std::string, std::string>>(),
-          {"Identity", "EXTRA"}, options_),
+          {"Identity", "EXTRA"}, options_, kNumThreads),
       IsCode(INVALID_ARGUMENT));
 }
 
@@ -108,7 +110,7 @@ TEST_F(TfLiteWrapperTest, Aborted) {
   // to see a CANCELLED status when we run the plan.
   auto wrapper = TfLiteWrapper::Create(
       *plan, []() { return true; }, default_timing_config_, &mock_log_manager_,
-      std::move(inputs), output_names_, options_);
+      std::move(inputs), output_names_, options_, kNumThreads);
   ASSERT_OK(wrapper);
   EXPECT_THAT((*wrapper)->Run(), IsCode(CANCELLED));
 }
@@ -122,7 +124,7 @@ TEST_F(TfLiteWrapperTest, Success) {
   (*inputs)["y"] = "def";
   auto wrapper = TfLiteWrapper::Create(
       *plan, []() { return false; }, default_timing_config_, &mock_log_manager_,
-      std::move(inputs), output_names_, options_);
+      std::move(inputs), output_names_, options_, kNumThreads);
   EXPECT_THAT(wrapper, IsCode(OK));
   auto outputs = (*wrapper)->Run();
   ASSERT_OK(outputs);

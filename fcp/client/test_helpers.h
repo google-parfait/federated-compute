@@ -540,6 +540,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_cache_dir, (), (const, override));
   MOCK_METHOD(bool, enable_federated_select, (), (const, override));
   MOCK_METHOD(bool, enable_per_phase_network_stats, (), (const, override));
+  MOCK_METHOD(int32_t, num_threads_for_tflite, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
