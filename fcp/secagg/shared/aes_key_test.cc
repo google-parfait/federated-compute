@@ -28,7 +28,7 @@ namespace {
 
 using ::testing::Eq;
 
-// For testing purposes, make an AesKey out of a std::string.
+// For testing purposes, make an AesKey out of a string.
 AesKey AesKeyFromString(const std::string& key) {
   return AesKey(reinterpret_cast<const uint8_t*>(key.c_str()),
                 static_cast<int>(key.size()));

@@ -30,7 +30,7 @@ int CachingErrorReporter::Report(const char* format, va_list args) {
   if (num_characters >= 0) {
     error_messages_.push_back(std::string(error_msg));
   } else {
-    // If num_characters is below zero, we can't trust the created std::string, so we
+    // If num_characters is below zero, we can't trust the created string, so we
     // push an "Unknown error" to the stored error messages.
     // We don't want to crash here, because the TFLite execution will be
     // terminated soon.

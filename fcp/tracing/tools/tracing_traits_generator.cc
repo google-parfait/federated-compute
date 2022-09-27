@@ -368,7 +368,7 @@ int main(int argc, const char** argv) {
     std::cout << "flatbuffers::FlatBufferBuilder* fbb) {" << std::endl;
 
     // Strings require special handling because the Create method takes an
-    // Offset<String>. Copy each provided std::string view into an Offset<String>.
+    // Offset<String>. Copy each provided string view into an Offset<String>.
     for (const auto& [name, type] : fields) {
       if (type.flatbuf_type == BaseType::String) {
         std::cout << "    auto " << name << "__ = fbb->CreateString(" << name

@@ -70,7 +70,7 @@ class RandomToken {
   std::string ToString() const;
 
   /**
-   * Returns a hex-std::string representation (suitable for log output etc.)
+   * Returns a hex-string representation (suitable for log output etc.)
    */
   std::string ToPrintableString() const;
 

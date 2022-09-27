@@ -56,7 +56,7 @@ SecAggVector::SecAggVector(absl::Span<const uint64_t> span, uint64_t modulus,
         << element << " found, max value allowed " << (modulus_ - 1ULL);
   }
 
-  // Packs the long vector into a std::string, initialized to all null.
+  // Packs the long vector into a string, initialized to all null.
   if (branchless_codec_) {
     PackUint64IntoByteStringBranchless(span);
   } else {
@@ -81,8 +81,8 @@ SecAggVector::SecAggVector(std::string packed_bytes, uint64_t modulus,
       << kMaxModulus << "; supplied value : " << modulus_;
   int expected_num_bytes = DivideRoundUp(num_elements_ * bit_width_, 8);
   FCP_CHECK(packed_bytes_.size() == static_cast<size_t>(expected_num_bytes))
-      << "The supplied std::string is not the right size for " << num_elements_
-      << " packed elements: given std::string has a limit of "
+      << "The supplied string is not the right size for " << num_elements_
+      << " packed elements: given string has a limit of "
       << packed_bytes_.size() << " bytes, " << expected_num_bytes
       << " bytes would have been needed.";
 }
@@ -299,7 +299,7 @@ SecAggVector::Coder::Coder(uint64_t modulus, int bit_width, size_t num_elements)
   num_bytes_needed_ =
       DivideRoundUp(static_cast<uint32_t>(num_elements_ * bit_width_), 8);
   // The branchless variant assumes eight bytes of scratch space.
-  // The std::string is resized to the correct size at the end.
+  // The string is resized to the correct size at the end.
   packed_bytes_ = std::string(num_bytes_needed_ + 8, '\0');
   write_cursor_ = &packed_bytes_[0];
 }

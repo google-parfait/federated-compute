@@ -42,7 +42,7 @@ std::vector<ShamirShare> ShamirSecretSharing::Share(
 
   std::vector<uint32_t> subsecrets = DivideIntoSubsecrets(to_share);
 
-  // Each ShamirShare is specified as a std::string of length 4 * subsecrets.size().
+  // Each ShamirShare is specified as a string of length 4 * subsecrets.size().
   // The first four characters of the ShamirShare are the share of the first
   // subsecret stored in big-endian order, and so on.
   std::vector<ShamirShare> shares(num_shares);

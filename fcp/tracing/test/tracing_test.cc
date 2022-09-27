@@ -54,7 +54,7 @@ TEST(Tracing, TraitsCreate) {
   EXPECT_EQ(foo->first(), 222);
   EXPECT_EQ(foo->second(), 333);
 
-  // Creating a flat buffer involving a std::string field has different codegen
+  // Creating a flat buffer involving a string field has different codegen
   // path, testing this as well:
   FlatBufferBuilder fbb_bar;
   fbb_bar.Finish(
@@ -63,7 +63,7 @@ TEST(Tracing, TraitsCreate) {
   EXPECT_EQ(bar->first(), 444);
   EXPECT_EQ(bar->second()->str(), "Hello world!");
 
-  // Also make sure that a flatbuf involving a std::string field can be created using
+  // Also make sure that a flatbuf involving a string field can be created using
   // a std::string.
   FlatBufferBuilder fbb_baz;
   std::string hello_str = "Hello world!";

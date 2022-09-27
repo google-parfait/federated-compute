@@ -72,7 +72,7 @@ TEST_F(TfLiteWrapperTest, InvalidModel) {
 TEST_F(TfLiteWrapperTest, InputNotSet) {
   auto plan = ReadFileAsString(absl::StrCat(kAssetsPath, kJoinModelFile));
   ASSERT_OK(plan);
-  // The plan that we use here join two strings. It requires two std::string tensors
+  // The plan that we use here join two strings. It requires two string tensors
   // as input.  We didn't pass the required tensor, therefore, we expect an
   // internal error to be thrown.
   EXPECT_THAT(
@@ -87,7 +87,7 @@ TEST_F(TfLiteWrapperTest, InputNotSet) {
 TEST_F(TfLiteWrapperTest, WrongNumberOfOutputs) {
   auto plan = ReadFileAsString(absl::StrCat(kAssetsPath, kJoinModelFile));
   ASSERT_OK(plan);
-  // The plan that we use here join two strings. It requires two std::string tensors
+  // The plan that we use here join two strings. It requires two string tensors
   // as input.  We didn't pass the required tensor, therefore, we expect an
   // internal error to be thrown.
   EXPECT_THAT(

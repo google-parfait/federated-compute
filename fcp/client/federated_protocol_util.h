@@ -54,7 +54,7 @@ GenerateRetryWindowFromRetryTime(absl::Time retry_time);
 // a phase ID (in the gRPC protocol), both of which are expected to adhere to
 // the following format: "population_name/task_name#round_id.shard_id".
 //
-// Returns the `session_id` std::string unmodified if it does not match that format.
+// Returns the `session_id` string unmodified if it does not match that format.
 // A diag code will be logged to the `LogManager` in this case.
 std::string ExtractTaskNameFromAggregationSessionId(
     const std::string& session_id, const std::string& population_name,

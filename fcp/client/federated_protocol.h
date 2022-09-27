@@ -39,11 +39,11 @@ namespace client {
 // Data type used to encode results of a computation - a TensorFlow
 // checkpoint, or SecAgg quantized tensors.
 // For non-SecAgg use (simple federated aggregation, or local computation),
-// this map should only contain one entry - a TFCheckpoint - and the std::string
+// this map should only contain one entry - a TFCheckpoint - and the string
 // should be ignored by downstream code.
 // For SecAgg use, there should be
 // * at most one TFCheckpoint - again, the key should be ignored - and
-// * N QuantizedTensors, whose std::string keys must map to the tensor names
+// * N QuantizedTensors, whose string keys must map to the tensor names
 //   provided in the server's CheckinResponse's SideChannelExecutionInfo.
 using TFCheckpoint = std::string;
 struct QuantizedTensor {

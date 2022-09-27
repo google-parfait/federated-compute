@@ -129,7 +129,7 @@ class SecAggClient {
   // FAILED_PRECONDITION. Otherwise returns OK.
   Status SetInput(std::unique_ptr<SecAggVectorMap> input_map);
 
-  // Returns a std::string uniquely describing the current state of the client's FSM.
+  // Returns a string uniquely describing the current state of the client's FSM.
   ABSL_MUST_USE_RESULT std::string State() const;
 
   // Returns true if the client has aborted the protocol, false else.
@@ -139,7 +139,7 @@ class SecAggClient {
   // false else.
   ABSL_MUST_USE_RESULT bool IsCompletedSuccessfully() const;
 
-  // Returns a std::string describing the reason that the client aborted.
+  // Returns a string describing the reason that the client aborted.
   // If the client has not actually aborted, returns an error Status with code
   // PRECONDITION_FAILED.
   ABSL_MUST_USE_RESULT StatusOr<std::string> ErrorMessage() const;

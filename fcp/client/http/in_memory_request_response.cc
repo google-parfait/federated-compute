@@ -410,7 +410,7 @@ FetchResourcesInMemory(HttpClient& http_client,
   // the inline data). Additionally, this struct will contain the
   // client_cache_id and max_age for the resource if the resource should be put
   // in the cache. If the resource should not be put in the cache,
-  // client_cache_id will be an empty std::string.
+  // client_cache_id will be an empty string.
   struct AccessorAndCacheMetadata {
     std::function<absl::StatusOr<InMemoryHttpResponse>()> accessor;
     std::string client_cache_id;

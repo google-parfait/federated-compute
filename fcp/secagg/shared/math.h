@@ -107,7 +107,7 @@ static inline uint64_t InverseModPrime(uint64_t a, uint64_t z) {
   return inverse;
 }
 
-// Converts ints to big-endian byte std::string representation. Provides platform-
+// Converts ints to big-endian byte string representation. Provides platform-
 // independence only in converting known integer values to byte strings for use
 // in cryptographic methods, not for general processing of binary data.
 static inline std::string IntToByteString(uint32_t input) {

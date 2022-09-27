@@ -32,7 +32,7 @@ using ::google::internal::federatedml::v2::TaskWeight;
 
 /**
  * CreateTaskEligibilityInfo op-kernel. Converts a set of input tensors into a
- * `TaskEligibilityInfo` proto serialized into a std::string tensor.
+ * `TaskEligibilityInfo` proto serialized into a string tensor.
  *
  * This op is used to generate `TaskEligibilityInfo` protos from a model at
  * runtime, since TF Mobile does not support the standard TensorFlow ops for

@@ -1046,7 +1046,7 @@ GrpcFederatedProtocol::ConvertResourceToUriOrInlineData(
     // Note: this copies the data into the new absl::Cord. However, this Cord is
     // then passed around all the way to fl_runner.cc without copying its data,
     // so this is ultimately approx. as efficient as the non-HTTP resource code
-    // path where we also make a copy of the protobuf std::string into a new std::string
+    // path where we also make a copy of the protobuf string into a new string
     // which is then returned.
     return UriOrInlineData::CreateInlineData(
         absl::Cord(resource.data),

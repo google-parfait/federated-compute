@@ -109,7 +109,7 @@ HostObjectRegistration AddDatasetTokenToInputs(
     ExampleIteratorStatus* example_iterator_status);
 
 // Sets up an ExternalDatasetProvider that is registered with the global
-// HostObjectRegistry. Adds a std::string representing the HostObjectRegistration
+// HostObjectRegistry. Adds a string representing the HostObjectRegistration
 // token to the map of input tensor name and values with the provided
 // dataset_token_tensor_name key.
 //

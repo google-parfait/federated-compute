@@ -33,7 +33,7 @@ namespace fcp {
  * Op-kernels are instantiated by TensorFlow, and can only be parameterized by
  * graph 'attrs' and tensor inputs. So, op-kernels which access the 'outside
  * world' tend to use ambient, process-global resources - for example, consider
- * op-kernels which interpret a std::string tensor as a filesystem path.
+ * op-kernels which interpret a string tensor as a filesystem path.
  *
  * In some uses, we'd like to parameterize an op-kernel on some 'host'-side,
  * non-Tensor objects (for example, a virtual filesystem) at the site of
@@ -99,7 +99,7 @@ class HostObjectRegistration final {
 
   /**
    * Token under which the object is registered. It can be passed into a graph
-   * (as a std::string tensor) and used to look up the object.
+   * (as a string tensor) and used to look up the object.
    */
   RandomToken token() const { return *token_; }
 

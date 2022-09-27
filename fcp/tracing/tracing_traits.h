@@ -36,7 +36,7 @@ class TracingTraitsBase {
   // Formats a serialized flatbuffer into human readable format.
   ABSL_MUST_USE_RESULT virtual std::string TextFormat(
       const flatbuffers::DetachedBuffer& buf) const = 0;
-  // Formats a serialized flatbuffer into a Json std::string.
+  // Formats a serialized flatbuffer into a Json string.
   ABSL_MUST_USE_RESULT virtual std::string JsonStringFormat(
       const uint8_t* flatbuf_bytes) const = 0;
 

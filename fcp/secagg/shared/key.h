@@ -24,7 +24,7 @@ namespace fcp {
 namespace secagg {
 // An immutable type that encapsulates a key to be used with OpenSSL. Stores the
 // key as std::string, but for better interaction with the OpenSSL API, the Key
-// API treats the key as either a std::string or a const uint8_t*.
+// API treats the key as either a string or a const uint8_t*.
 //
 // Note that this doesn't replace any OpenSSL structure, it simply allows for
 // storage of keys at rest without needing to store associated OpenSSL data.

@@ -69,7 +69,7 @@ absl::Status ConvertRpcStatusToAbslStatus(::google::rpc::Status rpc_status);
 // Converts an `absl::Status` into a `google::rpc::Status`.
 google::rpc::Status ConvertAbslStatusToRpcStatus(absl::Status status);
 
-// Converts the method enum to a std::string.
+// Converts the method enum to a string.
 std::string ConvertMethodToString(HttpRequest::Method method);
 
 // Finds the header value for header with name `needle` in a list of headers

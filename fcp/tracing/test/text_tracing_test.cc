@@ -27,8 +27,6 @@
 namespace fcp {
 namespace {
 
-using std::string;
-
 constexpr char kBaselineDir[] = "fcp/tracing/test/testdata";
 
 bool PostProcessOutput(std::string* input) {

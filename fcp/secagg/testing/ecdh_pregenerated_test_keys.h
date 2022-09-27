@@ -38,13 +38,13 @@ class EcdhPregeneratedTestKeys {
   EcdhPrivateKey GetPrivateKey(size_t index);
   EcdhPublicKey GetPublicKey(size_t index);
 
-  // Returns a public or private key in the form of a std::string.
+  // Returns a public or private key in the form of a string.
   std::string GetPrivateKeyString(size_t index);
   std::string GetPublicKeyString(size_t index);
 
   // Returns an uncompressed public key.
   EcdhPublicKey GetUncompressedPublicKey(size_t index);
-  // Returns an uncompressed public key in the form of a std::string, with X.509
+  // Returns an uncompressed public key in the form of a string, with X.509
   // header.
   std::string GetUncompressedPublicKeyString(size_t index);
 

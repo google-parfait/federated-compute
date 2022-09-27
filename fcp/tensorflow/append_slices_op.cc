@@ -86,7 +86,7 @@ void SaveTensors(
     OP_REQUIRES(
         context, size == 1,
         tensorflow::errors::InvalidArgument(
-            "Input 0 (filename) must be a std::string scalar; got a tensor of ",
+            "Input 0 (filename) must be a string scalar; got a tensor of ",
             size, "elements"));
   }
   const std::string& filename = filename_t.scalar<tensorflow::tstring>()();
@@ -118,7 +118,7 @@ void SaveTensors(
       context, context->num_inputs() == N + kFixedInputs,
       tensorflow::errors::InvalidArgument(
           "Expected totally ", N + kFixedInputs,
-          " inputs as input #1 (which is a std::string "
+          " inputs as input #1 (which is a string "
           "tensor of saved names) contains ",
           N, " names, but received ", context->num_inputs(), " inputs"));
 

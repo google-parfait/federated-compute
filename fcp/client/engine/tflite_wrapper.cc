@@ -44,7 +44,7 @@ absl::Status AssignStringInput(int index, const std::string& value,
                                tflite::Interpreter* interpreter) {
   TfLiteTensor* tensor = interpreter->tensor(index);
   if (tensor->type != kTfLiteString) {
-    return absl::InvalidArgumentError("Input tensor is not a std::string tensor.");
+    return absl::InvalidArgumentError("Input tensor is not a string tensor.");
   }
 
   tflite::DynamicBuffer buf;

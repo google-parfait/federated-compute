@@ -41,7 +41,7 @@ std::string ConcatPath(absl::string_view path1, absl::string_view path2);
 absl::string_view StripTrailingPathSeparator(absl::string_view path);
 
 /**
- * Reads file content into std::string.
+ * Reads file content into string.
  */
 absl::StatusOr<std::string> ReadFileToString(absl::string_view file_name);
 
@@ -57,7 +57,7 @@ absl::Status ReadFileToMessage(absl::string_view file_name,
                                google::protobuf::Message* message);
 
 /**
- * Writes std::string content into file.
+ * Writes string content into file.
  */
 absl::Status WriteStringToFile(absl::string_view file_name,
                                absl::string_view content);

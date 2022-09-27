@@ -60,7 +60,7 @@ class ShamirSecretSharing {
   std::vector<ShamirShare> Share(int threshold, int num_shares,
                                  const std::string& to_share);
 
-  // Convenience method to share a key instead of an arbitrary std::string.
+  // Convenience method to share a key instead of an arbitrary string.
   inline std::vector<ShamirShare> Share(int threshold, int num_shares,
                                         const Key& to_share) {
     return Share(threshold, num_shares, to_share.AsString());
@@ -69,7 +69,7 @@ class ShamirSecretSharing {
   // Reconstructs a secret, based on a vector of shares. The vector is
   // interpreted such that the i-th element of the vector is the i-th share. If
   // the i-th element of the vector is set to the default ShamirShare (an empty
-  // std::string), that share is considered not to be present.
+  // string), that share is considered not to be present.
   //
   // secret_length should be set to the expected length of the reconstructed
   // secret, in bytes.

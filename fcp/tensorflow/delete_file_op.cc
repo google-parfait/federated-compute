@@ -68,7 +68,7 @@ class DeleteFileOp : public OpKernel {
       OP_REQUIRES(
           context, size == 1,
           tensorflow::errors::InvalidArgument(
-              "Input 0 (filename) must be a std::string scalar; got a tensor of ",
+              "Input 0 (filename) must be a string scalar; got a tensor of ",
               size, "elements"));
     }
     const tensorflow::tstring& filename =

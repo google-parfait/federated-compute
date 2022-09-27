@@ -26,7 +26,7 @@
 namespace fcp {
 
 // Convenience macro for parsing text formatted protos in test code.
-// The input std::string should include only the proto fields but not the proto
+// The input string should include only the proto fields but not the proto
 // itself. For example:
 //
 //   const MyProtoType foo = PARSE_TEXT_PROTO("foo:1 sub { bar:2 }");

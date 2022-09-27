@@ -66,7 +66,7 @@ class SecAggClientR1ShareKeysBaseState : public SecAggClientAliveBaseState {
   //
   // The output will be false if an error was detected; this error will be
   // stored in *error_message. If the protocol should proceed, the output will
-  // be true and *error_message will be an empty std::string.
+  // be true and *error_message will be an empty string.
   bool HandleShareKeysRequest(
       const ShareKeysRequest& request,
       const EcdhKeyAgreement& enc_key_agreement,

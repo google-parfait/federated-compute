@@ -88,7 +88,7 @@ class ExternalDataset {
  * Interface for an ExternalDataset op's host object.
  *
  * An ExternalDatasetProvider is a function from Selector -> ExternalDataset.
- * Here, 'Selector' is a std::string provided to the dataset op (typically, an
+ * Here, 'Selector' is a string provided to the dataset op (typically, an
  * encoded proto). The returned ExternalDataset may be used (perhaps multiple
  * times) to create an iterator.
  *

@@ -60,13 +60,13 @@ inline constexpr absl::string_view kTensorflowCheckpointAggregand =
 //     https+test:// scheme.
 // - session_name: A client-side identifier of the type of work this computation
 //     performs; used to annotate log entries in the operational stats DB.
-// - population_name: a std::string provided to the Federated server to identify
+// - population_name: a string provided to the Federated server to identify
 //     what population this device is checking in for.
 // - client_version: A platform-specific identifier that is used by the server
 //     to serve versioned computations - that is, versions of a computation that
 //     have been tested and found to be compatible with this device's version -
 //     or reject the device.
-// - attestation_measurement: An opaque std::string from a "measurement" that can be
+// - attestation_measurement: An opaque string from a "measurement" that can be
 // used
 //     by the server to attest the device integrity.
 //

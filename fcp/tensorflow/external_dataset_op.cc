@@ -35,7 +35,7 @@ namespace fcp {
  * from the ExternalDatasetProviderRegistry (a HostObjectRegistry).
  *
  * Inputs:
- *   selector: An opaque std::string scalar. Forwarded to the stub.
+ *   selector: An opaque string scalar. Forwarded to the stub.
  *   token: String scalar. It should encode a token obtained from
  *          ExternalDatasetProviderRegistry::Register.
  *
@@ -102,7 +102,7 @@ class ExternalDatasetOp : public tensorflow::data::DatasetOpKernel {
           new Iterator(params, std::move(iter)));
     }
 
-    // Each iterator element is just a scalar std::string.
+    // Each iterator element is just a scalar string.
 
     const tensorflow::DataTypeVector& output_dtypes() const override {
       static auto* const dtypes =

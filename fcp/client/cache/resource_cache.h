@@ -31,7 +31,7 @@ namespace cache {
 /**
  * A ResourceCache is an interface for a cache that stores resources (entries)
  * for a certain duration. A resource consists of an absl::Cord payload and
- * accompanying metadata, keyed by a std::string ID.
+ * accompanying metadata, keyed by a string ID.
  */
 class ResourceCache {
  public:

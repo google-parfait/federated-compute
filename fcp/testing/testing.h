@@ -90,7 +90,7 @@ std::string TemporaryTestFile(absl::string_view suffix);
 
 /**
  * Verifies a provided content against an expected stored in a baseline file.
- * Returns an empty std::string if both are identical, otherwise a diagnostic
+ * Returns an empty string if both are identical, otherwise a diagnostic
  * message for error reports.
  *
  * A return status of not ok indicates an operational error which made the

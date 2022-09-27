@@ -30,7 +30,7 @@ namespace fcp {
 union TracingTag {
   char data[4];
   uint32_t value;
-  // Constructing from 4-char std::string literals. Supplied char array
+  // Constructing from 4-char string literals. Supplied char array
   // has a length of 5, to accommodate terminating 0, which is NOT stored in the
   // tag.
   explicit constexpr TracingTag(char const (&fourCharsLiteral)[5])

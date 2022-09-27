@@ -34,8 +34,6 @@ constexpr char kBaselineDir[] = "fcp/tracing/test/testdata";
 namespace fcp {
 namespace {
 
-using ::std::string;
-
 // Replaces timestamp with ${TIME} and span ID with ${ID} in text trace output.
 // Span IDs need to be replaced because of the lack of determinism in running
 // multiple threads in parallel.

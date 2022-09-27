@@ -152,7 +152,7 @@ TEST_P(SecAggVectorTest, StringConstructorDiesOnTooShortString) {
 
   std::string packed_bytes(expected_length - 1, '\0');
   EXPECT_DEATH(SecAggVector vector(packed_bytes, modulus, 4, GetParam()),
-               "The supplied std::string is not the right size");
+               "The supplied string is not the right size");
 }
 
 TEST_P(SecAggVectorTest, StringConstructorDiesOnTooLongString) {
@@ -163,7 +163,7 @@ TEST_P(SecAggVectorTest, StringConstructorDiesOnTooLongString) {
 
   std::string packed_bytes(expected_length + 1, '\0');
   EXPECT_DEATH(SecAggVector vector(packed_bytes, modulus, 4, GetParam()),
-               "The supplied std::string is not the right size");
+               "The supplied string is not the right size");
 }
 
 TEST_P(SecAggVectorTest, PackedVectorHasCorrectSize) {

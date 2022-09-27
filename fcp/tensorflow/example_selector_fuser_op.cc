@@ -43,7 +43,7 @@ using ::tensorflow::data::ParseScalarArgument;
  * type url and content for the resumption token.
  *
  * Inputs:
- *   example_selector: A std::string scalar encodes an ExampleSelector protobuf
+ *   example_selector: A string scalar encodes an ExampleSelector protobuf
  *   message.
  *   resumption_token_type_url: String scalar. The type_url for the resumption
  *   token.
@@ -51,8 +51,8 @@ using ::tensorflow::data::ParseScalarArgument;
  *   token message.
  *
  * Output:
- *   A std::string tensor contains the fused ExampleSelector message serialized to
- * std::string.
+ *   A string tensor contains the fused ExampleSelector message serialized to
+ * string.
  */
 class ExampleSelectorFuserOp : public OpKernel {
  public:

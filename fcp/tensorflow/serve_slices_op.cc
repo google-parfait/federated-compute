@@ -114,7 +114,7 @@ tensorflow::Status get_string_list_input(tensorflow::OpKernelContext* context,
 //     will result in `select_fn`'s output being written to `filename`.
 //
 // Outputs:
-//   served_at_id: A std::string ID under which the resulting slices will be served.
+//   served_at_id: A string ID under which the resulting slices will be served.
 //     This can then be provided to the `FetchSlicesOp` running on clients.
 class ServeSlicesOp : public tensorflow::OpKernel {
  public:

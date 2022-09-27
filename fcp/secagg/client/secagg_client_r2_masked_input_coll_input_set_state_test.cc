@@ -50,7 +50,7 @@ namespace {
 using ::testing::Eq;
 using ::testing::Pointee;
 
-// For testing purposes, make an AesKey out of a std::string.
+// For testing purposes, make an AesKey out of a string.
 AesKey MakeAesKey(const std::string& key) {
   EXPECT_THAT(key.size(), Eq(AesKey::kSize));
   return AesKey(reinterpret_cast<const uint8_t*>(key.c_str()));

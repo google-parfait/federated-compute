@@ -221,7 +221,7 @@ HostObjectRegistration AddDatasetTokenToInputs(
       std::make_shared<TrainingDatasetProvider>(
           example_iterator_factories, opstats_logger, total_example_count,
           total_example_size_bytes, example_iterator_status));
-  // Pack the token returned from registering the provider into a std::string
+  // Pack the token returned from registering the provider into a string
   // tensor. TensorFlow will use that token via the ExternalDatasetOp to create
   // datasets and iterators.
   tensorflow::Tensor token_scalar(std::string{});

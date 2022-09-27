@@ -29,7 +29,7 @@ namespace {
 using ::testing::Eq;
 using ::testing::Ne;
 
-// For testing purposes, make an AesKey out of a std::string.
+// For testing purposes, make an AesKey out of a string.
 AesKey MakeAesKey(const std::string& key) {
   EXPECT_THAT(key.size(), Eq(AesKey::kSize));
   return AesKey(reinterpret_cast<const uint8_t*>(key.c_str()));
@@ -51,7 +51,7 @@ TEST(AesGcmEncryptionTest, MultipleOperationsWithSameObjectWork) {
   AesKey key1 = MakeAesKey("Just some random 32 byte AES key");
   AesKey key2 = MakeAesKey("A different 32-byte-long AES key");
   std::string test_str1 = "This is a test. Should work on arbitrary strings.";
-  std::string test_str2 = "Another test std::string.";
+  std::string test_str2 = "Another test string.";
 
   std::string ciphertext1 = aes.Encrypt(key1, test_str1);
   std::string ciphertext2 = aes.Encrypt(key2, test_str2);

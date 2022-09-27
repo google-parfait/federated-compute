@@ -67,7 +67,7 @@ class SecAggClientR2MaskedInputCollBaseState
   //
   // The return value is computed map of masks if everything succeeed.
   // If there was a failure, the return value is nullptr, and error_message is
-  // set to a non-empty std::string.
+  // set to a non-empty string.
   std::unique_ptr<SecAggVectorMap> HandleMaskedInputCollectionRequest(
       const MaskedInputCollectionRequest& request, uint32_t client_id,
       const std::vector<InputVectorSpecification>& input_vector_specs,

@@ -33,7 +33,7 @@ constexpr char kContextWrongTypeMessage[] =
 // if so, serializes the provided `context` message and sets the field contents
 // to the serialized context.
 // If no tracing_context field is present on `message` or it is of a type other
-// than std::string or bytes, this will be a no-op.
+// than string or bytes, this will be a no-op.
 void SetTracingContextOnMessage(const google::protobuf::Message& context,
                                 google::protobuf::Message& message);
 
@@ -42,7 +42,7 @@ void SetTracingContextOnMessage(const google::protobuf::Message& context,
 // extract and parse the serialized proto to return a ContextT.
 // If the proto `message` does not have a tracing_context field, or it is empty,
 // returns the default value of ContextT.
-// If the tracing_context field is of a type other than std::string or bytes, this
+// If the tracing_context field is of a type other than string or bytes, this
 // will fail.
 template <class ContextT>
 ContextT GetContextFromMessage(const google::protobuf::Message& message) {

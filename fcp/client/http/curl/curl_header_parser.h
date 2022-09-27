@@ -31,7 +31,7 @@ class CurlHeaderParser {
   CurlHeaderParser(const CurlHeaderParser&) = delete;
   CurlHeaderParser& operator=(const CurlHeaderParser&) = delete;
 
-  // Parses the next header std::string
+  // Parses the next header string
   void ParseHeader(const std::string& header_string);
 
   // Removes the "Content-Encoding", "Content-Length", and "Content-Length"

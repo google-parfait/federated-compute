@@ -180,7 +180,7 @@ absl::StatusOr<std::string> ComputeDiff(absl::string_view baseline_file,
       diff_result = std_out;
     }
 #else  // _WIN32
-    // For now we do a simple std::string compare on Windows.
+    // For now we do a simple string compare on Windows.
     auto status_or_string = ReadFileToString(baseline_file_str);
     if (!status_or_string.ok()) {
       return status_or_string.status();

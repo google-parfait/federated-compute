@@ -581,7 +581,7 @@ TEST(SecAggClientR1ShareKeysInputSetStateTest,
 TEST(SecAggClientR1ShareKeysInputSetStateTest,
      ShareKeysRequestCausesAbortIfServerSendsWrongSizeKey) {
   // In this test, the client under test is id 1, and there are 4 clients.
-  // One of client 3's keys is a std::string of the wrong length, so this should
+  // One of client 3's keys is a string of the wrong length, so this should
   // cause an abort.
   EcdhPregeneratedTestKeys ecdh_keys;
   auto input_map = std::make_unique<SecAggVectorMap>();

@@ -76,7 +76,7 @@ class SecAggClientState {
   // returns an error Status with code PRECONDITION_FAILED.
   ABSL_MUST_USE_RESULT virtual StatusOr<std::string> ErrorMessage() const;
 
-  // Returns the name of the current state, as a std::string.
+  // Returns the name of the current state, as a string.
   ABSL_MUST_USE_RESULT virtual std::string StateName() const = 0;
 
   virtual ~SecAggClientState() = default;

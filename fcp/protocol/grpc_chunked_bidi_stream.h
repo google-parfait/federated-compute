@@ -239,7 +239,7 @@ absl::Status GrpcChunkedBidiStream<Outgoing, Incoming>::ChunkMessage(
   std::string output;
   if (outgoing_.compression_level == CompressionLevel::UNCOMPRESSED) {
     if (!message.AppendToString(&output))
-      return absl::InternalError("Could not append to std::string.");
+      return absl::InternalError("Could not append to string.");
   } else {
     StringOutputStream string_output_stream(&output);
     GzipOutputStream::Options options;
@@ -430,7 +430,7 @@ absl::Status GrpcChunkedBidiStream<Outgoing, Incoming>::AssemblePending(
   // TODO(team): Replace with a more efficient deserialization mechanism.
   if (incoming_.compression_level == CompressionLevel::UNCOMPRESSED) {
     if (!message->ParseFromString(incoming_.composite))
-      return absl::InternalError(absl::StrCat("Could not parse from std::string. ",
+      return absl::InternalError(absl::StrCat("Could not parse from string. ",
                                               incoming_.composite.size()));
   } else {
     ArrayInputStream string_input_stream(

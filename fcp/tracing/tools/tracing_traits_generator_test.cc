@@ -29,8 +29,6 @@ ABSL_FLAG(std::string, codegen_tool_path, "", "Path to codegen tool script");
 namespace fcp {
 namespace {
 
-using std::string;
-
 const char* kBaselineDir = "fcp/tracing/tools/testdata";
 
 std::string PostProcessOutput(const std::string& input) {
@@ -53,7 +51,8 @@ std::string PostProcessOutput(const std::string& input) {
 
 void DoTest() {
   std::string source_file = absl::StrCat(TestName(), ".fbs");
-  std::string source_path = GetTestDataPath(ConcatPath(kBaselineDir, source_file));
+  std::string source_path =
+      GetTestDataPath(ConcatPath(kBaselineDir, source_file));
 
   // Read fsb source file derived from the test name:
   StatusOr<std::string> source_s = ReadFileToString(source_path);
