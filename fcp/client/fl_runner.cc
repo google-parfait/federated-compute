@@ -1209,8 +1209,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   std::unique_ptr<FederatedSelectManager> federated_select_manager;
   if (http_client != nullptr && flags->enable_federated_select()) {
     federated_select_manager = std::make_unique<HttpFederatedSelectManager>(
-        log_manager, flags, files, http_client.get(),
-        should_abort_protocol_callback, timing_config);
+        log_manager, files, http_client.get(), should_abort_protocol_callback,
+        timing_config);
   } else {
     federated_select_manager =
         std::make_unique<DisabledFederatedSelectManager>(log_manager);

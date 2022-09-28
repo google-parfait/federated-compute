@@ -215,8 +215,7 @@ class ProtocolRequestHelperTest : public ::testing::Test {
                                  /*use_compression=*/false),
         protocol_request_helper_(&mock_http_client_, &bytes_downloaded_,
                                  &bytes_uploaded_, network_stopwatch_.get(),
-                                 &mock_clock_,
-                                 /*client_decoded_http_resources=*/false) {}
+                                 &mock_clock_) {}
 
  protected:
   void TearDown() override {

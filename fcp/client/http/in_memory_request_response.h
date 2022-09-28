@@ -140,7 +140,7 @@ class InMemoryHttpRequestCallback : public HttpRequestCallback {
 absl::StatusOr<InMemoryHttpResponse> PerformRequestInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::unique_ptr<http::HttpRequest> request, int64_t* bytes_received_acc,
-    int64_t* bytes_sent_acc, bool client_decoded_http_resources);
+    int64_t* bytes_sent_acc);
 
 // Utility for performing multiple HTTP requests and returning the results
 // (incl. the response body) in memory.
@@ -152,8 +152,7 @@ absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
 PerformMultipleRequestsInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::vector<std::unique_ptr<http::HttpRequest>> requests,
-    int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
-    bool client_decoded_http_resources);
+    int64_t* bytes_received_acc, int64_t* bytes_sent_acc);
 
 // Simple class representing a resource for which data is already available
 // in-memory (`inline_data`) or for which data needs to be fetched by an HTTP
@@ -235,7 +234,6 @@ FetchResourcesInMemory(HttpClient& http_client,
                        InterruptibleRunner& interruptible_runner,
                        const std::vector<UriOrInlineData>& resources,
                        int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
-                       bool client_decoded_http_resources,
                        cache::ResourceCache* resource_cache);
 
 // Used by the class and in tests only.

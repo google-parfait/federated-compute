@@ -28,7 +28,6 @@
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/files.h"
-#include "fcp/client/flags.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
@@ -106,7 +105,7 @@ class DisabledFederatedSelectManager : public FederatedSelectManager {
 class HttpFederatedSelectManager : public FederatedSelectManager {
  public:
   HttpFederatedSelectManager(
-      LogManager* log_manager, const Flags* flags, Files* files,
+      LogManager* log_manager, Files* files,
       fcp::client::http::HttpClient* http_client,
       std::function<bool()> should_abort,
       const InterruptibleRunner::TimingConfig& timing_config);
@@ -134,7 +133,6 @@ class HttpFederatedSelectManager : public FederatedSelectManager {
 
  private:
   LogManager& log_manager_;
-  const Flags& flags_;
   Files& files_;
   std::atomic<int64_t> bytes_sent_ = 0;
   std::atomic<int64_t> bytes_received_ = 0;

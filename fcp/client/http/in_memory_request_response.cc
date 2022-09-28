@@ -312,17 +312,16 @@ absl::StatusOr<InMemoryHttpResponse> InMemoryHttpRequestCallback::Response()
 absl::StatusOr<InMemoryHttpResponse> PerformRequestInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::unique_ptr<http::HttpRequest> request, int64_t* bytes_received_acc,
-    int64_t* bytes_sent_acc, bool client_decoded_http_resources) {
+    int64_t* bytes_sent_acc) {
   // Note: we must explicitly instantiate a vector here as opposed to passing an
   // initializer list to PerformRequestsInMemory, because initializer lists do
   // not support move-only values.
   std::vector<std::unique_ptr<http::HttpRequest>> requests;
   requests.push_back(std::move(request));
   FCP_ASSIGN_OR_RETURN(
-      auto result,
-      PerformMultipleRequestsInMemory(
-          http_client, interruptible_runner, std::move(requests),
-          bytes_received_acc, bytes_sent_acc, client_decoded_http_resources));
+      auto result, PerformMultipleRequestsInMemory(
+                       http_client, interruptible_runner, std::move(requests),
+                       bytes_received_acc, bytes_sent_acc));
   return std::move(result[0]);
 }
 
@@ -330,8 +329,7 @@ absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
 PerformMultipleRequestsInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::vector<std::unique_ptr<http::HttpRequest>> requests,
-    int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
-    bool client_decoded_http_resources) {
+    int64_t* bytes_received_acc, int64_t* bytes_sent_acc) {
   // A vector that will own the request handles and callbacks (and will
   // determine their lifetimes).
   std::vector<std::pair<std::unique_ptr<HttpRequestHandle>,
@@ -400,7 +398,6 @@ FetchResourcesInMemory(HttpClient& http_client,
                        InterruptibleRunner& interruptible_runner,
                        const std::vector<UriOrInlineData>& resources,
                        int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
-                       bool client_decoded_http_resources,
                        cache::ResourceCache* resource_cache) {
   // Each resource may have the data already available (by having been included
   // in a prior response inline), or may need to be fetched.
@@ -494,7 +491,7 @@ FetchResourcesInMemory(HttpClient& http_client,
   // Perform the requests.
   auto resource_fetch_result = PerformMultipleRequestsInMemory(
       http_client, interruptible_runner, std::move(http_requests),
-      bytes_received_acc, bytes_sent_acc, client_decoded_http_resources);
+      bytes_received_acc, bytes_sent_acc);
   // Check whether issuing the requests failed as a whole (generally indicating
   // a programming error).
   FCP_RETURN_IF_ERROR(resource_fetch_result);
@@ -509,7 +506,6 @@ FetchResourcesInMemory(HttpClient& http_client,
   for (const auto& response_accessor : response_accessors) {
     absl::StatusOr<InMemoryHttpResponse> response =
         response_accessor.accessor();
-    if (client_decoded_http_resources) {
       if (response.ok()) {
         bool encoded_with_gzip = absl::EndsWithIgnoreCase(
             response->content_type, kClientDecodedGzipSuffix);
@@ -534,10 +530,7 @@ FetchResourcesInMemory(HttpClient& http_client,
         }
       }
       result.push_back(response);
-    } else {
-      result.push_back(response);
     }
-  }
   return result;
 }
 

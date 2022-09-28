@@ -224,7 +224,6 @@ class FlagsImpl : public Flags {
   bool use_http_federated_compute_protocol() const override {
     return use_http_federated_compute_protocol_;
   }
-  bool client_decoded_http_resources() const override { return true; }
 
  private:
   bool use_http_federated_compute_protocol_ = false;

@@ -264,14 +264,12 @@ ProtocolRequestCreator::Create(const ForwardingInfo& forwarding_info,
 
 ProtocolRequestHelper::ProtocolRequestHelper(
     HttpClient* http_client, int64_t* bytes_downloaded, int64_t* bytes_uploaded,
-    WallClockStopwatch* network_stopwatch, Clock* clock,
-    bool client_decoded_http_resources)
+    WallClockStopwatch* network_stopwatch, Clock* clock)
     : http_client_(*http_client),
       bytes_downloaded_(*bytes_downloaded),
       bytes_uploaded_(*bytes_uploaded),
       network_stopwatch_(*network_stopwatch),
-      clock_(*clock),
-      client_decoded_http_resources_(client_decoded_http_resources) {}
+      clock_(*clock) {}
 
 absl::StatusOr<InMemoryHttpResponse>
 ProtocolRequestHelper::PerformProtocolRequest(
@@ -293,11 +291,10 @@ ProtocolRequestHelper::PerformMultipleProtocolRequests(
   std::vector<absl::StatusOr<InMemoryHttpResponse>> responses;
   {
     auto started_stopwatch = network_stopwatch_.Start();
-    FCP_ASSIGN_OR_RETURN(
-        responses,
-        PerformMultipleRequestsInMemory(
-            http_client_, runner, std::move(requests), &bytes_downloaded_,
-            &bytes_uploaded_, client_decoded_http_resources_));
+    FCP_ASSIGN_OR_RETURN(responses,
+                         PerformMultipleRequestsInMemory(
+                             http_client_, runner, std::move(requests),
+                             &bytes_downloaded_, &bytes_uploaded_));
   }
   std::vector<absl::StatusOr<InMemoryHttpResponse>> results;
   std::transform(responses.begin(), responses.end(),

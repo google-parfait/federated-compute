@@ -256,10 +256,8 @@ ProtocolOptionsRequest GrpcFederatedProtocol::CreateProtocolOptionsRequest(
   request.mutable_side_channels()
       ->mutable_secure_aggregation()
       ->add_client_variant(secagg::SECAGG_CLIENT_VARIANT_NATIVE_V1);
-  if (flags_->client_decoded_http_resources()) {
     request.mutable_supported_http_compression_formats()->Add(
         HttpCompressionFormat::HTTP_COMPRESSION_FORMAT_GZIP);
-  }
   return request;
 }
 
@@ -982,8 +980,7 @@ GrpcFederatedProtocol::FetchTaskResources(
     resource_responses = ::fcp::client::http::FetchResourcesInMemory(
         *http_client_, *interruptible_runner_,
         {plan_uri_or_data, checkpoint_uri_or_data}, &http_bytes_downloaded_,
-        &http_bytes_uploaded_, flags_->client_decoded_http_resources(),
-        resource_cache_);
+        &http_bytes_uploaded_, resource_cache_);
   }
   if (!resource_responses.ok()) {
     log_manager_->LogDiag(

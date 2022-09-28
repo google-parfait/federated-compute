@@ -94,7 +94,7 @@ class HttpFederatedSelectManagerTest : public ::testing::Test {
  protected:
   HttpFederatedSelectManagerTest()
       : fedselect_manager_(
-            &mock_log_manager_, &mock_flags_, &files_impl_, &mock_http_client_,
+            &mock_log_manager_, &files_impl_, &mock_http_client_,
             mock_should_abort_.AsStdFunction(),
             InterruptibleRunner::TimingConfig{
                 .polling_period = absl::ZeroDuration(),
@@ -317,10 +317,6 @@ TEST_F(HttpFederatedSelectManagerTest,
  * being returned.
  */
 TEST_F(HttpFederatedSelectManagerTest, SuccessfullyFetchCompressedSlice) {
-  // Enable the client_decoded_resources() feature that does the decompression.
-  EXPECT_CALL(mock_flags_, client_decoded_http_resources())
-      .WillRepeatedly(Return(true));
-
   const std::string uri_template =
       "https://foo.bar/{served_at_id}/{key_base10}";
 

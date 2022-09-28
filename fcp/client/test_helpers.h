@@ -536,7 +536,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_computation_id, (), (const, override));
   MOCK_METHOD(int32_t, waiting_period_sec_for_cancellation, (),
               (const, override));
-  MOCK_METHOD(bool, client_decoded_http_resources, (), (const, override));
   MOCK_METHOD(bool, enable_cache_dir, (), (const, override));
   MOCK_METHOD(bool, enable_federated_select, (), (const, override));
   MOCK_METHOD(bool, enable_per_phase_network_stats, (), (const, override));

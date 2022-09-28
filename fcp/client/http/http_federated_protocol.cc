@@ -309,7 +309,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
               !flags->disable_http_request_body_compression())),
       protocol_request_helper_(http_client, &bytes_downloaded_,
                                &bytes_uploaded_, network_stopwatch_.get(),
-                               clock, flags_->client_decoded_http_resources()),
+                               clock),
       api_key_(api_key),
       population_name_(population_name),
       retry_token_(retry_token),
@@ -365,10 +365,8 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   request.mutable_attestation_measurement()->set_value(
       attestation_measurement_);
 
-  if (flags_->client_decoded_http_resources()) {
     request.mutable_resource_capabilities()->add_supported_compression_formats(
         ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
-  }
 
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,
@@ -538,10 +536,8 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
     *request.mutable_task_eligibility_info() = *task_eligibility_info;
   }
 
-  if (flags_->client_decoded_http_resources()) {
     request.mutable_resource_capabilities()->add_supported_compression_formats(
         ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
-  }
 
   std::vector<std::unique_ptr<HttpRequest>> requests;
 
@@ -1038,8 +1034,7 @@ HttpFederatedProtocol::FetchTaskResources(
     resource_responses = FetchResourcesInMemory(
         *http_client_, *interruptible_runner_,
         {plan_uri_or_data, checkpoint_uri_or_data}, &bytes_downloaded_,
-        &bytes_uploaded_, flags_->client_decoded_http_resources(),
-        resource_cache_);
+        &bytes_uploaded_, resource_cache_);
   }
   FCP_RETURN_IF_ERROR(resource_responses);
   auto& plan_data_response = (*resource_responses)[0];

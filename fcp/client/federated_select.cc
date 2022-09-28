@@ -77,8 +77,7 @@ class DisabledFederatedSelectExampleIteratorFactory
 absl::StatusOr<std::deque<absl::Cord>> FetchSlicesViaHttp(
     const SlicesSelector& slices_selector, absl::string_view uri_template,
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
-    bool client_decoded_http_resources, int64_t* bytes_received_acc,
-    int64_t* bytes_sent_acc) {
+    int64_t* bytes_received_acc, int64_t* bytes_sent_acc) {
   std::vector<UriOrInlineData> resources;
   for (int32_t slice_key : slices_selector.keys()) {
     std::string slice_uri = absl::StrReplaceAll(
@@ -95,7 +94,7 @@ absl::StatusOr<std::deque<absl::Cord>> FetchSlicesViaHttp(
   absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
       slice_fetch_result = http::FetchResourcesInMemory(
           http_client, interruptible_runner, std::move(resources),
-          bytes_received_acc, bytes_sent_acc, client_decoded_http_resources,
+          bytes_received_acc, bytes_sent_acc,
           // TODO(team): Enable caching for federated select slices.
           /*resource_cache=*/nullptr);
 
@@ -127,13 +126,12 @@ class HttpFederatedSelectExampleIteratorFactory
     : public FederatedSelectExampleIteratorFactory {
  public:
   HttpFederatedSelectExampleIteratorFactory(
-      LogManager* log_manager, const Flags* flags, Files* files,
-      HttpClient* http_client, InterruptibleRunner* interruptible_runner,
-      absl::string_view uri_template, std::atomic<int64_t>& bytes_sent_acc,
+      LogManager* log_manager, Files* files, HttpClient* http_client,
+      InterruptibleRunner* interruptible_runner, absl::string_view uri_template,
+      std::atomic<int64_t>& bytes_sent_acc,
       std::atomic<int64_t>& bytes_received_acc,
       WallClockStopwatch* network_stopwatch)
       : log_manager_(*log_manager),
-        flags_(*flags),
         files_(*files),
         http_client_(*http_client),
         interruptible_runner_(*interruptible_runner),
@@ -150,7 +148,6 @@ class HttpFederatedSelectExampleIteratorFactory
 
  private:
   LogManager& log_manager_;
-  const Flags& flags_;
   Files& files_;
   HttpClient& http_client_;
   InterruptibleRunner& interruptible_runner_;
@@ -195,7 +192,6 @@ HttpFederatedSelectExampleIteratorFactory::CreateExampleIterator(
     auto started_stopwatch = network_stopwatch_.Start();
     slices = FetchSlicesViaHttp(slices_selector, uri_template_, http_client_,
                                 interruptible_runner_,
-                                flags_.client_decoded_http_resources(),
                                 /*bytes_received_acc=*/&bytes_received,
                                 /*bytes_sent_acc=*/&bytes_sent);
   }
@@ -226,11 +222,11 @@ DisabledFederatedSelectManager::CreateExampleIteratorFactoryForUriTemplate(
 }
 
 HttpFederatedSelectManager::HttpFederatedSelectManager(
-    LogManager* log_manager, const Flags* flags, Files* files,
-    HttpClient* http_client, std::function<bool()> should_abort,
+    LogManager* log_manager, Files* files,
+    fcp::client::http::HttpClient* http_client,
+    std::function<bool()> should_abort,
     const InterruptibleRunner::TimingConfig& timing_config)
     : log_manager_(*log_manager),
-      flags_(*flags),
       files_(*files),
       http_client_(*http_client),
       interruptible_runner_(std::make_unique<InterruptibleRunner>(
@@ -254,8 +250,8 @@ HttpFederatedSelectManager::CreateExampleIteratorFactoryForUriTemplate(
         &log_manager_);
   }
   return std::make_unique<HttpFederatedSelectExampleIteratorFactory>(
-      &log_manager_, &flags_, &files_, &http_client_,
-      interruptible_runner_.get(), uri_template,
+      &log_manager_, &files_, &http_client_, interruptible_runner_.get(),
+      uri_template,
       /*bytes_sent_acc=*/bytes_sent_, /*bytes_received_acc=*/bytes_received_,
       network_stopwatch_.get());
 }

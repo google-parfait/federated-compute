@@ -100,8 +100,7 @@ class ProtocolRequestHelper {
  public:
   ProtocolRequestHelper(HttpClient* http_client, int64_t* bytes_downloaded,
                         int64_t* bytes_uploaded,
-                        WallClockStopwatch* network_stopwatch, Clock* clock,
-                        bool client_decoded_http_resources);
+                        WallClockStopwatch* network_stopwatch, Clock* clock);
 
   // Performs the given request (handling any interruptions that may occur) and
   // updates the network stats.
@@ -145,7 +144,6 @@ class ProtocolRequestHelper {
   int64_t& bytes_uploaded_;
   WallClockStopwatch& network_stopwatch_;
   Clock& clock_;
-  const bool client_decoded_http_resources_;
 };
 
 // Parse a google::longrunning::Operation out of a InMemoryHttpResponse.

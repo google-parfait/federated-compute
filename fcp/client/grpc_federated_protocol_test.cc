@@ -290,6 +290,9 @@ ClientStreamMessage GetExpectedEligibilityEvalCheckinRequest(
       ->add_client_variant(secagg::SECAGG_CLIENT_VARIANT_NATIVE_V1);
   checkin_request->mutable_protocol_options_request()->set_should_ack_checkin(
       true);
+  checkin_request->mutable_protocol_options_request()
+      ->add_supported_http_compression_formats(
+          HttpCompressionFormat::HTTP_COMPRESSION_FORMAT_GZIP);
 
   if (enable_http_resource_support) {
     checkin_request->mutable_protocol_options_request()
@@ -319,6 +322,9 @@ ClientStreamMessage GetExpectedCheckinRequest(
       ->add_client_variant(secagg::SECAGG_CLIENT_VARIANT_NATIVE_V1);
   checkin_request->mutable_protocol_options_request()->set_should_ack_checkin(
       false);
+  checkin_request->mutable_protocol_options_request()
+      ->add_supported_http_compression_formats(
+          HttpCompressionFormat::HTTP_COMPRESSION_FORMAT_GZIP);
 
   if (enable_http_resource_support) {
     checkin_request->mutable_protocol_options_request()
@@ -1706,65 +1712,6 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
   // accepted during the Checkin phase first, and so we should receive the
   // "accepted" RetryWindow.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-}
-
-TEST_P(GrpcFederatedProtocolTest,
-       TestClientDecodedResourcesEnabledDeclaresSupport) {
-  EXPECT_CALL(mock_flags_, client_decoded_http_resources)
-      .WillRepeatedly(Return(true));
-
-  ClientStreamMessage expected_eligibility_request =
-      GetExpectedEligibilityEvalCheckinRequest(enable_http_resource_support_);
-
-  // Make sure HTTP_COMPRESSION_FORMAT_GZIP is there since
-  // client_decoded_http_resources is true.
-  EligibilityEvalCheckinRequest* eligibility_checkin_request =
-      expected_eligibility_request.mutable_eligibility_eval_checkin_request();
-  eligibility_checkin_request->mutable_protocol_options_request()
-      ->add_supported_http_compression_formats(
-          HttpCompressionFormat::HTTP_COMPRESSION_FORMAT_GZIP);
-  EXPECT_CALL(*mock_grpc_bidi_stream_,
-              Send(Pointee(EqualsProto(expected_eligibility_request))))
-      .WillOnce(Return(absl::OkStatus()));
-
-  const std::string expected_execution_id = "ELIGIBILITY_EVAL_EXECUTION_ID";
-  EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
-      .WillOnce(DoAll(SetArgPointee<0>(GetFakeCheckinRequestAck(
-                          GetAcceptedRetryWindow(), GetRejectedRetryWindow())),
-                      Return(absl::OkStatus())))
-      .WillOnce(DoAll(SetArgPointee<0>(GetFakeEnabledEligibilityCheckinResponse(
-                          kPlan, kInitCheckpoint, expected_execution_id)),
-                      Return(absl::OkStatus())));
-  ASSERT_OK(federated_protocol_->EligibilityEvalCheckin().status());
-
-  const std::optional<TaskEligibilityInfo> task_eligibility_info =
-      GetFakeTaskEligibilityInfo();
-
-  ClientStreamMessage expected_checkin_request = GetExpectedCheckinRequest(
-      task_eligibility_info, enable_http_resource_support_);
-  // Again, make sure HTTP_COMPRESSION_FORMAT_GZIP is there (but in the checkin
-  // request this time) since client_decoded_http_resources is true.
-  CheckinRequest* checkin_request =
-      expected_checkin_request.mutable_checkin_request();
-  checkin_request->mutable_protocol_options_request()
-      ->add_supported_http_compression_formats(
-          HttpCompressionFormat::HTTP_COMPRESSION_FORMAT_GZIP);
-  EXPECT_CALL(*mock_grpc_bidi_stream_,
-              Send(Pointee(EqualsProto(expected_checkin_request))))
-      .WillOnce(Return(absl::OkStatus()));
-
-  {
-    InSequence seq;
-    EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
-        .WillOnce(DoAll(SetArgPointee<0>(GetFakeAcceptedCheckinResponse(
-                            kPlan, kInitCheckpoint, kFederatedSelectUriTemplate,
-                            kExecutionPhaseId,
-                            /*use_secure_aggregation=*/false)),
-                        Return(absl::OkStatus())))
-        .RetiresOnSaturation();
-  }
-
-  ASSERT_OK(federated_protocol_->Checkin(task_eligibility_info));
 }
 
 }  // anonymous namespace

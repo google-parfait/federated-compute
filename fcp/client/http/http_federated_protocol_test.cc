@@ -283,6 +283,9 @@ EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest() {
   // the URI instead.
   request.mutable_client_version()->set_version_code(kClientVersion);
   request.mutable_attestation_measurement()->set_value(kAttestationMeasurement);
+  request.mutable_resource_capabilities()
+      ->mutable_supported_compression_formats()
+      ->Add(ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
 
   return request;
 }
@@ -343,6 +346,9 @@ StartTaskAssignmentRequest GetExpectedStartTaskAssignmentRequest(
   if (task_eligibility_info.has_value()) {
     *request.mutable_task_eligibility_info() = *task_eligibility_info;
   }
+  request.mutable_resource_capabilities()
+      ->mutable_supported_compression_formats()
+      ->Add(ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
   return request;
 }
 
@@ -916,9 +922,6 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
 
 TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalCheckinEnabledWithCompression) {
-  EXPECT_CALL(mock_flags_, client_decoded_http_resources)
-      .WillRepeatedly(Return(true));
-
   std::string expected_plan = kPlan;
   absl::StatusOr<std::string> compressed_plan =
       internal::CompressWithGzip(expected_plan);
@@ -2350,9 +2353,6 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
 
 TEST_F(HttpFederatedProtocolTest,
        TestClientDecodedResourcesEnabledDeclaresSupport) {
-  EXPECT_CALL(mock_flags_, client_decoded_http_resources)
-      .WillRepeatedly(Return(true));
-
   EligibilityEvalTaskRequest expected_eligibility_request;
   expected_eligibility_request.mutable_client_version()->set_version_code(
       kClientVersion);
