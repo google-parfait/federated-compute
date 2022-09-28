@@ -82,13 +82,6 @@ http_archive(
     urls = ["https://github.com/google/glog/archive/v0.5.0.zip"],
 )
 
-http_archive(
-    name = "rules_python",
-    sha256 = "b593d13bb43c94ce94b483c2858e53a9b811f6f10e1e0eedc61073bd90e58d9c",
-    strip_prefix = "rules_python-0.12.0",
-    url = "https://github.com/bazelbuild/rules_python/archive/refs/tags/0.12.0.tar.gz",
-)
-
 # Define the @io_grpc_grpc_java repository, which is used by the
 # @com_google_googleapis repository to define the Java protobuf targets such as
 # @com_google_googleapis//google/rpc:rpc_java_proto). The pattern we use here is
@@ -130,6 +123,9 @@ http_archive(
         # download versions of LLVM pointed to by non-HEAD TensorFlow.
         # TODO(team): Remove this patch when resolved.
         "//fcp/patches:tensorflow_llvm_url.patch",
+        # This patch updates TensorFlow's source_utils.py library to support
+        # loading absl as a workspace dep as opposed to as a system library.
+        "//fcp/patches:tensorflow_source_utils.patch",
     ],
     sha256 = "b5a1bb04c84b6fe1538377e5a1f649bb5d5f0b2e3625a3c526ff3a8af88633e8",
     strip_prefix = "tensorflow-2.10.0",
@@ -261,10 +257,4 @@ http_archive(
     sha256 = "c1db0b022cdfc5b5ce5f05b0f00568e2d927c9890429ec9c35bda12f52d93065",
     strip_prefix = "googleapis-2d8030c4102f97bc6be4ddab74c7cbfe88d8c016",
     url = "https://github.com/googleapis/googleapis/archive/2d8030c4102f97bc6be4ddab74c7cbfe88d8c016.tar.gz",
-)
-
-load("@rules_python//python:pip.bzl", "pip_install")
-
-pip_install(
-    requirements = "//fcp:requirements.txt",
 )

@@ -111,7 +111,7 @@ py_library(
     deps = [
         "//fcp/protos:plan_py_pb2",
         "@com_google_protobuf//:protobuf_python",
-        "@pip//pypi__tensorflow",
+        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -126,7 +126,7 @@ py_test(
         ":test_utils",
         "//fcp/protos:plan_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
-        "@pip//pypi__tensorflow",
+        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -163,7 +163,7 @@ py_test(
         "@com_google_absl_py//absl/logging",
         "@com_google_absl_py//absl/testing:absltest",
         "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
-        "@pip//pypi__tensorflow",
+        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -214,7 +214,7 @@ py_library(
     testonly = True,
     srcs = ["test_utils.py"],
     deps = [
-        "@pip//pypi__tensorflow",
+        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -227,6 +227,6 @@ py_test(
     deps = [
         ":test_utils",
         "@com_google_absl_py//absl/testing:absltest",
-        "@pip//pypi__tensorflow",
+        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )

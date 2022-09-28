@@ -61,6 +61,10 @@ build --spawn_strategy=sandboxed
 
 # The version of TensorFlow we use requires this
 common --experimental_repo_remote_exec
+build --noincompatible_remove_legacy_whole_archive
+
+# Use the version 2 TensorFlow API.
+build --define=tf_api_version=2 --action_env=TF2_BEHAVIOR=1
 
 # We avoid building with --compilation_mode=dbg usually, since the artifacts can
 # be very large (a binary with TensorFlow linked in is >2GiB); it costs several
