@@ -169,6 +169,10 @@ class Flags {
   // whether the client should be interrupted.
   virtual int32_t waiting_period_sec_for_cancellation() const { return 10; }
 
+  // When true, native will use the passed in cache dir to store temporary files
+  // and create and manage its own subdirectories.
+  virtual bool enable_cache_dir() const { return false; }
+
   // If true, the client supports the Federated Select feature. If not
   // then any Federated Select-specific example query will fail with an error
   virtual bool enable_federated_select() const { return false; }
