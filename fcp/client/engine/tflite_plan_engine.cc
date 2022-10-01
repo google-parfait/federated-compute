@@ -65,7 +65,9 @@ TfLiteInterpreterOptions CreateOptions(const Flags& flags) {
       .ensure_dynamic_tensors_are_released =
           flags.ensure_dynamic_tensors_are_released(),
       .large_tensor_threshold_for_dynamic_allocation =
-          flags.large_tensor_threshold_for_dynamic_allocation()};
+          flags.large_tensor_threshold_for_dynamic_allocation(),
+      .disable_delegate_clustering =
+          flags.disable_tflite_delegate_clustering()};
 }
 }  // namespace
 

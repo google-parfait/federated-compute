@@ -155,6 +155,10 @@ class Flags {
     return 1000;
   }
 
+  // When true, the TFLite runtime graph-reordering optimization that clusters
+  // delegate nodes together is disabled.
+  virtual bool disable_tflite_delegate_clustering() const { return false; }
+
   // When true, http request body won't be compressed.
   virtual bool disable_http_request_body_compression() const { return false; }
 

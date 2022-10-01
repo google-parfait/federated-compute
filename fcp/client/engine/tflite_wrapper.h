@@ -47,6 +47,9 @@ struct TfLiteInterpreterOptions {
   // When the threshold is zero, dynamic allocation is not enabled for any
   // tensor.
   int32_t large_tensor_threshold_for_dynamic_allocation = 0;
+  // Whether to disable the graph-reordering optimization that clusters delegate
+  // ops together.
+  bool disable_delegate_clustering = false;
 };
 
 // A class to call into TFLite.
