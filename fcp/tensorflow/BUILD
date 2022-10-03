@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_python//python:defs.bzl", "py_binary", "py_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 load("//fcp/tracing:build_defs.bzl", "tracing_schema_cc_library")
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_cc_test", "tf_custom_op_library", "tf_gen_op_wrapper_py")
+load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_custom_op_py_library")
+load("@grpc_for_py_proto_library//bazel:python_rules.bzl", "py_proto_library")
 
 default_visibility = ["//fcp:internal"]
 
@@ -40,6 +43,13 @@ tf_cc_test(
         "@org_tensorflow//tensorflow/core:tensorflow_opensource",
         "@org_tensorflow//tensorflow/core:testlib",
     ],
+)
+
+py_test(
+    name = "tf_py_smoke_test",
+    srcs = ["tf_py_smoke_test.py"],
+    python_version = "PY3",
+    deps = ["@org_tensorflow//tensorflow:tensorflow_py"],
 )
 
 # Library for converting between the FCP and TensorFlow versions of a Status.
@@ -273,6 +283,43 @@ tf_gen_op_wrapper_py(
     ],
 )
 
+# Public: Python library for ExternalDataset.
+tf_custom_op_py_library(
+    name = "external_dataset_py",
+    srcs = ["external_dataset.py"],
+    dso = [":_external_dataset_op.so"],
+    kernels = [
+        ":external_dataset_op_lib",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gen_external_dataset_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+# The dataset API isn't really usable from C++, so we generate a GraphDef for
+# testing using Python.
+py_binary(
+    name = "make_external_dataset_test_graph",
+    testonly = True,
+    srcs = ["make_external_dataset_test_graph.py"],
+    python_version = "PY3",
+    deps = [
+        ":external_dataset_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+genrule(
+    name = "external_dataset_test_graph",
+    testonly = True,
+    srcs = [],
+    outs = ["external_dataset_test.pbtxt"],
+    cmd = "$(location :make_external_dataset_test_graph) --output \"$@\"",
+    exec_tools = [":make_external_dataset_test_graph"],
+)
+
 # Selector proto used in test dataset stubs and example selector fuser op.
 proto_library(
     name = "test_selector_proto",
@@ -287,6 +334,34 @@ cc_proto_library(
     testonly = True,
     deps = [":test_selector_proto"],
 )
+
+tf_cc_test(
+    name = "external_dataset_op_test",
+    srcs = ["external_dataset_op_test.cc"],
+    data = [
+        "external_dataset_test.pbtxt",
+    ],
+    extra_copts = FCP_TF_COPTS,
+    deps = [
+        ":external_dataset",
+        ":external_dataset_op_lib",
+        ":test_selector_cc_proto",
+        "//fcp/base",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+        "@org_tensorflow//tensorflow/core:core_cpu",
+        "@org_tensorflow//tensorflow/core:direct_session",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/core:tensorflow_opensource",
+        "@org_tensorflow//tensorflow/core:testlib",
+    ],
+)
+
+CRC32_OP_SRCS = [
+    "crc32_op.cc",
+    "tensor_crc32.cc",
+]
 
 # Custom op to compute the CRC32 checksum of a tensor.
 cc_library(
@@ -306,6 +381,12 @@ cc_library(
     alwayslink = 1,
 )
 
+tf_custom_op_library(
+    name = "_crc32_op.so",
+    srcs = CRC32_OP_SRCS + ["tensor_crc32.h"],
+    copts = FCP_TF_COPTS,
+)
+
 # Generates the basic op wrapper for use in Python.
 tf_gen_op_wrapper_py(
     name = "gen_crc32_py",
@@ -315,17 +396,43 @@ tf_gen_op_wrapper_py(
     ],
 )
 
+tf_custom_op_py_library(
+    name = "crc32_py",
+    srcs = ["crc32.py"],
+    dso = [":_crc32_op.so"],
+    kernels = [
+        ":crc32_op_lib",
+    ],
+    deps = [
+        ":gen_crc32_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+py_test(
+    name = "crc32_test",
+    srcs = ["crc32_test.py"],
+    python_version = "PY3",
+    deps = [
+        ":crc32_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+EXAMPLE_SELECTOR_FUSER_OP_SRCS = ["example_selector_fuser_op.cc"]
+
+EXAMPLE_SELECTOR_FUSER_OP_DEPS = [
+    "@com_google_protobuf//:protobuf",
+    "//fcp/protos:plan_cc_proto",
+]
+
 # Custom op to add resumption token to example selector.
 cc_library(
     name = "example_selector_fuser_op_lib",
-    srcs = [
-        "example_selector_fuser_op.cc",
-    ],
+    srcs = EXAMPLE_SELECTOR_FUSER_OP_SRCS,
     copts = FCP_TF_COPTS,
     visibility = ["//visibility:public"],
-    deps = [
-        "//fcp/protos:plan_cc_proto",
-        "@com_google_protobuf//:protobuf",
+    deps = EXAMPLE_SELECTOR_FUSER_OP_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:lib",
     ],
@@ -333,13 +440,53 @@ cc_library(
     alwayslink = 1,
 )
 
+tf_custom_op_library(
+    name = "_example_selector_fuser_op.so",
+    srcs = EXAMPLE_SELECTOR_FUSER_OP_SRCS,
+    copts = FCP_TF_COPTS,
+    deps = EXAMPLE_SELECTOR_FUSER_OP_DEPS,
+)
+
 # Generates the basic op wrapper for use in Python.
 tf_gen_op_wrapper_py(
     name = "gen_example_selector_fuser_op",
     out = "gen_example_selector_fuser_op.py",
-    visibility = ["//visibility:public"],
     deps = [
         ":example_selector_fuser_op_lib",
+    ],
+)
+
+tf_custom_op_py_library(
+    name = "example_selector_fuser_py",
+    srcs = ["example_selector_fuser.py"],
+    dso = [":_example_selector_fuser_op.so"],
+    kernels = [
+        ":example_selector_fuser_op_lib",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gen_example_selector_fuser_op",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+py_proto_library(
+    name = "test_selector_py_pb2",
+    testonly = True,
+    deps = [
+        ":test_selector_proto",
+    ],
+)
+
+py_test(
+    name = "example_selector_fuser_test",
+    srcs = ["example_selector_fuser_test.py"],
+    python_version = "PY3",
+    deps = [
+        ":example_selector_fuser_py",
+        ":test_selector_py_pb2",
+        "//fcp/protos:plan_py_pb2",
+        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -412,6 +559,65 @@ tf_gen_op_wrapper_py(
 )
 
 # Public: Python library for ServeSlices.
+tf_custom_op_py_library(
+    name = "serve_slices_py",
+    srcs = ["serve_slices.py"],
+    dso = [":_serve_slices_op.so"],
+    kernels = [
+        ":serve_slices_op_lib",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gen_serve_slices_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+# Generate a GraphDef for testing `ServeSlices` using Python.
+py_binary(
+    name = "make_serve_slices_test_graph",
+    testonly = True,
+    srcs = ["make_serve_slices_test_graph.py"],
+    python_version = "PY3",
+    deps = [
+        ":serve_slices_py",
+        "@com_google_absl_py//absl:app",
+        "@com_google_absl_py//absl/flags",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+genrule(
+    name = "serve_slices_test_graph",
+    testonly = True,
+    srcs = [],
+    outs = ["serve_slices_test.pbtxt"],
+    cmd = "$(location :make_serve_slices_test_graph) --output \"$@\"",
+    exec_tools = [":make_serve_slices_test_graph"],
+)
+
+tf_cc_test(
+    name = "serve_slices_op_test",
+    srcs = ["serve_slices_op_test.cc"],
+    data = [
+        "serve_slices_test.pbtxt",
+    ],
+    extra_copts = FCP_TF_COPTS,
+    deps = [
+        ":serve_slices_op_lib",
+        ":serve_slices_registry",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+        "@org_tensorflow//tensorflow/core:core_cpu",
+        "@org_tensorflow//tensorflow/core:direct_session",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/core:tensorflow_opensource",
+        "@org_tensorflow//tensorflow/core:testlib",
+        "@org_tensorflow//tensorflow/core/platform:status_matchers",
+    ],
+)
 
 MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS = ["make_slices_selector_example_selector_op.cc"]
 
@@ -454,12 +660,39 @@ tf_gen_op_wrapper_py(
 )
 
 # Public: Python library for the `MakeSlicesSelectorExampleSelector` op.
+tf_custom_op_py_library(
+    name = "make_slices_selector_example_selector_py",
+    srcs = ["make_slices_selector_example_selector.py"],
+    dso = [":_make_slices_selector_example_selector_op.so"],
+    kernels = [
+        ":make_slices_selector_example_selector_op_lib",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gen_make_slices_selector_example_selector_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+# Test `MakeSlicesSelectorExampleSelector` using Python.
+py_test(
+    name = "make_slices_selector_example_selector_test",
+    testonly = True,
+    srcs = ["make_slices_selector_example_selector_test.py"],
+    python_version = "PY3",
+    deps = [
+        ":make_slices_selector_example_selector_py",
+        "//fcp/protos:plan_py_pb2",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
 
 APPEND_SLICES_OP_SRCS = ["append_slices_op.cc"]
 
 APPEND_SLICES_OP_DEPS = [
     "@com_google_absl//absl/base:core_headers",
     "@com_google_absl//absl/synchronization",
+    "@org_tensorflow//tensorflow/core/util:saved_tensor_slice_proto_cc",
 ]
 
 # Custom op to serialize an ExampleSelector containing a SlicesSelector proto.
@@ -473,7 +706,6 @@ cc_library(
         "@org_tensorflow//tensorflow/core:lib",
         "@org_tensorflow//tensorflow/core/kernels:save_restore_tensor",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
-        "@org_tensorflow//tensorflow/core/util:saved_tensor_slice_proto_cc",
     ],
     # Uses TensorFlow's registration macros
     alwayslink = 1,
@@ -498,6 +730,32 @@ tf_gen_op_wrapper_py(
 )
 
 # Public: Python library for the `AppendSlices` and `MergeAppendedSlices` ops.
+tf_custom_op_py_library(
+    name = "append_slices_py",
+    srcs = ["append_slices.py"],
+    dso = [":_append_slices_op.so"],
+    kernels = [
+        ":append_slices_op_lib",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gen_append_slices_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+# Test `AppendSlices` and `MergeAppendedSlices` using Python.
+py_test(
+    name = "append_slices_test",
+    testonly = True,
+    srcs = ["append_slices_test.py"],
+    python_version = "PY3",
+    deps = [
+        ":append_slices_py",
+        ":delete_file_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
 
 DELETE_FILE_OP_SRCS = ["delete_file_op.cc"]
 
@@ -540,6 +798,31 @@ tf_gen_op_wrapper_py(
 )
 
 # Public: Python library for the `DeleteFile` ops.
+tf_custom_op_py_library(
+    name = "delete_file_py",
+    srcs = ["delete_file.py"],
+    dso = [":_delete_file_op.so"],
+    kernels = [
+        ":delete_file_op_lib",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gen_delete_file_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+# Test `DeleteFile` using Python.
+py_test(
+    name = "delete_file_test",
+    testonly = True,
+    srcs = ["delete_file_test.py"],
+    python_version = "PY3",
+    deps = [
+        ":delete_file_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
 
 TENSOR_NAME_OP_SRCS = ["tensor_name_op.cc"]
 
@@ -582,19 +865,56 @@ tf_gen_op_wrapper_py(
 )
 
 # Public: Python library for the `TensorName` op.
+tf_custom_op_py_library(
+    name = "tensor_name_py",
+    srcs = ["tensor_name.py"],
+    dso = [":_tensor_name_op.so"],
+    kernels = [
+        ":tensor_name_op_lib",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gen_tensor_name_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+# Test `TensorName` using Python.
+py_test(
+    name = "tensor_name_test",
+    testonly = True,
+    srcs = ["tensor_name_test.py"],
+    python_version = "PY3",
+    deps = [
+        ":tensor_name_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+TASK_ELIGIBILITY_INFO_OPS_SRCS = ["task_eligibility_info_ops.cc"]
+
+TASK_ELIGIBILITY_INFO_OPS_DEPS = [
+    "//fcp/protos:federated_api_cc_proto",
+]
 
 cc_library(
     name = "task_eligibility_info_ops_lib",
-    srcs = ["task_eligibility_info_ops.cc"],
+    srcs = TASK_ELIGIBILITY_INFO_OPS_SRCS,
     copts = FCP_TF_COPTS,
     visibility = ["//visibility:public"],
-    deps = [
-        "//fcp/protos:federated_api_cc_proto",
+    deps = TASK_ELIGIBILITY_INFO_OPS_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:lib",
     ],
     # Uses TensorFlow's registration macros
     alwayslink = 1,
+)
+
+tf_custom_op_library(
+    name = "_task_eligibility_info_ops.so",
+    srcs = TASK_ELIGIBILITY_INFO_OPS_SRCS,
+    copts = FCP_TF_COPTS,
+    deps = TASK_ELIGIBILITY_INFO_OPS_DEPS,
 )
 
 # Generates the basic op wrapper for use in Python. We don't expose this wrapper
@@ -605,5 +925,31 @@ tf_gen_op_wrapper_py(
     out = "gen_task_eligibility_info_ops.py",
     deps = [
         ":task_eligibility_info_ops_lib",
+    ],
+)
+
+# Python library exposing the user-facing task eligibility info ops.
+tf_custom_op_py_library(
+    name = "task_eligibility_info_ops_py",
+    srcs = ["task_eligibility_info_ops.py"],
+    dso = [":_task_eligibility_info_ops.so"],
+    kernels = [
+        ":task_eligibility_info_ops_lib",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gen_task_eligibility_info_ops_py",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+py_test(
+    name = "task_eligibility_info_ops_test",
+    srcs = ["task_eligibility_info_ops_test.py"],
+    python_version = "PY3",
+    deps = [
+        ":task_eligibility_info_ops_py",
+        "//fcp/protos:federated_api_py_pb2",
+        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )

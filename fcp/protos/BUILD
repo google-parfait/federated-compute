@@ -14,6 +14,7 @@
 
 load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
 load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
+load("@grpc_for_py_proto_library//bazel:python_rules.bzl", "py_proto_library")
 
 default_visibility = [
     "//visibility:public",
@@ -37,6 +38,11 @@ proto_library(
         "@com_google_protobuf//:any_proto",
         "@com_google_protobuf//:duration_proto",
     ],
+)
+
+py_proto_library(
+    name = "federated_api_py_pb2",
+    deps = [":federated_api_proto"],
 )
 
 java_proto_library(
