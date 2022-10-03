@@ -159,6 +159,7 @@ py_test(
         ":test_utils",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+        "//fcp/tensorflow:external_dataset_py",
         "@com_google_absl_py//absl/flags",
         "@com_google_absl_py//absl/logging",
         "@com_google_absl_py//absl/testing:absltest",

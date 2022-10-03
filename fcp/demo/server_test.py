@@ -31,39 +31,62 @@ from fcp.demo import server
 from fcp.demo import test_utils
 from fcp.protos import plan_pb2
 from fcp.protos.federatedcompute import task_assignments_pb2
+from fcp.tensorflow import external_dataset
 
 POPULATION_NAME = 'test/population'
-TENSOR_NAME = 'x'
+CAP_TENSOR_NAME = 'cap'
+COUNT_TENSOR_NAME = 'count'
 
 
 def create_plan() -> plan_pb2.Plan:
-  """Creates a test plan that computes num_clients * input^2."""
+  """Creates a test plan that counts examples, with a per-client cap."""
 
   with tf.compat.v1.Graph().as_default() as client_graph:
     dataset_token = tf.compat.v1.placeholder(tf.string, shape=())
     input_filepath = tf.compat.v1.placeholder(tf.string, shape=())
     output_filepath = tf.compat.v1.placeholder(tf.string, shape=())
-    # TODO(team): Use ExternalDataset once it's available in OSS.
-    x = tf.raw_ops.Restore(
-        file_pattern=input_filepath, tensor_name=TENSOR_NAME, dt=tf.int32)
+    ds = external_dataset.ExternalDataset(token=dataset_token, selector=b'')
+    cap = tf.raw_ops.Restore(
+        file_pattern=input_filepath, tensor_name=CAP_TENSOR_NAME, dt=tf.int32)
+    count = ds.take(tf.cast(cap, dtype=tf.int64)).reduce(0, lambda x, _: x + 1)
     target_node = tf.raw_ops.Save(
-        filename=output_filepath, tensor_names=[TENSOR_NAME], data=[x * x])
+        filename=output_filepath,
+        tensor_names=[COUNT_TENSOR_NAME],
+        data=[count])
 
   with tf.compat.v1.Graph().as_default() as server_graph:
     filename = tf.compat.v1.placeholder(tf.string, shape=())
-    x = tf.Variable(0, dtype=tf.int32)
-    restore_server_savepoint = x.assign(
+    contribution_cap = tf.Variable(0, dtype=tf.int32)
+    count = tf.Variable(0, dtype=tf.int32)
+    load_initial_count = count.assign(
         tf.raw_ops.Restore(
-            file_pattern=filename, tensor_name=TENSOR_NAME, dt=tf.int32))
+            file_pattern=filename, tensor_name=COUNT_TENSOR_NAME, dt=tf.int32),
+        read_value=False)
+    load_contribution_cap = contribution_cap.assign(
+        tf.raw_ops.Restore(
+            file_pattern=filename, tensor_name=CAP_TENSOR_NAME, dt=tf.int32),
+        read_value=False)
+    with tf.control_dependencies([load_initial_count, load_contribution_cap]):
+      restore_server_savepoint = tf.no_op()
     write_client_init = tf.raw_ops.Save(
-        filename=filename, tensor_names=[TENSOR_NAME], data=[x])
+        filename=filename,
+        tensor_names=[CAP_TENSOR_NAME],
+        data=[contribution_cap])
 
-    acc = tf.Variable(0, dtype=tf.int32)
-    update_acc = acc.assign_add(
+    intermediate_acc = tf.Variable(0, dtype=tf.int32)
+    update_intermediate_acc = intermediate_acc.assign_add(
         tf.raw_ops.Restore(
-            file_pattern=filename, tensor_name=TENSOR_NAME, dt=tf.int32))
-    save_acc = tf.raw_ops.Save(
-        filename=filename, tensor_names=[TENSOR_NAME], data=[acc])
+            file_pattern=filename, tensor_name=COUNT_TENSOR_NAME, dt=tf.int32))
+    save_intermediate_acc = tf.raw_ops.Save(
+        filename=filename,
+        tensor_names=[COUNT_TENSOR_NAME],
+        data=[intermediate_acc])
+
+    read_intermediate_update = count.assign_add(
+        tf.raw_ops.Restore(
+            file_pattern=filename, tensor_name=COUNT_TENSOR_NAME, dt=tf.int32))
+    save_count = tf.raw_ops.Save(
+        filename=filename, tensor_names=[COUNT_TENSOR_NAME], data=[count])
 
   plan = plan_pb2.Plan(
       phase=[
@@ -82,7 +105,7 @@ def create_plan() -> plan_pb2.Plan:
                       input_filepath_tensor_name=input_filepath.op.name,
                       output_filepath_tensor_name=output_filepath.op.name)),
               server_phase=plan_pb2.ServerPhase(
-                  phase_init_op=acc.initializer.name,
+                  phase_init_op=intermediate_acc.initializer.name,
                   write_client_init=plan_pb2.CheckpointOp(
                       saver_def=tf.compat.v1.train.SaverDef(
                           filename_tensor_name=filename.name,
@@ -90,20 +113,20 @@ def create_plan() -> plan_pb2.Plan:
                   read_update=plan_pb2.CheckpointOp(
                       saver_def=tf.compat.v1.train.SaverDef(
                           filename_tensor_name=filename.name,
-                          restore_op_name=update_acc.name)),
+                          restore_op_name=update_intermediate_acc.name)),
                   write_intermediate_update=plan_pb2.CheckpointOp(
                       saver_def=tf.compat.v1.train.SaverDef(
                           filename_tensor_name=filename.name,
-                          save_tensor_name=save_acc.name)),
+                          save_tensor_name=save_intermediate_acc.name)),
                   read_intermediate_update=plan_pb2.CheckpointOp(
                       saver_def=tf.compat.v1.train.SaverDef(
                           filename_tensor_name=filename.name,
-                          restore_op_name=update_acc.name))))
+                          restore_op_name=read_intermediate_update.name))))
       ],
       server_savepoint=plan_pb2.CheckpointOp(
           saver_def=tf.compat.v1.train.SaverDef(
               filename_tensor_name=filename.name,
-              save_tensor_name=save_acc.name,
+              save_tensor_name=save_count.name,
               restore_op_name=restore_server_savepoint.name)),
       version=1)
   plan.client_graph_bytes.Pack(client_graph.as_graph_def())
@@ -149,12 +172,16 @@ class ServerTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
       await asyncio.sleep(0.5)
 
   async def test_run_computation(self):
-    x = 10
-    num_clients = 3
+    initial_count = 100
+    cap = 10
+    examples_per_client = [1, 5, 15]
+    checkpoint = test_utils.create_checkpoint({
+        CAP_TENSOR_NAME: cap,
+        COUNT_TENSOR_NAME: initial_count,
+    })
     run_computation_task = asyncio.create_task(
-        self.server.run_computation(
-            'task/name', create_plan(),
-            test_utils.create_checkpoint({TENSOR_NAME: x}), num_clients))
+        self.server.run_computation('task/name', create_plan(), checkpoint,
+                                    len(examples_per_client)))
 
     # Wait for task assignment to return a task.
     wait_task = asyncio.create_task(self.wait_for_task())
@@ -173,10 +200,11 @@ class ServerTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         'client_runner_main')
     server_url = f'http://{self.server.server_name}:{self.server.server_port}/'
     clients = []
-    for _ in range(num_clients):
+    for num_examples in examples_per_client:
       subprocess = asyncio.create_subprocess_exec(
           client_runner, f'--server={server_url}',
-          f'--population={POPULATION_NAME}', '--sleep_after_round_secs=0',
+          f'--population={POPULATION_NAME}',
+          f'--num_empty_examples={num_examples}', '--sleep_after_round_secs=0',
           '--use_http_federated_compute_protocol')
       clients.append(asyncio.create_task((await subprocess).wait()))
 
@@ -189,8 +217,9 @@ class ServerTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
 
     # Verify the sum in the checkpoint.
     result = test_utils.read_tensor_from_checkpoint(
-        run_computation_task.result(), TENSOR_NAME, tf.int32)
-    self.assertEqual(result, num_clients * x * x)
+        run_computation_task.result(), COUNT_TENSOR_NAME, tf.int32)
+    self.assertEqual(
+        result, initial_count + sum([min(n, cap) for n in examples_per_client]))
 
 
 if __name__ == '__main__':
