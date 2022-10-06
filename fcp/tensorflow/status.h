@@ -23,12 +23,12 @@
 namespace fcp {
 
 /**
- * Converts an FCP Status to a tensorflow::Status
+ * Converts an FCP Status to a tensorflow::Status.
  */
 tensorflow::Status ConvertToTensorFlowStatus(Status const&);
 
 /**
- * Converts an FCP Status to a tensorflow::Status
+ * Converts a tensorflow::Status to an FCP Status.
  */
 Status ConvertFromTensorFlowStatus(tensorflow::Status const&);
 
