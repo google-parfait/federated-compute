@@ -37,8 +37,8 @@ class PhaseLoggerImpl : public PhaseLogger {
       : event_publisher_(event_publisher),
         opstats_logger_(opstats_logger),
         log_manager_(log_manager),
-        log_tensorflow_error_messages_(flags->log_tensorflow_error_messages()),
-        granular_per_phase_logs_(flags->granular_per_phase_logs()) {}
+        log_tensorflow_error_messages_(flags->log_tensorflow_error_messages()) {
+  }
 
   void UpdateRetryWindowAndNetworkStats(
       const ::google::internal::federatedml::v2::RetryWindow& retry_window,
@@ -197,7 +197,6 @@ class PhaseLoggerImpl : public PhaseLogger {
   opstats::OpStatsLogger* opstats_logger_;
   LogManager* log_manager_;
   const bool log_tensorflow_error_messages_;
-  const bool granular_per_phase_logs_;
 };
 
 }  // namespace client

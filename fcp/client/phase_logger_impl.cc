@@ -53,16 +53,10 @@ void PhaseLoggerImpl::SetModelIdentifier(absl::string_view model_identifier) {
 }
 
 void PhaseLoggerImpl::LogTaskNotStarted(absl::string_view error_message) {
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishTaskNotStarted(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED,
-        std::string(error_message));
-  } else {
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED,
-        std::string(error_message));
-  }
+  event_publisher_->PublishTaskNotStarted(error_message);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED,
+      std::string(error_message));
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalCheckinStarted() {
@@ -77,17 +71,11 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinIOError(
   std::string error_message =
       GetErrorMessage(error_status, kEligibilityCheckinErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishEligibilityEvalCheckinIoError(
-        error_message, network_stats, absl::Now() - time_before_checkin);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_ERROR_IO,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, error_message);
-  }
+  event_publisher_->PublishEligibilityEvalCheckinIoError(
+      error_message, network_stats, absl::Now() - time_before_checkin);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_ERROR_IO,
+      error_message);
   LogEligibilityEvalCheckinLatency(time_before_checkin);
 }
 
@@ -97,18 +85,12 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinClientInterrupted(
   std::string error_message =
       GetErrorMessage(error_status, kEligibilityCheckinErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishEligibilityEvalCheckinClientInterrupted(
-        error_message, network_stats, absl::Now() - time_before_checkin);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::
-            EVENT_KIND_ELIGIBILITY_CHECKIN_CLIENT_INTERRUPTED,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, error_message);
-  }
+  event_publisher_->PublishEligibilityEvalCheckinClientInterrupted(
+      error_message, network_stats, absl::Now() - time_before_checkin);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::
+          EVENT_KIND_ELIGIBILITY_CHECKIN_CLIENT_INTERRUPTED,
+      error_message);
   LogEligibilityEvalCheckinLatency(time_before_checkin);
 }
 
@@ -118,17 +100,11 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinServerAborted(
   std::string error_message =
       GetErrorMessage(error_status, kEligibilityCheckinErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishEligibilityEvalCheckinServerAborted(
-        error_message, network_stats, absl::Now() - time_before_checkin);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_SERVER_ABORTED,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_SERVER_ABORTED, error_message);
-  }
+  event_publisher_->PublishEligibilityEvalCheckinServerAborted(
+      error_message, network_stats, absl::Now() - time_before_checkin);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_SERVER_ABORTED,
+      error_message);
   LogEligibilityEvalCheckinLatency(time_before_checkin);
 }
 
@@ -156,19 +132,12 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinInvalidPayloadError(
   log_manager_->LogDiag(
       ProdDiagCode::
           BACKGROUND_TRAINING_ELIGIBILITY_EVAL_FAILED_CANNOT_PARSE_PLAN);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishEligibilityEvalCheckinErrorInvalidPayload(
-        error_message, network_stats, absl::Now() - time_before_checkin);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::
-            EVENT_KIND_ELIGIBILITY_CHECKIN_ERROR_INVALID_PAYLOAD,
-        std::string(error_message));
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO,
-        std::string(error_message));
-  }
+  event_publisher_->PublishEligibilityEvalCheckinErrorInvalidPayload(
+      error_message, network_stats, absl::Now() - time_before_checkin);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::
+          EVENT_KIND_ELIGIBILITY_CHECKIN_ERROR_INVALID_PAYLOAD,
+      std::string(error_message));
   LogEligibilityEvalCheckinLatency(time_before_checkin);
 }
 
@@ -182,11 +151,7 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinCompleted(
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationStarted() {
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishEligibilityEvalComputationStarted();
-  } else {
-    event_publisher_->PublishPlanExecutionStarted();
-  }
+  event_publisher_->PublishEligibilityEvalComputationStarted();
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED);
 }
@@ -199,18 +164,12 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationInvalidArgument(
                       /* keep_error_message= */ true);
   log_manager_->LogDiag(
       ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishEligibilityEvalComputationInvalidArgument(
-        error_message, example_stats, absl::Now() - run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::
-            EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_INVALID_ARGUMENT,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, error_message);
-  }
+  event_publisher_->PublishEligibilityEvalComputationInvalidArgument(
+      error_message, example_stats, absl::Now() - run_plan_start_time);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::
+          EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_INVALID_ARGUMENT,
+      error_message);
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationExampleIteratorError(
@@ -219,20 +178,12 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationExampleIteratorError(
   std::string error_message =
       GetErrorMessage(error_status, kEligibilityComputationErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishEligibilityEvalComputationExampleIteratorError(
-        error_message, example_stats, absl::Now() - run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::
-            EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_EXAMPLE_ITERATOR,
-        error_message);
-  } else {
-    event_publisher_->PublishExampleSelectorError(/*example_count=*/0,
-                                                  error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
-        error_message);
-  }
+  event_publisher_->PublishEligibilityEvalComputationExampleIteratorError(
+      error_message, example_stats, absl::Now() - run_plan_start_time);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::
+          EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_EXAMPLE_ITERATOR,
+      error_message);
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationTensorflowError(
@@ -241,19 +192,12 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationTensorflowError(
   std::string error_message =
       GetErrorMessage(error_status, kEligibilityComputationErrorPrefix,
                       log_tensorflow_error_messages_);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishEligibilityEvalComputationTensorflowError(
-        error_message, example_stats, absl::Now() - run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::
-            EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_TENSORFLOW,
-        error_message);
-  } else {
-    event_publisher_->PublishTensorFlowError(example_stats.example_count,
-                                             error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW, error_message);
-  }
+  event_publisher_->PublishEligibilityEvalComputationTensorflowError(
+      error_message, example_stats, absl::Now() - run_plan_start_time);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::
+          EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_TENSORFLOW,
+      error_message);
   LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
 }
 
@@ -263,30 +207,20 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationInterrupted(
   std::string error_message =
       GetErrorMessage(error_status, kEligibilityComputationErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishEligibilityEvalComputationInterrupted(
-        error_message, example_stats, absl::Now() - run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::
-            EVENT_KIND_ELIGIBILITY_COMPUTATION_CLIENT_INTERRUPTED,
-        error_message);
-  } else {
-    event_publisher_->PublishInterruption(example_stats, run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, error_message);
-  }
+  event_publisher_->PublishEligibilityEvalComputationInterrupted(
+      error_message, example_stats, absl::Now() - run_plan_start_time);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::
+          EVENT_KIND_ELIGIBILITY_COMPUTATION_CLIENT_INTERRUPTED,
+      error_message);
   LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationCompleted(
     const ExampleStats& example_stats, absl::Time run_plan_start_time,
     absl::Time reference_time) {
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishEligibilityEvalComputationCompleted(
-        example_stats, absl::Now() - run_plan_start_time);
-  } else {
-    event_publisher_->PublishPlanCompleted(example_stats, run_plan_start_time);
-  }
+  event_publisher_->PublishEligibilityEvalComputationCompleted(
+      example_stats, absl::Now() - run_plan_start_time);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_FINISHED);
   log_manager_->LogToLongHistogram(
@@ -311,16 +245,10 @@ void PhaseLoggerImpl::LogCheckinIOError(absl::Status error_status,
                                         absl::Time reference_time) {
   std::string error_message = GetErrorMessage(error_status, kCheckinErrorPrefix,
                                               /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishCheckinIoError(error_message, network_stats,
-                                            absl::Now() - time_before_checkin);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CHECKIN_ERROR_IO, error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, error_message);
-  }
+  event_publisher_->PublishCheckinIoError(error_message, network_stats,
+                                          absl::Now() - time_before_checkin);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_ERROR_IO, error_message);
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
@@ -329,17 +257,11 @@ void PhaseLoggerImpl::LogCheckinClientInterrupted(
     absl::Time time_before_checkin, absl::Time reference_time) {
   std::string error_message = GetErrorMessage(error_status, kCheckinErrorPrefix,
                                               /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishCheckinClientInterrupted(
-        error_message, network_stats, absl::Now() - time_before_checkin);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CHECKIN_CLIENT_INTERRUPTED,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, error_message);
-  }
+  event_publisher_->PublishCheckinClientInterrupted(
+      error_message, network_stats, absl::Now() - time_before_checkin);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_CLIENT_INTERRUPTED,
+      error_message);
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
@@ -349,29 +271,19 @@ void PhaseLoggerImpl::LogCheckinServerAborted(absl::Status error_status,
                                               absl::Time reference_time) {
   std::string error_message = GetErrorMessage(error_status, kCheckinErrorPrefix,
                                               /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishCheckinServerAborted(
-        error_message, network_stats, absl::Now() - time_before_checkin);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CHECKIN_SERVER_ABORTED,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_SERVER_ABORTED, error_message);
-  }
+  event_publisher_->PublishCheckinServerAborted(
+      error_message, network_stats, absl::Now() - time_before_checkin);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_SERVER_ABORTED,
+      error_message);
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
 void PhaseLoggerImpl::LogCheckinTurnedAway(const NetworkStats& network_stats,
                                            absl::Time time_before_checkin,
                                            absl::Time reference_time) {
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishRejected(network_stats,
-                                      absl::Now() - time_before_checkin);
-  } else {
-    event_publisher_->PublishRejected();
-  }
+  event_publisher_->PublishRejected(network_stats,
+                                    absl::Now() - time_before_checkin);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
   LogCheckinLatency(time_before_checkin, reference_time);
@@ -382,18 +294,11 @@ void PhaseLoggerImpl::LogCheckinInvalidPayload(
     absl::Time time_before_checkin, absl::Time reference_time) {
   log_manager_->LogDiag(
       ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishCheckinInvalidPayload(
-        error_message, network_stats, absl::Now() - time_before_checkin);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CHECKIN_ERROR_INVALID_PAYLOAD,
-        std::string(error_message));
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO,
-        std::string(error_message));
-  }
+  event_publisher_->PublishCheckinInvalidPayload(
+      error_message, network_stats, absl::Now() - time_before_checkin);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_ERROR_INVALID_PAYLOAD,
+      std::string(error_message));
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
@@ -401,23 +306,14 @@ void PhaseLoggerImpl::LogCheckinCompleted(absl::string_view task_name,
                                           const NetworkStats& network_stats,
                                           absl::Time time_before_checkin,
                                           absl::Time reference_time) {
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishCheckinFinishedV2(
-        network_stats, absl::Now() - time_before_checkin);
-  } else {
-    event_publisher_->PublishCheckinFinished(network_stats,
+  event_publisher_->PublishCheckinFinishedV2(network_stats,
                                              absl::Now() - time_before_checkin);
-  }
   opstats_logger_->AddCheckinAcceptedEventWithTaskName(std::string(task_name));
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
 void PhaseLoggerImpl::LogComputationStarted() {
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishComputationStarted();
-  } else {
-    event_publisher_->PublishPlanExecutionStarted();
-  }
+  event_publisher_->PublishComputationStarted();
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
 }
@@ -430,18 +326,12 @@ void PhaseLoggerImpl::LogComputationInvalidArgument(
                       /* keep_error_message= */ true);
   log_manager_->LogDiag(
       ProdDiagCode::BACKGROUND_TRAINING_FAILED_PLAN_FAILS_SANITY_CHECK);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishComputationInvalidArgument(
-        error_message, example_stats, network_stats,
-        absl::Now() - run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_INVALID_ARGUMENT,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, error_message);
-  }
+  event_publisher_->PublishComputationInvalidArgument(
+      error_message, example_stats, network_stats,
+      absl::Now() - run_plan_start_time);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_INVALID_ARGUMENT,
+      error_message);
 }
 
 void PhaseLoggerImpl::LogComputationIOError(absl::Status error_status,
@@ -451,18 +341,11 @@ void PhaseLoggerImpl::LogComputationIOError(absl::Status error_status,
   std::string error_message =
       GetErrorMessage(error_status, kComputationErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishComputationIOError(
-        error_message, example_stats, network_stats,
-        absl::Now() - run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_IO,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, error_message);
-  }
+  event_publisher_->PublishComputationIOError(
+      error_message, example_stats, network_stats,
+      absl::Now() - run_plan_start_time);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_IO, error_message);
 }
 
 void PhaseLoggerImpl::LogComputationExampleIteratorError(
@@ -470,19 +353,12 @@ void PhaseLoggerImpl::LogComputationExampleIteratorError(
     const NetworkStats& network_stats, absl::Time run_plan_start_time) {
   std::string error_message = GetErrorMessage(
       error_status, kComputationErrorPrefix, /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishComputationExampleIteratorError(
-        error_message, example_stats, network_stats,
-        absl::Now() - run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_EXAMPLE_ITERATOR,
-        error_message);
-  } else {
-    event_publisher_->PublishExampleSelectorError(0, error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_EXAMPLE_SELECTOR,
-        error_message);
-  }
+  event_publisher_->PublishComputationExampleIteratorError(
+      error_message, example_stats, network_stats,
+      absl::Now() - run_plan_start_time);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_EXAMPLE_ITERATOR,
+      error_message);
 }
 
 void PhaseLoggerImpl::LogComputationTensorflowError(
@@ -491,19 +367,12 @@ void PhaseLoggerImpl::LogComputationTensorflowError(
     absl::Time reference_time) {
   std::string error_message = GetErrorMessage(
       error_status, kComputationErrorPrefix, log_tensorflow_error_messages_);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishComputationTensorflowError(
-        error_message, example_stats, network_stats,
-        absl::Now() - run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_TENSORFLOW,
-        error_message);
-  } else {
-    event_publisher_->PublishTensorFlowError(example_stats.example_count,
-                                             error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW, error_message);
-  }
+  event_publisher_->PublishComputationTensorflowError(
+      error_message, example_stats, network_stats,
+      absl::Now() - run_plan_start_time);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_TENSORFLOW,
+      error_message);
   LogComputationLatency(run_plan_start_time, reference_time);
 }
 
@@ -514,18 +383,12 @@ void PhaseLoggerImpl::LogComputationInterrupted(
   std::string error_message =
       GetErrorMessage(error_status, kComputationErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishComputationInterrupted(
-        error_message, example_stats, network_stats,
-        absl::Now() - run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_COMPUTATION_CLIENT_INTERRUPTED,
-        error_message);
-  } else {
-    event_publisher_->PublishInterruption(example_stats, run_plan_start_time);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, error_message);
-  }
+  event_publisher_->PublishComputationInterrupted(
+      error_message, example_stats, network_stats,
+      absl::Now() - run_plan_start_time);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_CLIENT_INTERRUPTED,
+      error_message);
   LogComputationLatency(run_plan_start_time, reference_time);
 }
 
@@ -533,12 +396,8 @@ void PhaseLoggerImpl::LogComputationCompleted(const ExampleStats& example_stats,
                                               const NetworkStats& network_stats,
                                               absl::Time run_plan_start_time,
                                               absl::Time reference_time) {
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishComputationCompleted(
-        example_stats, network_stats, absl::Now() - run_plan_start_time);
-  } else {
-    event_publisher_->PublishPlanCompleted(example_stats, run_plan_start_time);
-  }
+  event_publisher_->PublishComputationCompleted(
+      example_stats, network_stats, absl::Now() - run_plan_start_time);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
   log_manager_->LogToLongHistogram(
@@ -551,21 +410,12 @@ void PhaseLoggerImpl::LogComputationCompleted(const ExampleStats& example_stats,
 }
 
 absl::Status PhaseLoggerImpl::LogResultUploadStarted() {
-  if (granular_per_phase_logs_) {
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED);
-  } else {
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
-  }
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED);
   // Commit the run data accumulated thus far to Opstats and fail if
   // something goes wrong.
   FCP_RETURN_IF_ERROR(opstats_logger_->CommitToStorage());
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishResultUploadStarted();
-  } else {
-    event_publisher_->PublishReportStarted(0);
-  }
+  event_publisher_->PublishResultUploadStarted();
   return absl::OkStatus();
 }
 
@@ -575,17 +425,11 @@ void PhaseLoggerImpl::LogResultUploadIOError(
   std::string error_message =
       GetErrorMessage(error_status, kResultUploadErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishResultUploadIOError(
-        error_message, network_stats, absl::Now() - time_before_result_upload);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_ERROR_IO,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, error_message);
-  }
+  event_publisher_->PublishResultUploadIOError(
+      error_message, network_stats, absl::Now() - time_before_result_upload);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_ERROR_IO,
+      error_message);
   LogReportLatency(time_before_result_upload, reference_time);
 }
 
@@ -595,17 +439,11 @@ void PhaseLoggerImpl::LogResultUploadClientInterrupted(
   std::string error_message =
       GetErrorMessage(error_status, kResultUploadErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishResultUploadClientInterrupted(
-        error_message, network_stats, absl::Now() - time_before_result_upload);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_CLIENT_INTERRUPTED,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, error_message);
-  }
+  event_publisher_->PublishResultUploadClientInterrupted(
+      error_message, network_stats, absl::Now() - time_before_result_upload);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_CLIENT_INTERRUPTED,
+      error_message);
   LogReportLatency(time_before_result_upload, reference_time);
 }
 
@@ -615,53 +453,31 @@ void PhaseLoggerImpl::LogResultUploadServerAborted(
   std::string error_message =
       GetErrorMessage(error_status, kResultUploadErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishResultUploadServerAborted(
-        error_message, network_stats, absl::Now() - time_before_result_upload);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_SERVER_ABORTED,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_SERVER_ABORTED, error_message);
-  }
+  event_publisher_->PublishResultUploadServerAborted(
+      error_message, network_stats, absl::Now() - time_before_result_upload);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_SERVER_ABORTED,
+      error_message);
   LogReportLatency(time_before_result_upload, reference_time);
 }
 
 void PhaseLoggerImpl::LogResultUploadCompleted(
     const NetworkStats& network_stats, absl::Time time_before_result_upload,
     absl::Time reference_time) {
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishResultUploadCompleted(
-        network_stats, absl::Now() - time_before_result_upload);
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_FINISHED);
-  } else {
-    event_publisher_->PublishReportFinished(
-        network_stats, absl::Now() - time_before_result_upload);
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
-  }
+  event_publisher_->PublishResultUploadCompleted(
+      network_stats, absl::Now() - time_before_result_upload);
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_FINISHED);
   LogReportLatency(time_before_result_upload, reference_time);
 }
 
 absl::Status PhaseLoggerImpl::LogFailureUploadStarted() {
-  if (granular_per_phase_logs_) {
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_STARTED);
-  } else {
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_UPLOAD_STARTED);
-  }
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_STARTED);
   // Commit the run data accumulated thus far to Opstats and fail if
   // something goes wrong.
   FCP_RETURN_IF_ERROR(opstats_logger_->CommitToStorage());
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishFailureUploadStarted();
-  } else {
-    event_publisher_->PublishReportStarted(0);
-  }
+  event_publisher_->PublishFailureUploadStarted();
   return absl::OkStatus();
 }
 
@@ -671,17 +487,11 @@ void PhaseLoggerImpl::LogFailureUploadIOError(
   std::string error_message =
       GetErrorMessage(error_status, kFailureUploadErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishFailureUploadIOError(
-        error_message, network_stats, absl::Now() - time_before_failure_upload);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_ERROR_IO,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_ERROR_IO, error_message);
-  }
+  event_publisher_->PublishFailureUploadIOError(
+      error_message, network_stats, absl::Now() - time_before_failure_upload);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_ERROR_IO,
+      error_message);
   LogReportLatency(time_before_failure_upload, reference_time);
 }
 
@@ -691,17 +501,11 @@ void PhaseLoggerImpl::LogFailureUploadClientInterrupted(
   std::string error_message =
       GetErrorMessage(error_status, kFailureUploadErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishFailureUploadClientInterrupted(
-        error_message, network_stats, absl::Now() - time_before_failure_upload);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_CLIENT_INTERRUPTED,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_CLIENT_INTERRUPTED, error_message);
-  }
+  event_publisher_->PublishFailureUploadClientInterrupted(
+      error_message, network_stats, absl::Now() - time_before_failure_upload);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_CLIENT_INTERRUPTED,
+      error_message);
   LogReportLatency(time_before_failure_upload, reference_time);
 }
 
@@ -711,34 +515,21 @@ void PhaseLoggerImpl::LogFailureUploadServerAborted(
   std::string error_message =
       GetErrorMessage(error_status, kFailureUploadErrorPrefix,
                       /* keep_error_message= */ true);
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishFailureUploadServerAborted(
-        error_message, network_stats, absl::Now() - time_before_failure_upload);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_SERVER_ABORTED,
-        error_message);
-  } else {
-    event_publisher_->PublishIoError(error_message);
-    opstats_logger_->AddEventWithErrorMessage(
-        OperationalStats::Event::EVENT_KIND_SERVER_ABORTED, error_message);
-  }
+  event_publisher_->PublishFailureUploadServerAborted(
+      error_message, network_stats, absl::Now() - time_before_failure_upload);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_SERVER_ABORTED,
+      error_message);
   LogReportLatency(time_before_failure_upload, reference_time);
 }
 
 void PhaseLoggerImpl::LogFailureUploadCompleted(
     const NetworkStats& network_stats, absl::Time time_before_failure_upload,
     absl::Time reference_time) {
-  if (granular_per_phase_logs_) {
-    event_publisher_->PublishFailureUploadCompleted(
-        network_stats, absl::Now() - time_before_failure_upload);
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_FINISHED);
-  } else {
-    event_publisher_->PublishReportFinished(
-        network_stats, absl::Now() - time_before_failure_upload);
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_UPLOAD_FINISHED);
-  }
+  event_publisher_->PublishFailureUploadCompleted(
+      network_stats, absl::Now() - time_before_failure_upload);
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_FINISHED);
   LogReportLatency(time_before_failure_upload, reference_time);
 }
 
