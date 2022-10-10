@@ -140,6 +140,9 @@ message ByteStreamResource {
   // Resource name to which the data should be uploaded.
   // Clients should use this field as well as the
   // `ForwardingInfo.target_uri_prefix` to create the upload URL:
-  // {target_uri_prefix}/upload/v1/media/{resource_name}.
+  // {target_uri_prefix}/upload/v1/media/{resource_name} (where
+  // `{resource_name}` should be encoded as a multipath segment, as described
+  // in
+  // https://github.com/googleapis/googleapis/blob/master/google/api/http.proto).
   string resource_name = 2;
 }
