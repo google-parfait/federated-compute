@@ -37,3 +37,15 @@ cc_library(
         "@com_google_protobuf//:protobuf",
     ],
 )
+
+cc_test(
+    name = "utils_test",
+    size = "small",
+    srcs = ["utils_test.cc"],
+    deps = [
+        ":utils",
+        "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

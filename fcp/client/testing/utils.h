@@ -50,6 +50,28 @@ inline std::string MakeTestFileName(absl::string_view dir,
                     absl::StrCat(prefix, suffix));
 }
 
+// Basic implementation of ExampleIterator for testing purposes.
+// It iterates over examples from a given dataset.
+class TestExampleIterator : public ExampleIterator {
+ public:
+  explicit TestExampleIterator(const Dataset::ClientDataset* dataset)
+      : next_example_(dataset->example().begin()),
+        end_(dataset->example().end()) {}
+
+  absl::StatusOr<std::string> Next() override {
+    if (next_example_ == end_) {
+      return absl::OutOfRangeError("");
+    }
+    return *(next_example_++);
+  }
+
+  void Close() override {}
+
+ private:
+  google::protobuf::RepeatedPtrField<std::string>::const_iterator next_example_;
+  google::protobuf::RepeatedPtrField<std::string>::const_iterator end_;
+};
+
 // Implementation of TaskEnvironment, the interface by which the client plan
 // engine interacts with the environment, that allows tests to provide a dataset
 // as input and consume the output checkpoint.
@@ -80,26 +102,6 @@ class TestTaskEnvironment : public SimpleTaskEnvironment {
 
  private:
   bool TrainingConditionsSatisfied() override { return true; }
-
-  class TestExampleIterator : public ExampleIterator {
-   public:
-    explicit TestExampleIterator(const Dataset::ClientDataset* dataset)
-        : next_example_(dataset->example().begin()),
-          end_(dataset->example().end()) {}
-
-    absl::StatusOr<std::string> Next() override {
-      if (++next_example_ == end_) {
-        return absl::OutOfRangeError("");
-      }
-      return *next_example_;
-    }
-
-    void Close() override {}
-
-   private:
-    google::protobuf::RepeatedPtrField<std::string>::const_iterator next_example_;
-    google::protobuf::RepeatedPtrField<std::string>::const_iterator end_;
-  };
 
   const Dataset::ClientDataset* dataset_;
   std::string base_dir_;
