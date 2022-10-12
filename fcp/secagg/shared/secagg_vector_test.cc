@@ -204,7 +204,6 @@ TEST_P(SecAggVectorTest, PackedVectorHasCorrectSize) {
 TEST_P(SecAggVectorTest, PackedVectorUnpacksToSameValues) {
   std::vector<uint64_t> raw_vector = {};
   uint64_t modulus = 32;
-  int bit_width = 5;
   SecAggVector vector(raw_vector, modulus, GetParam());
   std::string packed_bytes = vector.GetAsPackedBytes();
   SecAggVector unpacked_vector(packed_bytes, modulus, raw_vector.size(),
@@ -214,7 +213,6 @@ TEST_P(SecAggVectorTest, PackedVectorUnpacksToSameValues) {
   // bit_width 1
   raw_vector = {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0};
   modulus = 2;
-  bit_width = 1;
   SecAggVector vector2(raw_vector, modulus, GetParam());
   packed_bytes = vector2.GetAsPackedBytes();
   SecAggVector unpacked_vector2(packed_bytes, modulus, raw_vector.size(),
@@ -224,7 +222,6 @@ TEST_P(SecAggVectorTest, PackedVectorUnpacksToSameValues) {
   // bit_width lines up with byte boundary
   raw_vector = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   modulus = 1ULL << 16;
-  bit_width = 16;
   SecAggVector vector3(raw_vector, modulus, GetParam());
   packed_bytes = vector3.GetAsPackedBytes();
   SecAggVector unpacked_vector3(packed_bytes, modulus, raw_vector.size(),
@@ -234,7 +231,6 @@ TEST_P(SecAggVectorTest, PackedVectorUnpacksToSameValues) {
   // bit_width one less than with byte boundary
   raw_vector = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   modulus = 1ULL << 15;
-  bit_width = 15;
   SecAggVector vector4(raw_vector, modulus, GetParam());
   packed_bytes = vector4.GetAsPackedBytes();
   SecAggVector unpacked_vector4(packed_bytes, modulus, raw_vector.size(),
@@ -244,7 +240,6 @@ TEST_P(SecAggVectorTest, PackedVectorUnpacksToSameValues) {
   // bit_width one greater than byte boundary
   raw_vector = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   modulus = 1ULL << 17;
-  bit_width = 17;
   SecAggVector vector5(raw_vector, modulus, GetParam());
   packed_bytes = vector5.GetAsPackedBytes();
   SecAggVector unpacked_vector5(packed_bytes, modulus, raw_vector.size(),
@@ -255,7 +250,6 @@ TEST_P(SecAggVectorTest, PackedVectorUnpacksToSameValues) {
   raw_vector.clear();
   raw_vector.resize(100, 1L);
   modulus = 1ULL << 19;
-  bit_width = 19;
   SecAggVector vector6(raw_vector, modulus, GetParam());
   packed_bytes = vector6.GetAsPackedBytes();
   SecAggVector unpacked_vector6(packed_bytes, modulus, raw_vector.size(),
@@ -264,7 +258,6 @@ TEST_P(SecAggVectorTest, PackedVectorUnpacksToSameValues) {
 
   // max bit_width, where each array entry has its lowest bit set
   modulus = 1ULL << 62;
-  bit_width = 62;
   SecAggVector vector7(raw_vector, modulus, GetParam());
   packed_bytes = vector7.GetAsPackedBytes();
   SecAggVector unpacked_vector7(packed_bytes, modulus, raw_vector.size(),
@@ -276,7 +269,6 @@ TEST_P(SecAggVectorTest, PackedVectorUnpacksToSameValues) {
   raw_vector.clear();
   raw_vector.resize(100, val);
   modulus = 1ULL << 62;
-  bit_width = 62;
   SecAggVector vector8(raw_vector, modulus, GetParam());
   packed_bytes = vector8.GetAsPackedBytes();
   SecAggVector unpacked_vector8(packed_bytes, modulus, raw_vector.size(),
