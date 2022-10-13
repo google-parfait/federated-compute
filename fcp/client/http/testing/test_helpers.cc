@@ -38,6 +38,8 @@ namespace fcp {
 namespace client {
 namespace http {
 
+using ::google::longrunning::Operation;
+using ::google::protobuf::Message;
 using ::testing::AllOf;
 using ::testing::Field;
 using ::testing::Matcher;
@@ -214,6 +216,33 @@ Matcher<MockableHttpClient::SimpleHttpRequest> SimpleHttpRequestMatcher(
             headers_matcher),
       Field("body", &MockableHttpClient::SimpleHttpRequest::body,
             body_matcher));
+}
+
+Operation CreatePendingOperation(absl::string_view operation_name) {
+  Operation operation;
+  operation.set_done(false);
+  operation.set_name(std::string(operation_name));
+  return operation;
+}
+
+Operation CreateDoneOperation(absl::string_view operation_name,
+                              const Message& inner_result) {
+  Operation operation;
+  operation.set_name(std::string(operation_name));
+  operation.set_done(true);
+  operation.mutable_response()->PackFrom(inner_result);
+  return operation;
+}
+
+Operation CreateErrorOperation(absl::string_view operation_name,
+                               const absl::StatusCode error_code,
+                               absl::string_view error_message) {
+  Operation operation;
+  operation.set_name(std::string(operation_name));
+  operation.set_done(true);
+  operation.mutable_error()->set_code(static_cast<int>(error_code));
+  operation.mutable_error()->set_message(std::string(error_message));
+  return operation;
 }
 
 }  // namespace http

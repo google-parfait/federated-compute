@@ -56,6 +56,7 @@
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
+#include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"
@@ -82,10 +83,13 @@ using ::google::internal::federatedcompute::v1::ReportTaskResultResponse;
 using ::google::internal::federatedcompute::v1::Resource;
 using ::google::internal::federatedcompute::v1::ResourceCompressionFormat;
 using ::google::internal::federatedcompute::v1::RetryWindow;
+using ::google::internal::federatedcompute::v1::SecureAggregandExecutionInfo;
 using ::google::internal::federatedcompute::v1::
     StartAggregationDataUploadRequest;
 using ::google::internal::federatedcompute::v1::
     StartAggregationDataUploadResponse;
+using ::google::internal::federatedcompute::v1::StartSecureAggregationRequest;
+using ::google::internal::federatedcompute::v1::StartSecureAggregationResponse;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentRequest;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentResponse;
 using ::google::internal::federatedcompute::v1::SubmitAggregationResultRequest;
@@ -98,6 +102,7 @@ using ::google::protobuf::Any;
 using ::google::protobuf::Message;
 using ::testing::_;
 using ::testing::AllOf;
+using ::testing::ByMove;
 using ::testing::ContainerEq;
 using ::testing::DescribeMatcher;
 using ::testing::DoubleEq;
@@ -144,6 +149,7 @@ constexpr char kAggregationSessionId[] = "AGGREGATION_SESSION_ID";
 constexpr char kClientToken[] = "CLIENT_TOKEN";
 constexpr char kResourceName[] = "CHECKPOINT_RESOURCE";
 constexpr char kFederatedSelectUriTemplate[] = "https://federated.select";
+constexpr char kOperationName[] = "my_operation";
 
 const int32_t kCancellationWaitingPeriodSec = 1;
 
@@ -352,30 +358,6 @@ StartTaskAssignmentRequest GetExpectedStartTaskAssignmentRequest(
   return request;
 }
 
-Operation CreatePendingOperation(const std::string operation_name) {
-  Operation operation;
-  operation.set_done(false);
-  operation.set_name(operation_name);
-  return operation;
-}
-
-// Creates a 'done' `Operation`, packing the given message into an `Any`.
-Operation CreateDoneOperation(const Message& inner_result) {
-  Operation operation;
-  operation.set_done(true);
-  operation.mutable_response()->PackFrom(inner_result);
-  return operation;
-}
-
-Operation CreateErrorOperation(const absl::StatusCode error_code,
-                               const std::string error_message) {
-  Operation operation;
-  operation.set_done(true);
-  operation.mutable_error()->set_code(static_cast<int>(error_code));
-  operation.mutable_error()->set_message(error_message);
-  return operation;
-}
-
 StartTaskAssignmentResponse GetFakeRejectedTaskAssignmentResponse() {
   StartTaskAssignmentResponse response;
   response.mutable_rejection_info();
@@ -474,9 +456,10 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     // HttpFederatedProtocol, since it doesn't have copy or move constructors).
     federated_protocol_ = std::make_unique<HttpFederatedProtocol>(
         clock_, &mock_log_manager_, &mock_flags_, &mock_http_client_,
-        kEntryPointUri, kApiKey, kPopulationName, kRetryToken, kClientVersion,
-        kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
-        absl::BitGen(),
+        absl::WrapUnique(mock_secagg_runner_factory_),
+        &mock_secagg_event_publisher_, kEntryPointUri, kApiKey, kPopulationName,
+        kRetryToken, kClientVersion, kAttestationMeasurement,
+        mock_should_abort_.AsStdFunction(), absl::BitGen(),
         InterruptibleRunner::TimingConfig{
             .polling_period = absl::ZeroDuration(),
             .graceful_shutdown_period = absl::InfiniteDuration(),
@@ -578,10 +561,10 @@ class HttpFederatedProtocolTest : public ::testing::Test {
                     StartTaskAssignmentRequestMatcher(
                         EqualsProto(GetExpectedStartTaskAssignmentRequest(
                             expected_eligibility_info))))))
-        .WillOnce(Return(
-            FakeHttpResponse(200, HeaderList(),
-                             CreateDoneOperation(task_assignment_response)
-                                 .SerializeAsString())));
+        .WillOnce(Return(FakeHttpResponse(
+            200, HeaderList(),
+            CreateDoneOperation(kOperationName, task_assignment_response)
+                .SerializeAsString())));
 
     EXPECT_CALL(mock_http_client_,
                 PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -653,10 +636,11 @@ class HttpFederatedProtocolTest : public ::testing::Test {
             GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
         .WillOnce(Return(FakeHttpResponse(
             200, HeaderList(),
-            CreateDoneOperation(GetFakeStartAggregationDataUploadResponse(
-                                    aggregation_resource_name,
-                                    byte_stream_uri_prefix,
-                                    second_stage_aggregation_uri_prefix))
+            CreateDoneOperation(
+                kOperationName,
+                GetFakeStartAggregationDataUploadResponse(
+                    aggregation_resource_name, byte_stream_uri_prefix,
+                    second_stage_aggregation_uri_prefix))
                 .SerializeAsString())));
   }
 
@@ -694,7 +678,9 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   }
 
   StrictMock<MockHttpClient> mock_http_client_;
-
+  StrictMock<MockSecAggRunnerFactory>* mock_secagg_runner_factory_ =
+      new StrictMock<MockSecAggRunnerFactory>();
+  StrictMock<MockSecAggEventPublisher> mock_secagg_event_publisher_;
   StrictMock<MockLogManager> mock_log_manager_;
   NiceMock<MockFlags> mock_flags_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
@@ -713,6 +699,7 @@ TEST_F(HttpFederatedProtocolTest,
       federated_protocol_->GetLatestRetryWindow();
   ExpectTransientErrorRetryWindow(retry_window1);
   federated_protocol_.reset(nullptr);
+  mock_secagg_runner_factory_ = new StrictMock<MockSecAggRunnerFactory>();
 
   // Create a new HttpFederatedProtocol instance. It should not produce the same
   // retry window value as the one we just got. This is a simple correctness
@@ -720,9 +707,10 @@ TEST_F(HttpFederatedProtocolTest,
   // don't accidentally use the random number generator incorrectly).
   federated_protocol_ = std::make_unique<HttpFederatedProtocol>(
       clock_, &mock_log_manager_, &mock_flags_, &mock_http_client_,
-      kEntryPointUri, kApiKey, kPopulationName, kRetryToken, kClientVersion,
-      kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
-      absl::BitGen(),
+      absl::WrapUnique(mock_secagg_runner_factory_),
+      &mock_secagg_event_publisher_, kEntryPointUri, kApiKey, kPopulationName,
+      kRetryToken, kClientVersion, kAttestationMeasurement,
+      mock_should_abort_.AsStdFunction(), absl::BitGen(),
       InterruptibleRunner::TimingConfig{
           .polling_period = absl::ZeroDuration(),
           .graceful_shutdown_period = absl::InfiniteDuration(),
@@ -1358,7 +1346,8 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromOperation) {
           HttpRequest::Method::kPost, _, _)))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
-          CreateErrorOperation(absl::StatusCode::kNotFound, "foo")
+          CreateErrorOperation(kOperationName, absl::StatusCode::kNotFound,
+                               "foo")
               .SerializeAsString())));
 
   auto checkin_result =
@@ -1366,7 +1355,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromOperation) {
 
   EXPECT_THAT(checkin_result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(checkin_result.status().message(),
-              HasSubstr("Operation contained error"));
+              HasSubstr("Operation my_operation contained error"));
   // The original error message should be included in the message as well.
   EXPECT_THAT(checkin_result.status().message(), HasSubstr("foo"));
   // Even though RetryWindows were already received from the server during the
@@ -1627,7 +1616,8 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
                   expected_eligibility_info))))))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
-          CreateDoneOperation(GetFakeRejectedTaskAssignmentResponse())
+          CreateDoneOperation(kOperationName,
+                              GetFakeRejectedTaskAssignmentResponse())
               .SerializeAsString())));
 
   // Issue the regular checkin.
@@ -1657,7 +1647,8 @@ TEST_F(HttpFederatedProtocolTest,
               GetExpectedStartTaskAssignmentRequest(std::nullopt))))))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
-          CreateDoneOperation(GetFakeRejectedTaskAssignmentResponse())
+          CreateDoneOperation(kOperationName,
+                              GetFakeRejectedTaskAssignmentResponse())
               .SerializeAsString())));
 
   // Issue the regular checkin, without a TaskEligibilityInfo (since we didn't
@@ -1707,7 +1698,8 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
                   expected_eligibility_info))))))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
-          CreateDoneOperation(GetFakeTaskAssignmentResponse(
+          CreateDoneOperation(kOperationName,
+                              GetFakeTaskAssignmentResponse(
                                   plan_resource, checkpoint_resource,
                                   expected_federated_select_uri_template,
                                   expected_aggregation_session_id))
@@ -1786,7 +1778,8 @@ TEST_F(HttpFederatedProtocolTest,
           200, HeaderList(), pending_operation_response.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
-          CreateDoneOperation(GetFakeTaskAssignmentResponse(
+          CreateDoneOperation(kOperationName,
+                              GetFakeTaskAssignmentResponse(
                                   plan_resource, checkpoint_resource,
                                   expected_federated_select_uri_template,
                                   expected_aggregation_session_id))
@@ -1835,6 +1828,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedPlanDataFetchFailed) {
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
           CreateDoneOperation(
+              kOperationName,
               GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
                                             kFederatedSelectUriTemplate,
                                             kAggregationSessionId))
@@ -1894,6 +1888,7 @@ TEST_F(HttpFederatedProtocolTest,
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
           CreateDoneOperation(
+              kOperationName,
               GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
                                             kFederatedSelectUriTemplate,
                                             kAggregationSessionId))
@@ -1963,22 +1958,137 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
   // Issue a regular checkin
   ASSERT_OK(RunSuccessfulCheckin());
 
+  StartSecureAggregationResponse start_secure_aggregation_response;
+  auto masked_result_resource =
+      start_secure_aggregation_response.mutable_masked_result_resource();
+  masked_result_resource->set_resource_name("masked_resource");
+  masked_result_resource->mutable_data_upload_forwarding_info()
+      ->set_target_uri_prefix("https://bytestream.uri/");
+
+  auto nonmasked_result_resource =
+      start_secure_aggregation_response.mutable_nonmasked_result_resource();
+  nonmasked_result_resource->set_resource_name("nonmasked_resource");
+  nonmasked_result_resource->mutable_data_upload_forwarding_info()
+      ->set_target_uri_prefix("https://bytestream.uri/");
+
+  start_secure_aggregation_response.mutable_secagg_protocol_forwarding_info()
+      ->set_target_uri_prefix("https://secure.aggregations.uri/");
+  auto protocol_execution_info =
+      start_secure_aggregation_response.mutable_protocol_execution_info();
+  protocol_execution_info->set_minimum_surviving_clients_for_reconstruction(
+      450);
+  protocol_execution_info->set_expected_number_of_clients(500);
+
+  auto secure_aggregands =
+      start_secure_aggregation_response.mutable_secure_aggregands();
+  SecureAggregandExecutionInfo secure_aggregand_execution_info;
+  secure_aggregand_execution_info.set_modulus(9999);
+  (*secure_aggregands)["secagg_tensor"] = secure_aggregand_execution_info;
+
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://aggregation.uri/v1/secureaggregations/"
+          "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:start?%24alt=proto",
+          HttpRequest::Method::kPost, _,
+          StartSecureAggregationRequest().SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreatePendingOperation("operations/foo#bar").SerializeAsString())));
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://aggregation.uri/v1/operations/foo%23bar?%24alt=proto",
+          HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreateDoneOperation(kOperationName, start_secure_aggregation_response)
+              .SerializeAsString())));
+
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
   ComputationResults results;
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   results.emplace("secagg_tensor", QuantizedTensor());
-  absl::Duration plan_duration = absl::Minutes(5);
 
+  MockSecAggRunner* mock_secagg_runner = new StrictMock<MockSecAggRunner>();
+  EXPECT_CALL(*mock_secagg_runner_factory_,
+              CreateSecAggRunner(_, _, _, _, _, 500, 450, _, _))
+      .WillOnce(Return(ByMove(absl::WrapUnique(mock_secagg_runner))));
+  EXPECT_CALL(*mock_secagg_runner,
+              Run(UnorderedElementsAre(
+                  Pair("secagg_tensor", VariantWith<QuantizedTensor>(FieldsAre(
+                                            IsEmpty(), 0, IsEmpty()))))))
+      .WillOnce(Return(absl::OkStatus()));
+
+  absl::Duration plan_duration = absl::Minutes(5);
+  EXPECT_OK(
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+}
+
+TEST_F(HttpFederatedProtocolTest, TestReportCompletedStartSecAggFailed) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin.
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://aggregation.uri/v1/secureaggregations/"
+          "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:start?%24alt=proto",
+          HttpRequest::Method::kPost, _,
+          StartSecureAggregationRequest().SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreateErrorOperation(kOperationName, absl::StatusCode::kInternal,
+                               "Request failed.")
+              .SerializeAsString())));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  results.emplace("secagg_tensor", QuantizedTensor());
+
+  absl::Duration plan_duration = absl::Minutes(5);
   EXPECT_THAT(
       federated_protocol_->ReportCompleted(std::move(results), plan_duration),
-      IsCode(absl::StatusCode::kUnimplemented));
+      IsCode(absl::StatusCode::kInternal));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedStartSecAggFailedImmediately) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin.
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://aggregation.uri/v1/secureaggregations/"
+          "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:start?%24alt=proto",
+          HttpRequest::Method::kPost, _,
+          StartSecureAggregationRequest().SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(403, HeaderList(), "")));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  results.emplace("secagg_tensor", QuantizedTensor());
+
+  absl::Duration plan_duration = absl::Minutes(5);
+  EXPECT_THAT(
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration),
+      IsCode(absl::StatusCode::kPermissionDenied));
 }
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin
+  // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
 
   // Create a fake checkpoint with 32 'X'.
@@ -2025,7 +2135,7 @@ TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedStartAggregationFailedImmediately) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin
+  // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
@@ -2060,7 +2170,7 @@ TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedStartAggregationFailedDuringPolling) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin
+  // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
@@ -2105,7 +2215,7 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin
+  // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
@@ -2140,7 +2250,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadAbortedByServer) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin
+  // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
@@ -2165,7 +2275,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadAbortedByServer) {
                   HttpRequest::Method::kPost, _, std::string(checkpoint_str))))
       .WillOnce(Return(FakeHttpResponse(
           409, HeaderList(),
-          CreateErrorOperation(absl::StatusCode::kAborted,
+          CreateErrorOperation(kOperationName, absl::StatusCode::kAborted,
                                "The client update is no longer needed.")
               .SerializeAsString())));
   absl::Status report_result =
@@ -2178,7 +2288,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadAbortedByServer) {
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadInterrupted) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin
+  // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
@@ -2240,7 +2350,7 @@ TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedSubmitAggregationResultFailed) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin
+  // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
@@ -2285,7 +2395,7 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin
+  // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
   absl::Duration plan_duration = absl::Minutes(5);
   ReportTaskResultResponse response;
@@ -2310,7 +2420,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {
 TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedError) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin
+  // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
   ReportTaskResultResponse response;
   EXPECT_CALL(mock_http_client_,
@@ -2332,7 +2442,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedError) {
 TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin
+  // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
   ReportTaskResultResponse response;
   EXPECT_CALL(mock_http_client_,
@@ -2413,7 +2523,8 @@ TEST_F(HttpFederatedProtocolTest,
           StartTaskAssignmentRequestMatcher(EqualsProto(expected_request)))))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
-          CreateDoneOperation(task_assignment_response).SerializeAsString())));
+          CreateDoneOperation(kOperationName, task_assignment_response)
+              .SerializeAsString())));
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(

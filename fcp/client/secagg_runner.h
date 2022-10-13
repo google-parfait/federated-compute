@@ -77,6 +77,8 @@ class SecAggRunnerImpl : public SecAggRunner {
                    int64_t minimum_surviving_clients_for_reconstruction,
                    int64_t* bytes_downloaded, int64_t* bytes_uploaded);
   // Run the secure aggregation protocol.
+  // SecAggProtocolDelegate and SecAggSendToServerBase will only be invoked from
+  // a single thread.
   absl::Status Run(ComputationResults results) override;
 
  private:

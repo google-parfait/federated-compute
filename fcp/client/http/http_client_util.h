@@ -120,6 +120,10 @@ absl::StatusOr<std::string> EncodeUriSinglePathSegment(absl::string_view input);
 absl::StatusOr<std::string> EncodeUriMultiplePathSegments(
     absl::string_view input);
 
+// Create a ByteStream upload URI suffix based on the resource name.
+// Returns INVALID_ARGUMENT when the resource name cannot be URI-encoded.
+absl::StatusOr<std::string> CreateByteStreamUploadUriSuffix(
+    absl::string_view resource_name);
 }  // namespace fcp::client::http
 
 #endif  // FCP_CLIENT_HTTP_HTTP_CLIENT_UTIL_H_

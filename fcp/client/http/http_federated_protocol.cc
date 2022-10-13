@@ -50,6 +50,7 @@
 #include "fcp/client/flags.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
+#include "fcp/client/http/http_secagg_send_to_server_impl.h"
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
@@ -58,6 +59,7 @@
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
+#include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
 
@@ -73,16 +75,19 @@ using ::google::internal::federatedcompute::v1::AbortAggregationRequest;
 using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
-using ::google::internal::federatedcompute::v1::ForwardingInfo;
 using ::google::internal::federatedcompute::v1::
     ReportEligibilityEvalTaskResultRequest;
 using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
 using ::google::internal::federatedcompute::v1::Resource;
 using ::google::internal::federatedcompute::v1::ResourceCompressionFormat;
 using ::google::internal::federatedcompute::v1::
+    SecureAggregationProtocolExecutionInfo;
+using ::google::internal::federatedcompute::v1::
     StartAggregationDataUploadRequest;
 using ::google::internal::federatedcompute::v1::
     StartAggregationDataUploadResponse;
+using ::google::internal::federatedcompute::v1::StartSecureAggregationRequest;
+using ::google::internal::federatedcompute::v1::StartSecureAggregationResponse;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentRequest;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentResponse;
 using ::google::internal::federatedcompute::v1::SubmitAggregationResultRequest;
@@ -156,15 +161,6 @@ absl::StatusOr<std::string> CreateStartAggregationDataUploadUriSuffix(
                           encoded_client_token);
 }
 
-absl::StatusOr<std::string> CreateByteStreamUploadUriSuffix(
-    absl::string_view resource_name) {
-  constexpr absl::string_view pattern = "/upload/v1/media/$0";
-  FCP_ASSIGN_OR_RETURN(std::string encoded_resource_name,
-                       EncodeUriMultiplePathSegments(resource_name));
-  // Construct the URI suffix.
-  return absl::Substitute(pattern, encoded_resource_name);
-}
-
 absl::StatusOr<std::string> CreateSubmitAggregationResultUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern = "/v1/aggregations/$0/clients/$1:submit";
@@ -180,6 +176,19 @@ absl::StatusOr<std::string> CreateSubmitAggregationResultUriSuffix(
 absl::StatusOr<std::string> CreateAbortAggregationUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern = "/v1/aggregations/$0/clients/$1:abort";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                       EncodeUriSinglePathSegment(aggregation_id));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                       EncodeUriSinglePathSegment(client_token));
+  // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_aggregation_id,
+                          encoded_client_token);
+}
+
+absl::StatusOr<std::string> CreateStartSecureAggregationUriSuffix(
+    absl::string_view aggregation_id, absl::string_view client_token) {
+  constexpr absl::string_view pattern =
+      "/v1/secureaggregations/$0/clients/$1:start";
   FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
                        EncodeUriSinglePathSegment(aggregation_id));
   FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
@@ -282,10 +291,12 @@ std::unique_ptr<InterruptibleRunner> CreateDelayedInterruptibleRunner(
 
 HttpFederatedProtocol::HttpFederatedProtocol(
     Clock* clock, LogManager* log_manager, const Flags* flags,
-    HttpClient* http_client, absl::string_view entry_point_uri,
-    absl::string_view api_key, absl::string_view population_name,
-    absl::string_view retry_token, absl::string_view client_version,
-    absl::string_view attestation_measurement,
+    HttpClient* http_client,
+    std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
+    SecAggEventPublisher* secagg_event_publisher,
+    absl::string_view entry_point_uri, absl::string_view api_key,
+    absl::string_view population_name, absl::string_view retry_token,
+    absl::string_view client_version, absl::string_view attestation_measurement,
     std::function<bool()> should_abort, absl::BitGen bit_gen,
     const InterruptibleRunner::TimingConfig& timing_config,
     cache::ResourceCache* resource_cache)
@@ -293,6 +304,8 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       log_manager_(log_manager),
       flags_(flags),
       http_client_(http_client),
+      secagg_runner_factory_(std::move(secagg_runner_factory)),
+      secagg_event_publisher_(secagg_event_publisher),
       interruptible_runner_(std::make_unique<InterruptibleRunner>(
           log_manager, should_abort, timing_config,
           InterruptibleRunner::DiagnosticsConfig{
@@ -625,7 +638,8 @@ HttpFederatedProtocol::HandleTaskAssignmentOperationResponse(
         ConvertRpcStatusToAbslStatus(response_operation_proto->error());
     return absl::Status(
         rpc_error.code(),
-        absl::StrCat("Operation contained error: ", rpc_error.ToString()));
+        absl::StrCat("Operation ", response_operation_proto->name(),
+                     " contained error: ", rpc_error.ToString()));
   }
 
   // Otherwise, handle the StartTaskAssignmentResponse that should have been
@@ -689,13 +703,11 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
   auto find_secagg_tensor_lambda = [](const auto& item) {
     return std::holds_alternative<QuantizedTensor>(item.second);
   };
-
   if (std::find_if(results.begin(), results.end(), find_secagg_tensor_lambda) ==
       results.end()) {
     return ReportViaSimpleAggregation(std::move(results), plan_duration);
   } else {
-    return absl::UnimplementedError(
-        "Report via secure aggregation is not yet implemented.");
+    return ReportViaSecureAggregation(std::move(results), plan_duration);
   }
 }
 
@@ -706,7 +718,6 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(
     return absl::InternalError(
         "Simple Aggregation aggregands have unexpected format.");
   }
-
   auto start_upload_status = HandleStartDataAggregationUploadOperationResponse(
       PerformStartDataUploadRequestAndReportTaskResult(plan_duration));
   if (!start_upload_status.ok()) {
@@ -821,7 +832,8 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
         ConvertRpcStatusToAbslStatus(response_operation_proto->error());
     return absl::Status(
         rpc_error.code(),
-        absl::StrCat("Operation contained error: ", rpc_error.ToString()));
+        absl::StrCat("Operation ", response_operation_proto->name(),
+                     " contained error: ", rpc_error.ToString()));
   }
 
   // Otherwise, handle the StartDataAggregationUploadResponse that should have
@@ -920,6 +932,84 @@ absl::Status HttpFederatedProtocol::AbortAggregation(
   return protocol_request_helper_
       .PerformProtocolRequest(std::move(http_request), *cancellation_runner)
       .status();
+}
+
+absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
+    ComputationResults results, absl::Duration plan_duration) {
+  FCP_ASSIGN_OR_RETURN(StartSecureAggregationResponse response_proto,
+                       StartSecureAggregation());
+  SecureAggregationProtocolExecutionInfo protocol_execution_info =
+      response_proto.protocol_execution_info();
+
+  // Move checkpoint out of ComputationResults, and put it into a std::optional.
+  std::optional<TFCheckpoint> tf_checkpoint;
+  for (auto& [k, v] : results) {
+    if (std::holds_alternative<TFCheckpoint>(v)) {
+      tf_checkpoint = std::get<TFCheckpoint>(std::move(v));
+      results.erase(k);
+      break;
+    }
+  }
+  absl::StatusOr<secagg::ServerToClientWrapperMessage> server_response_holder;
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<SecAggSendToServerBase> send_to_server_impl,
+      HttpSecAggSendToServerImpl::Create(
+          &protocol_request_helper_, interruptible_runner_.get(),
+          &server_response_holder, aggregation_session_id_,
+          aggregation_client_token_,
+          response_proto.secagg_protocol_forwarding_info(),
+          response_proto.masked_result_resource(),
+          response_proto.nonmasked_result_resource(), std::move(tf_checkpoint),
+          flags_->disable_http_request_body_compression()));
+  auto protocol_delegate = std::make_unique<HttpSecAggProtocolDelegate>(
+      response_proto.secure_aggregands(), &server_response_holder);
+  std::unique_ptr<SecAggRunner> secagg_runner =
+      secagg_runner_factory_->CreateSecAggRunner(
+          std::move(send_to_server_impl), std::move(protocol_delegate),
+          secagg_event_publisher_, log_manager_, interruptible_runner_.get(),
+          protocol_execution_info.expected_number_of_clients(),
+          protocol_execution_info
+              .minimum_surviving_clients_for_reconstruction(),
+          &bytes_downloaded_, &bytes_uploaded_);
+  FCP_RETURN_IF_ERROR(secagg_runner->Run(std::move(results)));
+  return absl::OkStatus();
+}
+
+absl::StatusOr<StartSecureAggregationResponse>
+HttpFederatedProtocol::StartSecureAggregation() {
+  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
+                       CreateStartSecureAggregationUriSuffix(
+                           aggregation_session_id_, aggregation_client_token_));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> request,
+      aggregation_request_creator_->CreateProtocolRequest(
+          uri_suffix, QueryParams(), HttpRequest::Method::kPost,
+          StartSecureAggregationRequest::default_instance().SerializeAsString(),
+          /*is_protobuf_encoded=*/true));
+  absl::StatusOr<InMemoryHttpResponse> response =
+      protocol_request_helper_.PerformProtocolRequest(std::move(request),
+                                                      *interruptible_runner_);
+  FCP_ASSIGN_OR_RETURN(Operation initial_operation,
+                       ParseOperationProtoFromHttpResponse(response));
+  FCP_ASSIGN_OR_RETURN(Operation completed_operation,
+                       protocol_request_helper_.PollOperationResponseUntilDone(
+                           initial_operation, *aggregation_request_creator_,
+                           *interruptible_runner_));
+  // The Operation has finished. Check if it resulted in an error, and if so
+  // forward it after converting it to an absl::Status error.
+  if (completed_operation.has_error()) {
+    auto rpc_error = ConvertRpcStatusToAbslStatus(completed_operation.error());
+    return absl::Status(
+        rpc_error.code(),
+        absl::StrCat("Operation ", completed_operation.name(),
+                     " contained error: ", rpc_error.ToString()));
+  }
+  StartSecureAggregationResponse response_proto;
+  if (!completed_operation.response().UnpackTo(&response_proto)) {
+    return absl::InvalidArgumentError(
+        "could not parse StartSecureAggregationResponse proto");
+  }
+  return response_proto;
 }
 
 absl::Status HttpFederatedProtocol::ReportNotCompleted(

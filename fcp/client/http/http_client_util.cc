@@ -29,6 +29,8 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "absl/strings/substitute.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/client/http/http_client.h"
 
 namespace fcp {
@@ -228,6 +230,14 @@ absl::StatusOr<std::string> EncodeUriMultiplePathSegments(
   });
 }
 
+absl::StatusOr<std::string> CreateByteStreamUploadUriSuffix(
+    absl::string_view resource_name) {
+  constexpr absl::string_view pattern = "/upload/v1/media/$0";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_resource_name,
+                       EncodeUriMultiplePathSegments(resource_name));
+  // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_resource_name);
+}
 }  // namespace http
 }  // namespace client
 }  // namespace fcp

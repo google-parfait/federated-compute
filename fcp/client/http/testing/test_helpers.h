@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "google/longrunning/operations.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/base/attributes.h"
@@ -151,6 +152,19 @@ class MockHttpRequestCallback : public HttpRequestCallback {
               (const HttpRequest& request, const HttpResponse& response),
               (override));
 };
+
+// Creates a 'pending' `Operation`.
+::google::longrunning::Operation CreatePendingOperation(
+    absl::string_view operation_name);
+
+// Creates a 'done' `Operation`, packing the given message into an `Any`.
+::google::longrunning::Operation CreateDoneOperation(
+    absl::string_view operation_name, const google::protobuf::Message& inner_result);
+
+// Creates an `Operation` with the specified error information.
+::google::longrunning::Operation CreateErrorOperation(
+    absl::string_view operation_name, const absl::StatusCode error_code,
+    absl::string_view error_message);
 
 }  // namespace http
 }  // namespace client

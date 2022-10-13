@@ -43,13 +43,16 @@
 #include "fcp/client/http/protocol_request_helper.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
+#include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
+#include "fcp/secagg/client/secagg_client.h"
 
 namespace fcp {
 namespace client {
@@ -60,9 +63,12 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
  public:
   HttpFederatedProtocol(
       Clock* clock, LogManager* log_manager, const Flags* flags,
-      HttpClient* http_client, absl::string_view entry_point_uri,
-      absl::string_view api_key, absl::string_view population_name,
-      absl::string_view retry_token, absl::string_view client_version,
+      HttpClient* http_client,
+      std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
+      SecAggEventPublisher* secagg_event_publisher,
+      absl::string_view entry_point_uri, absl::string_view api_key,
+      absl::string_view population_name, absl::string_view retry_token,
+      absl::string_view client_version,
       absl::string_view attestation_measurement,
       std::function<bool()> should_abort, absl::BitGen bit_gen,
       const InterruptibleRunner::TimingConfig& timing_config,
@@ -103,6 +109,12 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   HandleEligibilityEvalTaskResponse(
       absl::StatusOr<InMemoryHttpResponse> http_response);
 
+  absl::StatusOr<std::unique_ptr<HttpRequest>>
+  CreateReportEligibilityEvalTaskResultRequest(absl::Status status);
+
+  // Helper function to perform an ReportEligibilityEvalResult request.
+  absl::Status ReportEligibilityEvalErrorInternal(absl::Status error_status);
+
   // Helper function to perform a task assignment request and get its response.
   absl::StatusOr<InMemoryHttpResponse>
   PerformTaskAssignmentAndReportEligibilityEvalResultRequests(
@@ -127,7 +139,6 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // Helper function for reporting result via simple aggregation.
   absl::Status ReportViaSimpleAggregation(ComputationResults results,
                                           absl::Duration plan_duration);
-
   // Helper function to perform a StartDataUploadRequest and a ReportTaskResult
   // request concurrently.
   // This method will only return the response from the StartDataUploadRequest.
@@ -151,11 +162,14 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   absl::Status AbortAggregation(absl::Status original_error_status,
                                 absl::string_view error_message_for_server);
 
-  absl::StatusOr<std::unique_ptr<HttpRequest>>
-  CreateReportEligibilityEvalTaskResultRequest(absl::Status status);
+  // Helper function for reporting via secure aggregation.
+  absl::Status ReportViaSecureAggregation(ComputationResults results,
+                                          absl::Duration plan_duration);
 
-  // Helper function to perform an ReportEligibilityEvalResult request.
-  absl::Status ReportEligibilityEvalErrorInternal(absl::Status error_status);
+  // Helper function to perform a StartSecureAggregationRequest.
+  absl::StatusOr<
+      google::internal::federatedcompute::v1::StartSecureAggregationResponse>
+  StartSecureAggregation();
 
   struct TaskResources {
     const ::google::internal::federatedcompute::v1::Resource& plan;
@@ -176,6 +190,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   LogManager* log_manager_;
   const Flags* const flags_;
   HttpClient* const http_client_;
+  std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory_;
+  SecAggEventPublisher* secagg_event_publisher_;
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
   std::unique_ptr<ProtocolRequestCreator> eligibility_eval_request_creator_;
   std::unique_ptr<ProtocolRequestCreator> task_assignment_request_creator_;

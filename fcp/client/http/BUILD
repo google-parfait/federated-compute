@@ -38,6 +38,7 @@ cc_library(
     hdrs = ["http_client_util.h"],
     deps = [
         ":http_client",
+        "//fcp/base",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -128,6 +129,7 @@ cc_library(
     deps = [
         ":http_client",
         ":http_client_util",
+        ":http_secagg_send_to_server_impl",
         ":in_memory_request_response",
         ":protocol_request_helper",
         "//fcp/base",
@@ -140,12 +142,14 @@ cc_library(
         "//fcp/client:fl_runner_cc_proto",
         "//fcp/client:interfaces",
         "//fcp/client:interruptible_runner",
+        "//fcp/client:secagg_runner",
         "//fcp/client:selector_context_cc_proto",
         "//fcp/client/cache:resource_cache",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
+        "//fcp/secagg/client",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
@@ -195,6 +199,41 @@ cc_test(
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "http_secagg_send_to_server_impl",
+    srcs = ["http_secagg_send_to_server_impl.cc"],
+    hdrs = ["http_secagg_send_to_server_impl.h"],
+    # Limit visibility to this directory and its subdirectories.
+    visibility = ["//fcp/client/http:__subpackages__"],
+    deps = [
+        ":http_client_util",
+        ":protocol_request_helper",
+        "//fcp/client:interfaces",
+        "//fcp/client:secagg_runner",
+        "//fcp/protos/federatedcompute:federated_compute_cc_proto",
+        "//fcp/secagg/shared:cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googleapis//google/rpc:code_cc_proto",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "http_secagg_send_to_server_impl_test",
+    srcs = ["http_secagg_send_to_server_impl_test.cc"],
+    deps = [
+        ":http_secagg_send_to_server_impl",
+        "//fcp/client:test_helpers",
+        "//fcp/client/http/testing:test_helpers",
+        "//fcp/protos/federatedcompute:federated_compute_cc_proto",
+        "//fcp/testing",
+        "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
+        "@com_google_googleapis//google/rpc:code_cc_proto",
     ],
 )
 

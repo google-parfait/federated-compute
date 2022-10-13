@@ -309,5 +309,15 @@ TEST(EncodeUriTest, NonAsciiStringShouldReturnError) {
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
 }
 
+TEST(CreateByteStreamUriTest, HappyCase) {
+  auto result = CreateByteStreamUploadUriSuffix("my/resource");
+  ASSERT_OK(result);
+  EXPECT_THAT(*result, "/upload/v1/media/my/resource");
+}
+
+TEST(CreateByteStreamUriTest, NonAsciiResourceNameShouldReturnError) {
+  EXPECT_THAT(CreateByteStreamUploadUriSuffix("€"), IsCode(INVALID_ARGUMENT));
+}
+
 }  // namespace
 }  // namespace fcp::client::http
