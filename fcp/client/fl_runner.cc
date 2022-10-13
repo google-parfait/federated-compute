@@ -1159,7 +1159,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   Clock* clock = Clock::RealClock();
   std::unique_ptr<cache::ResourceCache> resource_cache;
-  if (flags->enable_cache_dir() && flags->max_resource_cache_size_bytes() > 0) {
+  if (flags->max_resource_cache_size_bytes() > 0) {
     // Anything that goes wrong in FileBackedResourceCache::Create is a
     // programmer error.
     FCP_ASSIGN_OR_RETURN(
