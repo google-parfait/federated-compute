@@ -147,6 +147,27 @@ message TaskAssignment {
   // data after task execution.
   ForwardingInfo aggregation_data_forwarding_info = 1;
 
+  message AggregationInfo {}
+
+  message SecureAggregationInfo {
+    // The minimum number of clients' values that must be aggregated together
+    // before the server can gain access to the aggregate,
+    // even transiently (e.g. in RAM).
+    // This isn't needed by Secure Aggregation protocol on the client side but
+    // shared by the server with clients for transparency or policy reasons.
+    int32 minimum_clients_in_server_visible_aggregate = 1;
+  }
+
+  oneof aggregation_type {
+    // If set, indicates that the Aggregations service (see
+    // `aggregations.proto`) should be used to perform aggregation.
+    AggregationInfo aggregation_info = 9;
+
+    // If set, indicates that the SecureAggregations service (see
+    // `secure_aggregations.proto`) should be used to perform aggregation.
+    SecureAggregationInfo secure_aggregation_info = 10;
+  }
+
   // Unique identifier for the client's protocol session.
   string session_id = 5;
 
