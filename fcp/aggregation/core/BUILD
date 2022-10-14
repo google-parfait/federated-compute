@@ -59,12 +59,15 @@ cc_library(
 
 AGGREGATOR_SRCS = [
     "tensor_aggregator.cc",
+    "tensor_aggregator_registry.cc",
 ]
 
 AGGREGATOR_HDRS = [
     "agg_vector_aggregator.h",
     "aggregator.h",
     "tensor_aggregator.h",
+    "tensor_aggregator_factory.h",
+    "tensor_aggregator_registry.h",
 ]
 
 cc_library(
@@ -75,6 +78,8 @@ cc_library(
     deps = [
         ":tensor",
         "//fcp/base",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/synchronization",
     ],
 )
 
@@ -118,6 +123,20 @@ cc_test(
         ":tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "tensor_aggregator_registry_test",
+    srcs = [
+        "tensor_aggregator_registry_test.cc",
+    ],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        "//fcp/base",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],
