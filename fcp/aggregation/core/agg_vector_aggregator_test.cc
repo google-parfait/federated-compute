@@ -94,7 +94,7 @@ TEST(AggVectorAggregatorTest, DenseAggregation_Succeeds) {
   EXPECT_THAT(result->AsAggVector<int32_t>().num_slices(), Eq(1));
 }
 
-TEST(AggVectorAggregatorTest, SparseAggregatgion_Succeeds) {
+TEST(AggVectorAggregatorTest, SparseAggregation_Succeeds) {
   const TensorShape shape = {4, 3};
   SumAggregator<int32_t> aggregator(DT_INT32, shape);
   Tensor t1 = Tensor::Create(DT_INT32, shape,

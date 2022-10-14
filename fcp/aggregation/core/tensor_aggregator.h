@@ -28,6 +28,8 @@ namespace fcp::aggregation {
 
 // TensorAggregator is a base class for implementing Aggregation intrinsics
 // with Tensor being an input and output type for the aggregation.
+// TODO(team): Generalize this to the case with multiple input and
+// output tensors.
 class TensorAggregator
     : public Aggregator<const Tensor&, Tensor, TensorAggregator> {
  public:

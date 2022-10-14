@@ -17,10 +17,12 @@
 #ifndef FCP_AGGREGATION_CORE_AGG_VECTOR_AGGREGATOR_H_
 #define FCP_AGGREGATION_CORE_AGG_VECTOR_AGGREGATOR_H_
 
+#include <memory>
 #include <vector>
 
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_data.h"
+#include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp::aggregation {

@@ -141,3 +141,33 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "federated_sum",
+    srcs = [
+        "federated_sum.cc",
+    ],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        "//fcp/base",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "federated_sum_test",
+    srcs = [
+        "federated_sum_test.cc",
+    ],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        ":federated_sum",  # buildcleaner: keep
+        ":tensor",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
