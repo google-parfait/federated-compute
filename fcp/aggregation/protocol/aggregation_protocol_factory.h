@@ -21,7 +21,7 @@
 
 #include "absl/status/statusor.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
-#include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
+#include "fcp/aggregation/protocol/configuration.pb.h"
 
 namespace fcp::aggregation {
 

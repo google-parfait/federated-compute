@@ -101,7 +101,3 @@ message StatusMessage {
   // no longer needs client inputs to complete.
   int64 num_inputs_discarded = 7;
 }
-
-// Configuration describing the kind of aggregation to perform.
-message Configuration {
-}
