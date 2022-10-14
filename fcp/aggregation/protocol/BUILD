@@ -39,11 +39,15 @@ cc_proto_library(
 
 cc_library(
     name = "aggregation_protocol",
-    hdrs = ["aggregation_protocol.h"],
+    hdrs = [
+        "aggregation_protocol.h",
+        "aggregation_protocol_factory.h",
+    ],
     copts = FCP_COPTS,
     deps = [
         ":cc_proto",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
     ],

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "fcp/aggregation/protocol/simple_aggregation_protocol.h"
 
 #include <memory>
@@ -7,7 +23,7 @@ namespace fcp::aggregation {
 absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>>
 SimpleAggregationProtocol::Create(
     const Configuration& configuration,
-    const AggregationProtocol::Callback* callback) {
+    AggregationProtocol::Callback* const callback) {
   // TODO(team): Parse configuration and initialize TensorAggregators.
   return absl::WrapUnique(new SimpleAggregationProtocol());
 }
