@@ -101,6 +101,8 @@ class TaskAssignmentsTest(absltest.TestCase):
         task_assignments_pb2.StartTaskAssignmentResponse(
             task_assignment=task_assignments_pb2.TaskAssignment(
                 aggregation_data_forwarding_info=FORWARDING_INFO,
+                aggregation_info=(
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session',
                 client_token='token',
@@ -142,6 +144,8 @@ class TaskAssignmentsTest(absltest.TestCase):
         task_assignments_pb2.StartTaskAssignmentResponse(
             task_assignment=task_assignments_pb2.TaskAssignment(
                 aggregation_data_forwarding_info=FORWARDING_INFO,
+                aggregation_info=(
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session1',
                 client_token='token',
@@ -161,6 +165,8 @@ class TaskAssignmentsTest(absltest.TestCase):
         task_assignments_pb2.StartTaskAssignmentResponse(
             task_assignment=task_assignments_pb2.TaskAssignment(
                 aggregation_data_forwarding_info=FORWARDING_INFO,
+                aggregation_info=(
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session2',
                 client_token='token',
