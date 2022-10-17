@@ -52,6 +52,15 @@ enum DebugDiagCode {
 
   /** Logged if opstats is enabled */
   TRAINING_OPSTATS_ENABLED = 1002;
+
+  // Codes reserved for test-only resource cache diag codes.
+  //================================================================
+
+  // Logged when a resource is requested that is in the cache.
+  RESOURCE_CACHE_HIT = 1200;
+
+  // Logged when a resource is requested that isn't in the cache.
+  RESOURCE_CACHE_MISS = 1201;
 }
 
 /**

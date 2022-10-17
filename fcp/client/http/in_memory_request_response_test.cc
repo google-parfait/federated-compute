@@ -1303,6 +1303,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCachedResourceOk) {
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
+  EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
@@ -1339,6 +1340,7 @@ TEST_F(PerformRequestsTest,
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
+  EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
@@ -1378,6 +1380,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryNotCachedButThenPutInCache) {
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
+  EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
@@ -1390,6 +1393,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryNotCachedButThenPutInCache) {
               FieldsAre(expected_response_code, IsEmpty(), content_type,
                         StrEq(expected_response_body)));
 
+  EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   auto stored_resource = (*resource_cache)->Get(cache_id, std::nullopt);
   ASSERT_OK(stored_resource);
   EXPECT_THAT(*stored_resource,
@@ -1423,6 +1427,7 @@ TEST_F(PerformRequestsTest,
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
+  EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
@@ -1435,6 +1440,7 @@ TEST_F(PerformRequestsTest,
               FieldsAre(expected_response_code, IsEmpty(), content_type,
                         StrEq(expected_response_body)));
 
+  EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   auto stored_resource = (*resource_cache)->Get(cache_id, std::nullopt);
   ASSERT_OK(stored_resource);
   EXPECT_THAT(*stored_resource,
@@ -1466,6 +1472,7 @@ TEST_F(PerformRequestsTest,
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
+  EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
   auto result = FetchResourcesInMemory(
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
@@ -1477,7 +1484,7 @@ TEST_F(PerformRequestsTest,
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code, IsEmpty(), content_type,
                         StrEq(expected_response_body)));
-
+  EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   auto stored_resource = (*resource_cache)->Get(cache_id, std::nullopt);
   ASSERT_OK(stored_resource);
   EXPECT_THAT(*stored_resource,

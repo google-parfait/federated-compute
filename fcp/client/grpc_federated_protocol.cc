@@ -401,10 +401,12 @@ GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
                      .uri = eligibility_eval_payload.init_checkpoint_resource()
                                 .uri(),
                      .data = eligibility_eval_payload.init_checkpoint(),
-                     .client_cache_id = eligibility_eval_payload.plan_resource()
-                                            .client_cache_id(),
+                     .client_cache_id =
+                         eligibility_eval_payload.init_checkpoint_resource()
+                             .client_cache_id(),
                      .max_age = TimeUtil::ConvertProtoToAbslDuration(
-                         eligibility_eval_payload.plan_resource().max_age()),
+                         eligibility_eval_payload.init_checkpoint_resource()
+                             .max_age()),
                  }}));
       }
       return EligibilityEvalTask{
@@ -492,9 +494,10 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
                      .uri = acceptance_info.init_checkpoint_resource().uri(),
                      .data = acceptance_info.init_checkpoint(),
                      .client_cache_id =
-                         acceptance_info.plan_resource().client_cache_id(),
+                         acceptance_info.init_checkpoint_resource()
+                             .client_cache_id(),
                      .max_age = TimeUtil::ConvertProtoToAbslDuration(
-                         acceptance_info.plan_resource().max_age()),
+                         acceptance_info.init_checkpoint_resource().max_age()),
                  }}));
       }
 

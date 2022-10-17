@@ -85,6 +85,7 @@ cc_library(
         "//fcp/base:time_util",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interfaces",
+        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

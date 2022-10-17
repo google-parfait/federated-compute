@@ -32,6 +32,7 @@
 
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/timestamp.pb.h"
+#include "absl/cleanup/cleanup.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -174,6 +175,12 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
 absl::StatusOr<FileBackedResourceCache::ResourceAndMetadata>
 FileBackedResourceCache::Get(absl::string_view cache_id,
                              std::optional<absl::Duration> max_age) {
+  // By default, set up a "CACHE_MISS" diag code to be logged when this method
+  // exits.
+  DebugDiagCode diag_code = DebugDiagCode::RESOURCE_CACHE_MISS;
+  absl::Cleanup diag_code_logger = [this, &diag_code] {
+    log_manager_.LogDiag(diag_code);
+  };
   absl::MutexLock lock(&mutex_);
   FCP_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
 
@@ -214,6 +221,9 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
       WriteInternal(std::make_unique<CacheManifest>(std::move(manifest)));
   if (!status.ok()) return status;
 
+  // We've reached the end, this is a hit! The absl::Cleanup above has a
+  // reference to diag_code, so we update it to CACHE_HIT here.
+  diag_code = DebugDiagCode::RESOURCE_CACHE_HIT;
   return FileBackedResourceCache::ResourceAndMetadata{*contents, metadata};
 }
 
