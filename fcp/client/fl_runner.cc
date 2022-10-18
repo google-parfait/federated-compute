@@ -1177,6 +1177,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   std::unique_ptr<FederatedProtocol> federated_protocol;
   if (flags->use_http_federated_compute_protocol()) {
+    log_manager->LogDiag(ProdDiagCode::HTTP_FEDERATED_PROTOCOL_USED);
     federated_protocol = std::make_unique<http::HttpFederatedProtocol>(
         clock, log_manager, flags, http_client.get(),
         std::make_unique<SecAggRunnerFactoryImpl>(),

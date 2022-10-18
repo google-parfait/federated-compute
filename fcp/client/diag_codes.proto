@@ -245,6 +245,8 @@ enum ProdDiagCode {
   HTTP_REPORT_ELIGIBILITY_EVAL_RESULT_REQUEST_FAILED = 1789;
   /* Logged when a ReportTaskResult request failed. */
   HTTP_REPORT_TASK_RESULT_REQUEST_FAILED = 1788;
+  /* Logged when HTTP federated protocol is used. */
+  HTTP_FEDERATED_PROTOCOL_USED = 1787;
 
   /**
    * Codes reserved for logs related to temp files
