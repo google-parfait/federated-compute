@@ -51,9 +51,9 @@ class CheckpointReader final {
   absl::StatusOr<Tensor> GetTensor(const std::string& name) const;
 
  private:
-  explicit CheckpointReader(
-      std::unique_ptr<::tensorflow::checkpoint::CheckpointReader>
-          tensorflow_checkpoint_reader);
+  CheckpointReader(std::unique_ptr<::tensorflow::checkpoint::CheckpointReader>
+                       tensorflow_checkpoint_reader,
+                   DataTypeMap data_type_map, TensorShapeMap shape_map);
 
   std::unique_ptr<::tensorflow::checkpoint::CheckpointReader>
       tf_checkpoint_reader_;

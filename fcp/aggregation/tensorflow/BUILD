@@ -20,11 +20,39 @@ package(
 )
 
 cc_library(
+    name = "converters",
+    srcs = ["converters.cc"],
+    hdrs = ["converters.h"],
+    copts = FCP_COPTS,
+    deps = [
+        "//fcp/aggregation/core:tensor",
+        "//fcp/base",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+    ],
+)
+
+cc_test(
+    name = "converters_test",
+    srcs = ["converters_test.cc"],
+    deps = [
+        ":converters",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/base",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+    ],
+)
+
+cc_library(
     name = "checkpoint_reader",
     srcs = ["checkpoint_reader.cc"],
     hdrs = ["checkpoint_reader.h"],
     copts = FCP_COPTS,
     deps = [
+        ":converters",
         "//fcp/aggregation/core:tensor",
         "//fcp/base",
         "@com_google_absl//absl/container:flat_hash_map",

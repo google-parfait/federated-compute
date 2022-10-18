@@ -23,7 +23,9 @@
 
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/tensorflow/converters.h"
 #include "fcp/base/monitoring.h"
 #include "tensorflow/c/checkpoint_reader.h"
 #include "tensorflow/c/tf_status.h"
@@ -47,50 +49,34 @@ absl::StatusOr<std::unique_ptr<CheckpointReader>> CheckpointReader::Create(
         absl::StrFormat("Couldn't read checkpoint: %s : %s", filename,
                         TF_Message(tf_status.get())));
   }
+
+  // Populate the DataType map.
+  DataTypeMap data_type_map;
+  for (const auto& [name, tf_dtype] :
+       tf_checkpoint_reader->GetVariableToDataTypeMap()) {
+    FCP_ASSIGN_OR_RETURN(DataType dtype, ConvertDataType(tf_dtype));
+    data_type_map.emplace(name, dtype);
+  }
+
+  // Populate the TensorShape map.
+  TensorShapeMap shape_map;
+  for (const auto& [name, tf_shape] :
+       tf_checkpoint_reader->GetVariableToShapeMap()) {
+    shape_map.emplace(name, ConvertShape(tf_shape));
+  }
+
   return std::unique_ptr<CheckpointReader>(
-      new CheckpointReader(std::move(tf_checkpoint_reader)));
-}
-
-DataType ConvertDataType(tf::DataType dtype) {
-  switch (dtype) {
-    case tf::DT_FLOAT:
-      return DT_FLOAT;
-    case tf::DT_DOUBLE:
-      return DT_DOUBLE;
-    case tf::DT_INT32:
-      return DT_INT32;
-    case tf::DT_INT64:
-      return DT_INT64;
-    default:
-      FCP_LOG(ERROR) << "Unsupported tf::DataType: " << dtype;
-      return DT_INVALID;
-  }
-}
-
-TensorShape ConvertShape(const tf::TensorShape& shape) {
-  std::vector<size_t> dim_sizes;
-  for (auto dim_size : shape.dim_sizes()) {
-    dim_sizes.push_back(dim_size);
-  }
-  return TensorShape(dim_sizes.begin(), dim_sizes.end());
+      new CheckpointReader(std::move(tf_checkpoint_reader),
+                           std::move(data_type_map), std::move(shape_map)));
 }
 
 CheckpointReader::CheckpointReader(
     std::unique_ptr<tf::checkpoint::CheckpointReader>
-        tensorflow_checkpoint_reader)
-    : tf_checkpoint_reader_(std::move(tensorflow_checkpoint_reader)) {
-  // Populate the DataType map.
-  for (const auto& [name, dtype] :
-       tf_checkpoint_reader_->GetVariableToDataTypeMap()) {
-    data_type_map_.emplace(name, ConvertDataType(dtype));
-  }
-
-  // Populate the TensorShape map.
-  for (const auto& [name, shape] :
-       tf_checkpoint_reader_->GetVariableToShapeMap()) {
-    shape_map_.emplace(name, ConvertShape(shape));
-  }
-}
+        tensorflow_checkpoint_reader,
+    DataTypeMap data_type_map, TensorShapeMap shape_map)
+    : tf_checkpoint_reader_(std::move(tensorflow_checkpoint_reader)),
+      data_type_map_(std::move(data_type_map)),
+      shape_map_(std::move(shape_map)) {}
 
 // A primitive TensorData implementation that wraps the original
 // tf::Tensor data.
@@ -122,8 +108,8 @@ StatusOr<Tensor> CheckpointReader::GetTensor(const std::string& name) const {
     return absl::NotFoundError(
         absl::StrFormat("Checkpoint doesn't have tensor %s", name));
   }
-  auto dtype = ConvertDataType(tensor->dtype());
-  auto shape = ConvertShape(tensor->shape());
+  FCP_ASSIGN_OR_RETURN(DataType dtype, ConvertDataType(tensor->dtype()));
+  TensorShape shape = ConvertShape(tensor->shape());
   return Tensor::Create(dtype, std::move(shape),
                         std::make_unique<TensorDataAdapter>(std::move(tensor)));
 }
