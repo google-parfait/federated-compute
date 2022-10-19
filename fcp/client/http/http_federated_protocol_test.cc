@@ -119,6 +119,7 @@ using ::testing::Lt;
 using ::testing::MockFunction;
 using ::testing::NiceMock;
 using ::testing::Not;
+using ::testing::Optional;
 using ::testing::Return;
 using ::testing::StrEq;
 using ::testing::StrictMock;
@@ -152,6 +153,7 @@ constexpr char kFederatedSelectUriTemplate[] = "https://federated.select";
 constexpr char kOperationName[] = "my_operation";
 
 const int32_t kCancellationWaitingPeriodSec = 1;
+const int32_t kMinimumClientsInServerVisibleAggregate = 2;
 
 MATCHER_P(EligibilityEvalTaskRequestMatcher, matcher,
           absl::StrCat(negation ? "doesn't parse" : "parses",
@@ -367,7 +369,8 @@ StartTaskAssignmentResponse GetFakeRejectedTaskAssignmentResponse() {
 StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
     const Resource& plan, const Resource& checkpoint,
     const std::string& federated_select_uri_template,
-    const std::string& aggregation_session_id) {
+    const std::string& aggregation_session_id,
+    int32_t minimum_clients_in_server_visible_aggregate) {
   StartTaskAssignmentResponse response;
   TaskAssignment* task_assignment = response.mutable_task_assignment();
   ForwardingInfo* forwarding_info =
@@ -380,6 +383,13 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
   *task_assignment->mutable_init_checkpoint() = checkpoint;
   task_assignment->mutable_federated_select_uri_info()->set_uri_template(
       federated_select_uri_template);
+  if (minimum_clients_in_server_visible_aggregate > 0) {
+    task_assignment->mutable_secure_aggregation_info()
+        ->set_minimum_clients_in_server_visible_aggregate(
+            minimum_clients_in_server_visible_aggregate);
+  } else {
+    task_assignment->mutable_aggregation_info();
+  }
   return response;
 }
 
@@ -548,7 +558,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     StartTaskAssignmentResponse task_assignment_response =
         GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
                                       kFederatedSelectUriTemplate,
-                                      expected_aggregation_session_id);
+                                      expected_aggregation_session_id, 0);
 
     std::string request_uri =
         "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
@@ -1702,7 +1712,8 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
                               GetFakeTaskAssignmentResponse(
                                   plan_resource, checkpoint_resource,
                                   expected_federated_select_uri_template,
-                                  expected_aggregation_session_id))
+                                  expected_aggregation_session_id,
+                                  kMinimumClientsInServerVisibleAggregate))
               .SerializeAsString())));
 
   EXPECT_CALL(mock_http_client_,
@@ -1719,7 +1730,9 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
       VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
           FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
           expected_federated_select_uri_template,
-          expected_aggregation_session_id, Eq(std::nullopt))));
+          expected_aggregation_session_id,
+          Optional(
+              FieldsAre(_, Eq(kMinimumClientsInServerVisibleAggregate))))));
   // The Checkin call is expected to return the accepted retry window from the
   // response to the first eligibility eval request.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -1782,7 +1795,7 @@ TEST_F(HttpFederatedProtocolTest,
                               GetFakeTaskAssignmentResponse(
                                   plan_resource, checkpoint_resource,
                                   expected_federated_select_uri_template,
-                                  expected_aggregation_session_id))
+                                  expected_aggregation_session_id, 0))
               .SerializeAsString())));
 
   // Issue the regular checkin.
@@ -1831,7 +1844,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedPlanDataFetchFailed) {
               kOperationName,
               GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
                                             kFederatedSelectUriTemplate,
-                                            kAggregationSessionId))
+                                            kAggregationSessionId, 0))
               .SerializeAsString())));
 
   // Mock a failed plan fetch.
@@ -1891,7 +1904,7 @@ TEST_F(HttpFederatedProtocolTest,
               kOperationName,
               GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
                                             kFederatedSelectUriTemplate,
-                                            kAggregationSessionId))
+                                            kAggregationSessionId, 0))
               .SerializeAsString())));
 
   // Mock a failed checkpoint fetch.
@@ -2503,7 +2516,7 @@ TEST_F(HttpFederatedProtocolTest,
   StartTaskAssignmentResponse task_assignment_response =
       GetFakeTaskAssignmentResponse(plan_resource, checkpoint_resource,
                                     kFederatedSelectUriTemplate,
-                                    kAggregationSessionId);
+                                    kAggregationSessionId, 0);
   const std::string request_uri =
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto";

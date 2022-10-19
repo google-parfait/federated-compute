@@ -681,16 +681,20 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   session_id_ = task_assignment.session_id();
   aggregation_session_id_ = task_assignment.aggregation_id();
   aggregation_client_token_ = task_assignment.client_token();
+  std::optional<SecAggInfo> sec_agg_info;
+  if (task_assignment.has_secure_aggregation_info()) {
+    sec_agg_info =
+        SecAggInfo{.minimum_clients_in_server_visible_aggregate =
+                       task_assignment.secure_aggregation_info()
+                           .minimum_clients_in_server_visible_aggregate()};
+  }
 
   return TaskAssignment{
       .payloads = std::move(payloads),
       .federated_select_uri_template =
           task_assignment.federated_select_uri_info().uri_template(),
       .aggregation_session_id = task_assignment.aggregation_id(),
-      // TODO(team): Populate this field with the actual values
-      // provided by the server, once we support Secure Aggregation in the
-      // HTTP protocol.
-      .sec_agg_info = std::nullopt};
+      .sec_agg_info = sec_agg_info};
 }
 
 absl::Status HttpFederatedProtocol::ReportCompleted(
