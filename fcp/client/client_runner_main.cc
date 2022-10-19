@@ -102,10 +102,10 @@ int main(int argc, char** argv) {
   bool success = false;
   for (auto i = 0; i < num_rounds || num_rounds < 0; ++i) {
     fcp::client::FederatedTaskEnvDepsImpl federated_task_env_deps_impl =
-        example_data ? fcp::client::FederatedTaskEnvDepsImpl(
-                           *std::move(example_data), test_cert)
-                     : fcp::client::FederatedTaskEnvDepsImpl(
-                           absl::GetFlag(FLAGS_num_empty_examples), test_cert);
+        example_data
+            ? fcp::client::FederatedTaskEnvDepsImpl(*example_data, test_cert)
+            : fcp::client::FederatedTaskEnvDepsImpl(
+                  absl::GetFlag(FLAGS_num_empty_examples), test_cert);
     fcp::client::FakeEventPublisher event_publisher(/*quiet=*/false);
     fcp::client::FilesImpl files_impl;
     fcp::client::LogManagerImpl log_manager_impl;
