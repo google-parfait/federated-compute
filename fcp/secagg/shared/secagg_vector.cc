@@ -23,6 +23,7 @@
 #include <climits>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -365,7 +366,7 @@ void SecAggUnpackedVectorMap::Add(const SecAggVectorMap& other) {
 
 std::unique_ptr<SecAggUnpackedVectorMap> SecAggUnpackedVectorMap::AddMaps(
     const SecAggUnpackedVectorMap& a, const SecAggUnpackedVectorMap& b) {
-  auto result = absl::make_unique<SecAggUnpackedVectorMap>();
+  auto result = std::make_unique<SecAggUnpackedVectorMap>();
   for (const auto& entry : a) {
     auto name = entry.first;
     auto length = entry.second.num_elements();
