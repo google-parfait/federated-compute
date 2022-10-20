@@ -30,12 +30,12 @@ namespace opstats {
 // Base no-op class for the OpStats logger.
 class OpStatsLogger {
  public:
-  OpStatsLogger() {}
+  OpStatsLogger() = default;
 
   explicit OpStatsLogger(bool opstats_enabled)
       : opstats_enabled_(opstats_enabled), db_(std::make_unique<OpStatsDb>()) {}
 
-  virtual ~OpStatsLogger() {}
+  virtual ~OpStatsLogger() = default;
 
   // Log a checkin accepted event and the corresponding task name.
   virtual void AddCheckinAcceptedEventWithTaskName(
