@@ -305,7 +305,7 @@ class PartialRandomAccessFile : public tensorflow::RandomAccessFile {
   PartialRandomAccessFile(tensorflow::RandomAccessFile* file, int64_t start,
                           int64_t end)
       : file_(file), start_(start), end_(end) {}
-  ~PartialRandomAccessFile() override {}
+  ~PartialRandomAccessFile() override = default;
   tensorflow::Status Read(uint64_t offset, size_t n,
                           tensorflow::StringPiece* result,
                           char* scratch) const override {
