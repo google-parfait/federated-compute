@@ -1,0 +1,29 @@
+# Requirements for the Federated Compute Python development environment.
+#
+# In general, Python dependencies should be satisfied using Bazel deps, not pip.
+# However, we use pip for packages that have lots of transitive dependencies and
+# aren't well integrated with Bazel.
+#
+# *   For packages that have a stable release, we use a version that is
+#     compatible with that release (e.g. `~=x.y`). See
+#     https://peps.python.org/pep-0440/#compatible-release for more information.
+# *   For packages that do not have a stable release, we use a version that
+#     matches a release that has been tested (e.g. `==x.y.z`). See
+#     https://peps.python.org/pep-0440/#version-matching for more information.
+#
+# Note: There is bug in `pip` when multiple packages use the compatible release
+# operator `~=` to specify a version and one of those versions ends in `0`. See
+# https://github.com/pypa/pip/issues/9613 for more information. In this case,
+# use the equivalent clause `>=x.0,==x.*` instead of `~=x.0`.
+#
+# This assumes that the packages follow Semantic Versioning, see
+# https://semver.org/. If a package follows a different versioning scheme or
+# requires unique handling, we use a different version specifier and comment the
+# versioning scheme or reasoning.
+
+# While TensorFlow is managed as a Bazel dependency, installing an identical
+# version here ensures that all of TensorFlow's non-Bazel-tracked dependencies
+# are available. This also ensures that the TensorFlow package installed
+# transitively by TFF provides the right dependencies.
+tensorflow==2.10.0
+tensorflow-federated~=0.37
