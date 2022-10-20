@@ -330,8 +330,7 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
   // Check that this is a TensorflowSpec-based plan for federated eligibility
   // computation.
   if (!client_plan.phase().has_tensorflow_spec() ||
-      !client_plan.phase().has_federated_compute_eligibility() ||
-      client_plan.phase().execution_size() > 0) {
+      !client_plan.phase().has_federated_compute_eligibility()) {
     return engine::PlanResult(
         engine::PlanOutcome::kInvalidArgument,
         absl::InvalidArgumentError("Invalid eligibility eval plan"));
@@ -494,8 +493,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
         engine::PlanOutcome::kInvalidArgument,
         absl::InvalidArgumentError("Plan must include TensorflowSpec.")));
   }
-  if (!client_plan.phase().has_federated_compute() ||
-      client_plan.phase().execution_size() > 0) {
+  if (!client_plan.phase().has_federated_compute()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
         engine::PlanOutcome::kInvalidArgument,
         absl::InvalidArgumentError("Invalid TensorflowSpec-based plan")));

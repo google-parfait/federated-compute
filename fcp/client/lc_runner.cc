@@ -159,8 +159,7 @@ absl::Status RunPlanWithTensorflowSpec(
         error_status, ExampleStats(), NetworkStats(), run_plan_start_time);
     return error_status;
   }
-  if (!client_plan.phase().has_local_compute() ||
-      client_plan.phase().execution_size() > 0) {
+  if (!client_plan.phase().has_local_compute()) {
     absl::Status error_status =
         absl::InvalidArgumentError("Invalid TensorflowSpec-based plan");
     phase_logger.LogComputationInvalidArgument(

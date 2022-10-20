@@ -364,25 +364,11 @@ message MetricTestPredicates {
 // Client Phase
 // ============
 
-// A `TensorflowSpec` or list of `ClientExecution`s that are executed
-// sequentially on the client in a single `tf.Session`. In federated
-// optimization, this will correspond to one `ServerPhase`.
-//
-// It is an error for both `TensorflowSpec` and `ClientExecution` to be present.
+// A `TensorflowSpec` that is executed on the client in a single `tf.Session`.
+// In federated optimization, this will correspond to one `ServerPhase`.
 message ClientPhase {
   // A short CamelCase name for the ClientPhase.
   string name = 2;
-
-  // A list of ClientExecutions that should be performed sequentially
-  // and constitute a phase.
-  //
-  // Only the first ClientExecution's read_client_init and the last
-  // ClientExecution's write_update should be set. These correspond to
-  // the checkpoints read from and sent to the server, respectively
-  // stored in device memory.
-  //
-  // If populated, the `tensorflow_spec` field must be empty.
-  repeated ClientExecution execution = 1;
 
   // Minimum number of clients in aggregation.
   // In secure aggregation mode this is used to configure the protocol instance
@@ -395,9 +381,7 @@ message ClientPhase {
 
   // A functional interface for the TensorFlow logic the client should perform.
   //
-  // If populated:
-  //   - `execution` must be empty.
-  //   - `io_router` must be specified.
+  // If populated, `io_router` must be specified.
   TensorflowSpec tensorflow_spec = 4 [lazy = true];
 
   // The specification of the inputs coming either from customer apps
@@ -408,137 +392,8 @@ message ClientPhase {
     FederatedComputeEligibilityIORouter federated_compute_eligibility = 7
         [lazy = true];
   }
-}
 
-// A ClientExecution corresponds to a related set of Ops that make one
-// or more passes (epochs) over the local training data. Multiple
-// ClientExecutions run sequentially in the same phase, see
-// ClientPhase.
-//
-// A typical execution loop is generally composed of the following
-// steps:
-//
-// 1. Read checkpoint (if read_client_init is set).
-// 2. Run before_op which does any local initialization and setup, and
-//    in TFF-based plans that use `tf.data.Dataset`, drives all the
-//    client-side work.
-// 3. In non-TFF-based plans, loop across loop_op until training is complete.
-//    Generally this will be defined by a certain number of training epochs.
-// 4. Run after_op (if set).
-// 5. Save checkpoint (if write_update is set).
-//
-// If new ops are added here, they should be added to plan_builder.py.
-//
-// NEXT TAG: 26
-message ClientExecution {
-  // A short CamelCase name for the ClientExecution.
-  string name = 21;
-
-  // An op to run before read_client_init.
-  string init_op = 1;
-
-  // Optional. If set, reads a checkpoint to initialize client state.
-  // This is a restore-only CheckpointOp.
-  CheckpointOp read_client_init = 2;
-
-  // Optional. If set, is called after execution has finished to save
-  // a checkpoint. Depending on the environment, the checkpoint is
-  // published to the server or stored on the device. This is a
-  // save-only CheckpointOp.
-  CheckpointOp write_update = 3;
-
-  // The stat_name of a metric which guards publishing the checkpoint
-  // produced by a write_update. If this is not set, the checkpoint
-  // will be unconditionally updated. If this is set, publishing will be
-  // postponed until a subsequent execution produces a metric of this name
-  // with a value greater than write_update_quality_threshold.
-  // Only one checkpoint can exist which is pending publishing;
-  // if an execution generates another write_update before the metric is
-  // produced, an older checkpoint will be abandoned.
-  string write_update_quality_metric = 15;
-
-  // The threshold for the write update metric, a value between 0 and 1.
-  // The metric must be greater than this value to let a checkpoint be
-  // published. If its smaller, the checkpoint will be abandoned.
-  double write_update_quality_threshold = 16;
-
-  // Saves and restores all state required for this ClientExecution
-  // and any subsequent ClientExecutions in the same ClientPhase, in
-  // order to allow resuming computation after a session is interrupted
-  // (e.g., shut down by Android).  The 'savepoint' is valid for
-  // saving/restoring state both in between calls to the 'loop_op',
-  // and after the ClientExecution completes.
-  //
-  // N.B. Even if a variable is not used by this ClientExecution, if
-  // it is needed by a subsequent ClientExecution in the same
-  // ClientPhase, it must still be saved by this saverdef.
-  CheckpointOp savepoint = 4;
-
-  // A specification of the example selection procedure.  This is
-  // passed to the client application which delivers training examples
-  // dataset.
-  ExampleSelector example_selector = 5;
-
-  // The number of passes over the dataset (epochs) to run the loop_op
-  // specified below.
-  int32 epochs_to_run = 6;
-
-  // Feeds for providing input, or metadata about input, to the graph. See
-  // comments below on when these are fed.
-  oneof input_kind {
-    // An input placeholder to fed examples to loop_op. This is an input
-    // mechanism used by non-TFF plans in production.
-    string input_feed = 7;
-
-    // The name of a string placeholder containing the token to feed to the
-    // custom dataset op fcp.tensorflow.external_dataset.ExternalDataset when
-    // running a client graph that uses tf.data.Dataset (rather than a
-    // push-based feed with a loop_op) to obtain data. The placeholder should be
-    // fed a valid token string when running `before_op`.
-    string external_dataset_token_feed = 24;
-
-    AsyncInputFeed async_input_feed = 8 [deprecated = true];
-    DatasetInput dataset_input = 22 [deprecated = true];
-  }
-
-  // The batch size for clustering examples into a single
-  // Tensor. Graphs are expected to support arbitrary batch sizes, so
-  // it is OK if some of the batches have different sizes (e.g. the
-  // last one may be small). If not specified or 0, a value of 1 is assumed.
-  //
-  // This should only be set if batches are to be formed *outside* of
-  // the TensorFlow graph, and fed in as complete batches, as in the
-  // client code (see training/service2/TensorflowPhaseExecutor.java).
-  // An alternative is to use queues to construct batches directly in
-  // the TensorFlow graph, in which case this value should be set to
-  // zero.
-  int32 batch_size = 9;
-
-  // Optional. Operation to run before loop_op.
-  string before_op = 10;
-
-  // Optional. The name of an operation to run many times. This is run
-  // either in "feed" or in "queue" mode, depending on input_kind. In
-  // feed mode, the op takes as parameter input_feed, which contains a
-  // minibatch of example protos. The plan engine calls the loop as
-  // often as needed to iterate through all examples in the dataset
-  // returned by example_selector. In queue mode, the loop_op takes no
-  // parameters, and instead input is read from input_queue; the loop
-  // is run until the op returns status code OUT_OF_RANGE.
-  string loop_op = 12;
-
-  // Optional. The name of an operation to run once immediately after
-  // all executions of the loop_op.
-  string after_op = 13;
-
-  // A list of scalar metrics which have been assigned to after
-  // executing this ClientExecution. Used to generate client specific
-  // metrics that are, say, logged via ClearCut. These will usually be
-  // set in the evaluation ClientExecution of a client-only
-  // computation to produce metric values that are locally consumed.
-  repeated Metric stats = 14;
-
-  reserved 11, 17, 18, 19, 20, 23, 25;
+  reserved 1;
 }
 
 // TensorflowSpec message describes a single call into TensorFlow, including the
@@ -1002,8 +857,8 @@ message ServerPhase {
   //   a. Restore variables from the client checkpoint.
   //
   // Loads a checkpoint from a single client written via
-  // `ClientExecution.write_update`.  This is done once for every client
-  // checkpoint in a round.
+  // `FederatedComputeIORouter.output_filepath_tensor_name`.  This is done once
+  // for every client checkpoint in a round.
   CheckpointOp read_update = 3;
   //   b. Aggregate the data coming from the client checkpoint.
   //
@@ -1073,7 +928,7 @@ message ServerPhase {
   // 2. Write a checkpoint that can be sent to the client.
   //
   // Generates a checkpoint to be sent to the client, to be read by
-  // `ClientExecution.read_client_init`.
+  // `FederatedComputeIORouter.input_filepath_tensor_name`.
 
   CheckpointOp write_client_init = 2;
 
@@ -1181,8 +1036,9 @@ message Plan {
   // ServerEligibilityComputationPhase).
   CheckpointOp server_savepoint = 2;
 
-  // Required. The TensorFlow graph used for all client executions.
-  // The actual type is expected to be tensorflow.GraphDef.
+  // Required. The TensorFlow graph that describes the TensorFlow logic a client
+  // should perform. It should be consistent with the `TensorflowSpec` field in
+  // the `client_phase`. The actual type is expected to be tensorflow.GraphDef.
   // The TensorFlow graph is stored in serialized form for two reasons.
   // 1) We may use execution engines other than TensorFlow.
   // 2) We wish to avoid the cost of deserialized and re-serializing large
