@@ -82,6 +82,13 @@ http_archive(
     urls = ["https://github.com/google/glog/archive/v0.5.0.zip"],
 )
 
+http_archive(
+    name = "com_github_grpc_grpc",
+    sha256 = "76900ab068da86378395a8e125b5cc43dfae671e09ff6462ddfef18676e2165a",
+    strip_prefix = "grpc-1.50.0",
+    urls = ["https://github.com/grpc/grpc/archive/refs/tags/v1.50.0.tar.gz"],
+)
+
 # Define the @io_grpc_grpc_java repository, which is used by the
 # @com_google_googleapis repository to define the Java protobuf targets such as
 # @com_google_googleapis//google/rpc:rpc_java_proto). The pattern we use here is
@@ -126,6 +133,9 @@ http_archive(
         # This patch updates TensorFlow's source_utils.py library to support
         # loading absl as a workspace dep as opposed to as a system library.
         "//fcp/patches:tensorflow_source_utils.patch",
+        # gRPC v1.48.0-pre1 and later include zconf.h in addition to zlib.h;
+        # TensorFlow's build rule for zlib only exports the latter.
+        "//fcp/patches:tensorflow_zlib.patch",
     ],
     sha256 = "b5a1bb04c84b6fe1538377e5a1f649bb5d5f0b2e3625a3c526ff3a8af88633e8",
     strip_prefix = "tensorflow-2.10.0",
@@ -235,16 +245,6 @@ maven_install(
         "https://maven.google.com",
         "https://repo1.maven.org/maven2",
     ],
-)
-
-# The version of gRPC imported by TensorFlow doesn't include fixes for
-# `py_proto_library` (https://github.com/grpc/grpc/pull/28103). This import of
-# gRPC should ONLY be used for that macro.
-http_archive(
-    name = "grpc_for_py_proto_library",
-    sha256 = "320366665d19027cda87b2368c03939006a37e0388bfd1091c8d2a96fbc93bd8",
-    strip_prefix = "grpc-1.48.1",
-    url = "https://github.com/grpc/grpc/archive/v1.48.1.tar.gz",
 )
 
 # The version of googleapis imported by TensorFlow doesn't provide

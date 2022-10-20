@@ -14,7 +14,7 @@
 
 load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
 load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
-load("@grpc_for_py_proto_library//bazel:python_rules.bzl", "py_proto_library")
+load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
 
 default_visibility = [
     "//visibility:public",
@@ -60,7 +60,6 @@ cc_grpc_library(
     srcs = [":federated_api_proto"],
     generate_mocks = True,
     grpc_only = True,
-    well_known_protos = True,
     deps = [":federated_api_cc_proto"],
 )
 

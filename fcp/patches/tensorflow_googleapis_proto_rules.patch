@@ -9,13 +9,3 @@
 +        python = True,
          rules_override = {
              "cc_proto_library": [
-@@ -43,5 +45,9 @@
-                 "@org_tensorflow//third_party/googleapis:build_rules.bzl",
-                 "",
-             ],
-+            "py_proto_library": [
-+                "@grpc_for_py_proto_library//bazel:python_rules.bzl",
-+                "",
-+            ],
-         },
-     )

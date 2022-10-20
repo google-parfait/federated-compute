@@ -17,7 +17,7 @@ load("//fcp:config.bzl", "FCP_COPTS")
 load("//fcp/tracing:build_defs.bzl", "tracing_schema_cc_library")
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_cc_test", "tf_custom_op_library", "tf_gen_op_wrapper_py")
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_custom_op_py_library")
-load("@grpc_for_py_proto_library//bazel:python_rules.bzl", "py_proto_library")
+load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
 
 default_visibility = ["//fcp:internal"]
 
