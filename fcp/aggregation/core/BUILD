@@ -33,6 +33,7 @@ TENSOR_HDRS = [
     "tensor.h",
     "tensor_data.h",
     "tensor_shape.h",
+    "tensor_spec.h",
 ]
 
 cc_library(

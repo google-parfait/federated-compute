@@ -19,9 +19,11 @@
 
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/base/monitoring.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.pb.h"
+#include "tensorflow/core/protobuf/struct.pb.h"
 
 namespace fcp::aggregation::tensorflow {
 
@@ -34,6 +36,12 @@ StatusOr<DataType> ConvertDataType(::tensorflow::DataType dtype);
 // Note that the Tensorflow shape is expected to be valid (it seems impossible
 // to create an invalid shape).
 TensorShape ConvertShape(const ::tensorflow::TensorShape& shape);
+
+// Converts Tensorflow TensorSpecProto to Aggregation TensorSpec.
+// Returns an error status if supplied TensorSpecProto data type or shape isn't
+// supported by the Aggregation Core.
+StatusOr<TensorSpec> ConvertTensorSpec(
+    const ::tensorflow::TensorSpecProto& spec);
 
 }  // namespace fcp::aggregation::tensorflow
 

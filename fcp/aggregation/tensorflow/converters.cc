@@ -18,7 +18,10 @@
 
 #include <vector>
 
+#include "fcp/aggregation/core/datatype.h"
 #include "fcp/base/monitoring.h"
+#include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/framework/tensor_shape.pb.h"
 
 namespace fcp::aggregation::tensorflow {
 
@@ -48,6 +51,17 @@ TensorShape ConvertShape(const tf::TensorShape& shape) {
     dim_sizes.push_back(dim_size);
   }
   return TensorShape(dim_sizes.begin(), dim_sizes.end());
+}
+
+StatusOr<TensorSpec> ConvertTensorSpec(
+    const ::tensorflow::TensorSpecProto& spec) {
+  FCP_ASSIGN_OR_RETURN(DataType dtype, ConvertDataType(spec.dtype()));
+  tf::TensorShape tf_shape;
+  if (!tf::TensorShape::BuildTensorShape(spec.shape(), &tf_shape).ok()) {
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "Unsupported tf::TensorShape: " << spec.shape().DebugString();
+  }
+  return TensorSpec(spec.name(), dtype, ConvertShape(tf_shape));
 }
 
 }  // namespace fcp::aggregation::tensorflow

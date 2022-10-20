@@ -17,15 +17,19 @@
 #include "fcp/aggregation/tensorflow/converters.h"
 
 #include <initializer_list>
+#include <string>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
 #include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/framework/types.pb.h"
+#include "tensorflow/core/protobuf/struct.pb.h"
 
 namespace fcp::aggregation::tensorflow {
 namespace {
@@ -36,6 +40,18 @@ tf::TensorShape CreateTfShape(std::initializer_list<int64_t> dim_sizes) {
   tf::TensorShape shape;
   EXPECT_TRUE(tf::TensorShape::BuildTensorShape(dim_sizes, &shape).ok());
   return shape;
+}
+
+tf::TensorSpecProto CreateTfTensorSpec(
+    const std::string& name, tf::DataType dtype,
+    std::initializer_list<int64_t> dim_sizes) {
+  tf::TensorSpecProto spec;
+  spec.set_name(name);
+  spec.set_dtype(dtype);
+  for (auto dim_size : dim_sizes) {
+    spec.mutable_shape()->add_dim()->set_size(dim_size);
+  }
+  return spec;
 }
 
 TEST(ConvertersTest, ConvertDataType_Success) {
@@ -53,6 +69,27 @@ TEST(ConvertersTest, ConvertShape_Success) {
   EXPECT_EQ(ConvertShape(CreateTfShape({})), TensorShape({}));
   EXPECT_EQ(ConvertShape(CreateTfShape({1})), TensorShape({1}));
   EXPECT_EQ(ConvertShape(CreateTfShape({2, 3})), TensorShape({2, 3}));
+}
+
+TEST(ConvertersTest, ConvertTensorSpec_Success) {
+  auto tensor_spec =
+      ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_FLOAT, {1, 2, 3}));
+  ASSERT_THAT(tensor_spec, IsOk());
+  EXPECT_EQ(tensor_spec->name(), "foo");
+  EXPECT_EQ(tensor_spec->dtype(), DT_FLOAT);
+  EXPECT_EQ(tensor_spec->shape(), TensorShape({1, 2, 3}));
+}
+
+TEST(ConvertersTest, ConvertTensorSpec_UnsupportedDataType) {
+  EXPECT_THAT(
+      ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_STRING, {1, 2, 3})),
+      IsCode(INVALID_ARGUMENT));
+}
+
+TEST(ConvertersTest, ConvertTensorSpec_UnsupportedShape) {
+  EXPECT_THAT(
+      ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_FLOAT, {1, -1})),
+      IsCode(INVALID_ARGUMENT));
 }
 
 }  // namespace
