@@ -1176,6 +1176,12 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   std::unique_ptr<FederatedProtocol> federated_protocol;
   if (flags->use_http_federated_compute_protocol()) {
     log_manager->LogDiag(ProdDiagCode::HTTP_FEDERATED_PROTOCOL_USED);
+    // Verify the entry point uri starts with "https://" or "http://localhost".
+    // Note "http://localhost" is allowed for testing purpose.
+    if (!(absl::StartsWith(federated_service_uri, "https://") ||
+          absl::StartsWith(federated_service_uri, "http://localhost"))) {
+      return absl::InvalidArgumentError("The entry point uri is invalid.");
+    }
     federated_protocol = std::make_unique<http::HttpFederatedProtocol>(
         clock, log_manager, flags, http_client.get(),
         std::make_unique<SecAggRunnerFactoryImpl>(),
