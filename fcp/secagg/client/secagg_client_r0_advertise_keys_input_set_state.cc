@@ -63,7 +63,7 @@ SecAggClientR0AdvertiseKeysInputSetState::
       prng_factory_(std::move(prng_factory)) {}
 
 SecAggClientR0AdvertiseKeysInputSetState::
-    ~SecAggClientR0AdvertiseKeysInputSetState() {}
+    ~SecAggClientR0AdvertiseKeysInputSetState() = default;
 
 StatusOr<std::unique_ptr<SecAggClientState> >
 SecAggClientR0AdvertiseKeysInputSetState::Start() {

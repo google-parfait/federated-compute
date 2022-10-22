@@ -71,7 +71,7 @@ SecAggClientR2MaskedInputCollWaitingForInputState::
 }
 
 SecAggClientR2MaskedInputCollWaitingForInputState::
-    ~SecAggClientR2MaskedInputCollWaitingForInputState() {}
+    ~SecAggClientR2MaskedInputCollWaitingForInputState() = default;
 
 StatusOr<std::unique_ptr<SecAggClientState> >
 SecAggClientR2MaskedInputCollWaitingForInputState::HandleMessage(

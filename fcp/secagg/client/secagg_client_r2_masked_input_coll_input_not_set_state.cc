@@ -81,7 +81,7 @@ SecAggClientR2MaskedInputCollInputNotSetState::
 }
 
 SecAggClientR2MaskedInputCollInputNotSetState::
-    ~SecAggClientR2MaskedInputCollInputNotSetState() {}
+    ~SecAggClientR2MaskedInputCollInputNotSetState() = default;
 
 StatusOr<std::unique_ptr<SecAggClientState> >
 SecAggClientR2MaskedInputCollInputNotSetState::HandleMessage(

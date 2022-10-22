@@ -53,7 +53,7 @@ SecAggClientR2MaskedInputCollBaseState::SecAggClientR2MaskedInputCollBaseState(
                                  ClientState::R2_MASKED_INPUT, async_abort) {}
 
 SecAggClientR2MaskedInputCollBaseState::
-    ~SecAggClientR2MaskedInputCollBaseState() {}
+    ~SecAggClientR2MaskedInputCollBaseState() = default;
 
 std::unique_ptr<SecAggVectorMap>
 SecAggClientR2MaskedInputCollBaseState::HandleMaskedInputCollectionRequest(

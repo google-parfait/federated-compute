@@ -32,7 +32,7 @@ SecAggClientCompletedState::SecAggClientCompletedState(
     : SecAggClientState(std::move(sender), std::move(transition_listener),
                         ClientState::COMPLETED) {}
 
-SecAggClientCompletedState::~SecAggClientCompletedState() {}
+SecAggClientCompletedState::~SecAggClientCompletedState() = default;
 
 bool SecAggClientCompletedState::IsCompletedSuccessfully() const {
   return true;

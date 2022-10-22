@@ -60,7 +60,7 @@ SecAggClientR3UnmaskingState::SecAggClientR3UnmaskingState(
       << "Client id must not be negative but was " << client_id_;
 }
 
-SecAggClientR3UnmaskingState::~SecAggClientR3UnmaskingState() {}
+SecAggClientR3UnmaskingState::~SecAggClientR3UnmaskingState() = default;
 
 StatusOr<std::unique_ptr<SecAggClientState> >
 SecAggClientR3UnmaskingState::HandleMessage(

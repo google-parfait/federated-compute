@@ -36,7 +36,7 @@ SecAggClientAbortedState::SecAggClientAbortedState(
   FCP_LOG(WARNING) << "Aborting for reason: " << reason_;
 }
 
-SecAggClientAbortedState::~SecAggClientAbortedState() {}
+SecAggClientAbortedState::~SecAggClientAbortedState() = default;
 
 bool SecAggClientAbortedState::IsAborted() const { return true; }
 

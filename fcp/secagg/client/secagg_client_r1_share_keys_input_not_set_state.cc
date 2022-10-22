@@ -65,7 +65,7 @@ SecAggClientR1ShareKeysInputNotSetState::
       prng_factory_(std::move(prng_factory)) {}
 
 SecAggClientR1ShareKeysInputNotSetState::
-    ~SecAggClientR1ShareKeysInputNotSetState() {}
+    ~SecAggClientR1ShareKeysInputNotSetState() = default;
 
 StatusOr<std::unique_ptr<SecAggClientState> >
 SecAggClientR1ShareKeysInputNotSetState::HandleMessage(
