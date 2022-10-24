@@ -301,6 +301,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
     const InterruptibleRunner::TimingConfig& timing_config,
     cache::ResourceCache* resource_cache)
     : object_state_(ObjectState::kInitialized),
+      clock_(*clock),
       log_manager_(log_manager),
       flags_(flags),
       http_client_(http_client),
@@ -958,13 +959,19 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<SecAggSendToServerBase> send_to_server_impl,
       HttpSecAggSendToServerImpl::Create(
-          &protocol_request_helper_, interruptible_runner_.get(),
+          &clock_, &protocol_request_helper_, interruptible_runner_.get(),
+          [this](absl::Time deadline) {
+            return CreateDelayedInterruptibleRunner(
+                this->log_manager_, this->should_abort_, this->timing_config_,
+                deadline);
+          },
           &server_response_holder, aggregation_session_id_,
           aggregation_client_token_,
           response_proto.secagg_protocol_forwarding_info(),
           response_proto.masked_result_resource(),
           response_proto.nonmasked_result_resource(), std::move(tf_checkpoint),
-          flags_->disable_http_request_body_compression()));
+          flags_->disable_http_request_body_compression(),
+          waiting_period_for_cancellation_));
   auto protocol_delegate = std::make_unique<HttpSecAggProtocolDelegate>(
       response_proto.secure_aggregands(), &server_response_holder);
   std::unique_ptr<SecAggRunner> secagg_runner =

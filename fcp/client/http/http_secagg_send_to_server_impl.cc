@@ -15,6 +15,7 @@
  */
 #include "fcp/client/http/http_secagg_send_to_server_impl.h"
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -115,8 +116,10 @@ absl::StatusOr<std::string> CreateUnmaskUriSuffix(
 
 absl::StatusOr<std::unique_ptr<HttpSecAggSendToServerImpl>>
 HttpSecAggSendToServerImpl::Create(
-    ProtocolRequestHelper* request_helper,
+    Clock* clock, ProtocolRequestHelper* request_helper,
     InterruptibleRunner* interruptible_runner,
+    std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>
+        delayed_interruptible_runner_creator,
     absl::StatusOr<secagg::ServerToClientWrapperMessage>*
         server_response_holder,
     absl::string_view aggregation_id, absl::string_view client_token,
@@ -124,7 +127,8 @@ HttpSecAggSendToServerImpl::Create(
     const ByteStreamResource& masked_result_resource,
     const ByteStreamResource& nonmasked_result_resource,
     std::optional<std::string> tf_checkpoint,
-    bool disable_request_body_compression) {
+    bool disable_request_body_compression,
+    absl::Duration waiting_period_for_cancellation) {
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<ProtocolRequestCreator> secagg_request_creator,
       ProtocolRequestCreator::Create(secagg_upload_forwarding_info,
@@ -144,13 +148,14 @@ HttpSecAggSendToServerImpl::Create(
           /*use_compression=*/false));
 
   return absl::WrapUnique(new HttpSecAggSendToServerImpl(
-      request_helper, interruptible_runner, server_response_holder,
+      clock, request_helper, interruptible_runner,
+      std::move(delayed_interruptible_runner_creator), server_response_holder,
       aggregation_id, client_token, masked_result_resource.resource_name(),
       nonmasked_result_resource.resource_name(),
       std::move(secagg_request_creator),
       std::move(masked_result_upload_request_creator),
       std::move(nonmasked_result_upload_request_creator),
-      std::move(tf_checkpoint)));
+      std::move(tf_checkpoint), waiting_period_for_cancellation));
 }
 
 // Despite the method name is "Send", this method is doing more. It sends the
@@ -213,10 +218,13 @@ HttpSecAggSendToServerImpl::AbortSecureAggregation(
           uri_suffix, QueryParams(), HttpRequest::Method::kPost,
           request.SerializeAsString(),
           /*is_protobuf_encoded=*/true));
-  // TODO(team): Use delayed interruptible runner here.
-  FCP_ASSIGN_OR_RETURN(InMemoryHttpResponse response,
-                       request_helper_.PerformProtocolRequest(
-                           std::move(http_request), interruptible_runner_));
+  std::unique_ptr<InterruptibleRunner> delayed_interruptible_runner =
+      delayed_interruptible_runner_creator_(clock_.Now() +
+                                            waiting_period_for_cancellation_);
+  FCP_ASSIGN_OR_RETURN(
+      InMemoryHttpResponse response,
+      request_helper_.PerformProtocolRequest(std::move(http_request),
+                                             *delayed_interruptible_runner));
 
   secagg::ServerToClientWrapperMessage server_message;
   server_message.mutable_abort();

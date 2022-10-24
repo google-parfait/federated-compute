@@ -228,6 +228,7 @@ cc_test(
     srcs = ["http_secagg_send_to_server_impl_test.cc"],
     deps = [
         ":http_secagg_send_to_server_impl",
+        "//fcp/base:simulated_clock",
         "//fcp/client:test_helpers",
         "//fcp/client/http/testing:test_helpers",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",

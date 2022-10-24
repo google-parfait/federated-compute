@@ -187,6 +187,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::Status status, ObjectState permanent_error_object_state);
 
   ObjectState object_state_;
+  Clock& clock_;
   LogManager* log_manager_;
   const Flags* const flags_;
   HttpClient* const http_client_;

@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_HTTP_HTTP_SECAGG_SEND_TO_SERVER_IMPL_H_
 #define FCP_CLIENT_HTTP_HTTP_SECAGG_SEND_TO_SERVER_IMPL_H_
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -42,8 +43,10 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
   // ProtocolRequestCreator based on the input ForwardingInfo or
   // ByteStreamResources.
   static absl::StatusOr<std::unique_ptr<HttpSecAggSendToServerImpl>> Create(
-      ProtocolRequestHelper* request_helper,
+      Clock* clock, ProtocolRequestHelper* request_helper,
       InterruptibleRunner* interruptible_runner,
+      std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>
+          delayed_interruptible_runner_creator,
       absl::StatusOr<secagg::ServerToClientWrapperMessage>*
           server_response_holder,
       absl::string_view aggregation_id, absl::string_view client_token,
@@ -54,7 +57,8 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
       const google::internal::federatedcompute::v1::ByteStreamResource&
           nonmasked_result_resource,
       std::optional<std::string> tf_checkpoint,
-      bool disable_request_body_compression);
+      bool disable_request_body_compression,
+      absl::Duration waiting_period_for_cancellation);
   ~HttpSecAggSendToServerImpl() override = default;
 
   // Sends a client to server request based on the
@@ -64,8 +68,10 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
 
  private:
   HttpSecAggSendToServerImpl(
-      ProtocolRequestHelper* request_helper,
+      Clock* clock, ProtocolRequestHelper* request_helper,
       InterruptibleRunner* interruptible_runner,
+      std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>
+          delayed_interruptible_runner_creator,
       absl::StatusOr<secagg::ServerToClientWrapperMessage>*
           server_response_holder,
       absl::string_view aggregation_id, absl::string_view client_token,
@@ -76,9 +82,13 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
           masked_result_upload_request_creator,
       std::unique_ptr<ProtocolRequestCreator>
           nonmasked_result_upload_request_creator,
-      std::optional<std::string> tf_checkpoint)
-      : request_helper_(*request_helper),
+      std::optional<std::string> tf_checkpoint,
+      absl::Duration waiting_period_for_cancellation)
+      : clock_(*clock),
+        request_helper_(*request_helper),
         interruptible_runner_(*interruptible_runner),
+        delayed_interruptible_runner_creator_(
+            delayed_interruptible_runner_creator),
         server_response_holder_(*server_response_holder),
         aggregation_id_(std::string(aggregation_id)),
         client_token_(std::string(client_token)),
@@ -89,7 +99,8 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
             std::move(masked_result_upload_request_creator)),
         nonmasked_result_upload_request_creator_(
             std::move(nonmasked_result_upload_request_creator)),
-        tf_checkpoint_(std::move(tf_checkpoint)) {}
+        tf_checkpoint_(std::move(tf_checkpoint)),
+        waiting_period_for_cancellation_(waiting_period_for_cancellation) {}
 
   // Sends an AbortSecureAggregationRequest.
   absl::StatusOr<secagg::ServerToClientWrapperMessage> AbortSecureAggregation(
@@ -113,8 +124,11 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
   absl::StatusOr<secagg::ServerToClientWrapperMessage> DoR3Unmask(
       secagg::UnmaskingResponse unmasking_response);
 
+  Clock& clock_;
   ProtocolRequestHelper& request_helper_;
   InterruptibleRunner& interruptible_runner_;
+  std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>
+      delayed_interruptible_runner_creator_;
   absl::StatusOr<secagg::ServerToClientWrapperMessage>& server_response_holder_;
   std::string aggregation_id_;
   std::string client_token_;
@@ -125,6 +139,7 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
   std::unique_ptr<ProtocolRequestCreator>
       nonmasked_result_upload_request_creator_;
   std::optional<std::string> tf_checkpoint_;
+  absl::Duration waiting_period_for_cancellation_;
 };
 
 // Implementation of SecAggProtocolDelegate for the HTTP federated protocol.

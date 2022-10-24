@@ -22,6 +22,7 @@
 
 #include "google/longrunning/operations.pb.h"
 #include "google/rpc/code.pb.h"
+#include "fcp/base/simulated_clock.h"
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
@@ -150,16 +151,41 @@ class HttpSecAggSendToServerImplTest : public ::testing::Test {
         nonmasked_resource_forwarding_info;
   }
 
+  std::unique_ptr<InterruptibleRunner> CreateDelayedInterruptibleRunner(
+      absl::Time deadline) {
+    return std::make_unique<InterruptibleRunner>(
+        &log_manager_,
+        [deadline, this]() { return absl::Now() > deadline && interrupted_; },
+        InterruptibleRunner::TimingConfig{
+            .polling_period = absl::ZeroDuration(),
+            .graceful_shutdown_period = absl::InfiniteDuration(),
+            .extended_shutdown_period = absl::InfiniteDuration()},
+        InterruptibleRunner::DiagnosticsConfig{
+            .interrupted = ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP,
+            .interrupt_timeout =
+                ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP_TIMED_OUT,
+            .interrupted_extended = ProdDiagCode::
+                BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
+            .interrupt_timeout_extended = ProdDiagCode::
+                BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT});
+  }
+
   std::unique_ptr<HttpSecAggSendToServerImpl> CreateSecAggSendToServer(
       std::optional<std::string> tf_checkpoint) {
     auto send_to_server = HttpSecAggSendToServerImpl::Create(
-        request_helper_.get(), runner_.get(), &server_response_holder_,
-        kAggregationId, kClientToken, secagg_upload_forwarding_info_,
-        masked_result_resource_, nonmasked_result_resource_, tf_checkpoint,
-        /* disable_request_body_compression= */ true);
+        &clock_, request_helper_.get(), runner_.get(),
+        [this](absl::Time deadline) {
+          return CreateDelayedInterruptibleRunner(deadline);
+        },
+        &server_response_holder_, kAggregationId, kClientToken,
+        secagg_upload_forwarding_info_, masked_result_resource_,
+        nonmasked_result_resource_, tf_checkpoint,
+        /* disable_request_body_compression= */ true, absl::Milliseconds(3));
     FCP_CHECK(send_to_server.ok());
     return std::move(*send_to_server);
   }
+  bool interrupted_ = false;
+  SimulatedClock clock_;
   StrictMock<MockHttpClient> http_client_;
   NiceMock<MockLogManager> log_manager_;
   int64_t bytes_downloaded_ = 0;
@@ -668,7 +694,10 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendAbort) {
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
           AbortSecureAggregationResponse().SerializeAsString())));
+  clock_.SetTime(absl::Now());
+  interrupted_ = true;
   send_to_server->Send(&server_message);
+  ASSERT_OK(server_response_holder_);
 }
 
 }  // anonymous namespace
