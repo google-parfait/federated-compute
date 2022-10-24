@@ -62,16 +62,7 @@ namespace fcp {
 namespace client {
 
 using ::fcp::client::http::UriOrInlineData;
-using ::fcp::secagg::AesCtrPrngFactory;
-using ::fcp::secagg::ClientState;
 using ::fcp::secagg::ClientToServerWrapperMessage;
-using ::fcp::secagg::CryptoRandPrng;
-using ::fcp::secagg::InputVectorSpecification;
-using ::fcp::secagg::SecAggClient;
-using ::fcp::secagg::SecAggVector;
-using ::fcp::secagg::SecAggVectorMap;
-using ::fcp::secagg::SendToServerInterface;
-using ::fcp::secagg::StateTransitionListenerInterface;
 using ::google::internal::federatedml::v2::CheckinRequest;
 using ::google::internal::federatedml::v2::CheckinRequestAck;
 using ::google::internal::federatedml::v2::CheckinResponse;
