@@ -374,6 +374,7 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/time",
         "//fcp/base",
+        "//fcp/client/opstats:opstats_utils",
         "//fcp/base:clock",
         "//fcp/client/cache:resource_cache",
         "//fcp/client/cache:file_backed_resource_cache",
@@ -737,6 +738,9 @@ cc_proto_library(
 proto_library(
     name = "selector_context_proto",
     srcs = ["selector_context.proto"],
+    deps = [
+        "@com_google_protobuf//:timestamp_proto",
+    ],
 )
 
 cc_proto_library(

@@ -112,6 +112,28 @@ cc_test(
 )
 
 cc_library(
+    name = "opstats_utils",
+    srcs = ["opstats_utils.cc"],
+    hdrs = ["opstats_utils.h"],
+    deps = [
+        ":opstats_db",
+        "//fcp/base",
+        "//fcp/protos:opstats_cc_proto",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "opstats_utils_test",
+    srcs = ["opstats_utils_test.cc"],
+    deps = [
+        ":opstats_utils",
+        "//fcp/client:test_helpers",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "pds_backed_opstats_db",
     srcs = ["pds_backed_opstats_db.cc"],
     hdrs = ["pds_backed_opstats_db.h"],

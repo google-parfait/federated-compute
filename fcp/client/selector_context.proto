@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package fcp.client;
 
+import "google/protobuf/timestamp.proto";
+
 option java_package = "com.google.intelligence.fcp.client";
 option java_multiple_files = true;
 
@@ -71,6 +73,9 @@ message FederatedComputation {
   // Identity representing the computation e.g. its plan hash.
   bytes computation_id = 5;
 
+  // Details about previous executions for the currently executing task.
+  HistoricalContext historical_context = 6;
+
   // Types of server aggregation.
   oneof aggregation_type {
     // Simple aggregation. At least one value is aggregated with simple
@@ -96,4 +101,10 @@ message SecureAggregation {
   // shared by the server with clients for transparency and/or policy reasons.
   // See `federated_api.proto`.
   int32 minimum_clients_in_server_visible_aggregate = 1;
+}
+
+// Details about previous executions for the currently executing task.
+message HistoricalContext {
+  // Timestamp of when this task was last successfully contributed to.
+  google.protobuf.Timestamp last_successful_contribution_time = 1;
 }

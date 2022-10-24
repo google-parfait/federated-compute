@@ -38,6 +38,7 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+#include "fcp/client/opstats/opstats_utils.h"
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
 #include "fcp/client/engine/simple_plan_engine.h"
@@ -1325,6 +1326,21 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     federated_selector_context_with_task_name.mutable_computation_properties()
         ->mutable_federated()
         ->set_computation_id(checkin_result->computation_id);
+  }
+
+  if (flags->selector_context_include_last_successful_contribution_time()) {
+    std::optional<google::protobuf::Timestamp>
+        last_successful_contribution_time =
+            opstats::GetLastSuccessfulContributionTime(
+                *(opstats_logger->GetOpStatsDb()), checkin_result->task_name);
+    if (last_successful_contribution_time.has_value()) {
+      *(federated_selector_context_with_task_name
+            .mutable_computation_properties()
+            ->mutable_federated()
+            ->mutable_historical_context()
+            ->mutable_last_successful_contribution_time()) =
+          *last_successful_contribution_time;
+    }
   }
 
   const auto& federated_compute_io_router =
