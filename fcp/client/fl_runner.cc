@@ -44,10 +44,7 @@
 #include "fcp/client/engine/simple_plan_engine.h"
 #endif
 
-#ifdef FCP_CLIENT_SUPPORT_TFLITE
 #include "fcp/client/engine/tflite_plan_engine.h"
-#endif
-
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/federated_protocol_util.h"
@@ -89,9 +86,7 @@ using ::google::internal::federated::plan::TensorflowSpec;
 using ::google::internal::federatedml::v2::RetryWindow;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 
-#ifdef FCP_CLIENT_SUPPORT_TFLITE
 using TfLiteInputs = absl::flat_hash_map<std::string, std::string>;
-#endif
 
 namespace {
 
@@ -239,7 +234,6 @@ ConstructInputsForEligibilityEvalPlan(
 }
 #endif
 
-#ifdef FCP_CLIENT_SUPPORT_TFLITE
 std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
     const FederatedComputeEligibilityIORouter& io_router,
     const std::string& checkpoint_input_filename) {
@@ -250,7 +244,6 @@ std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
   }
   return inputs;
 }
-#endif
 
 // Returns the cumulative network stats (those incurred up until this point in
 // time).
@@ -347,7 +340,6 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
         ProdDiagCode::BACKGROUND_TRAINING_TFLITE_MODEL_INCLUDED);
   }
 
-#ifdef FCP_CLIENT_SUPPORT_TFLITE
   if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
     std::unique_ptr<TfLiteInputs> tflite_inputs =
         ConstructTfLiteInputsForEligibilityEvalPlan(io_router,
@@ -359,7 +351,6 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
                                client_plan.tflite_graph(),
                                std::move(tflite_inputs), output_names);
   }
-#endif
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
   // Construct input tensors and output tensor names based on the values in the
@@ -442,7 +433,6 @@ ConstructInputsForTensorflowSpecPlan(
 }
 #endif
 
-#ifdef FCP_CLIENT_SUPPORT_TFLITE
 std::unique_ptr<TfLiteInputs> ConstructTFLiteInputsForTensorflowSpecPlan(
     const FederatedComputeIORouter& io_router,
     const std::string& checkpoint_input_filename,
@@ -460,7 +450,6 @@ std::unique_ptr<TfLiteInputs> ConstructTFLiteInputsForTensorflowSpecPlan(
 
   return inputs;
 }
-#endif
 
 absl::StatusOr<std::vector<std::string>> ConstructOutputsWithDeterministicOrder(
     const TensorflowSpec& tensorflow_spec,
@@ -511,7 +500,6 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   }
 
   // Run plan and get a set of output tensors back.
-#ifdef FCP_CLIENT_SUPPORT_TFLITE
   if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
     std::unique_ptr<TfLiteInputs> tflite_inputs =
         ConstructTFLiteInputsForTensorflowSpecPlan(
@@ -528,7 +516,6 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
 
     return result;
   }
-#endif
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
   // Construct input tensors based on the values in the

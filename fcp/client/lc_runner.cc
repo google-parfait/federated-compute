@@ -34,10 +34,7 @@
 
 #include "fcp/client/opstats/opstats_example_store.h"
 
-#ifdef FCP_CLIENT_SUPPORT_TFLITE
 #include "fcp/client/engine/tflite_plan_engine.h"
-#endif
-
 #include "fcp/client/phase_logger_impl.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -53,9 +50,7 @@ using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federated::plan::LocalComputeIORouter;
 
-#ifdef FCP_CLIENT_SUPPORT_TFLITE
 using TfLiteInputs = absl::flat_hash_map<std::string, std::string>;
-#endif
 
 namespace {
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
@@ -75,7 +70,6 @@ ConstructInputsForTensorflowSpecPlan(const LocalComputeIORouter& local_compute,
 }
 #endif
 
-#ifdef FCP_CLIENT_SUPPORT_TFLITE
 std::unique_ptr<TfLiteInputs> ConstructInputsForTFLitePlan(
     const LocalComputeIORouter& local_compute, const std::string& input_dir_uri,
     const std::string& output_dir_uri) {
@@ -84,7 +78,6 @@ std::unique_ptr<TfLiteInputs> ConstructInputsForTFLitePlan(
   (*inputs)[local_compute.output_dir_tensor_name()] = output_dir_uri;
   return inputs;
 }
-#endif
 
 void LogComputationOutcome(engine::PlanResult plan_result,
                            PhaseLogger& phase_logger,
@@ -175,7 +168,6 @@ absl::Status RunPlanWithTensorflowSpec(
         ProdDiagCode::BACKGROUND_TRAINING_TFLITE_MODEL_INCLUDED);
   }
 
-#ifdef FCP_CLIENT_SUPPORT_TFLITE
   if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
     auto inputs = ConstructInputsForTFLitePlan(
         client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
@@ -190,7 +182,6 @@ absl::Status RunPlanWithTensorflowSpec(
                           run_plan_start_time, reference_time);
     return ConvertPlanOutcomeToStatus(outcome);
   }
-#endif
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
   // Construct input tensors based on the values in the LocalComputeIORouter

@@ -285,18 +285,8 @@ bool_flag(
 )
 
 bool_flag(
-    name = "support_tflite",
-    build_setting_default = False,
-)
-
-bool_flag(
     name = "support_grpc",
     build_setting_default = True,
-)
-
-config_setting(
-    name = "client_support_tflite",
-    flag_values = {":support_tflite": "True"},
 )
 
 config_setting(
@@ -310,11 +300,6 @@ config_setting(
 )
 
 TF_OPTIONAL_DEPS = select({
-    ":client_support_tflite": [
-        "//fcp/client/engine:tflite_plan_engine",
-    ],
-    "//conditions:default": [],
-}) + select({
     ":client_support_tfmobile": [
         "//fcp/client/engine:plan_engine",
     ],
@@ -322,11 +307,6 @@ TF_OPTIONAL_DEPS = select({
 })
 
 TF_OPTIONAL_DEFINES = select({
-    ":client_support_tflite": [
-        "FCP_CLIENT_SUPPORT_TFLITE",
-    ],
-    "//conditions:default": [],
-}) + select({
     ":client_support_tfmobile": [
         "FCP_CLIENT_SUPPORT_TFMOBILE",
     ],
@@ -384,6 +364,7 @@ cc_library(
         "//fcp/client/http:http_federated_protocol",
         "//fcp/client/http:http_client",
         "//fcp/client/opstats:opstats_example_store",
+        "//fcp/client/engine:tflite_plan_engine",
         "//fcp/client/opstats:opstats_logger",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
@@ -414,6 +395,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "//fcp/base",
         "//fcp/client/engine:example_iterator_factory",
+        "//fcp/client/engine:tflite_plan_engine",
         "//fcp/client/engine:plan_engine_helpers",
         "//fcp/client/opstats:opstats_example_store",
         "//fcp/client/opstats:opstats_logger",
