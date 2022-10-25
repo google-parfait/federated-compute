@@ -36,7 +36,6 @@ using ::google::internal::federatedcompute::v1::
     SubmitSecureAggregationResultMetadata;
 using ::google::longrunning::Operation;
 using ::google::protobuf::Any;
-using ::google::protobuf::Message;
 using ::testing::_;
 using ::testing::ContainerEq;
 using ::testing::HasSubstr;
