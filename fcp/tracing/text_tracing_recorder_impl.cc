@@ -95,6 +95,6 @@ std::unique_ptr<TracingSpanImpl> TextTracingRecorderImpl::CreateChildSpan(
       parent_span_id);
 }
 
-TextTracingRecorderImpl::~TextTracingRecorderImpl() {}
+TextTracingRecorderImpl::~TextTracingRecorderImpl() = default;
 
 }  // namespace fcp::tracing_internal

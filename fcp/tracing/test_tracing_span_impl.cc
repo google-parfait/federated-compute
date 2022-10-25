@@ -37,7 +37,7 @@ void TestTracingSpanImpl::TraceImpl(DetachedBuffer&& buf,
   recorder_->TraceImpl(id_, std::move(buf), traits);
 }
 
-TestTracingSpanImpl::~TestTracingSpanImpl() {}
+TestTracingSpanImpl::~TestTracingSpanImpl() = default;
 
 TracingSpanRef TestTracingSpanImpl::Ref() {
   return TracingSpanRef(recorder_->shared_from_this(), id_);

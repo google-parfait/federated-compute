@@ -60,7 +60,7 @@ std::unique_ptr<TracingSpanImpl> TestTracingRecorderImpl::CreateChildSpan(
   return std::make_unique<TestTracingSpanImpl>(shared_this, new_id);
 }
 
-TestTracingRecorderImpl::~TestTracingRecorderImpl() {}
+TestTracingRecorderImpl::~TestTracingRecorderImpl() = default;
 
 }  // namespace tracing_internal
 }  // namespace fcp
