@@ -18,15 +18,28 @@
 #define FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_PROTOCOL_H_
 
 #include <memory>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "fcp/aggregation/core/tensor_aggregator.h"
+#include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
+#include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 
 namespace fcp::aggregation {
+
+// The structure representing a single aggregation intrinsic.
+// TODO(team): Implement mapping of multiple inputs and outputs to
+// individual TensorAggregator instances.
+struct Intrinsic {
+  TensorSpec input;
+  TensorSpec output;
+  std::unique_ptr<TensorAggregator> aggregator;
+};
 
 // Implementation of the simple aggregation protocol.
 //
@@ -41,7 +54,8 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   // that outlives the SimpleAggregationProtocol instance.
   static absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>> Create(
       const Configuration& configuration,
-      AggregationProtocol::Callback* const callback);
+      AggregationProtocol::Callback* callback,
+      const CheckpointBuilderFactory* checkpoint_builder_factory);
 
   // Implementation of the overridden Aggregation Protocol methods.
   absl::Status Start(int64_t num_clients) override;
@@ -64,7 +78,14 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
       delete;
 
  private:
-  SimpleAggregationProtocol() = default;
+  SimpleAggregationProtocol(
+      std::vector<Intrinsic> intrinsics,
+      AggregationProtocol::Callback* callback,
+      const CheckpointBuilderFactory* checkpoint_builder_factory);
+
+  std::vector<Intrinsic> const intrinsics_;
+  AggregationProtocol::Callback* const callback_;
+  const CheckpointBuilderFactory* const checkpoint_builder_factory_;
 };
 }  // namespace fcp::aggregation
 

@@ -71,15 +71,46 @@ cc_library(
 
 cc_library(
     name = "simple_aggregation_protocol",
-    srcs = ["simple_aggregation_protocol.cc"],
-    hdrs = ["simple_aggregation_protocol.h"],
+    srcs = [
+        "simple_aggregation_protocol.cc",
+    ],
+    hdrs = [
+        "checkpoint_builder.h",
+        "simple_aggregation_protocol.h",
+    ],
     copts = FCP_COPTS,
     deps = [
         ":aggregation_protocol",
         ":cc_proto",
         ":configuration_cc_proto",
+        "//fcp/aggregation/core:aggregator",
+        "//fcp/aggregation/core:federated_sum",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/tensorflow:converters",
+        "//fcp/base",
+        "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "simple_aggregation_protocol_test",
+    srcs = ["simple_aggregation_protocol_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":configuration_cc_proto",
+        ":simple_aggregation_protocol",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/testing",
+        "//fcp/testing",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_googletest//:gtest_main",
     ],
 )

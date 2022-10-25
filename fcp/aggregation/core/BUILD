@@ -21,6 +21,8 @@ package(
     licenses = ["notice"],  # Apache 2.0
 )
 
+# TODO(team): Create a "core" library that bundles all core libraries together.
+
 TENSOR_SRCS = [
     "tensor.cc",
     "tensor_data.cc",
@@ -164,7 +166,7 @@ cc_test(
     copts = FCP_COPTS,
     deps = [
         ":aggregator",
-        ":federated_sum",  # buildcleaner: keep
+        ":federated_sum",
         ":tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
