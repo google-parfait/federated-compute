@@ -974,10 +974,21 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
           waiting_period_for_cancellation_));
   auto protocol_delegate = std::make_unique<HttpSecAggProtocolDelegate>(
       response_proto.secure_aggregands(), &server_response_holder);
+  auto secagg_interruptible_runner = std::make_unique<InterruptibleRunner>(
+      log_manager_, should_abort_, timing_config_,
+      InterruptibleRunner::DiagnosticsConfig{
+          .interrupted = ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP,
+          .interrupt_timeout =
+              ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP_TIMED_OUT,
+          .interrupted_extended = ProdDiagCode::
+              BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
+          .interrupt_timeout_extended = ProdDiagCode::
+              BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT});
   std::unique_ptr<SecAggRunner> secagg_runner =
       secagg_runner_factory_->CreateSecAggRunner(
           std::move(send_to_server_impl), std::move(protocol_delegate),
-          secagg_event_publisher_, log_manager_, interruptible_runner_.get(),
+          secagg_event_publisher_, log_manager_,
+          secagg_interruptible_runner.get(),
           protocol_execution_info.expected_number_of_clients(),
           protocol_execution_info
               .minimum_surviving_clients_for_reconstruction(),
