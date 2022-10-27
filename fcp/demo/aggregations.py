@@ -239,13 +239,13 @@ class Service:
         state = self._sessions[request.aggregation_id]
       except KeyError as e:
         raise http_actions.HttpError(http.HTTPStatus.NOT_FOUND) from e
-      if request.client_token not in state.client_tokens:
+      if request.authorization_token not in state.client_tokens:
         raise http_actions.HttpError(http.HTTPStatus.UNAUTHORIZED)
-      if request.client_token in state.pending_uploads:
+      if request.authorization_token in state.pending_uploads:
         # The client should not have already called StartAggregationDataUpload.
         raise http_actions.HttpError(http.HTTPStatus.BAD_REQUEST)
       upload_name = self._media_service.register_upload()
-      state.pending_uploads[request.client_token] = upload_name
+      state.pending_uploads[request.authorization_token] = upload_name
       state.status.num_clients_pending += 1
 
     forwarding_info = self._forwarding_info()

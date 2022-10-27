@@ -37,7 +37,7 @@ service SecureAggregations {
   rpc StartSecureAggregation(StartSecureAggregationRequest)
       returns (google.longrunning.Operation) {
     option (google.api.http) = {
-      post: "/v1/secureaggregations/{aggregation_id}/clients/{client_token}:start"
+      post: "/v1/secureaggregations/{aggregation_id}/clients/{authorization_token}:start"
       body: "*"
     };
     option (google.longrunning.operation_info) = {
@@ -162,12 +162,12 @@ message StartSecureAggregationRequest {
   string aggregation_id = 1
       ;
 
-  // The client token returned by the server when the client was assigned a
-  // task.
+  // The authorization token returned by the server when the client was assigned
+  // a task.
   //
   // Note that HTTP clients set this value in the request URL instead of the
   // request body.
-  string client_token = 2
+  string authorization_token = 2
       ;
 }
 
@@ -189,6 +189,10 @@ message StartSecureAggregationResponse {
 
   // Information about where to upload unmasked result (e.g. metrics).
   ByteStreamResource nonmasked_result_resource = 5;
+
+  // Unique token that the client must include in the subsequent protocol
+  // requests.
+  string client_token = 6;
 }
 
 // Per-aggregand configuration information.

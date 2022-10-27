@@ -98,7 +98,7 @@ class Service:
       # always pre-authorize clients (e.g., due to rate-limiting incoming
       # clients), this code should either retry the operation or return a
       # non-permanent error to the client (e.g., UNAVAILABLE).
-      client_token = self._aggregations_service.pre_authorize_clients(
+      authorization_token = self._aggregations_service.pre_authorize_clients(
           task.aggregation_session_id, num_tokens=1)[0]
       response = task_assignments_pb2.StartTaskAssignmentResponse(
           task_assignment=task_assignments_pb2.TaskAssignment(
@@ -107,7 +107,7 @@ class Service:
                   task_assignments_pb2.TaskAssignment.AggregationInfo()),
               session_id=request.session_id,
               aggregation_id=task.aggregation_session_id,
-              client_token=client_token,
+              authorization_token=authorization_token,
               task_name=task.task_name,
               init_checkpoint=task.init_checkpoint,
               plan=task.plan))

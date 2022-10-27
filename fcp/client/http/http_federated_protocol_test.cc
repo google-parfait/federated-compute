@@ -375,7 +375,7 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
   forwarding_info->set_target_uri_prefix(kAggregationTargetUri);
   task_assignment->set_session_id(kClientSessionId);
   task_assignment->set_aggregation_id(aggregation_session_id);
-  task_assignment->set_client_token(kClientToken);
+  task_assignment->set_authorization_token(kClientToken);
   *task_assignment->mutable_plan() = plan;
   *task_assignment->mutable_init_checkpoint() = checkpoint;
   task_assignment->mutable_federated_select_uri_info()->set_uri_template(

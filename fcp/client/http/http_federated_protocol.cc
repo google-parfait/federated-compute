@@ -681,7 +681,9 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   object_state_ = ObjectState::kCheckinAccepted;
   session_id_ = task_assignment.session_id();
   aggregation_session_id_ = task_assignment.aggregation_id();
-  aggregation_client_token_ = task_assignment.client_token();
+  // TODO(team): Consider renaming aggregation_client_token_ to
+  // aggregation_authorization_token_.
+  aggregation_client_token_ = task_assignment.authorization_token();
   std::optional<SecAggInfo> sec_agg_info;
   if (task_assignment.has_secure_aggregation_info()) {
     sec_agg_info =

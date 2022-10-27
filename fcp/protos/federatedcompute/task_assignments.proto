@@ -177,7 +177,7 @@ message TaskAssignment {
   string aggregation_id = 2;
 
   // Unique identifier for the client's participation in an aggregation session.
-  string client_token = 6;
+  string authorization_token = 6;
 
   // The name identifying the task that was assigned.
   string task_name = 7;

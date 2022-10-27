@@ -105,7 +105,7 @@ class TaskAssignmentsTest(absltest.TestCase):
                     task_assignments_pb2.TaskAssignment.AggregationInfo()),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session',
-                client_token='token',
+                authorization_token='token',
                 task_name='task',
                 plan=task_plan,
                 init_checkpoint=task_checkpoint)))
@@ -148,7 +148,7 @@ class TaskAssignmentsTest(absltest.TestCase):
                     task_assignments_pb2.TaskAssignment.AggregationInfo()),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session1',
-                client_token='token',
+                authorization_token='token',
                 task_name='task1',
                 plan=task1_plan,
                 init_checkpoint=task1_checkpoint)))
@@ -169,7 +169,7 @@ class TaskAssignmentsTest(absltest.TestCase):
                     task_assignments_pb2.TaskAssignment.AggregationInfo()),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session2',
-                client_token='token',
+                authorization_token='token',
                 task_name='task2',
                 plan=task2_plan,
                 init_checkpoint=task2_checkpoint)))

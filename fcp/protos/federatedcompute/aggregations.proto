@@ -34,7 +34,7 @@ service Aggregations {
   rpc StartAggregationDataUpload(StartAggregationDataUploadRequest)
       returns (google.longrunning.Operation) {
     option (google.api.http) = {
-      post: "/v1/aggregations/{aggregation_id}/clients/{client_token}:startdataupload"
+      post: "/v1/aggregations/{aggregation_id}/clients/{authorization_token}:startdataupload"
       body: "*"
     };
     option (google.longrunning.operation_info) = {
@@ -92,12 +92,12 @@ message StartAggregationDataUploadRequest {
   string aggregation_id = 1
       ;
 
-  // The client token returned by the server when the client was assigned a
-  // task.
+  // The authorization token returned by the server when the client was assigned
+  // a task.
   //
   // Note that HTTP clients set this value in the request URL instead of the
   // request body.
-  string client_token = 2
+  string authorization_token = 2
       ;
 }
 
@@ -110,6 +110,10 @@ message StartAggregationDataUploadResponse {
 
   // Information about where to upload aggregation result data.
   ByteStreamResource resource = 2;
+
+  // Unique token that the client must include in the subsequent protocol
+  // requests.
+  string client_token = 3;
 }
 
 message SubmitAggregationResultRequest {
