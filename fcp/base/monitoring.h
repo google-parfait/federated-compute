@@ -129,7 +129,7 @@ namespace internal {
  */
 class Logger {
  public:
-  virtual ~Logger() {}
+  virtual ~Logger() = default;
 
   /**
    * Basic log function.

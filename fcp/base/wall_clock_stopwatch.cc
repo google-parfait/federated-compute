@@ -27,7 +27,7 @@ namespace fcp {
 namespace internal {
 class RealWallClockStopwatch : public WallClockStopwatch {
  public:
-  RealWallClockStopwatch() {}
+  RealWallClockStopwatch() = default;
 
   Handle Start() override ABSL_LOCKS_EXCLUDED(mutex_) {
     return WallClockStopwatch::Handle(this);
@@ -72,7 +72,7 @@ class RealWallClockStopwatch : public WallClockStopwatch {
 // flag-off the measurement of something).
 class NoopWallClockStopwatch : public WallClockStopwatch {
  public:
-  NoopWallClockStopwatch() {}
+  NoopWallClockStopwatch() = default;
 
   Handle Start() override { return Handle(nullptr); }
   absl::Duration GetTotalDuration() const override {

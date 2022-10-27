@@ -52,7 +52,7 @@ class WorkerImpl : public Worker, public LifetimeTracker {
  public:
   explicit WorkerImpl(Scheduler* scheduler) : scheduler_(scheduler) {}
 
-  ~WorkerImpl() override {}
+  ~WorkerImpl() override = default;
 
   void Schedule(std::function<void()> task) override {
     absl::MutexLock lock(&busy_);
