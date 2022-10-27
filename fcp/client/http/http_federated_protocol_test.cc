@@ -1963,6 +1963,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSimpleAggSuccess) {
 }
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
+  absl::Duration plan_duration = absl::Minutes(5);
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin
@@ -1995,6 +1996,10 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
   secure_aggregand_execution_info.set_modulus(9999);
   (*secure_aggregands)["secagg_tensor"] = secure_aggregand_execution_info;
 
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, plan_duration);
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2031,17 +2036,108 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
                                             IsEmpty(), 0, IsEmpty()))))))
       .WillOnce(Return(absl::OkStatus()));
 
+  EXPECT_OK(
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedViaSecureAggReportTaskResultFailed) {
   absl::Duration plan_duration = absl::Minutes(5);
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  StartSecureAggregationResponse start_secure_aggregation_response;
+  auto masked_result_resource =
+      start_secure_aggregation_response.mutable_masked_result_resource();
+  masked_result_resource->set_resource_name("masked_resource");
+  masked_result_resource->mutable_data_upload_forwarding_info()
+      ->set_target_uri_prefix("https://bytestream.uri/");
+
+  auto nonmasked_result_resource =
+      start_secure_aggregation_response.mutable_nonmasked_result_resource();
+  nonmasked_result_resource->set_resource_name("nonmasked_resource");
+  nonmasked_result_resource->mutable_data_upload_forwarding_info()
+      ->set_target_uri_prefix("https://bytestream.uri/");
+
+  start_secure_aggregation_response.mutable_secagg_protocol_forwarding_info()
+      ->set_target_uri_prefix("https://secure.aggregations.uri/");
+  auto protocol_execution_info =
+      start_secure_aggregation_response.mutable_protocol_execution_info();
+  protocol_execution_info->set_minimum_surviving_clients_for_reconstruction(
+      450);
+  protocol_execution_info->set_expected_number_of_clients(500);
+
+  auto secure_aggregands =
+      start_secure_aggregation_response.mutable_secure_aggregands();
+  SecureAggregandExecutionInfo secure_aggregand_execution_info;
+  secure_aggregand_execution_info.set_modulus(9999);
+  (*secure_aggregands)["secagg_tensor"] = secure_aggregand_execution_info;
+
+  // Mock a failed ReportTaskResult request.
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+                  "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  ReportTaskResultRequestMatcher(
+                      EqualsProto(GetExpectedReportTaskResultRequest(
+                          kAggregationSessionId, google::rpc::Code::OK,
+                          plan_duration))))))
+      .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
+  EXPECT_CALL(mock_log_manager_,
+              LogDiag(ProdDiagCode::HTTP_REPORT_TASK_RESULT_REQUEST_FAILED));
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://aggregation.uri/v1/secureaggregations/"
+          "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:start?%24alt=proto",
+          HttpRequest::Method::kPost, _,
+          StartSecureAggregationRequest().SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreatePendingOperation("operations/foo#bar").SerializeAsString())));
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://aggregation.uri/v1/operations/foo%23bar?%24alt=proto",
+          HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreateDoneOperation(kOperationName, start_secure_aggregation_response)
+              .SerializeAsString())));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  results.emplace("secagg_tensor", QuantizedTensor());
+
+  MockSecAggRunner* mock_secagg_runner = new StrictMock<MockSecAggRunner>();
+  EXPECT_CALL(*mock_secagg_runner_factory_,
+              CreateSecAggRunner(_, _, _, _, _, 500, 450, _, _))
+      .WillOnce(Return(ByMove(absl::WrapUnique(mock_secagg_runner))));
+  EXPECT_CALL(*mock_secagg_runner,
+              Run(UnorderedElementsAre(
+                  Pair("secagg_tensor", VariantWith<QuantizedTensor>(FieldsAre(
+                                            IsEmpty(), 0, IsEmpty()))))))
+      .WillOnce(Return(absl::OkStatus()));
+
   EXPECT_OK(
       federated_protocol_->ReportCompleted(std::move(results), plan_duration));
 }
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedStartSecAggFailed) {
+  absl::Duration plan_duration = absl::Minutes(5);
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
-
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, plan_duration);
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2061,7 +2157,6 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedStartSecAggFailed) {
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   results.emplace("secagg_tensor", QuantizedTensor());
 
-  absl::Duration plan_duration = absl::Minutes(5);
   EXPECT_THAT(
       federated_protocol_->ReportCompleted(std::move(results), plan_duration),
       IsCode(absl::StatusCode::kInternal));
@@ -2069,11 +2164,15 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedStartSecAggFailed) {
 
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedStartSecAggFailedImmediately) {
+  absl::Duration plan_duration = absl::Minutes(5);
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
-
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, plan_duration);
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2089,7 +2188,6 @@ TEST_F(HttpFederatedProtocolTest,
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   results.emplace("secagg_tensor", QuantizedTensor());
 
-  absl::Duration plan_duration = absl::Minutes(5);
   EXPECT_THAT(
       federated_protocol_->ReportCompleted(std::move(results), plan_duration),
       IsCode(absl::StatusCode::kPermissionDenied));

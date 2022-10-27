@@ -941,8 +941,9 @@ absl::Status HttpFederatedProtocol::AbortAggregation(
 
 absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
     ComputationResults results, absl::Duration plan_duration) {
-  FCP_ASSIGN_OR_RETURN(StartSecureAggregationResponse response_proto,
-                       StartSecureAggregation());
+  FCP_ASSIGN_OR_RETURN(
+      StartSecureAggregationResponse response_proto,
+      StartSecureAggregationAndReportTaskResult(plan_duration));
   SecureAggregationProtocolExecutionInfo protocol_execution_info =
       response_proto.protocol_execution_info();
 
@@ -998,21 +999,51 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
 }
 
 absl::StatusOr<StartSecureAggregationResponse>
-HttpFederatedProtocol::StartSecureAggregation() {
-  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
+HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
+    absl::Duration plan_duration) {
+  FCP_ASSIGN_OR_RETURN(std::string start_secure_aggregation_uri_suffix,
                        CreateStartSecureAggregationUriSuffix(
                            aggregation_session_id_, aggregation_client_token_));
   FCP_ASSIGN_OR_RETURN(
-      std::unique_ptr<HttpRequest> request,
+      std::unique_ptr<HttpRequest> start_secure_aggregation_http_request,
       aggregation_request_creator_->CreateProtocolRequest(
-          uri_suffix, QueryParams(), HttpRequest::Method::kPost,
+          start_secure_aggregation_uri_suffix, QueryParams(),
+          HttpRequest::Method::kPost,
           StartSecureAggregationRequest::default_instance().SerializeAsString(),
           /*is_protobuf_encoded=*/true));
-  absl::StatusOr<InMemoryHttpResponse> response =
-      protocol_request_helper_.PerformProtocolRequest(std::move(request),
-                                                      *interruptible_runner_);
+
+  FCP_ASSIGN_OR_RETURN(
+      std::string report_task_result_uri_suffix,
+      CreateReportTaskResultUriSuffix(population_name_, session_id_));
+  FCP_ASSIGN_OR_RETURN(
+      ReportTaskResultRequest report_task_result_request,
+      CreateReportTaskResultRequest(engine::PhaseOutcome::COMPLETED,
+                                    plan_duration, aggregation_session_id_));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> report_task_result_http_request,
+      task_assignment_request_creator_->CreateProtocolRequest(
+          report_task_result_uri_suffix, QueryParams(),
+          HttpRequest::Method::kPost,
+          report_task_result_request.SerializeAsString(),
+          /*is_protobuf_encoded=*/true));
+
+  std::vector<std::unique_ptr<HttpRequest>> requests;
+  requests.push_back(std::move(start_secure_aggregation_http_request));
+  requests.push_back(std::move(report_task_result_http_request));
+
+  FCP_ASSIGN_OR_RETURN(
+      std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
+      protocol_request_helper_.PerformMultipleProtocolRequests(
+          std::move(requests), *interruptible_runner_));
+  // We will handle the response for StartSecureAggregation RPC.
+  // The ReportTaskResult RPC is for best efforts only, we will ignore the
+  // response, only log a diagcode if it fails.
+  FCP_CHECK(responses.size() == 2);
+  if (!responses[1].ok()) {
+    log_manager_->LogDiag(ProdDiagCode::HTTP_REPORT_TASK_RESULT_REQUEST_FAILED);
+  }
   FCP_ASSIGN_OR_RETURN(Operation initial_operation,
-                       ParseOperationProtoFromHttpResponse(response));
+                       ParseOperationProtoFromHttpResponse(responses[0]));
   FCP_ASSIGN_OR_RETURN(Operation completed_operation,
                        protocol_request_helper_.PollOperationResponseUntilDone(
                            initial_operation, *aggregation_request_creator_,

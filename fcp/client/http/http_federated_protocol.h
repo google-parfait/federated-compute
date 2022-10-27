@@ -166,10 +166,11 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   absl::Status ReportViaSecureAggregation(ComputationResults results,
                                           absl::Duration plan_duration);
 
-  // Helper function to perform a StartSecureAggregationRequest.
+  // Helper function to perform a StartSecureAggregationRequest and a
+  // ReportTaskResultRequest.
   absl::StatusOr<
       google::internal::federatedcompute::v1::StartSecureAggregationResponse>
-  StartSecureAggregation();
+  StartSecureAggregationAndReportTaskResult(absl::Duration plan_duration);
 
   struct TaskResources {
     const ::google::internal::federatedcompute::v1::Resource& plan;
