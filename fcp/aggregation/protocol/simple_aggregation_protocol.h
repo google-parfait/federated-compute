@@ -28,6 +28,7 @@
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
+#include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 
 namespace fcp::aggregation {
@@ -55,6 +56,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   static absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>> Create(
       const Configuration& configuration,
       AggregationProtocol::Callback* callback,
+      const CheckpointParserFactory* checkpoint_parser_factory,
       const CheckpointBuilderFactory* checkpoint_builder_factory);
 
   // Implementation of the overridden Aggregation Protocol methods.

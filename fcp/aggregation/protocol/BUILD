@@ -76,6 +76,7 @@ cc_library(
     ],
     hdrs = [
         "checkpoint_builder.h",
+        "checkpoint_parser.h",
         "simple_aggregation_protocol.h",
     ],
     copts = FCP_COPTS,
@@ -89,6 +90,7 @@ cc_library(
         "//fcp/aggregation/tensorflow:converters",
         "//fcp/base",
         "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

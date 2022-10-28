@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
@@ -100,8 +101,10 @@ absl::StatusOr<Intrinsic> CreateIntrinsic(
 absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>>
 SimpleAggregationProtocol::Create(
     const Configuration& configuration, AggregationProtocol::Callback* callback,
+    const CheckpointParserFactory* checkpoint_parser_factory,
     const CheckpointBuilderFactory* checkpoint_builder_factory) {
   FCP_CHECK(callback != nullptr);
+  FCP_CHECK(checkpoint_parser_factory != nullptr);
   FCP_CHECK(checkpoint_builder_factory != nullptr);
 
   std::vector<Intrinsic> intrinsics;

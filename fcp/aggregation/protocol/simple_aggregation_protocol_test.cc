@@ -26,6 +26,7 @@
 #include "absl/strings/cord.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
+#include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/testing/testing.h"
@@ -38,6 +39,19 @@ using ::testing::Return;
 using ::testing::StrEq;
 
 // TODO(team): Consider moving mock classes into a separate test library.
+class MockCheckpointParser : public CheckpointParser {
+  MOCK_METHOD(absl::StatusOr<std::vector<std::string>>, GetTensorNames, (),
+              (const override));
+  MOCK_METHOD(absl::StatusOr<Tensor>, GetTensor, (const std::string& name),
+              (const override));
+};
+
+class MockCheckpointParserFactory : public CheckpointParserFactory {
+ public:
+  MOCK_METHOD(std::unique_ptr<CheckpointParser>, Create,
+              (const absl::Cord& serialized_checkpoint), (const override));
+};
+
 class MockCheckpointBuilder : public CheckpointBuilder {
  public:
   MOCK_METHOD(absl::Status, Add,
@@ -70,6 +84,7 @@ class SimpleAggregationProtocolTest : public ::testing::Test {
 
  protected:
   MockAggregationProtocolCallback callback_;
+  MockCheckpointParserFactory checkpoint_parser_factory_;
   MockCheckpointBuilderFactory checkpoint_builder_factory_;
   std::unique_ptr<MockCheckpointBuilder> wrapped_checkpoint_builder_;
   MockCheckpointBuilder& checkpoint_builder_;
@@ -119,7 +134,8 @@ TEST_F(SimpleAggregationProtocolTest, CreateAndGetResult_Success) {
   // Verify that the protocol can be created successfully.
   absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>>
       protocol_or_status = SimpleAggregationProtocol::Create(
-          config_message, &callback_, &checkpoint_builder_factory_);
+          config_message, &callback_, &checkpoint_parser_factory_,
+          &checkpoint_builder_factory_);
   EXPECT_THAT(protocol_or_status, IsOk());
   std::unique_ptr<SimpleAggregationProtocol> protocol =
       std::move(protocol_or_status).value();
@@ -172,6 +188,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedNumberOfInputs) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
+                                                &checkpoint_parser_factory_,
                                                 &checkpoint_builder_factory_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -200,6 +217,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedNumberOfOutputs) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
+                                                &checkpoint_parser_factory_,
                                                 &checkpoint_builder_factory_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -217,6 +235,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedInputType) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
+                                                &checkpoint_parser_factory_,
                                                 &checkpoint_builder_factory_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -240,6 +259,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedIntrinsicUri) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
+                                                &checkpoint_parser_factory_,
                                                 &checkpoint_builder_factory_),
               IsCode(NOT_FOUND));
 }
@@ -263,6 +283,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedInputSpec) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
+                                                &checkpoint_parser_factory_,
                                                 &checkpoint_builder_factory_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -286,6 +307,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnmatchingInputAndOutputDataType) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
+                                                &checkpoint_parser_factory_,
                                                 &checkpoint_builder_factory_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -309,6 +331,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnmatchingInputAndOutputShape) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
+                                                &checkpoint_parser_factory_,
                                                 &checkpoint_builder_factory_),
               IsCode(INVALID_ARGUMENT));
 }
