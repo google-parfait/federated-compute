@@ -953,3 +953,72 @@ py_test(
         "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
+
+DICTIONARY_OPS_SRCS = ["dictionary_ops.cc"]
+
+DICTIONARY_OPS_DEPS = [
+    "//fcp/base",
+    "//fcp/dictionary:dictionary_lib",
+    "//fcp/dictionary:dictionary_cc_proto",
+    "@com_google_absl//absl/status",
+    "@com_google_absl//absl/status:statusor",
+]
+
+cc_library(
+    name = "dictionary_ops_lib",
+    srcs = DICTIONARY_OPS_SRCS,
+    copts = FCP_TF_COPTS,
+    visibility = ["//visibility:public"],
+    deps = DICTIONARY_OPS_DEPS + [
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:lib",
+    ],
+    # Uses TensorFlow's registration macros
+    alwayslink = 1,
+)
+
+tf_custom_op_library(
+    name = "_dictionary_ops.so",
+    srcs = DICTIONARY_OPS_SRCS,
+    copts = FCP_TF_COPTS,
+    deps = DICTIONARY_OPS_DEPS,
+)
+
+tf_gen_op_wrapper_py(
+    name = "gen_dictionary_ops_py",
+    out = "gen_dictionary_ops.py",
+    op_allowlist = [
+        "DictionarySize",
+        "DictionaryLookup",
+        "DictionaryReverseLookup",
+    ],
+    deps = [":dictionary_ops_lib"],
+)
+
+tf_custom_op_py_library(
+    name = "dictionary_ops_py",
+    srcs = ["dictionary_ops.py"],
+    dso = [":_dictionary_ops.so"],
+    kernels = [
+        ":dictionary_ops_lib",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gen_dictionary_ops_py",
+        "//fcp/dictionary:dictionary_py_pb2",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
+
+py_test(
+    name = "dictionary_ops_test",
+    srcs = ["dictionary_ops_test.py"],
+    python_version = "PY3",
+    deps = [
+        ":dictionary_ops_py",
+        "//fcp/dictionary:dictionary_py_pb2",
+        "@com_google_absl_py//absl/testing:parameterized",
+        "@com_google_protobuf//:protobuf_python",
+        "@org_tensorflow//tensorflow:tensorflow_py",
+    ],
+)
