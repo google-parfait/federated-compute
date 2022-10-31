@@ -103,7 +103,6 @@ public final class HttpClientForNativeImplTest {
           /*responseBodyGzipBufferSizeBytes=*/ DEFAULT_TEST_CHUNK_BUFFER_SIZE,
           /*callDisconnectWhenCancelled=*/ true,
           /*supportAcceptEncodingHeader=*/ supportAcceptEncodingHeader,
-          /*estimateSentReceivedBytes=*/ true,
           /*estimatedHttp2HeaderCompressionRatio=*/ ESTIMATED_HTTP2_HEADER_COMPRESSION_RATIO);
     }
 

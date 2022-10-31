@@ -125,7 +125,6 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
   private final int responseBodyGzipBufferSizeBytes;
   private final boolean callDisconnectWhenCancelled;
   private final boolean supportAcceptEncodingHeader;
-  private final boolean estimateSentReceivedBytes;
   private final double estimatedHttp2HeaderCompressionRatio;
 
   // Until we have an actual connection, this is a no-op.
@@ -187,8 +186,6 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
    *     flag allows turning that behavior off. When this setting is false, the assumption is that
    *     the implementation at the very least sets "Accept-Encoding: gzip" (as required by the C++
    *     `HttpClient` contract).
-   * @param estimateSentReceivedBytes whether to estimate the number of sent/received bytes as the
-   *     request is processed.
    * @param estimatedHttp2HeaderCompressionRatio the compression ratio to account for in the
    *     calculation of sent/received bytes estimates for the header data, in case HTTP/2 is used
    *     for the request. HTTP/2 supports HPACK, and hence counting the header data in uncompressed
@@ -209,7 +206,6 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
       int responseBodyGzipBufferSizeBytes,
       boolean callDisconnectWhenCancelled,
       boolean supportAcceptEncodingHeader,
-      boolean estimateSentReceivedBytes,
       double estimatedHttp2HeaderCompressionRatio) {
     this.request = request;
     this.callFromNativeWrapper = callFromNativeWrapper;
@@ -222,7 +218,6 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     this.responseBodyGzipBufferSizeBytes = responseBodyGzipBufferSizeBytes;
     this.callDisconnectWhenCancelled = callDisconnectWhenCancelled;
     this.supportAcceptEncodingHeader = supportAcceptEncodingHeader;
-    this.estimateSentReceivedBytes = estimateSentReceivedBytes;
     this.estimatedHttp2HeaderCompressionRatio = estimatedHttp2HeaderCompressionRatio;
   }
 
@@ -445,7 +440,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     //
     // If there was no Content-Length header at all, then we must go by our own calculation of the
     // number of received bytes (i.e. based on the bytes we observed in the response InputStream).
-    if (estimateSentReceivedBytes && originalContentLengthHeader > -1) {
+    if (originalContentLengthHeader > -1) {
       receivedBodyBytes = originalContentLengthHeader;
     }
     // If the request hadn't already been closed, it should be considered closed now (since we're
@@ -716,28 +711,23 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     // headers (incl. implementation-specified ones), this isn't actually the case for most
     // HttpURLConnection implementations (and some implementations don't return anything from
     // getRequestProperties(), even if we've already called addRequestProperty()).
-    if (estimateSentReceivedBytes) {
-      // First, account for the HTTP request status line.
+    // First, account for the HTTP request status line.
+    sentHeaderBytes +=
+        requestMethod.length()
+            + " ".length()
+            + request.getUri().length()
+            + " HTTP/1.1\r\n".length();
+    // Then account for each header we know is will be included.
+    for (JniHttpHeader header : request.getExtraHeadersList()) {
+      // Each entry should count the lengths of the header name + header value (rather than only
+      // counting the header name length once), since duplicated headers are likely to be sent in
+      // separate header lines (rather than being coalesced into a single header line by the
+      // HttpURLConnection implementation).
       sentHeaderBytes +=
-          requestMethod.length()
-              + " ".length()
-              + request.getUri().length()
-              + " HTTP/1.1\r\n".length();
-      // Then account for each header we know is will be included.
-      for (JniHttpHeader header : request.getExtraHeadersList()) {
-        // Each entry should count the lengths of the header name + header value (rather than only
-        // counting the header name length once), since duplicated headers are likely to be sent in
-        // separate header lines (rather than being coalesced into a single header line by the
-        // HttpURLConnection implementation).
-        sentHeaderBytes +=
-            header.getName().length()
-                + ": ".length()
-                + header.getValue().length()
-                + "\r\n".length();
-      }
-      // Account for the \r\n characters at the end of the request headers.
-      sentHeaderBytes += "\r\n".length();
+          header.getName().length() + ": ".length() + header.getValue().length() + "\r\n".length();
     }
+    // Account for the \r\n characters at the end of the request headers.
+    sentHeaderBytes += "\r\n".length();
   }
 
   /**
@@ -787,9 +777,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
         // Account for the data we're about to send in our 'sent bytes' stats. We do this before we
         // write it to the output stream (so that this over rather than under-estimates the number,
         // in case we get interrupted mid-write).
-        if (estimateSentReceivedBytes) {
-          sentBodyBytes += actualBytesRead[0];
-        }
+        sentBodyBytes += actualBytesRead[0];
 
         // Write the data from the native layer to the network socket.
         outputStream.write(buffer, 0, actualBytesRead[0]);
@@ -866,20 +854,18 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
     JniHttpResponse.Builder response = JniHttpResponse.newBuilder();
     response.setCode(responseCode);
 
-    if (estimateSentReceivedBytes) {
-      // Account for the response status line in the 'received bytes' stats.
-      String responseMessage = connection.getResponseMessage();
-      // Note that responseMessage could be null or empty if an HTTP/2 implementation is used (since
-      // HTTP/2 doesn't have 'reason phrases' in the status line anymore, only codes).
-      responseMessage = nullToEmpty(responseMessage);
-      receivedHeaderBytes += "HTTP/1.1 XXX ".length() + responseMessage.length() + "\r\n".length();
-      // Add two bytes to account for the \r\n at the end of the response headers.
-      receivedHeaderBytes += "\r\n".length();
+    // Account for the response status line in the 'received bytes' stats.
+    String responseMessage = connection.getResponseMessage();
+    // Note that responseMessage could be null or empty if an HTTP/2 implementation is used (since
+    // HTTP/2 doesn't have 'reason phrases' in the status line anymore, only codes).
+    responseMessage = nullToEmpty(responseMessage);
+    receivedHeaderBytes += "HTTP/1.1 XXX ".length() + responseMessage.length() + "\r\n".length();
+    // Add two bytes to account for the \r\n at the end of the response headers.
+    receivedHeaderBytes += "\r\n".length();
 
-      // If the response message was empty, then we assume that the request used HTTP/2. This is a
-      // flawed heuristic, but the best we have available.
-      requestUsedHttp2Heuristic = responseMessage.isEmpty();
-    }
+    // If the response message was empty, then we assume that the request used HTTP/2. This is a
+    // flawed heuristic, but the best we have available.
+    requestUsedHttp2Heuristic = responseMessage.isEmpty();
 
     // Now let's process the response headers.
     long receivedContentLength = -1;
@@ -895,16 +881,14 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
       if (header.getKey() == null) {
         continue;
       }
-      if (estimateSentReceivedBytes) {
-        // Count the bytes for all the headers (including accounting for the colon, space, and
-        // newlines that would've been sent over the wire).
-        for (String headerValue : header.getValue()) {
-          receivedHeaderBytes +=
-              header.getKey() == null ? 0 : (header.getKey().length() + ": ".length());
-          receivedHeaderBytes += headerValue == null ? 0 : headerValue.length();
-          // Account for the \r\n chars at the end of the header.
-          receivedHeaderBytes += "\r\n".length();
-        }
+      // Count the bytes for all the headers (including accounting for the colon, space, and
+      // newlines that would've been sent over the wire).
+      for (String headerValue : header.getValue()) {
+        receivedHeaderBytes +=
+            header.getKey() == null ? 0 : (header.getKey().length() + ": ".length());
+        receivedHeaderBytes += headerValue == null ? 0 : headerValue.length();
+        // Account for the \r\n chars at the end of the header.
+        receivedHeaderBytes += "\r\n".length();
       }
 
       // Now let's skip headers we shouldn't return to the C++ layer.
@@ -934,7 +918,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
       // estimate the network bytes we've received (but only once the request has completed
       // successfully).
       if (Ascii.equalsIgnoreCase(CONTENT_LENGTH_HEADER, header.getKey())) {
-        if (estimateSentReceivedBytes && header.getValue().size() == 1) {
+        if (header.getValue().size() == 1) {
           try {
             receivedContentLength = Long.parseLong(header.getValue().get(0));
           } catch (NumberFormatException e) {
@@ -1001,11 +985,9 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
           // would be an over-estimate of actual network data usage. We will, however, try to
           // provide a more accurate value once the request is completed successfully, if a
           // Content-Length response header was available. See doOnResponseCompleted.
-          if (estimateSentReceivedBytes) {
-            long newNetworkReceivedBytes = networkStream.getCount();
-            receivedBodyBytes += (newNetworkReceivedBytes - networkReceivedBytes);
-            networkReceivedBytes = newNetworkReceivedBytes;
-          }
+          long newNetworkReceivedBytes = networkStream.getCount();
+          receivedBodyBytes += (newNetworkReceivedBytes - networkReceivedBytes);
+          networkReceivedBytes = newNetworkReceivedBytes;
 
           if (actualBytesRead == -1) {
             // End of data reached (successfully). Break out of inner loop.
