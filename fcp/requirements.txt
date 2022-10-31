@@ -1,8 +1,7 @@
 # Requirements for the Federated Compute Python development environment.
 #
-# In general, Python dependencies should be satisfied using Bazel deps, not pip.
-# However, we use pip for packages that have lots of transitive dependencies and
-# aren't well integrated with Bazel.
+# For compatibility with TensorFlow and TensorFlow Federated, most Python
+# dependencies should be managed by pip, not Bazel.
 #
 # *   For packages that have a stable release, we use a version that is
 #     compatible with that release (e.g. `~=x.y`). See
@@ -21,9 +20,9 @@
 # requires unique handling, we use a different version specifier and comment the
 # versioning scheme or reasoning.
 
-# While TensorFlow is managed as a Bazel dependency, installing an identical
-# version here ensures that all of TensorFlow's non-Bazel-tracked dependencies
-# are available. This also ensures that the TensorFlow package installed
-# transitively by TFF provides the right dependencies.
+absl-py>=1.0,==1.*
+protobuf~=3.19
+# The TensorFlow version should match what's specified in the WORKSPACE file for
+# C++ targets.
 tensorflow==2.10.0
 tensorflow-federated~=0.37

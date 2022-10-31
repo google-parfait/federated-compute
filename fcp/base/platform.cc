@@ -119,21 +119,6 @@ absl::Status WriteCordToFile(absl::string_view file_name,
   return absl::OkStatus();
 }
 
-absl::Status ReadFileToMessage(absl::string_view file_name,
-                               google::protobuf::Message* message) {
-  FCP_CHECK(message != nullptr);
-  auto file_name_str = std::string(file_name);
-  std::ifstream is(file_name_str);
-  if (!is) {
-    return absl::NotFoundError(
-        absl::StrCat("cannot read file ", file_name_str));
-  }
-  if (!message->ParseFromIstream(&is)) {
-    return absl::InvalidArgumentError("cannot parse message");
-  }
-  return absl::OkStatus();
-}
-
 bool FileExists(absl::string_view file_name) {
   struct stat info;
   return stat(std::string(file_name).c_str(), &info) == 0;

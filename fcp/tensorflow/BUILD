@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@system_provided_tf//:system_provided_tf.bzl", "tf_custom_op_library")
 load("@rules_python//python:defs.bzl", "py_binary", "py_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 load("//fcp/tracing:build_defs.bzl", "tracing_schema_cc_library")
-load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_cc_test", "tf_custom_op_library", "tf_gen_op_wrapper_py")
+load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_cc_test", "tf_gen_op_wrapper_py")
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_custom_op_py_library")
 load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
 
@@ -49,13 +50,13 @@ py_test(
     name = "tf_py_smoke_test",
     srcs = ["tf_py_smoke_test.py"],
     python_version = "PY3",
-    deps = ["@org_tensorflow//tensorflow:tensorflow_py"],
 )
 
 # Library for converting between the FCP and TensorFlow versions of a Status.
 # Note that this library is intended to be usable in an op .so, thus it depends
 # on TF headers but *not* an implementation (the final binary needs to link it
-# in).
+# in). We must also use the right copy of headers, depending on whether the
+# build is targeting a system-provided TF library or a bazel-built one.
 cc_library(
     name = "status",
     srcs = [
@@ -67,8 +68,10 @@ cc_library(
     copts = FCP_TF_COPTS,
     deps = [
         "//fcp/base",
-        "@org_tensorflow//tensorflow/core:framework_headers_lib",
-    ],
+    ] + select({
+        "@system_provided_tf//:system_provided_tf_build": ["@system_provided_tf//:tf_headers"],
+        "//conditions:default": ["@org_tensorflow//tensorflow/core:framework_headers_lib"],
+    }),
 )
 
 cc_test(
@@ -234,11 +237,8 @@ cc_library(
 # graph, this is of course not a problem.
 #
 # As such, the DSO version is specifically useful for *building graphs in
-# Python*, whereas a (C++) host program should probably use the cc_library
-# version.
-#
-# It's well-known that Bazel has a difficult time representing DSO dependencies. See
-# https://docs.google.com/document/d/1-tv0_79zGyBoDmaP_pYWaBVUwHUteLpAs90_rUl-VY8/edit
+# Python* and therefore targets the system-provided Python TensorFlow package.
+# (C++) host programs must use the cc_library version.
 
 EXTERNAL_DATASET_OP_SRCS = ["external_dataset_op.cc"]
 
@@ -292,10 +292,7 @@ tf_custom_op_py_library(
         ":external_dataset_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        ":gen_external_dataset_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":gen_external_dataset_py"],
 )
 
 # The dataset API isn't really usable from C++, so we generate a GraphDef for
@@ -305,10 +302,7 @@ py_binary(
     testonly = True,
     srcs = ["make_external_dataset_test_graph.py"],
     python_version = "PY3",
-    deps = [
-        ":external_dataset_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":external_dataset_py"],
 )
 
 genrule(
@@ -403,20 +397,14 @@ tf_custom_op_py_library(
     kernels = [
         ":crc32_op_lib",
     ],
-    deps = [
-        ":gen_crc32_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":gen_crc32_py"],
 )
 
 py_test(
     name = "crc32_test",
     srcs = ["crc32_test.py"],
     python_version = "PY3",
-    deps = [
-        ":crc32_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":crc32_py"],
 )
 
 EXAMPLE_SELECTOR_FUSER_OP_SRCS = ["example_selector_fuser_op.cc"]
@@ -444,6 +432,9 @@ tf_custom_op_library(
     name = "_example_selector_fuser_op.so",
     srcs = EXAMPLE_SELECTOR_FUSER_OP_SRCS,
     copts = FCP_TF_COPTS,
+    # This op uses Bazel-built protocol buffers, which are incompatible with
+    # the headers provided by the tensorflow pip package.
+    tags = ["manual"],
     deps = EXAMPLE_SELECTOR_FUSER_OP_DEPS,
 )
 
@@ -463,11 +454,9 @@ tf_custom_op_py_library(
     kernels = [
         ":example_selector_fuser_op_lib",
     ],
+    tags = ["manual"],  # :_example_selector_fuser_op.so is manual
     visibility = ["//visibility:public"],
-    deps = [
-        ":gen_example_selector_fuser_op",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":gen_example_selector_fuser_op"],
 )
 
 py_proto_library(
@@ -482,11 +471,11 @@ py_test(
     name = "example_selector_fuser_test",
     srcs = ["example_selector_fuser_test.py"],
     python_version = "PY3",
+    tags = ["manual"],  # :example_selector_fuser_py is manual
     deps = [
         ":example_selector_fuser_py",
         ":test_selector_py_pb2",
         "//fcp/protos:plan_py_pb2",
-        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -567,10 +556,7 @@ tf_custom_op_py_library(
         ":serve_slices_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        ":gen_serve_slices_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":gen_serve_slices_py"],
 )
 
 # Generate a GraphDef for testing `ServeSlices` using Python.
@@ -579,12 +565,7 @@ py_binary(
     testonly = True,
     srcs = ["make_serve_slices_test_graph.py"],
     python_version = "PY3",
-    deps = [
-        ":serve_slices_py",
-        "@com_google_absl_py//absl:app",
-        "@com_google_absl_py//absl/flags",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":serve_slices_py"],
 )
 
 genrule(
@@ -645,6 +626,9 @@ tf_custom_op_library(
     name = "_make_slices_selector_example_selector_op.so",
     srcs = MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS,
     copts = FCP_TF_COPTS,
+    # This op uses Bazel-built protocol buffers, which are incompatible with
+    # the headers provided by the tensorflow pip package.
+    tags = ["manual"],
     deps = ["@com_google_protobuf//:protobuf"] + MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS,
 )
 
@@ -667,11 +651,9 @@ tf_custom_op_py_library(
     kernels = [
         ":make_slices_selector_example_selector_op_lib",
     ],
+    tags = ["manual"],  # :_make_slices_selector_example_selector_op.so is manual
     visibility = ["//visibility:public"],
-    deps = [
-        ":gen_make_slices_selector_example_selector_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":gen_make_slices_selector_example_selector_py"],
 )
 
 # Test `MakeSlicesSelectorExampleSelector` using Python.
@@ -680,10 +662,10 @@ py_test(
     testonly = True,
     srcs = ["make_slices_selector_example_selector_test.py"],
     python_version = "PY3",
+    tags = ["manual"],  # :make_slices_selector_example_selector_py is manual
     deps = [
         ":make_slices_selector_example_selector_py",
         "//fcp/protos:plan_py_pb2",
-        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -715,6 +697,9 @@ tf_custom_op_library(
     name = "_append_slices_op.so",
     srcs = APPEND_SLICES_OP_SRCS,
     copts = FCP_TF_COPTS,
+    # This op uses Bazel-built protocol buffers, which are incompatible with
+    # the headers provided by the tensorflow pip package.
+    tags = ["manual"],
     deps = APPEND_SLICES_OP_DEPS,
 )
 
@@ -737,11 +722,9 @@ tf_custom_op_py_library(
     kernels = [
         ":append_slices_op_lib",
     ],
+    tags = ["manual"],  # :_append_slices_op.so is manual
     visibility = ["//visibility:public"],
-    deps = [
-        ":gen_append_slices_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":gen_append_slices_py"],
 )
 
 # Test `AppendSlices` and `MergeAppendedSlices` using Python.
@@ -750,10 +733,10 @@ py_test(
     testonly = True,
     srcs = ["append_slices_test.py"],
     python_version = "PY3",
+    tags = ["manual"],  # :append_slices_py is manual
     deps = [
         ":append_slices_py",
         ":delete_file_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -806,10 +789,7 @@ tf_custom_op_py_library(
         ":delete_file_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        ":gen_delete_file_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":gen_delete_file_py"],
 )
 
 # Test `DeleteFile` using Python.
@@ -818,10 +798,7 @@ py_test(
     testonly = True,
     srcs = ["delete_file_test.py"],
     python_version = "PY3",
-    deps = [
-        ":delete_file_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":delete_file_py"],
 )
 
 TENSOR_NAME_OP_SRCS = ["tensor_name_op.cc"]
@@ -873,10 +850,7 @@ tf_custom_op_py_library(
         ":tensor_name_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        ":gen_tensor_name_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":gen_tensor_name_py"],
 )
 
 # Test `TensorName` using Python.
@@ -885,10 +859,7 @@ py_test(
     testonly = True,
     srcs = ["tensor_name_test.py"],
     python_version = "PY3",
-    deps = [
-        ":tensor_name_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":tensor_name_py"],
 )
 
 TASK_ELIGIBILITY_INFO_OPS_SRCS = ["task_eligibility_info_ops.cc"]
@@ -914,6 +885,9 @@ tf_custom_op_library(
     name = "_task_eligibility_info_ops.so",
     srcs = TASK_ELIGIBILITY_INFO_OPS_SRCS,
     copts = FCP_TF_COPTS,
+    # This op uses Bazel-built protocol buffers, which are incompatible with
+    # the headers provided by the tensorflow pip package.
+    tags = ["manual"],
     deps = TASK_ELIGIBILITY_INFO_OPS_DEPS,
 )
 
@@ -936,21 +910,19 @@ tf_custom_op_py_library(
     kernels = [
         ":task_eligibility_info_ops_lib",
     ],
+    tags = ["manual"],  # :_task_eligibility_info_ops.so is manual
     visibility = ["//visibility:public"],
-    deps = [
-        ":gen_task_eligibility_info_ops_py",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":gen_task_eligibility_info_ops_py"],
 )
 
 py_test(
     name = "task_eligibility_info_ops_test",
     srcs = ["task_eligibility_info_ops_test.py"],
     python_version = "PY3",
+    tags = ["manual"],  # :task_eligibility_info_ops_py is manual
     deps = [
         ":task_eligibility_info_ops_py",
         "//fcp/protos:federated_api_py_pb2",
-        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -981,6 +953,9 @@ tf_custom_op_library(
     name = "_dictionary_ops.so",
     srcs = DICTIONARY_OPS_SRCS,
     copts = FCP_TF_COPTS,
+    # This op uses Bazel-built protocol buffers, which are incompatible with
+    # the headers provided by the tensorflow pip package.
+    tags = ["manual"],
     deps = DICTIONARY_OPS_DEPS,
 )
 
@@ -1002,11 +977,11 @@ tf_custom_op_py_library(
     kernels = [
         ":dictionary_ops_lib",
     ],
+    tags = ["manual"],  # :_dictionary_ops.so is manual
     visibility = ["//visibility:public"],
     deps = [
         ":gen_dictionary_ops_py",
         "//fcp/dictionary:dictionary_py_pb2",
-        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -1014,11 +989,10 @@ py_test(
     name = "dictionary_ops_test",
     srcs = ["dictionary_ops_test.py"],
     python_version = "PY3",
+    tags = ["manual"],  # :dictionary_ops_py is manual
     deps = [
         ":dictionary_ops_py",
         "//fcp/dictionary:dictionary_py_pb2",
-        "@com_google_absl_py//absl/testing:parameterized",
-        "@com_google_protobuf//:protobuf_python",
-        "@org_tensorflow//tensorflow:tensorflow_py",
+        "//third_party/py/absl/testing:parameterized",
     ],
 )

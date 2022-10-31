@@ -1,0 +1,10 @@
+--- tensorflow/tensorflow.bzl
++++ tensorflow/tensorflow.bzl
+@@ -1320,7 +1320,6 @@
+         srcs_version = "PY3",
+         visibility = visibility,
+         deps = [
+-            clean_dep("//tensorflow/python:framework_for_generated_wrappers_v2"),
+         ],
+         # Instruct build_cleaner to try to avoid using this rule; typically ops
+         # creators will provide their own tf_custom_op_py_library based target

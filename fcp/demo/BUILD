@@ -10,7 +10,6 @@ py_library(
         ":plan_utils",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
-        "@com_google_absl_py//absl/logging",
         "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
     ],
 )
@@ -27,7 +26,6 @@ py_test(
         ":plan_utils",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
-        "@com_google_absl_py//absl/testing:absltest",
     ],
 )
 
@@ -38,7 +36,6 @@ py_library(
     deps = [
         ":http_actions",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
-        "@com_google_absl_py//absl/logging",
         "@com_google_googleapis//google/rpc:code_py_proto",
     ],
 )
@@ -52,7 +49,6 @@ py_test(
         ":eligibility_eval_tasks",
         ":http_actions",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
-        "@com_google_absl_py//absl/testing:absltest",
         "@com_google_googleapis//google/rpc:code_py_proto",
     ],
 )
@@ -61,11 +57,7 @@ py_library(
     name = "http_actions",
     srcs = ["http_actions.py"],
     srcs_version = "PY3",
-    deps = [
-        "@com_google_absl_py//absl/logging",
-        "@com_google_googleapis//google/api:annotations_py_proto",
-        "@com_google_protobuf//:protobuf_python",
-    ],
+    deps = ["@com_google_googleapis//google/api:annotations_py_proto"],
 )
 
 py_test(
@@ -77,7 +69,6 @@ py_test(
     deps = [
         ":http_actions",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
-        "@com_google_absl_py//absl/testing:absltest",
     ],
 )
 
@@ -100,7 +91,6 @@ py_test(
         ":http_actions",
         ":media",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
-        "@com_google_absl_py//absl/testing:absltest",
     ],
 )
 
@@ -108,11 +98,7 @@ py_library(
     name = "plan_utils",
     srcs = ["plan_utils.py"],
     srcs_version = "PY3",
-    deps = [
-        "//fcp/protos:plan_py_pb2",
-        "@com_google_protobuf//:protobuf_python",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = ["//fcp/protos:plan_py_pb2"],
 )
 
 py_test(
@@ -125,8 +111,6 @@ py_test(
         ":plan_utils",
         ":test_utils",
         "//fcp/protos:plan_py_pb2",
-        "@com_google_absl_py//absl/testing:absltest",
-        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -143,7 +127,6 @@ py_library(
         ":task_assignments",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
-        "@com_google_absl_py//absl/logging",
     ],
 )
 
@@ -160,11 +143,7 @@ py_test(
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
         "//fcp/tensorflow:external_dataset_py",
-        "@com_google_absl_py//absl/flags",
-        "@com_google_absl_py//absl/logging",
-        "@com_google_absl_py//absl/testing:absltest",
         "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
-        "@org_tensorflow//tensorflow:tensorflow_py",
     ],
 )
 
@@ -174,9 +153,6 @@ py_binary(
     deps = [
         ":server",
         "//fcp/protos:plan_py_pb2",
-        "@com_google_absl_py//absl:app",
-        "@com_google_absl_py//absl/flags",
-        "@com_google_absl_py//absl/logging",
     ],
 )
 
@@ -188,9 +164,7 @@ py_library(
         ":aggregations",
         ":http_actions",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
-        "@com_google_absl_py//absl/logging",
         "@com_google_googleapis//google/rpc:code_py_proto",
-        "@com_google_protobuf//:protobuf_python",
         "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
     ],
 )
@@ -205,7 +179,6 @@ py_test(
         ":http_actions",
         ":task_assignments",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
-        "@com_google_absl_py//absl/testing:absltest",
         "@com_google_googleapis//google/rpc:code_py_proto",
     ],
 )
@@ -214,9 +187,6 @@ py_library(
     name = "test_utils",
     testonly = True,
     srcs = ["test_utils.py"],
-    deps = [
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
 )
 
 py_test(
@@ -225,9 +195,5 @@ py_test(
     srcs = ["test_utils_test.py"],
     python_version = "PY3",
     srcs_version = "PY3",
-    deps = [
-        ":test_utils",
-        "@com_google_absl_py//absl/testing:absltest",
-        "@org_tensorflow//tensorflow:tensorflow_py",
-    ],
+    deps = [":test_utils"],
 )

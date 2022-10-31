@@ -130,9 +130,10 @@ http_archive(
         # download versions of LLVM pointed to by non-HEAD TensorFlow.
         # TODO(team): Remove this patch when resolved.
         "//fcp/patches:tensorflow_llvm_url.patch",
-        # This patch updates TensorFlow's source_utils.py library to support
-        # loading absl as a workspace dep as opposed to as a system library.
-        "//fcp/patches:tensorflow_source_utils.patch",
+        # This patch removes tf_custom_op_py_library's dependency on the Bazel
+        # version of TensorFlow since for all of our Python code, we rely on a
+        # system-provided TensorFlow.
+        "//fcp/patches:tensorflow_tf_custom_op_py_library.patch",
         # gRPC v1.48.0-pre1 and later include zconf.h in addition to zlib.h;
         # TensorFlow's build rule for zlib only exports the latter.
         "//fcp/patches:tensorflow_zlib.patch",
@@ -163,13 +164,13 @@ load("@org_tensorflow//tensorflow:workspace0.bzl", "tf_workspace0")
 
 tf_workspace0()
 
-http_archive(
-    name = "com_google_absl_py",
-    sha256 = "0d3aa64ef42ef592d5cf12060082397d01291bfeb1ac7b6d9dcfb32a07fff311",
-    strip_prefix = "abseil-py-9954557f9df0b346a57ff82688438c55202d2188",
-    urls = [
-        "https://github.com/abseil/abseil-py/archive/9954557f9df0b346a57ff82688438c55202d2188.tar.gz",
-    ],
+load("//fcp/tensorflow/system_provided_tf:system_provided_tf.bzl", "system_provided_tf")
+
+system_provided_tf(
+    name = "system_provided_tf",
+    # TensorFlow's pip package was built with libstdc++, not libc++.
+    extra_cxxopts = ["-stdlib=libstdc++"],
+    extra_linkopts = ["-stdlib=libstdc++"],
 )
 
 http_archive(

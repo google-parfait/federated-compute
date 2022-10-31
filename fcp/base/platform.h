@@ -19,7 +19,6 @@
 
 #include <string>
 
-#include "google/protobuf/message.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
@@ -49,12 +48,6 @@ absl::StatusOr<std::string> ReadFileToString(absl::string_view file_name);
  * Reads file content into absl::Cord.
  */
 absl::StatusOr<absl::Cord> ReadFileToCord(absl::string_view file_name);
-
-/**
- * Reads file content into message.
- */
-absl::Status ReadFileToMessage(absl::string_view file_name,
-                               google::protobuf::Message* message);
 
 /**
  * Writes string content into file.
