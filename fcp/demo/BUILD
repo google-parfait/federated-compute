@@ -30,6 +30,23 @@ py_test(
 )
 
 py_library(
+    name = "checkpoint_tensor_reference",
+    srcs = ["checkpoint_tensor_reference.py"],
+    srcs_version = "PY3",
+)
+
+py_test(
+    name = "checkpoint_tensor_reference_test",
+    srcs = ["checkpoint_tensor_reference_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":checkpoint_tensor_reference",
+        ":test_utils",
+    ],
+)
+
+py_library(
     name = "eligibility_eval_tasks",
     srcs = ["eligibility_eval_tasks.py"],
     srcs_version = "PY3",
