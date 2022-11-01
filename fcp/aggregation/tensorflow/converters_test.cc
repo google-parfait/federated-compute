@@ -17,6 +17,7 @@
 #include "fcp/aggregation/tensorflow/converters.h"
 
 #include <initializer_list>
+#include <memory>
 #include <string>
 
 #include "gmock/gmock.h"
@@ -24,8 +25,11 @@
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/core/tensor_spec.h"
+#include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/framework/types.pb.h"
@@ -90,6 +94,31 @@ TEST(ConvertersTest, ConvertTensorSpec_UnsupportedShape) {
   EXPECT_THAT(
       ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_FLOAT, {1, -1})),
       IsCode(INVALID_ARGUMENT));
+}
+
+TEST(ConvertersTest, ConvertTensor_Success) {
+  tf::TensorProto tensor_proto = PARSE_TEXT_PROTO(R"pb(
+    dtype: DT_FLOAT
+    tensor_shape {
+      dim { size: 2 }
+      dim { size: 3 }
+    }
+    float_val: 1
+    float_val: 2
+    float_val: 3
+    float_val: 4
+    float_val: 5
+    float_val: 6
+  )pb");
+  auto tensor = std::make_unique<tf::Tensor>();
+  ASSERT_TRUE(tensor->FromProto(tensor_proto));
+  EXPECT_THAT(*ConvertTensor(std::move(tensor)),
+              IsTensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
+}
+
+TEST(ConvertersTest, ConvertTensor_UnsupportedDataType) {
+  auto tensor = std::make_unique<tf::Tensor>(tf::DT_STRING, CreateTfShape({}));
+  EXPECT_THAT(ConvertTensor(std::move(tensor)), IsCode(INVALID_ARGUMENT));
 }
 
 }  // namespace

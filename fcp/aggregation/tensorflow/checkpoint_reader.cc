@@ -78,28 +78,6 @@ CheckpointReader::CheckpointReader(
       data_type_map_(std::move(data_type_map)),
       shape_map_(std::move(shape_map)) {}
 
-// A primitive TensorData implementation that wraps the original
-// tf::Tensor data.
-// TensorDataAdapter gets the ownership of the wrapped tensor, which keeps
-// the underlying data alive.
-class TensorDataAdapter : public TensorData {
- public:
-  explicit TensorDataAdapter(std::unique_ptr<tf::Tensor> tensor)
-      : tensor_(std::move(tensor)) {}
-
-  // The source tf::Tensor has the data as one continues blob.
-  int num_slices() const override { return 1; }
-  size_t byte_size() const override { return tensor_->tensor_data().size(); }
-
-  Slice get_slice(int n) const override {
-    FCP_CHECK(n == 0);
-    return {0, tensor_->tensor_data().size(), tensor_->tensor_data().data()};
-  }
-
- private:
-  std::unique_ptr<tf::Tensor> tensor_;
-};
-
 StatusOr<Tensor> CheckpointReader::GetTensor(const std::string& name) const {
   std::unique_ptr<tf::Tensor> tensor;
   const tf::TF_StatusPtr read_status(TF_NewStatus());
@@ -108,10 +86,7 @@ StatusOr<Tensor> CheckpointReader::GetTensor(const std::string& name) const {
     return absl::NotFoundError(
         absl::StrFormat("Checkpoint doesn't have tensor %s", name));
   }
-  FCP_ASSIGN_OR_RETURN(DataType dtype, ConvertDataType(tensor->dtype()));
-  TensorShape shape = ConvertShape(tensor->shape());
-  return Tensor::Create(dtype, std::move(shape),
-                        std::make_unique<TensorDataAdapter>(std::move(tensor)));
+  return ConvertTensor(std::move(tensor));
 }
 
 }  // namespace fcp::aggregation::tensorflow

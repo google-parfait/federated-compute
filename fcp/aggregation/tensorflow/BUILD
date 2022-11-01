@@ -38,6 +38,7 @@ cc_test(
     deps = [
         ":converters",
         "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/testing",
         "//fcp/base",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",

@@ -17,10 +17,14 @@
 #ifndef FCP_AGGREGATION_TENSORFLOW_CONVERTERS_H_
 #define FCP_AGGREGATION_TENSORFLOW_CONVERTERS_H_
 
+#include <memory>
+
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/base/monitoring.h"
+#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.pb.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
@@ -42,6 +46,12 @@ TensorShape ConvertShape(const ::tensorflow::TensorShape& shape);
 // supported by the Aggregation Core.
 StatusOr<TensorSpec> ConvertTensorSpec(
     const ::tensorflow::TensorSpecProto& spec);
+
+// Converts Tensorflow Tensor to Aggregation Tensor.
+// Returns an error status if supplied Tensor data type or shape isn't
+// supported by the Aggregation Core.
+// Note that this function consumes the Tensorflow tensor.
+StatusOr<Tensor> ConvertTensor(std::unique_ptr<::tensorflow::Tensor> tensor);
 
 }  // namespace fcp::aggregation::tensorflow
 
