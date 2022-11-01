@@ -96,7 +96,7 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
                 session_id,
                 num_reports_aggregated_and_pending=number_of_clients)
             if status.status != aggregations.AggregationStatus.PENDING:
-              raise ValueError('aggregation failed')
+              raise ValueError('Aggregation failed.')
           finally:
             self._task_assignments_service.remove_task(session_id)
 
@@ -105,7 +105,7 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
               self._aggregations_service.complete_session(session_id))
           if (status.status != aggregations.AggregationStatus.COMPLETED or
               intermedia_update is None):
-            raise ValueError('aggregation failed')
+            raise ValueError('Aggregation failed.')
         logging.debug('%s aggregation complete: %s', task_name, status)
         return session.finalize(intermedia_update)
 

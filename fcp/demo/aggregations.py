@@ -145,7 +145,7 @@ class Service:
       if (state.status.num_reports_aggregated_and_pending <
           state.requirements.minimum_clients_in_server_published_aggregate):
         raise ValueError(
-            'minimum_clients_in_server_published_aggregate not met')
+            'minimum_clients_in_server_published_aggregate has not been met.')
       result = state.agg_session.finalize()
       state.status.status = AggregationStatus.COMPLETED
       state.status.num_reports_aggregated_and_included += (

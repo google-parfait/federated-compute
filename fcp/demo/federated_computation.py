@@ -34,7 +34,7 @@ class FederatedComputation(tff.Computation):
     tff.backends.mapreduce.check_computation_compatible_with_map_reduce_form(
         comp)
     if not COMPUTATION_NAME_REGEX.fullmatch(name):
-      raise ValueError(f'name must match "{COMPUTATION_NAME_REGEX.pattern}"')
+      raise ValueError(f'name must match "{COMPUTATION_NAME_REGEX.pattern}".')
     self._comp = comp
     self._name = name
 

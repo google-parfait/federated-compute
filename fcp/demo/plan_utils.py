@@ -32,15 +32,15 @@ class _BaseSession:
 
   def __init__(self, plan: plan_pb2.Plan):
     if len(plan.phase) != 1:
-      raise ValueError('plan must contain exactly 1 phase')
+      raise ValueError('plan must contain exactly 1 phase.')
     if not plan.phase[0].HasField('server_phase'):
-      raise ValueError('plan.phase[0] is missing server_phase')
+      raise ValueError('plan.phase[0] is missing server_phase.')
 
     graph_def = tf.compat.v1.GraphDef()
     try:
       plan.server_graph_bytes.Unpack(graph_def)
     except message.DecodeError as e:
-      raise ValueError('unable to parse server graph') from e
+      raise ValueError('Unable to parse server graph.') from e
 
     graph = tf.Graph()
     with graph.as_default():

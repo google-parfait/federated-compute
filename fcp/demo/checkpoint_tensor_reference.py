@@ -63,4 +63,4 @@ class CheckpointTensorReference(tff.program.MaterializableValueReference):
     try:
       return self._tensor.numpy()
     except AttributeError as e:
-      raise ValueError('get_value is only supported in eager mode') from e
+      raise ValueError('get_value is only supported in eager mode.') from e

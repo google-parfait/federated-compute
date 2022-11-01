@@ -87,7 +87,7 @@ def proto_action(*,
   try:
     desc = _FACTORY.pool.FindServiceByName(service).FindMethodByName(method)
   except KeyError as e:
-    raise ValueError(f'unable to find /{service}.{method}') from e
+    raise ValueError(f'Unable to find /{service}.{method}.') from e
 
   rule = desc.GetOptions().Extensions[annotations_pb2.http]
   pattern_kind = rule.WhichOneof('pattern')
@@ -95,7 +95,8 @@ def proto_action(*,
     http_method = _HttpMethod[pattern_kind.upper()]
   except KeyError as e:
     raise ValueError(
-        'invalid or unsupported google.api.http annotation on method') from e
+        f'The google.api.http annotation on /{service}.{method} is invalid '
+        'or unsupported.') from e
   path = _convert_pattern(getattr(rule, pattern_kind), alt_proto=True)
 
   def handler(match: Match[str], body: bytes,
