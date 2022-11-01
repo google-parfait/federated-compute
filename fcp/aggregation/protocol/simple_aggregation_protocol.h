@@ -18,8 +18,10 @@
 #define FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_PROTOCOL_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
@@ -83,10 +85,18 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   SimpleAggregationProtocol(
       std::vector<Intrinsic> intrinsics,
       AggregationProtocol::Callback* callback,
+      const CheckpointParserFactory* checkpoint_parser_factory,
       const CheckpointBuilderFactory* checkpoint_builder_factory);
+
+  using TensorMap = absl::flat_hash_map<std::string, Tensor>;
+  absl::StatusOr<TensorMap> ParseCheckpoint(absl::Cord report) const;
+  // TODO(team): expect this function to be called under the locked
+  // state.
+  absl::Status AggregateClientInput(TensorMap tensor_map);
 
   std::vector<Intrinsic> const intrinsics_;
   AggregationProtocol::Callback* const callback_;
+  const CheckpointParserFactory* const checkpoint_parser_factory_;
   const CheckpointBuilderFactory* const checkpoint_builder_factory_;
 };
 }  // namespace fcp::aggregation

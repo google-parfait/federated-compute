@@ -30,6 +30,7 @@
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
+#include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/tensorflow/converters.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/protos/plan.pb.h"
@@ -116,14 +117,17 @@ SimpleAggregationProtocol::Create(
   }
 
   return absl::WrapUnique(new SimpleAggregationProtocol(
-      std::move(intrinsics), callback, checkpoint_builder_factory));
+      std::move(intrinsics), callback, checkpoint_parser_factory,
+      checkpoint_builder_factory));
 }
 
 SimpleAggregationProtocol::SimpleAggregationProtocol(
     std::vector<Intrinsic> intrinsics, AggregationProtocol::Callback* callback,
+    const CheckpointParserFactory* checkpoint_parser_factory,
     const CheckpointBuilderFactory* checkpoint_builder_factory)
     : intrinsics_(std::move(intrinsics)),
       callback_(callback),
+      checkpoint_parser_factory_(checkpoint_parser_factory),
       checkpoint_builder_factory_(checkpoint_builder_factory) {}
 
 // TODO(team): Implement Simple Aggregation Protocol methods.
@@ -135,9 +139,60 @@ absl::Status SimpleAggregationProtocol::AddClients(int64_t num_clients) {
   return absl::UnimplementedError("AddClients is not implemented");
 }
 
+absl::StatusOr<SimpleAggregationProtocol::TensorMap>
+SimpleAggregationProtocol::ParseCheckpoint(absl::Cord report) const {
+  FCP_ASSIGN_OR_RETURN(std::unique_ptr<CheckpointParser> parser,
+                       checkpoint_parser_factory_->Create(report));
+  TensorMap tensor_map;
+  for (const auto& intrinsic : intrinsics_) {
+    // TODO(team): Support multiple input tensors.
+    FCP_ASSIGN_OR_RETURN(Tensor tensor,
+                         parser->GetTensor(intrinsic.input.name()));
+    if (tensor.dtype() != intrinsic.input.dtype() ||
+        tensor.shape() != intrinsic.input.shape()) {
+      // TODO(team): Detailed diagnostics including the expected vs
+      // actual data types and shapes.
+      return absl::InvalidArgumentError("Input tensor spec mismatch.");
+    }
+    tensor_map.emplace(intrinsic.input.name(), std::move(tensor));
+  }
+
+  return tensor_map;
+}
+
+absl::Status SimpleAggregationProtocol::AggregateClientInput(
+    SimpleAggregationProtocol::TensorMap tensor_map) {
+  for (const auto& intrinsic : intrinsics_) {
+    // TODO(team): Support multiple input tensors.
+    const auto& it = tensor_map.find(intrinsic.input.name());
+    FCP_CHECK(it != tensor_map.end());
+    FCP_RETURN_IF_ERROR(intrinsic.aggregator->Accumulate(it->second));
+  }
+  return absl::OkStatus();
+}
+
 absl::Status SimpleAggregationProtocol::ReceiveClientInput(int64_t client_id,
                                                            absl::Cord report) {
-  return absl::UnimplementedError("ReceiveClientInput is not implemented");
+  // Do the initial parsing of the report before the synchronized part of the
+  // processing.
+  absl::StatusOr<TensorMap> tensor_map_or_status =
+      ParseCheckpoint(std::move(report));
+  if (!tensor_map_or_status.ok()) {
+    // TODO(team): Call CloseClient once it is implemented.
+    FCP_LOG(WARNING)
+        << "ReceiveClientInput failed to parse the input for client "
+        << client_id << " : " << tensor_map_or_status.status().ToString();
+    return absl::OkStatus();
+  }
+
+  // TODO(team): Add synchronization locking here.
+  // TODO(team): Verify client specific state.
+  absl::Status aggregation_status =
+      AggregateClientInput(std::move(tensor_map_or_status).value());
+
+  // TODO(team): Update the client specific state and close the client
+  // connection.
+  return aggregation_status;
 }
 
 absl::Status SimpleAggregationProtocol::ReceiveClientMessage(

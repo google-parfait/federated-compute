@@ -28,27 +28,29 @@
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
+#include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp::aggregation {
 namespace {
 
+using ::testing::_;
+using ::testing::ByMove;
 using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::StrEq;
 
 // TODO(team): Consider moving mock classes into a separate test library.
 class MockCheckpointParser : public CheckpointParser {
-  MOCK_METHOD(absl::StatusOr<std::vector<std::string>>, GetTensorNames, (),
-              (const override));
+ public:
   MOCK_METHOD(absl::StatusOr<Tensor>, GetTensor, (const std::string& name),
               (const override));
 };
 
 class MockCheckpointParserFactory : public CheckpointParserFactory {
  public:
-  MOCK_METHOD(std::unique_ptr<CheckpointParser>, Create,
+  MOCK_METHOD(absl::StatusOr<std::unique_ptr<CheckpointParser>>, Create,
               (const absl::Cord& serialized_checkpoint), (const override));
 };
 
@@ -77,22 +79,42 @@ class MockAggregationProtocolCallback : public AggregationProtocol::Callback {
 };
 
 class SimpleAggregationProtocolTest : public ::testing::Test {
- public:
-  SimpleAggregationProtocolTest()
-      : wrapped_checkpoint_builder_(std::make_unique<MockCheckpointBuilder>()),
-        checkpoint_builder_(*wrapped_checkpoint_builder_) {}
-
  protected:
+  // Returns default configuration.
+  Configuration default_configuration() const;
+
+  // Returns the default instance of checkpoint bilder;
+  MockCheckpointBuilder& ExpectCheckpointBuilder() {
+    MockCheckpointBuilder& checkpoint_builder = *wrapped_checkpoint_builder_;
+    EXPECT_CALL(checkpoint_builder_factory_, Create())
+        .WillOnce(Return(ByMove(std::move(wrapped_checkpoint_builder_))));
+    return checkpoint_builder;
+  }
+
+  // Creates an instance of SimpleAggregationProtocol with the specified config.
+  std::unique_ptr<SimpleAggregationProtocol> CreateProtocol(
+      Configuration config);
+
+  // Creates an instance of SimpleAggregationProtocol with the default config.
+  std::unique_ptr<SimpleAggregationProtocol> CreateProtocolWithDefaultConfig() {
+    return CreateProtocol(default_configuration());
+  }
+
   MockAggregationProtocolCallback callback_;
+
   MockCheckpointParserFactory checkpoint_parser_factory_;
   MockCheckpointBuilderFactory checkpoint_builder_factory_;
-  std::unique_ptr<MockCheckpointBuilder> wrapped_checkpoint_builder_;
-  MockCheckpointBuilder& checkpoint_builder_;
+
+ private:
+  std::unique_ptr<MockCheckpointBuilder> wrapped_checkpoint_builder_ =
+      std::make_unique<MockCheckpointBuilder>();
 };
 
-TEST_F(SimpleAggregationProtocolTest, CreateAndGetResult_Success) {
-  // Configuration with two intrinsics.
-  Configuration config_message = PARSE_TEXT_PROTO(R"pb(
+Configuration SimpleAggregationProtocolTest::default_configuration() const {
+  // Two intrinsics:
+  // 1) federated_sum "foo" that takes int32 {2,3} tensors.
+  // 2) federated_sum "bar" that takes scalar float tensors.
+  return PARSE_TEXT_PROTO(R"pb(
     aggregation_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
@@ -130,30 +152,32 @@ TEST_F(SimpleAggregationProtocolTest, CreateAndGetResult_Success) {
       }
     }
   )pb");
+}
 
+std::unique_ptr<SimpleAggregationProtocol>
+SimpleAggregationProtocolTest::CreateProtocol(Configuration config) {
   // Verify that the protocol can be created successfully.
   absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>>
       protocol_or_status = SimpleAggregationProtocol::Create(
-          config_message, &callback_, &checkpoint_parser_factory_,
+          config, &callback_, &checkpoint_parser_factory_,
           &checkpoint_builder_factory_);
   EXPECT_THAT(protocol_or_status, IsOk());
-  std::unique_ptr<SimpleAggregationProtocol> protocol =
-      std::move(protocol_or_status).value();
+  return std::move(protocol_or_status).value();
+}
+
+TEST_F(SimpleAggregationProtocolTest, CreateAndGetResult_Success) {
+  auto protocol = CreateProtocolWithDefaultConfig();
 
   // Verify that the checkpoint builder is created.
-  EXPECT_CALL(checkpoint_builder_factory_, Create()).WillOnce(Invoke([&] {
-    return std::move(wrapped_checkpoint_builder_);
-  }));
+  auto& checkpoint_builder = ExpectCheckpointBuilder();
 
   // Verify that foo_out and bar_out tensors are added to the result checkpoint
-  EXPECT_CALL(
-      checkpoint_builder_,
-      Add(StrEq("foo_out"), IsTensor<int32_t>({2, 3}, {0, 0, 0, 0, 0, 0})))
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("foo_out"), IsTensor({2, 3}, {0, 0, 0, 0, 0, 0})))
       .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(checkpoint_builder_,
-              Add(StrEq("bar_out"), IsTensor<float>({}, {0})))
+  EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {0.f})))
       .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(checkpoint_builder_, Build()).WillOnce(Return(absl::Cord{}));
+  EXPECT_CALL(checkpoint_builder, Build()).WillOnce(Return(absl::Cord{}));
 
   // Verify that the Complete callback method is called.
   // TODO(team): Expect more callback methods to be called.
@@ -334,6 +358,136 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnmatchingInputAndOutputShape) {
                                                 &checkpoint_parser_factory_,
                                                 &checkpoint_builder_factory_),
               IsCode(INVALID_ARGUMENT));
+}
+
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_Success) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+
+  // TODO(team): Invoke the Start method.
+
+  // Expect two inputs.
+  auto parser1 = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser1, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_INT32, {2, 3},
+                          CreateTestData({4, 3, 11, 7, 1, 6}));
+  }));
+  EXPECT_CALL(*parser1, GetTensor(StrEq("bar"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {}, CreateTestData({1.f}));
+  }));
+
+  auto parser2 = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser2, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_INT32, {2, 3},
+                          CreateTestData({1, 8, 2, 10, 13, 2}));
+  }));
+  EXPECT_CALL(*parser2, GetTensor(StrEq("bar"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {}, CreateTestData({2.f}));
+  }));
+
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_))
+      .WillOnce(Return(ByMove(std::move(parser1))))
+      .WillOnce(Return(ByMove(std::move(parser2))));
+
+  // Handle the inputs.
+  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientInput(1, absl::Cord{}), IsOk());
+
+  // TODO(team): Verify the number of inputs processed.
+
+  // Complete the protocol.
+  // Verify that the checkpoint builder is created.
+  auto& checkpoint_builder = ExpectCheckpointBuilder();
+
+  // Verify that foo_out and bar_out tensors are added to the result checkpoint
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("foo_out"), IsTensor({2, 3}, {5, 11, 13, 17, 14, 8})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {3.f})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder, Build()).WillOnce(Return(absl::Cord{}));
+
+  // Verify that the Complete callback method is called.
+  // TODO(team): Expect more callback methods to be called.
+  EXPECT_CALL(callback_, Complete);
+
+  EXPECT_THAT(protocol->Complete(), IsOk());
+}
+
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_FailureToParseInput) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_))
+      .WillOnce(
+          Return(ByMove(absl::InvalidArgumentError("Invalid checkpoint"))));
+
+  // Receiving the client input should still succeed.
+  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+}
+
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MissingTensor) {
+  auto protocol = CreateProtocol(PARSE_TEXT_PROTO(R"pb(
+    aggregation_configs {
+      intrinsic_uri: "federated_sum"
+      intrinsic_args {
+        input_tensor {
+          name: "foo"
+          dtype: DT_INT32
+          shape {}
+        }
+      }
+      output_tensors {
+        name: "foo_out"
+        dtype: DT_INT32
+        shape {}
+      }
+    }
+  )pb"));
+
+  auto parser = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser, GetTensor(StrEq("foo")))
+      .WillOnce(Return(ByMove(absl::NotFoundError("Missing tensor foo"))));
+
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_))
+      .WillOnce(Return(ByMove(std::move(parser))));
+
+  // TODO(team): Expect the client to be closed with the above error.
+
+  // Receiving the client input should still succeed.
+  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+}
+
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MismatchingTensor) {
+  auto protocol = CreateProtocol(PARSE_TEXT_PROTO(R"pb(
+    aggregation_configs {
+      intrinsic_uri: "federated_sum"
+      intrinsic_args {
+        input_tensor {
+          name: "foo"
+          dtype: DT_INT32
+          shape {}
+        }
+      }
+      output_tensors {
+        name: "foo_out"
+        dtype: DT_INT32
+        shape {}
+      }
+    }
+  )pb"));
+
+  auto parser = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {}, CreateTestData({2.f}));
+  }));
+
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_))
+      .WillOnce(Return(ByMove(std::move(parser))));
+
+  // TODO(team): Expect the client to be closed with the INVALID_ARGUMENT
+  // error.
+
+  // Receiving the client input should still succeed.
+  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
 }
 
 }  // namespace

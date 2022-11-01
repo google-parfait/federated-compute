@@ -33,9 +33,6 @@ class CheckpointParser {
  public:
   virtual ~CheckpointParser() = default;
 
-  // Gets names of all tensors in the checkpoint.
-  virtual absl::StatusOr<std::vector<std::string>> GetTensorNames() const = 0;
-
   // Gets a tensor by name.
   virtual absl::StatusOr<Tensor> GetTensor(const std::string& name) const = 0;
 };
@@ -47,7 +44,7 @@ class CheckpointParserFactory {
 
   // Creates an instance of CheckpointParser with the provided serialized
   // checkpoint content.
-  virtual std::unique_ptr<CheckpointParser> Create(
+  virtual absl::StatusOr<std::unique_ptr<CheckpointParser>> Create(
       const absl::Cord& serialized_checkpoint) const = 0;
 };
 
