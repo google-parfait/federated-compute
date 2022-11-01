@@ -36,10 +36,8 @@ namespace client {
 class SecAggSendToServerBase : public secagg::SendToServerInterface {
  public:
   size_t last_sent_message_size() const { return last_sent_message_size_; }
-  size_t total_bytes_uploaded() const { return total_bytes_uploaded_; }
 
  protected:
-  size_t total_bytes_uploaded_ = 0;
   size_t last_sent_message_size_ = 0;
 };
 
@@ -74,8 +72,7 @@ class SecAggRunnerImpl : public SecAggRunner {
                    LogManager* log_manager,
                    InterruptibleRunner* interruptible_runner,
                    int64_t expected_number_of_clients,
-                   int64_t minimum_surviving_clients_for_reconstruction,
-                   int64_t* bytes_downloaded, int64_t* bytes_uploaded);
+                   int64_t minimum_surviving_clients_for_reconstruction);
   // Run the secure aggregation protocol.
   // SecAggProtocolDelegate and SecAggSendToServerBase will only be invoked from
   // a single thread.
@@ -92,8 +89,6 @@ class SecAggRunnerImpl : public SecAggRunner {
   InterruptibleRunner& interruptible_runner_;
   const int64_t expected_number_of_clients_;
   const int64_t minimum_surviving_clients_for_reconstruction_;
-  int64_t& bytes_downloaded_;
-  int64_t& bytes_uploaded_;
 };
 
 // A factory interface for SecAggRunner.
@@ -106,8 +101,7 @@ class SecAggRunnerFactory {
       SecAggEventPublisher* secagg_event_publisher, LogManager* log_manager,
       InterruptibleRunner* interruptible_runner,
       int64_t expected_number_of_clients,
-      int64_t minimum_surviving_clients_for_reconstruction,
-      int64_t* bytes_downloaded, int64_t* bytes_uploaded) = 0;
+      int64_t minimum_surviving_clients_for_reconstruction) = 0;
 };
 
 class SecAggRunnerFactoryImpl : public SecAggRunnerFactory {
@@ -117,8 +111,7 @@ class SecAggRunnerFactoryImpl : public SecAggRunnerFactory {
       SecAggEventPublisher* secagg_event_publisher, LogManager* log_manager,
       InterruptibleRunner* interruptible_runner,
       int64_t expected_number_of_clients,
-      int64_t minimum_surviving_clients_for_reconstruction,
-      int64_t* bytes_downloaded, int64_t* bytes_uploaded) override;
+      int64_t minimum_surviving_clients_for_reconstruction) override;
 };
 
 }  // namespace client

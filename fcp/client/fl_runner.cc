@@ -679,25 +679,18 @@ void LogFailureUploadStatus(PhaseLogger& phase_logger, absl::Status result,
 absl::Status ReportTensorflowSpecPlanResult(
     FederatedProtocol* federated_protocol, PhaseLogger& phase_logger,
     absl::StatusOr<ComputationResults> computation_results,
-    absl::Time run_plan_start_time, absl::Time reference_time,
-    bool enable_per_phase_network_stats) {
+    absl::Time run_plan_start_time, absl::Time reference_time) {
   const absl::Time before_report_time = absl::Now();
 
   // Note that the FederatedSelectManager shouldn't be active anymore during the
   // reporting of results, so we don't bother passing it to
   // GetNetworkStatsSince.
   //
-  // If the flag is on, we must return only stats that cover the report phase,
-  // for the log events below. If the flag is off we must return cumulative
-  // stats (incl. any stats before this point). We achieve the latter by using
-  // an empty/zero NetworkStats() as the "before" point (since
-  // GetNetworkStatsSince(..., NetworkStats()) is equivalent to
-  // GetCumulativeNetworkStats(...)).
+  // We must return only stats that cover the report phase for the log events
+  // below.
   const NetworkStats before_report_stats =
-      enable_per_phase_network_stats
-          ? GetCumulativeNetworkStats(federated_protocol,
-                                      /*fedselect_manager=*/nullptr)
-          : NetworkStats();
+      GetCumulativeNetworkStats(federated_protocol,
+                                /*fedselect_manager=*/nullptr);
   absl::Status result = absl::InternalError("");
   if (computation_results.ok()) {
     FCP_RETURN_IF_ERROR(phase_logger.LogResultUploadStarted());
@@ -964,17 +957,11 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     absl::Time reference_time, const std::string& population_name,
     FLRunnerResult& fl_runner_result, const Flags* flags) {
   absl::Time time_before_checkin = absl::Now();
-  // If the flag is on, we must return only stats that cover the check in phase,
-  // for the log events below. If the flag is off we must return cumulative
-  // stats (incl. any stats before this point). We achieve the latter by using
-  // an empty/zero NetworkStats() as the "before" point (since
-  // GetNetworkStatsSince(..., NetworkStats()) is equivalent to
-  // GetCumulativeNetworkStats(...)).
+  // We must return only stats that cover the check in phase for the log
+  // events below.
   const NetworkStats network_stats_before_checkin =
-      flags->enable_per_phase_network_stats()
-          ? GetCumulativeNetworkStats(federated_protocol,
-                                      /*fedselect_manager=*/nullptr)
-          : NetworkStats();
+      GetCumulativeNetworkStats(federated_protocol,
+                                /*fedselect_manager=*/nullptr);
 
   // Clear the model identifier before check-in, to ensure that the any prior
   // eligibility eval task name isn't used any longer.
@@ -1273,7 +1260,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // Eligibility eval plans can use example iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger, log_manager, flags->enable_per_phase_network_stats());
+      opstats_logger, log_manager);
   std::unique_ptr<engine::ExampleIteratorFactory>
       env_eligibility_example_iterator_factory =
           CreateSimpleTaskEnvironmentIteratorFactory(
@@ -1367,10 +1354,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         status.code(), ", message: ", status.message());
     phase_logger.LogComputationIOError(
         status, ExampleStats(),
-        flags->enable_per_phase_network_stats()
-            ? GetNetworkStatsSince(federated_protocol, fedselect_manager,
-                                   run_plan_start_network_stats)
-            : NetworkStats(),
+        GetNetworkStatsSince(federated_protocol, fedselect_manager,
+                             run_plan_start_network_stats),
         run_plan_start_time);
     return fl_runner_result;
   }
@@ -1409,15 +1394,12 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   LogComputationOutcome(
       plan_result_and_checkpoint_file.plan_result, computation_results.status(),
       phase_logger,
-      flags->enable_per_phase_network_stats()
-          ? GetNetworkStatsSince(federated_protocol, fedselect_manager,
-                                 run_plan_start_network_stats)
-          : NetworkStats(),
+      GetNetworkStatsSince(federated_protocol, fedselect_manager,
+                           run_plan_start_network_stats),
       run_plan_start_time, reference_time);
   absl::Status report_result = ReportTensorflowSpecPlanResult(
       federated_protocol, phase_logger, std::move(computation_results),
-      run_plan_start_time, reference_time,
-      flags->enable_per_phase_network_stats());
+      run_plan_start_time, reference_time);
   if (outcome == engine::PlanOutcome::kSuccess && report_result.ok()) {
     // Only if training succeeded *and* reporting succeeded do we consider
     // the device to have contributed successfully.
@@ -1463,8 +1445,7 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   // Eligibility eval plans can only use iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger.get(), log_manager,
-      flags->enable_per_phase_network_stats());
+      opstats_logger.get(), log_manager);
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(env_deps, SelectorContext());
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{

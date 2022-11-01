@@ -273,14 +273,6 @@ message OperationalStats {
   // The retry window returned by the fl runner.
   google.internal.federatedml.v2.RetryWindow retry_window = 7;
 
-  // The number of bytes downloaded (uncompressed payload size) from the server
-  // while executing the task thus far.
-  int64 bytes_downloaded = 8;
-
-  // The number of bytes uploaded (uncompressed payload size) to the server
-  // while executing the task thus far.
-  int64 bytes_uploaded = 9;
-
   // The number of bytes downloaded (payload size via the chunking layer, which
   // may be compressed) from the server while executing the task thus far.
   int64 chunking_layer_bytes_downloaded = 10;
@@ -292,6 +284,8 @@ message OperationalStats {
   // The duration of time spent waiting on the network (but excluding idle time
   // like the time between polling the server).
   google.protobuf.Duration network_duration = 12;
+
+  reserved 8, 9;
 }
 
 // Top level op stats message.

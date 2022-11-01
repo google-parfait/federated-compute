@@ -97,7 +97,7 @@ class GrpcChunkedBidiStream {
     int32_t blob_size_bytes = -1;
     std::deque<std::string> deque;
     std::string composite;
-    int64_t total_chunking_layer_bytes_received = 0;
+    int64_t total_bytes_downloaded = 0;
   } incoming_;
 
   struct {
@@ -106,7 +106,7 @@ class GrpcChunkedBidiStream {
     int32_t pending_chunks = 0;
     google::internal::federatedml::v2::CompressionLevel compression_level{};
     std::deque<std::unique_ptr<Outgoing>> deque;
-    int64_t total_chunking_layer_bytes_sent = 0;
+    int64_t total_bytes_uploaded = 0;
 
     google::internal::federatedml::v2::ChunkedTransferMessage* Add() {
       deque.push_back(std::make_unique<Outgoing>());
@@ -331,7 +331,7 @@ absl::Status GrpcChunkedBidiStream<Outgoing, Incoming>::SendRaw(
     return absl::FailedPreconditionError("Send on closed stream.");
   grpc::WriteOptions write_options;
   if (disable_compression) write_options.set_no_compression();
-  outgoing_.total_chunking_layer_bytes_sent += message.ByteSizeLong();
+  outgoing_.total_bytes_uploaded += message.ByteSizeLong();
   if (!writer_interface_->Write(message, write_options)) {
     Close();
     return absl::AbortedError("End of stream.");
@@ -457,7 +457,7 @@ absl::Status GrpcChunkedBidiStream<Outgoing, Incoming>::ReceiveRaw(
     Close();
     return absl::AbortedError("End of stream.");
   }
-  incoming_.total_chunking_layer_bytes_received += message->ByteSizeLong();
+  incoming_.total_bytes_downloaded += message->ByteSizeLong();
   return absl::OkStatus();
 }
 
@@ -470,12 +470,12 @@ void GrpcChunkedBidiStream<Outgoing, Incoming>::Close() {
 template <typename Outgoing, typename Incoming>
 int64_t
 GrpcChunkedBidiStream<Outgoing, Incoming>::ChunkingLayerBytesReceived() {
-  return incoming_.total_chunking_layer_bytes_received;
+  return incoming_.total_bytes_downloaded;
 }
 
 template <typename Outgoing, typename Incoming>
 int64_t GrpcChunkedBidiStream<Outgoing, Incoming>::ChunkingLayerBytesSent() {
-  return outgoing_.total_chunking_layer_bytes_sent;
+  return outgoing_.total_bytes_uploaded;
 }
 
 }  // namespace client

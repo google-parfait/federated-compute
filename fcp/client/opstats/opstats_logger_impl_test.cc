@@ -54,8 +54,6 @@ class OpStatsLoggerImplTest : public testing::Test {
     ON_CALL(mock_flags_, opstats_ttl_days()).WillByDefault(Return(1));
     ON_CALL(mock_flags_, opstats_db_size_limit_bytes())
         .WillByDefault(Return(1 * 1024 * 1024));
-    ON_CALL(mock_flags_, enable_per_phase_network_stats())
-        .WillByDefault(Return(true));
     base_dir_ = testing::TempDir();
   }
 
@@ -405,63 +403,17 @@ TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
   EXPECT_THAT(*data, EqualsProto(expected));
 }
 
-TEST_F(OpStatsLoggerImplTest, SetNetworkStatsWithPerPhaseStatsOff) {
-  // Force the flag to be off for this test.
-  EXPECT_CALL(mock_flags_, enable_per_phase_network_stats())
-      .WillRepeatedly(Return(false));
-
+TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
 
   auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->SetNetworkStats(
-      {.bytes_downloaded = 100,
-       .bytes_uploaded = 101,
-       .chunking_layer_bytes_received = 102,
-       .chunking_layer_bytes_sent = 103,
+      {.bytes_downloaded = 102,
+       .bytes_uploaded = 103,
        .network_duration = absl::Milliseconds(104)});
   opstats_logger->SetNetworkStats(
-      {.bytes_downloaded = 200,
-       .bytes_uploaded = 201,
-       .chunking_layer_bytes_received = 202,
-       .chunking_layer_bytes_sent = 203,
-       .network_duration = absl::Milliseconds(204)});
-  opstats_logger.reset();
-
-  auto db = PdsBackedOpStatsDb::Create(
-      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
-  ASSERT_OK(db);
-  auto data = (*db)->Read();
-  ASSERT_OK(data);
-
-  OpStatsSequence expected;
-  auto new_opstats = expected.add_opstats();
-  new_opstats->set_session_name(kSessionName);
-  new_opstats->set_population_name(kPopulationName);
-  new_opstats->set_bytes_downloaded(200);
-  new_opstats->set_bytes_uploaded(201);
-  new_opstats->set_chunking_layer_bytes_downloaded(202);
-  new_opstats->set_chunking_layer_bytes_uploaded(203);
-
-  (*data).clear_earliest_trustworthy_time();
-  EXPECT_THAT(*data, EqualsProto(expected));
-}
-
-TEST_F(OpStatsLoggerImplTest, SetNetworkStatsWithPerPhaseStatsOn) {
-  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
-
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
-  opstats_logger->SetNetworkStats(
-      {.bytes_downloaded = 100,
-       .bytes_uploaded = 101,
-       .chunking_layer_bytes_received = 102,
-       .chunking_layer_bytes_sent = 103,
-       .network_duration = absl::Milliseconds(104)});
-  opstats_logger->SetNetworkStats(
-      {.bytes_downloaded = 200,
-       .bytes_uploaded = 201,
-       .chunking_layer_bytes_received = 202,
-       .chunking_layer_bytes_sent = 203,
+      {.bytes_downloaded = 202,
+       .bytes_uploaded = 203,
        .network_duration = absl::Milliseconds(204)});
   opstats_logger.reset();
 

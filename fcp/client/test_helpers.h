@@ -266,39 +266,24 @@ class MockEventPublisher : public EventPublisher {
 class MockFederatedProtocol : public FederatedProtocol {
  public:
   constexpr static NetworkStats kPostEligibilityCheckinNetworkStats = {
-      .bytes_downloaded = 100,
-      .bytes_uploaded = 200,
-      .chunking_layer_bytes_received = 300,
-      .chunking_layer_bytes_sent = 400,
-      .report_size_bytes = 0,
+      .bytes_downloaded = 300,
+      .bytes_uploaded = 400,
       .network_duration = absl::Milliseconds(50)};
   constexpr static NetworkStats kPostReportEligibilityEvalErrorNetworkStats = {
-      .bytes_downloaded = 200,
-      .bytes_uploaded = 300,
-      .chunking_layer_bytes_received = 400,
-      .chunking_layer_bytes_sent = 500,
-      .report_size_bytes = 0,
+      .bytes_downloaded = 400,
+      .bytes_uploaded = 500,
       .network_duration = absl::Milliseconds(150)};
   constexpr static NetworkStats kPostCheckinNetworkStats = {
-      .bytes_downloaded = 1000,
-      .bytes_uploaded = 2000,
-      .chunking_layer_bytes_received = 3000,
-      .chunking_layer_bytes_sent = 4000,
-      .report_size_bytes = 0,
+      .bytes_downloaded = 3000,
+      .bytes_uploaded = 4000,
       .network_duration = absl::Milliseconds(250)};
   constexpr static NetworkStats kPostReportCompletedNetworkStats = {
-      .bytes_downloaded = 10000,
-      .bytes_uploaded = 20000,
-      .chunking_layer_bytes_received = 30000,
-      .chunking_layer_bytes_sent = 40000,
-      .report_size_bytes = 555,
+      .bytes_downloaded = 30000,
+      .bytes_uploaded = 40000,
       .network_duration = absl::Milliseconds(350)};
   constexpr static NetworkStats kPostReportNotCompletedNetworkStats = {
-      .bytes_downloaded = 9999,
-      .bytes_uploaded = 19999,
-      .chunking_layer_bytes_received = 29999,
-      .chunking_layer_bytes_sent = 39999,
-      .report_size_bytes = 111,
+      .bytes_downloaded = 29999,
+      .bytes_uploaded = 39999,
       .network_duration = absl::Milliseconds(450)};
 
   static google::internal::federatedml::v2::RetryWindow
@@ -536,7 +521,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(int32_t, waiting_period_sec_for_cancellation, (),
               (const, override));
   MOCK_METHOD(bool, enable_federated_select, (), (const, override));
-  MOCK_METHOD(bool, enable_per_phase_network_stats, (), (const, override));
   MOCK_METHOD(int32_t, num_threads_for_tflite, (), (const, override));
   MOCK_METHOD(bool, disable_tflite_delegate_clustering, (), (const, override));
 };
@@ -746,8 +730,7 @@ class MockSecAggRunnerFactory : public SecAggRunnerFactory {
                LogManager* log_manager,
                InterruptibleRunner* interruptible_runner,
                int64_t expected_number_of_clients,
-               int64_t minimum_surviving_clients_for_reconstruction,
-               int64_t* bytes_downloaded, int64_t* bytes_uploaded),
+               int64_t minimum_surviving_clients_for_reconstruction),
               (override));
 };
 

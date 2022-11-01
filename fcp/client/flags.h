@@ -173,15 +173,6 @@ class Flags {
   // then any Federated Select-specific example query will fail with an error
   virtual bool enable_federated_select() const { return false; }
 
-  // If true, the client will report per-phase NetworkStats to each
-  // `EventPublisher` call, incl. an estimate of wall clock time spent waiting
-  // on the network (excluding idle time between polling). Some other cleanups
-  // are gated behind this flag as well. If false, the client will only report
-  // NetworkStats for a subset of events that can incur network usage, and the
-  // stats will be somewhat incomplete and the period the stats cover will be
-  // less defined.
-  virtual bool enable_per_phase_network_stats() const { return false; }
-
   // The max size in bytes of resources that the ResourceCache is allowed to
   // store. If greater than 0, the client will attempt to cache resources sent
   // by uri via the hybrid grpc-with-http-resources and the full http stack. If

@@ -46,8 +46,6 @@ inline static constexpr char kRetryWindowDelayMinMillis[] =
     "retry_window-delay_min";
 inline static constexpr char kRetryWindowDelayMaxMillis[] =
     "retry_window-delay_max";
-inline static constexpr char kBytesDownloaded[] = "bytes_downloaded";
-inline static constexpr char kBytesUploaded[] = "bytes_uploaded";
 inline static constexpr char kChunkingLayerBytesDownloaded[] =
     "chunking_layer_bytes_downloaded";
 inline static constexpr char kChunkingLayerBytesUploaded[] =
@@ -60,11 +58,8 @@ class OpStatsExampleIteratorFactory
     : public fcp::client::engine::ExampleIteratorFactory {
  public:
   OpStatsExampleIteratorFactory(OpStatsLogger* op_stats_logger,
-                                LogManager* log_manager,
-                                bool enable_per_phase_network_stats)
-      : op_stats_logger_(op_stats_logger),
-        log_manager_(log_manager),
-        enable_per_phase_network_stats_(enable_per_phase_network_stats) {}
+                                LogManager* log_manager)
+      : op_stats_logger_(op_stats_logger), log_manager_(log_manager) {}
 
   bool CanHandle(const google::internal::federated::plan::ExampleSelector&
                      example_selector) override;
@@ -78,7 +73,6 @@ class OpStatsExampleIteratorFactory
  private:
   OpStatsLogger* op_stats_logger_;
   LogManager* log_manager_;
-  bool enable_per_phase_network_stats_;
 };
 
 }  // namespace opstats

@@ -115,19 +115,8 @@ class HttpFederatedSelectManager : public FederatedSelectManager {
       absl::string_view uri_template) override;
 
   NetworkStats GetNetworkStats() override {
-    // Note: we don't distinguish between 'chunking' and 'non-chunking' network
-    // usage like the legacy gRPC protocol does when downloading things via
-    // HTTP, as there is no concept of 'chunking' with the HTTP requests we
-    // issue to fetch slices like there was with the gRPC protocol. Instead we
-    // simply report our best estimate of the over-the-wire network usage in
-    // both the 'chunking' and 'non-chunking' stats, as that's the only thing we
-    // can measure.
-    int64_t bytes_downloaded = bytes_received_.load();
-    int64_t bytes_uploaded = bytes_sent_.load();
-    return {.bytes_downloaded = bytes_downloaded,
-            .bytes_uploaded = bytes_uploaded,
-            .chunking_layer_bytes_received = bytes_downloaded,
-            .chunking_layer_bytes_sent = bytes_uploaded,
+    return {.bytes_downloaded = bytes_received_.load(),
+            .bytes_uploaded = bytes_sent_.load(),
             .network_duration = network_stopwatch_->GetTotalDuration()};
   }
 

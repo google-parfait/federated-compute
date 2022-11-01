@@ -97,7 +97,6 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   bool already_committed_ ABSL_GUARDED_BY(mutex_) = false;
   std::unique_ptr<OpStatsDb> db_;
   LogManager* log_manager_;
-  const bool enable_per_phase_network_stats_;
   absl::Mutex mutex_;
 };
 

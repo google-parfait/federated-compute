@@ -452,8 +452,6 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillRepeatedly(Return(true));
     EXPECT_CALL(mock_flags_, waiting_period_sec_for_cancellation)
         .WillRepeatedly(Return(kCancellationWaitingPeriodSec));
-    EXPECT_CALL(mock_flags_, enable_per_phase_network_stats)
-        .WillRepeatedly(Return(true));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -477,22 +475,17 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   void TearDown() override {
     // Regardless of the outcome of the test (or the protocol interaction being
     // tested), network usage must always be reflected in the network stats
-    // methods. We only check the chunking_layer_bytes_downloaded/upload
-    // methods, since the legacy bytes_downloaded/uploaded methods will be
-    // removed in the future.
+    // methods.
     HttpRequestHandle::SentReceivedBytes sent_received_bytes =
         mock_http_client_.TotalSentReceivedBytes();
 
     NetworkStats network_stats = federated_protocol_->GetNetworkStats();
-    EXPECT_EQ(network_stats.bytes_downloaded, 0);
-    EXPECT_EQ(network_stats.bytes_uploaded, 0);
-    EXPECT_EQ(network_stats.chunking_layer_bytes_received,
+    EXPECT_EQ(network_stats.bytes_downloaded,
               sent_received_bytes.received_bytes);
-    EXPECT_EQ(network_stats.chunking_layer_bytes_sent,
-              sent_received_bytes.sent_bytes);
+    EXPECT_EQ(network_stats.bytes_uploaded, sent_received_bytes.sent_bytes);
     // If any network traffic occurred, we expect to see some time reflected in
     // the duration.
-    if (network_stats.chunking_layer_bytes_sent > 0) {
+    if (network_stats.bytes_uploaded > 0) {
       EXPECT_THAT(network_stats.network_duration, Gt(absl::ZeroDuration()));
     }
   }
@@ -2028,7 +2021,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
 
   MockSecAggRunner* mock_secagg_runner = new StrictMock<MockSecAggRunner>();
   EXPECT_CALL(*mock_secagg_runner_factory_,
-              CreateSecAggRunner(_, _, _, _, _, 500, 450, _, _))
+              CreateSecAggRunner(_, _, _, _, _, 500, 450))
       .WillOnce(Return(ByMove(absl::WrapUnique(mock_secagg_runner))));
   EXPECT_CALL(*mock_secagg_runner,
               Run(UnorderedElementsAre(
@@ -2116,7 +2109,7 @@ TEST_F(HttpFederatedProtocolTest,
 
   MockSecAggRunner* mock_secagg_runner = new StrictMock<MockSecAggRunner>();
   EXPECT_CALL(*mock_secagg_runner_factory_,
-              CreateSecAggRunner(_, _, _, _, _, 500, 450, _, _))
+              CreateSecAggRunner(_, _, _, _, _, 500, 450))
       .WillOnce(Return(ByMove(absl::WrapUnique(mock_secagg_runner))));
   EXPECT_CALL(*mock_secagg_runner,
               Run(UnorderedElementsAre(

@@ -40,28 +40,19 @@ using ::testing::InSequence;
 using ::testing::Return;
 using ::testing::StrictMock;
 
-const int64_t kBytesDownloaded = 200;
-const int64_t kBytesUploaded = 100;
 const int64_t kChunkingLayerBytesReceived = 100;
 const int64_t kChunkingLayerBytesSent = 50;
-const int64_t kReportSizeBytes = 15;
 const int kTotalExampleCount = 10;
 const int64_t kTotalExampleSizeBytes = 1000;
 
 // Parameterize tests with
 // 1) whether log tf error message;
-// 2) whether use granular per phase logs.
-// 3) whether use per phase network stats.
-class PhaseLoggerImplTest
-    : public testing::TestWithParam<std::tuple<bool, bool>> {
+class PhaseLoggerImplTest : public testing::TestWithParam<bool> {
  protected:
   void SetUp() override {
-    log_tensorflow_error_messages_ = std::get<0>(GetParam());
-    per_phase_network_stats_ = std::get<1>(GetParam());
+    log_tensorflow_error_messages_ = GetParam();
     EXPECT_CALL(mock_flags_, log_tensorflow_error_messages())
         .WillRepeatedly(Return(log_tensorflow_error_messages_));
-    EXPECT_CALL(mock_flags_, enable_per_phase_network_stats())
-        .WillRepeatedly(Return(per_phase_network_stats_));
     phase_logger_ = std::make_unique<PhaseLoggerImpl>(
         &mock_event_publisher_, &mock_opstats_logger_, &mock_log_manager_,
         &mock_flags_);
@@ -80,29 +71,21 @@ class PhaseLoggerImplTest
   StrictMock<MockOpStatsLogger> mock_opstats_logger_;
   MockFlags mock_flags_;
   bool log_tensorflow_error_messages_ = false;
-  bool per_phase_network_stats_ = false;
   std::unique_ptr<PhaseLoggerImpl> phase_logger_;
   NetworkStats network_stats_ = {
-      .bytes_downloaded = kBytesDownloaded,
-      .bytes_uploaded = kBytesUploaded,
-      .chunking_layer_bytes_received = kChunkingLayerBytesReceived,
-      .chunking_layer_bytes_sent = kChunkingLayerBytesSent,
-      .report_size_bytes = kReportSizeBytes};
+      .bytes_downloaded = kChunkingLayerBytesReceived,
+      .bytes_uploaded = kChunkingLayerBytesSent};
   ExampleStats example_stats_ = {.example_count = kTotalExampleCount,
                                  .example_size_bytes = kTotalExampleSizeBytes};
 };
 
 std::string GenerateTestName(
     const testing::TestParamInfo<PhaseLoggerImplTest::ParamType>& info) {
-  std::string name = absl::StrCat(
-      std::get<0>(info.param) ? "Log_tf_error" : "No_tf_error", "__",
-      std::get<1>(info.param) ? "Per_phase_network_stats_enabled"
-                              : "Per_phase_network_stats_dsabled");
+  std::string name = info.param ? "Log_tf_error" : "No_tf_error";
   return name;
 }
 
-INSTANTIATE_TEST_SUITE_P(OldVsNewBehavior, PhaseLoggerImplTest,
-                         testing::Combine(testing::Bool(), testing::Bool()),
+INSTANTIATE_TEST_SUITE_P(OldVsNewBehavior, PhaseLoggerImplTest, testing::Bool(),
                          GenerateTestName);
 
 TEST_P(PhaseLoggerImplTest, UpdateRetryWindowAndNetworkStats) {

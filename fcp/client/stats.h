@@ -24,24 +24,12 @@ namespace fcp {
 namespace client {
 
 struct NetworkStats {
-  // TODO(team): Remove the bytes_downloaded, bytes_uploaded, and
-  // report_size_bytes fields once enable_per_phase_network_stats has rolled
-  // out. And rename the chunking_layer_bytes_received/sent fields to simply
-  // "bytes_downloaded" and "bytes_uploaded".
-
-  // The estimated number of bytes downloaded from the network (after
-  // decompression).
-  int64_t bytes_downloaded = 0;
-  // The estimated number of bytes uploaded to the network (after
-  // decompression).
-  int64_t bytes_uploaded = 0;
   // The estimated number of bytes downloaded from the network ("over the
   // wire").
-  int64_t chunking_layer_bytes_received = 0;
+  int64_t bytes_downloaded = 0;
   // The estimated number of bytes uploaded to the network ("over the
   // wire").
-  int64_t chunking_layer_bytes_sent = 0;
-  int64_t report_size_bytes = 0;
+  int64_t bytes_uploaded = 0;
   // The best estimate of the duration of wall clock time spent waiting for
   // network requests to finish (but, for example, excluding any idle time spent
   // waiting between issuing polling requests).
@@ -49,37 +37,24 @@ struct NetworkStats {
 
   // Returns the difference between two sets of network stats.
   NetworkStats operator-(const NetworkStats& other) const {
-    return {
-        .bytes_downloaded = bytes_downloaded - other.bytes_downloaded,
-        .bytes_uploaded = bytes_uploaded - other.bytes_uploaded,
-        .chunking_layer_bytes_received =
-            chunking_layer_bytes_received - other.chunking_layer_bytes_received,
-        .chunking_layer_bytes_sent =
-            chunking_layer_bytes_sent - other.chunking_layer_bytes_sent,
-        .report_size_bytes = report_size_bytes - other.report_size_bytes,
-        .network_duration = network_duration - other.network_duration};
+    return {.bytes_downloaded = bytes_downloaded - other.bytes_downloaded,
+            .bytes_uploaded = bytes_uploaded - other.bytes_uploaded,
+            .network_duration = network_duration - other.network_duration};
   }
 
   NetworkStats operator+(const NetworkStats& other) const {
-    return {
-        .bytes_downloaded = bytes_downloaded + other.bytes_downloaded,
-        .bytes_uploaded = bytes_uploaded + other.bytes_uploaded,
-        .chunking_layer_bytes_received =
-            chunking_layer_bytes_received + other.chunking_layer_bytes_received,
-        .chunking_layer_bytes_sent =
-            chunking_layer_bytes_sent + other.chunking_layer_bytes_sent,
-        .report_size_bytes = report_size_bytes + other.report_size_bytes,
-        .network_duration = network_duration + other.network_duration};
+    return {.bytes_downloaded = bytes_downloaded + other.bytes_downloaded,
+            .bytes_uploaded = bytes_uploaded + other.bytes_uploaded,
+            .network_duration = network_duration + other.network_duration};
   }
 };
 
 inline bool operator==(const NetworkStats& s1, const NetworkStats& s2) {
-  return s1.bytes_downloaded == s2.bytes_downloaded &&
-         s1.bytes_uploaded == s2.bytes_uploaded &&
-         s1.chunking_layer_bytes_received == s2.chunking_layer_bytes_received &&
-         s1.chunking_layer_bytes_sent == s2.chunking_layer_bytes_sent &&
-         s1.report_size_bytes == s2.report_size_bytes &&
-         s1.network_duration == s2.network_duration;
+  return
+
+      s1.bytes_downloaded == s2.bytes_downloaded &&
+      s1.bytes_uploaded == s2.bytes_uploaded &&
+      s1.network_duration == s2.network_duration;
 }
 
 struct ExampleStats {

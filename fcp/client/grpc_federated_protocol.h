@@ -220,12 +220,10 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   // The set of canonical error codes that should be treated as 'permanent'
   // errors.
   absl::flat_hash_set<int32_t> federated_training_permanent_error_codes_;
-  int64_t bytes_downloaded_ = 0;
-  int64_t bytes_uploaded_ = 0;
   int64_t http_bytes_downloaded_ = 0;
   int64_t http_bytes_uploaded_ = 0;
-  std::unique_ptr<WallClockStopwatch> network_stopwatch_;
-  int64_t report_request_size_bytes_ = 0;
+  std::unique_ptr<WallClockStopwatch> network_stopwatch_ =
+      WallClockStopwatch::Create();
   // Represents 2 absolute retry timestamps and their corresponding retry
   // tokens, to use when the device is rejected or accepted. The retry
   // timestamps will have been generated based on the retry windows specified in

@@ -70,8 +70,7 @@ class OpStatsExampleStoreTest : public testing::Test {
   testing::StrictMock<MockOpStatsDb> mock_db_;
   testing::StrictMock<MockLogManager> mock_log_manager_;
   OpStatsExampleIteratorFactory iterator_factory_ =
-      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_,
-                                    /*enable_per_phase_network_stats=*/true);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
 };
 
 TEST_F(OpStatsExampleStoreTest, TestInvalidCollectionUrl) {
@@ -355,8 +354,6 @@ TEST_F(OpStatsExampleStoreTest, FullSerialization) {
   std::string population = "population";
   std::string task_name = "task";
   std::string error = "error";
-  int64_t bytes_downloaded = 500;
-  int64_t bytes_uploaded = 1200;
   int64_t chunking_layer_bytes_downloaded = 200;
   int64_t chunking_layer_bytes_uploaded = 600;
   int64_t network_duration_ms = 700;
@@ -364,8 +361,6 @@ TEST_F(OpStatsExampleStoreTest, FullSerialization) {
   stats.set_population_name(population);
   stats.set_task_name(task_name);
   stats.set_error_message(error);
-  stats.set_bytes_downloaded(bytes_downloaded);
-  stats.set_bytes_uploaded(bytes_uploaded);
   stats.set_chunking_layer_bytes_downloaded(chunking_layer_bytes_downloaded);
   stats.set_chunking_layer_bytes_uploaded(chunking_layer_bytes_uploaded);
   *stats.mutable_network_duration() =
@@ -426,8 +421,6 @@ TEST_F(OpStatsExampleStoreTest, FullSerialization) {
   ASSERT_EQ(ExtractSingleString(example, kPopulationName), population);
   ASSERT_EQ(ExtractSingleString(example, kTaskName), task_name);
   ASSERT_EQ(ExtractSingleString(example, kErrorMessage), error);
-  ASSERT_EQ(ExtractSingleInt64(example, kBytesDownloaded), bytes_downloaded);
-  ASSERT_EQ(ExtractSingleInt64(example, kBytesUploaded), bytes_uploaded);
   ASSERT_EQ(ExtractSingleInt64(example, kChunkingLayerBytesDownloaded),
             chunking_layer_bytes_downloaded);
   ASSERT_EQ(ExtractSingleInt64(example, kChunkingLayerBytesUploaded),

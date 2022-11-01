@@ -994,8 +994,7 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
           secagg_interruptible_runner.get(),
           protocol_execution_info.expected_number_of_clients(),
           protocol_execution_info
-              .minimum_surviving_clients_for_reconstruction(),
-          &bytes_downloaded_, &bytes_uploaded_);
+              .minimum_surviving_clients_for_reconstruction());
   FCP_RETURN_IF_ERROR(secagg_runner->Run(std::move(results)));
   return absl::OkStatus();
 }
@@ -1215,22 +1214,9 @@ void HttpFederatedProtocol::UpdateObjectStateIfPermanentError(
 }
 
 NetworkStats HttpFederatedProtocol::GetNetworkStats() {
-  // Note: we don't distinguish between 'chunking' and 'non-chunking' layers
-  // like the legacy protocol, as there is no concept of 'chunking' with the
-  // HTTP protocol like there was with the gRPC protocol. Instead we simply
-  // report our best estimate of the over-the-wire network usage.
-  return {
-      // When this flag is turned on then these first two fields will be
-      // ignored, so we set them to zero. The fields will be deleted once the
-      // flag is rolled out.
-      .bytes_downloaded =
-          flags_->enable_per_phase_network_stats() ? 0 : bytes_downloaded_,
-      .bytes_uploaded =
-          flags_->enable_per_phase_network_stats() ? 0 : bytes_uploaded_,
-      .chunking_layer_bytes_received = bytes_downloaded_,
-      .chunking_layer_bytes_sent = bytes_uploaded_,
-      .report_size_bytes = 0,
-      .network_duration = network_stopwatch_->GetTotalDuration()};
+  return {.bytes_downloaded = bytes_downloaded_,
+          .bytes_uploaded = bytes_uploaded_,
+          .network_duration = network_stopwatch_->GetTotalDuration()};
 }
 
 }  // namespace http

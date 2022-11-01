@@ -93,8 +93,7 @@ SecAggRunnerImpl::SecAggRunnerImpl(
     SecAggEventPublisher* secagg_event_publisher, LogManager* log_manager,
     InterruptibleRunner* interruptible_runner,
     int64_t expected_number_of_clients,
-    int64_t minimum_surviving_clients_for_reconstruction,
-    int64_t* bytes_downloaded, int64_t* bytes_uploaded)
+    int64_t minimum_surviving_clients_for_reconstruction)
     : send_to_server_impl_(std::move(send_to_server_impl)),
       protocol_delegate_(std::move(protocol_delegate)),
       secagg_event_publisher_(*secagg_event_publisher),
@@ -102,9 +101,7 @@ SecAggRunnerImpl::SecAggRunnerImpl(
       interruptible_runner_(*interruptible_runner),
       expected_number_of_clients_(expected_number_of_clients),
       minimum_surviving_clients_for_reconstruction_(
-          minimum_surviving_clients_for_reconstruction),
-      bytes_downloaded_(*bytes_downloaded),
-      bytes_uploaded_(*bytes_uploaded) {}
+          minimum_surviving_clients_for_reconstruction) {}
 
 absl::Status SecAggRunnerImpl::Run(ComputationResults results) {
   auto secagg_state_transition_listener =
@@ -147,8 +144,6 @@ absl::Status SecAggRunnerImpl::Run(ComputationResults results) {
           k, absl::MakeConstSpan(vector.values.data(), data_length), modulus);
     }
   }
-  SecAggSendToServerBase* send_to_server_impl_raw_ptr =
-      send_to_server_impl_.get();
   secagg_client_ = std::make_unique<secagg::SecAggClient>(
       expected_number_of_clients_,
       minimum_surviving_clients_for_reconstruction_,
@@ -181,8 +176,6 @@ absl::Status SecAggRunnerImpl::Run(ComputationResults results) {
                                 absl::StrCat("Error receiving SecAgg message: ",
                                              result.status().message()));
           }
-          this->bytes_downloaded_ +=
-              this->protocol_delegate_->last_received_message_size();
           if (secagg_client_->IsAborted()) {
             std::string error_message = "error message not found.";
             if (secagg_client_->ErrorMessage().ok())
@@ -197,9 +190,6 @@ absl::Status SecAggRunnerImpl::Run(ComputationResults results) {
         AbortInternal();
         this->protocol_delegate_->Abort();
       }));
-  if (send_to_server_impl_raw_ptr) {
-    bytes_uploaded_ += send_to_server_impl_raw_ptr->total_bytes_uploaded();
-  }
   return absl::OkStatus();
 }
 
@@ -223,13 +213,11 @@ std::unique_ptr<SecAggRunner> SecAggRunnerFactoryImpl::CreateSecAggRunner(
     SecAggEventPublisher* secagg_event_publisher, LogManager* log_manager,
     InterruptibleRunner* interruptible_runner,
     int64_t expected_number_of_clients,
-    int64_t minimum_surviving_clients_for_reconstruction,
-    int64_t* bytes_downloaded, int64_t* bytes_uploaded) {
+    int64_t minimum_surviving_clients_for_reconstruction) {
   return std::make_unique<SecAggRunnerImpl>(
       std::move(send_to_server_impl), std::move(protocol_delegate),
       secagg_event_publisher, log_manager, interruptible_runner,
-      expected_number_of_clients, minimum_surviving_clients_for_reconstruction,
-      bytes_downloaded, bytes_uploaded);
+      expected_number_of_clients, minimum_surviving_clients_for_reconstruction);
 }
 
 }  // namespace client

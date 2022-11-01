@@ -38,9 +38,7 @@ OpStatsLoggerImpl::OpStatsLoggerImpl(std::unique_ptr<OpStatsDb> db,
                                      const Flags* flags,
                                      const std::string& session_name,
                                      const std::string& population_name)
-    : db_(std::move(db)),
-      log_manager_(log_manager),
-      enable_per_phase_network_stats_(flags->enable_per_phase_network_stats()) {
+    : db_(std::move(db)), log_manager_(log_manager) {
   log_manager_->LogDiag(DebugDiagCode::TRAINING_OPSTATS_ENABLED);
   log_manager_->LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_EXPECTED);
 
@@ -90,18 +88,10 @@ void OpStatsLoggerImpl::UpdateDatasetStats(
 
 void OpStatsLoggerImpl::SetNetworkStats(const NetworkStats& network_stats) {
   absl::MutexLock lock(&mutex_);
-  if (!enable_per_phase_network_stats_) {
-    stats_.set_bytes_downloaded(network_stats.bytes_downloaded);
-    stats_.set_bytes_uploaded(network_stats.bytes_uploaded);
-  }
-  stats_.set_chunking_layer_bytes_downloaded(
-      network_stats.chunking_layer_bytes_received);
-  stats_.set_chunking_layer_bytes_uploaded(
-      network_stats.chunking_layer_bytes_sent);
-  if (enable_per_phase_network_stats_) {
-    *stats_.mutable_network_duration() =
-        TimeUtil::ConvertAbslToProtoDuration(network_stats.network_duration);
-  }
+  stats_.set_chunking_layer_bytes_downloaded(network_stats.bytes_downloaded);
+  stats_.set_chunking_layer_bytes_uploaded(network_stats.bytes_uploaded);
+  *stats_.mutable_network_duration() =
+      TimeUtil::ConvertAbslToProtoDuration(network_stats.network_duration);
 }
 
 void OpStatsLoggerImpl::SetRetryWindow(RetryWindow retry_window) {

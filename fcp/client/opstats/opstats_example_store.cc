@@ -82,8 +82,7 @@ tensorflow::Feature CreateFeatureFromIntVector(
 }
 
 std::string CreateExample(const OperationalStats& op_stats,
-                          int64_t earliest_trustworthy_time,
-                          bool enable_per_phase_network_stats) {
+                          int64_t earliest_trustworthy_time) {
   tensorflow::Example example;
   auto* feature_map = example.mutable_features()->mutable_feature();
   (*feature_map)[kPopulationName] =
@@ -128,18 +127,12 @@ std::string CreateExample(const OperationalStats& op_stats,
   (*feature_map)[kRetryWindowDelayMaxMillis] = CreateFeatureFromInt(
       TimeUtil::DurationToMilliseconds(op_stats.retry_window().delay_max()));
 
-  (*feature_map)[kBytesDownloaded] =
-      CreateFeatureFromInt(op_stats.bytes_downloaded());
-  (*feature_map)[kBytesUploaded] =
-      CreateFeatureFromInt(op_stats.bytes_uploaded());
   (*feature_map)[kChunkingLayerBytesDownloaded] =
       CreateFeatureFromInt(op_stats.chunking_layer_bytes_downloaded());
   (*feature_map)[kChunkingLayerBytesUploaded] =
       CreateFeatureFromInt(op_stats.chunking_layer_bytes_uploaded());
-  if (enable_per_phase_network_stats) {
     (*feature_map)[kNetworkDuration] = CreateFeatureFromInt(
         TimeUtil::DurationToMilliseconds(op_stats.network_duration()));
-  }
 
   (*feature_map)[kEarliestTrustWorthyTimeMillis] =
       CreateFeatureFromInt(earliest_trustworthy_time);
@@ -150,18 +143,15 @@ std::string CreateExample(const OperationalStats& op_stats,
 class OpStatsExampleIterator : public fcp::client::ExampleIterator {
  public:
   explicit OpStatsExampleIterator(std::vector<OperationalStats> op_stats,
-                                  int64_t earliest_trustworthy_time,
-                                  bool enable_per_phase_network_stats)
+                                  int64_t earliest_trustworthy_time)
       : next_(0),
         data_(std::move(op_stats)),
-        earliest_trustworthy_time_millis_(earliest_trustworthy_time),
-        enable_per_phase_network_stats_(enable_per_phase_network_stats) {}
+        earliest_trustworthy_time_millis_(earliest_trustworthy_time) {}
   absl::StatusOr<std::string> Next() override {
     if (next_ < 0 || next_ >= data_.size()) {
       return absl::OutOfRangeError("The iterator is out of range.");
     }
-    return CreateExample(data_[next_++], earliest_trustworthy_time_millis_,
-                         enable_per_phase_network_stats_);
+    return CreateExample(data_[next_++], earliest_trustworthy_time_millis_);
   }
 
   void Close() override {
@@ -174,7 +164,6 @@ class OpStatsExampleIterator : public fcp::client::ExampleIterator {
   int next_;
   std::vector<OperationalStats> data_;
   const int64_t earliest_trustworthy_time_millis_;
-  const bool enable_per_phase_network_stats_;
 };
 
 }  // anonymous namespace
@@ -235,8 +224,7 @@ OpStatsExampleIteratorFactory::CreateExampleIterator(
   }
   return std::make_unique<OpStatsExampleIterator>(
       std::move(selected_data),
-      TimeUtil::TimestampToMilliseconds(data.earliest_trustworthy_time()),
-      enable_per_phase_network_stats_);
+      TimeUtil::TimestampToMilliseconds(data.earliest_trustworthy_time()));
 }
 
 }  // namespace opstats

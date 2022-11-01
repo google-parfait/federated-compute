@@ -156,9 +156,6 @@ GrpcFederatedProtocol::GrpcFederatedProtocol(
       client_version_(client_version),
       attestation_measurement_(attestation_measurement),
       bit_gen_(std::move(bit_gen)),
-      network_stopwatch_(flags->enable_per_phase_network_stats()
-                             ? WallClockStopwatch::Create()
-                             : WallClockStopwatch::CreateNoop()),
       resource_cache_(resource_cache) {
   interruptible_runner_ = std::make_unique<InterruptibleRunner>(
       log_manager, should_abort, timing_config,
@@ -198,11 +195,6 @@ absl::Status GrpcFederatedProtocol::Send(
         return this->grpc_bidi_stream_->Send(client_stream_message);
       },
       [this]() { this->grpc_bidi_stream_->Close(); }));
-  // When this flag is turned on the bytes_uploaded_ field will be
-  // ignored, so we avoid calculating it.
-  if (!flags_->enable_per_phase_network_stats()) {
-    bytes_uploaded_ += client_stream_message->ByteSizeLong();
-  }
   return absl::OkStatus();
 }
 
@@ -219,11 +211,6 @@ absl::Status GrpcFederatedProtocol::Receive(
         return grpc_bidi_stream_->Receive(server_stream_message);
       },
       [this]() { this->grpc_bidi_stream_->Close(); }));
-  // When this flag is turned on the bytes_downloaded_ field will be
-  // ignored, so we avoid calculating it.
-  if (!flags_->enable_per_phase_network_stats()) {
-    bytes_downloaded_ += server_stream_message->ByteSizeLong();
-  }
   return absl::OkStatus();
 }
 
@@ -636,7 +623,6 @@ class GrpcSecAggSendToServerImpl : public SecAggSendToServerBase {
     auto status = grpc_bidi_stream_->Send(&client_stream_message);
     if (status.ok()) {
       last_sent_message_size_ = bytes_to_upload;
-      total_bytes_uploaded_ += last_sent_message_size_;
     }
   }
 
@@ -741,11 +727,6 @@ absl::Status GrpcFederatedProtocol::ReportInternal(
   report->add_serialized_train_event()->PackFrom(client_execution_stats);
 
   // 4. Send ReportRequest.
-  // When this flag is turned on the report_request_size_bytes_ field will be
-  // ignored, so we avoid calculating it.
-  if (!flags_->enable_per_phase_network_stats()) {
-    report_request_size_bytes_ += client_stream_message.ByteSizeLong();
-  }
 
   // Note that we do not use the GrpcFederatedProtocol::Send(...) helper method
   // here, since we are already running within a call to
@@ -755,11 +736,6 @@ absl::Status GrpcFederatedProtocol::ReportInternal(
     return absl::Status(
         status.code(),
         absl::StrCat("Error sending ReportRequest: ", status.message()));
-  }
-  // When this flag is turned on the report_request_size_bytes_ field will be
-  // ignored, so we avoid doing anything with it.
-  if (!flags_->enable_per_phase_network_stats()) {
-    bytes_uploaded_ += report_request_size_bytes_;
   }
 
   return absl::OkStatus();
@@ -822,8 +798,7 @@ absl::Status GrpcFederatedProtocol::Report(ComputationResults results,
             secagg_event_publisher, log_manager_, interruptible_runner_.get(),
             expected_number_of_clients,
             secure_aggregation_protocol_execution_info
-                .minimum_surviving_clients_for_reconstruction(),
-            &bytes_downloaded_, &bytes_uploaded_);
+                .minimum_surviving_clients_for_reconstruction());
 
     FCP_RETURN_IF_ERROR(secagg_runner->Run(std::move(results)));
   } else {
@@ -1052,31 +1027,14 @@ GrpcFederatedProtocol::ConvertResourceToUriOrInlineData(
 }
 
 NetworkStats GrpcFederatedProtocol::GetNetworkStats() {
-  // Note: the `HttpClient` bandwidth stats are most similar to the gRPC
-  // protocol's chunking layer stats, in that they reflect as closely as
-  // possible the amount of data sent on the wire. Because the `HttpClient`
-  // layer doesn't track 'uncompressed' bandwidth (i.e. more similar to our
-  // other `bytes_downloaded/uploaded` stats), we simply use the same HTTP
-  // bandwidth stats in both cases.
-  return {
-      // When this flag is turned on then some fields will be ignored, so we set
-      // them to zero. The fields will be deleted once the
-      // flag is rolled out.
-      .bytes_downloaded = flags_->enable_per_phase_network_stats()
-                              ? 0
-                              : bytes_downloaded_ + http_bytes_downloaded_,
-      .bytes_uploaded = flags_->enable_per_phase_network_stats()
-                            ? 0
-                            : bytes_uploaded_ + http_bytes_uploaded_,
-      .chunking_layer_bytes_received =
-          grpc_bidi_stream_->ChunkingLayerBytesReceived() +
-          http_bytes_downloaded_,
-      .chunking_layer_bytes_sent =
-          grpc_bidi_stream_->ChunkingLayerBytesSent() + http_bytes_uploaded_,
-      .report_size_bytes = flags_->enable_per_phase_network_stats()
-                               ? 0
-                               : report_request_size_bytes_,
-      .network_duration = network_stopwatch_->GetTotalDuration()};
+  // Note: the `HttpClient` bandwidth stats are similar to the gRPC protocol's
+  // "chunking layer" stats, in that they reflect as closely as possible the
+  // amount of data sent on the wire.
+  return {.bytes_downloaded = grpc_bidi_stream_->ChunkingLayerBytesReceived() +
+                              http_bytes_downloaded_,
+          .bytes_uploaded = grpc_bidi_stream_->ChunkingLayerBytesSent() +
+                            http_bytes_uploaded_,
+          .network_duration = network_stopwatch_->GetTotalDuration()};
 }
 
 }  // namespace client

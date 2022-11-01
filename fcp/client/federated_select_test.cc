@@ -116,13 +116,9 @@ class HttpFederatedSelectManagerTest : public ::testing::Test {
     EXPECT_EQ(network_stats.bytes_downloaded,
               sent_received_bytes.received_bytes);
     EXPECT_EQ(network_stats.bytes_uploaded, sent_received_bytes.sent_bytes);
-    EXPECT_EQ(network_stats.chunking_layer_bytes_received,
-              sent_received_bytes.received_bytes);
-    EXPECT_EQ(network_stats.chunking_layer_bytes_sent,
-              sent_received_bytes.sent_bytes);
     // If any network traffic occurred, we expect to see some time reflected in
     // the duration.
-    if (network_stats.chunking_layer_bytes_sent > 0) {
+    if (network_stats.bytes_uploaded > 0) {
       EXPECT_THAT(network_stats.network_duration, Gt(absl::ZeroDuration()));
     }
   }
