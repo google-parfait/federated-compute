@@ -365,11 +365,9 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs), output_names);
 #else
-  FCP_CHECK(false) << "No plan engine enabled";
-  // Return a default result, but only to satisfy the compiler (since this
-  // statement will never actually be reached).
-  return engine::PlanResult(engine::PlanOutcome::kTensorflowError,
-                            absl::InternalError("No plan engine enabled"));
+  return engine::PlanResult(
+      engine::PlanOutcome::kTensorflowError,
+      absl::InternalError("No eligibility eval plan engine enabled"));
 #endif
 }
 
@@ -536,9 +534,6 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
 
   return result;
 #else
-  FCP_CHECK(false) << "No plan engine enabled";
-  // Return a default result, but only to satisfy the compiler (since this
-  // statement will never actually be reached).
   return PlanResultAndCheckpointFile(
       engine::PlanResult(engine::PlanOutcome::kTensorflowError,
                          absl::InternalError("No plan engine enabled")));
