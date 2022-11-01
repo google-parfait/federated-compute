@@ -76,6 +76,11 @@ class AggregationProtocol {
   // Each client is expected to submit no more than one input.  The format of
   // the input blob is unspecified and can be different for each specific
   // aggregation protocol implementation.
+  //
+  // This method should return an error status only if there is an unrecoverable
+  // error which must result in aborting the protocol.  Any client specific
+  // error, like an invalid report, should result in closing the protocol with
+  // that specific client only, but this method should still return OK status.
   virtual absl::Status ReceiveClientInput(int64_t client_id,
                                           absl::Cord report) = 0;
 
@@ -84,6 +89,11 @@ class AggregationProtocol {
   // This method is optional - not all aggregation protocol implementations have
   // to implement it.  Depending on the specific protocol implementation there
   // may be multiple messages exchanged with each clients.
+  //
+  // This method should return an error status only if there is an unrecoverable
+  // error which must result in aborting the protocol.  Any client specific
+  // error, like an invalid message, should result in closing the protocol with
+  // that specific client only, but this method should still return OK status.
   virtual absl::Status ReceiveClientMessage(int64_t client_id,
                                             const ClientMessage& message) = 0;
 
