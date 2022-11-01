@@ -66,10 +66,10 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     not start until the previous one has completed (either successfully or not).
 
     Args:
-      task_name: the name of the task
-      plan: the Plan proto containing the client and server computations
-      server_checkpoint: the starting server checkpoint, if any
-      number_of_clients: the minimum number of clients to include
+      task_name: The name of the task.
+      plan: The Plan proto containing the client and server computations.
+      server_checkpoint: The starting server checkpoint, if any.
+      number_of_clients: The minimum number of clients to include.
 
     Returns:
       A TensorFlow checkpoint containing the aggregated results.

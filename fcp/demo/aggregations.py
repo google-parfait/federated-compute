@@ -210,7 +210,7 @@ class Service:
     Any pending clients are considered failed.
 
     Args:
-      state: the session state to clean up
+      state: The session state to clean up.
     """
     state.agg_session.close()
     state.status.num_clients_aborted += state.status.num_clients_pending

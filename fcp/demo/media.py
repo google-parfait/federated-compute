@@ -47,8 +47,8 @@ class Service:
     The download path is unregistered when the context manager is closed.
 
     Args:
-      data: the bytes to make available
-      content_type: the content type to include in the response
+      data: The bytes to make available.
+      content_type: The content type to include in the response.
 
     Yields:
       The URL from which to download the data.

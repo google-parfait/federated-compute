@@ -78,8 +78,8 @@ def proto_action(*,
   a response message or or throw an `HttpError`.
 
   Args:
-    service: the full name of the proto service
-    method: the name of the method
+    service: The full name of the proto service.
+    method: The name of the method.
 
   Returns:
     An annotated function.
@@ -147,8 +147,8 @@ def http_action(*, method: str,
   an `HttpError`.
 
   Args:
-    method: the type of HTTP method ('GET' or 'POST')
-    pattern: the url pattern to match
+    method: The type of HTTP method ('GET' or 'POST').
+    pattern: The url pattern to match.
 
   Returns:
     An annotated function.
@@ -184,7 +184,7 @@ def create_handler(*services: Any) -> Type[http.server.BaseHTTPRequestHandler]:
   action handlers, it's unspecified which will be invoked.
 
   Args:
-    *services: a list of objects with methods decorated with `@proto_action` or
+    *services: A list of objects with methods decorated with `@proto_action` or
       `@http_action`.
 
   Returns:
