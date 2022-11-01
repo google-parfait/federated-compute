@@ -71,6 +71,20 @@ py_test(
 )
 
 py_library(
+    name = "federated_computation",
+    srcs = ["federated_computation.py"],
+    srcs_version = "PY3",
+)
+
+py_test(
+    name = "federated_computation_test",
+    srcs = ["federated_computation_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [":federated_computation"],
+)
+
+py_library(
     name = "http_actions",
     srcs = ["http_actions.py"],
     srcs_version = "PY3",
