@@ -129,6 +129,11 @@ class FederatedProtocol {
   // eval task. This method is optional and may be called 0 or 1 times. If it is
   // called, then it must be called before any call to `Checkin(...)`.
   //
+  // If an eligibility eval task is configured, then the
+  // `payload_uris_received_callback` function will be called with a partially
+  // populated `EligibilityEvalTask` containing all of the task's info except
+  // for the actual payloads (which are yet to be fetched at that point).
+  //
   // Returns:
   // - On success, an EligibilityEvalCheckinResult.
   // - On error:
@@ -143,8 +148,9 @@ class FederatedProtocol {
   //     note in federated_protocol.cc for the reasoning for this.)
   //   - INTERNAL for other unexpected client-side errors.
   //   - any server-provided error code.
-  virtual absl::StatusOr<EligibilityEvalCheckinResult>
-  EligibilityEvalCheckin() = 0;
+  virtual absl::StatusOr<EligibilityEvalCheckinResult> EligibilityEvalCheckin(
+      std::function<void(const EligibilityEvalTask&)>
+          payload_uris_received_callback) = 0;
 
   // Report an eligibility eval task error to the federated server.
   // Must only be called once and after a successful call to
@@ -189,6 +195,11 @@ class FederatedProtocol {
   // If the caller did not previously call `EligibilityEvalCheckin()`, then the
   // `task_eligibility_info` parameter should be left empty.
   //
+  // If the client is assigned a task by the server, then the
+  // `payload_uris_received_callback` function will be called with a partially
+  // populated `TaskAssignment` containing all of the task's info except for the
+  // actual payloads (which are yet to be fetched at that point)
+  //
   // Returns:
   // - On success, a `CheckinResult`.
   // - On error:
@@ -208,7 +219,9 @@ class FederatedProtocol {
   virtual absl::StatusOr<CheckinResult> Checkin(
       const std::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&
-          task_eligibility_info) = 0;
+          task_eligibility_info,
+      std::function<void(const TaskAssignment&)>
+          payload_uris_received_callback) = 0;
 
   // Reports the result of a federated computation to the server. Must only be
   // called once and after a successful call to Checkin().

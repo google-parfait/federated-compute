@@ -37,7 +37,8 @@ class PhaseLoggerImpl : public PhaseLogger {
       : event_publisher_(event_publisher),
         opstats_logger_(opstats_logger),
         log_manager_(log_manager),
-        log_tensorflow_error_messages_(flags->log_tensorflow_error_messages()) {
+        log_tensorflow_error_messages_(flags->log_tensorflow_error_messages()),
+        enable_plan_uri_received_logs_(flags->enable_plan_uri_received_logs()) {
   }
 
   void UpdateRetryWindowAndNetworkStats(
@@ -65,9 +66,12 @@ class PhaseLoggerImpl : public PhaseLogger {
   void LogEligibilityEvalCheckinTurnedAway(
       const NetworkStats& network_stats,
       absl::Time time_before_checkin) override;
-  void LogEligibilityEvalCheckinCompleted(
+  void LogEligibilityEvalCheckinPlanUriReceived(
       const NetworkStats& network_stats,
       absl::Time time_before_checkin) override;
+  void LogEligibilityEvalCheckinCompleted(
+      const NetworkStats& network_stats, absl::Time time_before_checkin,
+      absl::Time time_before_plan_download) override;
 
   // Eligibility eval computation phase.
   void LogEligibilityEvalComputationStarted() override;
@@ -108,9 +112,13 @@ class PhaseLoggerImpl : public PhaseLogger {
   void LogCheckinTurnedAway(const NetworkStats& network_stats,
                             absl::Time time_before_checkin,
                             absl::Time reference_time) override;
+  void LogCheckinPlanUriReceived(absl::string_view task_name,
+                                 const NetworkStats& network_stats,
+                                 absl::Time time_before_checkin) override;
   void LogCheckinCompleted(absl::string_view task_name,
                            const NetworkStats& network_stats,
                            absl::Time time_before_checkin,
+                           absl::Time time_before_plan_download,
                            absl::Time reference_time) override;
 
   // Computation phase.
@@ -197,6 +205,7 @@ class PhaseLoggerImpl : public PhaseLogger {
   opstats::OpStatsLogger* opstats_logger_;
   LogManager* log_manager_;
   const bool log_tensorflow_error_messages_;
+  const bool enable_plan_uri_received_logs_;
 };
 
 }  // namespace client

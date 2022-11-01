@@ -42,9 +42,10 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   // Commits the cumulative message to the db.
   ~OpStatsLoggerImpl() override;
 
-  // Adds a checkin accepted event and the corresponding task name to the
-  // cumulative internal message.
-  void AddCheckinAcceptedEventWithTaskName(const std::string& task_name)
+  // Adds an event and the given task name to the cumulative internal message,
+  // in a single transaction.
+  void AddEventAndSetTaskName(const std::string& task_name,
+                              OperationalStats::Event::EventKind event)
       ABSL_LOCKS_EXCLUDED(mutex_) override;
 
   // Adds an event to the cumulative internal message.

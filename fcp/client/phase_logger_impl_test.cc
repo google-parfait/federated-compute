@@ -35,8 +35,10 @@ using ::fcp::client::opstats::OperationalStats;
 using ::google::internal::federatedml::v2::RetryWindow;
 using ::google::protobuf::util::TimeUtil;
 using ::testing::_;
+using ::testing::AllOf;
 using ::testing::Ge;
 using ::testing::InSequence;
+using ::testing::Lt;
 using ::testing::Return;
 using ::testing::StrictMock;
 
@@ -47,12 +49,19 @@ const int64_t kTotalExampleSizeBytes = 1000;
 
 // Parameterize tests with
 // 1) whether log tf error message;
-class PhaseLoggerImplTest : public testing::TestWithParam<bool> {
+// 2) whether separate "plan URI received" events should be logged.
+class PhaseLoggerImplTest
+    : public testing::TestWithParam<std::tuple<bool, bool>> {
  protected:
   void SetUp() override {
-    log_tensorflow_error_messages_ = GetParam();
+    log_tensorflow_error_messages_ = std::get<0>(GetParam());
     EXPECT_CALL(mock_flags_, log_tensorflow_error_messages())
         .WillRepeatedly(Return(log_tensorflow_error_messages_));
+
+    enable_plan_uri_received_logs_ = std::get<1>(GetParam());
+    EXPECT_CALL(mock_flags_, enable_plan_uri_received_logs())
+        .WillRepeatedly(Return(enable_plan_uri_received_logs_));
+
     phase_logger_ = std::make_unique<PhaseLoggerImpl>(
         &mock_event_publisher_, &mock_opstats_logger_, &mock_log_manager_,
         &mock_flags_);
@@ -71,6 +80,7 @@ class PhaseLoggerImplTest : public testing::TestWithParam<bool> {
   StrictMock<MockOpStatsLogger> mock_opstats_logger_;
   MockFlags mock_flags_;
   bool log_tensorflow_error_messages_ = false;
+  bool enable_plan_uri_received_logs_ = false;
   std::unique_ptr<PhaseLoggerImpl> phase_logger_;
   NetworkStats network_stats_ = {
       .bytes_downloaded = kChunkingLayerBytesReceived,
@@ -81,11 +91,15 @@ class PhaseLoggerImplTest : public testing::TestWithParam<bool> {
 
 std::string GenerateTestName(
     const testing::TestParamInfo<PhaseLoggerImplTest::ParamType>& info) {
-  std::string name = info.param ? "Log_tf_error" : "No_tf_error";
+  std::string name = absl::StrCat(
+      std::get<0>(info.param) ? "Log_tf_error" : "No_tf_error", "__",
+      std::get<1>(info.param) ? "Plan_uri_received_logs_enabled"
+                              : "Plan_uri_received_logs_disabled");
   return name;
 }
 
-INSTANTIATE_TEST_SUITE_P(OldVsNewBehavior, PhaseLoggerImplTest, testing::Bool(),
+INSTANTIATE_TEST_SUITE_P(OldVsNewBehavior, PhaseLoggerImplTest,
+                         testing::Combine(testing::Bool(), testing::Bool()),
                          GenerateTestName);
 
 TEST_P(PhaseLoggerImplTest, UpdateRetryWindowAndNetworkStats) {
@@ -241,19 +255,50 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinInvalidPayloadError) {
       error_message, network_stats_, absl::Now());
 }
 
+TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinPlanUriReceived) {
+  if (enable_plan_uri_received_logs_) {
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        AddEvent(
+            OperationalStats::Event::EVENT_KIND_ELIGIBILITY_PLAN_URI_RECEIVED));
+    EXPECT_CALL(mock_event_publisher_,
+                PublishEligibilityEvalPlanUriReceived(
+                    network_stats_,
+                    AllOf(Ge(absl::Minutes(1)),
+                          Lt(absl::Minutes(1) + absl::Milliseconds(10)))));
+  }
+
+  phase_logger_->LogEligibilityEvalCheckinPlanUriReceived(
+      network_stats_, absl::Now() - absl::Minutes(1));
+}
+
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinCompleted) {
+  NetworkStats network_stats{.bytes_downloaded = 100,
+                             .bytes_uploaded = 200,
+                             .network_duration = absl::Seconds(40)};
+
+  absl::Duration expected_duration =
+      enable_plan_uri_received_logs_ ? absl::Minutes(1) : absl::Minutes(2);
+
   InSequence seq;
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED));
   EXPECT_CALL(mock_event_publisher_,
-              PublishEligibilityEvalPlanReceived(network_stats_, _));
+              PublishEligibilityEvalPlanReceived(
+                  network_stats,
+                  AllOf(Ge(expected_duration),
+                        Lt(expected_duration + absl::Milliseconds(10)))));
+  // The counter should always log the full duration, from before the start of
+  // the checkin (regardless of the enable_plan_uri_received_logs_ flag).
   VerifyCounterLogged(
-      HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, Ge(0));
+      HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY,
+      absl::ToInt64Milliseconds(absl::Minutes(2)));
 
   phase_logger_->LogEligibilityEvalCheckinCompleted(
-      /*network_stats=*/network_stats_,
-      /*time_before_checkin=*/absl::Now() - absl::Minutes(2));
+      network_stats,
+      /*time_before_checkin=*/absl::Now() - absl::Minutes(2),
+      /*time_before_plan_downloaded=*/absl::Now() - absl::Minutes(1));
 }
 
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationStarted) {
@@ -479,20 +524,64 @@ TEST_P(PhaseLoggerImplTest, LogCheckinInvalidPayload) {
                                           absl::Now() - absl::Minutes(8));
 }
 
+TEST_P(PhaseLoggerImplTest, LogCheckinPlanUriReceived) {
+  std::string task_name = "my_task";
+  if (enable_plan_uri_received_logs_) {
+    EXPECT_CALL(mock_event_publisher_,
+                PublishCheckinPlanUriReceived(
+                    network_stats_,
+                    AllOf(Ge(absl::Minutes(1)),
+                          Lt(absl::Minutes(1) + absl::Milliseconds(10)))));
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        AddEventAndSetTaskName(
+            task_name,
+            OperationalStats::Event::EVENT_KIND_CHECKIN_PLAN_URI_RECEIVED));
+  }
+
+  phase_logger_->LogCheckinPlanUriReceived(task_name, network_stats_,
+                                           absl::Now() - absl::Minutes(1));
+}
+
 TEST_P(PhaseLoggerImplTest, LogCheckinCompleted) {
+  NetworkStats network_stats{.bytes_downloaded = 100,
+                             .bytes_uploaded = 200,
+                             .network_duration = absl::Seconds(40)};
+
+  absl::Duration expected_duration =
+      enable_plan_uri_received_logs_ ? absl::Minutes(1) : absl::Minutes(2);
+
   std::string task_name = "my_task";
   InSequence seq;
   EXPECT_CALL(mock_event_publisher_,
-              PublishCheckinFinishedV2(network_stats_, _));
-  EXPECT_CALL(mock_opstats_logger_,
-              AddCheckinAcceptedEventWithTaskName(task_name));
-  VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, Ge(0));
-  VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, Ge(0));
+              PublishCheckinFinishedV2(
+                  network_stats,
+                  AllOf(Ge(expected_duration),
+                        Lt(expected_duration + absl::Milliseconds(10)))));
+  if (enable_plan_uri_received_logs_) {
+    EXPECT_CALL(mock_opstats_logger_,
+                AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED));
+  } else {
+    EXPECT_CALL(
+        mock_opstats_logger_,
+        AddEventAndSetTaskName(
+            task_name, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED));
+  }
+  // The counter should always log the full duration, from before the start of
+  // the checkin (regardless of the enable_plan_uri_received_logs_ flag).
+  VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY,
+                      AllOf(Ge(absl::ToInt64Milliseconds(absl::Minutes(2))),
+                            Lt(absl::ToInt64Milliseconds(
+                                absl::Minutes(2) + absl::Milliseconds(100)))));
+  VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME,
+                      AllOf(Ge(absl::ToInt64Milliseconds(absl::Minutes(8))),
+                            Lt(absl::ToInt64Milliseconds(
+                                absl::Minutes(8) + absl::Milliseconds(100)))));
 
   phase_logger_->LogCheckinCompleted(
-      task_name,
-      /*network_stats=*/network_stats_,
+      task_name, network_stats,
       /*time_before_checkin=*/absl::Now() - absl::Minutes(2),
+      /*time_before_plan_download=*/absl::Now() - absl::Minutes(1),
       /*reference_time=*/absl::Now() - absl::Minutes(8));
 }
 

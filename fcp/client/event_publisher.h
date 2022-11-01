@@ -43,6 +43,13 @@ class EventPublisher {
   virtual void PublishEligibilityEvalCheckin() = 0;
 
   // Publishes that the device has finished its eligibility eval checkin with
+  // the server, and received the URIs to download the eligibility eval plan
+  // with, but hasn't actually downloaded them yet, along with information
+  // how much data was transferred up to this point and how long that took.
+  virtual void PublishEligibilityEvalPlanUriReceived(
+      const NetworkStats& network_stats, absl::Duration phase_duration) = 0;
+
+  // Publishes that the device has finished its eligibility eval checkin with
   // the server, and received an eligibility eval plan, along with information
   // how much data was transferred and how long that took.
   virtual void PublishEligibilityEvalPlanReceived(
@@ -162,6 +169,12 @@ class EventPublisher {
   virtual void PublishRejected(const NetworkStats& network_stats,
                                absl::Duration phase_duration) = 0;
 
+  // Publishes that the device has finished checking in with the server and
+  // received URIs to download the plan and checkpoint with, but hasn't yet
+  // downloaded those, along with information how much data was transferred up
+  // to this point and how long that took.
+  virtual void PublishCheckinPlanUriReceived(const NetworkStats& network_stats,
+                                             absl::Duration phase_duration) = 0;
   // Publishes that the device has finished checking in with the server, along
   // with information how much data was transferred and how long that took.
   virtual void PublishCheckinFinishedV2(const NetworkStats& network_stats,

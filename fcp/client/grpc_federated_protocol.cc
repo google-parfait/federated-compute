@@ -331,7 +331,8 @@ absl::Status GrpcFederatedProtocol::ReceiveCheckinRequestAck() {
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
 GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
-    absl::Time start_time) {
+    absl::Time start_time, std::function<void(const EligibilityEvalTask&)>
+                               payload_uris_received_callback) {
   ServerStreamMessage server_stream_message;
   FCP_RETURN_IF_ERROR(Receive(&server_stream_message));
 
@@ -349,16 +350,22 @@ GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
       const EligibilityEvalPayload& eligibility_eval_payload =
           eligibility_checkin_response.eligibility_eval_payload();
       object_state_ = ObjectState::kEligibilityEvalEnabled;
+      EligibilityEvalTask result{.execution_id =
+                                     eligibility_eval_payload.execution_id()};
+
+      payload_uris_received_callback(result);
+
       PlanAndCheckpointPayloads payloads;
       if (http_client_ == nullptr ||
           !flags_->enable_grpc_with_eligibility_eval_http_resource_support()) {
-        payloads = {.plan = eligibility_eval_payload.plan(),
-                    .checkpoint = eligibility_eval_payload.init_checkpoint()};
+        result.payloads = {
+            .plan = eligibility_eval_payload.plan(),
+            .checkpoint = eligibility_eval_payload.init_checkpoint()};
       } else {
         // Fetch the task resources, returning any errors that may be
         // encountered in the process.
         FCP_ASSIGN_OR_RETURN(
-            payloads,
+            result.payloads,
             FetchTaskResources(
                 {.plan =
                      {
@@ -387,9 +394,7 @@ GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
                              .max_age()),
                  }}));
       }
-      return EligibilityEvalTask{
-          .payloads = std::move(payloads),
-          .execution_id = eligibility_eval_payload.execution_id()};
+      return std::move(result);
     }
     case EligibilityEvalCheckinResponse::kNoEligibilityEvalConfigured: {
       // Nothing to do...
@@ -407,7 +412,9 @@ GrpcFederatedProtocol::ReceiveEligibilityEvalCheckinResponse(
 }
 
 absl::StatusOr<FederatedProtocol::CheckinResult>
-GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
+GrpcFederatedProtocol::ReceiveCheckinResponse(
+    absl::Time start_time,
+    std::function<void(const TaskAssignment&)> payload_uris_received_callback) {
   ServerStreamMessage server_stream_message;
   absl::Status receive_status = Receive(&server_stream_message);
   FCP_RETURN_IF_ERROR(receive_status);
@@ -447,15 +454,23 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
                     .minimum_clients_in_server_visible_aggregate()};
       }
 
+      TaskAssignment result{
+          .federated_select_uri_template =
+              acceptance_info.federated_select_uri_info().uri_template(),
+          .aggregation_session_id = acceptance_info.execution_phase_id(),
+          .sec_agg_info = sec_agg_info};
+
+      payload_uris_received_callback(result);
+
       PlanAndCheckpointPayloads payloads;
       if (http_client_ == nullptr) {
-        payloads = {.plan = acceptance_info.plan(),
-                    .checkpoint = acceptance_info.init_checkpoint()};
+        result.payloads = {.plan = acceptance_info.plan(),
+                           .checkpoint = acceptance_info.init_checkpoint()};
       } else {
         // Fetch the task resources, returning any errors that may be
         // encountered in the process.
         FCP_ASSIGN_OR_RETURN(
-            payloads,
+            result.payloads,
             FetchTaskResources(
                 {.plan =
                      {
@@ -480,12 +495,7 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
       }
 
       object_state_ = ObjectState::kCheckinAccepted;
-      return TaskAssignment{
-          .payloads = std::move(payloads),
-          .federated_select_uri_template =
-              acceptance_info.federated_select_uri_info().uri_template(),
-          .aggregation_session_id = acceptance_info.execution_phase_id(),
-          .sec_agg_info = sec_agg_info};
+      return result;
     }
     case CheckinResponse::kRejectionInfo: {
       object_state_ = ObjectState::kCheckinRejected;
@@ -497,7 +507,9 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(absl::Time start_time) {
 }
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
-GrpcFederatedProtocol::EligibilityEvalCheckin() {
+GrpcFederatedProtocol::EligibilityEvalCheckin(
+    std::function<void(const EligibilityEvalTask&)>
+        payload_uris_received_callback) {
   FCP_CHECK(object_state_ == ObjectState::kInitialized)
       << "Invalid call sequence";
   object_state_ = ObjectState::kEligibilityEvalCheckinFailed;
@@ -519,7 +531,8 @@ GrpcFederatedProtocol::EligibilityEvalCheckin() {
 
   // Receive + handle an EligibilityEvalCheckinResponse message, and update the
   // object state based on the received response.
-  auto response = ReceiveEligibilityEvalCheckinResponse(start_time);
+  auto response = ReceiveEligibilityEvalCheckinResponse(
+      start_time, payload_uris_received_callback);
   UpdateObjectStateIfPermanentError(
       response.status(),
       ObjectState::kEligibilityEvalCheckinFailedPermanentError);
@@ -531,7 +544,8 @@ void GrpcFederatedProtocol::ReportEligibilityEvalError(
     absl::Status error_status) {}
 
 absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
-    const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
+    const std::optional<TaskEligibilityInfo>& task_eligibility_info,
+    std::function<void(const TaskAssignment&)> payload_uris_received_callback) {
   // Checkin(...) must follow an earlier call to EligibilityEvalCheckin() that
   // resulted in a CheckinResultPayload or an EligibilityEvalDisabled result.
   FCP_CHECK(object_state_ == ObjectState::kEligibilityEvalDisabled ||
@@ -560,7 +574,8 @@ absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
 
   // Receive + handle a CheckinResponse message, and update the object state
   // based on the received response.
-  auto response = ReceiveCheckinResponse(start_time);
+  auto response =
+      ReceiveCheckinResponse(start_time, payload_uris_received_callback);
   UpdateObjectStateIfPermanentError(response.status(),
                                     ObjectState::kCheckinFailedPermanentError);
   return response;

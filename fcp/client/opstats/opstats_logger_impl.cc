@@ -52,10 +52,10 @@ OpStatsLoggerImpl::~OpStatsLoggerImpl() {
   auto status = CommitToStorage();
 }
 
-void OpStatsLoggerImpl::AddCheckinAcceptedEventWithTaskName(
-    const std::string& task_name) {
+void OpStatsLoggerImpl::AddEventAndSetTaskName(
+    const std::string& task_name, OperationalStats::Event::EventKind event) {
   absl::MutexLock lock(&mutex_);
-  AddNewEventToStats(OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
+  AddNewEventToStats(event);
   stats_.set_task_name(task_name);
 }
 

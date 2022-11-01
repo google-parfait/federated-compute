@@ -759,16 +759,14 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time reference_time,
-    const absl::Time time_before_eligibility_eval_checkin) {
+    const absl::Time reference_time, const absl::Time time_before_checkin,
+    const absl::Time time_before_plan_download,
+    const NetworkStats& network_stats) {
   ClientOnlyPlan plan;
   if (!ParseFromStringOrCord(plan, eligibility_eval_task.payloads.plan)) {
     auto message = "Failed to parse received eligibility eval plan";
     phase_logger.LogEligibilityEvalCheckinInvalidPayloadError(
-        message,
-        GetCumulativeNetworkStats(federated_protocol,
-                                  /*fedselect_manager=*/nullptr),
-        time_before_eligibility_eval_checkin);
+        message, network_stats, time_before_plan_download);
 
     FCP_LOG(ERROR) << message;
     return absl::InternalError(message);
@@ -782,19 +780,17 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     auto message = absl::StrCat(
         "Failed to create eligibility eval checkpoint input file: code: ",
         status.code(), ", message: ", status.message());
-    phase_logger.LogEligibilityEvalCheckinIOError(
-        status,
-        GetCumulativeNetworkStats(federated_protocol,
-                                  /*fedselect_manager=*/nullptr),
-        time_before_eligibility_eval_checkin);
+    phase_logger.LogEligibilityEvalCheckinIOError(status, network_stats,
+                                                  time_before_plan_download);
     FCP_LOG(ERROR) << message;
     return absl::InternalError("");
   }
 
-  phase_logger.LogEligibilityEvalCheckinCompleted(
-      GetCumulativeNetworkStats(federated_protocol,
-                                /*fedselect_manager=*/nullptr),
-      time_before_eligibility_eval_checkin);
+  phase_logger.LogEligibilityEvalCheckinCompleted(network_stats,
+                                                  /*time_before_checkin=*/
+                                                  time_before_checkin,
+                                                  /*time_before_plan_download=*/
+                                                  time_before_plan_download);
 
   absl::Time run_plan_start_time = absl::Now();
   phase_logger.LogEligibilityEvalComputationStarted();
@@ -835,15 +831,70 @@ IssueEligibilityEvalCheckinAndRunPlan(
     FederatedProtocol* federated_protocol,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, FLRunnerResult& fl_runner_result) {
-  absl::Time time_before_eligibility_eval_checkin = absl::Now();
+  const absl::Time time_before_checkin = absl::Now();
+  const NetworkStats network_stats_before_checkin =
+      GetCumulativeNetworkStats(federated_protocol,
+                                /*fedselect_manager=*/nullptr);
+
+  // When the enable_plan_uri_received_logs flag is on, these fields will,
+  // after a successful checkin that resulted in an EET being received, contain
+  // the time at which the EET plan/checkpoint URIs were received (but not yet
+  // downloaded), as well as the cumulative network stats at that point,
+  // allowing us to separately calculate how long it took to then download the
+  // actual payloads.
+  //
+  // When the flag is off, these fields will simply equal the time/stats from
+  // before the checkin request is issued at all (thereby *not* distinguishing
+  // separately between the time spent checkin in vs. downloading the
+  // resources).
+  absl::Time time_before_plan_download = time_before_checkin;
+  NetworkStats network_stats_before_plan_download =
+      network_stats_before_checkin;
+
   // Log that we are about to check in with the server.
   phase_logger.LogEligibilityEvalCheckinStarted();
-  // Issue the eligibility eval checkin request.
-  // The EligibilityEvalCheckin(...) method will call SetModelIdentifier() with
-  // the name of whatever task it receives, ensuring that subsequent events will
-  // be tagged with that identifier.
+
+  // Issue the eligibility eval checkin request (providing a callback that will
+  // be called when an EET is assigned to the task but before its
+  // plan/checkpoint URIs have actually been downloaded).
+  std::function<void(const FederatedProtocol::EligibilityEvalTask&)>
+      plan_uris_received_callback;
+  bool plan_uris_received_callback_called = false;
+  if (flags->enable_plan_uri_received_logs()) {
+    plan_uris_received_callback =
+        [&time_before_plan_download, &network_stats_before_plan_download,
+         &time_before_checkin, &network_stats_before_checkin,
+         &federated_protocol, &phase_logger,
+         &plan_uris_received_callback_called](
+            const FederatedProtocol::EligibilityEvalTask& task) {
+          // When the plan URIs have been received, we already know the name of
+          // the task we have been assigned, so let's tell the PhaseLogger.
+          phase_logger.SetModelIdentifier(task.execution_id);
+
+          // We also should log a corresponding log event.
+          phase_logger.LogEligibilityEvalCheckinPlanUriReceived(
+              GetNetworkStatsSince(federated_protocol,
+                                   /*fedselect_manager=*/nullptr,
+                                   network_stats_before_checkin),
+              time_before_checkin);
+
+          // And we must take a snapshot of the current time & network stats, so
+          // we can distinguish between the duration/network stats incurred for
+          // the checkin request vs. the actual downloading of the
+          // plan/checkpoint resources.
+          time_before_plan_download = absl::Now();
+          network_stats_before_plan_download =
+              GetCumulativeNetworkStats(federated_protocol,
+                                        /*fedselect_manager=*/nullptr);
+          plan_uris_received_callback_called = true;
+        };
+  } else {
+    plan_uris_received_callback =
+        [](const FederatedProtocol::EligibilityEvalTask& task) {};
+  }
   absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
-      eligibility_checkin_result = federated_protocol->EligibilityEvalCheckin();
+      eligibility_checkin_result = federated_protocol->EligibilityEvalCheckin(
+          plan_uris_received_callback);
   UpdateRetryWindowAndNetworkStats(*federated_protocol,
                                    /*fedselect_manager=*/nullptr, phase_logger,
                                    fl_runner_result);
@@ -856,10 +907,17 @@ IssueEligibilityEvalCheckinAndRunPlan(
   if (eligibility_checkin_result.ok() &&
       std::holds_alternative<FederatedProtocol::EligibilityEvalTask>(
           *eligibility_checkin_result)) {
-    auto model_identifier = std::get<FederatedProtocol::EligibilityEvalTask>(
-                                *eligibility_checkin_result)
-                                .execution_id;
-    phase_logger.SetModelIdentifier(model_identifier);
+    if (!flags->enable_plan_uri_received_logs()) {
+      auto model_identifier = std::get<FederatedProtocol::EligibilityEvalTask>(
+                                  *eligibility_checkin_result)
+                                  .execution_id;
+      phase_logger.SetModelIdentifier(model_identifier);
+    } else {
+      // Make sure that if we received an EligibilityEvalTask, then the
+      // callback should have already been called by this point by the
+      // protocol (ensuring that SetModelIdentifier has been called etc.).
+      FCP_CHECK(plan_uris_received_callback_called);
+    }
   }
 
   if (!eligibility_checkin_result.ok()) {
@@ -869,21 +927,24 @@ IssueEligibilityEvalCheckinAndRunPlan(
     if (status.code() == absl::StatusCode::kAborted) {
       phase_logger.LogEligibilityEvalCheckinServerAborted(
           status,
-          GetCumulativeNetworkStats(federated_protocol,
-                                    /*fedselect_manager=*/nullptr),
-          time_before_eligibility_eval_checkin);
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_plan_download),
+          time_before_plan_download);
     } else if (status.code() == absl::StatusCode::kCancelled) {
       phase_logger.LogEligibilityEvalCheckinClientInterrupted(
           status,
-          GetCumulativeNetworkStats(federated_protocol,
-                                    /*fedselect_manager=*/nullptr),
-          time_before_eligibility_eval_checkin);
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_plan_download),
+          time_before_plan_download);
     } else if (!status.ok()) {
       phase_logger.LogEligibilityEvalCheckinIOError(
           status,
-          GetCumulativeNetworkStats(federated_protocol,
-                                    /*fedselect_manager=*/nullptr),
-          time_before_eligibility_eval_checkin);
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_plan_download),
+          time_before_plan_download);
     }
     FCP_LOG(INFO) << message;
     return absl::InternalError("");
@@ -892,9 +953,9 @@ IssueEligibilityEvalCheckinAndRunPlan(
   if (std::holds_alternative<FederatedProtocol::Rejection>(
           *eligibility_checkin_result)) {
     phase_logger.LogEligibilityEvalCheckinTurnedAway(
-        GetCumulativeNetworkStats(federated_protocol,
-                                  /*fedselect_manager=*/nullptr),
-        time_before_eligibility_eval_checkin);
+        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                             network_stats_before_checkin),
+        time_before_checkin);
     // If the server explicitly rejected our request, then we must abort and
     // we must not proceed to the "checkin" phase below.
     FCP_LOG(INFO) << "Device rejected by server during eligibility eval "
@@ -903,9 +964,9 @@ IssueEligibilityEvalCheckinAndRunPlan(
   } else if (std::holds_alternative<FederatedProtocol::EligibilityEvalDisabled>(
                  *eligibility_checkin_result)) {
     phase_logger.LogEligibilityEvalNotConfigured(
-        GetCumulativeNetworkStats(federated_protocol,
-                                  /*fedselect_manager=*/nullptr),
-        time_before_eligibility_eval_checkin);
+        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                             network_stats_before_checkin),
+        time_before_checkin);
     // If the server indicates that no eligibility eval task is configured for
     // the population then there is nothing more to do. We simply proceed to
     // the "checkin" phase below without providing it a TaskEligibilityInfo
@@ -920,11 +981,15 @@ IssueEligibilityEvalCheckinAndRunPlan(
       absl::get<FederatedProtocol::EligibilityEvalTask>(
           *eligibility_checkin_result);
   absl::StatusOr<std::optional<TaskEligibilityInfo>> task_eligibility_info =
-      RunEligibilityEvalPlan(eligibility_eval_task, example_iterator_factories,
-                             should_abort, phase_logger, files, log_manager,
-                             opstats_logger, flags, federated_protocol,
-                             timing_config, reference_time,
-                             time_before_eligibility_eval_checkin);
+      RunEligibilityEvalPlan(
+          eligibility_eval_task, example_iterator_factories, should_abort,
+          phase_logger, files, log_manager, opstats_logger, flags,
+          federated_protocol, timing_config, reference_time,
+          /*time_before_checkin=*/time_before_checkin,
+          /*time_before_plan_download=*/time_before_plan_download,
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_plan_download));
   if (!task_eligibility_info.ok()) {
     // Note that none of the PhaseLogger methods will reflect the very little
     // amount of network usage the will be incurred by this protocol request.
@@ -963,16 +1028,72 @@ absl::StatusOr<CheckinResult> IssueCheckin(
       GetCumulativeNetworkStats(federated_protocol,
                                 /*fedselect_manager=*/nullptr);
 
+  // When the enable_plan_uri_received_logs flag is on, these fields will,
+  // after a successful checkin that resulted in a task being assigned, contain
+  // the time at which the task plan/checkpoint URIs were received (but not yet
+  // downloaded), as well as the cumulative network stats at that point,
+  // allowing us to separately calculate how long it took to then download the
+  // actual payloads.
+  //
+  // When the flag is off, these fields will simply equal the time/stats from
+  // before the checkin request is issued at all (thereby *not* distinguishing
+  // separately between the time spent checkin in vs. downloading the
+  // resources).
+  absl::Time time_before_plan_download = time_before_checkin;
+  NetworkStats network_stats_before_plan_download =
+      network_stats_before_checkin;
+
   // Clear the model identifier before check-in, to ensure that the any prior
   // eligibility eval task name isn't used any longer.
   phase_logger.SetModelIdentifier("");
   phase_logger.LogCheckinStarted();
 
-  // The Checkin(...) method will call SetModelIdentifier() with the name of
-  // whatever task it receives, ensuring that subsequent events will be tagged
-  // with that identifier.
+  std::string task_name;
+
+  // Issue the checkin request (providing a callback that will be called when an
+  // EET is assigned to the task but before its plan/checkpoint URIs have
+  // actually been downloaded).
+  std::function<void(const FederatedProtocol::TaskAssignment&)>
+      plan_uris_received_callback;
+  bool plan_uris_received_callback_called = false;
+  if (flags->enable_plan_uri_received_logs()) {
+    plan_uris_received_callback =
+        [&time_before_plan_download, &network_stats_before_plan_download,
+         &time_before_checkin, &network_stats_before_checkin, &task_name,
+         &federated_protocol, &population_name, &log_manager, &phase_logger,
+         &plan_uris_received_callback_called](
+            const FederatedProtocol::TaskAssignment& task_assignment) {
+          // When the plan URIs have been received, we already know the name of
+          // the task we have been assigned, so let's tell the PhaseLogger.
+          auto model_identifier = task_assignment.aggregation_session_id;
+          phase_logger.SetModelIdentifier(model_identifier);
+
+          // We also should log a corresponding log event.
+          task_name = ExtractTaskNameFromAggregationSessionId(
+              model_identifier, population_name, *log_manager);
+          phase_logger.LogCheckinPlanUriReceived(
+              task_name,
+              GetNetworkStatsSince(federated_protocol,
+                                   /*fedselect_manager=*/nullptr,
+                                   network_stats_before_checkin),
+              time_before_checkin);
+
+          // And we must take a snapshot of the current time & network stats, so
+          // we can distinguish between the duration/network stats incurred for
+          // the checkin request vs. the actual downloading of the
+          // plan/checkpoint resources.
+          time_before_plan_download = absl::Now();
+          network_stats_before_plan_download = GetCumulativeNetworkStats(
+              federated_protocol, /*fedselect_manager=*/nullptr);
+          plan_uris_received_callback_called = true;
+        };
+  } else {
+    plan_uris_received_callback =
+        [](const FederatedProtocol::TaskAssignment& task_assignment) {};
+  }
   absl::StatusOr<FederatedProtocol::CheckinResult> checkin_result =
-      federated_protocol->Checkin(task_eligibility_info);
+      federated_protocol->Checkin(task_eligibility_info,
+                                  plan_uris_received_callback);
   UpdateRetryWindowAndNetworkStats(*federated_protocol,
                                    /*fedselect_manager=*/nullptr, phase_logger,
                                    fl_runner_result);
@@ -985,10 +1106,17 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   if (checkin_result.ok() &&
       std::holds_alternative<FederatedProtocol::TaskAssignment>(
           *checkin_result)) {
-    auto model_identifier =
-        std::get<FederatedProtocol::TaskAssignment>(*checkin_result)
-            .aggregation_session_id;
-    phase_logger.SetModelIdentifier(model_identifier);
+    if (!flags->enable_plan_uri_received_logs()) {
+      auto model_identifier =
+          std::get<FederatedProtocol::TaskAssignment>(*checkin_result)
+              .aggregation_session_id;
+      phase_logger.SetModelIdentifier(model_identifier);
+    } else {
+      // Make sure that if we received a TaskAssignment, then the callback
+      // should have already been called by this point by the protocol (ensuring
+      // that SetModelIdentifier has been called etc.).
+      FCP_CHECK(plan_uris_received_callback_called);
+    }
   }
 
   if (!checkin_result.ok()) {
@@ -1000,22 +1128,22 @@ absl::StatusOr<CheckinResult> IssueCheckin(
           status,
           GetNetworkStatsSince(federated_protocol,
                                /*fedselect_manager=*/nullptr,
-                               network_stats_before_checkin),
-          time_before_checkin, reference_time);
+                               network_stats_before_plan_download),
+          time_before_plan_download, reference_time);
     } else if (status.code() == absl::StatusCode::kCancelled) {
       phase_logger.LogCheckinClientInterrupted(
           status,
           GetNetworkStatsSince(federated_protocol,
                                /*fedselect_manager=*/nullptr,
-                               network_stats_before_checkin),
-          time_before_checkin, reference_time);
+                               network_stats_before_plan_download),
+          time_before_plan_download, reference_time);
     } else if (!status.ok()) {
       phase_logger.LogCheckinIOError(
           status,
           GetNetworkStatsSince(federated_protocol,
                                /*fedselect_manager=*/nullptr,
-                               network_stats_before_checkin),
-          time_before_checkin, reference_time);
+                               network_stats_before_plan_download),
+          time_before_plan_download, reference_time);
     }
     FCP_LOG(INFO) << message;
     return status;
@@ -1041,8 +1169,8 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     phase_logger.LogCheckinInvalidPayload(
         message,
         GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
-                             network_stats_before_checkin),
-        time_before_checkin, reference_time);
+                             network_stats_before_plan_download),
+        time_before_plan_download, reference_time);
     FCP_LOG(ERROR) << message;
     return absl::InternalError("");
   }
@@ -1077,18 +1205,21 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     phase_logger.LogCheckinIOError(
         status,
         GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
-                             network_stats_before_checkin),
-        time_before_checkin, reference_time);
+                             network_stats_before_plan_download),
+        time_before_plan_download, reference_time);
     FCP_LOG(ERROR) << message;
     return status;
   }
-  std::string task_name = ExtractTaskNameFromAggregationSessionId(
-      task_assignment.aggregation_session_id, population_name, *log_manager);
+  if (!flags->enable_plan_uri_received_logs()) {
+    task_name = ExtractTaskNameFromAggregationSessionId(
+        task_assignment.aggregation_session_id, population_name, *log_manager);
+  }
   phase_logger.LogCheckinCompleted(
       task_name,
       GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
-                           network_stats_before_checkin),
-      time_before_checkin, reference_time);
+                           network_stats_before_plan_download),
+      /*time_before_checkin=*/time_before_checkin,
+      /*time_before_plan_download=*/time_before_plan_download, reference_time);
   return CheckinResult{
       .task_name = std::move(task_name),
       .plan = std::move(plan),

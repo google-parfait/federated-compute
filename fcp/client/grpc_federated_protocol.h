@@ -88,14 +88,17 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   ~GrpcFederatedProtocol() override;
 
   absl::StatusOr<::fcp::client::FederatedProtocol::EligibilityEvalCheckinResult>
-  EligibilityEvalCheckin() override;
+  EligibilityEvalCheckin(std::function<void(const EligibilityEvalTask&)>
+                             payload_uris_received_callback) override;
 
   void ReportEligibilityEvalError(absl::Status error_status) override;
 
   absl::StatusOr<::fcp::client::FederatedProtocol::CheckinResult> Checkin(
       const std::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&
-          task_eligibility_info) override;
+          task_eligibility_info,
+      std::function<void(const TaskAssignment&)> payload_uris_received_callback)
+      override;
 
   absl::Status ReportCompleted(
       ComputationResults results,
@@ -152,10 +155,14 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
 
   // Helper to receive + process an EligibilityEvalCheckinResponse message.
   absl::StatusOr<EligibilityEvalCheckinResult>
-  ReceiveEligibilityEvalCheckinResponse(absl::Time start_time);
+  ReceiveEligibilityEvalCheckinResponse(
+      absl::Time start_time, std::function<void(const EligibilityEvalTask&)>
+                                 payload_uris_received_callback);
 
   // Helper to receive + process a CheckinResponse message.
-  absl::StatusOr<CheckinResult> ReceiveCheckinResponse(absl::Time start_time);
+  absl::StatusOr<CheckinResult> ReceiveCheckinResponse(
+      absl::Time start_time, std::function<void(const TaskAssignment&)>
+                                 payload_uris_received_callback);
 
   // Utility class for holding an absolute retry time and a corresponding retry
   // token.

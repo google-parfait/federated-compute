@@ -161,18 +161,24 @@ TEST_F(OpStatsLoggerImplTest, SetTaskName) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/3);
 
   auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
-  opstats_logger->AddCheckinAcceptedEventWithTaskName(kTaskName);
+  opstats_logger->AddEventAndSetTaskName(
+      kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
+
   opstats_logger.reset();
 
   auto opstats_logger_no_population =
       CreateOpStatsLoggerImpl(kSessionName,
                               /*population_name=*/"");
-  opstats_logger_no_population->AddCheckinAcceptedEventWithTaskName(kTaskName);
+  opstats_logger_no_population->AddEventAndSetTaskName(
+      kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
+
   opstats_logger_no_population.reset();
 
   auto opstats_logger_no_session =
       CreateOpStatsLoggerImpl(/*session_name=*/"", kPopulationName);
-  opstats_logger_no_session->AddCheckinAcceptedEventWithTaskName(kTaskName);
+  opstats_logger_no_session->AddEventAndSetTaskName(
+      kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
+
   opstats_logger_no_session.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
@@ -211,7 +217,8 @@ TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/2);
 
   auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
-  opstats_logger->AddCheckinAcceptedEventWithTaskName(kTaskName);
+  opstats_logger->AddEventAndSetTaskName(
+      kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
   opstats_logger.reset();
 
   // Make the db file corrupt
@@ -230,7 +237,9 @@ TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
   auto opstats_logger_no_population =
       CreateOpStatsLoggerImpl(kSessionName,
                               /*population_name=*/"");
-  opstats_logger_no_population->AddCheckinAcceptedEventWithTaskName(kTaskName);
+  opstats_logger_no_population->AddEventAndSetTaskName(
+      kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
+
   opstats_logger_no_population.reset();
 
   auto db = PdsBackedOpStatsDb::Create(

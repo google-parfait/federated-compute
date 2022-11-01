@@ -61,9 +61,12 @@ class PhaseLogger {
   // Called when eligibility eval check-in request is turned away by the server.
   virtual void LogEligibilityEvalCheckinTurnedAway(
       const NetworkStats& network_stats, absl::Time time_before_checkin) = 0;
+  virtual void LogEligibilityEvalCheckinPlanUriReceived(
+      const NetworkStats& network_stats, absl::Time time_before_checkin) = 0;
   // Called when a valid eligibility eval plan is received.
   virtual void LogEligibilityEvalCheckinCompleted(
-      const NetworkStats& network_stats, absl::Time time_before_checkin) = 0;
+      const NetworkStats& network_stats, absl::Time time_before_checkin,
+      absl::Time time_before_plan_download) = 0;
 
   // Eligibility eval computation phase.
   // Called when the eligibility eval computation starts.
@@ -118,10 +121,14 @@ class PhaseLogger {
   virtual void LogCheckinTurnedAway(const NetworkStats& network_stats,
                                     absl::Time time_before_checkin,
                                     absl::Time reference_time) = 0;
+  virtual void LogCheckinPlanUriReceived(absl::string_view task_name,
+                                         const NetworkStats& network_stats,
+                                         absl::Time time_before_checkin) = 0;
   // Called when check-in is completed.
   virtual void LogCheckinCompleted(absl::string_view task_name,
                                    const NetworkStats& network_stats,
                                    absl::Time time_before_checkin,
+                                   absl::Time time_before_plan_download,
                                    absl::Time reference_time) = 0;
 
   // Computation phase.

@@ -352,14 +352,16 @@ HttpFederatedProtocol::HttpFederatedProtocol(
 }
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
-HttpFederatedProtocol::EligibilityEvalCheckin() {
+HttpFederatedProtocol::EligibilityEvalCheckin(
+    std::function<void(const EligibilityEvalTask&)>
+        payload_uris_received_callback) {
   FCP_CHECK(object_state_ == ObjectState::kInitialized)
       << "Invalid call sequence";
   object_state_ = ObjectState::kEligibilityEvalCheckinFailed;
 
   // Send the request and parse the response.
-  auto response =
-      HandleEligibilityEvalTaskResponse(PerformEligibilityEvalTaskRequest());
+  auto response = HandleEligibilityEvalTaskResponse(
+      PerformEligibilityEvalTaskRequest(), payload_uris_received_callback);
   // Update the object state to ensure we return the correct retry delay.
   UpdateObjectStateIfPermanentError(
       response.status(),
@@ -398,7 +400,9 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
 HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
-    absl::StatusOr<InMemoryHttpResponse> http_response) {
+    absl::StatusOr<InMemoryHttpResponse> http_response,
+    std::function<void(const EligibilityEvalTask&)>
+        payload_uris_received_callback) {
   if (!http_response.ok()) {
     // If the protocol request failed then forward the error, but add a prefix
     // to the error message to ensure we can easily distinguish an HTTP error
@@ -450,18 +454,18 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
     case EligibilityEvalTaskResponse::kEligibilityEvalTask: {
       const auto& task = response_proto.eligibility_eval_task();
 
+      EligibilityEvalTask result{.execution_id = task.execution_id()};
+      payload_uris_received_callback(result);
+
       // Fetch the task resources, returning any errors that may be encountered
       // in the process.
       FCP_ASSIGN_OR_RETURN(
-          auto result,
+          result.payloads,
           FetchTaskResources(
               {.plan = task.plan(), .checkpoint = task.init_checkpoint()}));
 
       object_state_ = ObjectState::kEligibilityEvalEnabled;
-      return EligibilityEvalTask{
-          .payloads = {.plan = std::move(result.plan),
-                       .checkpoint = std::move(result.checkpoint)},
-          .execution_id = task.execution_id()};
+      return std::move(result);
     }
     case EligibilityEvalTaskResponse::kNoEligibilityEvalConfigured: {
       // Nothing to do...
@@ -507,7 +511,8 @@ absl::Status HttpFederatedProtocol::ReportEligibilityEvalErrorInternal(
 }
 
 absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
-    const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
+    const std::optional<TaskEligibilityInfo>& task_eligibility_info,
+    std::function<void(const TaskAssignment&)> payload_uris_received_callback) {
   // Checkin(...) must follow an earlier call to EligibilityEvalCheckin() that
   // resulted in a CheckinResultPayload or an EligibilityEvalDisabled result.
   FCP_CHECK(object_state_ == ObjectState::kEligibilityEvalDisabled ||
@@ -528,7 +533,8 @@ absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
   // Send the request and parse the response.
   auto response = HandleTaskAssignmentOperationResponse(
       PerformTaskAssignmentAndReportEligibilityEvalResultRequests(
-          task_eligibility_info));
+          task_eligibility_info),
+      payload_uris_received_callback);
 
   // Update the object state to ensure we return the correct retry delay.
   UpdateObjectStateIfPermanentError(
@@ -591,7 +597,8 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
 
 absl::StatusOr<FederatedProtocol::CheckinResult>
 HttpFederatedProtocol::HandleTaskAssignmentOperationResponse(
-    absl::StatusOr<InMemoryHttpResponse> http_response) {
+    absl::StatusOr<InMemoryHttpResponse> http_response,
+    std::function<void(const TaskAssignment&)> payload_uris_received_callback) {
   // If the initial response was not successful, then return immediately, even
   // if the result was CANCELLED, since we won't have received an operation name
   // to issue a CancelOperationRequest with anyway.
@@ -645,13 +652,14 @@ HttpFederatedProtocol::HandleTaskAssignmentOperationResponse(
 
   // Otherwise, handle the StartTaskAssignmentResponse that should have been
   // returned by the Operation response proto.
-  return HandleTaskAssignmentInnerResponse(
-      response_operation_proto->response());
+  return HandleTaskAssignmentInnerResponse(response_operation_proto->response(),
+                                           payload_uris_received_callback);
 }
 
 absl::StatusOr<FederatedProtocol::CheckinResult>
 HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
-    const ::google::protobuf::Any& operation_response) {
+    const ::google::protobuf::Any& operation_response,
+    std::function<void(const TaskAssignment&)> payload_uris_received_callback) {
   StartTaskAssignmentResponse response_proto;
   if (!operation_response.UnpackTo(&response_proto)) {
     return absl::InvalidArgumentError(
@@ -671,10 +679,24 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
                            task_assignment.aggregation_data_forwarding_info(),
                            !flags_->disable_http_request_body_compression()));
 
+  TaskAssignment result = {
+      .federated_select_uri_template =
+          task_assignment.federated_select_uri_info().uri_template(),
+      .aggregation_session_id = task_assignment.aggregation_id(),
+      .sec_agg_info = std::nullopt};
+  if (task_assignment.has_secure_aggregation_info()) {
+    result.sec_agg_info =
+        SecAggInfo{.minimum_clients_in_server_visible_aggregate =
+                       task_assignment.secure_aggregation_info()
+                           .minimum_clients_in_server_visible_aggregate()};
+  }
+
+  payload_uris_received_callback(result);
+
   // Fetch the task resources, returning any errors that may be encountered in
   // the process.
   FCP_ASSIGN_OR_RETURN(
-      auto payloads,
+      result.payloads,
       FetchTaskResources({.plan = task_assignment.plan(),
                           .checkpoint = task_assignment.init_checkpoint()}));
 
@@ -684,20 +706,8 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   // TODO(team): Consider renaming aggregation_client_token_ to
   // aggregation_authorization_token_.
   aggregation_client_token_ = task_assignment.authorization_token();
-  std::optional<SecAggInfo> sec_agg_info;
-  if (task_assignment.has_secure_aggregation_info()) {
-    sec_agg_info =
-        SecAggInfo{.minimum_clients_in_server_visible_aggregate =
-                       task_assignment.secure_aggregation_info()
-                           .minimum_clients_in_server_visible_aggregate()};
-  }
 
-  return TaskAssignment{
-      .payloads = std::move(payloads),
-      .federated_select_uri_template =
-          task_assignment.federated_select_uri_info().uri_template(),
-      .aggregation_session_id = task_assignment.aggregation_id(),
-      .sec_agg_info = sec_agg_info};
+  return std::move(result);
 }
 
 absl::Status HttpFederatedProtocol::ReportCompleted(

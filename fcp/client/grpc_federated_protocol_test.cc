@@ -15,6 +15,7 @@
  */
 #include "fcp/client/grpc_federated_protocol.h"
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -414,11 +415,13 @@ class GrpcFederatedProtocolTest
     }
   }
 
-  // This function runs a successful EligibilityEvalCheckin() that results in an
-  // eligibility eval payload being returned by the server. This is a utility
-  // function used by Checkin*() tests that depend on a prior, successful
-  // execution of EligibilityEvalCheckin().
-  // It returns a absl::Status, which the caller should verify is OK using
+  // This function runs a successful
+  // EligibilityEvalCheckin(mock_eet_received_callback_.AsStdFunction()) that
+  // results in an eligibility eval payload being returned by the server. This
+  // is a utility function used by Checkin*() tests that depend on a prior,
+  // successful execution of
+  // EligibilityEvalCheckin(mock_eet_received_callback_.AsStdFunction()). It
+  // returns a absl::Status, which the caller should verify is OK using
   // ASSERT_OK.
   absl::Status RunSuccessfulEligibilityEvalCheckin(
       bool eligibility_eval_enabled = true,
@@ -443,7 +446,9 @@ class GrpcFederatedProtocolTest
                           : GetFakeDisabledEligibilityCheckinResponse()),
                   Return(absl::OkStatus())));
 
-    return federated_protocol_->EligibilityEvalCheckin().status();
+    return federated_protocol_
+        ->EligibilityEvalCheckin(mock_eet_received_callback_.AsStdFunction())
+        .status();
   }
 
   // This function runs a successful Checkin() that results in acceptance by the
@@ -471,7 +476,8 @@ class GrpcFederatedProtocolTest
           .RetiresOnSaturation();
     }
 
-    return federated_protocol_->Checkin(task_eligibility_info);
+    return federated_protocol_->Checkin(
+        task_eligibility_info, mock_task_received_callback_.AsStdFunction());
   }
 
   // See note in the constructor for why these are pointers.
@@ -487,6 +493,12 @@ class GrpcFederatedProtocolTest
   StrictMock<MockHttpClient> mock_http_client_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
   StrictMock<cache::MockResourceCache> mock_resource_cache_;
+  NiceMock<MockFunction<void(
+      const ::fcp::client::FederatedProtocol::EligibilityEvalTask&)>>
+      mock_eet_received_callback_;
+  NiceMock<MockFunction<void(
+      const ::fcp::client::FederatedProtocol::TaskAssignment&)>>
+      mock_task_received_callback_;
 
   // The class under test.
   std::unique_ptr<GrpcFederatedProtocol> federated_protocol_;
@@ -552,8 +564,8 @@ TEST_P(GrpcFederatedProtocolTest,
   EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
       .WillOnce(Return(absl::UnavailableError("foo")));
 
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(UNAVAILABLE));
   EXPECT_THAT(eligibility_checkin_result.status().message(), "foo");
@@ -570,8 +582,8 @@ TEST_P(GrpcFederatedProtocolTest,
   EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
       .WillOnce(Return(absl::NotFoundError("foo")));
 
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(eligibility_checkin_result.status().message(), "foo");
@@ -605,11 +617,11 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinSendInterrupted) {
   // In addition to the Close() call we expect in the test fixture above, expect
   // an additional one (the one that induced the abort).
   EXPECT_CALL(*mock_grpc_bidi_stream_, Close()).Times(1).RetiresOnSaturation();
-    EXPECT_CALL(mock_log_manager_,
-                LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_GRPC));
+  EXPECT_CALL(mock_log_manager_,
+              LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_GRPC));
 
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(CANCELLED));
   // No RetryWindows were received from the server, so we expect to get a
@@ -629,14 +641,14 @@ TEST_P(GrpcFederatedProtocolTest,
       .WillOnce(
           DoAll(SetArgPointee<0>(GetFakeRejectedEligibilityCheckinResponse()),
                 Return(absl::OkStatus())));
-    EXPECT_CALL(
-        mock_log_manager_,
-        LogDiag(
-            ProdDiagCode::
-                BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_EXPECTED_BUT_NOT_RECVD));  // NOLINT
+  EXPECT_CALL(
+      mock_log_manager_,
+      LogDiag(
+          ProdDiagCode::
+              BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_EXPECTED_BUT_NOT_RECVD));  // NOLINT
 
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(UNIMPLEMENTED));
   // No RetryWindows were received from the server, so we expect to get a
@@ -656,8 +668,8 @@ TEST_P(GrpcFederatedProtocolTest,
   EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
       .WillOnce(Return(absl::AbortedError(expected_message)));
 
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(ABORTED));
   EXPECT_THAT(eligibility_checkin_result.status().message(), expected_message);
@@ -681,8 +693,8 @@ TEST_P(GrpcFederatedProtocolTest,
       // EligibilityEvalCheckinResponse).
       .WillOnce(Return(absl::AbortedError(expected_message)));
 
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(ABORTED));
   EXPECT_THAT(eligibility_checkin_result.status().message(), expected_message);
@@ -700,8 +712,12 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
           DoAll(SetArgPointee<0>(GetFakeRejectedEligibilityCheckinResponse()),
                 Return(absl::OkStatus())));
 
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  // The 'eet received' callback should not be invoked since no EET was given to
+  // the client.
+  EXPECT_CALL(mock_eet_received_callback_, Call(_)).Times(0);
+
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(*eligibility_checkin_result,
@@ -720,8 +736,12 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
           DoAll(SetArgPointee<0>(GetFakeDisabledEligibilityCheckinResponse()),
                 Return(absl::OkStatus())));
 
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  // The 'eet received' callback should not be invoked since no EET was given to
+  // the client.
+  EXPECT_CALL(mock_eet_received_callback_, Call(_)).Times(0);
+
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(*eligibility_checkin_result,
@@ -751,18 +771,22 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
           DoAll(SetArgPointee<0>(GetFakeEnabledEligibilityCheckinResponse(
                     expected_plan, expected_checkpoint, expected_execution_id)),
                 Return(absl::OkStatus())));
-    EXPECT_CALL(
-        mock_log_manager_,
-        LogDiag(
-            ProdDiagCode::BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_RECEIVED));
+  EXPECT_CALL(
+      mock_log_manager_,
+      LogDiag(ProdDiagCode::BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_RECEIVED));
 
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  // The 'EET received' callback should be called, even if the task resource
+  // data was available inline.
+  EXPECT_CALL(mock_eet_received_callback_,
+              Call(FieldsAre(FieldsAre("", ""), expected_execution_id)));
+
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   ASSERT_OK(eligibility_checkin_result);
   // If HTTP support is enabled then the checkpoint data gets returned in the
-  // shape of an absl::Cord (rather than an std::string), regardless of whether
-  // it was actually downloaded via HTTP.
+  // shape of an absl::Cord (rather than an std::string), regardless of
+  // whether it was actually downloaded via HTTP.
   if (enable_http_resource_support_) {
     EXPECT_THAT(*eligibility_checkin_result,
                 VariantWith<FederatedProtocol::EligibilityEvalTask>(
@@ -802,6 +826,7 @@ TEST_P(GrpcFederatedProtocolTest,
   eligibility_eval_payload->mutable_plan_resource()->set_uri(plan_uri);
   eligibility_eval_payload->mutable_init_checkpoint_resource()->set_uri(
       checkpoint_uri);
+
   EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
       .WillOnce(DoAll(SetArgPointee<0>(GetFakeCheckinRequestAck()),
                       Return(absl::OkStatus())))
@@ -811,15 +836,23 @@ TEST_P(GrpcFederatedProtocolTest,
       mock_log_manager_,
       LogDiag(ProdDiagCode::BACKGROUND_TRAINING_CHECKIN_REQUEST_ACK_RECEIVED));
 
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  plan_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
+  {
+    InSequence seq;
+    // The 'EET received' callback should be called *before* the actual task
+    // resources are fetched.
+    EXPECT_CALL(mock_eet_received_callback_,
+                Call(FieldsAre(FieldsAre("", ""), expected_execution_id)));
 
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  checkpoint_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, expected_checkpoint)));
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    plan_uri, HttpRequest::Method::kGet, _, "")))
+        .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
+
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    checkpoint_uri, HttpRequest::Method::kGet, _, "")))
+        .WillOnce(Return(FakeHttpResponse(200, {}, expected_checkpoint)));
+  }
 
   {
     InSequence seq;
@@ -835,8 +868,8 @@ TEST_P(GrpcFederatedProtocolTest,
   }
 
   // Issue the Eligibility Eval checkin.
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(
@@ -895,8 +928,8 @@ TEST_P(GrpcFederatedProtocolTest,
   }
 
   // Issue the eligibility eval checkin.
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(eligibility_checkin_result.status().message(),
@@ -956,8 +989,8 @@ TEST_P(GrpcFederatedProtocolTest,
   }
 
   // Issue the eligibility eval checkin.
-  auto eligibility_checkin_result =
-      federated_protocol_->EligibilityEvalCheckin();
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(), IsCode(UNAVAILABLE));
   EXPECT_THAT(eligibility_checkin_result.status().message(),
@@ -1013,10 +1046,10 @@ TEST_P(GrpcFederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
   // use DoubleNear instead.
   EXPECT_THAT(actual_retry_window.delay_min().seconds() +
                   actual_retry_window.delay_min().nanos() / 1000000000.0,
-              DoubleNear(1234.0, 0.01));
+              DoubleNear(1234.0, 0.02));
   EXPECT_THAT(actual_retry_window.delay_max().seconds() +
                   actual_retry_window.delay_max().nanos() / 1000000000.0,
-              DoubleNear(1234.0, 0.01));
+              DoubleNear(1234.0, 0.02));
 }
 
 TEST_P(GrpcFederatedProtocolDeathTest, TestCheckinMissingTaskEligibilityInfo) {
@@ -1026,8 +1059,12 @@ TEST_P(GrpcFederatedProtocolDeathTest, TestCheckinMissingTaskEligibilityInfo) {
   // A Checkin(...) request with a missing TaskEligibilityInfo should now fail,
   // as the protocol requires us to provide one based on the plan includes in
   // the eligibility eval checkin response payload.
-  ASSERT_DEATH({ auto unused = federated_protocol_->Checkin(std::nullopt); },
-               _);
+  ASSERT_DEATH(
+      {
+        auto unused = federated_protocol_->Checkin(
+            std::nullopt, mock_task_received_callback_.AsStdFunction());
+      },
+      _);
 }
 
 TEST_P(GrpcFederatedProtocolTest, TestCheckinSendFailsTransientError) {
@@ -1040,8 +1077,9 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinSendFailsTransientError) {
   EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
       .WillOnce(Return(absl::UnavailableError("foo")));
 
-  auto checkin_result =
-      federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
+  auto checkin_result = federated_protocol_->Checkin(
+      GetFakeTaskEligibilityInfo(),
+      mock_task_received_callback_.AsStdFunction());
   EXPECT_THAT(checkin_result.status(), IsCode(UNAVAILABLE));
   EXPECT_THAT(checkin_result.status().message(), "foo");
   // RetryWindows were already received from the server during the eligibility
@@ -1059,8 +1097,9 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinSendFailsPermanentError) {
   EXPECT_CALL(*mock_grpc_bidi_stream_, Send(_))
       .WillOnce(Return(absl::NotFoundError("foo")));
 
-  auto checkin_result =
-      federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
+  auto checkin_result = federated_protocol_->Checkin(
+      GetFakeTaskEligibilityInfo(),
+      mock_task_received_callback_.AsStdFunction());
   EXPECT_THAT(checkin_result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(checkin_result.status().message(), "foo");
   // Even though RetryWindows were already received from the server during the
@@ -1098,11 +1137,12 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinSendInterrupted) {
   // In addition to the Close() call we expect in the test fixture above, expect
   // an additional one (the one that induced the abort).
   EXPECT_CALL(*mock_grpc_bidi_stream_, Close()).Times(1).RetiresOnSaturation();
-    EXPECT_CALL(mock_log_manager_,
-                LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_GRPC));
+  EXPECT_CALL(mock_log_manager_,
+              LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_GRPC));
 
-  auto checkin_result =
-      federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
+  auto checkin_result = federated_protocol_->Checkin(
+      GetFakeTaskEligibilityInfo(),
+      mock_task_received_callback_.AsStdFunction());
   EXPECT_THAT(checkin_result.status(), IsCode(CANCELLED));
   // RetryWindows were already received from the server during the eligibility
   // eval checkin, so we expect to get a 'rejected' retry window.
@@ -1119,9 +1159,15 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
   EXPECT_CALL(*mock_grpc_bidi_stream_, Receive(_))
       .WillOnce(DoAll(SetArgPointee<0>(GetFakeRejectedCheckinResponse()),
                       Return(absl::OkStatus())));
+
+  // The 'task received' callback should not be invoked since no task was given
+  // to the client.
+  EXPECT_CALL(mock_task_received_callback_, Call(_)).Times(0);
+
   // Issue the regular checkin.
-  auto checkin_result =
-      federated_protocol_->Checkin(GetFakeTaskEligibilityInfo());
+  auto checkin_result = federated_protocol_->Checkin(
+      GetFakeTaskEligibilityInfo(),
+      mock_task_received_callback_.AsStdFunction());
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
@@ -1147,9 +1193,14 @@ TEST_P(GrpcFederatedProtocolTest,
       .WillOnce(DoAll(SetArgPointee<0>(GetFakeRejectedCheckinResponse()),
                       Return(absl::OkStatus())));
 
+  // The 'task received' callback should not be invoked since no task was given
+  // to the client.
+  EXPECT_CALL(mock_task_received_callback_, Call(_)).Times(0);
+
   // Issue the regular checkin, without a TaskEligibilityInfo (since we didn't
   // receive an eligibility eval task to run during eligibility eval checkin).
-  auto checkin_result = federated_protocol_->Checkin(std::nullopt);
+  auto checkin_result = federated_protocol_->Checkin(
+      std::nullopt, mock_task_received_callback_.AsStdFunction());
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
@@ -1187,8 +1238,22 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
                           /* use_secure_aggregation=*/true)),
                       Return(absl::OkStatus())));
 
+  // The 'task received' callback should be called even when the resources were
+  // available inline.
+  EXPECT_CALL(
+      mock_task_received_callback_,
+      Call(FieldsAre(
+          FieldsAre("", ""), kFederatedSelectUriTemplate, kExecutionPhaseId,
+          Optional(AllOf(
+              Field(&FederatedProtocol::SecAggInfo::expected_number_of_clients,
+                    kSecAggExpectedNumberOfClients),
+              Field(&FederatedProtocol::SecAggInfo::
+                        minimum_clients_in_server_visible_aggregate,
+                    kSecAggMinClientsInServerVisibleAggregate))))));
+
   // Issue the regular checkin.
-  auto checkin_result = federated_protocol_->Checkin(expected_eligibility_info);
+  auto checkin_result = federated_protocol_->Checkin(
+      expected_eligibility_info, mock_task_received_callback_.AsStdFunction());
 
   ASSERT_OK(checkin_result.status());
   // If HTTP support is enabled then the checkpoint data gets returned in the
@@ -1273,15 +1338,32 @@ TEST_P(GrpcFederatedProtocolTest,
       .WillOnce(DoAll(SetArgPointee<0>(fake_checkin_response),
                       Return(absl::OkStatus())));
 
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  plan_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
+  {
+    InSequence seq;
+    // The 'task received' callback should be called *before* the actual task
+    // resources are fetched.
+    EXPECT_CALL(
+        mock_task_received_callback_,
+        Call(FieldsAre(
+            FieldsAre("", ""), kFederatedSelectUriTemplate, kExecutionPhaseId,
+            Optional(AllOf(
+                Field(
+                    &FederatedProtocol::SecAggInfo::expected_number_of_clients,
+                    kSecAggExpectedNumberOfClients),
+                Field(&FederatedProtocol::SecAggInfo::
+                          minimum_clients_in_server_visible_aggregate,
+                      kSecAggMinClientsInServerVisibleAggregate))))));
 
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  checkpoint_uri, HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(200, {}, expected_checkpoint)));
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    plan_uri, HttpRequest::Method::kGet, _, "")))
+        .WillOnce(Return(FakeHttpResponse(200, {}, expected_plan)));
+
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    checkpoint_uri, HttpRequest::Method::kGet, _, "")))
+        .WillOnce(Return(FakeHttpResponse(200, {}, expected_checkpoint)));
+  }
 
   {
     InSequence seq;
@@ -1297,7 +1379,8 @@ TEST_P(GrpcFederatedProtocolTest,
   }
 
   // Issue the regular checkin.
-  auto checkin_result = federated_protocol_->Checkin(expected_eligibility_info);
+  auto checkin_result = federated_protocol_->Checkin(
+      expected_eligibility_info, mock_task_received_callback_.AsStdFunction());
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(
@@ -1371,7 +1454,8 @@ TEST_P(GrpcFederatedProtocolTest,
   }
 
   // Issue the regular checkin.
-  auto checkin_result = federated_protocol_->Checkin(expected_eligibility_info);
+  auto checkin_result = federated_protocol_->Checkin(
+      expected_eligibility_info, mock_task_received_callback_.AsStdFunction());
 
   EXPECT_THAT(checkin_result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(checkin_result.status().message(),
@@ -1437,7 +1521,8 @@ TEST_P(GrpcFederatedProtocolTest,
   }
 
   // Issue the regular checkin.
-  auto checkin_result = federated_protocol_->Checkin(expected_eligibility_info);
+  auto checkin_result = federated_protocol_->Checkin(
+      expected_eligibility_info, mock_task_received_callback_.AsStdFunction());
 
   EXPECT_THAT(checkin_result.status(), IsCode(UNAVAILABLE));
   EXPECT_THAT(checkin_result.status().message(),

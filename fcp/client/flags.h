@@ -191,6 +191,11 @@ class Flags {
       const {
     return false;
   }
+
+  // If true, the client will log events when it has received plan/checkpoint
+  // URIs in response to its requests, but before it has starting fetching those
+  // resources.
+  virtual bool enable_plan_uri_received_logs() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

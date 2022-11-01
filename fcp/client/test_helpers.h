@@ -16,8 +16,10 @@
 #ifndef FCP_CLIENT_TEST_HELPERS_H_
 #define FCP_CLIENT_TEST_HELPERS_H_
 
+#include <functional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "google/protobuf/duration.pb.h"
@@ -61,6 +63,10 @@ class MockSecAggEventPublisher : public SecAggEventPublisher {
 class MockEventPublisher : public EventPublisher {
  public:
   MOCK_METHOD(void, PublishEligibilityEvalCheckin, (), (override));
+  MOCK_METHOD(void, PublishEligibilityEvalPlanUriReceived,
+              (const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
   MOCK_METHOD(void, PublishEligibilityEvalPlanReceived,
               (const NetworkStats& network_stats,
                absl::Duration phase_duration),
@@ -171,6 +177,10 @@ class MockEventPublisher : public EventPublisher {
               (const NetworkStats& network_stats,
                absl::Duration phase_duration),
               (override));
+  MOCK_METHOD(void, PublishCheckinPlanUriReceived,
+              (const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
   MOCK_METHOD(void, PublishCheckinFinishedV2,
               (const NetworkStats& network_stats,
                absl::Duration phase_duration),
@@ -265,6 +275,11 @@ class MockEventPublisher : public EventPublisher {
 // each stage, making it easier to write accurate assertions in unit tests.
 class MockFederatedProtocol : public FederatedProtocol {
  public:
+  constexpr static NetworkStats
+      kPostEligibilityCheckinPlanUriReceivedNetworkStats = {
+          .bytes_downloaded = 280,
+          .bytes_uploaded = 380,
+          .network_duration = absl::Milliseconds(25)};
   constexpr static NetworkStats kPostEligibilityCheckinNetworkStats = {
       .bytes_downloaded = 300,
       .bytes_uploaded = 400,
@@ -273,6 +288,10 @@ class MockFederatedProtocol : public FederatedProtocol {
       .bytes_downloaded = 400,
       .bytes_uploaded = 500,
       .network_duration = absl::Milliseconds(150)};
+  constexpr static NetworkStats kPostCheckinPlanUriReceivedNetworkStats = {
+      .bytes_downloaded = 2970,
+      .bytes_uploaded = 3970,
+      .network_duration = absl::Milliseconds(225)};
   constexpr static NetworkStats kPostCheckinNetworkStats = {
       .bytes_downloaded = 3000,
       .bytes_uploaded = 4000,
@@ -336,10 +355,21 @@ class MockFederatedProtocol : public FederatedProtocol {
   // We override the real FederatedProtocol methods so that we can intercept the
   // progression of protocol stages, and expose dedicate gMock-overridable
   // methods for use in tests.
-  absl::StatusOr<EligibilityEvalCheckinResult> EligibilityEvalCheckin() final {
+  absl::StatusOr<EligibilityEvalCheckinResult> EligibilityEvalCheckin(
+      std::function<void(const EligibilityEvalTask&)>
+          payload_uris_received_callback) final {
+    absl::StatusOr<EligibilityEvalCheckinResult> result =
+        MockEligibilityEvalCheckin();
+    if (result.ok() &&
+        std::holds_alternative<FederatedProtocol::EligibilityEvalTask>(
+            *result)) {
+      network_stats_ = kPostEligibilityCheckinPlanUriReceivedNetworkStats;
+      payload_uris_received_callback(
+          std::get<FederatedProtocol::EligibilityEvalTask>(*result));
+    }
     network_stats_ = kPostEligibilityCheckinNetworkStats;
     retry_window_ = GetPostEligibilityCheckinRetryWindow();
-    return MockEligibilityEvalCheckin();
+    return result;
   };
   MOCK_METHOD(absl::StatusOr<EligibilityEvalCheckinResult>,
               MockEligibilityEvalCheckin, ());
@@ -355,10 +385,19 @@ class MockFederatedProtocol : public FederatedProtocol {
   absl::StatusOr<CheckinResult> Checkin(
       const std::optional<
           ::google::internal::federatedml::v2::TaskEligibilityInfo>&
-          task_eligibility_info) final {
+          task_eligibility_info,
+      std::function<void(const FederatedProtocol::TaskAssignment&)>
+          payload_uris_received_callback) final {
+    absl::StatusOr<CheckinResult> result = MockCheckin(task_eligibility_info);
+    if (result.ok() &&
+        std::holds_alternative<FederatedProtocol::TaskAssignment>(*result)) {
+      network_stats_ = kPostCheckinPlanUriReceivedNetworkStats;
+      payload_uris_received_callback(
+          std::get<FederatedProtocol::TaskAssignment>(*result));
+    }
     retry_window_ = GetPostCheckinRetryWindow();
     network_stats_ = kPostCheckinNetworkStats;
-    return MockCheckin(task_eligibility_info);
+    return result;
   };
   MOCK_METHOD(absl::StatusOr<CheckinResult>, MockCheckin,
               (const std::optional<
@@ -410,8 +449,11 @@ class MockLogManager : public LogManager {
 
 class MockOpStatsLogger : public ::fcp::client::opstats::OpStatsLogger {
  public:
-  MOCK_METHOD(void, AddCheckinAcceptedEventWithTaskName,
-              (const std::string& task_name), (override));
+  MOCK_METHOD(
+      void, AddEventAndSetTaskName,
+      (const std::string& task_name,
+       ::fcp::client::opstats::OperationalStats::Event::EventKind event),
+      (override));
   MOCK_METHOD(
       void, AddEvent,
       (::fcp::client::opstats::OperationalStats::Event::EventKind event),
@@ -523,6 +565,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_federated_select, (), (const, override));
   MOCK_METHOD(int32_t, num_threads_for_tflite, (), (const, override));
   MOCK_METHOD(bool, disable_tflite_delegate_clustering, (), (const, override));
+  MOCK_METHOD(bool, enable_plan_uri_received_logs, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
@@ -581,9 +624,14 @@ class MockPhaseLogger : public PhaseLogger {
               (const NetworkStats& network_stats,
                absl::Time time_before_checkin),
               (override));
-  MOCK_METHOD(void, LogEligibilityEvalCheckinCompleted,
+  MOCK_METHOD(void, LogEligibilityEvalCheckinPlanUriReceived,
               (const NetworkStats& network_stats,
                absl::Time time_before_checkin),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalCheckinCompleted,
+              (const NetworkStats& network_stats,
+               absl::Time time_before_checkin,
+               absl::Time time_before_plan_download),
               (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationStarted, (), (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationInvalidArgument,
@@ -628,9 +676,14 @@ class MockPhaseLogger : public PhaseLogger {
               (const NetworkStats& network_stats,
                absl::Time time_before_checkin, absl::Time reference_time),
               (override));
+  MOCK_METHOD(void, LogCheckinPlanUriReceived,
+              (absl::string_view task_name, const NetworkStats& network_stats,
+               absl::Time time_before_checkin),
+              (override));
   MOCK_METHOD(void, LogCheckinCompleted,
               (absl::string_view task_name, const NetworkStats& network_stats,
-               absl::Time time_before_checkin, absl::Time reference_time),
+               absl::Time time_before_checkin,
+               absl::Time time_before_plan_download, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogComputationStarted, (), (override));
   MOCK_METHOD(void, LogComputationInvalidArgument,

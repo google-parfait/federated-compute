@@ -77,14 +77,17 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   ~HttpFederatedProtocol() override = default;
 
   absl::StatusOr<fcp::client::FederatedProtocol::EligibilityEvalCheckinResult>
-  EligibilityEvalCheckin() override;
+  EligibilityEvalCheckin(std::function<void(const EligibilityEvalTask&)>
+                             payload_uris_received_callback) override;
 
   void ReportEligibilityEvalError(absl::Status error_status) override;
 
   absl::StatusOr<fcp::client::FederatedProtocol::CheckinResult> Checkin(
       const std::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&
-          task_eligibility_info) override;
+          task_eligibility_info,
+      std::function<void(const TaskAssignment&)> payload_uris_received_callback)
+      override;
 
   absl::Status ReportCompleted(
       ComputationResults results,
@@ -107,7 +110,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // fetching any resources, if necessary).
   absl::StatusOr<fcp::client::FederatedProtocol::EligibilityEvalCheckinResult>
   HandleEligibilityEvalTaskResponse(
-      absl::StatusOr<InMemoryHttpResponse> http_response);
+      absl::StatusOr<InMemoryHttpResponse> http_response,
+      std::function<void(const EligibilityEvalTask&)>
+          payload_uris_received_callback);
 
   absl::StatusOr<std::unique_ptr<HttpRequest>>
   CreateReportEligibilityEvalTaskResultRequest(absl::Status status);
@@ -127,14 +132,18 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // final 'inner' response is available.
   absl::StatusOr<::fcp::client::FederatedProtocol::CheckinResult>
   HandleTaskAssignmentOperationResponse(
-      absl::StatusOr<InMemoryHttpResponse> http_response);
+      absl::StatusOr<InMemoryHttpResponse> http_response,
+      std::function<void(const TaskAssignment&)>
+          payload_uris_received_callback);
 
   // Helper function for handling an 'inner' task assignment response (i.e.
   // after the outer `Operation` has concluded). This includes fetching any
   // resources, if necessary.
   absl::StatusOr<::fcp::client::FederatedProtocol::CheckinResult>
   HandleTaskAssignmentInnerResponse(
-      const ::google::protobuf::Any& operation_response);
+      const ::google::protobuf::Any& operation_response,
+      std::function<void(const TaskAssignment&)>
+          payload_uris_received_callback);
 
   // Helper function for reporting result via simple aggregation.
   absl::Status ReportViaSimpleAggregation(ComputationResults results,

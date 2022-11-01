@@ -50,6 +50,14 @@ message OperationalStats {
       // plans are not configured.
       EVENT_KIND_ELIGIBILITY_DISABLED = 3;
 
+      // An eligibility task checkin response return an eligibility task plan
+      // URI, but the client hasn't downloaded the plan and checkpoint yet. Also
+      // logged when the plan/checkpoint resources were actually supplied inline
+      // in the protocol response message and no actual HTTP fetch needs to
+      // happen anymore. This ensures that this event can always be compared
+      // against EVENT_KIND_ELIGIBILITY_ENABLED.
+      EVENT_KIND_ELIGIBILITY_PLAN_URI_RECEIVED = 48;
+
       // An eligibility task checkin response returned an eligibility task plan,
       // and the received plan was parseable.
       EVENT_KIND_ELIGIBILITY_ENABLED = 4;
@@ -66,6 +74,14 @@ message OperationalStats {
 
       // A checkin response indicated that the client was rejected.
       EVENT_KIND_CHECKIN_REJECTED = 8;
+
+      // A checkin response indicated that the client was accepted for a task,
+      // but the client hasn't downloaded the plan and checkpoint yet. Also
+      // logged when the plan/checkpoint resources were actually supplied inline
+      // in the protocol response message and no actual HTTP fetch needs to
+      // happen anymore. This ensures that this event can always be compared
+      // against EVENT_KIND_CHECKIN_ACCEPTED.
+      EVENT_KIND_CHECKIN_PLAN_URI_RECEIVED = 49;
 
       // A checkin response indicated that the client was accepted for a task,
       // and the received plan was parseable.

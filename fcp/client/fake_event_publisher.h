@@ -80,6 +80,11 @@ class FakeEventPublisher : public EventPublisher {
     if (quiet_) return;
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
+  void PublishEligibilityEvalPlanUriReceived(const NetworkStats&,
+                                             absl::Duration) override {
+    if (quiet_) return;
+    FCP_CLIENT_LOG_FUNCTION_NAME;
+  }
 
   void PublishEligibilityEvalPlanReceived(const NetworkStats&,
                                           absl::Duration) override {
@@ -246,6 +251,11 @@ class FakeEventPublisher : public EventPublisher {
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
 
+  void PublishCheckinPlanUriReceived(const NetworkStats& network_stats,
+                                     absl::Duration) override {
+    if (quiet_) return;
+    FCP_CLIENT_LOG_FUNCTION_NAME;
+  }
   void PublishCheckinFinishedV2(const NetworkStats& network_stats,
                                 absl::Duration phase_duration) override {
     if (quiet_) return;
