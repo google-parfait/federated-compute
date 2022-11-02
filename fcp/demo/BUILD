@@ -85,6 +85,24 @@ py_test(
 )
 
 py_library(
+    name = "federated_data_source",
+    srcs = ["federated_data_source.py"],
+    srcs_version = "PY3",
+    deps = ["//fcp/protos:plan_py_pb2"],
+)
+
+py_test(
+    name = "federated_data_source_test",
+    srcs = ["federated_data_source_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":federated_data_source",
+        "//fcp/protos:plan_py_pb2",
+    ],
+)
+
+py_library(
     name = "http_actions",
     srcs = ["http_actions.py"],
     srcs_version = "PY3",
