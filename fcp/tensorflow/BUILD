@@ -993,6 +993,5 @@ py_test(
     deps = [
         ":dictionary_ops_py",
         "//fcp/dictionary:dictionary_py_pb2",
-        "//third_party/py/absl/testing:parameterized",
     ],
 )
