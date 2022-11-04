@@ -144,11 +144,10 @@ class Logger {
 };
 
 /**
- * Holds the active logger object.
- *
- * This possible needs to be refined to be thread safe for updaters.
+ * Gets/sets the active logger object.
  */
-extern Logger* logger;
+Logger* logger();
+void set_logger(Logger* logger);
 
 #ifndef _FCP_BAREMETAL
 using StringStream = std::ostringstream;
@@ -177,7 +176,7 @@ class LogMessage {
 #endif
 
   ~LogMessage() {
-    logger->Log(file_, line_, severity_, message_.str().c_str());
+    logger()->Log(file_, line_, severity_, message_.str().c_str());
     if (severity_ == LogSeverity::kFatal) {
       abort();
     }

@@ -27,13 +27,6 @@
 #include "fcp/base/base_name.h"
 
 namespace fcp {
-
-namespace internal {
-// Baremetal tests don't write to stderr, so allow setting a custom
-// logger compatible with the non-baremetal version.
-extern Logger* logger;
-}  // namespace internal
-
 namespace {
 
 using ::testing::MatchesRegex;
@@ -61,13 +54,13 @@ class MonitoringTest : public ::testing::TestWithParam<bool> {
  public:
   void SetUp() override {
     if (replace_logger_) {
-      prev_logger_ = internal::logger;
-      internal::logger = &logger_;
+      prev_logger_ = internal::logger();
+      internal::set_logger(&logger_);
     }
   }
   void TearDown() override {
     if (replace_logger_) {
-      internal::logger = prev_logger_;
+      internal::set_logger(prev_logger_);
     }
   }
 

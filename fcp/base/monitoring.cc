@@ -59,7 +59,15 @@ int AndroidLogLevel(LogSeverity severity) {
 
 }  // namespace
 
-Logger* logger = new Logger();
+// Provides safe static initialization of the default global logger instance.
+// TODO(team): Improve the logger registration mechanism.
+Logger*& GetGlobalLogger() {
+  static Logger* global_logger = new Logger();
+  return global_logger;
+}
+
+Logger* logger() { return GetGlobalLogger(); }
+void set_logger(Logger* logger) { GetGlobalLogger() = logger; }
 
 void Logger::Log(const char* file, int line, LogSeverity severity,
                  const char* message) {
@@ -109,7 +117,7 @@ StatusBuilder::operator Status() {
     if (log_severity_ != kNoLog) {
       StringStream log_message;
       log_message << "[" << code_ << "] " << message_str;
-      logger->Log(file_, line_, log_severity_, log_message.str().c_str());
+      logger()->Log(file_, line_, log_severity_, log_message.str().c_str());
       if (log_severity_ == LogSeverity::kFatal) {
         abort();
       }
