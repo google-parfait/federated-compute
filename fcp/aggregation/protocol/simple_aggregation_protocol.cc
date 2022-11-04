@@ -51,22 +51,6 @@ absl::Status ServerAggregationConfigArgumentError(
 // Creates an aggregation intrinsic based on the intrinsic configuration.
 absl::StatusOr<Intrinsic> CreateIntrinsic(
     const ServerAggregationConfig& aggregation_config) {
-  // TODO(team): Support multiple intrinsic args.
-  if (aggregation_config.intrinsic_args_size() != 1) {
-    return ServerAggregationConfigArgumentError(
-        aggregation_config, "Exactly one intrinsic argument is expected.");
-  }
-
-  if (aggregation_config.output_tensors_size() != 1) {
-    return ServerAggregationConfigArgumentError(
-        aggregation_config, "Exactly one output tensor is expected.");
-  }
-
-  if (!aggregation_config.intrinsic_args(0).has_input_tensor()) {
-    return ServerAggregationConfigArgumentError(
-        aggregation_config, "Intrinsic arguments must be input tensors.");
-  }
-
   // Resolve the intrinsic_uri to the registered TensorAggregatorFactory.
   FCP_ASSIGN_OR_RETURN(
       const TensorAggregatorFactory* factory,
@@ -99,6 +83,37 @@ absl::StatusOr<Intrinsic> CreateIntrinsic(
                    std::move(aggregator)};
 }
 
+absl::Status SimpleAggregationProtocol::ValidateConfig(
+    const Configuration& configuration) {
+  for (const ServerAggregationConfig& aggregation_config :
+       configuration.aggregation_configs()) {
+    // TODO(team): Add support for other intrinsics after MVP launch.
+    if (!GetAggregatorFactory(aggregation_config.intrinsic_uri()).ok()) {
+      return ServerAggregationConfigArgumentError(
+          aggregation_config,
+          absl::StrFormat("%s is not a supported intrinsic_uri.",
+                          aggregation_config.intrinsic_uri()));
+    }
+
+    // TODO(team): Support multiple intrinsic args.
+    if (aggregation_config.intrinsic_args_size() != 1) {
+      return ServerAggregationConfigArgumentError(
+          aggregation_config, "Exactly one intrinsic argument is expected.");
+    }
+
+    if (aggregation_config.output_tensors_size() != 1) {
+      return ServerAggregationConfigArgumentError(
+          aggregation_config, "Exactly one output tensor is expected.");
+    }
+
+    if (!aggregation_config.intrinsic_args(0).has_input_tensor()) {
+      return ServerAggregationConfigArgumentError(
+          aggregation_config, "Intrinsic arguments must be input tensors.");
+    }
+  }
+  return absl::OkStatus();
+}
+
 absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>>
 SimpleAggregationProtocol::Create(
     const Configuration& configuration, AggregationProtocol::Callback* callback,
@@ -107,6 +122,7 @@ SimpleAggregationProtocol::Create(
   FCP_CHECK(callback != nullptr);
   FCP_CHECK(checkpoint_parser_factory != nullptr);
   FCP_CHECK(checkpoint_builder_factory != nullptr);
+  FCP_RETURN_IF_ERROR(ValidateConfig(configuration));
 
   std::vector<Intrinsic> intrinsics;
   for (const ServerAggregationConfig& aggregation_config :

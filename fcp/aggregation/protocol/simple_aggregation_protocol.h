@@ -51,6 +51,11 @@ struct Intrinsic {
 // released only if the number of participants exceed configured threshold.
 class SimpleAggregationProtocol final : public AggregationProtocol {
  public:
+  // Validates the Configuration that will subsequently be used to create an
+  // instance of this protocol.
+  // Returns INVALID_ARGUMENT if the configuration is invalid.
+  static absl::Status ValidateConfig(const Configuration& configuration);
+
   // Factory method to create an instance of the Simple Aggregation Protocol.
   //
   // Does not take ownership of the callback, which must refer to a valid object

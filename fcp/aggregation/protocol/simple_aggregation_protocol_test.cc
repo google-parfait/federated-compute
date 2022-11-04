@@ -285,7 +285,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedIntrinsicUri) {
   EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
                                                 &checkpoint_parser_factory_,
                                                 &checkpoint_builder_factory_),
-              IsCode(NOT_FOUND));
+              IsCode(INVALID_ARGUMENT));
 }
 
 TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedInputSpec) {
