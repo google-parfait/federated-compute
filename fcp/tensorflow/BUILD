@@ -340,7 +340,6 @@ tf_cc_test(
         ":external_dataset",
         ":external_dataset_op_lib",
         ":test_selector_cc_proto",
-        "//fcp/base",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
         "@org_tensorflow//tensorflow/core:core_cpu",

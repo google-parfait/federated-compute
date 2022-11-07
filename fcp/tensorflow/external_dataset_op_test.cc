@@ -33,12 +33,12 @@
 #include <utility>
 #include <vector>
 
-#include "google/protobuf/io/zero_copy_stream.h"
-#include "google/protobuf/io/zero_copy_stream_impl.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "fcp/tensorflow/external_dataset.h"
 #include "fcp/tensorflow/test_selector.pb.h"
+#include "google/protobuf/io/zero_copy_stream.h"
+#include "google/protobuf/io/zero_copy_stream_impl.h"
 #include "tensorflow/core/example/example.pb.h"
 #include "tensorflow/core/example/feature_util.h"
 #include "tensorflow/core/framework/graph.pb.h"

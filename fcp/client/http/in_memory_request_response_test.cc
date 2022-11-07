@@ -23,8 +23,6 @@
 #include <vector>
 
 #include "google/protobuf/any.pb.h"
-#include "google/protobuf/io/gzip_stream.h"
-#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
@@ -47,6 +45,8 @@
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/testing/testing.h"
+#include "google/protobuf/io/gzip_stream.h"
+#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 
 namespace fcp::client::http {
 namespace {

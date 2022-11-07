@@ -24,8 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include "google/protobuf/io/gzip_stream.h"
-#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -41,6 +39,8 @@
 #include "fcp/client/http/http_client_util.h"
 #include "fcp/client/http/http_resource_metadata.pb.h"
 #include "fcp/client/interruptible_runner.h"
+#include "google/protobuf/io/gzip_stream.h"
+#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 
 namespace fcp {
 namespace client {
