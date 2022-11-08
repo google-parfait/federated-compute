@@ -68,7 +68,9 @@ class MockCheckpointBuilderFactory : public CheckpointBuilderFactory {
 
 class MockAggregationProtocolCallback : public AggregationProtocol::Callback {
  public:
-  MOCK_METHOD(void, AcceptClients, (const AcceptanceMessage& message),
+  MOCK_METHOD(void, AcceptClients,
+              (int64_t start_client_id, int64_t num_clients,
+               const AcceptanceMessage& message),
               (override));
   MOCK_METHOD(void, SendServerMessage,
               (int64_t client_id, const ServerMessage& message), (override));

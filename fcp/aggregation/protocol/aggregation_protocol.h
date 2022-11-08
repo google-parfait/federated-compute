@@ -141,7 +141,8 @@ class AggregationProtocol {
     // Called in response to either StartProtocol or AddClients methods being
     // called and provides protocol parameters to be broadcasted to all newly
     // joined clients.
-    virtual void AcceptClients(const AcceptanceMessage& message) = 0;
+    virtual void AcceptClients(int64_t start_client_id, int64_t num_clients,
+                               const AcceptanceMessage& message) = 0;
 
     // Called by the protocol to deliver a message to a given client.
     //
