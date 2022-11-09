@@ -170,8 +170,12 @@ void CurlHttpRequestHandle::MarkAsCompleted() {
 
   FCP_CHECK(callback_ != nullptr);
   if (!is_cancelled_ && !is_completed_) {
-    FCP_CHECK(response_ != nullptr);
-    callback_->OnResponseCompleted(*request_, *response_);
+    if (response_ != nullptr) {
+      callback_->OnResponseCompleted(*request_, *response_);
+    } else {
+      callback_->OnResponseError(*request_,
+                                 absl::InternalError("response_ is nullptr"));
+    }
   }
   is_completed_ = true;
 }
