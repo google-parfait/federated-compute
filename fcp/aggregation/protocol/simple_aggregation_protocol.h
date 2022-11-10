@@ -17,6 +17,8 @@
 #ifndef FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_PROTOCOL_H_
 #define FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_PROTOCOL_H_
 
+#include <atomic>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -25,6 +27,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/string_view.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
@@ -34,15 +37,6 @@
 #include "fcp/aggregation/protocol/configuration.pb.h"
 
 namespace fcp::aggregation {
-
-// The structure representing a single aggregation intrinsic.
-// TODO(team): Implement mapping of multiple inputs and outputs to
-// individual TensorAggregator instances.
-struct Intrinsic {
-  TensorSpec input;
-  TensorSpec output;
-  std::unique_ptr<TensorAggregator> aggregator;
-};
 
 // Implementation of the simple aggregation protocol.
 //
@@ -87,19 +81,126 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
       delete;
 
  private:
+  // The structure representing a single aggregation intrinsic.
+  // TODO(team): Implement mapping of multiple inputs and outputs to
+  // individual TensorAggregator instances.
+  struct Intrinsic {
+    TensorSpec input;
+    TensorSpec output;
+    std::unique_ptr<TensorAggregator> aggregator
+        ABSL_PT_GUARDED_BY(&SimpleAggregationProtocol::aggregation_mu_);
+  };
+
+  // Private constructor.
   SimpleAggregationProtocol(
       std::vector<Intrinsic> intrinsics,
       AggregationProtocol::Callback* callback,
       const CheckpointParserFactory* checkpoint_parser_factory,
       const CheckpointBuilderFactory* checkpoint_builder_factory);
 
-  using TensorMap = absl::flat_hash_map<std::string, Tensor>;
-  absl::StatusOr<TensorMap> ParseCheckpoint(absl::Cord report) const;
-  // TODO(team): expect this function to be called under the locked
-  // state.
-  absl::Status AggregateClientInput(TensorMap tensor_map);
+  // Creates an aggregation intrinsic based on the intrinsic configuration.
+  static absl::StatusOr<Intrinsic> CreateIntrinsic(
+      const google::internal::federated::plan::ServerAggregationConfig&
+          aggregation_config);
 
+  // Describes the overall protocol state.
+  enum ProtocolState {
+    // The initial state indicating that the protocol was created.
+    PROTOCOL_CREATED,
+    // The protocol `Start` method has been called.
+    PROTOCOL_STARTED,
+    // The protocol `Complete` method has finished successfully.
+    PROTOCOL_COMPLETED,
+    // The protocol `Abort` method has been called.
+    PROTOCOL_ABORTED
+  };
+
+  // Describes state of each client participating in the protocol.
+  enum ClientState : uint8_t {
+    // No input received from the client yet.
+    CLIENT_PENDING,
+    // Client input received but the aggregation still pending, which may
+    // be the case when there are multiple concurrent ReceiveClientInput calls.
+    CLIENT_RECEIVED_INPUT_AND_PENDING,
+    // Client input has been successfully aggregated.
+    CLIENT_COMPLETED,
+    // Client failed either by being closed with an error or by submitting a
+    // malformed input.
+    CLIENT_FAILED,
+    // Client input has been received but discarded, for example due to being
+    // received after Complete or Abort protocol calls.
+    CLIENT_DISCARDED
+  };
+
+  // Returns string representation of the protocol state.
+  static absl::string_view ProtocolStateDebugString(ProtocolState state);
+
+  // Returns string representation of the client state.
+  static absl::string_view ClientStateDebugString(ClientState state);
+
+  // Returns an error if the current protocol state isn't the expected one.
+  absl::Status CheckProtocolState(ProtocolState state) const
+      ABSL_SHARED_LOCKS_REQUIRED(state_mu_);
+
+  // Changes the protocol state.
+  void SetProtocolState(ProtocolState state)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
+
+  // Gets the client state for the given client ID.
+  absl::StatusOr<ClientState> GetClientState(int64_t client_id) const
+      ABSL_SHARED_LOCKS_REQUIRED(state_mu_);
+
+  // Sets the client state for the given client ID.
+  void SetClientState(int64_t client_id, ClientState state)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
+
+  // Parses and validates the client report.
+  // This function involves a potentially expensive I/O and parsing and should
+  // run concurrently as much as possible. The ABSL_LOCKS_EXCLUDED attribution
+  // below is used to emphasize that.
+  using TensorMap = absl::flat_hash_map<std::string, Tensor>;
+  absl::StatusOr<TensorMap> ParseCheckpoint(absl::Cord report) const
+      ABSL_LOCKS_EXCLUDED(state_mu_, aggregation_mu_);
+
+  // Aggregates the input via the underlying aggregators.
+  absl::Status AggregateClientInput(TensorMap tensor_map)
+      ABSL_LOCKS_EXCLUDED(state_mu_, aggregation_mu_);
+
+  // Produces the report via the underlying aggregators.
+  absl::StatusOr<absl::Cord> CreateReport()
+      ABSL_LOCKS_EXCLUDED(aggregation_mu_);
+
+  // Protects the mutable state.
+  absl::Mutex state_mu_;
+  // Protects calls into the aggregators.
+  absl::Mutex aggregation_mu_;
+  // This indicates that the aggregation has finished either by completing
+  // the protocol or by aborting it. This can be triggered without locking on
+  // the aggregation_mu_ mutex first to allow aborting the protocol promptly and
+  // discarding all the pending aggregation calls.
+  std::atomic_bool aggregation_finished_ = false;
+
+  // The overall state of the protocol.
+  ProtocolState protocol_state_ ABSL_GUARDED_BY(state_mu_);
+
+  // Holds state of all clients. The length of the vector equals
+  // to the number of clients accepted into the protocol.
+  std::vector<ClientState> client_states_ ABSL_GUARDED_BY(state_mu_);
+
+  // Counters for various client states other than pending.
+  // Note that the number of pending clients can be found by subtracting the
+  // sum of the below counters from `client_states_.size()`.
+  uint64_t num_clients_received_and_pending_ ABSL_GUARDED_BY(state_mu_) = 0;
+  uint64_t num_clients_aggregated_ ABSL_GUARDED_BY(state_mu_) = 0;
+  uint64_t num_clients_failed_ ABSL_GUARDED_BY(state_mu_) = 0;
+  uint64_t num_clients_discarded_ ABSL_GUARDED_BY(state_mu_) = 0;
+
+  // Intrinsics are immutable and shouldn't be guarded by the either of mutexes.
+  // Please note that the access to the aggregators that intrinsics point to
+  // still needs to be strictly sequential. That is guarded separatedly by
+  // `aggregators_mu_`.
   std::vector<Intrinsic> const intrinsics_;
+
   AggregationProtocol::Callback* const callback_;
   const CheckpointParserFactory* const checkpoint_parser_factory_;
   const CheckpointBuilderFactory* const checkpoint_builder_factory_;

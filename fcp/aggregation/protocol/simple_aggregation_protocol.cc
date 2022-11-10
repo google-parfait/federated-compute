@@ -26,6 +26,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
@@ -49,7 +50,8 @@ absl::Status ServerAggregationConfigArgumentError(
 }
 
 // Creates an aggregation intrinsic based on the intrinsic configuration.
-absl::StatusOr<Intrinsic> CreateIntrinsic(
+absl::StatusOr<SimpleAggregationProtocol::Intrinsic>
+SimpleAggregationProtocol::CreateIntrinsic(
     const ServerAggregationConfig& aggregation_config) {
   // Resolve the intrinsic_uri to the registered TensorAggregatorFactory.
   FCP_ASSIGN_OR_RETURN(
@@ -141,18 +143,103 @@ SimpleAggregationProtocol::SimpleAggregationProtocol(
     std::vector<Intrinsic> intrinsics, AggregationProtocol::Callback* callback,
     const CheckpointParserFactory* checkpoint_parser_factory,
     const CheckpointBuilderFactory* checkpoint_builder_factory)
-    : intrinsics_(std::move(intrinsics)),
+    : protocol_state_(PROTOCOL_CREATED),
+      intrinsics_(std::move(intrinsics)),
       callback_(callback),
       checkpoint_parser_factory_(checkpoint_parser_factory),
       checkpoint_builder_factory_(checkpoint_builder_factory) {}
 
-// TODO(team): Implement Simple Aggregation Protocol methods.
-absl::Status SimpleAggregationProtocol::Start(int64_t num_clients) {
-  return absl::UnimplementedError("Start is not implemented");
+absl::string_view SimpleAggregationProtocol::ProtocolStateDebugString(
+    ProtocolState state) {
+  switch (state) {
+    case PROTOCOL_CREATED:
+      return "PROTOCOL_CREATED";
+    case PROTOCOL_STARTED:
+      return "PROTOCOL_STARTED";
+    case PROTOCOL_COMPLETED:
+      return "PROTOCOL_COMPLETED";
+    case PROTOCOL_ABORTED:
+      return "PROTOCOL_ABORTED";
+  }
 }
 
-absl::Status SimpleAggregationProtocol::AddClients(int64_t num_clients) {
-  return absl::UnimplementedError("AddClients is not implemented");
+absl::string_view SimpleAggregationProtocol::ClientStateDebugString(
+    ClientState state) {
+  switch (state) {
+    case CLIENT_PENDING:
+      return "CLIENT_PENDING";
+    case CLIENT_RECEIVED_INPUT_AND_PENDING:
+      return "CLIENT_RECEIVED_INPUT_AND_PENDING";
+    case CLIENT_COMPLETED:
+      return "CLIENT_COMPLETED";
+    case CLIENT_FAILED:
+      return "CLIENT_FAILED";
+    case CLIENT_DISCARDED:
+      return "CLIENT_DISCARDED";
+  }
+}
+
+absl::Status SimpleAggregationProtocol::CheckProtocolState(
+    ProtocolState state) const {
+  if (protocol_state_ != state) {
+    return absl::FailedPreconditionError(
+        absl::StrFormat("The current protocol state is %s, expected %s.",
+                        ProtocolStateDebugString(protocol_state_),
+                        ProtocolStateDebugString(state)));
+  }
+  return absl::OkStatus();
+}
+
+void SimpleAggregationProtocol::SetProtocolState(ProtocolState state) {
+  FCP_CHECK(
+      (protocol_state_ == PROTOCOL_CREATED && state == PROTOCOL_STARTED) ||
+      (protocol_state_ == PROTOCOL_STARTED &&
+       (state == PROTOCOL_COMPLETED || state == PROTOCOL_ABORTED)))
+      << "Invalid protocol state transition from "
+      << ProtocolStateDebugString(protocol_state_) << " to "
+      << ProtocolStateDebugString(state) << ".";
+  protocol_state_ = state;
+}
+
+absl::StatusOr<SimpleAggregationProtocol::ClientState>
+SimpleAggregationProtocol::GetClientState(int64_t client_id) const {
+  if (client_id < 0 || client_id >= client_states_.size()) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("client_id %ld is outside the valid range", client_id));
+  }
+  return client_states_[client_id];
+}
+
+void SimpleAggregationProtocol::SetClientState(int64_t client_id,
+                                               ClientState to_state) {
+  FCP_CHECK(client_id >= 0 && client_id < client_states_.size());
+  ClientState from_state = client_states_[client_id];
+  FCP_CHECK(from_state != to_state);
+  if (from_state == CLIENT_RECEIVED_INPUT_AND_PENDING) {
+    num_clients_received_and_pending_--;
+  } else {
+    FCP_CHECK(from_state == CLIENT_PENDING)
+        << "Client state can't be changed from "
+        << ClientStateDebugString(client_states_[client_id]);
+  }
+  client_states_[client_id] = to_state;
+  switch (to_state) {
+    case CLIENT_PENDING:
+      FCP_LOG(FATAL) << "Client state can't be changed to CLIENT_PENDING";
+      break;
+    case CLIENT_RECEIVED_INPUT_AND_PENDING:
+      num_clients_received_and_pending_++;
+      break;
+    case CLIENT_COMPLETED:
+      num_clients_aggregated_++;
+      break;
+    case CLIENT_FAILED:
+      num_clients_failed_++;
+      break;
+    case CLIENT_DISCARDED:
+      num_clients_discarded_++;
+      break;
+  }
 }
 
 absl::StatusOr<SimpleAggregationProtocol::TensorMap>
@@ -178,52 +265,25 @@ SimpleAggregationProtocol::ParseCheckpoint(absl::Cord report) const {
 
 absl::Status SimpleAggregationProtocol::AggregateClientInput(
     SimpleAggregationProtocol::TensorMap tensor_map) {
-  for (const auto& intrinsic : intrinsics_) {
-    // TODO(team): Support multiple input tensors.
-    const auto& it = tensor_map.find(intrinsic.input.name());
-    FCP_CHECK(it != tensor_map.end());
-    FCP_RETURN_IF_ERROR(intrinsic.aggregator->Accumulate(it->second));
+  absl::MutexLock lock(&aggregation_mu_);
+  if (!aggregation_finished_) {
+    for (const auto& intrinsic : intrinsics_) {
+      // TODO(team): Support multiple input tensors.
+      const auto& it = tensor_map.find(intrinsic.input.name());
+      FCP_CHECK(it != tensor_map.end());
+      FCP_CHECK(intrinsic.aggregator != nullptr)
+          << "CreateReport() has already been called.";
+      FCP_RETURN_IF_ERROR(intrinsic.aggregator->Accumulate(it->second));
+    }
   }
   return absl::OkStatus();
 }
 
-absl::Status SimpleAggregationProtocol::ReceiveClientInput(int64_t client_id,
-                                                           absl::Cord report) {
-  // Do the initial parsing of the report before the synchronized part of the
-  // processing.
-  absl::StatusOr<TensorMap> tensor_map_or_status =
-      ParseCheckpoint(std::move(report));
-  if (!tensor_map_or_status.ok()) {
-    // TODO(team): Call CloseClient once it is implemented.
-    FCP_LOG(WARNING)
-        << "ReceiveClientInput failed to parse the input for client "
-        << client_id << " : " << tensor_map_or_status.status().ToString();
-    return absl::OkStatus();
-  }
-
-  // TODO(team): Add synchronization locking here.
-  // TODO(team): Verify client specific state.
-  absl::Status aggregation_status =
-      AggregateClientInput(std::move(tensor_map_or_status).value());
-
-  // TODO(team): Update the client specific state and close the client
-  // connection.
-  return aggregation_status;
-}
-
-absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
-    int64_t client_id, const ClientMessage& message) {
-  return absl::UnimplementedError(
-      "ReceiveClientMessage is not supported by SimpleAggregationProtocol");
-}
-
-absl::Status SimpleAggregationProtocol::CloseClient(
-    int64_t client_id, absl::Status client_status) {
-  return absl::UnimplementedError("CloseClient is not implemented");
-}
-
-absl::Status SimpleAggregationProtocol::Complete() {
+absl::StatusOr<absl::Cord> SimpleAggregationProtocol::CreateReport() {
+  absl::MutexLock lock(&aggregation_mu_);
   for (auto& intrinsic : intrinsics_) {
+    FCP_CHECK(intrinsic.aggregator != nullptr)
+        << "CreateReport() has already been called.";
     if (!intrinsic.aggregator->CanReport()) {
       return absl::FailedPreconditionError(
           "The aggregation can't be completed due to failed preconditions.");
@@ -242,14 +302,134 @@ absl::Status SimpleAggregationProtocol::Complete() {
     FCP_RETURN_IF_ERROR(
         checkpoint_builder->Add(intrinsic.output.name(), tensor));
   }
+  aggregation_finished_ = true;
+  return checkpoint_builder->Build();
+}
 
-  FCP_ASSIGN_OR_RETURN(absl::Cord result, checkpoint_builder->Build());
-  callback_->Complete(result);
+absl::Status SimpleAggregationProtocol::Start(int64_t num_clients) {
+  absl::MutexLock lock(&state_mu_);
+  FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_CREATED));
+  SetProtocolState(PROTOCOL_STARTED);
+  FCP_CHECK(client_states_.empty());
+  client_states_.resize(num_clients, CLIENT_PENDING);
+  // TODO(team): Call AcceptClients callback
+  return absl::OkStatus();
+}
+
+absl::Status SimpleAggregationProtocol::AddClients(int64_t num_clients) {
+  absl::MutexLock lock(&state_mu_);
+  FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
+  if (num_clients <= 0) {
+    return absl::InvalidArgumentError("Non-zero number of clients required");
+  }
+  client_states_.resize(client_states_.size() + num_clients, CLIENT_PENDING);
+  // TODO(team): Call AcceptClients callback
+  return absl::OkStatus();
+}
+
+absl::Status SimpleAggregationProtocol::ReceiveClientInput(int64_t client_id,
+                                                           absl::Cord report) {
+  // Verify the state.
+  {
+    absl::MutexLock lock(&state_mu_);
+    if (protocol_state_ == PROTOCOL_CREATED) {
+      return absl::FailedPreconditionError("The protocol hasn't been started");
+    }
+    FCP_ASSIGN_OR_RETURN(auto client_state, GetClientState(client_id));
+    if (client_state != CLIENT_PENDING) {
+      // TODO(team): Decide whether the logging level should be INFO or
+      // WARNING, or perhaps it should depend on the client state (e.g. WARNING
+      // for COMPLETED and INFO for other states).
+      FCP_LOG(INFO) << "ReceiveClientInput: client " << client_id
+                    << " input ignored, the state is already "
+                    << ClientStateDebugString(client_state);
+      return absl::OkStatus();
+    }
+    SetClientState(client_id, CLIENT_RECEIVED_INPUT_AND_PENDING);
+  }
+
+  absl::Status client_completion_status = absl::OkStatus();
+  ClientState client_completion_state = CLIENT_COMPLETED;
+
+  // Parse the client input concurrently with other protocol calls.
+  absl::StatusOr<TensorMap> tensor_map_or_status =
+      ParseCheckpoint(std::move(report));
+  if (!tensor_map_or_status.ok()) {
+    client_completion_status = tensor_map_or_status.status();
+    client_completion_state = CLIENT_FAILED;
+    FCP_LOG(WARNING) << "Client " << client_id << " input can't be parsed: "
+                     << client_completion_status.ToString();
+  } else {
+    // Aggregate the client input which would block on aggregation_mu_ if there
+    // are any concurrent AggregateClientInput calls.
+    client_completion_status =
+        AggregateClientInput(std::move(tensor_map_or_status).value());
+    if (!client_completion_status.ok()) {
+      client_completion_state = CLIENT_DISCARDED;
+      FCP_LOG(INFO) << "Client " << client_id << " input is discarded: "
+                    << client_completion_status.ToString();
+    }
+  }
+
+  // Update the state post aggregation.
+  {
+    absl::MutexLock lock(&state_mu_);
+    SetClientState(client_id, client_completion_state);
+    callback_->CloseClient(client_id, client_completion_status);
+  }
+  return absl::OkStatus();
+}
+
+absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
+    int64_t client_id, const ClientMessage& message) {
+  return absl::UnimplementedError(
+      "ReceiveClientMessage is not supported by SimpleAggregationProtocol");
+}
+
+absl::Status SimpleAggregationProtocol::CloseClient(
+    int64_t client_id, absl::Status client_status) {
+  {
+    absl::MutexLock lock(&state_mu_);
+    if (protocol_state_ == PROTOCOL_CREATED) {
+      return absl::FailedPreconditionError("The protocol hasn't been started");
+    }
+    FCP_ASSIGN_OR_RETURN(auto client_state, GetClientState(client_id));
+    // Close the client only if the client is currently pending.
+    if (client_state == CLIENT_PENDING) {
+      FCP_LOG(INFO) << "Closing client " << client_id << " with the status "
+                    << client_status.ToString();
+      SetClientState(client_id,
+                     client_status.ok() ? CLIENT_DISCARDED : CLIENT_FAILED);
+    }
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status SimpleAggregationProtocol::Complete() {
+  absl::Cord result;
+  {
+    absl::MutexLock lock(&state_mu_);
+    FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
+    FCP_ASSIGN_OR_RETURN(result, CreateReport());
+    SetProtocolState(PROTOCOL_COMPLETED);
+    // TODO(team): Close all pending clients, all pending and completed
+    // clients should become discarded.
+  }
+  callback_->Complete(std::move(result));
   return absl::OkStatus();
 }
 
 absl::Status SimpleAggregationProtocol::Abort() {
-  return absl::UnimplementedError("Abort is not implemented");
+  {
+    absl::MutexLock lock(&state_mu_);
+    FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
+    SetProtocolState(PROTOCOL_ABORTED);
+    aggregation_finished_ = true;
+    // TODO(team): Close all pending clients, all pending and completed
+    // clients should become discarded.
+  }
+  return absl::OkStatus();
 }
 
 StatusMessage SimpleAggregationProtocol::GetStatus() {

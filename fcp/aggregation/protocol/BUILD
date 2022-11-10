@@ -94,6 +94,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
     ],
     alwayslink = 1,
 )
@@ -108,6 +109,7 @@ cc_test(
         "//fcp/aggregation/core:tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
         "//fcp/testing",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
