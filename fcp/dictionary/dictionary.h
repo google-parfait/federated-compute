@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FCP_DICTIONARY_H_
-#define FCP_DICTIONARY_H_
+#ifndef FCP_DICTIONARY_DICTIONARY_H_
+#define FCP_DICTIONARY_DICTIONARY_H_
 
 #include <cstdint>
 #include <memory>
@@ -69,4 +69,4 @@ class Dictionary {
 }  // namespace dictionary
 }  // namespace fcp
 
-#endif  // FCP_DICTIONARY_H_
+#endif  // FCP_DICTIONARY_DICTIONARY_H_
