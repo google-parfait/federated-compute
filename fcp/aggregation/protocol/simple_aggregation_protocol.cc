@@ -17,6 +17,7 @@
 #include "fcp/aggregation/protocol/simple_aggregation_protocol.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -433,9 +434,20 @@ absl::Status SimpleAggregationProtocol::Abort() {
 }
 
 StatusMessage SimpleAggregationProtocol::GetStatus() {
-  StatusMessage status_message;
-  // TODO(team): Populate status_message before returning.
-  return status_message;
+  absl::MutexLock lock(&state_mu_);
+  int64_t num_clients_completed = num_clients_received_and_pending_ +
+                                  num_clients_aggregated_ +
+                                  num_clients_discarded_;
+  StatusMessage message;
+  message.set_num_clients_completed(num_clients_completed);
+  message.set_num_clients_failed(num_clients_failed_);
+  message.set_num_clients_pending(client_states_.size() -
+                                  num_clients_completed - num_clients_failed_);
+  message.set_num_inputs_aggregated_and_included(num_clients_aggregated_);
+  message.set_num_inputs_aggregated_and_pending(
+      num_clients_received_and_pending_);
+  message.set_num_inputs_discarded(num_clients_discarded_);
+  return message;
 }
 
 }  // namespace fcp::aggregation

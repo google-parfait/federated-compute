@@ -104,6 +104,7 @@ cc_test(
     srcs = ["simple_aggregation_protocol_test.cc"],
     copts = FCP_COPTS,
     deps = [
+        ":cc_proto",
         ":configuration_cc_proto",
         ":simple_aggregation_protocol",
         "//fcp/aggregation/core:tensor",

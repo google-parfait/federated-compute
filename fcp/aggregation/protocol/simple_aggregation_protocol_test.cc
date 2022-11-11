@@ -25,6 +25,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
@@ -207,6 +208,10 @@ TEST_F(SimpleAggregationProtocolTest, CreateAndGetResult_Success) {
   EXPECT_CALL(callback_, Complete);
 
   EXPECT_THAT(protocol->Complete(), IsOk());
+
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedNumberOfInputs) {
@@ -393,7 +398,13 @@ TEST_F(SimpleAggregationProtocolTest, StartProtocol_MultipleCalls) {
 TEST_F(SimpleAggregationProtocolTest, AddClients_Success) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_THAT(protocol->Start(1), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
   EXPECT_THAT(protocol->AddClients(1), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 2")));
   // TODO(team): Verify AcceptClients callbacks
 }
 
@@ -476,7 +487,16 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_Success) {
 
   // Handle the inputs.
   EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "num_clients_pending: 1 num_clients_completed: 1 "
+                  "num_inputs_aggregated_and_included: 1")));
+
   EXPECT_THAT(protocol->ReceiveClientInput(1, absl::Cord{}), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
 
   // TODO(team): Verify the number of inputs processed.
 
@@ -519,7 +539,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_InvalidClientId) {
 TEST_F(SimpleAggregationProtocolTest,
        ReceiveClientInput_DuplicateClientIdInputs) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_THAT(protocol->Start(1), IsOk());
+  EXPECT_THAT(protocol->Start(2), IsOk());
 
   auto parser = std::make_unique<MockCheckpointParser>();
   EXPECT_CALL(*parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
@@ -532,8 +552,11 @@ TEST_F(SimpleAggregationProtocolTest,
   EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
   // The second input for the same client must succeed to without changing the
   // aggregated state.
-  // TODO(team): test the counters in the status.
   EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "num_clients_pending: 1 num_clients_completed: 1 "
+                  "num_inputs_aggregated_and_included: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_AfterClosingClient) {
@@ -541,9 +564,14 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_AfterClosingClient) {
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   EXPECT_THAT(protocol->CloseClient(0, absl::OkStatus()), IsOk());
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "num_clients_completed: 1 num_inputs_discarded: 1")));
   // This must succeed to without changing the aggregated state.
-  // TODO(team): test the counters in the status.
   EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "num_clients_completed: 1 num_inputs_discarded: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_FailureToParseInput) {
@@ -558,6 +586,9 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_FailureToParseInput) {
 
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MissingTensor) {
@@ -575,6 +606,9 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MissingTensor) {
 
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MismatchingTensor) {
@@ -593,6 +627,9 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MismatchingTensor) {
 
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
 }
 
 }  // namespace
