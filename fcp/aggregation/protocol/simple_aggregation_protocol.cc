@@ -31,6 +31,7 @@
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
+#include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/tensorflow/converters.h"
@@ -308,23 +309,31 @@ absl::StatusOr<absl::Cord> SimpleAggregationProtocol::CreateReport() {
 }
 
 absl::Status SimpleAggregationProtocol::Start(int64_t num_clients) {
-  absl::MutexLock lock(&state_mu_);
-  FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_CREATED));
-  SetProtocolState(PROTOCOL_STARTED);
-  FCP_CHECK(client_states_.empty());
-  client_states_.resize(num_clients, CLIENT_PENDING);
-  // TODO(team): Call AcceptClients callback
+  {
+    absl::MutexLock lock(&state_mu_);
+    FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_CREATED));
+    SetProtocolState(PROTOCOL_STARTED);
+    FCP_CHECK(client_states_.empty());
+    client_states_.resize(num_clients, CLIENT_PENDING);
+  }
+  AcceptanceMessage acceptance_message;
+  callback_->AcceptClients(0, num_clients, acceptance_message);
   return absl::OkStatus();
 }
 
 absl::Status SimpleAggregationProtocol::AddClients(int64_t num_clients) {
-  absl::MutexLock lock(&state_mu_);
-  FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
-  if (num_clients <= 0) {
-    return absl::InvalidArgumentError("Non-zero number of clients required");
+  int64_t start_index;
+  {
+    absl::MutexLock lock(&state_mu_);
+    FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
+    if (num_clients <= 0) {
+      return absl::InvalidArgumentError("Non-zero number of clients required");
+    }
+    start_index = client_states_.size();
+    client_states_.resize(start_index + num_clients, CLIENT_PENDING);
   }
-  client_states_.resize(client_states_.size() + num_clients, CLIENT_PENDING);
-  // TODO(team): Call AcceptClients callback
+  AcceptanceMessage acceptance_message;
+  callback_->AcceptClients(start_index, num_clients, acceptance_message);
   return absl::OkStatus();
 }
 
