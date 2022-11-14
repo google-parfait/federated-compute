@@ -32,11 +32,9 @@ using ::testing::IsEmpty;
 TEST(CachingErrorReporterTest, CachingMultiple) {
   CachingErrorReporter reporter;
   std::string first_error = "Op a is not found.";
-  static_cast<tflite::ErrorReporter*>(&reporter)->Report(
-      "%s%d", first_error.c_str(), 1);
+  TF_LITE_REPORT_ERROR(&reporter, "%s%d", first_error.c_str(), 1);
   std::string second_error = "Op b is not found.";
-  static_cast<tflite::ErrorReporter*>(&reporter)->Report(
-      "%s%d", second_error.c_str(), 2);
+  TF_LITE_REPORT_ERROR(&reporter, "%s%d", second_error.c_str(), 2);
   EXPECT_THAT(reporter.GetFirstErrorMessage(), absl::StrCat(first_error, "1"));
 }
 
