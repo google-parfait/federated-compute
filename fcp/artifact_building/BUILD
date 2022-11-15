@@ -3,6 +3,31 @@ load("@rules_python//python:defs.bzl", "py_library", "py_test")
 default_visibility = ["//fcp:internal"]
 
 py_library(
+    name = "checkpoint_utils",
+    srcs = ["checkpoint_utils.py"],
+    srcs_version = "PY3",
+    visibility = default_visibility + [
+    ],
+    deps = [
+        ":tensor_utils",
+        ":type_checks",
+    ],
+)
+
+py_test(
+    name = "checkpoint_utils_test",
+    srcs = [
+        "checkpoint_utils_test.py",
+    ],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":checkpoint_utils",
+        "@com_google_protobuf//:protobuf_python",
+    ],
+)
+
+py_library(
     name = "tensor_utils",
     srcs = ["tensor_utils.py"],
     srcs_version = "PY3",
