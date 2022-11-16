@@ -22,8 +22,8 @@
 #include <memory>
 #include <utility>
 
+#include "fcp/aggregation/core/agg_vector_iterator.h"
 #include "fcp/aggregation/core/tensor_data.h"
-#include "fcp/base/monitoring.h"
 
 namespace fcp::aggregation {
 
@@ -66,6 +66,15 @@ namespace fcp::aggregation {
 template <typename T>
 class AggVector final {
  public:
+  using value_type = typename AggVectorIterator<T>::value_type;
+  using const_iterator = AggVectorIterator<T>;
+
+  // Iterator begin() function.
+  const_iterator begin() const { return AggVectorIterator<T>(data_); }
+
+  // Iterator end() function.
+  const_iterator end() const { return AggVectorIterator<T>::end(); }
+
   // Individual slice of AggVector. The data is not owned by the slice.
   // The actual lifetime of the data is controlled by the AggVector instance.
   class Slice final {

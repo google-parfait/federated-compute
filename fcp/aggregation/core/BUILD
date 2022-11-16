@@ -31,6 +31,7 @@ TENSOR_SRCS = [
 
 TENSOR_HDRS = [
     "agg_vector.h",
+    "agg_vector_iterator.h",
     "datatype.h",
     "tensor.h",
     "tensor_data.h",
@@ -111,6 +112,17 @@ cc_test(
         ":tensor",
         "//fcp/aggregation/testing:test_data",
         "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "agg_vector_test",
+    srcs = ["agg_vector_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":tensor",
+        "//fcp/aggregation/testing:test_data",
         "@com_google_googletest//:gtest_main",
     ],
 )
