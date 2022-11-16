@@ -29,50 +29,12 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/testing/testing.h"
-#include "tensorflow/cc/framework/ops.h"
-#include "tensorflow/cc/framework/scope.h"
-#include "tensorflow/cc/ops/io_ops.h"
-#include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/framework/types.pb.h"
-#include "tensorflow/core/public/session.h"
 
 namespace fcp::aggregation::tensorflow {
 namespace {
 
-namespace tf = ::tensorflow;
-
 using ::testing::Key;
 using ::testing::UnorderedElementsAre;
-
-template <typename T>
-tf::Tensor CreateTfTensor(tf::DataType data_type,
-                          std::initializer_list<int64_t> dim_sizes,
-                          std::initializer_list<T> values) {
-  tf::TensorShape shape;
-  EXPECT_TRUE(tf::TensorShape::BuildTensorShape(dim_sizes, &shape).ok());
-  tf::Tensor tensor(data_type, shape);
-  T* tensor_data_ptr = reinterpret_cast<T*>(tensor.data());
-  for (auto value : values) {
-    *tensor_data_ptr++ = value;
-  }
-  return tensor;
-}
-
-// Wrapper around tf::ops::Save that sets up and runs the op.
-tf::Status CreateTfCheckpoint(tf::Input filename, tf::Input tensor_names,
-                              tf::InputList tensors) {
-  tf::Scope scope = tf::Scope::NewRootScope();
-
-  tf::ops::Save save(scope, std::move(filename), std::move(tensor_names),
-                     std::move(tensors));
-
-  tf::GraphDef graph;
-  if (auto s = scope.ToGraphDef(&graph); !s.ok()) return s;
-
-  auto session = absl::WrapUnique(tf::NewSession(tf::SessionOptions()));
-  if (auto s = session->Create(graph); !s.ok()) return s;
-  return session->Run({}, {}, {save.operation.node()->name()}, nullptr);
-}
 
 TEST(CheckpointReaderTest, ReadTensors) {
   // Write a test TF checkpoint with 3 tensors

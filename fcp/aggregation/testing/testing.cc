@@ -16,6 +16,13 @@
 
 #include "fcp/aggregation/testing/testing.h"
 
+#include <ostream>
+#include <utility>
+
+#include "tensorflow/cc/framework/scope.h"
+#include "tensorflow/cc/ops/io_ops.h"
+#include "tensorflow/core/public/session.h"
+
 namespace fcp::aggregation {
 
 std::ostream& operator<<(std::ostream& os, const Tensor& tensor) {
@@ -24,4 +31,18 @@ std::ostream& operator<<(std::ostream& os, const Tensor& tensor) {
   return os;
 }
 
+tf::Status CreateTfCheckpoint(tf::Input filename, tf::Input tensor_names,
+                              tf::InputList tensors) {
+  tf::Scope scope = tf::Scope::NewRootScope();
+
+  tf::ops::Save save(scope, std::move(filename), std::move(tensor_names),
+                     std::move(tensors));
+
+  tf::GraphDef graph;
+  if (auto s = scope.ToGraphDef(&graph); !s.ok()) return s;
+
+  auto session = absl::WrapUnique(tf::NewSession(tf::SessionOptions()));
+  if (auto s = session->Create(graph); !s.ok()) return s;
+  return session->Run({}, {}, {save.operation.node()->name()}, nullptr);
+}
 }  // namespace fcp::aggregation
