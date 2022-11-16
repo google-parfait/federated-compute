@@ -13,7 +13,7 @@
 # limitations under the License.
 """Helper methods for working with demo server checkpoints."""
 
-from typing import Union
+from typing import Any, Union
 
 import numpy as np
 import tensorflow as tf
@@ -25,6 +25,115 @@ from fcp.artifact_building import type_checks
 # TFF types allowed for variables created at input/output serialization
 # boundaries.
 AllowedTffTypes = Union[tff.TensorType, tff.StructType, tff.FederatedType]
+
+
+def tff_type_to_dtype_list(tff_type: AllowedTffTypes) -> list[tf.DType]:
+  """Creates a flat list of `tf.DType`s for tensors in a `tff.Type`.
+
+  Args:
+    tff_type: Either a `tff.StructType`, `tff.FederatedType`, or a
+      `tff.TensorType` object.
+
+  Returns:
+    A flat list of `tf.DType`s.
+  """
+  type_checks.check_type(tff_type,
+                         (tff.TensorType, tff.FederatedType, tff.StructType))
+  if isinstance(tff_type, tff.TensorType):
+    return [tff_type.dtype]
+  elif isinstance(tff_type, tff.FederatedType):
+    return tff_type_to_dtype_list(tff_type.member)
+  else:  # tff.StructType
+    elem_list = []
+    for elem_type in tff_type:
+      elem_list.extend(tff_type_to_dtype_list(elem_type))
+    return elem_list
+
+
+def tff_type_to_tensor_spec_list(
+    tff_type: AllowedTffTypes) -> list[tf.TensorSpec]:
+  """Creates a flat list of tensor specs for tensors in a `tff.Type`.
+
+  Args:
+    tff_type: Either a `tff.StructType`, `tff.FederatedType` or a
+      `tff.TensorType` object.
+
+  Returns:
+    A flat list of `tf.TensorSpec`s.
+  """
+  type_checks.check_type(tff_type,
+                         (tff.TensorType, tff.FederatedType, tff.StructType))
+  if isinstance(tff_type, tff.TensorType):
+    return [tf.TensorSpec(tff_type.shape, dtype=tff_type.dtype)]
+  elif isinstance(tff_type, tff.FederatedType):
+    return tff_type_to_tensor_spec_list(tff_type.member)
+  else:  # tff.StructType
+    elem_list = []
+    for elem_type in tff_type:
+      elem_list.extend(tff_type_to_tensor_spec_list(elem_type))
+    return elem_list
+
+
+def pack_tff_value(tff_type: AllowedTffTypes, value_list: Any) -> Any:
+  """Packs a list of values into a shape specified by a `tff.Type`.
+
+  Args:
+    tff_type: Either a `tff.StructType`, `tff.FederatedType`, or a
+      `tff.TensorType` object.
+    value_list: A flat list of `tf.Tensor` or `CheckpointTensorReference`.
+
+  Returns:
+    A Python container with a structure consistent with a `tff.Type`.
+
+  Raises:
+    ValueError: If the number of leaves in `tff_type` does not match the length
+    of `value_list`, or `tff_type` is of a disallowed type.
+  """
+  type_checks.check_type(tff_type,
+                         (tff.TensorType, tff.FederatedType, tff.StructType))
+
+  # We must "unwrap" any FederatedTypes because the
+  # `tff.structure.pack_sequence_as` call below will fail to recurse into them.
+  # Instead, we remove all the FederatedTypes, because we're only trying to
+  # build up a Python tree structure that matches the struct/tensor types from a
+  # list of values.
+  def remove_federated_types(
+      type_spec: tff.Type) -> Union[tff.StructType, tff.TensorType]:
+    """Removes `FederatedType` from a type tree, returning a new tree."""
+    if type_spec.is_tensor():
+      return type_spec
+    elif type_spec.is_federated():
+      return type_spec.member
+    elif type_spec.is_struct():
+      return tff.StructType(
+          (elem_name, remove_federated_types(elem_type))
+          for elem_name, elem_type in tff.structure.iter_elements(type_spec))
+    else:
+      raise ValueError(
+          'Must be either tff.TensorType, tff.FederatedType, or tff.StructType.'
+          f' Got a {type(type_spec)}')
+
+  try:
+    tff_type = remove_federated_types(tff_type)
+  except ValueError as e:
+    raise ValueError('`tff_type` is not packable, see earlier error. '
+                     f'Attempted to pack type: {tff_type}') from e
+
+  ordered_dtypes = tff_type_to_dtype_list(tff_type)
+  if len(ordered_dtypes) != len(value_list):
+    raise ValueError('The number of leaves in `tff_type` must equals the length'
+                     ' of `value_list`. Found `tff_type` with'
+                     f' {len(ordered_dtypes)} leaves and `value_list` of length'
+                     f' {len(value_list)}.')
+
+  if tff_type.is_tensor():
+    return value_list[0]
+  elif tff_type.is_struct():
+    return tff.structure.pack_sequence_as(tff_type, value_list)
+  else:
+    raise ValueError('`tff_type` must be either tff.TensorType or '
+                     'tff.StructType, reaching here is an internal coding '
+                     'error, please file a bug.')
 
 
 def variable_names_from_structure(tff_structure: Union[tff.structure.Struct,

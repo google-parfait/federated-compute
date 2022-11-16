@@ -1,5 +1,6 @@
 """Tests for checkpoint_utils."""
 
+import collections
 import os
 
 from absl.testing import absltest
@@ -14,6 +15,85 @@ from fcp.artifact_building import checkpoint_utils
 
 
 class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
+
+  def test_tff_type_to_dtype_list_as_expected(self):
+    tff_type = tff.FederatedType(
+        tff.StructType([('foo', tf.int32), ('bar', tf.string)]), tff.SERVER)
+    expected_dtype_list = [tf.int32, tf.string]
+    self.assertEqual(
+        checkpoint_utils.tff_type_to_dtype_list(tff_type), expected_dtype_list)
+
+  def test_tff_type_to_dtype_list_type_error(self):
+    list_type = [tf.int32, tf.string]
+    with self.assertRaisesRegex(TypeError, 'to be an instance of type'):
+      checkpoint_utils.tff_type_to_dtype_list(list_type)
+
+  def test_tff_type_to_tensor_spec_list_as_expected(self):
+    tff_type = tff.FederatedType(
+        tff.StructType([('foo', tf.int32),
+                        ('bar', tff.TensorType(tf.string, shape=[1]))]),
+        tff.SERVER)
+    expected_tensor_spec_list = [
+        tf.TensorSpec([], tf.int32),
+        tf.TensorSpec([1], tf.string)
+    ]
+    self.assertEqual(
+        checkpoint_utils.tff_type_to_tensor_spec_list(tff_type),
+        expected_tensor_spec_list)
+
+  def test_tff_type_to_tensor_spec_list_type_error(self):
+    list_type = [tf.int32, tf.string]
+    with self.assertRaisesRegex(TypeError, 'to be an instance of type'):
+      checkpoint_utils.tff_type_to_tensor_spec_list(list_type)
+
+  def test_pack_tff_value_with_tensors_as_expected(self):
+    tff_type = tff.StructType([('foo', tf.int32), ('bar', tf.string)])
+    value_list = [
+        tf.constant(1, dtype=tf.int32),
+        tf.constant('bla', dtype=tf.string)
+    ]
+    expected_packed_structure = tff.structure.Struct([
+        ('foo', tf.constant(1, dtype=tf.int32)),
+        ('bar', tf.constant('bla', dtype=tf.string))
+    ])
+    self.assertEqual(
+        checkpoint_utils.pack_tff_value(tff_type, value_list),
+        expected_packed_structure)
+
+  def test_pack_tff_value_with_federated_server_tensors_as_expected(self):
+    # This test must create a type that has `StructType`s nested under the
+    # `FederatedType` to cover testing that tff.structure.pack_sequence_as
+    # package correctly descends through the entire type tree.
+    tff_type = tff.to_type(
+        collections.OrderedDict(
+            foo=tff.FederatedType(tf.int32, tff.SERVER),
+            # Some arbitrarily deep nesting to ensure full traversals.
+            bar=tff.FederatedType([(), ([tf.int32], tf.int32)], tff.SERVER)))
+    value_list = [tf.constant(1), tf.constant(2), tf.constant(3)]
+    expected_packed_structure = tff.structure.from_container(
+        collections.OrderedDict(
+            foo=tf.constant(1), bar=[(), ([tf.constant(2)], tf.constant(3))]),
+        recursive=True)
+    self.assertEqual(
+        checkpoint_utils.pack_tff_value(tff_type, value_list),
+        expected_packed_structure)
+
+  def test_pack_tff_value_with_unmatched_input_sizes(self):
+    tff_type = tff.StructType([('foo', tf.int32), ('bar', tf.string)])
+    value_list = [tf.constant(1, dtype=tf.int32)]
+    with self.assertRaises(ValueError):
+      checkpoint_utils.pack_tff_value(tff_type, value_list)
+
+  def test_pack_tff_value_with_tff_type_error(self):
+
+    @tff.federated_computation
+    def fed_comp():
+      return tff.federated_value(0, tff.SERVER)
+
+    tff_function_type = fed_comp.type_signature
+    value_list = [tf.constant(1, dtype=tf.int32)]
+    with self.assertRaisesRegex(TypeError, 'to be an instance of type'):
+      checkpoint_utils.pack_tff_value(tff_function_type, value_list)
 
   def test_variable_names_from_structure_with_tensor_and_no_name(self):
     names = checkpoint_utils.variable_names_from_structure(tf.constant(1.0))
