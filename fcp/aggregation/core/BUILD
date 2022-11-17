@@ -172,9 +172,7 @@ cc_library(
 
 cc_test(
     name = "federated_sum_test",
-    srcs = [
-        "federated_sum_test.cc",
-    ],
+    srcs = ["federated_sum_test.cc"],
     copts = FCP_COPTS,
     deps = [
         ":aggregator",
@@ -184,5 +182,20 @@ cc_test(
         "//fcp/aggregation/testing:test_data",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "federated_sum_bench",
+    testonly = 1,
+    srcs = ["federated_sum_bench.cc"],
+    copts = FCP_COPTS,
+    linkstatic = 1,
+    deps = [
+        ":aggregator",
+        ":federated_sum",
+        ":tensor",
+        "//fcp/aggregation/testing:test_data",
+        "@com_google_benchmark//:benchmark_main",
     ],
 )
