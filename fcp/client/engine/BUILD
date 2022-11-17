@@ -33,8 +33,7 @@ cc_library(
         "simple_plan_engine.h",
     ],
     copts = FCP_COPTS,
-    visibility = default_visibility + [
-    ],
+    visibility = default_visibility,
     deps = [
         ":common",
         ":example_iterator_factory",
