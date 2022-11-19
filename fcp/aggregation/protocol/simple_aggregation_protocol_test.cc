@@ -147,75 +147,6 @@ SimpleAggregationProtocolTest::CreateProtocol(Configuration config) {
   return std::move(protocol_or_status).value();
 }
 
-TEST_F(SimpleAggregationProtocolTest, CreateAndGetResult_Success) {
-  // Two intrinsics:
-  // 1) federated_sum "foo" that takes int32 {2,3} tensors.
-  // 2) federated_sum "bar" that takes scalar float tensors.
-  Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
-      intrinsic_uri: "federated_sum"
-      intrinsic_args {
-        input_tensor {
-          name: "foo"
-          dtype: DT_INT32
-          shape {
-            dim { size: 2 }
-            dim { size: 3 }
-          }
-        }
-      }
-      output_tensors {
-        name: "foo_out"
-        dtype: DT_INT32
-        shape {
-          dim { size: 2 }
-          dim { size: 3 }
-        }
-      }
-    }
-    aggregation_configs {
-      intrinsic_uri: "federated_sum"
-      intrinsic_args {
-        input_tensor {
-          name: "bar"
-          dtype: DT_FLOAT
-          shape {}
-        }
-      }
-      output_tensors {
-        name: "bar_out"
-        dtype: DT_FLOAT
-        shape {}
-      }
-    }
-  )pb");
-  auto protocol = CreateProtocol(config_message);
-
-  EXPECT_CALL(callback_, AcceptClients(0, 1, _));
-  EXPECT_THAT(protocol->Start(1), IsOk());
-
-  // Verify that the checkpoint builder is created.
-  auto& checkpoint_builder = ExpectCheckpointBuilder();
-
-  // Verify that foo_out and bar_out tensors are added to the result checkpoint
-  EXPECT_CALL(checkpoint_builder,
-              Add(StrEq("foo_out"), IsTensor({2, 3}, {0, 0, 0, 0, 0, 0})))
-      .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {0.f})))
-      .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(checkpoint_builder, Build()).WillOnce(Return(absl::Cord{}));
-
-  // Verify that the Complete callback method is called.
-  // TODO(team): Expect more callback methods to be called.
-  EXPECT_CALL(callback_, Complete);
-
-  EXPECT_THAT(protocol->Complete(), IsOk());
-
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
-}
-
 TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedNumberOfInputs) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs {
@@ -390,6 +321,14 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnmatchingInputAndOutputShape) {
               IsCode(INVALID_ARGUMENT));
 }
 
+TEST_F(SimpleAggregationProtocolTest, StartProtocol_Success) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_THAT(protocol->Start(3), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 3")));
+}
+
 // TODO(team): Add similar tests for other callbacks.
 TEST_F(SimpleAggregationProtocolTest,
        StartProtocol_AcceptClientsProtocolReentrace) {
@@ -434,112 +373,6 @@ TEST_F(SimpleAggregationProtocolTest, AddClients_ProtocolNotStarted) {
   // Must fail because the protocol isn't started.
   EXPECT_CALL(callback_, AcceptClients).Times(0);
   EXPECT_THAT(protocol->AddClients(1), IsCode(FAILED_PRECONDITION));
-}
-
-TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_Success) {
-  // Two intrinsics:
-  // 1) federated_sum "foo" that takes int32 {2,3} tensors.
-  // 2) federated_sum "bar" that takes scalar float tensors.
-  Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
-      intrinsic_uri: "federated_sum"
-      intrinsic_args {
-        input_tensor {
-          name: "foo"
-          dtype: DT_INT32
-          shape {
-            dim { size: 2 }
-            dim { size: 3 }
-          }
-        }
-      }
-      output_tensors {
-        name: "foo_out"
-        dtype: DT_INT32
-        shape {
-          dim { size: 2 }
-          dim { size: 3 }
-        }
-      }
-    }
-    aggregation_configs {
-      intrinsic_uri: "federated_sum"
-      intrinsic_args {
-        input_tensor {
-          name: "bar"
-          dtype: DT_FLOAT
-          shape {}
-        }
-      }
-      output_tensors {
-        name: "bar_out"
-        dtype: DT_FLOAT
-        shape {}
-      }
-    }
-  )pb");
-  auto protocol = CreateProtocol(config_message);
-  EXPECT_CALL(callback_, AcceptClients);
-  EXPECT_THAT(protocol->Start(2), IsOk());
-
-  // Expect two inputs.
-  auto parser1 = std::make_unique<MockCheckpointParser>();
-  EXPECT_CALL(*parser1, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
-    return Tensor::Create(DT_INT32, {2, 3},
-                          CreateTestData({4, 3, 11, 7, 1, 6}));
-  }));
-  EXPECT_CALL(*parser1, GetTensor(StrEq("bar"))).WillOnce(Invoke([] {
-    return Tensor::Create(DT_FLOAT, {}, CreateTestData({1.f}));
-  }));
-
-  auto parser2 = std::make_unique<MockCheckpointParser>();
-  EXPECT_CALL(*parser2, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
-    return Tensor::Create(DT_INT32, {2, 3},
-                          CreateTestData({1, 8, 2, 10, 13, 2}));
-  }));
-  EXPECT_CALL(*parser2, GetTensor(StrEq("bar"))).WillOnce(Invoke([] {
-    return Tensor::Create(DT_FLOAT, {}, CreateTestData({2.f}));
-  }));
-
-  EXPECT_CALL(checkpoint_parser_factory_, Create(_))
-      .WillOnce(Return(ByMove(std::move(parser1))))
-      .WillOnce(Return(ByMove(std::move(parser2))));
-
-  EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(OK)));
-  EXPECT_CALL(callback_, CloseClient(Eq(1), IsCode(OK)));
-
-  // Handle the inputs.
-  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
-  EXPECT_THAT(protocol->GetStatus(),
-              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-                  "num_clients_pending: 1 num_clients_completed: 1 "
-                  "num_inputs_aggregated_and_included: 1")));
-
-  EXPECT_THAT(protocol->ReceiveClientInput(1, absl::Cord{}), IsOk());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
-
-  // TODO(team): Verify the number of inputs processed.
-
-  // Complete the protocol.
-  // Verify that the checkpoint builder is created.
-  auto& checkpoint_builder = ExpectCheckpointBuilder();
-
-  // Verify that foo_out and bar_out tensors are added to the result checkpoint
-  EXPECT_CALL(checkpoint_builder,
-              Add(StrEq("foo_out"), IsTensor({2, 3}, {5, 11, 13, 17, 14, 8})))
-      .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {3.f})))
-      .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(checkpoint_builder, Build()).WillOnce(Return(absl::Cord{}));
-
-  // Verify that the Complete callback method is called.
-  // TODO(team): Expect more callback methods to be called.
-  EXPECT_CALL(callback_, Complete);
-
-  EXPECT_THAT(protocol->Complete(), IsOk());
 }
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_ProtocolNotStarted) {
@@ -659,6 +492,235 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MismatchingTensor) {
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
+}
+
+TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
+  // Two intrinsics:
+  // 1) federated_sum "foo" that takes int32 {2,3} tensors.
+  // 2) federated_sum "bar" that takes scalar float tensors.
+  Configuration config_message = PARSE_TEXT_PROTO(R"pb(
+    aggregation_configs {
+      intrinsic_uri: "federated_sum"
+      intrinsic_args {
+        input_tensor {
+          name: "foo"
+          dtype: DT_INT32
+          shape {
+            dim { size: 2 }
+            dim { size: 3 }
+          }
+        }
+      }
+      output_tensors {
+        name: "foo_out"
+        dtype: DT_INT32
+        shape {
+          dim { size: 2 }
+          dim { size: 3 }
+        }
+      }
+    }
+    aggregation_configs {
+      intrinsic_uri: "federated_sum"
+      intrinsic_args {
+        input_tensor {
+          name: "bar"
+          dtype: DT_FLOAT
+          shape {}
+        }
+      }
+      output_tensors {
+        name: "bar_out"
+        dtype: DT_FLOAT
+        shape {}
+      }
+    }
+  )pb");
+  auto protocol = CreateProtocol(config_message);
+
+  EXPECT_CALL(callback_, AcceptClients(0, 1, _));
+  EXPECT_THAT(protocol->Start(1), IsOk());
+
+  // Verify that the checkpoint builder is created.
+  auto& checkpoint_builder = ExpectCheckpointBuilder();
+
+  // Verify that foo_out and bar_out tensors are added to the result checkpoint
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("foo_out"), IsTensor({2, 3}, {0, 0, 0, 0, 0, 0})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {0.f})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder, Build()).WillOnce(Return(absl::Cord{}));
+
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
+
+  // Verify that the pending client is closed.
+  EXPECT_CALL(callback_, CloseClient(0, IsCode(ABORTED)));
+  // Verify that the Complete callback method is called.
+  EXPECT_CALL(callback_, Complete);
+
+  EXPECT_THAT(protocol->Complete(), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 1")));
+}
+
+TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
+  // Two intrinsics:
+  // 1) federated_sum "foo" that takes int32 {2,3} tensors.
+  // 2) federated_sum "bar" that takes scalar float tensors.
+  Configuration config_message = PARSE_TEXT_PROTO(R"pb(
+    aggregation_configs {
+      intrinsic_uri: "federated_sum"
+      intrinsic_args {
+        input_tensor {
+          name: "foo"
+          dtype: DT_INT32
+          shape {
+            dim { size: 2 }
+            dim { size: 3 }
+          }
+        }
+      }
+      output_tensors {
+        name: "foo_out"
+        dtype: DT_INT32
+        shape {
+          dim { size: 2 }
+          dim { size: 3 }
+        }
+      }
+    }
+    aggregation_configs {
+      intrinsic_uri: "federated_sum"
+      intrinsic_args {
+        input_tensor {
+          name: "bar"
+          dtype: DT_FLOAT
+          shape {}
+        }
+      }
+      output_tensors {
+        name: "bar_out"
+        dtype: DT_FLOAT
+        shape {}
+      }
+    }
+  )pb");
+  auto protocol = CreateProtocol(config_message);
+  EXPECT_CALL(callback_, AcceptClients);
+  EXPECT_THAT(protocol->Start(2), IsOk());
+
+  // Expect two inputs.
+  auto parser1 = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser1, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_INT32, {2, 3},
+                          CreateTestData({4, 3, 11, 7, 1, 6}));
+  }));
+  EXPECT_CALL(*parser1, GetTensor(StrEq("bar"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {}, CreateTestData({1.f}));
+  }));
+
+  auto parser2 = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser2, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_INT32, {2, 3},
+                          CreateTestData({1, 8, 2, 10, 13, 2}));
+  }));
+  EXPECT_CALL(*parser2, GetTensor(StrEq("bar"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {}, CreateTestData({2.f}));
+  }));
+
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_))
+      .WillOnce(Return(ByMove(std::move(parser1))))
+      .WillOnce(Return(ByMove(std::move(parser2))));
+
+  EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(OK)));
+  EXPECT_CALL(callback_, CloseClient(Eq(1), IsCode(OK)));
+
+  // Handle the inputs.
+  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "num_clients_pending: 1 num_clients_completed: 1 "
+                  "num_inputs_aggregated_and_included: 1")));
+
+  EXPECT_THAT(protocol->ReceiveClientInput(1, absl::Cord{}), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+
+  // Complete the protocol.
+  // Verify that the checkpoint builder is created.
+  auto& checkpoint_builder = ExpectCheckpointBuilder();
+
+  // Verify that foo_out and bar_out tensors are added to the result checkpoint
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("foo_out"), IsTensor({2, 3}, {5, 11, 13, 17, 14, 8})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {3.f})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder, Build()).WillOnce(Return(absl::Cord{}));
+
+  // Verify that the Complete callback method is called.
+  EXPECT_CALL(callback_, Complete);
+
+  EXPECT_THAT(protocol->Complete(), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+}
+
+TEST_F(SimpleAggregationProtocolTest, Complete_ProtocolNotStarted) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_THAT(protocol->Complete(), IsCode(FAILED_PRECONDITION));
+}
+
+TEST_F(SimpleAggregationProtocolTest, Abort_NoInputsReceived) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_CALL(callback_, AcceptClients(0, 2, _));
+  EXPECT_THAT(protocol->Start(2), IsOk());
+
+  EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(ABORTED)));
+  EXPECT_CALL(callback_, CloseClient(Eq(1), IsCode(ABORTED)));
+  EXPECT_THAT(protocol->Abort(), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 2")));
+}
+
+TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_CALL(callback_, AcceptClients(0, 2, _));
+  EXPECT_THAT(protocol->Start(2), IsOk());
+
+  auto parser = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_INT32, {}, CreateTestData({1}));
+  }));
+
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_))
+      .WillOnce(Return(ByMove(std::move(parser))));
+
+  // Receive input for the client #1
+  EXPECT_CALL(callback_, CloseClient(Eq(1), IsCode(OK)));
+  EXPECT_THAT(protocol->ReceiveClientInput(1, absl::Cord{}), IsOk());
+
+  // The client #0 should be aborted on Abort().
+  EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(ABORTED)));
+  EXPECT_THAT(protocol->Abort(), IsOk());
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "num_clients_aborted: 1 num_clients_completed:1 "
+                  "num_inputs_discarded: 1")));
+}
+
+TEST_F(SimpleAggregationProtocolTest, Abort_ProtocolNotStarted) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_THAT(protocol->Abort(), IsCode(FAILED_PRECONDITION));
 }
 
 }  // namespace

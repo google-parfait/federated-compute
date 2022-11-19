@@ -176,6 +176,8 @@ absl::string_view SimpleAggregationProtocol::ClientStateDebugString(
       return "CLIENT_COMPLETED";
     case CLIENT_FAILED:
       return "CLIENT_FAILED";
+    case CLIENT_ABORTED:
+      return "CLIENT_ABORTED";
     case CLIENT_DISCARDED:
       return "CLIENT_DISCARDED";
   }
@@ -219,10 +221,15 @@ void SimpleAggregationProtocol::SetClientState(int64_t client_id,
   FCP_CHECK(from_state != to_state);
   if (from_state == CLIENT_RECEIVED_INPUT_AND_PENDING) {
     num_clients_received_and_pending_--;
+  } else if (from_state == CLIENT_COMPLETED) {
+    FCP_CHECK(to_state == CLIENT_DISCARDED)
+        << "Client state can't be changed from CLIENT_COMPLETED to "
+        << ClientStateDebugString(to_state);
+    num_clients_aggregated_--;
   } else {
     FCP_CHECK(from_state == CLIENT_PENDING)
         << "Client state can't be changed from "
-        << ClientStateDebugString(client_states_[client_id]);
+        << ClientStateDebugString(from_state);
   }
   client_states_[client_id] = to_state;
   switch (to_state) {
@@ -237,6 +244,9 @@ void SimpleAggregationProtocol::SetClientState(int64_t client_id,
       break;
     case CLIENT_FAILED:
       num_clients_failed_++;
+      break;
+    case CLIENT_ABORTED:
+      num_clients_aborted_++;
       break;
     case CLIENT_DISCARDED:
       num_clients_discarded_++;
@@ -384,8 +394,13 @@ absl::Status SimpleAggregationProtocol::ReceiveClientInput(int64_t client_id,
   // Update the state post aggregation.
   {
     absl::MutexLock lock(&state_mu_);
-    SetClientState(client_id, client_completion_state);
-    callback_->CloseClient(client_id, client_completion_status);
+    // Change the client state only if the current state is still
+    // CLIENT_RECEIVED_INPUT_AND_PENDING, meaning that the client wasn't already
+    // closed by a concurrent Complete or Abort call.
+    if (client_states_[client_id] == CLIENT_RECEIVED_INPUT_AND_PENDING) {
+      SetClientState(client_id, client_completion_state);
+      callback_->CloseClient(client_id, client_completion_status);
+    }
   }
   return absl::OkStatus();
 }
@@ -418,26 +433,68 @@ absl::Status SimpleAggregationProtocol::CloseClient(
 
 absl::Status SimpleAggregationProtocol::Complete() {
   absl::Cord result;
+  std::vector<int64_t> client_ids_to_close;
   {
     absl::MutexLock lock(&state_mu_);
     FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
     FCP_ASSIGN_OR_RETURN(result, CreateReport());
     SetProtocolState(PROTOCOL_COMPLETED);
-    // TODO(team): Close all pending clients, all pending and completed
-    // clients should become discarded.
+    for (int64_t client_id = 0; client_id < client_states_.size();
+         client_id++) {
+      switch (client_states_[client_id]) {
+        case CLIENT_PENDING:
+          SetClientState(client_id, CLIENT_ABORTED);
+          client_ids_to_close.push_back(client_id);
+          break;
+        case CLIENT_RECEIVED_INPUT_AND_PENDING:
+          SetClientState(client_id, CLIENT_DISCARDED);
+          client_ids_to_close.push_back(client_id);
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  for (int64_t client_id : client_ids_to_close) {
+    callback_->CloseClient(
+        client_id, absl::AbortedError("The protocol has completed before the "
+                                      "client input has been aggregated."));
   }
   callback_->Complete(std::move(result));
   return absl::OkStatus();
 }
 
 absl::Status SimpleAggregationProtocol::Abort() {
+  std::vector<int64_t> client_ids_to_close;
   {
     absl::MutexLock lock(&state_mu_);
     FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
-    SetProtocolState(PROTOCOL_ABORTED);
     aggregation_finished_ = true;
-    // TODO(team): Close all pending clients, all pending and completed
-    // clients should become discarded.
+    SetProtocolState(PROTOCOL_ABORTED);
+    for (int64_t client_id = 0; client_id < client_states_.size();
+         client_id++) {
+      switch (client_states_[client_id]) {
+        case CLIENT_PENDING:
+          SetClientState(client_id, CLIENT_ABORTED);
+          client_ids_to_close.push_back(client_id);
+          break;
+        case CLIENT_RECEIVED_INPUT_AND_PENDING:
+          SetClientState(client_id, CLIENT_DISCARDED);
+          client_ids_to_close.push_back(client_id);
+          break;
+        case CLIENT_COMPLETED:
+          SetClientState(client_id, CLIENT_DISCARDED);
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  for (int64_t client_id : client_ids_to_close) {
+    callback_->CloseClient(
+        client_id, absl::AbortedError("The protocol has aborted before the "
+                                      "client input has been aggregated."));
   }
   return absl::OkStatus();
 }
@@ -451,10 +508,12 @@ StatusMessage SimpleAggregationProtocol::GetStatus() {
   message.set_num_clients_completed(num_clients_completed);
   message.set_num_clients_failed(num_clients_failed_);
   message.set_num_clients_pending(client_states_.size() -
-                                  num_clients_completed - num_clients_failed_);
+                                  num_clients_completed - num_clients_failed_ -
+                                  num_clients_aborted_);
   message.set_num_inputs_aggregated_and_included(num_clients_aggregated_);
   message.set_num_inputs_aggregated_and_pending(
       num_clients_received_and_pending_);
+  message.set_num_clients_aborted(num_clients_aborted_);
   message.set_num_inputs_discarded(num_clients_discarded_);
   return message;
 }

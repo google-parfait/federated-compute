@@ -127,8 +127,11 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
     // Client failed either by being closed with an error or by submitting a
     // malformed input.
     CLIENT_FAILED,
-    // Client input has been received but discarded, for example due to being
-    // received after Complete or Abort protocol calls.
+    // Client which has been aborted by the server before its input has been
+    // received.
+    CLIENT_ABORTED,
+    // Client input has been received but discarded, for example due to the
+    // protocol Abort method being called.
     CLIENT_DISCARDED
   };
 
@@ -193,6 +196,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   uint64_t num_clients_received_and_pending_ ABSL_GUARDED_BY(state_mu_) = 0;
   uint64_t num_clients_aggregated_ ABSL_GUARDED_BY(state_mu_) = 0;
   uint64_t num_clients_failed_ ABSL_GUARDED_BY(state_mu_) = 0;
+  uint64_t num_clients_aborted_ ABSL_GUARDED_BY(state_mu_) = 0;
   uint64_t num_clients_discarded_ ABSL_GUARDED_BY(state_mu_) = 0;
 
   // Intrinsics are immutable and shouldn't be guarded by the either of mutexes.
