@@ -61,7 +61,16 @@ absl::StatusOr<CacheManifest> FileBackedResourceCache::ReadInternal() {
     return *data.value();
   }
   log_manager_.LogDiag(ProdDiagCode::RESOURCE_CACHE_MANIFEST_READ_FAILED);
-  FCP_RETURN_IF_ERROR(Initialize(/*reset=*/true));
+  // Ignore the status from DeleteManifest() even if it's an error, and bubble
+  // up the status from pds. We call DeleteManifest() here instead of
+  // Initialize(), as Initialize() calls ReadInternal(), potentially causing
+  // infinite recursion. This means that any resources that were tracked by the
+  // deleted manifest will not be cleaned up until the next time Initialize() is
+  // called.
+  auto ignored_status = DeleteManifest();
+  if (!ignored_status.ok()) {
+    FCP_LOG(INFO) << "Failed to delete manifest: " << ignored_status.ToString();
+  }
   return absl::InternalError(
       absl::StrCat("Failed to read from database, with error message: ",
                    data.status().message()));
@@ -72,7 +81,17 @@ absl::Status FileBackedResourceCache::WriteInternal(
   absl::Status status = pds_->Write(std::move(manifest));
   if (!status.ok()) {
     log_manager_.LogDiag(ProdDiagCode::RESOURCE_CACHE_MANIFEST_WRITE_FAILED);
-    FCP_RETURN_IF_ERROR(Initialize(/*reset=*/true));
+    // Ignore the status returned by DeleteManifest even if it's an error and
+    // instead return the status from pds. We call DeleteManifest() here instead
+    // of Initialize(), as Initialize() calls WriteInternal(), potentially
+    // causing infinite recursion. This means that any resources that were
+    // tracked by the deleted manifest will not be cleaned up until the next
+    // time Initialize() is called.
+    auto ignored_status = DeleteManifest();
+    if (!ignored_status.ok()) {
+      FCP_LOG(INFO) << "Failed to delete manifest: "
+                    << ignored_status.ToString();
+    }
   }
   return status;
 }
@@ -87,15 +106,19 @@ FileBackedResourceCache::Create(absl::string_view base_dir,
   // absl::string_view.
   std::filesystem::path cache_root_path((std::string(cache_dir)));
   if (!cache_root_path.is_absolute()) {
+    log_manager->LogDiag(
+        ProdDiagCode::RESOURCE_CACHE_CACHE_ROOT_PATH_NOT_ABSOLUTE);
     return absl::InvalidArgumentError(
         absl::StrCat("The provided path: ", cache_dir,
-                     "is invalid. The path must be absolute"));
+                     " is invalid. The path must be absolute"));
   }
   std::filesystem::path cache_dir_path =
       cache_root_path / kParentDir / kCacheDir;
   std::error_code error;
   std::filesystem::create_directories(cache_dir_path, error);
   if (error.value() != 0) {
+    log_manager->LogDiag(
+        ProdDiagCode::RESOURCE_CACHE_FAILED_TO_CREATE_CACHE_DIR);
     return absl::InternalError(absl::StrCat(
         "Failed to create FileBackedResourceCache cache directory ",
         cache_dir_path.string()));
@@ -103,13 +126,15 @@ FileBackedResourceCache::Create(absl::string_view base_dir,
   // Create <files root>/fcp/cache_manifest.pb.s
   std::filesystem::path manifest_path((std::string(base_dir)));
   if (!manifest_path.is_absolute()) {
+    log_manager->LogDiag(ProdDiagCode::RESOURCE_CACHE_INVALID_MANIFEST_PATH);
     return absl::InvalidArgumentError(
         absl::StrCat("The provided path: ", manifest_path.string(),
-                     "is invalid. The path must start with \"/\""));
+                     " is invalid. The path must start with \"/\""));
   }
   manifest_path /= kParentDir;
   std::filesystem::create_directories(manifest_path, error);
   if (error.value() != 0) {
+    log_manager->LogDiag(RESOURCE_CACHE_FAILED_TO_CREATE_MANIFEST_DIR);
     return absl::InternalError(
         absl::StrCat("Failed to create directory ", manifest_path.string()));
   }
@@ -124,7 +149,7 @@ FileBackedResourceCache::Create(absl::string_view base_dir,
           manifest_path, log_manager, clock, max_cache_size_bytes));
   {
     absl::MutexLock lock(&resource_cache->mutex_);
-    FCP_RETURN_IF_ERROR(resource_cache->Initialize(/*reset=*/false));
+    FCP_RETURN_IF_ERROR(resource_cache->Initialize());
   }
 
   return resource_cache;
@@ -227,33 +252,54 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
   return FileBackedResourceCache::ResourceAndMetadata{*contents, metadata};
 }
 
-absl::Status FileBackedResourceCache::Initialize(bool reset) {
-  // Delete the manifest, forcing re-initialization and all cached resources to
-  // be cleaned up.
-  if (reset && std::filesystem::exists(manifest_path_)) {
-    std::error_code error;
-    std::filesystem::remove(manifest_path_, error);
-    if (error.value() != 0) {
-      return absl::InternalError("Failed to reset manifest!");
-    }
-  }
+absl::Status FileBackedResourceCache::Initialize() {
+  absl::string_view errorInInitializePrefix = "Error in initialize: ";
   std::string pds_path = manifest_path_.string();
   if (!std::filesystem::exists(pds_path)) {
     std::ofstream ofs(pds_path);
   }
-  FCP_ASSIGN_OR_RETURN(absl::StatusOr<int64_t> file_size,
-                       storage_->GetFileSize(pds_path));
+  absl::StatusOr<int64_t> file_size = storage_->GetFileSize(pds_path);
+  if (!file_size.ok()) {
+    log_manager_.LogDiag(
+        ProdDiagCode::RESOURCE_CACHE_INIT_FAILED_TO_GET_MANIFEST_SIZE);
+    return absl::InternalError(absl::StrCat(
+        errorInInitializePrefix, "Failed to get file size of cache manifest: ",
+        file_size.status().message()));
+  }
   // Initialize db if it's not initialized.
-  if (file_size.value() == 0) {
-    FCP_RETURN_IF_ERROR(WriteInternal(std::make_unique<CacheManifest>()));
+  if (*file_size == 0) {
+    auto status = WriteInternal(std::make_unique<CacheManifest>());
+    if (!status.ok()) {
+      log_manager_.LogDiag(
+          ProdDiagCode::RESOURCE_CACHE_INIT_FAILED_TO_INITIALIZE_MANIFEST);
+      return absl::InternalError(absl::StrCat(
+          errorInInitializePrefix,
+          "Failed to initialize cache manifest for the first time: ",
+          status.message()));
+    }
   }
   // Then run CleanUp. Even if our manifest was empty we still might have
   // stranded cache files to delete, i.e. in the case that the manifest was
   // deleted but the cache dir was not deleted.
-  FCP_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
-  FCP_RETURN_IF_ERROR(CleanUp(std::nullopt, manifest));
-  FCP_RETURN_IF_ERROR(pds_->Write(std::make_unique<CacheManifest>(manifest)));
-
+  absl::StatusOr<CacheManifest> manifest = ReadInternal();
+  if (!manifest.ok()) {
+    return absl::InternalError(
+        absl::StrCat(errorInInitializePrefix,
+                     "Failed to read manifest: ", manifest.status().message()));
+  }
+  auto cleanup_status = CleanUp(std::nullopt, *manifest);
+  if (!cleanup_status.ok()) {
+    log_manager_.LogDiag(ProdDiagCode::RESOURCE_CACHE_INIT_FAILED_CLEANUP);
+    return absl::InternalError(absl::StrCat(
+        errorInInitializePrefix,
+        "Failed to clean up resource cache: ", cleanup_status.message()));
+  }
+  auto write_status = WriteInternal(std::make_unique<CacheManifest>(*manifest));
+  if (!write_status.ok()) {
+    return absl::InternalError(absl::StrCat(
+        errorInInitializePrefix,
+        "Failed to write cleaned up resource cache: ", write_status.message()));
+  }
   return absl::OkStatus();
 }
 
@@ -271,14 +317,17 @@ absl::Status FileBackedResourceCache::CleanUp(
   // We don't have any subdirectories in the cache, so we can use a directory
   // iterator.
   std::error_code directory_error;
-  for (auto& file :
-       std::filesystem::directory_iterator(cache_dir_path_, directory_error)) {
-    files_to_delete.insert(cache_dir_path_ / file);
-  }
-
+  auto cache_dir_iterator =
+      std::filesystem::directory_iterator(cache_dir_path_, directory_error);
   if (directory_error.value() != 0) {
-    return absl::InternalError(absl::StrCat("Error iterating over cache dir: ",
-                                            directory_error.message()));
+    log_manager_.LogDiag(
+        ProdDiagCode::RESOURCE_CACHE_CLEANUP_FAILED_TO_ITERATE_OVER_CACHE_DIR);
+    return absl::InternalError(absl::StrCat(
+        "Error iterating over cache dir. Error code: ", directory_error.value(),
+        " message: ", directory_error.message()));
+  }
+  for (auto& file : cache_dir_iterator) {
+    files_to_delete.insert(cache_dir_path_ / file);
   }
 
   int64_t max_allowed_size_bytes = max_cache_size_bytes_;
@@ -310,10 +359,13 @@ absl::Status FileBackedResourceCache::CleanUp(
     std::error_code remove_error;
     std::filesystem::remove(file, remove_error);
     // We intentionally loop through all files and attempt to remove as many as
-    // we can, then return the last error we saw.
-    if (remove_error.value() != 0) {
-      filesystem_status = absl::InternalError(
-          absl::StrCat("Failed to delete file: ", remove_error.message()));
+    // we can, then return the first error we saw.
+    if (remove_error.value() != 0 && filesystem_status.ok()) {
+      log_manager_.LogDiag(
+          ProdDiagCode::RESOURCE_CACHE_CLEANUP_FAILED_TO_DELETE_CACHED_FILE);
+      filesystem_status = absl::InternalError(absl::StrCat(
+          "Failed to delete file. Error code: ", remove_error.value(),
+          ", message: ", remove_error.message()));
     }
   }
 
@@ -337,11 +389,14 @@ absl::Status FileBackedResourceCache::CleanUp(
     // the total size of all of the files inside a directory.
     cache_dir_size += std::filesystem::file_size(
         cache_dir_path_ / resource.file_name(), file_size_error);
-    // Loop through as many as we can and if there's an error, return the most
-    // recent one.
-    if (file_size_error.value() != 0) {
-      filesystem_status = absl::InternalError(
-          absl::StrCat("Error getting file size: ", file_size_error.message()));
+    // Loop through as many as we can and if there's an error, return the first
+    // error we saw.
+    if (file_size_error.value() != 0 && filesystem_status.ok()) {
+      log_manager_.LogDiag(
+          ProdDiagCode::RESOURCE_CACHE_CLEANUP_FAILED_TO_GET_FILE_SIZE);
+      filesystem_status = absl::InternalError(absl::StrCat(
+          "Error getting file size. Error code: ", file_size_error.value(),
+          ", message: ", file_size_error.message()));
     }
   }
 
@@ -364,10 +419,20 @@ absl::Status FileBackedResourceCache::CleanUp(
       std::error_code remove_error;
       uintmax_t file_size =
           std::filesystem::file_size(file_to_remove, remove_error);
+      if (remove_error.value() != 0 && filesystem_status.ok()) {
+        log_manager_.LogDiag(
+            ProdDiagCode::RESOURCE_CACHE_CLEANUP_FAILED_TO_GET_FILE_SIZE);
+        filesystem_status = absl::InternalError(absl::StrCat(
+            "Error getting file size. Error code: ", remove_error.value(),
+            ", message: ", remove_error.message()));
+      }
       std::filesystem::remove(file_to_remove, remove_error);
       if (remove_error.value() != 0 && filesystem_status.ok()) {
-        filesystem_status = absl::InternalError(
-            absl::StrCat("Failed to delete file: ", remove_error.message()));
+        log_manager_.LogDiag(
+            ProdDiagCode::RESOURCE_CACHE_CLEANUP_FAILED_TO_GET_FILE_SIZE);
+        filesystem_status = absl::InternalError(absl::StrCat(
+            "Failed to delete file. Error code: ", remove_error.value(),
+            ", message: ", remove_error.message()));
       }
       cache_dir_size -= file_size;
       if (cache_dir_size < max_allowed_size_bytes) break;
@@ -376,6 +441,21 @@ absl::Status FileBackedResourceCache::CleanUp(
 
   FCP_RETURN_IF_ERROR(filesystem_status);
 
+  return absl::OkStatus();
+}
+
+absl::Status FileBackedResourceCache::DeleteManifest() {
+  if (std::filesystem::exists(manifest_path_)) {
+    std::error_code error;
+    std::filesystem::remove(manifest_path_, error);
+    if (error.value() != 0) {
+      log_manager_.LogDiag(
+          ProdDiagCode::RESOURCE_CACHE_FAILED_TO_DELETE_MANIFEST);
+      return absl::InternalError(
+          absl::StrCat("Failed to delete manifest! error code: ", error.value(),
+                       ", message: ", error.message()));
+    }
+  }
   return absl::OkStatus();
 }
 

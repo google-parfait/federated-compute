@@ -162,6 +162,16 @@ class FakeEventPublisher : public EventPublisher {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
+  void PublishNonfatalInitializationError(
+      absl::string_view error_message) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
+  }
+
+  void PublishFatalInitializationError(
+      absl::string_view error_message) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
+  }
+
   void PublishEligibilityEvalCheckinIoError(
       absl::string_view error_message, const NetworkStats& network_stats,
       absl::Duration phase_duration) override {

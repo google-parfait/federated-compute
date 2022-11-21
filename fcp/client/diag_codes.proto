@@ -288,6 +288,42 @@ enum ProdDiagCode {
   /* Logged when a FileBackedResourceCache fails to write the cached resource to
    * storage. */
   RESOURCE_CACHE_RESOURCE_WRITE_FAILED = 1996;
+  /* Logged when a FileBackedResourceCache is initialized without an absolute
+   * root path. */
+  RESOURCE_CACHE_CACHE_ROOT_PATH_NOT_ABSOLUTE = 1995;
+  /* Logged when a FileBackedResourceCache fails to create the cache dir on
+   * initialization. */
+  RESOURCE_CACHE_FAILED_TO_CREATE_CACHE_DIR = 1994;
+  /* Logged when a FileBackedResourceCache is initialized with an invalid cache
+   * manifest path. */
+  RESOURCE_CACHE_INVALID_MANIFEST_PATH = 1993;
+  /* Logged when a FileBackedResourceCache fails to create the parent directory
+   * of the cache manifest. */
+  RESOURCE_CACHE_FAILED_TO_CREATE_MANIFEST_DIR = 1992;
+  /* Logged when a FileBackedResourceCache fails to reset the cache manifest. */
+  RESOURCE_CACHE_FAILED_TO_RESET_MANIFEST = 1991;
+  /* Logged when a FileBackedResourceCache fails to get the size of the cache
+   * manifest. */
+  RESOURCE_CACHE_INIT_FAILED_TO_GET_MANIFEST_SIZE = 1990;
+  /* Logged when a FileBackedResourceCache fails to iterate over the cache
+   * directory during cleanup.
+   */
+  RESOURCE_CACHE_CLEANUP_FAILED_TO_ITERATE_OVER_CACHE_DIR = 1989;
+  /* Logged when a FileBackedResourceCache fails to delete a cached file during
+   * cleanup. */
+  RESOURCE_CACHE_CLEANUP_FAILED_TO_DELETE_CACHED_FILE = 1988;
+  /* Logged when a FileBackedResourceCache fails to get the file size of a
+   * cached file. */
+  RESOURCE_CACHE_CLEANUP_FAILED_TO_GET_FILE_SIZE = 1987;
+  /* Logged when a FileBackedResourceCache fails to initialize the cache
+   * manifest when it doesn't already exist. */
+  RESOURCE_CACHE_INIT_FAILED_TO_INITIALIZE_MANIFEST = 1986;
+  /* Logged when a FileBackedResourceCache fails to delete an existing cache
+   * manifest due to an error. */
+  RESOURCE_CACHE_FAILED_TO_DELETE_MANIFEST = 1985;
+  /* Logged when a FileBackedResourceCache fails in some way during cleanup in
+   * initialization. */
+  RESOURCE_CACHE_INIT_FAILED_CLEANUP = 1984;
 
   reserved 25;
 }

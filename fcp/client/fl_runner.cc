@@ -1236,6 +1236,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     const std::string& population_name, const std::string& retry_token,
     const std::string& client_version,
     const std::string& attestation_measurement) {
+  // TODO(team): Log opstats initialization errors via
+  //  LogNonfatalInitializationError().
   auto opstats_logger =
       engine::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
                                   session_name, population_name);
@@ -1256,16 +1258,32 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return env_deps->ShouldAbort(absl::Now(), timing_config.polling_period);
   };
 
+  PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
+                               log_manager, flags);
+
   Clock* clock = Clock::RealClock();
   std::unique_ptr<cache::ResourceCache> resource_cache;
   if (flags->max_resource_cache_size_bytes() > 0) {
     // Anything that goes wrong in FileBackedResourceCache::Create is a
     // programmer error.
-    FCP_ASSIGN_OR_RETURN(
-        resource_cache,
-        cache::FileBackedResourceCache::Create(
+    absl::StatusOr<std::unique_ptr<cache::ResourceCache>>
+        resource_cache_internal = cache::FileBackedResourceCache::Create(
             env_deps->GetBaseDir(), env_deps->GetCacheDir(), log_manager, clock,
-            flags->max_resource_cache_size_bytes()));
+            flags->max_resource_cache_size_bytes());
+    if (!resource_cache_internal.ok()) {
+      auto resource_init_failed_status = absl::Status(
+          resource_cache_internal.status().code(),
+          absl::StrCat("Failed to initialize FileBackedResourceCache: ",
+                       resource_cache_internal.status().ToString()));
+      if (flags->resource_cache_initialization_error_is_fatal()) {
+        phase_logger.LogFatalInitializationError(resource_init_failed_status);
+        return resource_init_failed_status;
+      }
+      // We log an error but otherwise proceed as if the cache was disabled.
+      phase_logger.LogNonfatalInitializationError(resource_init_failed_status);
+    } else {
+      resource_cache = std::move(*resource_cache_internal);
+    }
   }
 
   std::unique_ptr<::fcp::client::http::HttpClient> http_client =
@@ -1312,8 +1330,6 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return absl::InternalError("No FederatedProtocol enabled.");
 #endif
   }
-  PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
-                               log_manager, flags);
   std::unique_ptr<FederatedSelectManager> federated_select_manager;
   if (http_client != nullptr && flags->enable_federated_select()) {
     federated_select_manager = std::make_unique<HttpFederatedSelectManager>(

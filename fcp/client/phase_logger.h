@@ -34,6 +34,12 @@ class PhaseLogger {
 
   // Called when a run was started but immediately aborted.
   virtual void LogTaskNotStarted(absl::string_view error_message) = 0;
+  // Called when a run was started but the runtime failed to initialize a
+  // noncritical component, and execution continue.
+  virtual void LogNonfatalInitializationError(absl::Status error_status) = 0;
+  // Called when a run was started but the runtime failed to initialize a
+  // component, and execution was halted.
+  virtual void LogFatalInitializationError(absl::Status error_status) = 0;
 
   // Eligibility eval check-in phase.
   // Called when an eligibility eval check-in starts.

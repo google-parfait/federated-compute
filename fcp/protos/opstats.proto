@@ -258,6 +258,12 @@ message OperationalStats {
       // Client uploaded failure report to the server
       // Always preceded by EVENT_KIND_FAILURE_UPLOAD_STARTED.
       EVENT_KIND_FAILURE_UPLOAD_FINISHED = 47;
+
+      // Client failed to initialize a component, but execution was not halted.
+      EVENT_KIND_INITIALIZATION_ERROR_NONFATAL = 50;
+
+      // Client failed to initialize a component, and execution was halted.
+      EVENT_KIND_INITIALIZATION_ERROR_FATAL = 51;
     }
 
     EventKind event_type = 1;

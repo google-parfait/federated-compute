@@ -46,6 +46,8 @@ class PhaseLoggerImpl : public PhaseLogger {
       const NetworkStats& network_stats) override;
   void SetModelIdentifier(absl::string_view model_identifier) override;
   void LogTaskNotStarted(absl::string_view error_message) override;
+  void LogNonfatalInitializationError(absl::Status error_status) override;
+  void LogFatalInitializationError(absl::Status error_status) override;
 
   // Eligibility eval check-in phase.
   void LogEligibilityEvalCheckinStarted() override;

@@ -108,6 +108,10 @@ class MockEventPublisher : public EventPublisher {
               (override));
   MOCK_METHOD(void, PublishTaskNotStarted, (absl::string_view error_message),
               (override));
+  MOCK_METHOD(void, PublishNonfatalInitializationError,
+              (absl::string_view error_message), (override));
+  MOCK_METHOD(void, PublishFatalInitializationError,
+              (absl::string_view error_message), (override));
   MOCK_METHOD(void, PublishEligibilityEvalCheckinIoError,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
@@ -597,6 +601,10 @@ class MockPhaseLogger : public PhaseLogger {
   MOCK_METHOD(void, SetModelIdentifier, (absl::string_view model_identifier),
               (override));
   MOCK_METHOD(void, LogTaskNotStarted, (absl::string_view error_message),
+              (override));
+  MOCK_METHOD(void, LogNonfatalInitializationError, (absl::Status error_status),
+              (override));
+  MOCK_METHOD(void, LogFatalInitializationError, (absl::Status error_status),
               (override));
   MOCK_METHOD(void, LogEligibilityEvalCheckinStarted, (), (override));
   MOCK_METHOD(void, LogEligibilityEvalCheckinIOError,

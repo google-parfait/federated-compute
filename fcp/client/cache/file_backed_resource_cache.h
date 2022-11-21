@@ -109,9 +109,11 @@ class FileBackedResourceCache : public ResourceCache {
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Initializes the CacheManifest ProtoDataStore db if necessesary, then runs
-  // CleanUp(). If `reset` is true, the CacheManifest will be reset and all
-  // cached resources will be removed.
-  absl::Status Initialize(bool reset) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  // CleanUp().
+  absl::Status Initialize() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Deletes the cache manifest.
+  absl::Status DeleteManifest() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // TTLs any cached resources stored past their expiry, then deletes any
   // stranded files without matching manifest entries, and any entries without

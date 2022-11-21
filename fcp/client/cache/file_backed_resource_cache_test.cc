@@ -94,6 +94,9 @@ class FileBackedResourceCacheTest : public testing::Test {
 };
 
 TEST_F(FileBackedResourceCacheTest, FailToCreateParentDirectoryInBaseDir) {
+  EXPECT_CALL(
+      log_manager_,
+      LogDiag(ProdDiagCode::RESOURCE_CACHE_FAILED_TO_CREATE_MANIFEST_DIR));
   ASSERT_THAT(
       FileBackedResourceCache::Create("/proc/0", root_cache_dir_, &log_manager_,
                                       &clock_, kMaxCacheSizeBytes),
@@ -101,6 +104,8 @@ TEST_F(FileBackedResourceCacheTest, FailToCreateParentDirectoryInBaseDir) {
 }
 
 TEST_F(FileBackedResourceCacheTest, FailToCreateParentDirectoryInCacheDir) {
+  EXPECT_CALL(log_manager_,
+              LogDiag(ProdDiagCode::RESOURCE_CACHE_FAILED_TO_CREATE_CACHE_DIR));
   ASSERT_THAT(
       FileBackedResourceCache::Create(root_files_dir_, "/proc/0", &log_manager_,
                                       &clock_, kMaxCacheSizeBytes),
@@ -108,6 +113,8 @@ TEST_F(FileBackedResourceCacheTest, FailToCreateParentDirectoryInCacheDir) {
 }
 
 TEST_F(FileBackedResourceCacheTest, InvalidBaseDirRelativePath) {
+  EXPECT_CALL(log_manager_,
+              LogDiag(ProdDiagCode::RESOURCE_CACHE_INVALID_MANIFEST_PATH));
   ASSERT_THAT(FileBackedResourceCache::Create("relative/base", root_cache_dir_,
                                               &log_manager_, &clock_,
                                               kMaxCacheSizeBytes),
@@ -115,6 +122,9 @@ TEST_F(FileBackedResourceCacheTest, InvalidBaseDirRelativePath) {
 }
 
 TEST_F(FileBackedResourceCacheTest, InvalidCacheDirRelativePath) {
+  EXPECT_CALL(
+      log_manager_,
+      LogDiag(ProdDiagCode::RESOURCE_CACHE_CACHE_ROOT_PATH_NOT_ABSOLUTE));
   ASSERT_THAT(FileBackedResourceCache::Create(root_files_dir_, "relative/cache",
                                               &log_manager_, &clock_,
                                               kMaxCacheSizeBytes),
@@ -212,17 +222,22 @@ TEST_F(FileBackedResourceCacheTest,
     ASSERT_THAT(resource_cache, IsCode(INTERNAL));
   }
 
-  // Failing to read the manifest should have reset it and cleaned up the cache
-  // dir.
-  ASSERT_EQ(NumFilesInDir(cache_dir_), 0);
+  // Failing to read the manifest should have deleted it.
+  ASSERT_EQ(std::filesystem::exists(manifest_path_), false);
+  // But there will still be files in the cache dir. These files will be cleaned
+  // up the next time the cache is initialized.
+  ASSERT_EQ(NumFilesInDir(cache_dir_), 1);
 
   // We should be able to create a new FileBackedResourceCache successfully
-  // since it was reset.
+  // since the garbage manifest was deleted.
   {
     auto resource_cache = FileBackedResourceCache::Create(
         root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
         kMaxCacheSizeBytes);
     ASSERT_OK(resource_cache);
+    // Initializing the cache should have deleted the untracked files in the
+    // cache dir.
+    ASSERT_EQ(NumFilesInDir(cache_dir_), 0);
     EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
     ASSERT_THAT((*resource_cache)->Get(kKey1, std::nullopt), IsCode(NOT_FOUND));
   }
@@ -257,9 +272,11 @@ TEST_F(FileBackedResourceCacheTest,
     ASSERT_THAT(resource_cache, IsCode(INTERNAL));
   }
 
-  // Failing to read the manifest should have reset it and cleaned up the cache
-  // dir.
-  ASSERT_EQ(NumFilesInDir(cache_dir_), 0);
+  // Failing to read the manifest should have deleted it.
+  ASSERT_EQ(std::filesystem::exists(manifest_path_), false);
+  // But there will still be files in the cache dir. These files will be cleaned
+  // up the next time the cache is initialized.
+  ASSERT_EQ(NumFilesInDir(cache_dir_), 1);
 
   // We should be able to create a new FileBackedResourceCache successfully
   // since it was reset.
@@ -267,9 +284,13 @@ TEST_F(FileBackedResourceCacheTest,
     auto resource_cache = FileBackedResourceCache::Create(
         root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
         kMaxCacheSizeBytes);
+    // Initializing the cache should have deleted the untracked files in the
+    // cache dir.
+    ASSERT_EQ(NumFilesInDir(cache_dir_), 0);
     ASSERT_OK(resource_cache);
     ASSERT_OK(
         (*resource_cache)->Put(kKey1, Resource1(), Metadata(), absl::Hours(1)));
+    ASSERT_EQ(NumFilesInDir(cache_dir_), 1);
   }
 }
 

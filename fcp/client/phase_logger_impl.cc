@@ -23,6 +23,8 @@
 namespace fcp {
 namespace client {
 namespace {
+constexpr absl::string_view kInitializationErrorPrefix =
+    "Error during initialization: ";
 constexpr absl::string_view kEligibilityCheckinErrorPrefix =
     "Error during eligibility check-in: ";
 constexpr absl::string_view kEligibilityComputationErrorPrefix =
@@ -57,6 +59,25 @@ void PhaseLoggerImpl::LogTaskNotStarted(absl::string_view error_message) {
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED,
       std::string(error_message));
+}
+
+void PhaseLoggerImpl::LogNonfatalInitializationError(
+    absl::Status error_status) {
+  std::string error_message = GetErrorMessage(
+      error_status, kInitializationErrorPrefix, /* keep_error_message= */ true);
+  event_publisher_->PublishNonfatalInitializationError(error_message);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_INITIALIZATION_ERROR_FATAL,
+      error_message);
+}
+
+void PhaseLoggerImpl::LogFatalInitializationError(absl::Status error_status) {
+  std::string error_message = GetErrorMessage(
+      error_status, kInitializationErrorPrefix, /* keep_error_message= */ true);
+  event_publisher_->PublishFatalInitializationError(error_message);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_INITIALIZATION_ERROR_NONFATAL,
+      error_message);
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalCheckinStarted() {

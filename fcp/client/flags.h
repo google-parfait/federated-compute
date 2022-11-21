@@ -181,6 +181,13 @@ class Flags {
   // the next run.
   virtual int64_t max_resource_cache_size_bytes() const { return 0; }
 
+  // If true, an error during the initialization of the resource cache will
+  // publish a fatal initialization error instead of a nonfatal initialization
+  // error and halt execution.
+  virtual bool resource_cache_initialization_error_is_fatal() const {
+    return false;
+  }
+
   // The number of threads that TFLite interpreter will use.
   virtual int32_t num_threads_for_tflite() const { return 1; }
 

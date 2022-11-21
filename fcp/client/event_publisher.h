@@ -20,6 +20,7 @@
 #include <string>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "fcp/client/stats.h"
@@ -110,6 +111,15 @@ class EventPublisher {
                                     absl::Time start_time) = 0;
   // Publishes that the task didn't start.
   virtual void PublishTaskNotStarted(absl::string_view error_message) = 0;
+
+  // Publishes that the federated compute runtime failed to initialize a
+  // noncritical component, but execution continued.
+  virtual void PublishNonfatalInitializationError(
+      absl::string_view error_message) = 0;
+  // Publishes that the federated compute runtime failed to initialize a
+  // component, and execution was halted.
+  virtual void PublishFatalInitializationError(
+      absl::string_view error_message) = 0;
 
   // Publish that an IO error was encountered during eligibility eval check-in.
   virtual void PublishEligibilityEvalCheckinIoError(
