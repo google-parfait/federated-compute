@@ -111,3 +111,85 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "tensorflow_checkpoint_builder_factory",
+    srcs = ["tensorflow_checkpoint_builder_factory.cc"],
+    hdrs = ["tensorflow_checkpoint_builder_factory.h"],
+    copts = FCP_COPTS,
+    deps = [
+        ":checkpoint_writer",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/protocol:simple_aggregation_protocol",
+        "//fcp/base",
+        "//fcp/tensorflow:status",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@org_tensorflow//tensorflow/core/platform:env",
+        "@org_tensorflow//tensorflow/core/platform:status",
+    ],
+)
+
+cc_test(
+    name = "tensorflow_checkpoint_builder_factory_test",
+    srcs = ["tensorflow_checkpoint_builder_factory_test.cc"],
+    deps = [
+        ":tensorflow_checkpoint_builder_factory",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
+        "//fcp/tensorflow:status",
+        "//fcp/testing",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/c:checkpoint_reader",
+        "@org_tensorflow//tensorflow/c:tf_status_headers",
+        "@org_tensorflow//tensorflow/c:tf_status_helper",
+        "@org_tensorflow//tensorflow/core:framework",
+    ],
+)
+
+cc_library(
+    name = "tensorflow_checkpoint_parser_factory",
+    srcs = ["tensorflow_checkpoint_parser_factory.cc"],
+    hdrs = ["tensorflow_checkpoint_parser_factory.h"],
+    copts = FCP_COPTS,
+    deps = [
+        ":checkpoint_reader",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/protocol:simple_aggregation_protocol",
+        "//fcp/base",
+        "//fcp/tensorflow:status",
+        "@com_google_absl//absl/cleanup",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@org_tensorflow//tensorflow/core/platform:env",
+    ],
+)
+
+cc_test(
+    name = "tensorflow_checkpoint_parser_factory_test",
+    srcs = ["tensorflow_checkpoint_parser_factory_test.cc"],
+    deps = [
+        ":tensorflow_checkpoint_parser_factory",
+        "//fcp/aggregation/protocol:simple_aggregation_protocol",
+        "//fcp/aggregation/testing",
+        "//fcp/base",
+        "//fcp/tensorflow:status",
+        "//fcp/testing",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/cc:cc_ops",
+        "@org_tensorflow//tensorflow/core:tensorflow",
+    ],
+)
