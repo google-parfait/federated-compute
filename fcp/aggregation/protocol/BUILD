@@ -118,3 +118,39 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "secure_aggregation_protocol",
+    srcs = [
+        "secure_aggregation_protocol.cc",
+    ],
+    hdrs = [
+        "secure_aggregation_protocol.h",
+    ],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregation_protocol",
+        ":cc_proto",
+        ":configuration_cc_proto",
+        "//fcp/base",
+        "//fcp/base:scheduler",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
+    ],
+)
+
+cc_test(
+    name = "secure_aggregation_protocol_test",
+    srcs = ["secure_aggregation_protocol_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":configuration_cc_proto",
+        ":secure_aggregation_protocol",
+        "//fcp/aggregation/testing",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
