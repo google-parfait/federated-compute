@@ -1236,8 +1236,6 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     const std::string& population_name, const std::string& retry_token,
     const std::string& client_version,
     const std::string& attestation_measurement) {
-  // TODO(team): Log opstats initialization errors via
-  //  LogNonfatalInitializationError().
   auto opstats_logger =
       engine::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
                                   session_name, population_name);
@@ -1260,6 +1258,15 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
                                log_manager, flags);
+
+  // If there was an error initializing OpStats, opstats_logger will be a no-op
+  // implementation and execution will be allowed to continue.
+  if (!opstats_logger->GetInitStatus().ok()) {
+    // This will only happen if OpStats is enabled and there was an error in
+    // initialization.
+    phase_logger.LogNonfatalInitializationError(
+        opstats_logger->GetInitStatus());
+  }
 
   Clock* clock = Clock::RealClock();
   std::unique_ptr<cache::ResourceCache> resource_cache;

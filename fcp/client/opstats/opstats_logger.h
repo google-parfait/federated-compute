@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_OPSTATS_OPSTATS_LOGGER_H_
 #define FCP_CLIENT_OPSTATS_OPSTATS_LOGGER_H_
 
+#include <memory>
 #include <string>
 
 #include "fcp/client/opstats/opstats_db.h"
@@ -33,7 +34,14 @@ class OpStatsLogger {
   OpStatsLogger() = default;
 
   explicit OpStatsLogger(bool opstats_enabled)
-      : opstats_enabled_(opstats_enabled), db_(std::make_unique<OpStatsDb>()) {}
+      : opstats_enabled_(opstats_enabled),
+        db_(std::make_unique<OpStatsDb>()),
+        init_status_(absl::OkStatus()) {}
+
+  OpStatsLogger(bool opstats_enabled, absl::Status init_status)
+      : opstats_enabled_(opstats_enabled),
+        db_(std::make_unique<OpStatsDb>()),
+        init_status_(init_status) {}
 
   virtual ~OpStatsLogger() = default;
 
@@ -73,9 +81,16 @@ class OpStatsLogger {
   // Syncs all logged events to storage.
   virtual absl::Status CommitToStorage() { return absl::OkStatus(); }
 
+  // Returns a status holding an initialization error if OpStats was enabled but
+  // failed to initialize.
+  absl::Status GetInitStatus() { return init_status_; }
+
  private:
   bool opstats_enabled_;
   std::unique_ptr<OpStatsDb> db_;
+  // If there was an error initializing the OpStats logger such that the no-op
+  // impl was returned instead, this will hold the status detailing the error.
+  absl::Status init_status_;
 };
 
 }  // namespace opstats

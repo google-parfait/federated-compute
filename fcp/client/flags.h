@@ -203,6 +203,11 @@ class Flags {
   // URIs in response to its requests, but before it has starting fetching those
   // resources.
   virtual bool enable_plan_uri_received_logs() const { return false; }
+
+  // If true, Opstats initialization errors will be logged via
+  // PhaseLogger.LogNonfatalInitializationError(). Execution will still be
+  // allowed to continue with a no-op implementation like before.
+  virtual bool log_opstats_initialization_errors() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

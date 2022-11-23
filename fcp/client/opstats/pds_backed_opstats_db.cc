@@ -212,7 +212,7 @@ absl::StatusOr<std::unique_ptr<OpStatsDb>> PdsBackedOpStatsDb::Create(
     log_manager.LogDiag(ProdDiagCode::OPSTATS_INVALID_FILE_PATH);
     return absl::InvalidArgumentError(
         absl::StrCat("The provided path: ", base_dir,
-                     "is invalid. The path must start with \"/\""));
+                     " is invalid. The path must start with \"/\""));
   }
   path /= kParentDir;
   std::error_code error;
