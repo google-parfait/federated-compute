@@ -60,16 +60,16 @@ class SessionStatus:
   # the server before they could complete (e.g., if progress on the session was
   # no longer needed).
   num_clients_aborted: int = 0
-  # Number of reports that were successfully aggregated and included in the
+  # Number of inputs that were successfully aggregated and included in the
   # final aggregate. Note that even if a client successfully completes the
   # protocol (i.e., it is included in num_clients_completed), it is not
   # guaranteed that the uploaded report is included in the final aggregate yet.
-  num_reports_aggregated_and_included: int = 0
-  # Number of reports that were received by the server and are pending (i.e.,
-  # the reports have not been included in the final aggregate yet).
-  num_reports_aggregated_and_pending: int = 0
-  # Number of reports that were received by the server but discarded.
-  num_reports_discarded: int = 0
+  num_inputs_aggregated_and_included: int = 0
+  # Number of inputs that were received by the server and are pending (i.e.,
+  # the inputs have not been included in the final aggregate yet).
+  num_inputs_aggregated_and_pending: int = 0
+  # Number of inputs that were received by the server but discarded.
+  num_inputs_discarded: int = 0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -87,7 +87,7 @@ class AggregationRequirements:
 class _WaitData:
   """Information about a pending wait operation."""
   # The condition under which the wait should complete.
-  num_reports_aggregated_and_pending: Optional[int]
+  num_inputs_aggregated_and_pending: Optional[int]
   # The loop the caller is waiting on.
   loop: asyncio.AbstractEventLoop = dataclasses.field(
       default_factory=asyncio.get_running_loop)
@@ -142,15 +142,15 @@ class Service:
       state = self._sessions.pop(session_id)
 
     try:
-      if (state.status.num_reports_aggregated_and_pending <
+      if (state.status.num_inputs_aggregated_and_pending <
           state.requirements.minimum_clients_in_server_published_aggregate):
         raise ValueError(
             'minimum_clients_in_server_published_aggregate has not been met.')
       result = state.agg_session.finalize()
       state.status.status = AggregationStatus.COMPLETED
-      state.status.num_reports_aggregated_and_included += (
-          state.status.num_reports_aggregated_and_pending)
-      state.status.num_reports_aggregated_and_pending = 0
+      state.status.num_inputs_aggregated_and_included += (
+          state.status.num_inputs_aggregated_and_pending)
+      state.status.num_inputs_aggregated_and_pending = 0
       return state.status, result
     except ValueError as e:
       logging.warning('Failed to finalize aggregation session: %s', e)
@@ -165,11 +165,11 @@ class Service:
       state = self._sessions.pop(session_id)
     state.status.status = AggregationStatus.ABORTED
     # Cleaning up the session will mark all pending clients as aborted and all
-    # pending reports as discarded. Since no results will be returned, all
-    # completed reports should also be considered discarded.
-    state.status.num_reports_discarded += (
-        state.status.num_reports_aggregated_and_included)
-    state.status.num_reports_aggregated_and_included = 0
+    # pending inputs as discarded. Since no results will be returned, all
+    # completed inputs should also be considered discarded.
+    state.status.num_inputs_discarded += (
+        state.status.num_inputs_aggregated_and_included)
+    state.status.num_inputs_aggregated_and_included = 0
     self._cleanup_session(state)
     return state.status
 
@@ -181,18 +181,17 @@ class Service:
   async def wait(
       self,
       session_id: str,
-      num_reports_aggregated_and_pending: Optional[int] = None
-  ) -> SessionStatus:
+      num_inputs_aggregated_and_pending: Optional[int] = None) -> SessionStatus:
     """Blocks until all conditions are satisfied or the aggregation fails."""
     with self._sessions_lock:
       state = self._sessions[session_id]
       # Check if any of the conditions are already satisfied.
-      if (num_reports_aggregated_and_pending is None or
-          num_reports_aggregated_and_pending <=
-          state.status.num_reports_aggregated_and_pending):
+      if (num_inputs_aggregated_and_pending is None or
+          num_inputs_aggregated_and_pending <=
+          state.status.num_inputs_aggregated_and_pending):
         return copy.deepcopy(state.status)
 
-      wait_data = _WaitData(num_reports_aggregated_and_pending)
+      wait_data = _WaitData(num_inputs_aggregated_and_pending)
       state.pending_waits.add(wait_data)
     return await wait_data.queue.get()
 
@@ -215,9 +214,9 @@ class Service:
     state.agg_session.close()
     state.status.num_clients_aborted += state.status.num_clients_pending
     state.status.num_clients_pending = 0
-    state.status.num_reports_discarded += (
-        state.status.num_reports_aggregated_and_pending)
-    state.status.num_reports_aggregated_and_pending = 0
+    state.status.num_inputs_discarded += (
+        state.status.num_inputs_aggregated_and_pending)
+    state.status.num_inputs_aggregated_and_pending = 0
     state.client_tokens.clear()
     for name in state.pending_uploads.values():
       self._media_service.finalize_upload(name)
@@ -308,14 +307,14 @@ class Service:
         stack.pop_all()
         state.status.num_clients_pending -= 1
         state.status.num_clients_completed += 1
-        state.status.num_reports_aggregated_and_pending += 1
+        state.status.num_inputs_aggregated_and_pending += 1
 
         # Check for any newly-satisfied pending wait operations.
         completed_waits = set()
         for data in state.pending_waits:
-          if (data.num_reports_aggregated_and_pending is not None and
-              state.status.num_reports_aggregated_and_pending >=
-              data.num_reports_aggregated_and_pending):
+          if (data.num_inputs_aggregated_and_pending is not None and
+              state.status.num_inputs_aggregated_and_pending >=
+              data.num_inputs_aggregated_and_pending):
             data.loop.call_soon_threadsafe(
                 functools.partial(data.queue.put_nowait, state.status))
             completed_waits.add(data)

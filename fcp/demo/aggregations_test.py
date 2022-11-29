@@ -84,9 +84,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_complete_session(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -148,9 +148,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=num_clients,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=num_clients,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
     self.assertEqual(aggregate, self.mock_session.finalize.return_value)
     self.mock_session.finalize.assert_called_once()
 
@@ -158,7 +158,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     with self.assertRaises(KeyError):
       service.get_session_status(session_id)
 
-  def test_complete_session_without_enough_reports(self):
+  def test_complete_session_without_enough_inputs(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
                                    self.mock_media_service)
     session_id = service.create_session(
@@ -191,9 +191,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=1))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=1))
     self.assertIsNone(aggregate)
 
   def test_complete_session_with_missing_session_id(self):
@@ -214,9 +214,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_abort_session_with_uploads(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -250,9 +250,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=1,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=1))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=1))
     # The registered upload for the second client should have been finalized.
     self.mock_media_service.finalize_upload.assert_called_with('upload2')
     # get_session_status should no longer return results.
@@ -276,7 +276,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
                                    self.mock_media_service)
     session_id = service.create_session(AGGREGATION_REQUIREMENTS)
     task = asyncio.create_task(
-        service.wait(session_id, num_reports_aggregated_and_pending=1))
+        service.wait(session_id, num_inputs_aggregated_and_pending=1))
     # The awaitable should not be done yet.
     await asyncio.wait([task], timeout=0.1)
     self.assertFalse(task.done())
@@ -304,9 +304,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=1,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=1,
+            num_inputs_discarded=0))
 
   async def test_wait_already_satisfied(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -328,7 +328,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     # Since a client has already reported, the condition should already be
     # satisfied.
     task = asyncio.create_task(
-        service.wait(session_id, num_reports_aggregated_and_pending=1))
+        service.wait(session_id, num_inputs_aggregated_and_pending=1))
     await asyncio.wait([task], timeout=1)
     self.assertTrue(task.done())
     self.assertEqual(
@@ -338,16 +338,16 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_completed=1,
             num_clients_failed=0,
             num_clients_pending=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=1,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=1,
+            num_inputs_discarded=0))
 
   async def test_wait_with_abort(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
                                    self.mock_media_service)
     session_id = service.create_session(AGGREGATION_REQUIREMENTS)
     task = asyncio.create_task(
-        service.wait(session_id, num_reports_aggregated_and_pending=1))
+        service.wait(session_id, num_inputs_aggregated_and_pending=1))
     # The awaitable should not be done yet.
     await asyncio.wait([task], timeout=0.1)
     self.assertFalse(task.done())
@@ -366,7 +366,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             minimum_clients_in_server_published_aggregate=0,
             plan=AGGREGATION_REQUIREMENTS.plan))
     task = asyncio.create_task(
-        service.wait(session_id, num_reports_aggregated_and_pending=1))
+        service.wait(session_id, num_inputs_aggregated_and_pending=1))
     # The awaitable should not be done yet.
     await asyncio.wait([task], timeout=0.1)
     self.assertFalse(task.done())
@@ -393,9 +393,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   async def test_wait_with_missing_session_id(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -423,9 +423,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_start_aggregagation_data_upload_with_invalid_token(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -444,9 +444,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_start_aggregagation_data_upload_twice(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -469,9 +469,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=1,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_submit_aggregation_result_with_missing_session_id(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -493,9 +493,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_submit_aggregation_result_with_invalid_token(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -516,9 +516,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_submit_aggregation_result_without_start_upload(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -543,9 +543,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_submit_aggregation_result_with_invalid_resource_name(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -574,9 +574,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=1,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_submit_aggregation_result_with_unuploaded_resource(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -609,9 +609,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=1,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_abort_aggregation(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -634,9 +634,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=1,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_abort_aggregation_with_missing_session_id(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -659,9 +659,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=1,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_abort_aggregation_with_invalid_token(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -680,9 +680,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
   def test_abort_aggregation_without_start(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
@@ -702,9 +702,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
             num_clients_failed=0,
             num_clients_pending=0,
             num_clients_aborted=0,
-            num_reports_aggregated_and_included=0,
-            num_reports_aggregated_and_pending=0,
-            num_reports_discarded=0))
+            num_inputs_aggregated_and_included=0,
+            num_inputs_aggregated_and_pending=0,
+            num_inputs_discarded=0))
 
 
 if __name__ == '__main__':
