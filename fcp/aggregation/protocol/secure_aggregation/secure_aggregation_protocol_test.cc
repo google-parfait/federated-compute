@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "fcp/aggregation/protocol/secure_aggregation_protocol.h"
+#include "fcp/aggregation/protocol/secure_aggregation/secure_aggregation_protocol.h"
 
 #include <memory>
 #include <utility>

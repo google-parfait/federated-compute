@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "fcp/aggregation/protocol/simple_aggregation_protocol.h"
+#include "fcp/aggregation/protocol/simple_aggregation/simple_aggregation_protocol.h"
 
 #include <memory>
 #include <utility>
@@ -26,8 +26,8 @@
 #include "absl/strings/cord.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
-#include "fcp/aggregation/protocol/checkpoint_builder.h"
-#include "fcp/aggregation/protocol/checkpoint_parser.h"
+#include "fcp/aggregation/protocol/simple_aggregation/checkpoint_builder.h"
+#include "fcp/aggregation/protocol/simple_aggregation/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"

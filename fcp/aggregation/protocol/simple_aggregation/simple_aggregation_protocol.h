@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_PROTOCOL_H_
-#define FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_PROTOCOL_H_
+#ifndef FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_SIMPLE_AGGREGATION_PROTOCOL_H_
+#define FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_SIMPLE_AGGREGATION_PROTOCOL_H_
 
 #include <atomic>
 #include <cstdint>
@@ -32,8 +32,8 @@
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
-#include "fcp/aggregation/protocol/checkpoint_builder.h"
-#include "fcp/aggregation/protocol/checkpoint_parser.h"
+#include "fcp/aggregation/protocol/simple_aggregation/checkpoint_builder.h"
+#include "fcp/aggregation/protocol/simple_aggregation/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 
 namespace fcp::aggregation {
@@ -211,4 +211,4 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
 };
 }  // namespace fcp::aggregation
 
-#endif  // FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_PROTOCOL_H_
+#endif  // FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_SIMPLE_AGGREGATION_PROTOCOL_H_

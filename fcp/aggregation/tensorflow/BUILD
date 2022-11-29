@@ -120,7 +120,7 @@ cc_library(
     deps = [
         ":checkpoint_writer",
         "//fcp/aggregation/core:tensor",
-        "//fcp/aggregation/protocol:simple_aggregation_protocol",
+        "//fcp/aggregation/protocol/simple_aggregation",
         "//fcp/base",
         "//fcp/tensorflow:status",
         "@com_google_absl//absl/random",
@@ -163,7 +163,7 @@ cc_library(
     deps = [
         ":checkpoint_reader",
         "//fcp/aggregation/core:tensor",
-        "//fcp/aggregation/protocol:simple_aggregation_protocol",
+        "//fcp/aggregation/protocol/simple_aggregation",
         "//fcp/base",
         "//fcp/tensorflow:status",
         "@com_google_absl//absl/cleanup",
@@ -181,7 +181,7 @@ cc_test(
     srcs = ["tensorflow_checkpoint_parser_factory_test.cc"],
     deps = [
         ":tensorflow_checkpoint_parser_factory",
-        "//fcp/aggregation/protocol:simple_aggregation_protocol",
+        "//fcp/aggregation/protocol/simple_aggregation",
         "//fcp/aggregation/testing",
         "//fcp/base",
         "//fcp/tensorflow:status",
