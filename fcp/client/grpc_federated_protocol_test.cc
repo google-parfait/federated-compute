@@ -1567,7 +1567,7 @@ TEST_P(GrpcFederatedProtocolTest, TestReportWithSecAgg) {
   // one or more SecAgg quantized aggregands.
   ComputationResults results;
   results.emplace("tensorflow_checkpoint", "");
-  results.emplace("some_tensor", QuantizedTensor{{}, 0, {}});
+  results.emplace("some_tensor", QuantizedTensor());
 
   mock_secagg_runner_ = new StrictMock<MockSecAggRunner>();
   EXPECT_CALL(*mock_secagg_runner_factory_,
@@ -1595,7 +1595,7 @@ TEST_P(GrpcFederatedProtocolTest, TestReportWithSecAggWithoutTFCheckpoint) {
   ASSERT_OK(RunSuccessfulCheckin(/*use_secure_aggregation=*/true));
 
   ComputationResults results;
-  results.emplace("some_tensor", QuantizedTensor{{}, 0, {}});
+  results.emplace("some_tensor", QuantizedTensor());
 
   mock_secagg_runner_ = new StrictMock<MockSecAggRunner>();
   EXPECT_CALL(*mock_secagg_runner_factory_,

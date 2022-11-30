@@ -48,7 +48,7 @@ namespace client {
 using TFCheckpoint = std::string;
 struct QuantizedTensor {
   std::vector<uint64_t> values;
-  int32_t bitwidth;
+  int32_t bitwidth = 0;
   std::vector<int64_t> dimensions;
 
   QuantizedTensor() = default;
