@@ -38,12 +38,14 @@ using QueryParams = absl::flat_hash_map<std::string, std::string>;
 class ProtocolRequestCreator {
  public:
   ProtocolRequestCreator(absl::string_view request_base_uri,
-                         HeaderList request_headers, bool use_compression);
+                         absl::string_view api_key, HeaderList request_headers,
+                         bool use_compression);
 
   // Creates a `ProtocolRequestCreator` based on the forwarding info.
   // Validates and extracts the base URI and headers to use for the subsequent
   // request(s).
   static absl::StatusOr<std::unique_ptr<ProtocolRequestCreator>> Create(
+      absl::string_view api_key,
       const ::google::internal::federatedcompute::v1::ForwardingInfo&
           forwarding_info,
       bool use_compression);
@@ -89,6 +91,8 @@ class ProtocolRequestCreator {
       bool is_protobuf_encoded, bool use_compression) const;
   // The URI to use for the next protocol request. See `ForwardingInfo`.
   std::string next_request_base_uri_;
+  // The API key used for requests.
+  const std::string api_key_;
   // The set of headers to attach to the next protocol request. See
   // `ForwardingInfo`.
   HeaderList next_request_headers_;

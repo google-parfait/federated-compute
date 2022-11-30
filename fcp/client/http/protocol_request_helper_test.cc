@@ -46,6 +46,8 @@ using ::testing::Return;
 using ::testing::StrictMock;
 using ::testing::UnorderedElementsAre;
 
+constexpr absl::string_view kApiKey = "API_KEY";
+
 class MockClock : public Clock {
  public:
   MOCK_METHOD(absl::Time, Now, (), (override));
@@ -102,19 +104,19 @@ TEST(ProtocolRequestCreatorTest, TestInvalidForwardingInfo) {
   // If a ForwardingInfo does not have a target_uri_prefix field set then the
   // ProcessForwardingInfo call should fail.
   ForwardingInfo forwarding_info;
-  EXPECT_THAT(ProtocolRequestCreator::Create(forwarding_info,
+  EXPECT_THAT(ProtocolRequestCreator::Create(kApiKey, forwarding_info,
                                              /*use_compression=*/false),
               IsCode(INVALID_ARGUMENT));
 
   (*forwarding_info.mutable_extra_request_headers())["x-header1"] =
       "header-value1";
-  EXPECT_THAT(ProtocolRequestCreator::Create(forwarding_info,
+  EXPECT_THAT(ProtocolRequestCreator::Create(kApiKey, forwarding_info,
                                              /*use_compression=*/false),
               IsCode(INVALID_ARGUMENT));
 }
 
 TEST(ProtocolRequestCreatorTest, CreateProtocolRequestInvalidSuffix) {
-  ProtocolRequestCreator creator("https://initial.uri", HeaderList(),
+  ProtocolRequestCreator creator("https://initial.uri", kApiKey, HeaderList(),
                                  /*use_compression=*/false);
   std::string uri_suffix = "v1/request";
   ASSERT_THAT(
@@ -125,7 +127,7 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequestInvalidSuffix) {
 }
 
 TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
-  ProtocolRequestCreator creator("https://initial.uri", HeaderList(),
+  ProtocolRequestCreator creator("https://initial.uri", kApiKey, HeaderList(),
                                  /*use_compression=*/false);
   std::string expected_body = "expected_body";
   auto request = creator.CreateProtocolRequest(
@@ -135,9 +137,11 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
   ASSERT_OK(request);
   EXPECT_EQ((*request)->uri(), "https://initial.uri/v1/request");
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
-  EXPECT_THAT((*request)->extra_headers(),
-              UnorderedElementsAre(Header{
-                  "Content-Length", std::to_string(expected_body.size())}));
+  EXPECT_THAT(
+      (*request)->extra_headers(),
+      UnorderedElementsAre(
+          Header{"x-goog-api-key", "API_KEY"},
+          Header{"Content-Length", std::to_string(expected_body.size())}));
   EXPECT_TRUE((*request)->HasBody());
   std::string actual_body;
   actual_body.resize(expected_body.size());
@@ -146,7 +150,7 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
 }
 
 TEST(ProtocolRequestCreatorTest, CreateProtobufEncodedProtocolRequest) {
-  ProtocolRequestCreator creator("https://initial.uri", HeaderList(),
+  ProtocolRequestCreator creator("https://initial.uri", kApiKey, HeaderList(),
                                  /*use_compression=*/false);
   std::string expected_body = "expected_body";
   auto request = creator.CreateProtocolRequest(
@@ -158,6 +162,7 @@ TEST(ProtocolRequestCreatorTest, CreateProtobufEncodedProtocolRequest) {
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
   EXPECT_THAT((*request)->extra_headers(),
               UnorderedElementsAre(
+                  Header{"x-goog-api-key", "API_KEY"},
                   Header{"Content-Length", absl::StrCat(expected_body.size())},
                   Header{"Content-Type", "application/x-protobuf"}));
   EXPECT_TRUE((*request)->HasBody());
@@ -168,7 +173,7 @@ TEST(ProtocolRequestCreatorTest, CreateProtobufEncodedProtocolRequest) {
 }
 
 TEST(ProtocolRequestCreatorTest, CreateGetOperationRequest) {
-  ProtocolRequestCreator creator("https://initial.uri", HeaderList(),
+  ProtocolRequestCreator creator("https://initial.uri", kApiKey, HeaderList(),
                                  /*use_compression=*/false);
   std::string operation_name = "my_operation";
   auto request = creator.CreateGetOperationRequest(operation_name);
@@ -176,12 +181,13 @@ TEST(ProtocolRequestCreatorTest, CreateGetOperationRequest) {
   EXPECT_EQ((*request)->uri(),
             "https://initial.uri/v1/my_operation?%24alt=proto");
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kGet);
-  EXPECT_THAT((*request)->extra_headers(), IsEmpty());
+  EXPECT_THAT((*request)->extra_headers(),
+              UnorderedElementsAre(Header{"x-goog-api-key", "API_KEY"}));
   EXPECT_FALSE((*request)->HasBody());
 }
 
 TEST(ProtocolRequestCreatorTest, CreateCancelOperationRequest) {
-  ProtocolRequestCreator creator("https://initial.uri", HeaderList(),
+  ProtocolRequestCreator creator("https://initial.uri", kApiKey, HeaderList(),
                                  /*use_compression=*/false);
   std::string operation_name = "my_operation";
   auto request = creator.CreateCancelOperationRequest(operation_name);
@@ -189,7 +195,8 @@ TEST(ProtocolRequestCreatorTest, CreateCancelOperationRequest) {
   EXPECT_EQ((*request)->uri(),
             "https://initial.uri/v1/my_operation:cancel?%24alt=proto");
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kGet);
-  EXPECT_THAT((*request)->extra_headers(), IsEmpty());
+  EXPECT_THAT((*request)->extra_headers(),
+              UnorderedElementsAre(Header{"x-goog-api-key", "API_KEY"}));
   EXPECT_FALSE((*request)->HasBody());
 }
 
@@ -210,7 +217,7 @@ class ProtocolRequestHelperTest : public ::testing::Test {
                     BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
                 .interrupt_timeout_extended = ProdDiagCode::
                     BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT}),
-        initial_request_creator_("https://initial.uri", HeaderList(),
+        initial_request_creator_("https://initial.uri", kApiKey, HeaderList(),
                                  /*use_compression=*/false),
         protocol_request_helper_(&mock_http_client_, &bytes_downloaded_,
                                  &bytes_uploaded_, network_stopwatch_.get(),
@@ -258,10 +265,12 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
                   "https://initial.uri/suffix1", HttpRequest::Method::kPost,
                   // This request has a response body, so the HttpClient will
                   // add this header automatically.
-                  ContainerEq(HeaderList{{"Content-Length", "5"}}), "body1")))
+                  ContainerEq(HeaderList{{"x-goog-api-key", "API_KEY"},
+                                         {"Content-Length", "5"}}),
+                  "body1")))
       .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response1")));
   auto request_creator = std::make_unique<ProtocolRequestCreator>(
-      "https://initial.uri", HeaderList(),
+      "https://initial.uri", kApiKey, HeaderList(),
       /*use_compression=*/false);
   auto http_request = request_creator->CreateProtocolRequest(
       "/suffix1", QueryParams(), HttpRequest::Method::kPost, "body1",
@@ -281,7 +290,7 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
     (*forwarding_info1.mutable_extra_request_headers())["x-header2"] =
         "header-value2";
     auto new_request_creator = ProtocolRequestCreator::Create(
-        forwarding_info1, /*use_compression=*/false);
+        kApiKey, forwarding_info1, /*use_compression=*/false);
     ASSERT_OK(new_request_creator);
     request_creator = std::move(*new_request_creator);
   }
@@ -293,7 +302,8 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://second.uri/suffix2", HttpRequest::Method::kGet,
-                  UnorderedElementsAre(Header{"x-header1", "header-value1"},
+                  UnorderedElementsAre(Header{"x-goog-api-key", "API_KEY"},
+                                       Header{"x-header1", "header-value1"},
                                        Header{"x-header2", "header-value2"}),
                   "")))
       .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response2")));
@@ -309,7 +319,8 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://second.uri/suffix3", HttpRequest::Method::kPut,
-                  UnorderedElementsAre(Header{"x-header1", "header-value1"},
+                  UnorderedElementsAre(Header{"x-goog-api-key", "API_KEY"},
+                                       Header{"x-header1", "header-value1"},
                                        Header{"x-header2", "header-value2"},
                                        // This request has a response body, so
                                        // the HttpClient will add this header
@@ -331,7 +342,7 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
     ForwardingInfo forwarding_info2;
     forwarding_info2.set_target_uri_prefix("https://third.uri");
     auto new_request_creator = ProtocolRequestCreator::Create(
-        forwarding_info2, /*use_compression=*/false);
+        kApiKey, forwarding_info2, /*use_compression=*/false);
     ASSERT_OK(new_request_creator);
     request_creator = std::move(*new_request_creator);
   }
@@ -343,7 +354,11 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
                   "https://third.uri/suffix4", HttpRequest::Method::kPost,
                   // This request has a response body, so the HttpClient will
                   // add this header automatically.
-                  ContainerEq(HeaderList{{"Content-Length", "5"}}), "body4")))
+                  ContainerEq(HeaderList{
+                      {"x-goog-api-key", "API_KEY"},
+                      {"Content-Length", "5"},
+                  }),
+                  "body4")))
       .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response4")));
   http_request = request_creator->CreateProtocolRequest(
       "/suffix4", QueryParams(), HttpRequest::Method::kPost, "body4",
@@ -664,7 +679,9 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsSuccess) {
           "https://initial.uri/v1/request_a", HttpRequest::Method::kPost,
           // This request has a response body, so the HttpClient will
           // add this header automatically.
-          ContainerEq(HeaderList{{"Content-Length", "5"}}), "body1")))
+          ContainerEq(HeaderList{{"x-goog-api-key", "API_KEY"},
+                                 {"Content-Length", "5"}}),
+          "body1")))
       .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response1")));
   EXPECT_CALL(
       mock_http_client_,
@@ -672,7 +689,9 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsSuccess) {
           "https://initial.uri/v1/request_b", HttpRequest::Method::kPost,
           // This request has a response body, so the HttpClient will
           // add this header automatically.
-          ContainerEq(HeaderList{{"Content-Length", "5"}}), "body2")))
+          ContainerEq(HeaderList{{"x-goog-api-key", "API_KEY"},
+                                 {"Content-Length", "5"}}),
+          "body2")))
       .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response2")));
 
   std::vector<std::unique_ptr<HttpRequest>> requests;
@@ -707,7 +726,9 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
           "https://initial.uri/v1/request_a", HttpRequest::Method::kPost,
           // This request has a response body, so the HttpClient will
           // add this header automatically.
-          ContainerEq(HeaderList{{"Content-Length", "5"}}), "body1")))
+          ContainerEq(HeaderList{{"x-goog-api-key", "API_KEY"},
+                                 {"Content-Length", "5"}}),
+          "body1")))
       .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "response1")));
   EXPECT_CALL(
       mock_http_client_,
@@ -715,7 +736,9 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
           "https://initial.uri/v1/request_b", HttpRequest::Method::kPost,
           // This request has a response body, so the HttpClient will
           // add this header automatically.
-          ContainerEq(HeaderList{{"Content-Length", "5"}}), "body2")))
+          ContainerEq(HeaderList{{"x-goog-api-key", "API_KEY"},
+                                 {"Content-Length", "5"}}),
+          "body2")))
       .WillOnce(
           Return(FakeHttpResponse(404, HeaderList(), "failure_response")));
 

@@ -181,9 +181,10 @@ absl::Duration GetPollingInterval(Operation operation) {
 }  // anonymous namespace
 
 ProtocolRequestCreator::ProtocolRequestCreator(
-    absl::string_view request_base_uri, HeaderList request_headers,
-    bool use_compression)
+    absl::string_view request_base_uri, absl::string_view api_key,
+    HeaderList request_headers, bool use_compression)
     : next_request_base_uri_(request_base_uri),
+      api_key_(api_key),
       next_request_headers_(std::move(request_headers)),
       use_compression_(use_compression) {}
 
@@ -226,6 +227,7 @@ ProtocolRequestCreator::CreateHttpRequest(absl::string_view uri_path_suffix,
                                           bool is_protobuf_encoded,
                                           bool use_compression) const {
   HeaderList request_headers = next_request_headers_;
+  request_headers.push_back({kApiKeyHdr, api_key_});
   if (is_protobuf_encoded) {
     if (!request_body.empty()) {
       request_headers.push_back({kContentTypeHdr, kProtobufContentType});
@@ -249,7 +251,8 @@ ProtocolRequestCreator::CreateHttpRequest(absl::string_view uri_path_suffix,
 }
 
 absl::StatusOr<std::unique_ptr<ProtocolRequestCreator>>
-ProtocolRequestCreator::Create(const ForwardingInfo& forwarding_info,
+ProtocolRequestCreator::Create(absl::string_view api_key,
+                               const ForwardingInfo& forwarding_info,
                                bool use_compression) {
   // Extract the base URI and headers to use for the subsequent request.
   if (forwarding_info.target_uri_prefix().empty()) {
@@ -258,7 +261,7 @@ ProtocolRequestCreator::Create(const ForwardingInfo& forwarding_info,
   }
   const auto& new_headers = forwarding_info.extra_request_headers();
   return std::make_unique<ProtocolRequestCreator>(ProtocolRequestCreator(
-      forwarding_info.target_uri_prefix(),
+      forwarding_info.target_uri_prefix(), api_key,
       HeaderList(new_headers.begin(), new_headers.end()), use_compression));
 }
 

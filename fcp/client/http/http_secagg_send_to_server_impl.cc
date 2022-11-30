@@ -116,7 +116,8 @@ absl::StatusOr<std::string> CreateUnmaskUriSuffix(
 
 absl::StatusOr<std::unique_ptr<HttpSecAggSendToServerImpl>>
 HttpSecAggSendToServerImpl::Create(
-    Clock* clock, ProtocolRequestHelper* request_helper,
+    absl::string_view api_key, Clock* clock,
+    ProtocolRequestHelper* request_helper,
     InterruptibleRunner* interruptible_runner,
     std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>
         delayed_interruptible_runner_creator,
@@ -131,24 +132,25 @@ HttpSecAggSendToServerImpl::Create(
     absl::Duration waiting_period_for_cancellation) {
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<ProtocolRequestCreator> secagg_request_creator,
-      ProtocolRequestCreator::Create(secagg_upload_forwarding_info,
+      ProtocolRequestCreator::Create(api_key, secagg_upload_forwarding_info,
                                      !disable_request_body_compression));
   // We don't use request body compression for resource upload.
-  FCP_ASSIGN_OR_RETURN(std::unique_ptr<ProtocolRequestCreator>
-                           masked_result_upload_request_creator,
-                       ProtocolRequestCreator::Create(
-                           masked_result_resource.data_upload_forwarding_info(),
-                           /*use_compression=*/false));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<ProtocolRequestCreator>
+          masked_result_upload_request_creator,
+      ProtocolRequestCreator::Create(
+          api_key, masked_result_resource.data_upload_forwarding_info(),
+          /*use_compression=*/false));
   // We don't use request body compression for resource upload.
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<ProtocolRequestCreator>
           nonmasked_result_upload_request_creator,
       ProtocolRequestCreator::Create(
-          nonmasked_result_resource.data_upload_forwarding_info(),
+          api_key, nonmasked_result_resource.data_upload_forwarding_info(),
           /*use_compression=*/false));
 
   return absl::WrapUnique(new HttpSecAggSendToServerImpl(
-      clock, request_helper, interruptible_runner,
+      api_key, clock, request_helper, interruptible_runner,
       std::move(delayed_interruptible_runner_creator), server_response_holder,
       aggregation_id, client_token, masked_result_resource.resource_name(),
       nonmasked_result_resource.resource_name(),

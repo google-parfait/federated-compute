@@ -43,7 +43,8 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
   // ProtocolRequestCreator based on the input ForwardingInfo or
   // ByteStreamResources.
   static absl::StatusOr<std::unique_ptr<HttpSecAggSendToServerImpl>> Create(
-      Clock* clock, ProtocolRequestHelper* request_helper,
+      absl::string_view api_key, Clock* clock,
+      ProtocolRequestHelper* request_helper,
       InterruptibleRunner* interruptible_runner,
       std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>
           delayed_interruptible_runner_creator,
@@ -68,7 +69,8 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
 
  private:
   HttpSecAggSendToServerImpl(
-      Clock* clock, ProtocolRequestHelper* request_helper,
+      absl::string_view api_key, Clock* clock,
+      ProtocolRequestHelper* request_helper,
       InterruptibleRunner* interruptible_runner,
       std::function<std::unique_ptr<InterruptibleRunner>(absl::Time)>
           delayed_interruptible_runner_creator,
@@ -84,7 +86,8 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
           nonmasked_result_upload_request_creator,
       std::optional<std::string> tf_checkpoint,
       absl::Duration waiting_period_for_cancellation)
-      : clock_(*clock),
+      : api_key_(api_key),
+        clock_(*clock),
         request_helper_(*request_helper),
         interruptible_runner_(*interruptible_runner),
         delayed_interruptible_runner_creator_(
@@ -123,7 +126,7 @@ class HttpSecAggSendToServerImpl : public SecAggSendToServerBase {
   // Sends an UnmaskRequest and waits for the UnmaskResponse.
   absl::StatusOr<secagg::ServerToClientWrapperMessage> DoR3Unmask(
       secagg::UnmaskingResponse unmasking_response);
-
+  const std::string api_key_;
   Clock& clock_;
   ProtocolRequestHelper& request_helper_;
   InterruptibleRunner& interruptible_runner_;

@@ -319,7 +319,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
                   BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT})),
       eligibility_eval_request_creator_(
           std::make_unique<ProtocolRequestCreator>(
-              entry_point_uri, HeaderList{},
+              entry_point_uri, api_key, HeaderList{},
               !flags->disable_http_request_body_compression())),
       protocol_request_helper_(http_client, &bytes_downloaded_,
                                &bytes_uploaded_, network_stopwatch_.get(),
@@ -347,8 +347,6 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       flags->federated_training_permanent_error_codes();
   federated_training_permanent_error_codes_ =
       absl::flat_hash_set<int32_t>(error_codes.begin(), error_codes.end());
-  // TODO(team): Validate initial URI has https:// scheme, and a trailing
-  // slash, either here or in fl_runner.cc.
 }
 
 absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
@@ -445,10 +443,11 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
 
   session_id_ = response_proto.session_id();
 
-  FCP_ASSIGN_OR_RETURN(task_assignment_request_creator_,
-                       ProtocolRequestCreator::Create(
-                           response_proto.task_assignment_forwarding_info(),
-                           !flags_->disable_http_request_body_compression()));
+  FCP_ASSIGN_OR_RETURN(
+      task_assignment_request_creator_,
+      ProtocolRequestCreator::Create(
+          api_key_, response_proto.task_assignment_forwarding_info(),
+          !flags_->disable_http_request_body_compression()));
 
   switch (response_proto.result_case()) {
     case EligibilityEvalTaskResponse::kEligibilityEvalTask: {
@@ -674,10 +673,11 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   }
   const auto& task_assignment = response_proto.task_assignment();
 
-  FCP_ASSIGN_OR_RETURN(aggregation_request_creator_,
-                       ProtocolRequestCreator::Create(
-                           task_assignment.aggregation_data_forwarding_info(),
-                           !flags_->disable_http_request_body_compression()));
+  FCP_ASSIGN_OR_RETURN(
+      aggregation_request_creator_,
+      ProtocolRequestCreator::Create(
+          api_key_, task_assignment.aggregation_data_forwarding_info(),
+          !flags_->disable_http_request_body_compression()));
 
   TaskAssignment result = {
       .federated_select_uri_template =
@@ -868,14 +868,15 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
   FCP_ASSIGN_OR_RETURN(
       aggregation_request_creator_,
       ProtocolRequestCreator::Create(
-          response_proto.aggregation_protocol_forwarding_info(),
+          api_key_, response_proto.aggregation_protocol_forwarding_info(),
           !flags_->disable_http_request_body_compression()));
   auto upload_resource = response_proto.resource();
   aggregation_resource_name_ = upload_resource.resource_name();
-  FCP_ASSIGN_OR_RETURN(data_upload_request_creator_,
-                       ProtocolRequestCreator::Create(
-                           upload_resource.data_upload_forwarding_info(),
-                           !flags_->disable_http_request_body_compression()));
+  FCP_ASSIGN_OR_RETURN(
+      data_upload_request_creator_,
+      ProtocolRequestCreator::Create(
+          api_key_, upload_resource.data_upload_forwarding_info(),
+          !flags_->disable_http_request_body_compression()));
   return absl::OkStatus();
 }
 
@@ -972,7 +973,8 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<SecAggSendToServerBase> send_to_server_impl,
       HttpSecAggSendToServerImpl::Create(
-          &clock_, &protocol_request_helper_, interruptible_runner_.get(),
+          api_key_, &clock_, &protocol_request_helper_,
+          interruptible_runner_.get(),
           [this](absl::Time deadline) {
             return CreateDelayedInterruptibleRunner(
                 this->log_manager_, this->should_abort_, this->timing_config_,

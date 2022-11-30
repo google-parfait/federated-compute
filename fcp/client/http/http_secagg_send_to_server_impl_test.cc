@@ -62,6 +62,7 @@ constexpr absl::string_view kByteStreamTargetUri = "https://bytestream.uri/";
 constexpr absl::string_view kMaskedResourceName = "masked_resource";
 constexpr absl::string_view kNonmaskedResourceName = "nonmasked_resource";
 constexpr absl::string_view kOperationName = "my_operation";
+constexpr absl::string_view kApiKey = "API_KEY";
 
 TEST(HttpSecAggProtocolDelegateTest, GetModulus) {
   absl::StatusOr<secagg::ServerToClientWrapperMessage> holder;
@@ -173,7 +174,7 @@ class HttpSecAggSendToServerImplTest : public ::testing::Test {
   std::unique_ptr<HttpSecAggSendToServerImpl> CreateSecAggSendToServer(
       std::optional<std::string> tf_checkpoint) {
     auto send_to_server = HttpSecAggSendToServerImpl::Create(
-        &clock_, request_helper_.get(), runner_.get(),
+        kApiKey, &clock_, request_helper_.get(), runner_.get(),
         [this](absl::Time deadline) {
           return CreateDelayedInterruptibleRunner(deadline);
         },
