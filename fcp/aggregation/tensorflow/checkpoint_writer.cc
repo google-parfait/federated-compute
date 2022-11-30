@@ -42,11 +42,9 @@ tf::TensorShape ConvertShape(const TensorShape& shape) {
 
 template <typename T>
 const T* GetTensorData(const Tensor& tensor) {
-  AggVector<T> agg_vector = tensor.AsAggVector<T>();
-  FCP_CHECK(agg_vector.num_slices() == 1 &&
-            agg_vector.size() == agg_vector.get_slice(0).size())
+  FCP_CHECK(tensor.is_dense())
       << "Only dense tensors with one slice are supported";
-  return agg_vector.get_slice(0).data();
+  return static_cast<const T*>(tensor.data().get_slice(0).data);
 }
 
 CheckpointWriter::CheckpointWriter(const std::string& filename)

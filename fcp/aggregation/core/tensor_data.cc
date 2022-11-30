@@ -20,6 +20,14 @@
 
 namespace fcp::aggregation {
 
+bool TensorData::is_dense() const {
+  if (num_slices() != 1) {
+    return false;
+  }
+  auto slice = get_slice(0);
+  return slice.byte_offset == 0 && slice.byte_size == byte_size();
+}
+
 Status TensorData::CheckValid(size_t value_size) const {
   FCP_CHECK(value_size > 0);
   if (byte_size() == 0) {

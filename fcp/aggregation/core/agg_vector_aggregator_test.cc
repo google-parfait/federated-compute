@@ -43,12 +43,8 @@ class SumAggregator final : public AggVectorAggregator<T> {
 
  private:
   void AggregateVector(const AggVector<T>& agg_vector) override {
-    for (int i = 0; i < agg_vector.num_slices(); i++) {
-      auto slice = agg_vector.get_slice(i);
-      size_t index = slice.start_index();
-      for (auto v : slice) {
-        data()[index++] += v;
-      }
+    for (auto [i, v] : agg_vector) {
+      data()[i] += v;
     }
   }
 };
@@ -90,8 +86,8 @@ TEST(AggVectorAggregatorTest, DenseAggregation_Succeeds) {
 
   // Verify the resulting tensor.
   EXPECT_THAT(result.value(), IsTensor(shape, {14, 19, 23, 49}));
-  // Also ensure that there is exactly one slice.
-  EXPECT_THAT(result->AsAggVector<int32_t>().num_slices(), Eq(1));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result->is_dense());
 }
 
 TEST(AggVectorAggregatorTest, SparseAggregation_Succeeds) {
@@ -118,8 +114,8 @@ TEST(AggVectorAggregatorTest, SparseAggregation_Succeeds) {
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result.value(),
               IsTensor(shape, {5, 6, 7, 0, 0, 0, 10, 11, 12, 17, 18, 19}));
-  // Also ensure that there is exactly one slice.
-  EXPECT_THAT(result->AsAggVector<int32_t>().num_slices(), Eq(1));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result->is_dense());
 }
 
 TEST(AggVectorAggregationTest, Merge_Succeeds) {

@@ -80,6 +80,10 @@ class TensorData {
   // its byte_offset + byte_size must not exceed this value.
   virtual size_t byte_size() const = 0;
 
+  // Returns true is the current TensorData is dense i.e. consists of one
+  // slice that covers the entire valid space of the tensor data.
+  bool is_dense() const;
+
   // Validates TensorData constraints given the specified value_size.
   // The value_size is the size of the native data type (e.g. 4 bytes for int32
   // or float, 8 bytes for int64). This is used to verify data alignment - that

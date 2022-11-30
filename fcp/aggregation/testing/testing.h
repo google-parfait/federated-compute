@@ -18,6 +18,7 @@
 #define FCP_AGGREGATION_TESTING_TESTING_H_
 
 #include <initializer_list>
+#include <ostream>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -55,12 +56,8 @@ template <typename T>
 std::vector<T> TensorValuesToVector(const Tensor& arg) {
   std::vector<T> vec(arg.shape().NumElements());
   AggVector<T> agg_vector = arg.AsAggVector<T>();
-  for (int i = 0; i < agg_vector.num_slices(); i++) {
-    auto slice = agg_vector.get_slice(i);
-    size_t index = slice.start_index();
-    for (auto v : slice) {
-      vec[index++] = v;
-    }
+  for (auto [i, v] : agg_vector) {
+    vec[i] = v;
   }
   return vec;
 }

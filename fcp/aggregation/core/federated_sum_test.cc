@@ -72,8 +72,8 @@ TEST(FederatedSumTest, DenseAggregation_Succeeds) {
 
   // Verify the resulting tensor.
   EXPECT_THAT(result.value(), IsTensor(shape, {14, 19, 23, 49}));
-  // Also ensure that there is exactly one slice.
-  EXPECT_THAT(result->AsAggVector<int32_t>().num_slices(), Eq(1));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result->is_dense());
 }
 
 TEST(FederatedSumTest, SparseAggregation_Succeeds) {
@@ -101,8 +101,8 @@ TEST(FederatedSumTest, SparseAggregation_Succeeds) {
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result.value(),
               IsTensor(shape, {5, 6, 7, 0, 0, 0, 10, 11, 12, 17, 18, 19}));
-  // Also ensure that there is exactly one slice.
-  EXPECT_THAT(result->AsAggVector<int32_t>().num_slices(), Eq(1));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result->is_dense());
 }
 
 TEST(AggVectorAggregationTest, Merge_Succeeds) {

@@ -33,6 +33,18 @@ using ::testing::Eq;
 template <typename T>
 using Pair = typename AggVectorIterator<T>::IndexValuePair;
 
+TEST(AggVectorTest, Size) {
+  auto t1 = Tensor::Create(DT_INT32, {}, CreateTestData({0}));
+  EXPECT_EQ(t1->AsAggVector<int>().size(), 1);
+
+  auto t2 = Tensor::Create(DT_FLOAT, {3}, CreateTestData<float>({0, 1, 2}));
+  EXPECT_EQ(t2->AsAggVector<float>().size(), 3);
+
+  auto t3 = Tensor::Create(DT_INT64, {2, 3, 4},
+                           CreateTestData<int64_t>(24, {{4, {2, 3, 4, 5}}}));
+  EXPECT_EQ(t3->AsAggVector<int64_t>().size(), 24);
+}
+
 TEST(AggVectorTest, PostIncrementIterator_ScalarTensor) {
   auto t = Tensor::Create(DT_INT32, {}, CreateTestData({5}));
   EXPECT_THAT(t->AsAggVector<int>(), ElementsAre(Pair<int>{0, 5}));

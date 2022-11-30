@@ -69,6 +69,12 @@ class Tensor final {
   // Gets the tensor shape.
   const TensorShape& shape() const { return shape_; }
 
+  // Readonly access to the tensor data.
+  const TensorData& data() const { return *data_; }
+
+  // Returns true is the current tensor data is dense.
+  bool is_dense() const { return data_->is_dense(); }
+
   // Provides access to the tensor data via a strongly typed AggVector.
   template <typename T>
   AggVector<T> AsAggVector() const {

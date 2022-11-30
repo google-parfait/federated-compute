@@ -33,12 +33,8 @@ class FederatedSum final : public AggVectorAggregator<T> {
 
  private:
   void AggregateVector(const AggVector<T>& agg_vector) override {
-    for (int i = 0; i < agg_vector.num_slices(); i++) {
-      auto slice = agg_vector.get_slice(i);
-      size_t index = slice.start_index();
-      for (auto v : slice) {
-        data()[index++] += v;
-      }
+    for (auto [i, v] : agg_vector) {
+      data()[i] += v;
     }
   }
 };
