@@ -506,6 +506,35 @@ TEST_F(FileBackedResourceCacheTest, FileInCacheDirButNotInManifest) {
   }
 }
 
+// Covers the case where a user manually deletes the app's cache dir.
+TEST_F(FileBackedResourceCacheTest, FileInManifestButRootCacheDirDeleted) {
+  {
+    auto resource_cache = FileBackedResourceCache::Create(
+        root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+        kMaxCacheSizeBytes);
+    ASSERT_OK(resource_cache);
+    ASSERT_OK(
+        (*resource_cache)->Put(kKey1, Resource1(), Metadata(), absl::Hours(1)));
+  }
+
+  // Delete the entire cache dir from the root.
+  std::filesystem::remove_all(root_cache_dir_);
+
+  {
+    auto resource_cache = FileBackedResourceCache::Create(
+        root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
+        kMaxCacheSizeBytes);
+    ASSERT_OK(resource_cache);
+
+    // Now we should gracefully fail even though the file is in the manifest but
+    // not on disk.
+    EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
+    absl::StatusOr<FileBackedResourceCache::ResourceAndMetadata>
+        cached_resource = (*resource_cache)->Get(kKey1, std::nullopt);
+    ASSERT_THAT(cached_resource, IsCode(NOT_FOUND));
+  }
+}
+
 TEST_F(FileBackedResourceCacheTest, FileInManifestButNotInCacheDir) {
   {
     auto resource_cache = FileBackedResourceCache::Create(
@@ -517,7 +546,7 @@ TEST_F(FileBackedResourceCacheTest, FileInManifestButNotInCacheDir) {
   }
 
   // Delete the file we just cached.
-  std::filesystem::remove_all(root_cache_dir_);
+  std::filesystem::remove(cache_dir_ / kKey1);
 
   {
     auto resource_cache = FileBackedResourceCache::Create(

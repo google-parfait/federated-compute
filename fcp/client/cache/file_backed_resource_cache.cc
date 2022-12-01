@@ -310,9 +310,10 @@ absl::Status FileBackedResourceCache::CleanUp(
   // Clean up any manifest entries that point to nonexistent files.
 
   // In order to delete files we don't track in the CacheManifest (or that
-  // became untracked due to a crash), fill files_to_delete with every file in
-  // the cache dir. We'll then remove any file not actively in the cache.
-  std::set<std::filesystem::path> files_to_delete;
+  // became untracked due to a crash), fill cache_dir_files with every file in
+  // the cache dir. We'll then remove any file not actively tracked in the cache
+  // manifest.
+  std::set<std::filesystem::path> cache_dir_files;
 
   // We don't have any subdirectories in the cache, so we can use a directory
   // iterator.
@@ -327,7 +328,7 @@ absl::Status FileBackedResourceCache::CleanUp(
         " message: ", directory_error.message()));
   }
   for (auto& file : cache_dir_iterator) {
-    files_to_delete.insert(cache_dir_path_ / file);
+    cache_dir_files.insert(cache_dir_path_ / file);
   }
 
   int64_t max_allowed_size_bytes = max_cache_size_bytes_;
@@ -335,16 +336,22 @@ absl::Status FileBackedResourceCache::CleanUp(
 
   std::set<std::string> cache_ids_to_delete;
   absl::Time now = clock_.Now();
-  for (const auto& entry : manifest.cache()) {
-    CachedResource cached_resource = entry.second;
+  for (const auto& [id, resource] : manifest.cache()) {
     absl::Time expiry =
-        TimeUtil::ConvertProtoToAbslTime(cached_resource.expiry_time());
-    if (expiry < now) {
-      cache_ids_to_delete.insert(entry.first);
+        TimeUtil::ConvertProtoToAbslTime(resource.expiry_time());
+    std::filesystem::path resource_file =
+        cache_dir_path_ / resource.file_name();
+    // It's possible that this manifest entry points at a file in the cache dir
+    // that doesn't exist, i.e. due to a failed write. In this case, the entry
+    // should be deleted as well. cache_dir_files should contain a scan of the
+    // entire cache dir, so the file pointed at by this manifest entry should be
+    // there.
+    bool cached_resource_exists =
+        cache_dir_files.find(resource_file) != cache_dir_files.end();
+    if (expiry < now || !cached_resource_exists) {
+      cache_ids_to_delete.insert(id);
     } else {
-      std::filesystem::path actively_cached_file =
-          cache_dir_path_ / entry.second.file_name();
-      files_to_delete.erase(actively_cached_file);
+      cache_dir_files.erase(resource_file);
     }
   }
 
@@ -355,7 +362,7 @@ absl::Status FileBackedResourceCache::CleanUp(
 
   // Then delete files.
   absl::Status filesystem_status = absl::OkStatus();
-  for (const auto& file : files_to_delete) {
+  for (const auto& file : cache_dir_files) {
     std::error_code remove_error;
     std::filesystem::remove(file, remove_error);
     // We intentionally loop through all files and attempt to remove as many as
@@ -380,23 +387,42 @@ absl::Status FileBackedResourceCache::CleanUp(
   cache_id_lru.reserve(manifest.cache().size());
   uintmax_t cache_dir_size = 0;
 
-  for (auto& [id, resource] : manifest.cache()) {
-    std::error_code file_size_error;
+  for (const auto& [id, resource] : manifest.cache()) {
     cache_id_lru.emplace_back(std::make_pair(
         id, TimeUtil::ConvertProtoToAbslTime(resource.last_accessed_time())));
+    std::filesystem::path resource_file =
+        cache_dir_path_ / resource.file_name();
     // We calculate the sum of tracked files instead of taking the file_size()
     // of the cache directory, because the latter generally does not reflect the
-    // the total size of all of the files inside a directory.
-    cache_dir_size += std::filesystem::file_size(
-        cache_dir_path_ / resource.file_name(), file_size_error);
-    // Loop through as many as we can and if there's an error, return the first
-    // error we saw.
-    if (file_size_error.value() != 0 && filesystem_status.ok()) {
+    // total size of the sum of all the files inside a directory.
+    std::error_code ignored_exists_error;
+    if (!std::filesystem::exists(resource_file, ignored_exists_error)) {
+      // We log that the manifest entry pointed at a file in the cache that
+      // doesn't exist, but otherwise continue. The next time the cache is
+      // initialized, the manifest entry will be cleaned up.
       log_manager_.LogDiag(
           ProdDiagCode::RESOURCE_CACHE_CLEANUP_FAILED_TO_GET_FILE_SIZE);
-      filesystem_status = absl::InternalError(absl::StrCat(
-          "Error getting file size. Error code: ", file_size_error.value(),
-          ", message: ", file_size_error.message()));
+      continue;
+    }
+    std::error_code file_size_error;
+    std::uintmax_t size =
+        std::filesystem::file_size(resource_file, file_size_error);
+    // Loop through as many as we can and if there's an error, return the first
+    // error we saw.
+    if (file_size_error.value() != 0) {
+      log_manager_.LogDiag(
+          ProdDiagCode::RESOURCE_CACHE_CLEANUP_FAILED_TO_GET_FILE_SIZE);
+      if (filesystem_status.ok()) {
+        filesystem_status = absl::InternalError(absl::StrCat(
+            "Error getting file size. Error code: ", file_size_error.value(),
+            ", message: ", file_size_error.message()));
+      }
+      // If the file exists, but we failed to get the file size for some reason,
+      // try to delete it then continue.
+      std::error_code ignored_remove_error;
+      std::filesystem::remove(resource_file, ignored_remove_error);
+    } else {
+      cache_dir_size += size;
     }
   }
 
@@ -411,8 +437,8 @@ absl::Status FileBackedResourceCache::CleanUp(
                 // Sort by least recently used timestamp.
                 return first.second < second.second;
               });
-    for (auto const& entry : cache_id_lru) {
-      std::string id_to_remove = entry.first;
+    for (auto const& [cache_id, timestamp] : cache_id_lru) {
+      std::string id_to_remove = cache_id;
       std::filesystem::path file_to_remove =
           cache_dir_path_ / manifest.cache().at(id_to_remove).file_name();
       manifest.mutable_cache()->erase(id_to_remove);
