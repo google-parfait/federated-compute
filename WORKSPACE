@@ -89,6 +89,31 @@ http_archive(
     urls = ["https://github.com/grpc/grpc/archive/refs/tags/v1.50.0.tar.gz"],
 )
 
+# The version provided by TensorFlow 2.10 is incompatible with recent
+# pybind11_abseil versions. Remove when updating to TensorFlow 2.11.
+http_archive(
+    name = "pybind11",
+    build_file = "@org_tensorflow//third_party:pybind11.BUILD",
+    sha256 = "eacf582fa8f696227988d08cfc46121770823839fe9e301a20fbce67e7cd70ec",
+    strip_prefix = "pybind11-2.10.0",
+    urls = ["https://github.com/pybind/pybind11/archive/refs/tags/v2.10.0.tar.gz"],
+)
+
+# The version provided by TensorFlow 2.10 doesn't support absl::Cord.
+http_archive(
+    name = "pybind11_abseil",
+    sha256 = "6481888831cd548858c09371ea892329b36c8d4d961f559876c64e009d0bc630",
+    strip_prefix = "pybind11_abseil-3922b3861a2b27d4111e3ac971e6697ea030a36e",
+    url = "https://github.com/pybind/pybind11_abseil/archive/3922b3861a2b27d4111e3ac971e6697ea030a36e.tar.gz",
+)
+
+http_archive(
+    name = "pybind11_protobuf",
+    sha256 = "fe2b8bf12a65997b853709a5e719f7561b2e86a4cdbb9d8b051e654dd0fd8d11",
+    strip_prefix = "pybind11_protobuf-a50899c2eb604fc5f25deeb8901eff6231b8b3c0",
+    url = "https://github.com/pybind/pybind11_protobuf/archive/a50899c2eb604fc5f25deeb8901eff6231b8b3c0.tar.gz",
+)
+
 # Define the @io_grpc_grpc_java repository, which is used by the
 # @com_google_googleapis repository to define the Java protobuf targets such as
 # @com_google_googleapis//google/rpc:rpc_java_proto). The pattern we use here is
@@ -130,6 +155,9 @@ http_archive(
         # download versions of LLVM pointed to by non-HEAD TensorFlow.
         # TODO(team): Remove this patch when resolved.
         "//fcp/patches:tensorflow_llvm_url.patch",
+        # TensorFlow's custom pybind11 BUILD file is missing the osx config
+        # setting expected by pybind11_bazel.
+        "//fcp/patches:tensorflow_pybind11_osx.patch",
         # This patch removes tf_custom_op_py_library's dependency on the Bazel
         # version of TensorFlow since for all of our Python code, we rely on a
         # system-provided TensorFlow.

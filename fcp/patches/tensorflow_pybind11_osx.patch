@@ -1,0 +1,11 @@
+--- third_party/pybind11.BUILD
++++ third_party/pybind11.BUILD
+@@ -23,3 +23,8 @@
+         "@org_tensorflow//third_party/python_runtime:headers",
+     ],
+ )
++
++config_setting(
++    name = "osx",
++    constraint_values = ["@platforms//os:osx"],
++)

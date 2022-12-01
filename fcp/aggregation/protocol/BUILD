@@ -16,6 +16,7 @@
 
 load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
 load("//fcp:config.bzl", "FCP_COPTS")
+load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
 
 package(
     default_visibility = ["//fcp/aggregation:internal"],
@@ -37,6 +38,13 @@ cc_proto_library(
     ],
 )
 
+py_proto_library(
+    name = "py_pb2",
+    deps = [
+        ":proto",
+    ],
+)
+
 # Using tf_proto_library to get dependencies to TF protos built correctly.
 tf_proto_library(
     name = "configuration_proto",
@@ -50,6 +58,11 @@ tf_proto_library(
 alias(
     name = "configuration_cc_proto",
     actual = "configuration_proto_cc",
+)
+
+alias(
+    name = "configuration_py_pb2",
+    actual = "configuration_proto_py",
 )
 
 cc_library(
