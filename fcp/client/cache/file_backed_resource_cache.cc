@@ -186,7 +186,17 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
       WriteInternal(std::make_unique<CacheManifest>(std::move(manifest))));
 
   // Write file if it doesn't exist.
-  if (!std::filesystem::exists(cached_file_path)) {
+  std::error_code exists_error;
+  bool cached_file_exists =
+      std::filesystem::exists(cached_file_path, exists_error);
+  if (exists_error.value() != 0) {
+    log_manager_.LogDiag(
+        ProdDiagCode::RESOURCE_CACHE_PUT_FAILED_TO_CHECK_IF_FILE_EXISTS);
+    return absl::InternalError(absl::StrCat(
+        "Failed to check if cached resource already exists with error code: ",
+        exists_error.value()));
+  }
+  if (!cached_file_exists) {
     auto status = WriteCordToFile(cached_file_path.string(), resource);
     if (!status.ok()) {
       log_manager_.LogDiag(ProdDiagCode::RESOURCE_CACHE_RESOURCE_WRITE_FAILED);

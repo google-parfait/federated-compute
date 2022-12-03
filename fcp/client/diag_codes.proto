@@ -325,8 +325,11 @@ enum ProdDiagCode {
    * initialization. */
   RESOURCE_CACHE_INIT_FAILED_CLEANUP = 1984;
   /* Logged when a FileBackedResourceCache fails to check if a cached file
-   * exists. */
+   * exists during cleanup. */
   RESOURCE_CACHE_CLEANUP_FAILED_TO_CHECK_IF_FILE_EXISTS = 1983;
+  /* Logged when a FileBackedResourceCache fails to check if a cached file
+   * exists during Put(). */
+  RESOURCE_CACHE_PUT_FAILED_TO_CHECK_IF_FILE_EXISTS = 1982;
 
   reserved 25;
 }
