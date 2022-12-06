@@ -20,14 +20,29 @@ package fcp.aggregation;
 
 import "fcp/secagg/shared/secagg_messages.proto";
 
+// Client resource passed to the Aggregation Protocol either as an inlined
+// binary data or as a resource URI.
+message ClientResource {
+  oneof resource_kind {
+    bytes inline_bytes = 1 [ctype = CORD];
+    string uri = 2;
+  }
+}
+
 // Polymorhic client-to-server message carrying protocol specific content.
 message ClientMessage {
   oneof protocol_kind {
-    SecureAggregation secure_aggregation = 1;
+    SimpleAggregation simple_aggregation = 1;
+    SecureAggregation secure_aggregation = 2;
+  }
+
+  message SimpleAggregation {
+    ClientResource input = 1;
   }
 
   message SecureAggregation {
     fcp.secagg.ClientToServerWrapperMessage content = 1;
+    ClientResource masked_input = 2;
   }
 }
 
