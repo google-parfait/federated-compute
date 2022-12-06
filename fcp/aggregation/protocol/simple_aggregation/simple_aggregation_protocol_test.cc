@@ -16,6 +16,8 @@
 
 #include "fcp/aggregation/protocol/simple_aggregation/simple_aggregation_protocol.h"
 
+#include <atomic>
+#include <functional>
 #include <memory>
 #include <utility>
 
@@ -24,14 +26,19 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/synchronization/notification.h"
+#include "fcp/aggregation/core/agg_vector_aggregator.h"
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor_aggregator_factory.h"
+#include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
+#include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/protocol/simple_aggregation/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/simple_aggregation/checkpoint_parser.h"
-#include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/base/scheduler.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp::aggregation {
@@ -93,6 +100,7 @@ class SimpleAggregationProtocolTest : public ::testing::Test {
     MockCheckpointBuilder& checkpoint_builder = *wrapped_checkpoint_builder_;
     EXPECT_CALL(checkpoint_builder_factory_, Create())
         .WillOnce(Return(ByMove(std::move(wrapped_checkpoint_builder_))));
+    EXPECT_CALL(checkpoint_builder, Build()).WillOnce(Return(absl::Cord{}));
     return checkpoint_builder;
   }
 
@@ -550,7 +558,6 @@ TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
       .WillOnce(Return(absl::OkStatus()));
   EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {0.f})))
       .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(checkpoint_builder, Build()).WillOnce(Return(absl::Cord{}));
 
   EXPECT_THAT(
       protocol->GetStatus(),
@@ -662,7 +669,6 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
       .WillOnce(Return(absl::OkStatus()));
   EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {3.f})))
       .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(checkpoint_builder, Build()).WillOnce(Return(absl::Cord{}));
 
   // Verify that the Complete callback method is called.
   EXPECT_CALL(callback_, Complete);
@@ -721,6 +727,170 @@ TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
 TEST_F(SimpleAggregationProtocolTest, Abort_ProtocolNotStarted) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_THAT(protocol->Abort(), IsCode(FAILED_PRECONDITION));
+}
+
+TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_Success) {
+  const int64_t kNumClients = 10;
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_CALL(callback_, AcceptClients(0, kNumClients, _));
+  EXPECT_THAT(protocol->Start(kNumClients), IsOk());
+
+  // The following block will repeatedly create CheckpointParser instances
+  // which will be creating scalar int tensors with repeatedly incrementing
+  // values.
+  std::atomic<int> tensor_value = 0;
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_)).WillRepeatedly(Invoke([&] {
+    auto parser = std::make_unique<MockCheckpointParser>();
+    EXPECT_CALL(*parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([&] {
+      return Tensor::Create(DT_INT32, {}, CreateTestData({++tensor_value}));
+    }));
+    return parser;
+  }));
+
+  // Schedule receiving inputs on 4 concurrent threads.
+  auto scheduler = CreateThreadPoolScheduler(4);
+  for (int64_t i = 0; i < kNumClients; ++i) {
+    scheduler->Schedule([&, i]() {
+      EXPECT_THAT(protocol->ReceiveClientInput(i, absl::Cord{}), IsOk());
+    });
+  }
+  scheduler->WaitUntilIdle();
+
+  // Complete the protocol.
+  // Verify that the checkpoint builder is created.
+  auto& checkpoint_builder = ExpectCheckpointBuilder();
+  // Verify that foo_out tensor is added to the result checkpoint
+  EXPECT_CALL(checkpoint_builder, Add(StrEq("foo_out"), IsTensor({}, {55})))
+      .WillOnce(Return(absl::OkStatus()));
+
+  // Verify that the Complete callback method is called.
+  EXPECT_CALL(callback_, Complete);
+  EXPECT_THAT(protocol->Complete(), IsOk());
+}
+
+// A trivial test aggregator that delegates aggregation to a function.
+class FunctionAggregator final : public AggVectorAggregator<int> {
+ public:
+  using Func = std::function<int(int, int)>;
+
+  FunctionAggregator(DataType dtype, TensorShape shape, Func agg_function)
+      : AggVectorAggregator<int>(dtype, shape), agg_function_(agg_function) {}
+
+ private:
+  void AggregateVector(const AggVector<int>& agg_vector) override {
+    for (auto [i, v] : agg_vector) {
+      data()[i] = agg_function_(data()[i], v);
+    }
+  }
+
+  const Func agg_function_;
+};
+
+// Factory for the FunctionAggregator.
+class FunctionAggregatorFactory final : public TensorAggregatorFactory {
+ public:
+  explicit FunctionAggregatorFactory(FunctionAggregator::Func agg_function)
+      : agg_function_(agg_function) {}
+
+ private:
+  absl::StatusOr<std::unique_ptr<TensorAggregator>> Create(
+      DataType dtype, TensorShape shape) const override {
+    if (dtype != DT_INT32) {
+      return absl::InvalidArgumentError("Unsupported dtype: expected DT_INT32");
+    }
+    return std::make_unique<FunctionAggregator>(dtype, shape, agg_function_);
+  }
+
+  const FunctionAggregator::Func agg_function_;
+};
+
+TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_AbortWhileQueued) {
+  const int64_t kNumClients = 10;
+  const int64_t kNumClientBeforeBlocking = 3;
+
+  // Notifies the aggregation to unblock;
+  absl::Notification resume_aggregation_notification;
+  absl::Notification aggregation_blocked_notification;
+  std::atomic<int> agg_counter = 0;
+  FunctionAggregatorFactory agg_factory([&](int a, int b) {
+    if (++agg_counter > kNumClientBeforeBlocking &&
+        !aggregation_blocked_notification.HasBeenNotified()) {
+      aggregation_blocked_notification.Notify();
+      resume_aggregation_notification.WaitForNotification();
+    }
+    return a + b;
+  });
+  RegisterAggregatorFactory("foo1_aggregation", &agg_factory);
+
+  // The configuration below refers to the custom aggregation registered
+  // above.
+  auto protocol = CreateProtocol(PARSE_TEXT_PROTO(R"pb(
+    aggregation_configs {
+      intrinsic_uri: "foo1_aggregation"
+      intrinsic_args {
+        input_tensor {
+          name: "foo"
+          dtype: DT_INT32
+          shape {}
+        }
+      }
+      output_tensors {
+        name: "foo_out"
+        dtype: DT_INT32
+        shape {}
+      }
+    }
+  )pb"));
+  EXPECT_CALL(callback_, AcceptClients(0, kNumClients, _));
+  EXPECT_THAT(protocol->Start(kNumClients), IsOk());
+
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_)).WillRepeatedly(Invoke([&] {
+    auto parser = std::make_unique<MockCheckpointParser>();
+    EXPECT_CALL(*parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([&] {
+      return Tensor::Create(DT_INT32, {}, CreateTestData({1}));
+    }));
+    return parser;
+  }));
+
+  // Schedule receiving inputs on 10 concurrent threads.
+  auto scheduler = CreateThreadPoolScheduler(10);
+  for (int64_t i = 0; i < kNumClients; ++i) {
+    scheduler->Schedule([&, i]() {
+      EXPECT_THAT(protocol->ReceiveClientInput(i, absl::Cord{}), IsOk());
+    });
+  }
+
+  aggregation_blocked_notification.WaitForNotification();
+
+  StatusMessage status_message;
+  do {
+    status_message = protocol->GetStatus();
+  } while (status_message.num_clients_pending() > 0);
+
+  // At this point one input must be blocked inside the aggregation waiting for
+  // the notification, 3 inputs should already be gone through the aggregation,
+  // and the remaining 6 inputs should be blocked waiting to enter the
+  // aggregation.
+
+  // TODO(team): Need to revise the status implementation because it
+  // treats received and pending (queued) inputs "as aggregated and pending".
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(
+                  PARSE_TEXT_PROTO("num_clients_completed: 10 "
+                                   "num_inputs_aggregated_and_pending: 7 "
+                                   "num_inputs_aggregated_and_included: 3")));
+
+  resume_aggregation_notification.Notify();
+
+  // Abort and let all blocked aggregations continue.
+  EXPECT_THAT(protocol->Abort(), IsOk());
+  scheduler->WaitUntilIdle();
+
+  // All 10 inputs should now be discarded.
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_completed: 10 "
+                                                  "num_inputs_discarded: 10")));
 }
 
 }  // namespace
