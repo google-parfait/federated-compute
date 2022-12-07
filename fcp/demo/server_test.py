@@ -138,7 +138,7 @@ class ServerTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
 
   def setUp(self):
     super().setUp()
-    self.server = server.InProcessServer(
+    self.server = server.InProcessServer(  # pytype: disable=wrong-arg-types
         population_name=POPULATION_NAME,
         host='localhost',
         port=0)
