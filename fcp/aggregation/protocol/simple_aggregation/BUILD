@@ -64,6 +64,7 @@ cc_test(
         "//fcp/aggregation/core:tensor",
         "//fcp/aggregation/protocol:cc_proto",
         "//fcp/aggregation/protocol:configuration_cc_proto",
+        "//fcp/aggregation/protocol/testing:mock_callback",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/base",

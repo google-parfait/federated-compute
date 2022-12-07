@@ -49,6 +49,7 @@ cc_test(
     deps = [
         ":secure_aggregation",
         "//fcp/aggregation/protocol:configuration_cc_proto",
+        "//fcp/aggregation/protocol/testing:mock_callback",
         "//fcp/aggregation/testing",
         "//fcp/testing",
         "@com_google_absl//absl/status",

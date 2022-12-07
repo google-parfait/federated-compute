@@ -35,6 +35,7 @@
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/protocol/simple_aggregation/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/simple_aggregation/checkpoint_parser.h"
+#include "fcp/aggregation/protocol/testing/test_callback.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/monitoring.h"
@@ -74,20 +75,6 @@ class MockCheckpointBuilder : public CheckpointBuilder {
 class MockCheckpointBuilderFactory : public CheckpointBuilderFactory {
  public:
   MOCK_METHOD(std::unique_ptr<CheckpointBuilder>, Create, (), (const override));
-};
-
-class MockAggregationProtocolCallback : public AggregationProtocol::Callback {
- public:
-  MOCK_METHOD(void, AcceptClients,
-              (int64_t start_client_id, int64_t num_clients,
-               const AcceptanceMessage& message),
-              (override));
-  MOCK_METHOD(void, SendServerMessage,
-              (int64_t client_id, const ServerMessage& message), (override));
-  MOCK_METHOD(void, CloseClient,
-              (int64_t client_id, absl::Status diagnostic_status), (override));
-  MOCK_METHOD(void, Complete, (absl::Cord result), (override));
-  MOCK_METHOD(void, Abort, (absl::Status diagnostic_status), (override));
 };
 
 class SimpleAggregationProtocolTest : public ::testing::Test {

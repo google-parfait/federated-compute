@@ -68,7 +68,7 @@ class SecureAggregationProtocol final : public AggregationProtocol {
   // Similarly, does not take ownership of the schedulers, which must refer to a
   // valid object that outlives the SecureAggregationProtocol instance.
   static absl::StatusOr<std::unique_ptr<SecureAggregationProtocol>> Create(
-      const Configuration& configuration,
+      const Configuration& configuration, Callback* callback,
       std::unique_ptr<fcp::Scheduler> worker_scheduler,
       std::unique_ptr<fcp::Scheduler> callback_scheduler);
 
@@ -97,9 +97,10 @@ class SecureAggregationProtocol final : public AggregationProtocol {
 
  private:
   // Private constructor
-  SecureAggregationProtocol(std::unique_ptr<fcp::Scheduler>,
+  SecureAggregationProtocol(Callback* callback, std::unique_ptr<fcp::Scheduler>,
                             std::unique_ptr<fcp::Scheduler>);
 
+  Callback* callback_;
   std::unique_ptr<fcp::Scheduler> worker_scheduler_;
   std::unique_ptr<fcp::Scheduler> callback_scheduler_;
 };

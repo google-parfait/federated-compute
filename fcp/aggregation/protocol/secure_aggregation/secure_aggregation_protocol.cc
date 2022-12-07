@@ -28,21 +28,27 @@ namespace fcp::aggregation {
 
 absl::StatusOr<std::unique_ptr<SecureAggregationProtocol>>
 SecureAggregationProtocol::Create(
-    const Configuration& configuration,
+    const Configuration& /*configuration*/,
+    AggregationProtocol::Callback* callback,
     std::unique_ptr<fcp::Scheduler> worker_scheduler,
     std::unique_ptr<fcp::Scheduler> callback_scheduler) {
   // TODO(team): Create round advancement policy
   return absl::WrapUnique(new SecureAggregationProtocol(
-      std::move(worker_scheduler), std::move(callback_scheduler)));
+      callback, std::move(worker_scheduler), std::move(callback_scheduler)));
 }
 
 // TODO(team): Implement Secure Aggregation Protocol methods.
 absl::Status SecureAggregationProtocol::Start(int64_t num_clients) {
-  return absl::UnimplementedError("Start is not implemented");
+  // TODO(team): Populate SecureAggregation field in  AcceptanceMessage
+  // with parameters required by SecAgg client.
+  AcceptanceMessage acceptance_message;
+  callback_->AcceptClients(0, num_clients, acceptance_message);
+  return absl::OkStatus();
 }
 
-absl::Status SecureAggregationProtocol::AddClients(int64_t num_clients) {
-  return absl::UnimplementedError("AddClients is not implemented");
+absl::Status SecureAggregationProtocol::AddClients(int64_t /*num_clients*/) {
+  return absl::UnimplementedError(
+      "AddClients is not relevant to SecureAggregationProtocol");
 }
 
 absl::Status SecureAggregationProtocol::ReceiveClientInput(int64_t client_id,
@@ -75,9 +81,10 @@ StatusMessage SecureAggregationProtocol::GetStatus() {
 }
 
 SecureAggregationProtocol::SecureAggregationProtocol(
-    std::unique_ptr<fcp::Scheduler> worker_scheduler,
+    Callback* callback, std::unique_ptr<fcp::Scheduler> worker_scheduler,
     std::unique_ptr<fcp::Scheduler> callback_scheduler)
-    : worker_scheduler_(std::move(worker_scheduler)),
+    : callback_(callback),
+      worker_scheduler_(std::move(worker_scheduler)),
       callback_scheduler_(std::move(callback_scheduler)) {}
 
 }  // namespace fcp::aggregation
