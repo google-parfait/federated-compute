@@ -28,6 +28,31 @@ py_test(
 )
 
 py_library(
+    name = "data_spec",
+    srcs = ["data_spec.py"],
+    srcs_version = "PY3",
+    visibility = default_visibility + [
+    ],
+    deps = [
+        ":type_checks",
+        "//fcp/protos:plan_py_pb2",
+    ],
+)
+
+py_test(
+    name = "data_spec_test",
+    srcs = [
+        "data_spec_test.py",
+    ],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":data_spec",
+        "//fcp/protos:plan_py_pb2",
+    ],
+)
+
+py_library(
     name = "tensor_utils",
     srcs = ["tensor_utils.py"],
     srcs_version = "PY3",
