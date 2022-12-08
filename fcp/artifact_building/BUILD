@@ -82,6 +82,31 @@ py_test(
 )
 
 py_library(
+    name = "proto_helpers",
+    srcs = ["proto_helpers.py"],
+    srcs_version = "PY3",
+    visibility = default_visibility + [
+    ],
+    deps = [
+        ":tensor_utils",
+        ":type_checks",
+        "//fcp/protos:plan_py_pb2",
+    ],
+)
+
+py_test(
+    name = "proto_helpers_test",
+    size = "small",
+    srcs = ["proto_helpers_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":proto_helpers",
+        ":variable_helpers",
+    ],
+)
+
+py_library(
     name = "tensor_utils",
     srcs = ["tensor_utils.py"],
     srcs_version = "PY3",
