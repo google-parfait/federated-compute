@@ -21,13 +21,11 @@ import tensorflow_federated as tff
 
 from fcp.artifact_building import tensor_utils
 from fcp.artifact_building import type_checks
-
-# TFF types allowed for variables created at input/output serialization
-# boundaries.
-AllowedTffTypes = Union[tff.TensorType, tff.StructType, tff.FederatedType]
+from fcp.artifact_building import variable_helpers
 
 
-def tff_type_to_dtype_list(tff_type: AllowedTffTypes) -> list[tf.DType]:
+def tff_type_to_dtype_list(
+    tff_type: variable_helpers.AllowedTffTypes) -> list[tf.DType]:
   """Creates a flat list of `tf.DType`s for tensors in a `tff.Type`.
 
   Args:
@@ -51,7 +49,7 @@ def tff_type_to_dtype_list(tff_type: AllowedTffTypes) -> list[tf.DType]:
 
 
 def tff_type_to_tensor_spec_list(
-    tff_type: AllowedTffTypes) -> list[tf.TensorSpec]:
+    tff_type: variable_helpers.AllowedTffTypes) -> list[tf.TensorSpec]:
   """Creates a flat list of tensor specs for tensors in a `tff.Type`.
 
   Args:
@@ -74,7 +72,8 @@ def tff_type_to_tensor_spec_list(
     return elem_list
 
 
-def pack_tff_value(tff_type: AllowedTffTypes, value_list: Any) -> Any:
+def pack_tff_value(tff_type: variable_helpers.AllowedTffTypes,
+                   value_list: Any) -> Any:
   """Packs a list of values into a shape specified by a `tff.Type`.
 
   Args:
