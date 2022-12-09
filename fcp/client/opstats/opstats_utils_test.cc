@@ -48,8 +48,6 @@ OperationalStats::Event CreateEvent(
 
 TEST(OpStatsUtils,
      GetLastSuccessfulContributionTimeReturnsUploadStartedTimestamp) {
-  StrictMock<MockOpStatsDb> db;
-
   OperationalStats stats;
   stats.set_task_name(kTaskName);
 
@@ -59,16 +57,14 @@ TEST(OpStatsUtils,
 
   OpStatsSequence opstats_sequence;
   *opstats_sequence.add_opstats() = std::move(stats);
-  EXPECT_CALL(db, Read()).WillOnce(Return(opstats_sequence));
 
-  auto last_time = GetLastSuccessfulContributionTime(db, kTaskName);
+  auto last_time =
+      GetLastSuccessfulContributionTime(opstats_sequence, kTaskName);
   EXPECT_EQ(last_time->seconds(), upload_started_time_sec);
 }
 
 TEST(OpStatsUtils,
      GetLastSuccessfulContributionTimeReturnNotFoundForUnknownTask) {
-  StrictMock<MockOpStatsDb> db;
-
   OperationalStats stats;
   stats.set_task_name(kTaskName);
 
@@ -78,14 +74,13 @@ TEST(OpStatsUtils,
 
   OpStatsSequence opstats_sequence;
   *opstats_sequence.add_opstats() = std::move(stats);
-  EXPECT_CALL(db, Read()).WillOnce(Return(opstats_sequence));
   EXPECT_FALSE(
-      GetLastSuccessfulContributionTime(db, "task_name_not_found").has_value());
+      GetLastSuccessfulContributionTime(opstats_sequence, "task_name_not_found")
+          .has_value());
 }
 
 TEST(OpStatsUtils,
      GetLastSuccessfulContributionTimeReturnsMostRecentUploadStartedTimestamp) {
-  StrictMock<MockOpStatsDb> db;
   OpStatsSequence opstats_sequence;
 
   OperationalStats old_stats;
@@ -100,16 +95,13 @@ TEST(OpStatsUtils,
       CreateEvent(kUploadStartedEvent, new_upload_started_sec));
   *opstats_sequence.add_opstats() = std::move(new_stats);
 
-  EXPECT_CALL(db, Read()).WillOnce(Return(opstats_sequence));
-
-  auto last_time = GetLastSuccessfulContributionTime(db, kTaskName);
+  auto last_time =
+      GetLastSuccessfulContributionTime(opstats_sequence, kTaskName);
   EXPECT_EQ(last_time->seconds(), new_upload_started_sec);
 }
 
 TEST(OpStatsUtils,
      GetLastSuccessfulContributionTimeReturnNotFoundIfAbortedByServer) {
-  StrictMock<MockOpStatsDb> db;
-
   OperationalStats stats;
   stats.set_task_name(kTaskName);
   stats.mutable_events()->Add(CreateEvent(kUploadStartedEvent, 1000));
@@ -118,13 +110,12 @@ TEST(OpStatsUtils,
   OpStatsSequence opstats_sequence;
   *opstats_sequence.add_opstats() = std::move(stats);
 
-  EXPECT_CALL(db, Read()).WillOnce(Return(opstats_sequence));
-  EXPECT_FALSE(GetLastSuccessfulContributionTime(db, kTaskName).has_value());
+  EXPECT_FALSE(GetLastSuccessfulContributionTime(opstats_sequence, kTaskName)
+                   .has_value());
 }
 
 TEST(OpStatsUtils,
      GetLastSuccessfulContributionTimeReturnOlderIfNewerAbortedByServer) {
-  StrictMock<MockOpStatsDb> db;
   OpStatsSequence opstats_sequence;
 
   OperationalStats old_stats;
@@ -142,16 +133,13 @@ TEST(OpStatsUtils,
       OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_SERVER_ABORTED, 2001));
   *opstats_sequence.add_opstats() = std::move(new_stats);
 
-  EXPECT_CALL(db, Read()).WillOnce(Return(opstats_sequence));
-
-  auto last_time = GetLastSuccessfulContributionTime(db, kTaskName);
+  auto last_time =
+      GetLastSuccessfulContributionTime(opstats_sequence, kTaskName);
   EXPECT_EQ(last_time->seconds(), expected_time_sec);
 }
 
 TEST(OpStatsUtils,
      GetLastSuccessfulContributionTimeReturnNotFoundIfNoUploadStarted) {
-  StrictMock<MockOpStatsDb> db;
-
   OperationalStats stats;
   stats.set_task_name(kTaskName);
   stats.mutable_events()->Add(
@@ -159,8 +147,8 @@ TEST(OpStatsUtils,
 
   OpStatsSequence opstats_sequence;
   *opstats_sequence.add_opstats() = std::move(stats);
-  EXPECT_CALL(db, Read()).WillOnce(Return(opstats_sequence));
-  EXPECT_FALSE(GetLastSuccessfulContributionTime(db, kTaskName).has_value());
+  EXPECT_FALSE(GetLastSuccessfulContributionTime(opstats_sequence, kTaskName)
+                   .has_value());
 }
 
 }  // namespace

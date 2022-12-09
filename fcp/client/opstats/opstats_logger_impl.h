@@ -87,6 +87,10 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   // Syncs all logged events to storage.
   absl::Status CommitToStorage() override;
 
+  // Returns the task name of the currently executing task. Only returns a valid
+  // task name if called after `AddEventAndSetTaskName` is called.
+  std::string GetCurrentTaskName() override;
+
  private:
   // Helper for adding a new event of the specified kind to the cumulative
   // message being stored in this class.

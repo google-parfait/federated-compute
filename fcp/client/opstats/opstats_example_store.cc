@@ -16,15 +16,18 @@
 #include "fcp/client/opstats/opstats_example_store.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/util/time_util.h"
+#include "absl/status/status.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/opstats/opstats_utils.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
@@ -190,6 +193,7 @@ OpStatsExampleIteratorFactory::CreateExampleIterator(
 
   absl::Time lower_bound_time = absl::InfinitePast();
   absl::Time upper_bound_time = absl::InfiniteFuture();
+  bool last_successful_contribution = false;
   if (example_selector.has_criteria()) {
     OpStatsSelectionCriteria criteria;
     if (!example_selector.criteria().UnpackTo(&criteria)) {
@@ -210,16 +214,34 @@ OpStatsExampleIteratorFactory::CreateExampleIterator(
       return absl::InvalidArgumentError(
           "Invalid selection criteria: start_time is after end_time.");
     }
+    last_successful_contribution = criteria.last_successful_contribution();
   }
 
   FCP_ASSIGN_OR_RETURN(OpStatsSequence data,
                        op_stats_logger_->GetOpStatsDb()->Read());
   std::vector<OperationalStats> selected_data;
-  for (auto it = data.opstats().rbegin(); it != data.opstats().rend(); ++it) {
-    absl::Time last_update_time = GetLastUpdatedTime(*it);
-    if (last_update_time >= lower_bound_time &&
-        last_update_time <= upper_bound_time) {
-      selected_data.push_back(*it);
+  if (last_successful_contribution) {
+    if (opstats_last_successful_contribution_criteria_) {
+      // Selector specified last_successful_contribution, and the feature is
+      // enabled. Create a last_successful_contribution iterator.
+      std::optional<OperationalStats> last_successful_contribution_entry =
+          GetLastSuccessfulContribution(data,
+                                        op_stats_logger_->GetCurrentTaskName());
+      if (last_successful_contribution_entry.has_value()) {
+        selected_data.push_back(*last_successful_contribution_entry);
+      }
+    } else {
+      return absl::InvalidArgumentError(
+          "OpStats selection criteria has last_successful_contribution enabled "
+          "but feature not enabled in the runtime!");
+    }
+  } else {
+    for (auto it = data.opstats().rbegin(); it != data.opstats().rend(); ++it) {
+      absl::Time last_update_time = GetLastUpdatedTime(*it);
+      if (last_update_time >= lower_bound_time &&
+          last_update_time <= upper_bound_time) {
+        selected_data.push_back(*it);
+      }
     }
   }
   return std::make_unique<OpStatsExampleIterator>(

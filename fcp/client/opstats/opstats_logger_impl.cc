@@ -137,6 +137,11 @@ absl::Status OpStatsLoggerImpl::CommitToStorage() {
   return status;
 }
 
+std::string OpStatsLoggerImpl::GetCurrentTaskName() {
+  absl::MutexLock lock(&mutex_);
+  return stats_.task_name();
+}
+
 }  // namespace opstats
 }  // namespace client
 }  // namespace fcp

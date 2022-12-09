@@ -28,11 +28,17 @@ namespace fcp {
 namespace client {
 namespace opstats {
 
-// Returns an optional either containing the timestamp of the last time the
+// Returns an optional containing an OperationalStats of the last time the
 // runtime successfully contributed to a task with the given task name,
 // otherwise returns an empty optional.
+std::optional<OperationalStats> GetLastSuccessfulContribution(
+    OpStatsSequence& data, const std::string& task_name);
+
+// Returns an optional containing the timestamp of the last time the runtime
+// successfully contributed to a task with the given task name, otherwise
+// returns an empty optional.
 std::optional<google::protobuf::Timestamp> GetLastSuccessfulContributionTime(
-    OpStatsDb& db, const std::string& task_name);
+    OpStatsSequence& data, const std::string& task_name);
 
 }  // namespace opstats
 }  // namespace client

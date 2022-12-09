@@ -85,6 +85,10 @@ class OpStatsLogger {
   // failed to initialize.
   absl::Status GetInitStatus() { return init_status_; }
 
+  // Returns the task name of the currently executing task. Only returns a valid
+  // task name if called after `AddEventAndSetTaskName` is called.
+  virtual std::string GetCurrentTaskName() { return ""; }
+
  private:
   bool opstats_enabled_;
   std::unique_ptr<OpStatsDb> db_;

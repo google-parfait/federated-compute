@@ -16,6 +16,7 @@
 
 #include "fcp/client/opstats/opstats_utils.h"
 
+#include <algorithm>
 #include <optional>
 #include <string>
 
@@ -29,14 +30,33 @@ namespace client {
 namespace opstats {
 
 std::optional<google::protobuf::Timestamp> GetLastSuccessfulContributionTime(
-    OpStatsDb& db, const std::string& task_name) {
-  absl::StatusOr<OpStatsSequence> data = db.Read();
-  if (!data.ok()) {
+    OpStatsSequence& data, const std::string& task_name) {
+  std::optional<OperationalStats> last_successful_entry =
+      GetLastSuccessfulContribution(data, task_name);
+  if (!last_successful_entry.has_value()) {
     return std::nullopt;
   }
-  for (auto it = data->opstats().rbegin(); it != data->opstats().rend(); ++it) {
+
+  auto upload_started = std::find_if(
+      last_successful_entry->events().begin(),
+      last_successful_entry->events().end(),
+      [](const OperationalStats::Event& event) {
+        return event.event_type() ==
+               OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED;
+      });
+  if (upload_started == last_successful_entry->events().end()) {
+    // For last_successful_entry to have a value, it must have had an
+    // EVENT_KIND_RESULT_UPLOAD_STARTED event, so we should never reach this.
+    return std::nullopt;
+  }
+
+  return upload_started->timestamp();
+}
+
+std::optional<OperationalStats> GetLastSuccessfulContribution(
+    OpStatsSequence& data, const std::string& task_name) {
+  for (auto it = data.opstats().rbegin(); it != data.opstats().rend(); ++it) {
     const OperationalStats& opstats_entry = *it;
-    google::protobuf::Timestamp timestamp;
     bool upload_started = false;
     bool upload_aborted = false;
     if (opstats_entry.task_name() != task_name) {
@@ -45,7 +65,6 @@ std::optional<google::protobuf::Timestamp> GetLastSuccessfulContributionTime(
     for (const auto& event : opstats_entry.events()) {
       if (event.event_type() ==
           OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED) {
-        timestamp = event.timestamp();
         upload_started = true;
       }
       if (event.event_type() ==
@@ -54,7 +73,7 @@ std::optional<google::protobuf::Timestamp> GetLastSuccessfulContributionTime(
       }
     }
     if (upload_started && !upload_aborted) {
-      return timestamp;
+      return opstats_entry;
     }
   }
   return std::nullopt;

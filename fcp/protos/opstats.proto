@@ -328,6 +328,10 @@ message OpStatsSequence {
 // If neither start_time nor end_time are set, all examples will be used.
 // If both start_time and end_time are set, the examples within the time range
 // will be used.
+// If last_successful_contribution is set, start_time and end_time are ignored,
+// and opstats returns a single example containing the entry of the last
+// successful contribution (if it exists) of the runtime to the current task. If
+// there are no previous successful contributions, returns an empty iterator.
 message OpStatsSelectionCriteria {
   // The lower bound (inclusive) of the last updated time for a OperationalStats
   // message.
@@ -335,4 +339,8 @@ message OpStatsSelectionCriteria {
   // The upper bound (inclusive) of the last updated time for a OperationalStats
   // message.
   google.protobuf.Timestamp end_time = 2;
+  // If set, returns the entry of the last successful contribution to the
+  // current task, or no entries if there was no successful contribution.
+  // `start_time` and `end_time are ignored.
+  bool last_successful_contribution = 3;
 }

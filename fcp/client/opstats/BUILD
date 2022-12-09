@@ -83,6 +83,7 @@ cc_library(
     deps = [
         ":opstats_db",
         ":opstats_logger",
+        ":opstats_utils",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interfaces",
         "//fcp/client:simple_task_environment",
@@ -90,6 +91,7 @@ cc_library(
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
         "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
         "@org_tensorflow//tensorflow/core:protos_all_cc",

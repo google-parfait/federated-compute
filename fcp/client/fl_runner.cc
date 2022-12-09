@@ -1409,7 +1409,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // Eligibility eval plans can use example iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger, log_manager);
+      opstats_logger, log_manager,
+      flags->opstats_last_successful_contribution_criteria());
   std::unique_ptr<engine::ExampleIteratorFactory>
       env_eligibility_example_iterator_factory =
           CreateSimpleTaskEnvironmentIteratorFactory(
@@ -1452,17 +1453,23 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   }
 
   if (flags->selector_context_include_last_successful_contribution_time()) {
-    std::optional<google::protobuf::Timestamp>
-        last_successful_contribution_time =
-            opstats::GetLastSuccessfulContributionTime(
-                *(opstats_logger->GetOpStatsDb()), checkin_result->task_name);
-    if (last_successful_contribution_time.has_value()) {
-      *(federated_selector_context_with_task_name
-            .mutable_computation_properties()
-            ->mutable_federated()
-            ->mutable_historical_context()
-            ->mutable_last_successful_contribution_time()) =
-          *last_successful_contribution_time;
+    const auto& opstats_db = opstats_logger->GetOpStatsDb();
+    if (opstats_db != nullptr) {
+      absl::StatusOr<opstats::OpStatsSequence> data = opstats_db->Read();
+      if (data.ok()) {
+        std::optional<google::protobuf::Timestamp>
+            last_successful_contribution_time =
+                opstats::GetLastSuccessfulContributionTime(
+                    *data, checkin_result->task_name);
+        if (last_successful_contribution_time.has_value()) {
+          *(federated_selector_context_with_task_name
+                .mutable_computation_properties()
+                ->mutable_federated()
+                ->mutable_historical_context()
+                ->mutable_last_successful_contribution_time()) =
+              *last_successful_contribution_time;
+        }
+      }
     }
   }
 
@@ -1594,7 +1601,8 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   // Eligibility eval plans can only use iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger.get(), log_manager);
+      opstats_logger.get(), log_manager,
+      flags->opstats_last_successful_contribution_criteria());
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(env_deps, SelectorContext());
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{

@@ -478,6 +478,7 @@ class MockOpStatsLogger : public ::fcp::client::opstats::OpStatsLogger {
   MOCK_METHOD(::fcp::client::opstats::OpStatsDb*, GetOpStatsDb, (), (override));
   MOCK_METHOD(bool, IsOpStatsEnabled, (), (const override));
   MOCK_METHOD(absl::Status, CommitToStorage, (), (override));
+  MOCK_METHOD(std::string, GetCurrentTaskName, (), (override));
 };
 
 class MockSimpleTaskEnvironment : public SimpleTaskEnvironment {
