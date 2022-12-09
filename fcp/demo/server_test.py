@@ -73,15 +73,6 @@ def create_plan() -> plan_pb2.Plan:
         tensor_names=[CAP_TENSOR_NAME],
         data=[contribution_cap])
 
-    intermediate_acc = tf.Variable(0, dtype=tf.int32)
-    update_intermediate_acc = intermediate_acc.assign_add(
-        tf.raw_ops.Restore(
-            file_pattern=filename, tensor_name=COUNT_TENSOR_NAME, dt=tf.int32))
-    save_intermediate_acc = tf.raw_ops.Save(
-        filename=filename,
-        tensor_names=[COUNT_TENSOR_NAME],
-        data=[intermediate_acc])
-
     read_intermediate_update = count.assign_add(
         tf.raw_ops.Restore(
             file_pattern=filename, tensor_name=COUNT_TENSOR_NAME, dt=tf.int32))
@@ -105,23 +96,28 @@ def create_plan() -> plan_pb2.Plan:
                       input_filepath_tensor_name=input_filepath.op.name,
                       output_filepath_tensor_name=output_filepath.op.name)),
               server_phase=plan_pb2.ServerPhase(
-                  phase_init_op=intermediate_acc.initializer.name,
                   write_client_init=plan_pb2.CheckpointOp(
                       saver_def=tf.compat.v1.train.SaverDef(
                           filename_tensor_name=filename.name,
                           save_tensor_name=write_client_init.name)),
-                  read_update=plan_pb2.CheckpointOp(
-                      saver_def=tf.compat.v1.train.SaverDef(
-                          filename_tensor_name=filename.name,
-                          restore_op_name=update_intermediate_acc.name)),
-                  write_intermediate_update=plan_pb2.CheckpointOp(
-                      saver_def=tf.compat.v1.train.SaverDef(
-                          filename_tensor_name=filename.name,
-                          save_tensor_name=save_intermediate_acc.name)),
                   read_intermediate_update=plan_pb2.CheckpointOp(
                       saver_def=tf.compat.v1.train.SaverDef(
                           filename_tensor_name=filename.name,
-                          restore_op_name=read_intermediate_update.name))))
+                          restore_op_name=read_intermediate_update.name))),
+              server_phase_v2=plan_pb2.ServerPhaseV2(aggregations=[
+                  plan_pb2.ServerAggregationConfig(
+                      intrinsic_uri='federated_sum',
+                      intrinsic_args=[
+                          plan_pb2.ServerAggregationConfig.IntrinsicArg(
+                              input_tensor=tf.TensorSpec(
+                                  (), tf.int32,
+                                  COUNT_TENSOR_NAME).experimental_as_proto())
+                      ],
+                      output_tensors=[
+                          tf.TensorSpec((), tf.int32, COUNT_TENSOR_NAME)
+                          .experimental_as_proto()
+                      ])
+              ]))
       ],
       server_savepoint=plan_pb2.CheckpointOp(
           saver_def=tf.compat.v1.train.SaverDef(

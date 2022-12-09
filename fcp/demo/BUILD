@@ -17,13 +17,18 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 py_library(
     name = "aggregations",
     srcs = ["aggregations.py"],
+    data = ["@pybind11_abseil//pybind11_abseil:status.so"],
     srcs_version = "PY3",
     deps = [
         ":http_actions",
         ":media",
-        ":plan_utils",
+        "//fcp/aggregation/protocol:configuration_py_pb2",
+        "//fcp/aggregation/protocol:py_pb2",
+        "//fcp/aggregation/protocol/python:aggregation_protocol",
+        "//fcp/aggregation/tensorflow/python:aggregation_protocols",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+        "@com_google_googleapis//google/rpc:code_py_proto",
         "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
     ],
 )
@@ -31,13 +36,17 @@ py_library(
 py_test(
     name = "aggregations_test",
     srcs = ["aggregations_test.py"],
+    data = ["@pybind11_abseil//pybind11_abseil:status.so"],
     python_version = "PY3",
     srcs_version = "PY3",
     deps = [
         ":aggregations",
         ":http_actions",
         ":media",
-        ":plan_utils",
+        ":test_utils",
+        "//fcp/aggregation/protocol:py_pb2",
+        "//fcp/aggregation/protocol/python:aggregation_protocol",
+        "//fcp/aggregation/tensorflow/python:aggregation_protocols",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
     ],

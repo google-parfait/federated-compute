@@ -23,5 +23,6 @@ package_group(
     ],
     packages = [
         "//fcp/aggregation/...",
+        "//fcp/demo/...",
     ],
 )

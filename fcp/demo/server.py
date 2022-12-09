@@ -93,7 +93,8 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
               common_pb2.Resource(uri=checkpoint_url))
           try:
             status = await self._aggregations_service.wait(
-                session_id, num_inputs_aggregated_and_pending=number_of_clients)
+                session_id,
+                num_inputs_aggregated_and_included=number_of_clients)
             if status.status != aggregations.AggregationStatus.PENDING:
               raise ValueError('Aggregation failed.')
           finally:
