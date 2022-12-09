@@ -38,6 +38,13 @@ class CheckpointWriter final {
   // Constructs CheckpointWriter for the given filename.
   explicit CheckpointWriter(const std::string& filename);
 
+  // Constructs CheckpointWriter for the given filename and
+  // CreateBuilderFunction.
+  explicit CheckpointWriter(
+      const std::string& filename,
+      ::tensorflow::checkpoint::TensorSliceWriter::CreateBuilderFunction
+          create_builder_fn);
+
   // Adds a tensor to the checkpoint.
   absl::Status Add(const std::string& tensor_name, const Tensor& tensor);
 

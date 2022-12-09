@@ -48,8 +48,13 @@ const T* GetTensorData(const Tensor& tensor) {
 }
 
 CheckpointWriter::CheckpointWriter(const std::string& filename)
-    : tensorflow_writer_(
-          filename, ::tensorflow::checkpoint::CreateTableTensorSliceBuilder) {}
+    : tensorflow_writer_(filename,
+                         tf::checkpoint::CreateTableTensorSliceBuilder) {}
+
+CheckpointWriter::CheckpointWriter(
+    const std::string& filename,
+    tf::checkpoint::TensorSliceWriter::CreateBuilderFunction create_builder_fn)
+    : tensorflow_writer_(filename, create_builder_fn) {}
 
 absl::Status CheckpointWriter::Add(const std::string& tensor_name,
                                    const Tensor& tensor) {
