@@ -109,8 +109,9 @@ class _WaitData:
   # The loop the caller is waiting on.
   loop: asyncio.AbstractEventLoop = dataclasses.field(
       default_factory=asyncio.get_running_loop)
-  # The queue to which the SessionStatus will be written once the wait is over.
-  queue: asyncio.Queue = dataclasses.field(default_factory=asyncio.Queue)
+  # The future to which the SessionStatus will be written once the wait is over.
+  status_future: asyncio.Future[SessionStatus] = dataclasses.field(
+      default_factory=asyncio.Future)
 
 
 class _AggregationProtocolCallback(
@@ -291,7 +292,7 @@ class Service:
 
       wait_data = _WaitData(num_inputs_aggregated_and_included)
       state.pending_waits.add(wait_data)
-    return await wait_data.queue.get()
+    return await wait_data.status_future
 
   def pre_authorize_clients(self, session_id: str,
                             num_tokens: int) -> Sequence[str]:
@@ -342,7 +343,7 @@ class Service:
       status = self._get_session_status(state)
       for data in state.pending_waits:
         data.loop.call_soon_threadsafe(
-            functools.partial(data.queue.put_nowait, status))
+            functools.partial(data.status_future.set_result, status))
       state.pending_waits.clear()
 
   def _handle_protocol_abort(self, session_id: str) -> None:
@@ -356,7 +357,7 @@ class Service:
           status = self._get_session_status(state)
           for data in state.pending_waits:
             data.loop.call_soon_threadsafe(
-                functools.partial(data.queue.put_nowait, status))
+                functools.partial(data.status_future.set_result, status))
           state.pending_waits.clear()
 
   @http_actions.proto_action(
@@ -467,7 +468,7 @@ class Service:
               status.num_inputs_aggregated_and_included >=
               data.num_inputs_aggregated_and_included):
             data.loop.call_soon_threadsafe(
-                functools.partial(data.queue.put_nowait, status))
+                functools.partial(data.status_future.set_result, status))
             completed_waits.add(data)
         state.pending_waits -= completed_waits
     return aggregations_pb2.SubmitAggregationResultResponse()
