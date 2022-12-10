@@ -25,7 +25,6 @@ from fcp.protos import plan_pb2
 
 DEFAULT_INITIAL_CHECKPOINT = b'initial'
 CHECKPOINT_TENSOR_NAME = 'checkpoint'
-CLIENT_TENSOR_NAME = 'client_value'
 INTERMEDIATE_TENSOR_NAME = 'intermediate_value'
 FINAL_TENSOR_NAME = 'final_value'
 
@@ -68,7 +67,7 @@ def create_plan(log_file: Optional[str] = None) -> plan_pb2.Plan:
     tf.constant(0)
 
   with tf.compat.v1.Graph().as_default() as server_graph:
-    # Initialization (used by both Session and IntermediateAggregationSession.
+    # Initialization:
     last_client_update = tf.Variable(0, dtype=tf.int32)
     intermediate_acc = tf.Variable(0, dtype=tf.int32)
     last_intermediate_update = tf.Variable(0, dtype=tf.int32)
@@ -79,32 +78,7 @@ def create_plan(log_file: Optional[str] = None) -> plan_pb2.Plan:
     ]):
       phase_init_op = log_op('phase_init')
 
-    # Ops for IntermediateAggregationSession:
-    read_update_filename = tf.compat.v1.placeholder(tf.string, shape=())
-    read_update_op = create_checkpoint_op(
-        'read_update',
-        read_update_filename,
-        restore_op=last_client_update.assign(
-            tf.raw_ops.Restore(
-                file_pattern=read_update_filename,
-                tensor_name=CLIENT_TENSOR_NAME,
-                dt=tf.int32)))
-
-    with tf.control_dependencies([log_op('aggregate_into_accumulators')]):
-      aggregate_into_accumulators_op = intermediate_acc.assign_add(
-          last_client_update)
-
-    write_intermediate_update_filename = tf.compat.v1.placeholder(
-        tf.string, shape=())
-    write_intermediate_update_op = create_checkpoint_op(
-        'write_intermediate_update',
-        write_intermediate_update_filename,
-        save_op=tf.raw_ops.Save(
-            filename=write_intermediate_update_filename,
-            tensor_names=[INTERMEDIATE_TENSOR_NAME],
-            data=[intermediate_acc]))
-
-    # Ops for Session:
+    # Ops for L2 Aggregation:
     client_checkpoint_data = tf.Variable(
         DEFAULT_INITIAL_CHECKPOINT, dtype=tf.string)
 
@@ -152,10 +126,6 @@ def create_plan(log_file: Optional[str] = None) -> plan_pb2.Plan:
               client_phase=plan_pb2.ClientPhase(name='ClientPhase'),
               server_phase=plan_pb2.ServerPhase(
                   phase_init_op=phase_init_op.name,
-                  read_update=read_update_op,
-                  aggregate_into_accumulators_op=(
-                      aggregate_into_accumulators_op.name),
-                  write_intermediate_update=write_intermediate_update_op,
                   write_client_init=write_client_init_op,
                   read_intermediate_update=read_intermediate_update_op,
                   apply_aggregrated_updates_op=(
@@ -170,92 +140,6 @@ def create_plan(log_file: Optional[str] = None) -> plan_pb2.Plan:
 
 
 class PlanUtilsTest(absltest.TestCase):
-
-  def test_intermediate_aggregation_session_enter_exit(self):
-    self.assertIsNone(tf.compat.v1.get_default_session())
-    with plan_utils.IntermediateAggregationSession(create_plan()):
-      self.assertIsNotNone(tf.compat.v1.get_default_session())
-    self.assertIsNone(tf.compat.v1.get_default_session())
-
-  def test_intermediate_aggregation_session_without_phase(self):
-    plan = create_plan()
-    plan.ClearField('phase')
-    with self.assertRaises(ValueError):
-      plan_utils.IntermediateAggregationSession(plan)
-
-  def test_intermediate_aggregation_session_without_server_phase(self):
-    plan = create_plan()
-    plan.phase[0].ClearField('server_phase')
-    with self.assertRaises(ValueError):
-      plan_utils.IntermediateAggregationSession(plan)
-
-  def test_intermediate_aggregation_session_with_multiple_phases(self):
-    plan = create_plan()
-    plan.phase.append(plan.phase[0])
-    with self.assertRaises(ValueError):
-      plan_utils.IntermediateAggregationSession(plan)
-
-  def test_intermediate_aggregation_session_with_one_client(self):
-    with tempfile.NamedTemporaryFile('r') as tmpfile:
-      with plan_utils.IntermediateAggregationSession(create_plan(
-          tmpfile.name)) as session:
-        session.accumulate_client_update(
-            test_utils.create_checkpoint({CLIENT_TENSOR_NAME: 3}))
-        aggregate = session.finalize()
-      self.assertSequenceEqual(tmpfile.read().splitlines(), [
-          'phase_init',
-          'read_update/before_restore',
-          'read_update/restore',
-          'read_update/after_restore',
-          'aggregate_into_accumulators',
-          'write_intermediate_update/before_save',
-          'write_intermediate_update/save',
-          'write_intermediate_update/after_save',
-      ])
-
-    result = test_utils.read_tensor_from_checkpoint(aggregate,
-                                                    INTERMEDIATE_TENSOR_NAME,
-                                                    tf.int32)
-    self.assertEqual(result, 3)
-
-  def test_intermediate_aggregation_session_with_multiple_clients(self):
-    with tempfile.NamedTemporaryFile('r') as tmpfile:
-      with plan_utils.IntermediateAggregationSession(create_plan(
-          tmpfile.name)) as session:
-        for i in range(3):
-          session.accumulate_client_update(
-              test_utils.create_checkpoint({CLIENT_TENSOR_NAME: 1 << i}))
-        checkpoint = session.finalize()
-      self.assertSequenceEqual(tmpfile.read().splitlines(), [
-          'phase_init',
-          'read_update/before_restore',
-          'read_update/restore',
-          'read_update/after_restore',
-          'aggregate_into_accumulators',
-          'read_update/before_restore',
-          'read_update/restore',
-          'read_update/after_restore',
-          'aggregate_into_accumulators',
-          'read_update/before_restore',
-          'read_update/restore',
-          'read_update/after_restore',
-          'aggregate_into_accumulators',
-          'write_intermediate_update/before_save',
-          'write_intermediate_update/save',
-          'write_intermediate_update/after_save',
-      ])
-
-    result = test_utils.read_tensor_from_checkpoint(checkpoint,
-                                                    INTERMEDIATE_TENSOR_NAME,
-                                                    tf.int32)
-    # The values from all client updates should be summed.
-    self.assertEqual(result, 7)
-
-  def test_intermediate_aggregation_session_with_tensorflow_error(self):
-    plan = create_plan()
-    plan.phase[0].server_phase.phase_init_op = 'does-not-exist'
-    with self.assertRaises(ValueError):
-      plan_utils.IntermediateAggregationSession(plan)
 
   def test_session_enter_exit(self):
     self.assertIsNone(tf.compat.v1.get_default_session())

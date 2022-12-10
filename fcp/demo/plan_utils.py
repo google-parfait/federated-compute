@@ -27,10 +27,13 @@ from google.protobuf import message
 from fcp.protos import plan_pb2
 
 
-class _BaseSession:
-  """Base class for a Plan-based TensorFlow session."""
+class Session:
+  """A session for performing L2 Plan operations.
 
-  def __init__(self, plan: plan_pb2.Plan):
+  This class only supports loading a single intermediate update.
+  """
+
+  def __init__(self, plan: plan_pb2.Plan, checkpoint: Optional[bytes]):
     if len(plan.phase) != 1:
       raise ValueError('plan must contain exactly 1 phase.')
     if not plan.phase[0].HasField('server_phase'):
@@ -47,8 +50,12 @@ class _BaseSession:
       tf.import_graph_def(graph_def, name='')
     self._session = tf.compat.v1.Session(graph=graph)
     self._plan = plan
+    self._restore_state(plan.server_savepoint, checkpoint)
+    self._maybe_run(plan.phase[0].server_phase.phase_init_op)
+    self._client_checkpoint = self._save_state(
+        plan.phase[0].server_phase.write_client_init)
 
-  def __enter__(self) -> '_BaseSession':
+  def __enter__(self) -> 'Session':
     self._session.__enter__()
     return self
 
@@ -92,42 +99,6 @@ class _BaseSession:
           result = f.read()
     self._maybe_run(checkpoint_op.after_save_op)
     return result
-
-
-class IntermediateAggregationSession(_BaseSession):
-  """A session for performing L1 Plan operations."""
-
-  def __init__(self, plan: plan_pb2.Plan):
-    super().__init__(plan)
-    self._maybe_run(plan.phase[0].server_phase.phase_init_op)
-
-  def accumulate_client_update(self, client_update: bytes) -> None:
-    """Loads and incorporates a client update."""
-    self._restore_state(self._plan.phase[0].server_phase.read_update,
-                        client_update)
-    self._maybe_run(
-        self._plan.phase[0].server_phase.aggregate_into_accumulators_op)
-
-  def finalize(self) -> bytes:
-    """Returns a checkpoint containing the aggregated result."""
-    # read_aggregated_update is only used by the SecAgg protocol, which this
-    # implementation does not yet support.
-    return self._save_state(
-        self._plan.phase[0].server_phase.write_intermediate_update)
-
-
-class Session(_BaseSession):
-  """A session for performing L2 Plan operations.
-
-  This class only supports loading a single intermediate update.
-  """
-
-  def __init__(self, plan: plan_pb2.Plan, checkpoint: Optional[bytes]):
-    super().__init__(plan)
-    self._restore_state(plan.server_savepoint, checkpoint)
-    self._maybe_run(plan.phase[0].server_phase.phase_init_op)
-    self._client_checkpoint = self._save_state(
-        plan.phase[0].server_phase.write_client_init)
 
   @functools.cached_property
   def client_plan(self) -> bytes:
