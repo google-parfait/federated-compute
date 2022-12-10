@@ -58,3 +58,7 @@ a federated computation; this test will cover the majority of the code in this
 repository.
 
 This is not an officially supported Google product.
+
+## Getting Started
+
+Please refer to the instructions in GETTING_STARTED.md.
