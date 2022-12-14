@@ -42,7 +42,7 @@ absl::Status SecureAggregationProtocol::Start(int64_t num_clients) {
   // TODO(team): Populate SecureAggregation field in  AcceptanceMessage
   // with parameters required by SecAgg client.
   AcceptanceMessage acceptance_message;
-  callback_->AcceptClients(0, num_clients, acceptance_message);
+  callback_->OnAcceptClients(0, num_clients, acceptance_message);
   return absl::OkStatus();
 }
 

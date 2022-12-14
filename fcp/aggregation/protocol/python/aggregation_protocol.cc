@@ -40,31 +40,32 @@ using ::fcp::aggregation::ServerMessage;
 // https://pybind11.readthedocs.io/en/stable/advanced/classes.html#overriding-virtual-functions-in-python
 class PyAggregationProtocolCallback : public AggregationProtocol::Callback {
  public:
-  void AcceptClients(int64_t start_client_id, int64_t num_clients,
-                     const AcceptanceMessage& message) override {
-    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, AcceptClients,
+  void OnAcceptClients(int64_t start_client_id, int64_t num_clients,
+                       const AcceptanceMessage& message) override {
+    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, OnAcceptClients,
                            start_client_id, num_clients, message);
   }
 
-  void SendServerMessage(int64_t client_id,
-                         const ServerMessage& message) override {
+  void OnSendServerMessage(int64_t client_id,
+                           const ServerMessage& message) override {
     PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback,
-                           SendServerMessage, client_id, message);
+                           OnSendServerMessage, client_id, message);
   }
 
-  void CloseClient(int64_t client_id, absl::Status diagnostic_status) override {
-    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, CloseClient,
+  void OnCloseClient(int64_t client_id,
+                     absl::Status diagnostic_status) override {
+    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, OnCloseClient,
                            client_id,
                            py::google::DoNotThrowStatus(diagnostic_status));
   }
 
-  void Complete(absl::Cord result) override {
-    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, Complete,
+  void OnComplete(absl::Cord result) override {
+    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, OnComplete,
                            result);
   }
 
-  void Abort(absl::Status diagnostic_status) override {
-    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, Abort,
+  void OnAbort(absl::Status diagnostic_status) override {
+    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, OnAbort,
                            py::google::DoNotThrowStatus(diagnostic_status));
   }
 };
@@ -91,10 +92,10 @@ PYBIND11_MODULE(aggregation_protocol, m) {
                    PyAggregationProtocolCallback>(py_aggregation_protocol,
                                                   "Callback")
       .def(py::init<>())
-      .def("AcceptClients", &AggregationProtocol::Callback::AcceptClients)
-      .def("SendServerMessage",
-           &AggregationProtocol::Callback::SendServerMessage)
-      .def("CloseClient", &AggregationProtocol::Callback::CloseClient)
-      .def("Complete", &AggregationProtocol::Callback::Complete)
-      .def("Abort", &AggregationProtocol::Callback::Abort);
+      .def("OnAcceptClients", &AggregationProtocol::Callback::OnAcceptClients)
+      .def("OnSendServerMessage",
+           &AggregationProtocol::Callback::OnSendServerMessage)
+      .def("OnCloseClient", &AggregationProtocol::Callback::OnCloseClient)
+      .def("OnComplete", &AggregationProtocol::Callback::OnComplete)
+      .def("OnAbort", &AggregationProtocol::Callback::OnAbort);
 }

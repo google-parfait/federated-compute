@@ -327,7 +327,7 @@ absl::Status SimpleAggregationProtocol::Start(int64_t num_clients) {
     client_states_.resize(num_clients, CLIENT_PENDING);
   }
   AcceptanceMessage acceptance_message;
-  callback_->AcceptClients(0, num_clients, acceptance_message);
+  callback_->OnAcceptClients(0, num_clients, acceptance_message);
   return absl::OkStatus();
 }
 
@@ -343,7 +343,7 @@ absl::Status SimpleAggregationProtocol::AddClients(int64_t num_clients) {
     client_states_.resize(start_index + num_clients, CLIENT_PENDING);
   }
   AcceptanceMessage acceptance_message;
-  callback_->AcceptClients(start_index, num_clients, acceptance_message);
+  callback_->OnAcceptClients(start_index, num_clients, acceptance_message);
   return absl::OkStatus();
 }
 
@@ -421,7 +421,7 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
     // closed by a concurrent Complete or Abort call.
     if (client_states_[client_id] == CLIENT_RECEIVED_INPUT_AND_PENDING) {
       SetClientState(client_id, client_completion_state);
-      callback_->CloseClient(client_id, client_completion_status);
+      callback_->OnCloseClient(client_id, client_completion_status);
     }
   }
   return absl::OkStatus();
@@ -472,11 +472,11 @@ absl::Status SimpleAggregationProtocol::Complete() {
     }
   }
   for (int64_t client_id : client_ids_to_close) {
-    callback_->CloseClient(
+    callback_->OnCloseClient(
         client_id, absl::AbortedError("The protocol has completed before the "
                                       "client input has been aggregated."));
   }
-  callback_->Complete(std::move(result));
+  callback_->OnComplete(std::move(result));
   return absl::OkStatus();
 }
 
@@ -508,7 +508,7 @@ absl::Status SimpleAggregationProtocol::Abort() {
   }
 
   for (int64_t client_id : client_ids_to_close) {
-    callback_->CloseClient(
+    callback_->OnCloseClient(
         client_id, absl::AbortedError("The protocol has aborted before the "
                                       "client input has been aggregated."));
   }

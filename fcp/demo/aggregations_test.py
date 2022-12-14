@@ -216,7 +216,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
           agg_status.num_inputs_aggregated_and_included)
       agg_status.num_inputs_aggregated_and_included = 0
       callback = mock_create_simple_agg_protocol.call_args.args[1]
-      callback.Abort(absl_status.unknown_error('message'))
+      callback.OnAbort(absl_status.unknown_error('message'))
 
     mock_agg_protocol.Complete.side_effect = on_complete
 
@@ -429,7 +429,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
 
     # The awaitable should return once the AggregationProtocol aborts.
     callback = mock_create_simple_agg_protocol.call_args.args[1]
-    callback.Abort(absl_status.unknown_error('message'))
+    callback.OnAbort(absl_status.unknown_error('message'))
     await asyncio.wait([task], timeout=1)
     self.assertTrue(task.done())
     self.assertEqual(

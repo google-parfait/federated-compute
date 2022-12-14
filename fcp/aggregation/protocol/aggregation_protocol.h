@@ -143,16 +143,16 @@ class AggregationProtocol {
     // Called in response to either StartProtocol or AddClients methods being
     // called and provides protocol parameters to be broadcasted to all newly
     // joined clients.
-    virtual void AcceptClients(int64_t start_client_id, int64_t num_clients,
-                               const AcceptanceMessage& message) = 0;
+    virtual void OnAcceptClients(int64_t start_client_id, int64_t num_clients,
+                                 const AcceptanceMessage& message) = 0;
 
     // Called by the protocol to deliver a message to a given client.
     //
     // Depending on the specific protocol implementation there may be multiple
     // messages exchanged with each clients, but not all protocols need to
     // send messages to clients.
-    virtual void SendServerMessage(int64_t client_id,
-                                   const ServerMessage& message) = 0;
+    virtual void OnSendServerMessage(int64_t client_id,
+                                     const ServerMessage& message) = 0;
 
     // Called by the protocol to force communication with a client to be closed,
     // for example due to a client specific error or due to the protocol getting
@@ -160,8 +160,8 @@ class AggregationProtocol {
     //
     // No further calls or callbacks specific to the given client are expected
     // after this method.
-    virtual void CloseClient(int64_t client_id,
-                             absl::Status diagnostic_status) = 0;
+    virtual void OnCloseClient(int64_t client_id,
+                               absl::Status diagnostic_status) = 0;
 
     // Indicates successful completion of the aggregation protocol, contains
     // the result of the aggregation.
@@ -169,7 +169,7 @@ class AggregationProtocol {
     // The format of the result blob is unspecified and can be different for
     // each specific aggregation protocol implementation.  Completing the
     // protocol should close communications with all remaining clients.
-    virtual void Complete(absl::Cord result) = 0;
+    virtual void OnComplete(absl::Cord result) = 0;
 
     // Called by the protocol to indicate that the protocol has been aborted
     // for internal reasons (e.g. the number of remaining clients dropping
@@ -177,7 +177,7 @@ class AggregationProtocol {
     //
     // Aborting the protocol should close communications with all remaining
     // clients.
-    virtual void Abort(absl::Status diagnostic_status) = 0;
+    virtual void OnAbort(absl::Status diagnostic_status) = 0;
   };
 };
 

@@ -64,8 +64,8 @@ TEST_F(SecureAggregationProtocolTest, StartProtocol_Succeeds) {
   auto protocol_or_status = CreateProtocol();
   EXPECT_THAT(protocol_or_status, IsOk());
   EXPECT_CALL(callback_,
-              AcceptClients(/*start_client_id=*/0, /*int64_t num_clients=*/3,
-                            /*message=*/testing::_));
+              OnAcceptClients(/*start_client_id=*/0, /*int64_t num_clients=*/3,
+                              /*message=*/testing::_));
   EXPECT_THAT(protocol_or_status.value()->Start(/*num_clients=*/3), IsOk());
 }
 

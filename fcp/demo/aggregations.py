@@ -142,27 +142,27 @@ class _AggregationProtocolCallback(
     # A map from client id to the queue for each client's close status.
     self._client_results: dict[int, queue.SimpleQueue[absl_status.Status]] = {}
 
-  def AcceptClients(self, start_client_id: int, num_clients: int,
-                    message: apm_pb2.AcceptanceMessage) -> None:
+  def OnAcceptClients(self, start_client_id: int, num_clients: int,
+                      message: apm_pb2.AcceptanceMessage) -> None:
     with self._client_results_lock:
       for client_id in range(start_client_id, start_client_id + num_clients):
         q = queue.SimpleQueue()
         self._client_results[client_id] = q
         self.accepted_clients.put((client_id, q))
 
-  def SendServerMessage(self, client_id: int,
-                        message: apm_pb2.ServerMessage) -> None:
+  def OnSendServerMessage(self, client_id: int,
+                          message: apm_pb2.ServerMessage) -> None:
     raise NotImplementedError()
 
-  def CloseClient(self, client_id: int,
-                  diagnostic_status: absl_status.Status) -> None:
+  def OnCloseClient(self, client_id: int,
+                    diagnostic_status: absl_status.Status) -> None:
     with self._client_results_lock:
       self._client_results.pop(client_id).put(diagnostic_status)
 
-  def Complete(self, result: bytes) -> None:
+  def OnComplete(self, result: bytes) -> None:
     self.result.put(result)
 
-  def Abort(self, diagnostic_status: absl_status.Status) -> None:
+  def OnAbort(self, diagnostic_status: absl_status.Status) -> None:
     self.result.put(diagnostic_status)
     self._on_abort()
 
@@ -441,7 +441,7 @@ class Service:
       state.agg_protocol.CloseClient(client_data.client_id, e.status)
       # Since we're initiating the close, it's also necessary to notify the
       # _AggregationProtocolCallback so it can clean up resources.
-      state.callback.CloseClient(client_data.client_id, e.status)
+      state.callback.OnCloseClient(client_data.client_id, e.status)
       raise http_actions.HttpError(self._get_http_status(
           e.status.code())) from e
 
@@ -504,7 +504,7 @@ class Service:
     state.agg_protocol.CloseClient(client_data.client_id, status)
     # Since we're initiating the close, it's also necessary to notify the
     # _AggregationProtocolCallback so it can clean up resources.
-    state.callback.CloseClient(client_data.client_id, status)
+    state.callback.OnCloseClient(client_data.client_id, status)
 
     logging.debug('[%s] AbortAggregation: %s', request.aggregation_id,
                   request.status)

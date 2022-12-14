@@ -336,7 +336,7 @@ TEST_F(SimpleAggregationProtocolTest,
   // This verifies that the protocol can be re-entered from the callback.
   auto protocol = CreateProtocolWithDefaultConfig();
 
-  EXPECT_CALL(callback_, AcceptClients(0, 1, _)).WillOnce(Invoke([&]() {
+  EXPECT_CALL(callback_, OnAcceptClients(0, 1, _)).WillOnce(Invoke([&]() {
     EXPECT_THAT(
         protocol->GetStatus(),
         EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
@@ -347,7 +347,7 @@ TEST_F(SimpleAggregationProtocolTest,
 
 TEST_F(SimpleAggregationProtocolTest, StartProtocol_MultipleCalls) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, AcceptClients).Times(1);
+  EXPECT_CALL(callback_, OnAcceptClients).Times(1);
   EXPECT_THAT(protocol->Start(1), IsOk());
   // The second Start call must fail.
   EXPECT_THAT(protocol->Start(1), IsCode(FAILED_PRECONDITION));
@@ -356,13 +356,13 @@ TEST_F(SimpleAggregationProtocolTest, StartProtocol_MultipleCalls) {
 TEST_F(SimpleAggregationProtocolTest, AddClients_Success) {
   auto protocol = CreateProtocolWithDefaultConfig();
 
-  EXPECT_CALL(callback_, AcceptClients(0, 1, _));
+  EXPECT_CALL(callback_, OnAcceptClients(0, 1, _));
   EXPECT_THAT(protocol->Start(1), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
 
-  EXPECT_CALL(callback_, AcceptClients(1, 3, _));
+  EXPECT_CALL(callback_, OnAcceptClients(1, 3, _));
   EXPECT_THAT(protocol->AddClients(3), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
@@ -372,7 +372,7 @@ TEST_F(SimpleAggregationProtocolTest, AddClients_Success) {
 TEST_F(SimpleAggregationProtocolTest, AddClients_ProtocolNotStarted) {
   auto protocol = CreateProtocolWithDefaultConfig();
   // Must fail because the protocol isn't started.
-  EXPECT_CALL(callback_, AcceptClients).Times(0);
+  EXPECT_CALL(callback_, OnAcceptClients).Times(0);
   EXPECT_THAT(protocol->AddClients(1), IsCode(FAILED_PRECONDITION));
 }
 
@@ -405,7 +405,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_InvalidMessage) {
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_InvalidClientId) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, AcceptClients);
+  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
   // Must fail for the client_id -1 and 2.
   EXPECT_THAT(protocol->ReceiveClientMessage(-1, MakeClientMessage()),
@@ -417,7 +417,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_InvalidClientId) {
 TEST_F(SimpleAggregationProtocolTest,
        ReceiveClientMessage_DuplicateClientIdInputs) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, AcceptClients);
+  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(2), IsOk());
 
   auto parser = std::make_unique<MockCheckpointParser>();
@@ -440,7 +440,7 @@ TEST_F(SimpleAggregationProtocolTest,
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_AfterClosingClient) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, AcceptClients);
+  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   EXPECT_THAT(protocol->CloseClient(0, absl::OkStatus()), IsOk());
@@ -457,14 +457,14 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_AfterClosingClient) {
 TEST_F(SimpleAggregationProtocolTest,
        ReceiveClientMessage_FailureToParseInput) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, AcceptClients);
+  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   EXPECT_CALL(checkpoint_parser_factory_, Create(_))
       .WillOnce(
           Return(ByMove(absl::InvalidArgumentError("Invalid checkpoint"))));
 
-  EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(INVALID_ARGUMENT)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(INVALID_ARGUMENT)));
 
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
@@ -475,7 +475,7 @@ TEST_F(SimpleAggregationProtocolTest,
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MissingTensor) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, AcceptClients);
+  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   auto parser = std::make_unique<MockCheckpointParser>();
@@ -485,7 +485,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MissingTensor) {
   EXPECT_CALL(checkpoint_parser_factory_, Create(_))
       .WillOnce(Return(ByMove(std::move(parser))));
 
-  EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(NOT_FOUND)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(NOT_FOUND)));
 
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
@@ -496,7 +496,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MissingTensor) {
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MismatchingTensor) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, AcceptClients);
+  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   auto parser = std::make_unique<MockCheckpointParser>();
@@ -507,7 +507,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MismatchingTensor) {
   EXPECT_CALL(checkpoint_parser_factory_, Create(_))
       .WillOnce(Return(ByMove(std::move(parser))));
 
-  EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(INVALID_ARGUMENT)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(INVALID_ARGUMENT)));
 
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
@@ -560,7 +560,7 @@ TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
   )pb");
   auto protocol = CreateProtocol(config_message);
 
-  EXPECT_CALL(callback_, AcceptClients(0, 1, _));
+  EXPECT_CALL(callback_, OnAcceptClients(0, 1, _));
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   // Verify that the checkpoint builder is created.
@@ -578,9 +578,9 @@ TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
 
   // Verify that the pending client is closed.
-  EXPECT_CALL(callback_, CloseClient(0, IsCode(ABORTED)));
+  EXPECT_CALL(callback_, OnCloseClient(0, IsCode(ABORTED)));
   // Verify that the Complete callback method is called.
-  EXPECT_CALL(callback_, Complete);
+  EXPECT_CALL(callback_, OnComplete);
 
   EXPECT_THAT(protocol->Complete(), IsOk());
   EXPECT_THAT(
@@ -631,7 +631,7 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
     }
   )pb");
   auto protocol = CreateProtocol(config_message);
-  EXPECT_CALL(callback_, AcceptClients);
+  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(2), IsOk());
 
   // Expect two inputs.
@@ -657,8 +657,8 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
       .WillOnce(Return(ByMove(std::move(parser1))))
       .WillOnce(Return(ByMove(std::move(parser2))));
 
-  EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(OK)));
-  EXPECT_CALL(callback_, CloseClient(Eq(1), IsCode(OK)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(OK)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(1), IsCode(OK)));
 
   // Handle the inputs.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
@@ -684,8 +684,8 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
   EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {3.f})))
       .WillOnce(Return(absl::OkStatus()));
 
-  // Verify that the Complete callback method is called.
-  EXPECT_CALL(callback_, Complete);
+  // Verify that the OnComplete callback method is called.
+  EXPECT_CALL(callback_, OnComplete);
 
   EXPECT_THAT(protocol->Complete(), IsOk());
   EXPECT_THAT(
@@ -701,11 +701,11 @@ TEST_F(SimpleAggregationProtocolTest, Complete_ProtocolNotStarted) {
 
 TEST_F(SimpleAggregationProtocolTest, Abort_NoInputsReceived) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, AcceptClients(0, 2, _));
+  EXPECT_CALL(callback_, OnAcceptClients(0, 2, _));
   EXPECT_THAT(protocol->Start(2), IsOk());
 
-  EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(ABORTED)));
-  EXPECT_CALL(callback_, CloseClient(Eq(1), IsCode(ABORTED)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(ABORTED)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(1), IsCode(ABORTED)));
   EXPECT_THAT(protocol->Abort(), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
@@ -714,7 +714,7 @@ TEST_F(SimpleAggregationProtocolTest, Abort_NoInputsReceived) {
 
 TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, AcceptClients(0, 2, _));
+  EXPECT_CALL(callback_, OnAcceptClients(0, 2, _));
   EXPECT_THAT(protocol->Start(2), IsOk());
 
   auto parser = std::make_unique<MockCheckpointParser>();
@@ -726,11 +726,11 @@ TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
       .WillOnce(Return(ByMove(std::move(parser))));
 
   // Receive input for the client #1
-  EXPECT_CALL(callback_, CloseClient(Eq(1), IsCode(OK)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(1), IsCode(OK)));
   EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
 
   // The client #0 should be aborted on Abort().
-  EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(ABORTED)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(ABORTED)));
   EXPECT_THAT(protocol->Abort(), IsOk());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
@@ -746,7 +746,7 @@ TEST_F(SimpleAggregationProtocolTest, Abort_ProtocolNotStarted) {
 TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_Success) {
   const int64_t kNumClients = 10;
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, AcceptClients(0, kNumClients, _));
+  EXPECT_CALL(callback_, OnAcceptClients(0, kNumClients, _));
   EXPECT_THAT(protocol->Start(kNumClients), IsOk());
 
   // The following block will repeatedly create CheckpointParser instances
@@ -778,8 +778,8 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_Success) {
   EXPECT_CALL(checkpoint_builder, Add(StrEq("foo_out"), IsTensor({}, {55})))
       .WillOnce(Return(absl::OkStatus()));
 
-  // Verify that the Complete callback method is called.
-  EXPECT_CALL(callback_, Complete);
+  // Verify that the OnComplete callback method is called.
+  EXPECT_CALL(callback_, OnComplete);
   EXPECT_THAT(protocol->Complete(), IsOk());
 }
 
@@ -856,7 +856,7 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_AbortWhileQueued) {
       }
     }
   )pb"));
-  EXPECT_CALL(callback_, AcceptClients(0, kNumClients, _));
+  EXPECT_CALL(callback_, OnAcceptClients(0, kNumClients, _));
   EXPECT_THAT(protocol->Start(kNumClients), IsOk());
 
   EXPECT_CALL(checkpoint_parser_factory_, Create(_)).WillRepeatedly(Invoke([&] {

@@ -25,16 +25,16 @@ namespace fcp::aggregation {
 
 class MockAggregationProtocolCallback : public AggregationProtocol::Callback {
  public:
-  MOCK_METHOD(void, AcceptClients,
+  MOCK_METHOD(void, OnAcceptClients,
               (int64_t start_client_id, int64_t num_clients,
                const AcceptanceMessage& message),
               (override));
-  MOCK_METHOD(void, SendServerMessage,
+  MOCK_METHOD(void, OnSendServerMessage,
               (int64_t client_id, const ServerMessage& message), (override));
-  MOCK_METHOD(void, CloseClient,
+  MOCK_METHOD(void, OnCloseClient,
               (int64_t client_id, absl::Status diagnostic_status), (override));
-  MOCK_METHOD(void, Complete, (absl::Cord result), (override));
-  MOCK_METHOD(void, Abort, (absl::Status diagnostic_status), (override));
+  MOCK_METHOD(void, OnComplete, (absl::Cord result), (override));
+  MOCK_METHOD(void, OnAbort, (absl::Status diagnostic_status), (override));
 };
 
 }  // namespace fcp::aggregation
