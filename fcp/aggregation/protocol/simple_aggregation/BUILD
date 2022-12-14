@@ -42,6 +42,7 @@ cc_library(
         "//fcp/aggregation/tensorflow:converters",
         "//fcp/base",
         "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",

@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -32,9 +33,9 @@
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
+#include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/protocol/simple_aggregation/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/simple_aggregation/checkpoint_parser.h"
-#include "fcp/aggregation/protocol/configuration.pb.h"
 
 namespace fcp::aggregation {
 
@@ -63,6 +64,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   // Implementation of the overridden Aggregation Protocol methods.
   absl::Status Start(int64_t num_clients) override;
   absl::Status AddClients(int64_t num_clients) override;
+  ABSL_DEPRECATED("Use ReceiveClientMessage instead")
   absl::Status ReceiveClientInput(int64_t client_id,
                                   absl::Cord report) override;
   absl::Status ReceiveClientMessage(int64_t client_id,

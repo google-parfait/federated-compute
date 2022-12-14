@@ -142,6 +142,12 @@ SimpleAggregationProtocolTest::CreateProtocol(Configuration config) {
   return std::move(protocol_or_status).value();
 }
 
+ClientMessage MakeClientMessage() {
+  ClientMessage message;
+  message.mutable_simple_aggregation()->mutable_input()->set_inline_bytes("");
+  return message;
+}
+
 TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedNumberOfInputs) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs {
@@ -370,26 +376,46 @@ TEST_F(SimpleAggregationProtocolTest, AddClients_ProtocolNotStarted) {
   EXPECT_THAT(protocol->AddClients(1), IsCode(FAILED_PRECONDITION));
 }
 
-TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_ProtocolNotStarted) {
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_ProtocolNotStarted) {
   auto protocol = CreateProtocolWithDefaultConfig();
   // Must fail because the protocol isn't started.
-  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}),
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()),
               IsCode(FAILED_PRECONDITION));
 }
 
-TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_InvalidClientId) {
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_InvalidMessage) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  ClientMessage message;
+  // Empty message without SimpleAggregation.
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, message),
+              IsCode(INVALID_ARGUMENT));
+  // Message with SimpleAggregation but without the input.
+  message.mutable_simple_aggregation();
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, message),
+              IsCode(INVALID_ARGUMENT));
+  // Message with empty input.
+  message.mutable_simple_aggregation()->mutable_input();
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, message),
+              IsCode(INVALID_ARGUMENT));
+  // Message with the unsupported input type.
+  message.mutable_simple_aggregation()->mutable_input()->set_uri("foo");
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, message),
+              IsCode(INVALID_ARGUMENT));
+}
+
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_InvalidClientId) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_CALL(callback_, AcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
   // Must fail for the client_id -1 and 2.
-  EXPECT_THAT(protocol->ReceiveClientInput(-1, absl::Cord{}),
+  EXPECT_THAT(protocol->ReceiveClientMessage(-1, MakeClientMessage()),
               IsCode(INVALID_ARGUMENT));
-  EXPECT_THAT(protocol->ReceiveClientInput(2, absl::Cord{}),
+  EXPECT_THAT(protocol->ReceiveClientMessage(2, MakeClientMessage()),
               IsCode(INVALID_ARGUMENT));
 }
 
 TEST_F(SimpleAggregationProtocolTest,
-       ReceiveClientInput_DuplicateClientIdInputs) {
+       ReceiveClientMessage_DuplicateClientIdInputs) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_CALL(callback_, AcceptClients);
   EXPECT_THAT(protocol->Start(2), IsOk());
@@ -402,17 +428,17 @@ TEST_F(SimpleAggregationProtocolTest,
   EXPECT_CALL(checkpoint_parser_factory_, Create(_))
       .WillOnce(Return(ByMove(std::move(parser))));
 
-  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
   // The second input for the same client must succeed to without changing the
   // aggregated state.
-  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
                   "num_clients_pending: 1 num_clients_completed: 1 "
                   "num_inputs_aggregated_and_included: 1")));
 }
 
-TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_AfterClosingClient) {
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_AfterClosingClient) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_CALL(callback_, AcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
@@ -422,13 +448,14 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_AfterClosingClient) {
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
                   "num_clients_completed: 1 num_inputs_discarded: 1")));
   // This must succeed to without changing the aggregated state.
-  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
                   "num_clients_completed: 1 num_inputs_discarded: 1")));
 }
 
-TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_FailureToParseInput) {
+TEST_F(SimpleAggregationProtocolTest,
+       ReceiveClientMessage_FailureToParseInput) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_CALL(callback_, AcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
@@ -440,13 +467,13 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_FailureToParseInput) {
   EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(INVALID_ARGUMENT)));
 
   // Receiving the client input should still succeed.
-  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
 }
 
-TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MissingTensor) {
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MissingTensor) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_CALL(callback_, AcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
@@ -461,13 +488,13 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MissingTensor) {
   EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(NOT_FOUND)));
 
   // Receiving the client input should still succeed.
-  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
 }
 
-TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MismatchingTensor) {
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MismatchingTensor) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_CALL(callback_, AcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
@@ -483,7 +510,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientInput_MismatchingTensor) {
   EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(INVALID_ARGUMENT)));
 
   // Receiving the client input should still succeed.
-  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
@@ -634,13 +661,13 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
   EXPECT_CALL(callback_, CloseClient(Eq(1), IsCode(OK)));
 
   // Handle the inputs.
-  EXPECT_THAT(protocol->ReceiveClientInput(0, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
                   "num_clients_pending: 1 num_clients_completed: 1 "
                   "num_inputs_aggregated_and_included: 1")));
 
-  EXPECT_THAT(protocol->ReceiveClientInput(1, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
@@ -700,7 +727,7 @@ TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
 
   // Receive input for the client #1
   EXPECT_CALL(callback_, CloseClient(Eq(1), IsCode(OK)));
-  EXPECT_THAT(protocol->ReceiveClientInput(1, absl::Cord{}), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
 
   // The client #0 should be aborted on Abort().
   EXPECT_CALL(callback_, CloseClient(Eq(0), IsCode(ABORTED)));
@@ -738,7 +765,8 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_Success) {
   auto scheduler = CreateThreadPoolScheduler(4);
   for (int64_t i = 0; i < kNumClients; ++i) {
     scheduler->Schedule([&, i]() {
-      EXPECT_THAT(protocol->ReceiveClientInput(i, absl::Cord{}), IsOk());
+      EXPECT_THAT(protocol->ReceiveClientMessage(i, MakeClientMessage()),
+                  IsOk());
     });
   }
   scheduler->WaitUntilIdle();
@@ -843,7 +871,8 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_AbortWhileQueued) {
   auto scheduler = CreateThreadPoolScheduler(10);
   for (int64_t i = 0; i < kNumClients; ++i) {
     scheduler->Schedule([&, i]() {
-      EXPECT_THAT(protocol->ReceiveClientInput(i, absl::Cord{}), IsOk());
+      EXPECT_THAT(protocol->ReceiveClientMessage(i, MakeClientMessage()),
+                  IsOk());
     });
   }
 

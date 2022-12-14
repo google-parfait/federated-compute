@@ -349,6 +349,26 @@ absl::Status SimpleAggregationProtocol::AddClients(int64_t num_clients) {
 
 absl::Status SimpleAggregationProtocol::ReceiveClientInput(int64_t client_id,
                                                            absl::Cord report) {
+  ClientMessage message;
+  *message.mutable_simple_aggregation()
+       ->mutable_input()
+       ->mutable_inline_bytes() = static_cast<std::string>(report);
+  return ReceiveClientMessage(client_id, message);
+}
+
+absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
+    int64_t client_id, const ClientMessage& message) {
+  if (!message.has_simple_aggregation() ||
+      !message.simple_aggregation().has_input()) {
+    return absl::InvalidArgumentError("Unexpected message");
+  }
+
+  // TODO(team): Support fetching input by uri.
+  if (!message.simple_aggregation().input().has_inline_bytes()) {
+    return absl::InvalidArgumentError(
+        "Only inline_bytes type of input is supported");
+  }
+
   // Verify the state.
   {
     absl::MutexLock lock(&state_mu_);
@@ -360,8 +380,8 @@ absl::Status SimpleAggregationProtocol::ReceiveClientInput(int64_t client_id,
       // TODO(team): Decide whether the logging level should be INFO or
       // WARNING, or perhaps it should depend on the client state (e.g. WARNING
       // for COMPLETED and INFO for other states).
-      FCP_LOG(INFO) << "ReceiveClientInput: client " << client_id
-                    << " input ignored, the state is already "
+      FCP_LOG(INFO) << "ReceiveClientMessage: client " << client_id
+                    << " message ignored, the state is already "
                     << ClientStateDebugString(client_state);
       return absl::OkStatus();
     }
@@ -372,6 +392,8 @@ absl::Status SimpleAggregationProtocol::ReceiveClientInput(int64_t client_id,
   ClientState client_completion_state = CLIENT_COMPLETED;
 
   // Parse the client input concurrently with other protocol calls.
+  absl::Cord report =
+      absl::Cord(message.simple_aggregation().input().inline_bytes());
   absl::StatusOr<TensorMap> tensor_map_or_status =
       ParseCheckpoint(std::move(report));
   if (!tensor_map_or_status.ok()) {
@@ -403,12 +425,6 @@ absl::Status SimpleAggregationProtocol::ReceiveClientInput(int64_t client_id,
     }
   }
   return absl::OkStatus();
-}
-
-absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
-    int64_t client_id, const ClientMessage& message) {
-  return absl::UnimplementedError(
-      "ReceiveClientMessage is not supported by SimpleAggregationProtocol");
 }
 
 absl::Status SimpleAggregationProtocol::CloseClient(

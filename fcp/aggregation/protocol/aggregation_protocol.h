@@ -17,6 +17,7 @@
 #ifndef FCP_AGGREGATION_PROTOCOL_AGGREGATION_PROTOCOL_H_
 #define FCP_AGGREGATION_PROTOCOL_AGGREGATION_PROTOCOL_H_
 
+#include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
@@ -81,6 +82,7 @@ class AggregationProtocol {
   // error which must result in aborting the protocol.  Any client specific
   // error, like an invalid report, should result in closing the protocol with
   // that specific client only, but this method should still return OK status.
+  ABSL_DEPRECATED("Use ReceiveClientMessage instead")
   virtual absl::Status ReceiveClientInput(int64_t client_id,
                                           absl::Cord report) = 0;
 

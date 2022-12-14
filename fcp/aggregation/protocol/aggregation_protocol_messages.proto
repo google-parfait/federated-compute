@@ -24,7 +24,8 @@ import "fcp/secagg/shared/secagg_messages.proto";
 // binary data or as a resource URI.
 message ClientResource {
   oneof resource_kind {
-    bytes inline_bytes = 1 [ctype = CORD];
+    bytes inline_bytes = 1
+        ;
     string uri = 2;
   }
 }
