@@ -82,6 +82,32 @@ py_test(
 )
 
 py_library(
+    name = "plan_utils",
+    srcs = ["plan_utils.py"],
+    srcs_version = "PY3",
+    visibility = default_visibility + [
+    ],
+    deps = [
+        "//fcp/protos:plan_py_pb2",
+    ],
+)
+
+py_test(
+    name = "plan_utils_test",
+    srcs = [
+        "plan_utils_test.py",
+    ],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":checkpoint_utils",
+        ":plan_utils",
+        ":test_utils",
+        "//fcp/protos:plan_py_pb2",
+    ],
+)
+
+py_library(
     name = "proto_helpers",
     srcs = ["proto_helpers.py"],
     srcs_version = "PY3",
@@ -124,6 +150,29 @@ py_test(
     deps = [
         ":tensor_utils",
         "@com_google_protobuf//:protobuf_python",
+    ],
+)
+
+py_library(
+    name = "test_utils",
+    srcs = ["test_utils.py"],
+    srcs_version = "PY3",
+    visibility = default_visibility + [
+    ],
+    deps = ["//fcp/protos:plan_py_pb2"],
+)
+
+py_test(
+    name = "test_utils_test",
+    srcs = [
+        "test_utils_test.py",
+    ],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":checkpoint_utils",
+        ":test_utils",
+        "//fcp/protos:plan_py_pb2",
     ],
 )
 

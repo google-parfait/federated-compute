@@ -13,6 +13,8 @@
 # limitations under the License.
 """Helper methods for working with demo server checkpoints."""
 
+import collections
+from collections.abc import Iterable, Mapping
 from typing import Any, Union
 
 import numpy as np
@@ -22,6 +24,44 @@ import tensorflow_federated as tff
 from fcp.artifact_building import tensor_utils
 from fcp.artifact_building import type_checks
 from fcp.artifact_building import variable_helpers
+
+
+def create_deterministic_saver(var_list: Union[Iterable[tf.Variable],
+                                               Mapping[str, tf.Variable]],
+                               *args, **kwargs) -> tf.compat.v1.train.Saver:
+  """Creates a `tf.compat.v1.Saver` that is deterministic.
+
+  This method sorts the `var_list` to ensure a deterministic ordering which
+  in turn ensures a deterministic checkpoint.
+
+  Uses `tf.compat.v1.train.SaverDef.V1` version for writing checkpoints.
+
+  Args:
+    var_list: An `Iterable` or `str` keyed `Mapping` of `tf.Variables`. In the
+      case of a `dict`, the keys become the names of the checkpoint variables
+      (rather than reading the names off the `tf.Variable` values).
+    *args: Positional arguments forwarded to the `tf.compat.v1.train.Saver`
+      constructor.
+    **kwargs: Keyword arguments forwarded to the `tf.compat.v1.train.Saver`
+      constructor.
+
+  Returns:
+    A `tf.compat.v1.train.Saver` instance.
+  """
+  if isinstance(var_list, collections.abc.Mapping):
+    determinisic_names = collections.OrderedDict(sorted(var_list.items()))
+  elif isinstance(var_list, collections.abc.Iterable):
+    determinisic_names = sorted(var_list, key=lambda v: v.name)
+  else:
+    raise ValueError(
+        'Do not know how to make a deterministic saver for '
+        '`var_list` of type [{t}]. Must be a Mapping or Sequence'.format(
+            t=type(var_list)))
+  return tf.compat.v1.train.Saver(
+      determinisic_names,
+      write_version=tf.compat.v1.train.SaverDef.V1,
+      *args,
+      **kwargs)
 
 
 def tff_type_to_dtype_list(

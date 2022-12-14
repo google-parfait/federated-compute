@@ -1,7 +1,21 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Tests for checkpoint_utils."""
 
 import collections
 import os
+import typing
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -202,6 +216,45 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
   )
   def test_is_not_allowed(self, structure):
     self.assertFalse(checkpoint_utils.is_structure_of_allowed_types(structure))
+
+
+class CreateDeterministicSaverTest(tf.test.TestCase):
+
+  def test_failure_unknown_type(self):
+    with self.assertRaisesRegex(ValueError, 'Do not know how to make'):
+      # Using a cast in case the test is being run with static type checking.
+      checkpoint_utils.create_deterministic_saver(
+          typing.cast(list[tf.Variable], 0))
+
+  def test_creates_saver_for_list(self):
+    with tf.Graph().as_default() as g:
+      saver = checkpoint_utils.create_deterministic_saver([
+          tf.Variable(initial_value=1.0, name='z'),
+          tf.Variable(initial_value=2.0, name='x'),
+          tf.Variable(initial_value=3.0, name='y'),
+      ])
+    self.assertIsInstance(saver, tf.compat.v1.train.Saver)
+    test_filepath = self.create_tempfile().full_path
+    with tf.compat.v1.Session(graph=g) as sess:
+      sess.run(tf.compat.v1.global_variables_initializer())
+      saver.save(sess, save_path=test_filepath)
+    variable_specs = tf.train.list_variables(test_filepath)
+    self.assertEqual([('x', []), ('y', []), ('z', [])], variable_specs)
+
+  def test_creates_saver_for_dict(self):
+    with tf.Graph().as_default() as g:
+      saver = checkpoint_utils.create_deterministic_saver({
+          'foo': tf.Variable(initial_value=1.0, name='z'),
+          'baz': tf.Variable(initial_value=2.0, name='x'),
+          'bar': tf.Variable(initial_value=3.0, name='y'),
+      })
+    self.assertIsInstance(saver, tf.compat.v1.train.Saver)
+    test_filepath = self.create_tempfile().full_path
+    with tf.compat.v1.Session(graph=g) as sess:
+      sess.run(tf.compat.v1.global_variables_initializer())
+      saver.save(sess, save_path=test_filepath)
+    variable_specs = tf.train.list_variables(test_filepath)
+    self.assertEqual([('bar', []), ('baz', []), ('foo', [])], variable_specs)
 
 
 if __name__ == '__main__':
