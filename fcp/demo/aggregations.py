@@ -445,8 +445,12 @@ class Service:
       raise http_actions.HttpError(self._get_http_status(
           e.status.code())) from e
 
+    client_message = apm_pb2.ClientMessage(
+        simple_aggregation=apm_pb2.ClientMessage.SimpleAggregation(
+            input=apm_pb2.ClientResource(inline_bytes=update)))
     try:
-      state.agg_protocol.ReceiveClientInput(client_data.client_id, update)
+      state.agg_protocol.ReceiveClientMessage(client_data.client_id,
+                                              client_message)
     except absl_status.StatusNotOk as e:
       # ReceiveClientInput should only fail if the AggregationProtocol is in a
       # bad state -- likely leading to it being aborted.

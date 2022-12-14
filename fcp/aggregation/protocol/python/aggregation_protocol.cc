@@ -80,7 +80,6 @@ PYBIND11_MODULE(aggregation_protocol, m) {
       py::class_<AggregationProtocol>(m, "AggregationProtocol")
           .def("Start", &AggregationProtocol::Start)
           .def("AddClients", &AggregationProtocol::AddClients)
-          .def("ReceiveClientInput", &AggregationProtocol::ReceiveClientInput)
           .def("ReceiveClientMessage",
                &AggregationProtocol::ReceiveClientMessage)
           .def("CloseClient", &AggregationProtocol::CloseClient)

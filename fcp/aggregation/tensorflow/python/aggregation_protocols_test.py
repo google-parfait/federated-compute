@@ -28,14 +28,16 @@ from fcp.protos import plan_pb2
 from pybind11_abseil import status
 
 
-def create_checkpoint(tensors: dict[str, Any]) -> bytes:
+def create_client_input(tensors: dict[str, Any]) -> apm_pb2.ClientMessage:
   with tempfile.NamedTemporaryFile() as tmpfile:
     tf.raw_ops.Save(
         filename=tmpfile.name,
         tensor_names=list(tensors.keys()),
         data=list(tensors.values()))
     with open(tmpfile.name, 'rb') as f:
-      return f.read()
+      return apm_pb2.ClientMessage(
+          simple_aggregation=apm_pb2.ClientMessage.SimpleAggregation(
+              input=apm_pb2.ClientResource(inline_bytes=f.read())))
 
 
 class CallbackProxy(aggregation_protocol.AggregationProtocol.Callback):
@@ -93,10 +95,10 @@ class AggregationProtocolsTest(absltest.TestCase):
     callback.OnAcceptClients.assert_called_once_with(mock.ANY, 2, mock.ANY)
     start_client_id = callback.OnAcceptClients.call_args.args[0]
 
-    agg_protocol.ReceiveClientInput(start_client_id,
-                                    create_checkpoint({input_tensor.name: 3}))
-    agg_protocol.ReceiveClientInput(start_client_id + 1,
-                                    create_checkpoint({input_tensor.name: 5}))
+    agg_protocol.ReceiveClientMessage(
+        start_client_id, create_client_input({input_tensor.name: 3}))
+    agg_protocol.ReceiveClientMessage(
+        start_client_id + 1, create_client_input({input_tensor.name: 5}))
     callback.OnCloseClient.assert_has_calls([
         mock.call(start_client_id, status.Status.OkStatus()),
         mock.call(start_client_id + 1, status.Status.OkStatus()),
