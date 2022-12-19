@@ -703,9 +703,7 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   object_state_ = ObjectState::kCheckinAccepted;
   session_id_ = task_assignment.session_id();
   aggregation_session_id_ = task_assignment.aggregation_id();
-  // TODO(team): Consider renaming aggregation_client_token_ to
-  // aggregation_authorization_token_.
-  aggregation_client_token_ = task_assignment.authorization_token();
+  aggregation_authorization_token_ = task_assignment.authorization_token();
 
   return std::move(result);
 }
@@ -739,18 +737,6 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(
       PerformStartDataUploadRequestAndReportTaskResult(plan_duration));
   if (!start_upload_status.ok()) {
     object_state_ = ObjectState::kReportFailedPermanentError;
-    // We only issue AbortAggregation when the error is not kAborted, which
-    // means the server did not need our data anymore and won't expect any more
-    // requests from this client. In all other cases we assume that the server
-    // should still be informed that this client is about to terminate its
-    // protocol and won't send any further requests.
-    if (start_upload_status.code() != absl::StatusCode::kAborted &&
-        !AbortAggregation(start_upload_status,
-                          "StartDataAggregationUpload failed.")
-             .ok()) {
-      log_manager_->LogDiag(
-          ProdDiagCode::HTTP_CANCELLATION_OR_ABORT_REQUEST_FAILED);
-    }
     return start_upload_status;
   }
   auto upload_status = UploadDataViaSimpleAgg(
@@ -787,9 +773,10 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
           /*is_protobuf_encoded=*/true));
 
   StartAggregationDataUploadRequest start_upload_request;
-  FCP_ASSIGN_OR_RETURN(std::string start_aggregation_data_upload_uri_suffix,
-                       CreateStartAggregationDataUploadUriSuffix(
-                           aggregation_session_id_, aggregation_client_token_));
+  FCP_ASSIGN_OR_RETURN(
+      std::string start_aggregation_data_upload_uri_suffix,
+      CreateStartAggregationDataUploadUriSuffix(
+          aggregation_session_id_, aggregation_authorization_token_));
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_start_aggregation_data_upload_request,
       aggregation_request_creator_->CreateProtocolRequest(
@@ -877,6 +864,11 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
       ProtocolRequestCreator::Create(
           api_key_, upload_resource.data_upload_forwarding_info(),
           !flags_->disable_http_request_body_compression()));
+  // TODO(team): Remove the authorization token fallback once
+  // client_token is always populated.
+  aggregation_client_token_ = !response_proto.client_token().empty()
+                                  ? response_proto.client_token()
+                                  : aggregation_authorization_token_;
   return absl::OkStatus();
 }
 
@@ -959,6 +951,11 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
       StartSecureAggregationAndReportTaskResult(plan_duration));
   SecureAggregationProtocolExecutionInfo protocol_execution_info =
       response_proto.protocol_execution_info();
+  // TODO(team): Remove the authorization token fallback once
+  // client_token is always populated.
+  aggregation_client_token_ = !response_proto.client_token().empty()
+                                  ? response_proto.client_token()
+                                  : aggregation_authorization_token_;
 
   // Move checkpoint out of ComputationResults, and put it into a std::optional.
   std::optional<TFCheckpoint> tf_checkpoint;
@@ -1014,9 +1011,10 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
 absl::StatusOr<StartSecureAggregationResponse>
 HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
     absl::Duration plan_duration) {
-  FCP_ASSIGN_OR_RETURN(std::string start_secure_aggregation_uri_suffix,
-                       CreateStartSecureAggregationUriSuffix(
-                           aggregation_session_id_, aggregation_client_token_));
+  FCP_ASSIGN_OR_RETURN(
+      std::string start_secure_aggregation_uri_suffix,
+      CreateStartSecureAggregationUriSuffix(aggregation_session_id_,
+                                            aggregation_authorization_token_));
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> start_secure_aggregation_http_request,
       aggregation_request_creator_->CreateProtocolRequest(

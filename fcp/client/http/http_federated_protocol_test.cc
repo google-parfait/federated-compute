@@ -59,6 +59,7 @@
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
+#include "fcp/secagg/shared/secagg_messages.pb.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp::client::http {
@@ -123,6 +124,7 @@ using ::testing::StrEq;
 using ::testing::StrictMock;
 using ::testing::UnorderedElementsAre;
 using ::testing::VariantWith;
+using ::testing::WithArg;
 
 constexpr char kEntryPointUri[] = "https://initial.uri/";
 constexpr char kTaskAssignmentTargetUri[] = "https://taskassignment.uri/";
@@ -145,6 +147,7 @@ constexpr char kClientVersion[] = "CLIENT_VERSION";
 constexpr char kAttestationMeasurement[] = "ATTESTATION_MEASUREMENT";
 constexpr char kClientSessionId[] = "CLIENT_SESSION_ID";
 constexpr char kAggregationSessionId[] = "AGGREGATION_SESSION_ID";
+constexpr char kAuthorizationToken[] = "AUTHORIZATION_TOKEN";
 constexpr char kClientToken[] = "CLIENT_TOKEN";
 constexpr char kResourceName[] = "CHECKPOINT_RESOURCE";
 constexpr char kFederatedSelectUriTemplate[] = "https://federated.select";
@@ -376,7 +379,7 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
   forwarding_info->set_target_uri_prefix(kAggregationTargetUri);
   task_assignment->set_session_id(kClientSessionId);
   task_assignment->set_aggregation_id(aggregation_session_id);
-  task_assignment->set_authorization_token(kClientToken);
+  task_assignment->set_authorization_token(kAuthorizationToken);
   *task_assignment->mutable_plan() = plan;
   *task_assignment->mutable_init_checkpoint() = checkpoint;
   task_assignment->mutable_federated_select_uri_info()->set_uri_template(
@@ -419,6 +422,7 @@ StartAggregationDataUploadResponse GetFakeStartAggregationDataUploadResponse(
       response.mutable_aggregation_protocol_forwarding_info();
   *aggregation_protocol_forwarding_info->mutable_target_uri_prefix() =
       second_stage_aggregation_uri_prefix;
+  response.set_client_token(kClientToken);
   return response;
 }
 
@@ -2040,7 +2044,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSimpleAggSuccess) {
       kAggregationSessionId, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
   ExpectSuccessfulByteStreamUploadRequest(
       "https://bytestream.uri/upload/v1/media/"
@@ -2054,6 +2058,57 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSimpleAggSuccess) {
       federated_protocol_->ReportCompleted(std::move(results), plan_duration));
 }
 
+// TODO(team): Remove this test once client_token is always populated in
+// StartAggregationDataUploadResponse.
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedViaSimpleAggWithoutClientToken) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, plan_duration);
+
+  StartAggregationDataUploadResponse start_aggregation_data_upload_response =
+      GetFakeStartAggregationDataUploadResponse(
+          kResourceName, kByteStreamTargetUri,
+          kSecondStageAggregationTargetUri);
+  // Omit the client token from the response.
+  start_aggregation_data_upload_response.clear_client_token();
+  EXPECT_CALL(
+      mock_http_client_,
+      PerformSingleRequest(SimpleHttpRequestMatcher(
+          "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+          "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+          HttpRequest::Method::kPost, _, _)))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreateDoneOperation(kOperationName,
+                              start_aggregation_data_upload_response)
+              .SerializeAsString())));
+
+  ExpectSuccessfulByteStreamUploadRequest(
+      "https://bytestream.uri/upload/v1/media/"
+      "CHECKPOINT_RESOURCE?upload_protocol=raw",
+      checkpoint_str);
+  // SubmitAggregationResult should reuse the authorization token.
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/aggregations/"
+      "AGGREGATION_SESSION_ID/clients/AUTHORIZATION_TOKEN:submit?%24alt=proto");
+
+  EXPECT_OK(
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+}
+
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
   absl::Duration plan_duration = absl::Minutes(5);
   // Issue an eligibility eval checkin first.
@@ -2062,6 +2117,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
   ASSERT_OK(RunSuccessfulCheckin());
 
   StartSecureAggregationResponse start_secure_aggregation_response;
+  start_secure_aggregation_response.set_client_token(kClientToken);
   auto masked_result_resource =
       start_secure_aggregation_response.mutable_masked_result_resource();
   masked_result_resource->set_resource_name("masked_resource");
@@ -2092,13 +2148,13 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
       kAggregationSessionId, plan_duration);
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://aggregation.uri/v1/secureaggregations/"
-          "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:start?%24alt=proto",
-          HttpRequest::Method::kPost, _,
-          StartSecureAggregationRequest().SerializeAsString())))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://aggregation.uri/v1/secureaggregations/"
+                  "AGGREGATION_SESSION_ID/clients/"
+                  "AUTHORIZATION_TOKEN:start?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  StartSecureAggregationRequest().SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
           CreatePendingOperation("operations/foo#bar").SerializeAsString())));
@@ -2118,15 +2174,128 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   results.emplace("secagg_tensor", QuantizedTensor());
 
-  MockSecAggRunner* mock_secagg_runner = new StrictMock<MockSecAggRunner>();
   EXPECT_CALL(*mock_secagg_runner_factory_,
               CreateSecAggRunner(_, _, _, _, _, 500, 450))
-      .WillOnce(Return(ByMove(absl::WrapUnique(mock_secagg_runner))));
-  EXPECT_CALL(*mock_secagg_runner,
-              Run(UnorderedElementsAre(
-                  Pair("secagg_tensor", VariantWith<QuantizedTensor>(FieldsAre(
-                                            IsEmpty(), 0, IsEmpty()))))))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(WithArg<0>([&](auto send_to_server_impl) {
+        auto mock_secagg_runner =
+            std::make_unique<StrictMock<MockSecAggRunner>>();
+        EXPECT_CALL(*mock_secagg_runner,
+                    Run(UnorderedElementsAre(Pair(
+                        "secagg_tensor", VariantWith<QuantizedTensor>(FieldsAre(
+                                             IsEmpty(), 0, IsEmpty()))))))
+            .WillOnce([=,
+                       send_to_server_impl = std::move(send_to_server_impl)] {
+              // SecAggSendToServerBase::Send should use the client token. This
+              // needs to be tested here since `send_to_server_impl` should not
+              // be used outside of Run.
+              EXPECT_CALL(
+                  mock_http_client_,
+                  PerformSingleRequest(SimpleHttpRequestMatcher(
+                      "https://secure.aggregations.uri/v1/secureaggregations/"
+                      "AGGREGATION_SESSION_ID/clients/"
+                      "CLIENT_TOKEN:abort?%24alt=proto",
+                      _, _, _)))
+                  .WillOnce(Return(CreateEmptySuccessHttpResponse()));
+              secagg::ClientToServerWrapperMessage abort_message;
+              abort_message.mutable_abort();
+              send_to_server_impl->Send(&abort_message);
+
+              return absl::OkStatus();
+            });
+        return mock_secagg_runner;
+      }));
+
+  EXPECT_OK(
+      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+}
+
+// TODO(team): Remove this test once client_token is always populated in
+// StartSecureAggregationResponse.
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedViaSecureAggWithoutClientToken) {
+  absl::Duration plan_duration = absl::Minutes(5);
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulCheckin());
+
+  StartSecureAggregationResponse start_secure_aggregation_response;
+  // Don't set client_token.
+  auto masked_result_resource =
+      start_secure_aggregation_response.mutable_masked_result_resource();
+  masked_result_resource->set_resource_name("masked_resource");
+  masked_result_resource->mutable_data_upload_forwarding_info()
+      ->set_target_uri_prefix("https://bytestream.uri/");
+
+  auto nonmasked_result_resource =
+      start_secure_aggregation_response.mutable_nonmasked_result_resource();
+  nonmasked_result_resource->set_resource_name("nonmasked_resource");
+  nonmasked_result_resource->mutable_data_upload_forwarding_info()
+      ->set_target_uri_prefix("https://bytestream.uri/");
+
+  start_secure_aggregation_response.mutable_secagg_protocol_forwarding_info()
+      ->set_target_uri_prefix("https://secure.aggregations.uri/");
+  auto protocol_execution_info =
+      start_secure_aggregation_response.mutable_protocol_execution_info();
+  protocol_execution_info->set_minimum_surviving_clients_for_reconstruction(
+      450);
+  protocol_execution_info->set_expected_number_of_clients(500);
+
+  auto secure_aggregands =
+      start_secure_aggregation_response.mutable_secure_aggregands();
+  SecureAggregandExecutionInfo secure_aggregand_execution_info;
+  secure_aggregand_execution_info.set_modulus(9999);
+  (*secure_aggregands)["secagg_tensor"] = secure_aggregand_execution_info;
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, plan_duration);
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://aggregation.uri/v1/secureaggregations/"
+                  "AGGREGATION_SESSION_ID/clients/"
+                  "AUTHORIZATION_TOKEN:start?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  StartSecureAggregationRequest().SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreateDoneOperation(kOperationName, start_secure_aggregation_response)
+              .SerializeAsString())));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  results.emplace("secagg_tensor", QuantizedTensor());
+
+  EXPECT_CALL(*mock_secagg_runner_factory_,
+              CreateSecAggRunner(_, _, _, _, _, _, _))
+      .WillOnce(WithArg<0>([&](auto send_to_server_impl) {
+        auto mock_secagg_runner =
+            std::make_unique<StrictMock<MockSecAggRunner>>();
+        EXPECT_CALL(*mock_secagg_runner, Run(_))
+            .WillOnce([=,
+                       send_to_server_impl = std::move(send_to_server_impl)] {
+              // SecAggSendToServerBase::Send should reuse the authorization
+              // token. This needs to be tested here since `send_to_server_impl`
+              // should not be used outside of Run.
+              EXPECT_CALL(
+                  mock_http_client_,
+                  PerformSingleRequest(SimpleHttpRequestMatcher(
+                      "https://secure.aggregations.uri/v1/secureaggregations/"
+                      "AGGREGATION_SESSION_ID/clients/"
+                      "AUTHORIZATION_TOKEN:abort?%24alt=proto",
+                      _, _, _)))
+                  .WillOnce(Return(CreateEmptySuccessHttpResponse()));
+              secagg::ClientToServerWrapperMessage abort_message;
+              abort_message.mutable_abort();
+              send_to_server_impl->Send(&abort_message);
+
+              return absl::OkStatus();
+            });
+        return mock_secagg_runner;
+      }));
 
   EXPECT_OK(
       federated_protocol_->ReportCompleted(std::move(results), plan_duration));
@@ -2141,6 +2310,7 @@ TEST_F(HttpFederatedProtocolTest,
   ASSERT_OK(RunSuccessfulCheckin());
 
   StartSecureAggregationResponse start_secure_aggregation_response;
+  start_secure_aggregation_response.set_client_token(kClientToken);
   auto masked_result_resource =
       start_secure_aggregation_response.mutable_masked_result_resource();
   masked_result_resource->set_resource_name("masked_resource");
@@ -2180,13 +2350,13 @@ TEST_F(HttpFederatedProtocolTest,
       .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
   EXPECT_CALL(mock_log_manager_,
               LogDiag(ProdDiagCode::HTTP_REPORT_TASK_RESULT_REQUEST_FAILED));
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://aggregation.uri/v1/secureaggregations/"
-          "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:start?%24alt=proto",
-          HttpRequest::Method::kPost, _,
-          StartSecureAggregationRequest().SerializeAsString())))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://aggregation.uri/v1/secureaggregations/"
+                  "AGGREGATION_SESSION_ID/clients/"
+                  "AUTHORIZATION_TOKEN:start?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  StartSecureAggregationRequest().SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
           CreatePendingOperation("operations/foo#bar").SerializeAsString())));
@@ -2230,13 +2400,13 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedStartSecAggFailed) {
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
       kAggregationSessionId, plan_duration);
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://aggregation.uri/v1/secureaggregations/"
-          "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:start?%24alt=proto",
-          HttpRequest::Method::kPost, _,
-          StartSecureAggregationRequest().SerializeAsString())))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://aggregation.uri/v1/secureaggregations/"
+                  "AGGREGATION_SESSION_ID/clients/"
+                  "AUTHORIZATION_TOKEN:start?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  StartSecureAggregationRequest().SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
           CreateErrorOperation(kOperationName, absl::StatusCode::kInternal,
@@ -2265,13 +2435,13 @@ TEST_F(HttpFederatedProtocolTest,
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
       kAggregationSessionId, plan_duration);
-  EXPECT_CALL(
-      mock_http_client_,
-      PerformSingleRequest(SimpleHttpRequestMatcher(
-          "https://aggregation.uri/v1/secureaggregations/"
-          "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:start?%24alt=proto",
-          HttpRequest::Method::kPost, _,
-          StartSecureAggregationRequest().SerializeAsString())))
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://aggregation.uri/v1/secureaggregations/"
+                  "AGGREGATION_SESSION_ID/clients/"
+                  "AUTHORIZATION_TOKEN:start?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  StartSecureAggregationRequest().SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(403, HeaderList(), "")));
 
   // Create a fake checkpoint with 32 'X'.
@@ -2314,7 +2484,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
 
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
   ExpectSuccessfulByteStreamUploadRequest(
       "https://bytestream.uri/upload/v1/media/"
@@ -2353,11 +2523,10 @@ TEST_F(HttpFederatedProtocolTest,
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
           "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-          "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
+          "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
           HttpRequest::Method::kPost, _,
           StartAggregationDataUploadRequest().SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
-  ExpectSuccessfulAbortAggregationRequest("https://aggregation.uri");
   absl::Status report_result =
       federated_protocol_->ReportCompleted(std::move(results), plan_duration);
   ASSERT_THAT(report_result, IsCode(absl::StatusCode::kUnavailable));
@@ -2390,7 +2559,7 @@ TEST_F(HttpFederatedProtocolTest,
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
           "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-          "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
+          "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
           HttpRequest::Method::kPost, _,
           StartAggregationDataUploadRequest().SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(
@@ -2403,7 +2572,6 @@ TEST_F(HttpFederatedProtocolTest,
           HttpRequest::Method::kGet, _,
           GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
       .WillOnce(Return(FakeHttpResponse(401, HeaderList())));
-  ExpectSuccessfulAbortAggregationRequest("https://aggregation.uri");
   absl::Status report_result =
       federated_protocol_->ReportCompleted(std::move(results), plan_duration);
   ASSERT_THAT(report_result, IsCode(absl::StatusCode::kUnauthenticated));
@@ -2431,7 +2599,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
       kAggregationSessionId, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2466,7 +2634,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadAbortedByServer) {
       kAggregationSessionId, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2504,7 +2672,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadInterrupted) {
       kAggregationSessionId, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
   absl::Notification request_issued;
   absl::Notification request_cancelled;
@@ -2566,7 +2734,7 @@ TEST_F(HttpFederatedProtocolTest,
       kAggregationSessionId, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/CLIENT_TOKEN:startdataupload?%24alt=proto",
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
   ExpectSuccessfulByteStreamUploadRequest(
       "https://bytestream.uri/upload/v1/media/"

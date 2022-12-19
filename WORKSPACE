@@ -63,9 +63,9 @@ bazel_skylib_workspace()
 http_archive(
     name = "com_google_googletest",
     patches = ["//fcp/patches:googletest.patch"],
-    sha256 = "fcfac631041fce253eba4fc014c28fd620e33e3758f64f8ed5487cc3e1840e3d",
-    strip_prefix = "googletest-5a509dbd2e5a6c694116e329c5a20dc190653724",
-    urls = ["https://github.com/google/googletest/archive/5a509dbd2e5a6c694116e329c5a20dc190653724.zip"],
+    sha256 = "81964fe578e9bd7c94dfdb09c8e4d6e6759e19967e397dbea48d1c10e45d0df2",
+    strip_prefix = "googletest-release-1.12.1",
+    urls = ["https://github.com/google/googletest/archive/refs/tags/release-1.12.1.tar.gz"],
 )
 
 http_archive(

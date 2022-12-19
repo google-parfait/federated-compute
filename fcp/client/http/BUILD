@@ -187,6 +187,7 @@ cc_test(
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
+        "//fcp/secagg/shared:cc_proto",
         "//fcp/testing",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/random",

@@ -1,7 +1,7 @@
 diff -Naur googletest-5a509dbd2e5a6c694116e329c5a20dc190653724/BUILD.bazel googletest.new/BUILD.bazel
 --- BUILD.bazel
 +++ BUILD.bazel
-@@ -116,11 +116,14 @@
+@@ -159,11 +159,14 @@
  cc_library(
      name = "gtest_main",
      srcs = ["googlemock/src/gmock_main.cc"],
@@ -20,17 +20,17 @@ diff -Naur googletest-5a509dbd2e5a6c694116e329c5a20dc190653724/BUILD.bazel googl
 diff -Naur googletest-5a509dbd2e5a6c694116e329c5a20dc190653724/googlemock/src/gmock_main.cc googletest.new/googlemock/src/gmock_main.cc
 --- googlemock/src/gmock_main.cc
 +++ googlemock/src/gmock_main.cc
-@@ -29,6 +29,9 @@
-
+@@ -32,6 +32,9 @@
 
  #include <iostream>
+
 +#if GTEST_HAS_ABSL
 +#include "absl/flags/parse.h"
 +#endif  //  GTEST_HAS_ABSL
  #include "gmock/gmock.h"
  #include "gtest/gtest.h"
 
-@@ -66,6 +69,9 @@
+@@ -70,6 +73,9 @@
    // also responsible for initializing Google Test.  Therefore there's
    // no need for calling testing::InitGoogleTest() separately.
    testing::InitGoogleMock(&argc, argv);
@@ -43,7 +43,7 @@ diff -Naur googletest-5a509dbd2e5a6c694116e329c5a20dc190653724/googlemock/src/gm
 diff -Naur googletest-5a509dbd2e5a6c694116e329c5a20dc190653724/googletest/src/gtest_main.cc googletest.new/googletest/src/gtest_main.cc
 --- googletest/src/gtest_main.cc
 +++ googletest/src/gtest_main.cc
-@@ -48,6 +48,9 @@
+@@ -50,6 +50,9 @@
  GTEST_API_ int main(int argc, char **argv) {
    printf("Running main() from %s\n", __FILE__);
    testing::InitGoogleTest(&argc, argv);
