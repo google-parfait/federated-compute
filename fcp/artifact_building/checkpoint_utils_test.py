@@ -16,6 +16,7 @@
 import collections
 import os
 import typing
+from typing import Any
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -26,9 +27,63 @@ import tensorflow_federated as tff
 
 from google.protobuf import any_pb2
 from fcp.artifact_building import checkpoint_utils
+from fcp.protos import plan_pb2
 
 
 class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
+
+  def _assert_variable_functionality(self,
+                                     test_vars: list[tf.Variable],
+                                     test_value_to_save: Any = 10):
+    self.assertIsInstance(test_vars, list)
+    initializer = tf.compat.v1.global_variables_initializer()
+    for test_variable in test_vars:
+      with self.test_session() as session:
+        session.run(initializer)
+        session.run(test_variable.assign(test_value_to_save))
+        self.assertEqual(session.run(test_variable), test_value_to_save)
+
+  def test_create_server_checkpoint_vars_and_savepoint_succeeds_state_vars(
+      self):
+    with tf.Graph().as_default():
+      state_vars, _, _, savepoint = (
+          checkpoint_utils.create_server_checkpoint_vars_and_savepoint(
+              server_state_type=tff.to_type([('foo1', tf.int32)]),
+              server_metrics_type=tff.to_type([('bar2', tf.int32)]),
+              write_metrics_to_checkpoint=True))
+      self.assertIsInstance(savepoint, plan_pb2.CheckpointOp)
+      self._assert_variable_functionality(state_vars)
+
+  def test_create_server_checkpoint_vars_and_savepoint_succeeds_metadata_vars(
+      self):
+
+    def additional_checkpoint_metadata_var_fn(state_vars, metrics_vars,
+                                              write_metrics_to_checkpoint):
+      del state_vars, metrics_vars, write_metrics_to_checkpoint
+      return [tf.Variable(initial_value=b'dog', name='metadata')]
+
+    with tf.Graph().as_default():
+      _, _, metadata_vars, savepoint = (
+          checkpoint_utils.create_server_checkpoint_vars_and_savepoint(
+              server_state_type=tff.to_type([('foo3', tf.int32)]),
+              server_metrics_type=tff.to_type([('bar1', tf.int32)]),
+              additional_checkpoint_metadata_var_fn=(
+                  additional_checkpoint_metadata_var_fn),
+              write_metrics_to_checkpoint=True))
+      self.assertIsInstance(savepoint, plan_pb2.CheckpointOp)
+      self._assert_variable_functionality(
+          metadata_vars, test_value_to_save=b'cat')
+
+  def test_create_server_checkpoint_vars_and_savepoint_succeeds_metrics_vars(
+      self):
+    with tf.Graph().as_default():
+      _, metrics_vars, _, savepoint = (
+          checkpoint_utils.create_server_checkpoint_vars_and_savepoint(
+              server_state_type=tff.to_type([('foo2', tf.int32)]),
+              server_metrics_type=tff.to_type([('bar3', tf.int32)]),
+              write_metrics_to_checkpoint=True))
+      self.assertIsInstance(savepoint, plan_pb2.CheckpointOp)
+      self._assert_variable_functionality(metrics_vars)
 
   def test_tff_type_to_dtype_list_as_expected(self):
     tff_type = tff.FederatedType(

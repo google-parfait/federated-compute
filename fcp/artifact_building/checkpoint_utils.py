@@ -14,16 +14,194 @@
 """Helper methods for working with demo server checkpoints."""
 
 import collections
-from collections.abc import Iterable, Mapping
-from typing import Any, Union
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any, Optional, Union
 
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
 
+from fcp.artifact_building import artifact_constants
 from fcp.artifact_building import tensor_utils
 from fcp.artifact_building import type_checks
 from fcp.artifact_building import variable_helpers
+from fcp.protos import plan_pb2
+
+SAVE_SERVER_SAVEPOINT_NAME = 'save_server_savepoint'
+
+
+def create_server_checkpoint_vars_and_savepoint(
+    *,
+    server_state_type: tff.StructType,
+    server_metrics_type: Optional[tff.StructType] = None,
+    write_metrics_to_checkpoint: bool = True,
+    additional_checkpoint_metadata_var_fn: Optional[Callable[
+        [tff.StructType, tff.StructType, bool], list[tf.Variable]]] = None
+) -> tuple[list[tf.Variable], list[tf.Variable], list[tf.Variable],
+           plan_pb2.CheckpointOp]:
+  """Creates tf.Variables for a server checkpoint and the associated savepoint.
+
+  The variables and the associated saver are constructed in the default graph.
+
+  For now, only `server_state_type` is required. If metrics are to be saved in
+  the server checkpoint, `server_metrics_type` and `server_result_type` must
+  be provided. `server_state_type` refers to the server state portion of the
+  checkpoint and is used in the `Restore` op of the savepoint. The
+  `server_metrics_type` refers to the metrics saved in the checkpoint, and is
+  not used in the `Restore` op of the savepoint. `server_result_type` refers to
+  the complete round result structure stored in the checkpoint for a round.
+
+  Args:
+    server_state_type: A `tff.Type` with the type signature of the state. This
+      is used to construct the server state variable names stored in the
+      checkpoint and is used to create the metadata variables for the checkpoint
+      if `server_result_type` is not provided.
+    server_metrics_type: Optional. A `tff.Type` with the type signature of the
+      metrics. If provided, this is used to construct the metric variable names
+      that are stored in the checkpoint.
+    write_metrics_to_checkpoint: If False, revert to legacy behavior where
+      metrics and other non-state values were handled by post-processing
+      separate from the outputted checkpoint.
+    additional_checkpoint_metadata_var_fn: An optional method that takes in the
+      server_state_type, server_metrics_type, and write_metrics_to_checkpoint to
+      produce additional metadata variables.
+
+  Returns:
+    A tuple `(state_vars, metric_vars, metadata_vars, savepoint)`:
+    - `state_vars` is a Python `list` of variables that hold the state.
+    - `metric_vars` is a Python `list` of variables that hold the metrics.
+    - `metadata_vars` is a Python `list` of variables that hold optional
+      metadata.
+    - `savepoint` is the associated savepoint, i.e., an instance of
+      `plan_pb2.CheckpointOp` with a saver configured for saving the
+      `state_vars`, `metadata_vars`, and, if write_metrics_to_checkpoint is
+      True, `metric_vars`, and restoring the `state_vars` and
+      `metadata_vars`.
+  """
+  has_metrics = False
+  metric_vars = []
+  save_tensor_name = None
+  type_checks.check_type(server_state_type, tff.Type, name='server_state_type')
+  state_vars = variable_helpers.create_vars_for_tff_type(
+      server_state_type, artifact_constants.SERVER_STATE_VAR_PREFIX)
+  var_names = list(map(tensor_utils.bare_name, state_vars))
+  metadata_vars = []
+  if server_metrics_type is not None:
+    type_checks.check_type(
+        server_metrics_type, tff.Type, name='server_metrics_type')
+    metric_vars = variable_helpers.create_vars_for_tff_type(
+        server_metrics_type, artifact_constants.SERVER_METRICS_VAR_PREFIX)
+    if additional_checkpoint_metadata_var_fn:
+      metadata_vars = additional_checkpoint_metadata_var_fn(
+          state_vars, metric_vars, write_metrics_to_checkpoint)
+
+    has_metrics = bool(tff.structure.flatten(server_metrics_type))
+    if has_metrics and write_metrics_to_checkpoint:
+      var_names.extend(list(map(tensor_utils.bare_name, metric_vars)))
+
+      temp_saver_for_all_vars = create_deterministic_saver(
+          var_list=state_vars + metadata_vars + metric_vars,
+          name=SAVE_SERVER_SAVEPOINT_NAME)
+      temp_saver_def = temp_saver_for_all_vars.as_saver_def()
+      save_tensor_name = temp_saver_def.save_tensor_name
+  else:
+    if additional_checkpoint_metadata_var_fn:
+      metadata_vars = additional_checkpoint_metadata_var_fn(
+          state_vars, None, write_metrics_to_checkpoint)
+
+  saver = create_deterministic_saver(
+      var_list=state_vars + metadata_vars,
+      name='{}_savepoint'.format(artifact_constants.SERVER_STATE_VAR_PREFIX))
+  savepoint = plan_pb2.CheckpointOp()
+  savepoint.saver_def.CopyFrom(saver.as_saver_def())
+
+  if save_tensor_name is not None:
+    # Replace the save_tensor_name to the one in
+    # temp_saver_for_all_vars so that we are additionally saving metrics vars
+    # in the checkpoint that don't need to be restored as part of the input
+    # computation state.
+    # Once we create the server GraphDef, we will edit the GraphDef directly
+    # to ensure the input filename links to the filename tensor from the
+    # `savepoint`.
+    savepoint.saver_def.save_tensor_name = save_tensor_name
+  return state_vars, metric_vars, metadata_vars, savepoint
+
+
+def create_state_vars_and_savepoint(
+    type_spec: variable_helpers.AllowedTffTypes,
+    name: str) -> tuple[list[tf.Variable], plan_pb2.CheckpointOp]:
+  """Creates state variables and their savepoint as a `plan_pb2.CheckpointOp`.
+
+  The variables and the associated saver are constructed in the default graph.
+
+  Args:
+    type_spec: An instance of `tff.Type` with the type signature of the state.
+    name: The string to use as a basis for naming the vars and the saver. The
+      vars will be under `${name}_state`, and saver under `${name}_savepoint`.
+
+  Returns:
+    A tuple `(vars, savepoint)`, where `vars` is a Python `list` of variables
+    that hold the state, and `savepoint` is the associated savepoint, i.e.,
+    an instance of `plan_pb2.CheckpointOp` with a saver configured for saving
+    and restoring the `vars`.
+
+  Raises:
+    ValueError: If the name is empty.
+  """
+  state_vars, saver = create_state_vars_and_saver(type_spec, name)
+  savepoint = plan_pb2.CheckpointOp()
+  savepoint.saver_def.CopyFrom(saver.as_saver_def())
+  return state_vars, savepoint
+
+
+def create_state_vars_and_saver(
+    type_spec: variable_helpers.AllowedTffTypes,
+    name: str) -> tuple[list[tf.Variable], tf.compat.v1.train.Saver]:
+  """Creates state variables and the associated saver.
+
+  The variables and the associated saver are constructed in the default graph.
+
+  Args:
+    type_spec: An instance of `tff.Type` with the type signature of the state.
+    name: The string to use as a basis for naming the vars and the saver. The
+      vars will be under `${name}_state`, and saver under `${name}_savepoint`.
+
+  Returns:
+    A tuple `(vars, savepoint)`, where `vars` is a Python `list` of variables
+    that hold the state, and `savepoint` is the associated
+    `tf.compat.v1.train.Saver`.
+
+  Raises:
+    ValueError: If the name is empty.
+  """
+  type_checks.check_type(type_spec, tff.Type, name='type_spec')
+  type_checks.check_type(name, str, name='name')
+  if not name:
+    raise ValueError('Name cannot be empty.')
+  state_vars = variable_helpers.create_vars_for_tff_type(type_spec, name)
+  saver = create_deterministic_saver(
+      state_vars, name='{}_savepoint'.format(name))
+  return state_vars, saver
+
+
+def restore_tensors_from_savepoint(
+    tensor_specs: Iterable[tf.TensorSpec],
+    filepath_tensor: tf.Tensor) -> list[tf.Tensor]:
+  """Restores tensors from a checkpoint designated by a tensor filepath.
+
+  Args:
+    tensor_specs: A `list` of `tf.TensorSpec`s with the names and dtypes of the
+      tensors to restore.
+    filepath_tensor: A placeholder tensor that contains file names with a given
+      pattern.
+
+  Returns:
+    A list of restored tensors.
+  """
+  return [
+      tensor_utils.restore(filepath_tensor, tensor_utils.bare_name(spec.name),
+                           spec.dtype) for spec in tensor_specs
+  ]
 
 
 def create_deterministic_saver(var_list: Union[Iterable[tf.Variable],

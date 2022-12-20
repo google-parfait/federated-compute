@@ -3,15 +3,25 @@ load("@rules_python//python:defs.bzl", "py_library", "py_test")
 default_visibility = ["//fcp:internal"]
 
 py_library(
+    name = "artifact_constants",
+    srcs = ["artifact_constants.py"],
+    srcs_version = "PY3",
+    visibility = default_visibility + [
+    ],
+)
+
+py_library(
     name = "checkpoint_utils",
     srcs = ["checkpoint_utils.py"],
     srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
+        ":artifact_constants",
         ":tensor_utils",
         ":type_checks",
         ":variable_helpers",
+        "//fcp/protos:plan_py_pb2",
     ],
 )
 
@@ -24,6 +34,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":checkpoint_utils",
+        "//fcp/protos:plan_py_pb2",
         "@com_google_protobuf//:protobuf_python",
     ],
 )
@@ -50,6 +61,26 @@ py_test(
     deps = [
         ":data_spec",
         "//fcp/protos:plan_py_pb2",
+    ],
+)
+
+py_library(
+    name = "federated_compute_plan_builder",
+    srcs = ["federated_compute_plan_builder.py"],
+    srcs_version = "PY3",
+    visibility = default_visibility + [
+    ],
+    deps = [
+        ":artifact_constants",
+        ":checkpoint_utils",
+        ":data_spec",
+        ":graph_helpers",
+        ":proto_helpers",
+        ":tensor_utils",
+        ":type_checks",
+        ":variable_helpers",
+        "//fcp/protos:plan_py_pb2",
+        "//fcp/tensorflow:delete_file_py",
     ],
 )
 
