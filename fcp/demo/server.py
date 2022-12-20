@@ -58,7 +58,7 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     http.server.HTTPServer.__init__(self, (host, port), handler)
 
   async def run_computation(self, task_name: str, plan: plan_pb2.Plan,
-                            server_checkpoint: Optional[bytes],
+                            server_checkpoint: bytes,
                             number_of_clients: int) -> bytes:
     """Runs a computation, returning the resulting checkpoint.
 
@@ -68,7 +68,7 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     Args:
       task_name: The name of the task.
       plan: The Plan proto containing the client and server computations.
-      server_checkpoint: The starting server checkpoint, if any.
+      server_checkpoint: The starting server checkpoint.
       number_of_clients: The minimum number of clients to include.
 
     Returns:

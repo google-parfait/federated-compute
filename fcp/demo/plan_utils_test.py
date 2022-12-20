@@ -139,11 +139,16 @@ def create_plan(log_file: Optional[str] = None) -> plan_pb2.Plan:
   return plan
 
 
+def create_checkpoint(tensor_name=b'test'):
+  """Creates a test initial checkpoint."""
+  return test_utils.create_checkpoint({CHECKPOINT_TENSOR_NAME: tensor_name})
+
+
 class PlanUtilsTest(absltest.TestCase):
 
   def test_session_enter_exit(self):
     self.assertIsNone(tf.compat.v1.get_default_session())
-    with plan_utils.Session(create_plan(), None):
+    with plan_utils.Session(create_plan(), create_checkpoint()):
       self.assertIsNotNone(tf.compat.v1.get_default_session())
     self.assertIsNone(tf.compat.v1.get_default_session())
 
@@ -151,23 +156,23 @@ class PlanUtilsTest(absltest.TestCase):
     plan = create_plan()
     plan.ClearField('phase')
     with self.assertRaises(ValueError):
-      plan_utils.Session(plan, None)
+      plan_utils.Session(plan, create_checkpoint())
 
   def test_session_without_server_phase(self):
     plan = create_plan()
     plan.phase[0].ClearField('server_phase')
     with self.assertRaises(ValueError):
-      plan_utils.Session(plan, None)
+      plan_utils.Session(plan, create_checkpoint())
 
   def test_session_with_multiple_phases(self):
     plan = create_plan()
     plan.phase.append(plan.phase[0])
     with self.assertRaises(ValueError):
-      plan_utils.Session(plan, None)
+      plan_utils.Session(plan, create_checkpoint())
 
   def test_session_client_plan(self):
     plan = create_plan()
-    with plan_utils.Session(plan, None) as session:
+    with plan_utils.Session(plan, create_checkpoint()) as session:
       self.assertEqual(
           plan_pb2.ClientOnlyPlan.FromString(session.client_plan),
           plan_pb2.ClientOnlyPlan(
@@ -178,7 +183,7 @@ class PlanUtilsTest(absltest.TestCase):
   def test_session_client_plan_without_tensorflow_config(self):
     plan = create_plan()
     plan.ClearField('tensorflow_config_proto')
-    with plan_utils.Session(plan, None) as session:
+    with plan_utils.Session(plan, create_checkpoint()) as session:
       self.assertEqual(
           plan_pb2.ClientOnlyPlan.FromString(session.client_plan),
           plan_pb2.ClientOnlyPlan(
@@ -193,23 +198,17 @@ class PlanUtilsTest(absltest.TestCase):
                                      })) as session:
       self.assertEqual(session.client_checkpoint, expected)
 
-  def test_session_client_checkpoint_without_checkpoint(self):
-    with plan_utils.Session(create_plan(), None) as session:
-      self.assertEqual(session.client_checkpoint, DEFAULT_INITIAL_CHECKPOINT)
-
   def test_session_client_checkpoint_without_server_savepoint(self):
     plan = create_plan()
-    checkpoint = test_utils.create_checkpoint(
-        {CHECKPOINT_TENSOR_NAME: b'unused'})
     # If server_savepoint isn't set, the checkpoint shouldn't be loaded.
     plan.ClearField('server_savepoint')
-    with plan_utils.Session(plan, checkpoint) as session:
+    with plan_utils.Session(plan, create_checkpoint()) as session:
       self.assertEqual(session.client_checkpoint, DEFAULT_INITIAL_CHECKPOINT)
 
   def test_session_finalize(self):
-    checkpoint = test_utils.create_checkpoint({CHECKPOINT_TENSOR_NAME: b''})
     with tempfile.NamedTemporaryFile('r') as tmpfile:
-      with plan_utils.Session(create_plan(tmpfile.name), checkpoint) as session:
+      with plan_utils.Session(create_plan(tmpfile.name),
+                              create_checkpoint()) as session:
         checkpoint = session.finalize(
             test_utils.create_checkpoint({INTERMEDIATE_TENSOR_NAME: 3}))
       self.assertSequenceEqual(tmpfile.read().splitlines(), [
@@ -238,7 +237,7 @@ class PlanUtilsTest(absltest.TestCase):
     plan = create_plan()
     plan.phase[0].server_phase.phase_init_op = 'does-not-exist'
     with self.assertRaises(ValueError):
-      plan_utils.Session(plan, None)
+      plan_utils.Session(plan, create_checkpoint())
 
 
 if __name__ == '__main__':

@@ -19,7 +19,6 @@ and when it should be run.
 
 import functools
 import tempfile
-from typing import Optional
 
 import tensorflow as tf
 
@@ -33,7 +32,7 @@ class Session:
   This class only supports loading a single intermediate update.
   """
 
-  def __init__(self, plan: plan_pb2.Plan, checkpoint: Optional[bytes]):
+  def __init__(self, plan: plan_pb2.Plan, checkpoint: bytes):
     if len(plan.phase) != 1:
       raise ValueError('plan must contain exactly 1 phase.')
     if not plan.phase[0].HasField('server_phase'):
@@ -72,10 +71,10 @@ class Session:
       self._session.run(op)
 
   def _restore_state(self, checkpoint_op: plan_pb2.CheckpointOp,
-                     checkpoint: Optional[bytes]) -> None:
+                     checkpoint: bytes) -> None:
     """Restores state from a TensorFlow checkpoint."""
     self._maybe_run(checkpoint_op.before_restore_op)
-    if checkpoint_op.HasField('saver_def') and checkpoint is not None:
+    if checkpoint_op.HasField('saver_def'):
       with tempfile.NamedTemporaryFile('wb') as tmpfile:
         tmpfile.write(checkpoint)
         tmpfile.flush()
