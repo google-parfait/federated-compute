@@ -108,6 +108,43 @@ py_test(
 )
 
 py_library(
+    name = "federated_context",
+    srcs = ["federated_context.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":checkpoint_tensor_reference",
+        ":federated_computation",
+        ":federated_data_source",
+        ":server",
+        "//fcp/artifact_building:artifact_constants",
+        "//fcp/artifact_building:checkpoint_utils",
+        "//fcp/artifact_building:data_spec",
+        "//fcp/artifact_building:federated_compute_plan_builder",
+        "//fcp/artifact_building:variable_helpers",
+        "//fcp/protos:plan_py_pb2",
+    ],
+)
+
+py_test(
+    name = "federated_context_test",
+    size = "medium",
+    srcs = ["federated_context_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":federated_computation",
+        ":federated_context",
+        ":federated_data_source",
+        ":server",
+        ":test_utils",
+        "//fcp/artifact_building:artifact_constants",
+        "//fcp/artifact_building:federated_compute_plan_builder",
+        "//fcp/artifact_building:variable_helpers",
+        "//fcp/protos:plan_py_pb2",
+    ],
+)
+
+py_library(
     name = "federated_data_source",
     srcs = ["federated_data_source.py"],
     srcs_version = "PY3",
