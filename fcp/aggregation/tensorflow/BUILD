@@ -139,19 +139,15 @@ cc_test(
     deps = [
         ":tensorflow_checkpoint_builder_factory",
         "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/base",
-        "//fcp/tensorflow:status",
         "//fcp/testing",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",
         "@com_google_googletest//:gtest_main",
-        "@org_tensorflow//tensorflow/c:checkpoint_reader",
-        "@org_tensorflow//tensorflow/c:tf_status_headers",
-        "@org_tensorflow//tensorflow/c:tf_status_helper",
-        "@org_tensorflow//tensorflow/core:framework",
     ],
 )
 

@@ -19,6 +19,7 @@
 
 #include <initializer_list>
 #include <ostream>
+#include <string>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -50,6 +51,10 @@ tf::Tensor CreateTfTensor(tf::DataType data_type,
 // Wrapper around tf::ops::Save that sets up and runs the op.
 tf::Status CreateTfCheckpoint(tf::Input filename, tf::Input tensor_names,
                               tf::InputList tensors);
+
+// Returns a summary of the checkpoint as a map of tensor names and values.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+SummarizeCheckpoint(const absl::Cord& checkpoint);
 
 // Converts a potentially sparse tensor to a flat vector of tensor values.
 template <typename T>

@@ -31,7 +31,13 @@ cc_library(
     copts = FCP_COPTS,
     deps = [
         "//fcp/aggregation/core:tensor",
+        "//fcp/base",
+        "//fcp/tensorflow:status",
+        "//fcp/testing",
         "@com_google_googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/c:checkpoint_reader",
+        "@org_tensorflow//tensorflow/c:tf_status_headers",
+        "@org_tensorflow//tensorflow/c:tf_status_helper",
         "@org_tensorflow//tensorflow/cc:cc_ops",
         "@org_tensorflow//tensorflow/cc:ops",
         "@org_tensorflow//tensorflow/cc:scope",

@@ -29,44 +29,15 @@
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/testing/test_data.h"
+#include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/base/platform.h"
-#include "fcp/tensorflow/status.h"
 #include "fcp/testing/testing.h"
-#include "tensorflow/c/checkpoint_reader.h"
-#include "tensorflow/c/tf_status.h"
-#include "tensorflow/c/tf_status_helper.h"
-#include "tensorflow/core/framework/tensor.h"
 
 namespace fcp::aggregation::tensorflow {
 namespace {
 
-using ::tensorflow::StatusFromTF_Status;
-using ::tensorflow::TF_StatusPtr;
-using ::tensorflow::checkpoint::CheckpointReader;
 using ::testing::Pair;
 using ::testing::UnorderedElementsAre;
-
-absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
-SummarizeCheckpoint(const absl::Cord& checkpoint) {
-  std::string filename = TemporaryTestFile(".ckpt");
-  FCP_RETURN_IF_ERROR(WriteCordToFile(filename, checkpoint));
-
-  TF_StatusPtr tf_status(TF_NewStatus());
-  auto reader = std::make_unique<CheckpointReader>(filename, tf_status.get());
-  FCP_RETURN_IF_ERROR(
-      ConvertFromTensorFlowStatus(StatusFromTF_Status(tf_status.get())));
-
-  absl::flat_hash_map<std::string, std::string> tensors;
-  for (const auto& [name, shape] : reader->GetVariableToShapeMap()) {
-    std::unique_ptr<::tensorflow::Tensor> tensor;
-    reader->GetTensor(name, &tensor, tf_status.get());
-    FCP_RETURN_IF_ERROR(
-        ConvertFromTensorFlowStatus(StatusFromTF_Status(tf_status.get())));
-    tensors[name] = tensor->SummarizeValue(/*max_entries=*/10);
-  }
-  return tensors;
-}
 
 TEST(TensorflowCheckpointBuilderFactoryTest, BuildCheckpoint) {
   TensorflowCheckpointBuilderFactory factory;
