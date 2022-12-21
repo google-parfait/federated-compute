@@ -104,7 +104,8 @@ class Session:
     """The serialized ClientOnlyPlan corresponding to the Plan proto."""
     client_only_plan = plan_pb2.ClientOnlyPlan(
         phase=self._plan.phase[0].client_phase,
-        graph=self._plan.client_graph_bytes.value)
+        graph=self._plan.client_graph_bytes.value,
+        tflite_graph=self._plan.client_tflite_graph_bytes)
     if self._plan.HasField('tensorflow_config_proto'):
       client_only_plan.tensorflow_config_proto.CopyFrom(
           self._plan.tensorflow_config_proto)

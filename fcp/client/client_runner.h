@@ -211,6 +211,7 @@ class FlagsImpl : public Flags {
   void set_use_http_federated_compute_protocol(bool value) {
     use_http_federated_compute_protocol_ = value;
   }
+  void set_use_tflite_training(bool value) { use_tflite_training_ = value; }
 
   int64_t condition_polling_period_millis() const override { return 1000; }
   int64_t tf_execution_teardown_grace_period_millis() const override {
@@ -224,9 +225,11 @@ class FlagsImpl : public Flags {
   bool use_http_federated_compute_protocol() const override {
     return use_http_federated_compute_protocol_;
   }
+  bool use_tflite_training() const override { return use_tflite_training_; }
 
  private:
   bool use_http_federated_compute_protocol_ = false;
+  bool use_tflite_training_ = false;
 };
 
 }  // namespace fcp::client

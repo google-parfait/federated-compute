@@ -132,6 +132,7 @@ def create_plan(log_file: Optional[str] = None) -> plan_pb2.Plan:
                       apply_aggregated_updates_op.name)))
       ],
       server_savepoint=server_savepoint_op,
+      client_tflite_graph_bytes=b'tflite-graph',
       version=1)
   plan.client_graph_bytes.Pack(client_graph.as_graph_def())
   plan.server_graph_bytes.Pack(server_graph.as_graph_def())
@@ -178,6 +179,7 @@ class PlanUtilsTest(absltest.TestCase):
           plan_pb2.ClientOnlyPlan(
               phase=plan.phase[0].client_phase,
               graph=plan.client_graph_bytes.value,
+              tflite_graph=plan.client_tflite_graph_bytes,
               tensorflow_config_proto=plan.tensorflow_config_proto))
 
   def test_session_client_plan_without_tensorflow_config(self):
@@ -188,7 +190,19 @@ class PlanUtilsTest(absltest.TestCase):
           plan_pb2.ClientOnlyPlan.FromString(session.client_plan),
           plan_pb2.ClientOnlyPlan(
               phase=plan.phase[0].client_phase,
-              graph=plan.client_graph_bytes.value))
+              graph=plan.client_graph_bytes.value,
+              tflite_graph=plan.client_tflite_graph_bytes))
+
+  def test_session_client_plan_without_tflite_graph(self):
+    plan = create_plan()
+    plan.ClearField('client_tflite_graph_bytes')
+    with plan_utils.Session(plan, create_checkpoint()) as session:
+      self.assertEqual(
+          plan_pb2.ClientOnlyPlan.FromString(session.client_plan),
+          plan_pb2.ClientOnlyPlan(
+              phase=plan.phase[0].client_phase,
+              graph=plan.client_graph_bytes.value,
+              tensorflow_config_proto=plan.tensorflow_config_proto))
 
   def test_session_client_checkpoint(self):
     expected = b'test-client-checkpoint'
