@@ -119,6 +119,7 @@ py_library(
     visibility = default_visibility + [
     ],
     deps = [
+        ":tensor_utils",
         "//fcp/protos:plan_py_pb2",
     ],
 )
