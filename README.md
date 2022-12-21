@@ -53,9 +53,9 @@ its dependencies on proprietary infrastructure, and we instead provide a
 reference / example server implementation in `demo/` for demonstration purposes.
 
 The best way to get started is to run the end-to-end demo
-`//fcp/demo:server_test`, which will spin up example services, clients, and run
-a federated computation; this test will cover the majority of the code in this
-repository.
+`//fcp/demo:federated_program_test`, which will spin up example services,
+clients, and run a federated program; this test will cover the majority of the
+code in this repository.
 
 This is not an officially supported Google product.
 

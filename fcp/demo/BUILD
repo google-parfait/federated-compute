@@ -12,7 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
+
+# The public interface for this package, providing the various Federated Program platform
+# components needed to run a Federated Program using Federated Compute clients.
+py_library(
+    name = "demo",
+    srcs = ["__init__.py"],
+    srcs_version = "PY3",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":federated_computation",
+        ":federated_context",
+        ":federated_data_source",
+    ],
+)
 
 py_library(
     name = "aggregations",
@@ -162,6 +176,20 @@ py_test(
     ],
 )
 
+py_test(
+    name = "federated_program_test",
+    size = "medium",
+    srcs = ["federated_program_test.py"],
+    data = ["//fcp/client:client_runner_main"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":demo",
+        "//fcp/client:client_runner_example_data_py_pb2",
+        "//fcp/protos:plan_py_pb2",
+    ],
+)
+
 py_library(
     name = "http_actions",
     srcs = ["http_actions.py"],
@@ -253,15 +281,6 @@ py_test(
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
         "//fcp/tensorflow:external_dataset_py",
         "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
-    ],
-)
-
-py_binary(
-    name = "server_runner",
-    srcs = ["server_runner.py"],
-    deps = [
-        ":server",
-        "//fcp/protos:plan_py_pb2",
     ],
 )
 

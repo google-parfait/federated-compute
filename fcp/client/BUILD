@@ -14,6 +14,7 @@
 
 load("//fcp:config.bzl", "FCP_COPTS")
 load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
+load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 
 package(
@@ -710,6 +711,12 @@ proto_library(
 
 cc_proto_library(
     name = "client_runner_example_data_cc_proto",
+    testonly = True,
+    deps = [":client_runner_example_data_proto"],
+)
+
+py_proto_library(
+    name = "client_runner_example_data_py_pb2",
     testonly = True,
     deps = [":client_runner_example_data_proto"],
 )
