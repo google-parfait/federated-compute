@@ -29,7 +29,6 @@ cc_library(
         "//fcp/base",
         "//fcp/protos:cc_grpc",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_grpc_grpc//:grpc++_codegen_base",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/status",
         "@com_google_protobuf//:protobuf",
