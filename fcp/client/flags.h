@@ -191,14 +191,6 @@ class Flags {
   // The number of threads that TFLite interpreter will use.
   virtual int32_t num_threads_for_tflite() const { return 1; }
 
-  // If true, the SelectorContext proto passed to the ExampleStore will include
-  // a timestamp of the last time the device successfully contributed to the
-  // currently executing task.
-  virtual bool selector_context_include_last_successful_contribution_time()
-      const {
-    return false;
-  }
-
   // If true, the client will log events when it has received plan/checkpoint
   // URIs in response to its requests, but before it has starting fetching those
   // resources.
