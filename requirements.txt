@@ -26,3 +26,4 @@ protobuf~=3.19
 # C++ targets.
 tensorflow==2.10.0
 tensorflow-federated~=0.37
+tensorflow-probability<0.19  # 0.19.0 requires TensorFlow 2.11

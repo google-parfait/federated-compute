@@ -9,10 +9,8 @@ First run `sudo apt update` to update the package index.
 There are some basic tools and packages you will need on your machine:
 
 ```
-sudo apt install git libboost-math-dev
+sudo apt install git
 ```
-
-The Boost library is used for parameter finding in secagg.
 
 ## Language support
 
