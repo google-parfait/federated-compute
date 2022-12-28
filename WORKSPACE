@@ -196,9 +196,6 @@ load("//fcp/tensorflow/system_provided_tf:system_provided_tf.bzl", "system_provi
 
 system_provided_tf(
     name = "system_provided_tf",
-    # TensorFlow's pip package was built with libstdc++, not libc++.
-    extra_cxxopts = ["-stdlib=libstdc++"],
-    extra_linkopts = ["-stdlib=libstdc++"],
 )
 
 http_archive(

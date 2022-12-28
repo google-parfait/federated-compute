@@ -17,6 +17,13 @@ bool_setting(
     visibility = ["//visibility:private"],
 )
 
+# Internal config setting to distinguish clang from other compilers. This target
+# should not be used directly.
+config_setting(
+    name = "clang_compiler",
+    flag_values = {"@bazel_tools//tools/cpp:compiler": "clang"},
+)
+
 cc_library(
     name = "tf_headers",
     hdrs = glob(["%{HEADERS_DIR}/**"]),

@@ -14,13 +14,16 @@
 """Provides rules for building custom TensorFlow ops compatible with pip."""
 
 def _force_system_provided_tf_transition_impl(settings, attr):
-    attr = attr  # unused
     copts = list(settings["//command_line_option:copt"])
     cxxopts = list(settings["//command_line_option:cxxopt"])
     linkopts = list(settings["//command_line_option:linkopt"])
     copts += %{COPTS}
-    cxxopts += %{CXXOPTS}
     linkopts += %{LINKOPTS}
+    # TensorFlow's pip package was built with libstdc++; ensure the right
+    # standard library is used if the compiler supports multiple.
+    if attr.compiler_supports_stdlib:
+        cxxopts += ["-stdlib=libstdc++"]
+        linkopts += ["-stdlib=libstdc++"]
     return {
         "//:system_provided_tf_build_setting": True,
         "//command_line_option:copt": copts,
@@ -65,6 +68,12 @@ with the system-provided Python TensorFlow package.""",
             mandatory = True,
             doc = "The cc_binary target to build with TensorFlow compatibility.",
         ),
+        # Compiler information cannot be read by the transition directly because
+        # the StarlarkAttributeTransitionProvider doesn't yet support providers
+        # for dependency-typed attributes.
+        "compiler_supports_stdlib": attr.bool(
+            doc = "Whether the compiler supports the --stdlib flag.",
+        ),
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
@@ -106,6 +115,10 @@ def tf_custom_op_library(
     _force_system_provided_tf(
         name = name,
         cc_binary = name + "_lib",
+        compiler_supports_stdlib = select({
+            "@%{REPOSITORY_NAME}//:clang_compiler": True,
+            "//conditions:default": False,
+        }),
         visibility = visibility,
         tags = tags,
     )

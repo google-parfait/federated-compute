@@ -104,9 +104,6 @@ def _tf_custom_op_configure_impl(repository_ctx):
     the necessary options to be compatible with the system-provided TensorFlow
     package.
     """
-    copts = list(repository_ctx.attr.extra_copts)
-    cxxopts = list(repository_ctx.attr.extra_cxxopts)
-    linkopts = list(repository_ctx.attr.extra_linkopts)
     python3 = repository_ctx.os.environ.get("PYTHON_BIN_PATH", "python3")
 
     # Name of the sub-directory that will link to TensorFlow C++ headers.
@@ -115,8 +112,8 @@ def _tf_custom_op_configure_impl(repository_ctx):
     # Name of the file that will link to libtensorflow_framework.so.
     library_file = "libtensorflow_framework.so"
 
-    copts += _process_compile_flags(repository_ctx, python3, headers_dir)
-    linkopts += _process_link_flags(repository_ctx, python3, library_file)
+    copts = _process_compile_flags(repository_ctx, python3, headers_dir)
+    linkopts = _process_link_flags(repository_ctx, python3, library_file)
 
     # Create a BUILD file providing targets for the TensorFlow C++ headers and
     # framework library.
@@ -137,7 +134,6 @@ def _tf_custom_op_configure_impl(repository_ctx):
         Label("//fcp/tensorflow/system_provided_tf:templates/system_provided_tf.bzl.tpl"),
         substitutions = {
             "%{COPTS}": str(copts),
-            "%{CXXOPTS}": str(cxxopts),
             "%{LINKOPTS}": str(linkopts),
             "%{REPOSITORY_NAME}": repository_ctx.name,
         },
@@ -146,17 +142,6 @@ def _tf_custom_op_configure_impl(repository_ctx):
 
 system_provided_tf = repository_rule(
     implementation = _tf_custom_op_configure_impl,
-    attrs = {
-        "extra_copts": attr.string_list(
-            doc = "Additional copts to use when compiling custom ops.",
-        ),
-        "extra_cxxopts": attr.string_list(
-            doc = "Additional cxxopts to use when compiling custom ops.",
-        ),
-        "extra_linkopts": attr.string_list(
-            doc = "Additional linkopts to use when linking custom ops.",
-        ),
-    },
     configure = True,
     doc = """Creates a repository with targets for the system-provided TensorFlow.
 
