@@ -27,15 +27,10 @@ package(
     licenses = ["notice"],  # Apache 2.0
 )
 
-# We want to build with -Werror. Here we disable some warnings arising from
-# including TensorFlow headers. For simplicity, use this for all targets in
-# this package.
-FCP_TF_COPTS = FCP_COPTS + ["-Wno-error=thread-safety-precise"]
-
 tf_cc_test(
     name = "tf_smoke_test",
     srcs = ["tf_smoke_test.cc"],
-    extra_copts = FCP_TF_COPTS,
+    extra_copts = FCP_COPTS,
     deps = [
         "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/cc:cc_ops",
@@ -65,7 +60,7 @@ cc_library(
     hdrs = [
         "status.h",
     ],
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     deps = [
         "//fcp/base",
     ] + select({
@@ -79,7 +74,7 @@ cc_test(
     srcs = [
         "status_test.cc",
     ],
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     deps = [
         ":status",
         "@com_google_googletest//:gtest_main",
@@ -96,7 +91,7 @@ cc_library(
     hdrs = [
         "host_object.h",
     ],
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = default_visibility + [
     ],
     deps = [
@@ -114,7 +109,7 @@ cc_test(
     srcs = [
         "host_object_test.cc",
     ],
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     deps = [
         ":host_object",
         "@com_google_googletest//:gtest_main",
@@ -130,7 +125,7 @@ cc_library(
     name = "tf_session",
     srcs = ["tf_session.cc"],
     hdrs = ["tf_session.h"],
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     deps = [
         ":status",
         ":tracing_schema",
@@ -151,7 +146,7 @@ cc_library(
 cc_test(
     name = "tf_session_test",
     srcs = ["tf_session_test.cc"],
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     deps = [
         ":tf_session",
         ":tracing_schema",
@@ -178,7 +173,7 @@ cc_library(
     hdrs = [
         "external_dataset.h",
     ],
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = default_visibility + [
     ],
     deps = [
@@ -254,7 +249,7 @@ EXTERNAL_DATASET_OP_DEPS = [
 cc_library(
     name = "external_dataset_op_lib",
     srcs = EXTERNAL_DATASET_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = EXTERNAL_DATASET_OP_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
@@ -269,7 +264,7 @@ cc_library(
 tf_custom_op_library(
     name = "_external_dataset_op.so",
     srcs = EXTERNAL_DATASET_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     deps = EXTERNAL_DATASET_OP_DEPS,
 )
 
@@ -335,7 +330,7 @@ tf_cc_test(
     data = [
         "external_dataset_test.pbtxt",
     ],
-    extra_copts = FCP_TF_COPTS,
+    extra_copts = FCP_COPTS,
     deps = [
         ":external_dataset",
         ":external_dataset_op_lib",
@@ -364,7 +359,7 @@ cc_library(
         "tensor_crc32.cc",
     ],
     hdrs = ["tensor_crc32.h"],
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = [
         "@org_tensorflow//tensorflow/core:framework",
@@ -377,7 +372,7 @@ cc_library(
 tf_custom_op_library(
     name = "_crc32_op.so",
     srcs = CRC32_OP_SRCS + ["tensor_crc32.h"],
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
 )
 
 # Generates the basic op wrapper for use in Python.
@@ -417,7 +412,7 @@ EXAMPLE_SELECTOR_FUSER_OP_DEPS = [
 cc_library(
     name = "example_selector_fuser_op_lib",
     srcs = EXAMPLE_SELECTOR_FUSER_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = EXAMPLE_SELECTOR_FUSER_OP_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
@@ -430,7 +425,7 @@ cc_library(
 tf_custom_op_library(
     name = "_example_selector_fuser_op.so",
     srcs = EXAMPLE_SELECTOR_FUSER_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     # This op uses Bazel-built protocol buffers, which are incompatible with
     # the headers provided by the tensorflow pip package.
     tags = ["manual"],
@@ -485,7 +480,7 @@ cc_library(
     hdrs = [
         "serve_slices_registry.h",
     ],
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = [
         ":host_object",
@@ -516,7 +511,7 @@ SERVE_SLICES_OP_DEPS = [
 cc_library(
     name = "serve_slices_op_lib",
     srcs = SERVE_SLICES_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = SERVE_SLICES_OP_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
@@ -531,7 +526,7 @@ cc_library(
 tf_custom_op_library(
     name = "_serve_slices_op.so",
     srcs = SERVE_SLICES_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     deps = SERVE_SLICES_OP_DEPS,
 )
 
@@ -582,7 +577,7 @@ tf_cc_test(
     data = [
         "serve_slices_test.pbtxt",
     ],
-    extra_copts = FCP_TF_COPTS,
+    extra_copts = FCP_COPTS,
     deps = [
         ":serve_slices_op_lib",
         ":serve_slices_registry",
@@ -611,7 +606,7 @@ MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS = [
 cc_library(
     name = "make_slices_selector_example_selector_op_lib",
     srcs = MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = ["@com_google_protobuf//:protobuf"] + MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
@@ -624,7 +619,7 @@ cc_library(
 tf_custom_op_library(
     name = "_make_slices_selector_example_selector_op.so",
     srcs = MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     # This op uses Bazel-built protocol buffers, which are incompatible with
     # the headers provided by the tensorflow pip package.
     tags = ["manual"],
@@ -680,7 +675,7 @@ APPEND_SLICES_OP_DEPS = [
 cc_library(
     name = "append_slices_op_lib",
     srcs = APPEND_SLICES_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = APPEND_SLICES_OP_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
@@ -695,7 +690,7 @@ cc_library(
 tf_custom_op_library(
     name = "_append_slices_op.so",
     srcs = APPEND_SLICES_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     # This op uses Bazel-built protocol buffers, which are incompatible with
     # the headers provided by the tensorflow pip package.
     tags = ["manual"],
@@ -750,7 +745,7 @@ DELETE_FILE_OP_DEPS = [
 cc_library(
     name = "delete_file_op_lib",
     srcs = DELETE_FILE_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = DELETE_FILE_OP_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
@@ -764,7 +759,7 @@ cc_library(
 tf_custom_op_library(
     name = "_delete_file_op.so",
     srcs = DELETE_FILE_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     deps = DELETE_FILE_OP_DEPS,
 )
 
@@ -810,7 +805,7 @@ TENSOR_NAME_OP_DEPS = [
 cc_library(
     name = "tensor_name_op_lib",
     srcs = TENSOR_NAME_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = TENSOR_NAME_OP_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
@@ -825,7 +820,7 @@ cc_library(
 tf_custom_op_library(
     name = "_tensor_name_op.so",
     srcs = TENSOR_NAME_OP_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     deps = TENSOR_NAME_OP_DEPS,
 )
 
@@ -870,7 +865,7 @@ TASK_ELIGIBILITY_INFO_OPS_DEPS = [
 cc_library(
     name = "task_eligibility_info_ops_lib",
     srcs = TASK_ELIGIBILITY_INFO_OPS_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = TASK_ELIGIBILITY_INFO_OPS_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
@@ -883,7 +878,7 @@ cc_library(
 tf_custom_op_library(
     name = "_task_eligibility_info_ops.so",
     srcs = TASK_ELIGIBILITY_INFO_OPS_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     # This op uses Bazel-built protocol buffers, which are incompatible with
     # the headers provided by the tensorflow pip package.
     tags = ["manual"],
@@ -938,7 +933,7 @@ DICTIONARY_OPS_DEPS = [
 cc_library(
     name = "dictionary_ops_lib",
     srcs = DICTIONARY_OPS_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = DICTIONARY_OPS_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
@@ -951,7 +946,7 @@ cc_library(
 tf_custom_op_library(
     name = "_dictionary_ops.so",
     srcs = DICTIONARY_OPS_SRCS,
-    copts = FCP_TF_COPTS,
+    copts = FCP_COPTS,
     # This op uses Bazel-built protocol buffers, which are incompatible with
     # the headers provided by the tensorflow pip package.
     tags = ["manual"],
