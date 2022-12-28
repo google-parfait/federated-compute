@@ -111,20 +111,6 @@ flowchart
   Handlers --> http_actions
   federated_program --> federated_context & federated_computation & federated_data_source
   federated_context --> checkpoint_tensor_reference & server
-
-  click aggregations href "#aggregationspy"
-  click checkpoint_tensor_reference href "#checkpoint_tensor_referencepy"
-  click client href "#client"
-  click eligibility_eval_tasks href "#eligibility_eval_taskspy"
-  click federated_computation href "#federated_computationpy"
-  click federated_context href "#federated_contextpy"
-  click federated_data_source href "#federated_data_sourcepy"
-  click federated_program href "https://github.com/tensorflow/federated/blob/main/tensorflow_federated/python/program/README.md"
-  click http_actions href "#http_actionspy"
-  click media href "#mediapy"
-  click plan_utils href "#plan_utilspy"
-  click server href "#serverpy"
-  click task_assignments href "#task_assignmentspy"
 ```
 
 ### Client
