@@ -130,7 +130,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
       service.submit_aggregation_result(
           aggregations_pb2.SubmitAggregationResultRequest(
               aggregation_id=session_id,
-              client_token=tokens[0],
+              client_token=start_upload_response.client_token,
               resource_name=start_upload_response.resource.resource_name))
 
     # Now that all clients have contributed, the aggregation session can be
@@ -250,7 +250,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     service.submit_aggregation_result(
         aggregations_pb2.SubmitAggregationResultRequest(
             aggregation_id=session_id,
-            client_token=tokens[0],
+            client_token=start_upload_response.client_token,
             resource_name=start_upload_response.resource.resource_name))
 
     # Complete the session before there are 2 completed clients.
@@ -286,14 +286,18 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
 
     # Upload results for one client.
     self.mock_media_service.register_upload.return_value = 'upload1'
-    service.start_aggregation_data_upload(
+    operation = service.start_aggregation_data_upload(
         aggregations_pb2.StartAggregationDataUploadRequest(
             aggregation_id=session_id, authorization_token=tokens[0]))
+    self.assertTrue(operation.done)
+    start_upload_response = (
+        aggregations_pb2.StartAggregationDataUploadResponse())
+    operation.response.Unpack(start_upload_response)
     service.submit_aggregation_result(
         aggregations_pb2.SubmitAggregationResultRequest(
             aggregation_id=session_id,
-            client_token=tokens[0],
-            resource_name='upload1'))
+            client_token=start_upload_response.client_token,
+            resource_name=start_upload_response.resource.resource_name))
 
     # Start a partial upload from a second client.
     self.mock_media_service.register_upload.return_value = 'upload2'
@@ -340,14 +344,18 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     # Upload results for one client.
     tokens = service.pre_authorize_clients(session_id, 1)
     self.mock_media_service.register_upload.return_value = 'upload'
-    service.start_aggregation_data_upload(
+    operation = service.start_aggregation_data_upload(
         aggregations_pb2.StartAggregationDataUploadRequest(
             aggregation_id=session_id, authorization_token=tokens[0]))
+    self.assertTrue(operation.done)
+    start_upload_response = (
+        aggregations_pb2.StartAggregationDataUploadResponse())
+    operation.response.Unpack(start_upload_response)
     service.submit_aggregation_result(
         aggregations_pb2.SubmitAggregationResultRequest(
             aggregation_id=session_id,
-            client_token=tokens[0],
-            resource_name='upload'))
+            client_token=start_upload_response.client_token,
+            resource_name=start_upload_response.resource.resource_name))
 
     # The awaitable should now return.
     await asyncio.wait([task], timeout=1)
@@ -367,14 +375,18 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     # Upload results for one client.
     tokens = service.pre_authorize_clients(session_id, 1)
     self.mock_media_service.register_upload.return_value = 'upload'
-    service.start_aggregation_data_upload(
+    operation = service.start_aggregation_data_upload(
         aggregations_pb2.StartAggregationDataUploadRequest(
             aggregation_id=session_id, authorization_token=tokens[0]))
+    self.assertTrue(operation.done)
+    start_upload_response = (
+        aggregations_pb2.StartAggregationDataUploadResponse())
+    operation.response.Unpack(start_upload_response)
     service.submit_aggregation_result(
         aggregations_pb2.SubmitAggregationResultRequest(
             aggregation_id=session_id,
-            client_token=tokens[0],
-            resource_name='upload'))
+            client_token=start_upload_response.client_token,
+            resource_name=start_upload_response.resource.resource_name))
 
     # Since a client has already reported, the condition should already be
     # satisfied.
@@ -494,13 +506,17 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
 
     response = aggregations_pb2.StartAggregationDataUploadResponse()
     operation.response.Unpack(response)
+    # The client token should be set and different from the authorization token.
+    self.assertNotEmpty(response.client_token)
+    self.assertNotEqual(response.client_token, tokens[0])
     self.assertEqual(
         response,
         aggregations_pb2.StartAggregationDataUploadResponse(
             aggregation_protocol_forwarding_info=FORWARDING_INFO,
             resource=common_pb2.ByteStreamResource(
                 data_upload_forwarding_info=FORWARDING_INFO,
-                resource_name='upload')))
+                resource_name='upload'),
+            client_token=response.client_token))
     self.assertEqual(
         service.get_session_status(session_id),
         aggregations.SessionStatus(
@@ -569,7 +585,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     submit_response = service.submit_aggregation_result(
         aggregations_pb2.SubmitAggregationResultRequest(
             aggregation_id=session_id,
-            client_token=tokens[0],
+            client_token=start_upload_response.client_token,
             resource_name=start_upload_response.resource.resource_name))
     self.assertEqual(submit_response,
                      aggregations_pb2.SubmitAggregationResultResponse())
@@ -601,7 +617,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
       service.submit_aggregation_result(
           aggregations_pb2.SubmitAggregationResultRequest(
               aggregation_id=session_id,
-              client_token=tokens[0],
+              client_token=start_upload_response.client_token,
               resource_name=start_upload_response.resource.resource_name))
     self.assertEqual(
         service.get_session_status(session_id),
@@ -613,12 +629,11 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     service = aggregations.Service(lambda: FORWARDING_INFO,
                                    self.mock_media_service)
     session_id = service.create_session(AGGREGATION_REQUIREMENTS)
-    tokens = service.pre_authorize_clients(session_id, 1)
     with self.assertRaises(http_actions.HttpError) as cm:
       service.submit_aggregation_result(
           aggregations_pb2.SubmitAggregationResultRequest(
               aggregation_id='does-not-exist',
-              client_token=tokens[0],
+              client_token='client-token',
               resource_name='upload-id'))
     self.assertEqual(cm.exception.code, http.HTTPStatus.NOT_FOUND)
     self.assertEqual(
@@ -642,34 +657,18 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         aggregations.SessionStatus(
             status=aggregations.AggregationStatus.PENDING))
 
-  def test_submit_aggregation_result_without_start_upload(self):
-    service = aggregations.Service(lambda: FORWARDING_INFO,
-                                   self.mock_media_service)
-    session_id = service.create_session(AGGREGATION_REQUIREMENTS)
-    tokens = service.pre_authorize_clients(session_id, 1)
-    # The request should fail if the client never called
-    # StartAggregationDataUpload.
-    with self.assertRaises(http_actions.HttpError) as cm:
-      service.submit_aggregation_result(
-          aggregations_pb2.SubmitAggregationResultRequest(
-              aggregation_id=session_id,
-              client_token=tokens[0],
-              resource_name='upload-id'))
-    self.mock_media_service.finalize_upload.assert_not_called()
-    self.assertEqual(cm.exception.code, http.HTTPStatus.UNAUTHORIZED)
-    self.assertEqual(
-        service.get_session_status(session_id),
-        aggregations.SessionStatus(
-            status=aggregations.AggregationStatus.PENDING))
-
   def test_submit_aggregation_result_with_finalize_upload_error(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
                                    self.mock_media_service)
     session_id = service.create_session(AGGREGATION_REQUIREMENTS)
     tokens = service.pre_authorize_clients(session_id, 1)
-    service.start_aggregation_data_upload(
+    operation = service.start_aggregation_data_upload(
         aggregations_pb2.StartAggregationDataUploadRequest(
             aggregation_id=session_id, authorization_token=tokens[0]))
+    self.assertTrue(operation.done)
+    start_upload_response = (
+        aggregations_pb2.StartAggregationDataUploadResponse())
+    operation.response.Unpack(start_upload_response)
 
     # If the resource_name doesn't correspond to a registered upload,
     # finalize_upload will raise a KeyError.
@@ -678,8 +677,8 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
       service.submit_aggregation_result(
           aggregations_pb2.SubmitAggregationResultRequest(
               aggregation_id=session_id,
-              client_token=tokens[0],
-              resource_name='upload-id'))
+              client_token=start_upload_response.client_token,
+              resource_name=start_upload_response.resource.resource_name))
     self.assertEqual(cm.exception.code, http.HTTPStatus.INTERNAL_SERVER_ERROR)
     self.assertEqual(
         service.get_session_status(session_id),
@@ -707,7 +706,7 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
       service.submit_aggregation_result(
           aggregations_pb2.SubmitAggregationResultRequest(
               aggregation_id=session_id,
-              client_token=tokens[0],
+              client_token=start_upload_response.client_token,
               resource_name=start_upload_response.resource.resource_name))
     self.assertEqual(cm.exception.code, http.HTTPStatus.BAD_REQUEST)
     self.assertEqual(
@@ -721,13 +720,18 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
                                    self.mock_media_service)
     session_id = service.create_session(AGGREGATION_REQUIREMENTS)
     tokens = service.pre_authorize_clients(session_id, 1)
-    service.start_aggregation_data_upload(
+    operation = service.start_aggregation_data_upload(
         aggregations_pb2.StartAggregationDataUploadRequest(
             aggregation_id=session_id, authorization_token=tokens[0]))
+    self.assertTrue(operation.done)
+    start_upload_response = (
+        aggregations_pb2.StartAggregationDataUploadResponse())
+    operation.response.Unpack(start_upload_response)
     self.assertEqual(
         service.abort_aggregation(
             aggregations_pb2.AbortAggregationRequest(
-                aggregation_id=session_id, client_token=tokens[0])),
+                aggregation_id=session_id,
+                client_token=start_upload_response.client_token)),
         aggregations_pb2.AbortAggregationResponse())
     self.assertEqual(
         service.get_session_status(session_id),
@@ -741,13 +745,18 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
                                    self.mock_media_service)
     session_id = service.create_session(AGGREGATION_REQUIREMENTS)
     tokens = service.pre_authorize_clients(session_id, 1)
-    service.start_aggregation_data_upload(
+    operation = service.start_aggregation_data_upload(
         aggregations_pb2.StartAggregationDataUploadRequest(
             aggregation_id=session_id, authorization_token=tokens[0]))
+    self.assertTrue(operation.done)
+    start_upload_response = (
+        aggregations_pb2.StartAggregationDataUploadResponse())
+    operation.response.Unpack(start_upload_response)
     with self.assertRaises(http_actions.HttpError) as cm:
       service.abort_aggregation(
           aggregations_pb2.AbortAggregationRequest(
-              aggregation_id='does-not-exist', client_token=tokens[0]))
+              aggregation_id='does-not-exist',
+              client_token=start_upload_response.client_token))
     self.assertEqual(cm.exception.code, http.HTTPStatus.NOT_FOUND)
     self.assertEqual(
         service.get_session_status(session_id),
@@ -763,21 +772,6 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
       service.abort_aggregation(
           aggregations_pb2.AbortAggregationRequest(
               aggregation_id=session_id, client_token='does-not-exist'))
-    self.assertEqual(cm.exception.code, http.HTTPStatus.UNAUTHORIZED)
-    self.assertEqual(
-        service.get_session_status(session_id),
-        aggregations.SessionStatus(
-            status=aggregations.AggregationStatus.PENDING))
-
-  def test_abort_aggregation_without_start(self):
-    service = aggregations.Service(lambda: FORWARDING_INFO,
-                                   self.mock_media_service)
-    session_id = service.create_session(AGGREGATION_REQUIREMENTS)
-    tokens = service.pre_authorize_clients(session_id, 1)
-    with self.assertRaises(http_actions.HttpError) as cm:
-      service.abort_aggregation(
-          aggregations_pb2.AbortAggregationRequest(
-              aggregation_id=session_id, client_token=tokens[0]))
     self.assertEqual(cm.exception.code, http.HTTPStatus.UNAUTHORIZED)
     self.assertEqual(
         service.get_session_status(session_id),

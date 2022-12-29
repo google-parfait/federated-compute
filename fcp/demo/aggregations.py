@@ -378,11 +378,12 @@ class Service:
         raise http_actions.HttpError(http.HTTPStatus.UNAUTHORIZED) from e
 
     state.agg_protocol.AddClients(1)
+    client_token = str(uuid.uuid4())
     client_id, close_status = state.callback.accepted_clients.get(timeout=1)
     upload_name = self._media_service.register_upload()
 
     with self._sessions_lock:
-      state.active_clients[request.authorization_token] = _ActiveClientData(
+      state.active_clients[client_token] = _ActiveClientData(
           client_id, close_status, upload_name)
 
     forwarding_info = self._forwarding_info()
@@ -390,7 +391,8 @@ class Service:
         aggregation_protocol_forwarding_info=forwarding_info,
         resource=common_pb2.ByteStreamResource(
             data_upload_forwarding_info=forwarding_info,
-            resource_name=upload_name))
+            resource_name=upload_name),
+        client_token=client_token)
 
     op = operations_pb2.Operation(name=f'operations/{uuid.uuid4()}', done=True)
     op.metadata.Pack(aggregations_pb2.StartAggregationDataUploadMetadata())
