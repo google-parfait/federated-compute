@@ -28,6 +28,7 @@ from fcp.artifact_building import artifact_constants
 from fcp.artifact_building import checkpoint_utils
 from fcp.artifact_building import data_spec
 from fcp.artifact_building import federated_compute_plan_builder
+from fcp.artifact_building import plan_utils
 from fcp.artifact_building import variable_helpers
 from fcp.demo import checkpoint_tensor_reference
 from fcp.demo import federated_computation
@@ -135,6 +136,12 @@ class FederatedContext(tff.program.FederatedContext):
           comp.map_reduce_form,
           self._get_nested_data_spec(config.example_selector),
           generate_server_phase_v2=True)
+      # Add the TF Lite flatbuffer to the plan. If the conversion fails, the
+      # flatbuffer will be silently omitted and the client will use the
+      # TensorFlow graph in `plan.client_graph_bytes` instead.
+      # NOTE: If conversion failures should not be silent, pass
+      # `forgive_tflite_conversion_failure=False`.
+      plan = plan_utils.generate_and_add_flat_buffer_to_plan(plan)
       self._cached_comps[cache_key] = plan
 
     checkpoint_future = self._run_computation(comp.name, config, plan,

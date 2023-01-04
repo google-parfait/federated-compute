@@ -26,6 +26,7 @@ import tensorflow_federated as tff
 
 from fcp.artifact_building import artifact_constants
 from fcp.artifact_building import federated_compute_plan_builder
+from fcp.artifact_building import plan_utils
 from fcp.artifact_building import variable_helpers
 from fcp.demo import federated_computation
 from fcp.demo import federated_context
@@ -158,7 +159,9 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
 
     run_computation.assert_called_once_with(mock.ANY, comp.name, mock.ANY,
                                             mock.ANY, 10)
-    self.assertIsInstance(run_computation.call_args.args[2], plan_pb2.Plan)
+    plan = run_computation.call_args.args[2]
+    self.assertIsInstance(plan, plan_pb2.Plan)
+    self.assertNotEmpty(plan.client_tflite_graph_bytes)
     input_var_names = variable_helpers.variable_names_from_type(
         count_clients.type_signature.parameter[0],
         name=artifact_constants.SERVER_STATE_VAR_PREFIX)
@@ -256,6 +259,10 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
         mock.patch.object(
             federated_compute_plan_builder, 'build_plan', autospec=True))
     self.build_plan.return_value = plan_pb2.Plan()
+    self.generate_and_add_flat_buffer_to_plan = self.enter_context(
+        mock.patch.object(
+            plan_utils, 'generate_and_add_flat_buffer_to_plan', autospec=True))
+    self.generate_and_add_flat_buffer_to_plan.side_effect = lambda plan: plan
     self.enter_context(tff.framework.get_context_stack().install(
         federated_context.FederatedContext(
             POPULATION_NAME, address_family=ADDRESS_FAMILY)))
