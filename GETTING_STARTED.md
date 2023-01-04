@@ -1,39 +1,39 @@
 # Instructions for getting the Federated Compute Platform code up and running on your own machine.
 
-## Download and install apt-provided dependencies
-
-First run `sudo apt update` to update the package index.
+## Download and install build dependencies
 
 ### Basic tools
 
 There are some basic tools and packages you will need on your machine:
 
-```
-sudo apt install git
-```
+*   Git
+*   A C++ compiler (e.g., GCC or Clang)
+*   Python 3.9 or greater, including the `venv` module
 
-## Language support
-
-The FCP codebase contains C++ code, which requires Clang and libc++, as well as
-Python code:
+For example, on Debian:
 
 ```
-sudo apt install clang-13 lld-13 libc++-13-dev libc++abi-13-dev python3.9 python3-venv
+sudo apt install -y git gcc python3 python3-venv
 ```
+
+> ⚠️ The project maintainers internally test with Clang only, so the GCC-based
+> build may at times be broken. Please see
+> [Building with Clang](#building-with-clang) for instructions on how to use
+> Clang instead.
 
 ### Install Bazelisk
 
 Bazelisk is used to fetch the correct Bazel binaries necessary to build and run
-your FCP code.
+Federated Compute code.
 
 Please read https://github.com/bazelbuild/bazelisk#installation.
 
 ## Set up your Python environment
 
-You should make sure that your Python bin and lib paths are set to `python3.9`
-in the case you have multiple version of Python on your machine.
-
-Then you can set up your Python environment.
+Setting up a virtual Python environment will ensure that Python dependencies
+don't conflict or overwrite your existing Python installation. If you have
+multiple installed versions of Python, replace `python3` in the following
+instructions with the desired version (e.g., `python3.X`).
 
 ```
 python3 -m venv venv
@@ -41,7 +41,9 @@ source venv/bin/activate
 pip install --upgrade pip
 ```
 
-## Clone the FCP repository and install requirements
+Note: To exit the virtual environment, run `deactivate`.
+
+## Clone the Federated Compute repository and install Python requirements
 
 ```
 git clone https://github.com/google/federated-compute.git
@@ -49,19 +51,26 @@ cd federated-compute
 pip install -r requirements.txt
 ```
 
-## Set up the environment variables
+## Build and run the federated program test!
 
-Next, configure environment variables that will make Bazel use clang and libc++:
-
-```
-export CC=clang-13 $ export BAZEL_CXXOPTS=-stdlib=libc++ BAZEL_LINKOPTS=-stdlib=libc++
-```
-
-## Build FCP and run the server test!
-
-WARNING: Building FCP can be slow the first time, on the order of hours. This
-happens because all of TensorFlow is built as part of the process.
+> ⚠️ Many Federated Compute targets depend on TensorFlow, which can take several
+> hours to build for the first time. Consider running builds in `screen` or
+> `tmux` if you're worried about your terminal closing during this time.
+>
+> While not required, Bazel's
+> [remote build execution](https://bazel.build/remote/rbe) and
+> [remote caching](https://bazel.build/remote/caching) features can speed up
+> builds.
 
 ```
-bazelisk test //fcp/demo:server_test
+bazelisk test //fcp/demo:federated_program_test
+```
+
+### Building with Clang
+
+Use `--config=clang` to build with clang and libc++. On Debian, this requires
+installing several additional packages:
+
+```
+sudo apt install -y clang lld libc++-dev libc++abi-dev`
 ```

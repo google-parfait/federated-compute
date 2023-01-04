@@ -36,17 +36,21 @@ build --define=grpc_no_ares=true
 # googletest requires absl flags.
 build --define=absl=1
 
+# `--config=clang` will build with clang and libc++.
+build:clang --repo_env=CC=clang --repo_env=CXX=clang++ --linkopt=-fuse-ld=lld
+build:clang --cxxopt=-stdlib=libc++ --linkopt=-stdlib=libc++
+
 # This results in -Werror for all FCP code, but nothing we pull in via
 # repository rules (those labels have a @ prefix).
-build --per_file_copt=+^//@-Werror
+build:clang --per_file_copt=+^//@-Werror
 # We pull in some headers from TensorFlow which give the following warning, we
 # don't want to convert them to errors.
-build --per_file_copt=+^//@-Wno-error=inconsistent-missing-override
-build --per_file_copt=+^//@-Wno-error=mismatched-tags
-build --per_file_copt=+^//@-Wno-error=defaulted-function-deleted
+build:clang --per_file_copt=+^//@-Wno-error=inconsistent-missing-override
+build:clang --per_file_copt=+^//@-Wno-error=mismatched-tags
+build:clang --per_file_copt=+^//@-Wno-error=defaulted-function-deleted
 # Some of the opstats.proto enums are deprecated, but until all references to
 # them have been removed we should be allowed to use them.
-build --per_file_copt=+^//@-Wno-error=deprecated-declarations
+build:clang --per_file_copt=+^//@-Wno-error=deprecated-declarations
 
 # TF now has `cc_shared_library` targets, so it needs the experimental flag.
 build --experimental_cc_shared_library

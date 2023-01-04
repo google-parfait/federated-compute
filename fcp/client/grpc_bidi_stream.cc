@@ -47,7 +47,7 @@ GrpcBidiStream::GrpcBidiStream(
     const std::string& api_key, const std::string& population_name,
     int64_t grpc_channel_deadline_seconds)
     : mu_(), stub_(FederatedTrainingApi::NewStub(channel)) {
-  FCP_LOG(INFO) << "Connecting to stub: " << stub_;
+  FCP_LOG(INFO) << "Connecting to stub: " << stub_.get();
   gpr_timespec deadline = gpr_time_add(
       gpr_now(GPR_CLOCK_REALTIME),
       gpr_time_from_seconds(grpc_channel_deadline_seconds, GPR_TIMESPAN));
@@ -120,7 +120,7 @@ void GrpcBidiStream::Close() {
   chunked_bidi_stream_->Close();
   if (client_reader_writer_) client_reader_writer_->WritesDone();
   client_reader_writer_.reset();
-  FCP_LOG(INFO) << "Closing stub: " << stub_;
+  FCP_LOG(INFO) << "Closing stub: " << stub_.get();
   stub_.reset();
   mu_.Unlock();
 }
