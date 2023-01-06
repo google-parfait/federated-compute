@@ -387,7 +387,9 @@ def _build_server_graph(
     flattened_moduli: list[int],
     write_metrics_to_checkpoint: bool = True,
     additional_checkpoint_metadata_var_fn: Optional[Callable[
-        [tff.StructType, tff.StructType, bool], list[tf.Variable]]] = None
+        [tff.StructType, tff.StructType, bool], list[tf.Variable]]] = None,
+    experimental_client_update_format: checkpoint_type.
+    CheckpointFormatType = checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES,
 ) -> tuple[tf.compat.v1.GraphDef, plan_pb2.CheckpointOp, plan_pb2.ServerPhase,
            list[tf.TensorSpec]]:
   """Builds the `tf.Graph` that will run on the server.
@@ -413,6 +415,9 @@ def _build_server_graph(
       server state type, a server metrics type, and a boolean determining
       whether to revert to legacy metrics behavior to produce additional
       metadata variables.
+    experimental_client_update_format: Determines how the client update will be
+      interpreted. The value has to match experimental_checkpoint_write argument
+      of the  _build_client_graph_with_tensorflow_spec call.
 
   Returns:
     A `tuple` containing the following (in order):
@@ -521,7 +526,16 @@ def _build_server_graph(
               simpleagg_update_type, 'update'))
       update_vars_initializer = tf.compat.v1.variables_initializer(
           update_vars, 'initialize_update_vars')
-      read_update.before_restore_op = update_vars_initializer.name
+      if experimental_client_update_format == checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_READ:
+        graph = tf.compat.v1.get_default_graph()
+        checkpoint_pl = graph.get_tensor_by_name(
+            read_update.saver_def.filename_tensor_name)
+        merge_checkpoint_slices = append_slices.merge_appended_slices(
+            checkpoint_pl, 'merge_checkpoint_slices')
+        init_merge = tf.group(update_vars_initializer, merge_checkpoint_slices)
+        read_update.before_restore_op = init_merge.name
+      else:
+        read_update.before_restore_op = update_vars_initializer.name
     else:
       # Create a empty list for `update_vars` when there are no SimpleAgg
       # variables, to be compatible with the `accumulated_values` defined below.
@@ -873,14 +887,21 @@ def _build_client_graph_with_tensorflow_spec(
           dtype=tf.string, shape=(), name='output_filepath')
       simpleagg_variable_names = variable_helpers.variable_names_from_type(
           simpleagg_update_type, name='update')
-      if experimental_checkpoint_write == checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_WRITE:
+      if experimental_checkpoint_write in [
+          checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_WRITE,
+          checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_READ
+      ]:
         raise NotImplementedError
-      else:
+      elif experimental_checkpoint_write == checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES:
         save_op = tensor_utils.save(
             filename=output_filepath_placeholder,
             tensor_names=simpleagg_variable_names,
             tensors=simpleagg_tensors,
             name='save_client_update_tensors')
+      else:
+        raise NotImplementedError(
+            f'Unsupported CheckpointFormatType {experimental_checkpoint_write}.'
+        )
       input_tensors.append(output_filepath_placeholder)
       target_nodes.append(save_op.name)
 
@@ -1001,9 +1022,15 @@ def build_plan(mrf: tff.backends.mapreduce.MapReduceForm,
 
     (server_graph_def, server_savepoint, server_phase,
      broadcasted_tensor_specs) = _build_server_graph(
-         mrf, broadcast_tff_type, is_broadcast_empty, flattened_bitwidths,
-         flattened_max_inputs, flattened_moduli, write_metrics_to_checkpoint,
-         additional_checkpoint_metadata_var_fn)
+         mrf,
+         broadcast_tff_type,
+         is_broadcast_empty,
+         flattened_bitwidths,
+         flattened_max_inputs,
+         flattened_moduli,
+         write_metrics_to_checkpoint,
+         additional_checkpoint_metadata_var_fn,
+         experimental_client_update_format=experimental_client_checkpoint_write)
 
     client_graph_def, client_phase = _build_client_graph_with_tensorflow_spec(
         mrf.work,

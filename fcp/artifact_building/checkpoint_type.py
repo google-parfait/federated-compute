@@ -17,6 +17,12 @@ class CheckpointFormatType(enum.Enum):
       checkpoint. The conversion from stream of checkpoint slices to TFv1 format
       happens right after all the chunks are written. So the transport format is
       identical to the TF1_SAVE_SLICES option.
+    APPEND_SLICES_MERGE_READ: Experimental value allowing to stream data to
+      checkpoint. The conversion from stream of checkpoint slices to TFv1 format
+      happens before the data is read. So the transport format is the
+      appended slices format. This setting has the smallest write memory
+      overhead.
   """
   TF1_SAVE_SLICES = 'tf1_save_slices'
   APPEND_SLICES_MERGE_WRITE = 'append_slices_merge_write'
+  APPEND_SLICES_MERGE_READ = 'append_slices_merge_read'
