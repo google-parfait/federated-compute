@@ -11,6 +11,14 @@ py_library(
 )
 
 py_library(
+    name = "checkpoint_type",
+    srcs = ["checkpoint_type.py"],
+    srcs_version = "PY3",
+    visibility = default_visibility + [
+    ],
+)
+
+py_library(
     name = "checkpoint_utils",
     srcs = ["checkpoint_utils.py"],
     srcs_version = "PY3",
@@ -72,6 +80,7 @@ py_library(
     ],
     deps = [
         ":artifact_constants",
+        ":checkpoint_type",
         ":checkpoint_utils",
         ":data_spec",
         ":graph_helpers",

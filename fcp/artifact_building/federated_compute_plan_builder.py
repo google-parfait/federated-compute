@@ -26,6 +26,7 @@ import tensorflow as tf
 import tensorflow_federated as tff
 
 from fcp.artifact_building import artifact_constants
+from fcp.artifact_building import checkpoint_type
 from fcp.artifact_building import checkpoint_utils
 from fcp.artifact_building import data_spec
 from fcp.artifact_building import graph_helpers
@@ -737,7 +738,8 @@ def _build_client_graph_with_tensorflow_spec(
     broadcasted_tensor_specs: Iterable[tf.TensorSpec],
     is_broadcast_empty: bool,
     *,
-    experimental_combined_checkpoint_write: bool = False,
+    experimental_checkpoint_write: checkpoint_type.
+    CheckpointFormatType = checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES,
 ) -> tuple[tf.compat.v1.GraphDef, plan_pb2.ClientPhase]:
   """Builds the client graph and ClientPhase with TensorflowSpec populated.
 
@@ -755,11 +757,9 @@ def _build_client_graph_with_tensorflow_spec(
       initially called for an empty broadcast. In this
       case the broadcasted_tensor_specs will contain a single tf.int32, but it
       will be ignored.
-    experimental_combined_checkpoint_write: Iff `True`, will write the final
-      checkpoint out in two stages: the first outputs a checkpoint per tensor,
-      then the second merges all checkpoints into a single checkpoint. This is
-      intended to reduce memory pressure on-device by allowing TensorFlow to
-      free each tensor as it is written in step one.
+    experimental_checkpoint_write: Determines the format of the final client
+      update checkpoint. The value affects required operations and might have
+      performance implications.
 
   Returns:
     A `tuple` of the client TensorFlow GraphDef and the client phase protocol
@@ -873,7 +873,7 @@ def _build_client_graph_with_tensorflow_spec(
           dtype=tf.string, shape=(), name='output_filepath')
       simpleagg_variable_names = variable_helpers.variable_names_from_type(
           simpleagg_update_type, name='update')
-      if experimental_combined_checkpoint_write:
+      if experimental_checkpoint_write == checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_WRITE:
         raise NotImplementedError
       else:
         save_op = tensor_utils.save(
@@ -915,7 +915,9 @@ def build_plan(mrf: tff.backends.mapreduce.MapReduceForm,
                additional_checkpoint_metadata_var_fn: Optional[
                    Callable[[tff.StructType, tff.StructType, bool],
                             list[tf.Variable]]] = None,
-               experimental_combined_client_checkpoint_write: bool = False,
+               experimental_client_checkpoint_write: checkpoint_type
+               .CheckpointFormatType = checkpoint_type.CheckpointFormatType
+               .TF1_SAVE_SLICES,
                generate_server_phase_v2: bool = False,
                write_metrics_to_checkpoint: bool = True) -> plan_pb2.Plan:
   """Constructs an instance of `plan_pb2.Plan` given a `MapReduceForm` instance.
@@ -952,11 +954,9 @@ def build_plan(mrf: tff.backends.mapreduce.MapReduceForm,
       server state type, a server metrics type, and a boolean determining
       whether to revert to legacy metrics behavior to produce additional
       metadata variables.
-    experimental_combined_client_checkpoint_write: Iff `True`, will write the
-      final checkpoint out in two stages: the first outputs a checkpoint per
-      tensor, then the second merges all checkpoints into a single checkpoint.
-      This is intended to reduce memory pressure on-device by allowing
-      TensorFlow to free each tensor as it is written in step one.
+    experimental_client_checkpoint_write: Determines the style of writing of the
+      client checkpoint (client->server communication). The value affects the
+      operation used and might have impact on overall task performance.
     generate_server_phase_v2: Iff `True`, will produce a ServerPhaseV2 message
       in the plan in addition to a ServerPhase message.
     write_metrics_to_checkpoint: If False, revert to legacy behavior where
@@ -1010,8 +1010,7 @@ def build_plan(mrf: tff.backends.mapreduce.MapReduceForm,
         dataspec,
         broadcasted_tensor_specs,
         is_broadcast_empty,
-        experimental_combined_checkpoint_write=experimental_combined_client_checkpoint_write
-    )
+        experimental_checkpoint_write=experimental_client_checkpoint_write)
 
     combined_phases = plan_pb2.Plan.Phase(
         server_phase=server_phase, client_phase=client_phase)
