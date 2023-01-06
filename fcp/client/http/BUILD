@@ -234,6 +234,7 @@ cc_test(
         "//fcp/client/http/testing:test_helpers",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "//fcp/testing",
+        "@com_google_absl//absl/time",
         "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
         "@com_google_googleapis//google/rpc:code_cc_proto",
     ],

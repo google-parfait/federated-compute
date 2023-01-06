@@ -102,7 +102,7 @@ class MockableHttpClient : public HttpClient {
   }
 
  private:
-  std::function<void()> cancellation_listener_;
+  std::function<void()> cancellation_listener_ = []() {};
 
   // A running (fake) tally of the number of bytes that have been
   // downloaded/uploaded so far.

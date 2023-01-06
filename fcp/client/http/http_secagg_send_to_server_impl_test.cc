@@ -22,6 +22,7 @@
 
 #include "google/longrunning/operations.pb.h"
 #include "google/rpc/code.pb.h"
+#include "absl/time/time.h"
 #include "fcp/base/simulated_clock.h"
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/test_helpers.h"
@@ -63,6 +64,8 @@ constexpr absl::string_view kMaskedResourceName = "masked_resource";
 constexpr absl::string_view kNonmaskedResourceName = "nonmasked_resource";
 constexpr absl::string_view kOperationName = "my_operation";
 constexpr absl::string_view kApiKey = "API_KEY";
+constexpr absl::Duration kDelayedInterruptibleRunnerDeadline =
+    absl::Seconds(10);
 
 TEST(HttpSecAggProtocolDelegateTest, GetModulus) {
   absl::StatusOr<secagg::ServerToClientWrapperMessage> holder;
@@ -152,11 +155,9 @@ class HttpSecAggSendToServerImplTest : public ::testing::Test {
         nonmasked_resource_forwarding_info;
   }
 
-  std::unique_ptr<InterruptibleRunner> CreateDelayedInterruptibleRunner(
-      absl::Time deadline) {
+  std::unique_ptr<InterruptibleRunner> CreateInterruptibleRunner() {
     return std::make_unique<InterruptibleRunner>(
-        &log_manager_,
-        [deadline, this]() { return absl::Now() > deadline && interrupted_; },
+        &log_manager_, [this]() { return interrupted_; },
         InterruptibleRunner::TimingConfig{
             .polling_period = absl::ZeroDuration(),
             .graceful_shutdown_period = absl::InfiniteDuration(),
@@ -175,18 +176,37 @@ class HttpSecAggSendToServerImplTest : public ::testing::Test {
       std::optional<std::string> tf_checkpoint) {
     auto send_to_server = HttpSecAggSendToServerImpl::Create(
         kApiKey, &clock_, request_helper_.get(), runner_.get(),
+        /* delayed_interruptible_runner_creator=*/
         [this](absl::Time deadline) {
-          return CreateDelayedInterruptibleRunner(deadline);
+          // Ensure that the HttpSecAggSendToServerImpl implementation correctly
+          // passes a deadline that matches the 'waiting period' value we
+          // provide below (with a 1s grace period to account for the delay of
+          // executing the actual test; unfortunately the underlying HTTP code
+          // currently still uses absl::Now() directly, so we're forced to deal
+          // with 'real' time...).
+          //
+          // We don't actually use the deadline value though, since that
+          // would only make testing more complicated.
+          EXPECT_GE(deadline, absl::Now() +
+                                  kDelayedInterruptibleRunnerDeadline -
+                                  absl::Seconds(1));
+          return CreateInterruptibleRunner();
         },
         &server_response_holder_, kAggregationId, kClientToken,
         secagg_upload_forwarding_info_, masked_result_resource_,
         nonmasked_result_resource_, tf_checkpoint,
-        /* disable_request_body_compression= */ true, absl::Milliseconds(3));
+        /* disable_request_body_compression=*/true,
+        /* waiting_period_for_cancellation=*/
+        kDelayedInterruptibleRunnerDeadline);
     FCP_CHECK(send_to_server.ok());
     return std::move(*send_to_server);
   }
   bool interrupted_ = false;
-  SimulatedClock clock_;
+  // We set the simulated clock to "now", since a bunch of the HTTP-related FCP
+  // code currently still uses absl::Now() directly, rather than using a more
+  // testable "Clock" object. This ensures various timestamps we may encounter
+  // are more understandable.
+  SimulatedClock clock_ = SimulatedClock(absl::Now());
   StrictMock<MockHttpClient> http_client_;
   NiceMock<MockLogManager> log_manager_;
   int64_t bytes_downloaded_ = 0;
@@ -672,7 +692,7 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendR3Unmask) {
   EXPECT_THAT(*response, EqualsProto(secagg::ServerToClientWrapperMessage()));
 }
 
-TEST_F(HttpSecAggSendToServerImplTest, TestSendAbort) {
+TEST_F(HttpSecAggSendToServerImplTest, TestSendAbortWithoutInterruption) {
   std::unique_ptr<HttpSecAggSendToServerImpl> send_to_server =
       CreateSecAggSendToServer(std::optional<std::string>());
   std::string diagnostic_info = "Some computation failed.";
@@ -685,7 +705,9 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendAbort) {
   status.set_code(google::rpc::INTERNAL);
   *expected_request.mutable_status() = status;
 
-  // Create expected response
+  // We expect the abort request to actually be issued, because interrupted_ is
+  // set to false, and hence the "InterruptibleRunner" we provided at the top of
+  // the test should let the request go through.
   EXPECT_CALL(
       http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -695,10 +717,37 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendAbort) {
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(),
           AbortSecureAggregationResponse().SerializeAsString())));
-  clock_.SetTime(absl::Now());
-  interrupted_ = true;
+
+  // Send the request, and verify that sending it succeeded.
   send_to_server->Send(&server_message);
   ASSERT_OK(server_response_holder_);
+  secagg::ServerToClientWrapperMessage expected_response;
+  expected_response.mutable_abort();
+  EXPECT_THAT(*server_response_holder_, EqualsProto(expected_response));
+}
+
+TEST_F(HttpSecAggSendToServerImplTest,
+       TestSendAbortShouldBeCancelledIfAlreadyInterruptedForTooLong) {
+  std::unique_ptr<HttpSecAggSendToServerImpl> send_to_server =
+      CreateSecAggSendToServer(std::optional<std::string>());
+  std::string diagnostic_info = "Some computation failed.";
+  secagg::ClientToServerWrapperMessage server_message;
+  server_message.mutable_abort()->set_diagnostic_info(diagnostic_info);
+  // Create expected request
+  AbortSecureAggregationRequest expected_request;
+  google::rpc::Status status;
+  status.set_message(diagnostic_info);
+  status.set_code(google::rpc::INTERNAL);
+  *expected_request.mutable_status() = status;
+
+  // We do *not* expect any HTTP request to actually be issued, since the
+  // interrupted_ flag is true, and therefore the request should be cancelled
+  // before it is even issued.
+  interrupted_ = true;
+
+  // Send the request, and verify that sending it failed.
+  send_to_server->Send(&server_message);
+  EXPECT_THAT(server_response_holder_, IsCode(absl::StatusCode::kCancelled));
 }
 
 }  // anonymous namespace
