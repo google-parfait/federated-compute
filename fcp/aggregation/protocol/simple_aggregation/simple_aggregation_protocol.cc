@@ -319,6 +319,9 @@ absl::StatusOr<absl::Cord> SimpleAggregationProtocol::CreateReport() {
 }
 
 absl::Status SimpleAggregationProtocol::Start(int64_t num_clients) {
+  if (num_clients < 0) {
+    return absl::InvalidArgumentError("Number of clients cannot be negative.");
+  }
   {
     absl::MutexLock lock(&state_mu_);
     FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_CREATED));
@@ -326,8 +329,10 @@ absl::Status SimpleAggregationProtocol::Start(int64_t num_clients) {
     FCP_CHECK(client_states_.empty());
     client_states_.resize(num_clients, CLIENT_PENDING);
   }
-  AcceptanceMessage acceptance_message;
-  callback_->OnAcceptClients(0, num_clients, acceptance_message);
+  if (num_clients > 0) {
+    AcceptanceMessage acceptance_message;
+    callback_->OnAcceptClients(0, num_clients, acceptance_message);
+  }
   return absl::OkStatus();
 }
 

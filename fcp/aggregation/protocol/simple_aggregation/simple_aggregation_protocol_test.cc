@@ -353,6 +353,18 @@ TEST_F(SimpleAggregationProtocolTest, StartProtocol_MultipleCalls) {
   EXPECT_THAT(protocol->Start(1), IsCode(FAILED_PRECONDITION));
 }
 
+TEST_F(SimpleAggregationProtocolTest, StartProtocol_ZeroClients) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_CALL(callback_, OnAcceptClients).Times(0);
+  EXPECT_THAT(protocol->Start(0), IsOk());
+}
+
+TEST_F(SimpleAggregationProtocolTest, StartProtocol_NegativeClients) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_CALL(callback_, OnAcceptClients).Times(0);
+  EXPECT_THAT(protocol->Start(-1), IsCode(INVALID_ARGUMENT));
+}
+
 TEST_F(SimpleAggregationProtocolTest, AddClients_Success) {
   auto protocol = CreateProtocolWithDefaultConfig();
 
