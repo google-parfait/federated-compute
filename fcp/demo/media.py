@@ -28,44 +28,79 @@ from fcp.demo import http_actions
 from fcp.protos.federatedcompute import common_pb2
 
 
+class DownloadGroup:
+  """A group of downloadable files."""
+
+  def __init__(self, prefix: str, add_fn: Callable[[str, bytes, str], None]):
+    self._prefix = prefix
+    self._add_fn = add_fn
+
+  @property
+  def prefix(self) -> str:
+    """The path prefix for all files in this group."""
+    return self._prefix
+
+  def add(self,
+          name: str,
+          data: bytes,
+          content_type: str = 'application/octet-stream') -> str:
+    """Adds a file to the group.
+
+    Args:
+      name: The name of the new file.
+      data: The bytes to make available.
+      content_type: The content type to include in the response.
+
+    Returns:
+      The full path to the new file.
+
+    Raises:
+      KeyError if a file with that name has already been registered.
+    """
+    self._add_fn(name, data, content_type)
+    return self._prefix + name
+
+
 class Service:
   """Implements a service for uploading and downloading data over HTTP."""
 
   def __init__(self, forwarding_info: Callable[[], common_pb2.ForwardingInfo]):
     self._forwarding_info = forwarding_info
     self._lock = threading.Lock()
-    self._downloads: dict[str, http_actions.HttpResponse] = {}
+    self._downloads: dict[str, dict[str, http_actions.HttpResponse]] = {}
     self._uploads: dict[str, Optional[bytes]] = {}
 
   @contextlib.contextmanager
-  def register_download(
-      self,
-      data: bytes,
-      content_type: str = 'application/octet-stream') -> Iterator[str]:
-    """Registers data for download, returning a context manager with the path.
+  def create_download_group(self) -> Iterator[DownloadGroup]:
+    """Creates a new group of downloadable files.
 
-    The download path is unregistered when the context manager is closed.
-
-    Args:
-      data: The bytes to make available.
-      content_type: The content type to include in the response.
+    Files can be be added to this group using `DownloadGroup.add`. All files in
+    the group will be unregistered when the ContextManager goes out of scope.
 
     Yields:
-      The URL from which to download the data.
+      The download group to which files should be added.
     """
-    name = str(uuid.uuid4())
+    group = str(uuid.uuid4())
+
+    def add_file(name: str, data: bytes, content_type: str) -> None:
+      with self._lock:
+        if name in self._downloads[group]:
+          raise KeyError(f'{name} already exists')
+        self._downloads[group][name] = http_actions.HttpResponse(
+            body=data,
+            headers={
+                'Content-Length': len(data),
+                'Content-Type': content_type,
+            })
+
     with self._lock:
-      self._downloads[name] = http_actions.HttpResponse(
-          body=data,
-          headers={
-              'Content-Length': len(data),
-              'Content-Type': content_type,
-          })
+      self._downloads[group] = {}
     try:
-      yield f'{self._forwarding_info().target_uri_prefix}data/{name}'
+      yield DownloadGroup(
+          f'{self._forwarding_info().target_uri_prefix}data/{group}/', add_file)
     finally:
       with self._lock:
-        del self._downloads[name]
+        del self._downloads[group]
 
   def register_upload(self) -> str:
     """Registers a path for single-use upload, returning the resource name."""
@@ -79,13 +114,14 @@ class Service:
     with self._lock:
       return self._uploads.pop(name)
 
-  @http_actions.http_action(method='GET', pattern='/data/{name}')
-  def download(self, body: bytes, name: str) -> http_actions.HttpResponse:
+  @http_actions.http_action(method='GET', pattern='/data/{group}/{name}')
+  def download(self, body: bytes, group: str,
+               name: str) -> http_actions.HttpResponse:
     """Handles a download request."""
     del body
     try:
       with self._lock:
-        return self._downloads[name]
+        return self._downloads[group][name]
     except KeyError as e:
       raise http_actions.HttpError(http.HTTPStatus.NOT_FOUND) from e
 

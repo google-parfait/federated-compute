@@ -82,12 +82,15 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
       stack.callback(
           lambda: self._aggregations_service.abort_session(session_id))
       with plan_utils.Session(plan, server_checkpoint) as session:
-        with self._media_service.register_download(
-            gzip.compress(session.client_plan),
-            content_type='application/x-protobuf+gzip'
-        ) as plan_url, self._media_service.register_download(
-            gzip.compress(session.client_checkpoint),
-            content_type='application/octet-stream+gzip') as checkpoint_url:
+        with self._media_service.create_download_group() as group:
+          plan_url = group.add(
+              'plan',
+              gzip.compress(session.client_plan),
+              content_type='application/x-protobuf+gzip')
+          checkpoint_url = group.add(
+              'checkpoint',
+              gzip.compress(session.client_checkpoint),
+              content_type='application/octet-stream+gzip')
           self._task_assignments_service.add_task(
               task_name, session_id, common_pb2.Resource(uri=plan_url),
               common_pb2.Resource(uri=checkpoint_url))

@@ -27,17 +27,24 @@ from fcp.protos.federatedcompute import common_pb2
 class MediaTest(absltest.TestCase):
 
   @mock.patch.object(uuid, 'uuid4', return_value=uuid.uuid4(), autospec=True)
-  def test_download(self, mock_uuid):
+  def test_create_download_group(self, mock_uuid):
     forwarding_info = common_pb2.ForwardingInfo(
         target_uri_prefix='https://media.example/')
     service = media.Service(lambda: forwarding_info)
-    data = b'data'
-    with service.register_download(data) as url:
-      self.assertEqual(url,
-                       f'https://media.example/data/{mock_uuid.return_value}')
+    with service.create_download_group() as group:
+      self.assertEqual(group.prefix,
+                       f'https://media.example/data/{mock_uuid.return_value}/')
+      name = 'file-name'
+      self.assertEqual(group.add(name, b'data'), group.prefix + name)
+
+  def test_download(self):
+    service = media.Service(common_pb2.ForwardingInfo)
+    with service.create_download_group() as group:
+      data = b'data'
+      url = group.add('name', data)
       self.assertEqual(
           service.download(b'',
-                           url.split('/')[-1]),
+                           *url.split('/')[-2:]),
           http_actions.HttpResponse(
               body=data,
               headers={
@@ -45,51 +52,76 @@ class MediaTest(absltest.TestCase):
                   'Content-Type': 'application/octet-stream',
               }))
 
-  @mock.patch.object(uuid, 'uuid4', return_value=uuid.uuid4(), autospec=True)
-  def test_download_with_content_type(self, mock_uuid):
-    del mock_uuid
+  def test_download_with_content_type(self):
     service = media.Service(common_pb2.ForwardingInfo)
-    data = b'data'
-    with service.register_download(
-        data, content_type='application/x-test') as url:
+    with service.create_download_group() as group:
+      data = b'data'
+      content_type = 'application/x-test'
+      url = group.add('name', data, content_type=content_type)
       self.assertEqual(
           service.download(b'',
-                           url.split('/')[-1]),
+                           *url.split('/')[-2:]),
           http_actions.HttpResponse(
               body=data,
               headers={
                   'Content-Length': len(data),
-                  'Content-Type': 'application/x-test',
+                  'Content-Type': content_type,
               }))
 
-  @mock.patch.object(
-      uuid, 'uuid4', side_effect=[uuid.uuid4(), uuid.uuid4()], autospec=True)
-  def test_download_multiple(self, mock_uuid):
+  def test_download_multiple_files(self):
     service = media.Service(common_pb2.ForwardingInfo)
-    uuids = [uuid.uuid4() for _ in range(2)]
-    mock_uuid.side_effect = uuids
-    data1 = b'data1'
-    data2 = b'data2'
-    with service.register_download(data1) as url1, service.register_download(
-        data2) as url2:
-      self.assertEqual(service.download(b'', url1.split('/')[-1]).body, data1)
-      self.assertEqual(service.download(b'', url2.split('/')[-1]).body, data2)
+    with service.create_download_group() as group:
+      data1 = b'data1'
+      data2 = b'data2'
+      url1 = group.add('file1', data1)
+      url2 = group.add('file2', data2)
+      self.assertEqual(service.download(b'', *url1.split('/')[-2:]).body, data1)
+      self.assertEqual(service.download(b'', *url2.split('/')[-2:]).body, data2)
 
-  def test_download_unregistered(self):
+  def test_download_multiple_groups(self):
+    service = media.Service(common_pb2.ForwardingInfo)
+    with service.create_download_group() as group1, (
+        service.create_download_group()) as group2:
+      self.assertNotEqual(group1.prefix, group2.prefix)
+      data1 = b'data1'
+      data2 = b'data2'
+      url1 = group1.add('name', data1)
+      url2 = group2.add('name', data2)
+      self.assertEqual(service.download(b'', *url1.split('/')[-2:]).body, data1)
+      self.assertEqual(service.download(b'', *url2.split('/')[-2:]).body, data2)
+
+  def test_download_unregistered_group(self):
     service = media.Service(common_pb2.ForwardingInfo)
     with self.assertRaises(http_actions.HttpError) as cm:
-      service.download(b'', 'does-not-exist')
+      service.download(b'', 'does-not-exist', 'does-not-exist')
     self.assertEqual(cm.exception.code, http.HTTPStatus.NOT_FOUND)
 
-  @mock.patch.object(uuid, 'uuid4', return_value=uuid.uuid4(), autospec=True)
-  def test_download_no_longer_registered(self, mock_uuid):
+  def test_download_unregistered_file(self):
     service = media.Service(common_pb2.ForwardingInfo)
-    data = b'data'
-    with service.register_download(data, content_type='application/x-test'):
-      pass
+    with service.create_download_group() as group:
+      url = group.add('name', b'data')
+      with self.assertRaises(http_actions.HttpError) as cm:
+        service.download(b'', url.split('/')[-2], 'does-not-exist')
+      self.assertEqual(cm.exception.code, http.HTTPStatus.NOT_FOUND)
+
+  def test_download_no_longer_registered(self):
+    service = media.Service(common_pb2.ForwardingInfo)
+    with service.create_download_group() as group:
+      url = group.add('name', b'data')
     with self.assertRaises(http_actions.HttpError) as cm:
-      service.download(b'', str(mock_uuid.return_value))
+      service.download(b'', *url.split('/')[-2:])
     self.assertEqual(cm.exception.code, http.HTTPStatus.NOT_FOUND)
+
+  def test_register_duplicate_download(self):
+    service = media.Service(common_pb2.ForwardingInfo)
+    with service.create_download_group() as group:
+      data1 = b'data'
+      url = group.add('name', data1)
+      with self.assertRaises(KeyError):
+        group.add('name', b'data2')
+
+      # The original file should still be downloadable.
+      self.assertEqual(service.download(b'', *url.split('/')[-2:]).body, data1)
 
   def test_upload(self):
     service = media.Service(common_pb2.ForwardingInfo)
