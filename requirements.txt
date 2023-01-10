@@ -24,6 +24,5 @@ absl-py>=1.0,==1.*
 protobuf~=3.19
 # The TensorFlow version should match what's specified in the WORKSPACE file for
 # C++ targets.
-tensorflow==2.10.0
-tensorflow-federated~=0.37
-tensorflow-probability<0.19  # 0.19.0 requires TensorFlow 2.11
+tensorflow==2.11.0
+tensorflow-federated~=0.44

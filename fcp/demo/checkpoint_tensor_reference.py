@@ -20,9 +20,6 @@ import tensorflow as tf
 import tensorflow_federated as tff
 
 
-_MaterializedValue = tff.program.MaterializablePythonType
-
-
 class CheckpointTensorReference(tff.program.MaterializableValueReference):
   """A reference to a tensor in a TF checkpoint file."""
 
@@ -47,7 +44,7 @@ class CheckpointTensorReference(tff.program.MaterializableValueReference):
   def type_signature(self) -> tff.Type:
     return self._type_signature
 
-  async def get_value(self) -> _MaterializedValue:
+  async def get_value(self) -> tff.program.MaterializedValue:
     if self._tensor is None:
       checkpoint = await self._checkpoint_future
       # Write to a file in TensorFlow's RamFileSystem to avoid disk I/O.

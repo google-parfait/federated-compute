@@ -48,10 +48,10 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 # Needed for user-defined configs
 http_archive(
     name = "bazel_skylib",
-    sha256 = "f7be3474d42aae265405a592bb7da8e171919d74c16f082a5457840f06054728",
+    sha256 = "74d544d96f4a5bb630d465ca8bbcfe231e3594e5aae57e1edbf17a6eb3ca2506",
     urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.2.1/bazel-skylib-1.2.1.tar.gz",
-        "https://github.com/bazelbuild/bazel-skylib/releases/download/1.2.1/bazel-skylib-1.2.1.tar.gz",
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/bazelbuild/bazel-skylib/releases/download/1.3.0/bazel-skylib-1.3.0.tar.gz",
+        "https://github.com/bazelbuild/bazel-skylib/releases/download/1.3.0/bazel-skylib-1.3.0.tar.gz",
     ],
 )
 
@@ -89,17 +89,21 @@ http_archive(
     urls = ["https://github.com/grpc/grpc/archive/refs/tags/v1.50.0.tar.gz"],
 )
 
-# The version provided by TensorFlow 2.10 is incompatible with recent
-# pybind11_abseil versions. Remove when updating to TensorFlow 2.11.
+# TensorFlow 2.11.0 pins an old version of upb that's compatible with their old
+# version of gRPC, but not with the newer version we use. Pin the version that
+# would be added by gRPC 1.50.0.
 http_archive(
-    name = "pybind11",
-    build_file = "@org_tensorflow//third_party:pybind11.BUILD",
-    sha256 = "eacf582fa8f696227988d08cfc46121770823839fe9e301a20fbce67e7cd70ec",
-    strip_prefix = "pybind11-2.10.0",
-    urls = ["https://github.com/pybind/pybind11/archive/refs/tags/v2.10.0.tar.gz"],
+    name = "upb",
+    sha256 = "017a7e8e4e842d01dba5dc8aa316323eee080cd1b75986a7d1f94d87220e6502",
+    strip_prefix = "upb-e4635f223e7d36dfbea3b722a4ca4807a7e882e2",
+    urls = [
+        "https://storage.googleapis.com/grpc-bazel-mirror/github.com/protocolbuffers/upb/archive/e4635f223e7d36dfbea3b722a4ca4807a7e882e2.tar.gz",
+        "https://github.com/protocolbuffers/upb/archive/e4635f223e7d36dfbea3b722a4ca4807a7e882e2.tar.gz",
+    ],
 )
 
-# The version provided by TensorFlow 2.10 doesn't support absl::Cord.
+# The version provided by TensorFlow 2.11 doesn't support equality checks for
+# absl::Status.
 http_archive(
     name = "pybind11_abseil",
     sha256 = "6481888831cd548858c09371ea892329b36c8d4d961f559876c64e009d0bc630",
@@ -139,7 +143,7 @@ load("@com_google_api_gax_java//:repositories.bzl", "com_google_api_gax_java_rep
 
 com_google_api_gax_java_repositories()
 
-# Tensorflow v2.10.0
+# Tensorflow v2.11.0
 http_archive(
     name = "org_tensorflow",
     patch_tool = "patch",
@@ -166,10 +170,10 @@ http_archive(
         # TensorFlow's build rule for zlib only exports the latter.
         "//fcp/patches:tensorflow_zlib.patch",
     ],
-    sha256 = "b5a1bb04c84b6fe1538377e5a1f649bb5d5f0b2e3625a3c526ff3a8af88633e8",
-    strip_prefix = "tensorflow-2.10.0",
+    sha256 = "99c732b92b1b37fc243a559e02f9aef5671771e272758aa4aec7f34dc92dac48",
+    strip_prefix = "tensorflow-2.11.0",
     urls = [
-        "https://github.com/tensorflow/tensorflow/archive/v2.10.0.tar.gz",
+        "https://github.com/tensorflow/tensorflow/archive/v2.11.0.tar.gz",
     ],
 )
 

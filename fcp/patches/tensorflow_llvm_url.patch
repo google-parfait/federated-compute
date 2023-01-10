@@ -5,9 +5,9 @@ index 038e0ee5fe5..4693f5cfadc 100644
 @@ -5,15 +5,15 @@ load("//third_party:repo.bzl", "tf_http_archive")
  def repo(name):
      """Imports LLVM."""
-     LLVM_COMMIT = "0538e5431afdb1fa05bdcedf70ee502ccfcd112a"
--    LLVM_SHA256 = "01f168b1a8798e652a04f1faecc3d3c631ff12828b89c65503f39b0a0d6ad048"
-+    LLVM_SHA256 = "fa14d29ed27df747319c86efac6ece7ede988a2f8957b16f697d3b3339e08885"
+     LLVM_COMMIT = "d8415b02a519f222ecf71b069c96cc85ac635de3"
+-    LLVM_SHA256 = "05fffac826b16218bbc0f882204734e68566fd0b61a1196f12c16a58b0b8af58"
++    LLVM_SHA256 = "31a8507ca4b812724adba8274747c8f69b29f78d9b0949a7ecc54ec74d31c1d4"
  
      tf_http_archive(
          name = name,
@@ -20,4 +20,4 @@ index 038e0ee5fe5..4693f5cfadc 100644
 +            "https://api.github.com/repos/llvm/llvm-project/tarball/{commit}".format(commit = LLVM_COMMIT),
          ],
          build_file = "//third_party/llvm:llvm.BUILD",
-         patch_file = ["//third_party/llvm:macos_build_fix.patch"],
+         patch_file = [

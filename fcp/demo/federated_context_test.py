@@ -95,10 +95,12 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
       self.assertEqual(conn.getresponse().status, http.HTTPStatus.NOT_FOUND)
 
   def test_invoke_non_federated_with_base_context(self):
+    # TFF 0.44.0 defaults to the TFF-C++ runtime, which isn't cross-platform.
+    base_context = tff.backends.native.create_local_python_execution_context()
     ctx = federated_context.FederatedContext(
         POPULATION_NAME,
         address_family=ADDRESS_FAMILY,
-        base_context=tff.framework.get_context_stack().current)
+        base_context=base_context)
     with tff.framework.get_context_stack().install(ctx):
       self.assertEqual(add_one(3), 4)
 

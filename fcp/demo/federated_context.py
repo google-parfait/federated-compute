@@ -40,16 +40,15 @@ from fcp.protos import plan_pb2
 class FederatedContext(tff.program.FederatedContext):
   """A FederatedContext for use with the demo platform."""
 
-  def __init__(
-      self,
-      population_name: str,
-      *,
-      base_context: Optional[tff.framework.ExecutionContext] = None,
-      host: str = 'localhost',
-      port: int = 0,
-      certfile: Optional[str] = None,
-      keyfile: Optional[str] = None,
-      address_family: Optional[socket.AddressFamily] = None):
+  def __init__(self,
+               population_name: str,
+               *,
+               base_context: Optional[tff.framework.SyncContext] = None,
+               host: str = 'localhost',
+               port: int = 0,
+               certfile: Optional[str] = None,
+               keyfile: Optional[str] = None,
+               address_family: Optional[socket.AddressFamily] = None):
     """Initializes a `FederatedContext`.
 
     Args:

@@ -45,6 +45,7 @@ build:clang --cxxopt=-stdlib=libc++ --linkopt=-stdlib=libc++
 build:clang --per_file_copt=+^//@-Werror
 # We pull in some headers from TensorFlow which give the following warning, we
 # don't want to convert them to errors.
+build:clang --per_file_copt=+^//@-Wno-error=ignored-qualifiers
 build:clang --per_file_copt=+^//@-Wno-error=inconsistent-missing-override
 build:clang --per_file_copt=+^//@-Wno-error=mismatched-tags
 build:clang --per_file_copt=+^//@-Wno-error=defaulted-function-deleted
