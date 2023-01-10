@@ -20,8 +20,6 @@
 #include <utility>
 
 #ifdef _FCP_BAREMETAL
-#include <variant>
-
 #include "fcp/base/string_stream.h"
 #else
 #include <cstdlib>
@@ -291,17 +289,13 @@ class FCP_MUST_USE_RESULT Status final {
   std::string message_;
 };
 
-namespace internal {
-Status const* OkStatus();
-}
-
 template <typename T>
 class FCP_MUST_USE_RESULT StatusOr final {
  public:
   // Constructs a StatusOr from a failed status. The passed status must not be
   // OK. This constructor is expected to be implicitly called.
   StatusOr(Status status)  // NOLINT
-      : impl_(Impl(std::in_place_index_t<kStatusIndex>(), std::move(status))) {
+      : status_(std::move(status)) {
     FCP_CHECK(!this->status().ok());
   }
 
@@ -310,46 +304,73 @@ class FCP_MUST_USE_RESULT StatusOr final {
 
   // Constructs a StatusOr from a status code and a message.
   StatusOr(StatusCode code, const std::string& message)
-      : impl_(Impl(std::in_place_index_t<kStatusIndex>(),
-                   Status(code, message))) {
+      : status_(Status(code, message)) {
     FCP_CHECK(!this->status().ok());
   }
 
   // Construct a StatusOr from a value.
   StatusOr(const T& value)  // NOLINT
-      : impl_(Impl(std::in_place_index_t<kValueIndex>(), value)) {}
+      : value_(value) {}
 
   // Construct a StatusOr from an R-value.
   StatusOr(T&& value)  // NOLINT
-      : impl_(Impl(std::in_place_index_t<kValueIndex>(), std::move(value))) {}
+      : value_(std::move(value)) {}
 
   // StatusOr is copyable and moveable.
-  StatusOr(const StatusOr& other) = default;
-  StatusOr(StatusOr&& other) = default;
-  StatusOr& operator=(const StatusOr& other) = default;
-  StatusOr& operator=(StatusOr&& other) = default;
+  StatusOr(const StatusOr& other) : status_(other.status_) {
+    if (ok()) {
+      AssignValue(other.value_);
+    }
+  }
+
+  StatusOr(StatusOr&& other) : status_(std::move(other.status_)) {
+    if (ok()) {
+      AssignValue(std::move(other.value_));
+    }
+  }
+
+  StatusOr& operator=(const StatusOr& other) {
+    if (this != &other) {
+      ClearValue();
+      if (other.ok()) {
+        AssignValue(other.value_);
+      }
+      status_ = other.status_;
+    }
+    return *this;
+  }
+
+  StatusOr& operator=(StatusOr&& other) {
+    if (this != &other) {
+      ClearValue();
+      if (other.ok()) {
+        AssignValue(std::move(other.value_));
+      }
+      status_ = std::move(other.status_);
+    }
+    return *this;
+  }
+
+  ~StatusOr() { ClearValue(); }
 
   // Tests whether this StatusOr is OK and has a value.
-  bool ok() const { return impl_.index() == kValueIndex; }
+  bool ok() const { return status_.ok(); }
 
   // Returns the status.
-  const Status& status() const {
-    return impl_.index() == kValueIndex ? *internal::OkStatus()
-                                        : std::get<kStatusIndex>(impl_);
-  }
+  const Status& status() const { return status_; }
 
   // Returns the value if the StatusOr is OK.
   const T& value() const& {
     CheckOk();
-    return std::get<kValueIndex>(impl_);
+    return value_;
   }
   T& value() & {
     CheckOk();
-    return std::get<kValueIndex>(impl_);
+    return value_;
   }
   T&& value() && {
     CheckOk();
-    return std::get<kValueIndex>(std::move(impl_));
+    return value_;
   }
 
   // Operator *
@@ -367,13 +388,29 @@ class FCP_MUST_USE_RESULT StatusOr final {
  private:
   void CheckOk() const { FCP_CHECK(ok()) << "StatusOr has no value"; }
 
-  enum Indices : std::size_t {
-    kStatusIndex = 0,
-    kValueIndex = 1,
-  };
-  using Impl = std::variant<Status, T>;
+  // This is used to assign the value in place without invoking the assignment
+  // operator. Using the assignment operator wouldn't work in case the value_
+  // wasn't previously initialized. For example the value_ object might try
+  // to clear its previous value.
+  template <typename Arg>
+  void AssignValue(Arg&& arg) {
+    new (&unused_) T(std::forward<Arg>(arg));
+  }
 
-  Impl impl_{};
+  // Destroy the current value if it was initialized.
+  void ClearValue() {
+    if (ok()) value_.~T();
+  }
+
+  Status status_;
+
+  // Using the union allows to avoid initializing the value_ field when
+  // StatusOr is constructed with Status.
+  struct Unused {};
+  union {
+    Unused unused_;
+    T value_;
+  };
 };
 
 #else
@@ -522,7 +559,7 @@ class FCP_MUST_USE_RESULT StatusBuilder {
   /** Implicit conversion to StatusOr. */
   template <typename T>
   inline operator StatusOr<T>() {  // NOLINT
-    return static_cast<Status>(*this);
+    return StatusOr<T>(static_cast<Status>(*this));
   }
 
  private:

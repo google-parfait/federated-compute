@@ -126,11 +126,6 @@ StatusBuilder::operator Status() {
   return Status(code_, message_str);
 }
 
-#ifdef _FCP_BAREMETAL
-const Status* kOkStatus = new Status();
-Status const* OkStatus() { return kOkStatus; }
-#endif
-
 }  // namespace internal
 
 }  // namespace fcp

@@ -18,7 +18,10 @@
 
 #include <stdio.h>
 
+#include <array>
+#include <memory>
 #include <string>
+#include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -29,6 +32,7 @@
 namespace fcp {
 namespace {
 
+using ::testing::Eq;
 using ::testing::MatchesRegex;
 using ::testing::Not;
 
@@ -159,6 +163,67 @@ TEST_P(MonitoringTest, StatusOr) {
   // which is string_view, to std::string.
   ASSERT_THAT(fail_status.status().message(),
               MatchesRegex(".*operation aborted"));
+}
+
+TEST_P(MonitoringTest, StatusOrCopyAssignment) {
+  StatusOr<int> fail_status = FCP_STATUS(ABORTED) << "operation aborted";
+  StatusOr<int> copy_of_fail_status(fail_status);
+  ASSERT_FALSE(copy_of_fail_status.ok());
+  ASSERT_EQ(copy_of_fail_status.status().code(), ABORTED);
+  ASSERT_THAT(copy_of_fail_status.status().message(),
+              MatchesRegex(".*operation aborted"));
+
+  StatusOr<int> ok_status = 42;
+  StatusOr<int> copy_of_ok_status(ok_status);
+  ASSERT_THAT(copy_of_ok_status, IsOkAndHolds(Eq(42)));
+  ASSERT_EQ(copy_of_ok_status.value(), 42);
+}
+
+TEST_P(MonitoringTest, StatusOrMoveAssignment) {
+  StatusOr<std::unique_ptr<std::string>> fail_status = FCP_STATUS(ABORTED)
+                                                       << "operation aborted";
+  StatusOr<std::unique_ptr<std::string>> moved_fail_status(
+      std::move(fail_status));
+  ASSERT_FALSE(moved_fail_status.ok());
+  ASSERT_EQ(moved_fail_status.status().code(), ABORTED);
+  ASSERT_THAT(moved_fail_status.status().message(),
+              MatchesRegex(".*operation aborted"));
+
+  auto value = std::make_unique<std::string>("foobar");
+  StatusOr<std::unique_ptr<std::string>> ok_status = std::move(value);
+  StatusOr<std::unique_ptr<std::string>> moved_ok_status(std::move(ok_status));
+  ASSERT_TRUE(moved_ok_status.ok());
+  ASSERT_EQ(*moved_ok_status.value(), "foobar");
+}
+
+TEST_P(MonitoringTest, StatusOrCopying) {
+  StatusOr<int> fail_status = FCP_STATUS(ABORTED) << "operation aborted";
+  StatusOr<int> copy_of_status = fail_status;
+  ASSERT_FALSE(copy_of_status.ok());
+  ASSERT_EQ(copy_of_status.status().code(), ABORTED);
+  ASSERT_THAT(copy_of_status.status().message(),
+              MatchesRegex(".*operation aborted"));
+
+  StatusOr<int> ok_status = 42;
+  copy_of_status = ok_status;
+  ASSERT_THAT(copy_of_status, IsOkAndHolds(Eq(42)));
+  ASSERT_EQ(copy_of_status.value(), 42);
+}
+
+TEST_P(MonitoringTest, StatusOrMoving) {
+  StatusOr<std::unique_ptr<std::string>> fail_status = FCP_STATUS(ABORTED)
+                                                       << "operation aborted";
+  StatusOr<std::unique_ptr<std::string>> moved_status = std::move(fail_status);
+  ASSERT_FALSE(moved_status.ok());
+  ASSERT_EQ(moved_status.status().code(), ABORTED);
+  ASSERT_THAT(moved_status.status().message(),
+              MatchesRegex(".*operation aborted"));
+
+  auto value = std::make_unique<std::string>("foobar");
+  StatusOr<std::unique_ptr<std::string>> ok_status = std::move(value);
+  moved_status = std::move(ok_status);
+  ASSERT_TRUE(moved_status.ok());
+  ASSERT_EQ(*moved_status.value(), "foobar");
 }
 
 TEST_P(MonitoringTest, StatusBuilder) {
