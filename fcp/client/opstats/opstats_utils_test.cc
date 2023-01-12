@@ -27,9 +27,6 @@ namespace client {
 namespace opstats {
 namespace {
 
-using ::testing::Return;
-using ::testing::StrictMock;
-
 constexpr char kTaskName[] = "task";
 OperationalStats::Event::EventKind kUploadStartedEvent =
     OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED;

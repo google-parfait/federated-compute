@@ -891,6 +891,7 @@ tf_custom_op_library(
 tf_gen_op_wrapper_py(
     name = "gen_task_eligibility_info_ops_py",
     out = "gen_task_eligibility_info_ops.py",
+    visibility = ["//visibility:private"],
     deps = [
         ":task_eligibility_info_ops_lib",
     ],
@@ -961,6 +962,7 @@ tf_gen_op_wrapper_py(
         "DictionaryLookup",
         "DictionaryReverseLookup",
     ],
+    visibility = ["//visibility:private"],
     deps = [":dictionary_ops_lib"],
 )
 
