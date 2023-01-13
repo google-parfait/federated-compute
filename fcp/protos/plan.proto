@@ -621,26 +621,27 @@ message LocalComputeIORouter {
   // ===========================================================================
   //   Inputs
   // ===========================================================================
-  // The name of the placeholder tensor representing the input directory path.
-  // It can be a single input directory (in this case the
-  // `input_dir_tensor_name` is populated) or multiple input directories (in
-  // this case the `multiple_input_dirs` is populated).
+  // The name of the placeholder tensor representing the input resource path(s).
+  // It can be a single input directory or file path (in this case the
+  // `input_dir_tensor_name` is populated) or multiple input resources
+  // represented as a map from names to input directories or file paths (in this
+  // case the `multiple_input_resources` is populated).
   //
-  // In the multiple input directories case, the placeholder tensors are
-  // represented as a map: the keys are the input directory names defined by the
-  // users when constructing the `LocalComputation` object, and the values are
-  // the corresponding placeholder tensor names created by the local computation
-  // plan builder.
+  // In the multiple input resources case, the placeholder tensors are
+  // represented as a map: the keys are the input resource names defined by the
+  // users when constructing the `LocalComputation` Python object, and the
+  // values are the corresponding placeholder tensor names created by the local
+  // computation plan builder.
   //
   // Apps will have the ability to create contracts between their Android code
-  // and Local Compute toolkit code to place files in this directory with known
-  // names (Android code) and create graphs with ops to read from the directory
-  // + known name (toolkit code).
-  oneof input_directory {
+  // and `LocalComputation` toolkit code to place files inside the input
+  // resource paths with known names (Android code) and create graphs with ops
+  // to read from these paths (file names can be specified in toolkit code).
+  oneof input_resource {
     string input_dir_tensor_name = 1;
     // Directly using the `map` field is not allowed in `oneof`, so we have to
     // wrap it in a new message.
-    MultipleInputDirectories multiple_input_dirs = 3;
+    MultipleInputResources multiple_input_resources = 3;
   }
 
   // Scalar string tensor name that will contain the output directory path.
@@ -658,13 +659,13 @@ message LocalComputeIORouter {
   // to `output_dir` specified above.
 }
 
-// Describes the multiple input directories in `LocalComputeIORouter`.
-message MultipleInputDirectories {
-  // The keys are the input directory names (defined by the users when
-  // constructing the `LocalComputation` object), and the values are the
+// Describes the multiple input resources in `LocalComputeIORouter`.
+message MultipleInputResources {
+  // The keys are the input resource names (defined by the users when
+  // constructing the `LocalComputation` Python object), and the values are the
   // corresponding placeholder tensor names created by the local computation
   // plan builder.
-  map<string, string> input_dir_tensor_name_map = 1;
+  map<string, string> input_resource_tensor_name_map = 1;
 }
 
 // Describes a queue to which input is fed.
