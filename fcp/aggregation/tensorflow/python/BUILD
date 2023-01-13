@@ -32,6 +32,5 @@ py_test(
         ":aggregation_protocols",
         "//fcp/aggregation/protocol:configuration_py_pb2",
         "//fcp/aggregation/protocol:py_pb2",
-        "//fcp/protos:plan_py_pb2",
     ],
 )

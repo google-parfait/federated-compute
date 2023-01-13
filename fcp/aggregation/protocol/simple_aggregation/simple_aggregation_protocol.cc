@@ -40,11 +40,9 @@
 
 namespace fcp::aggregation {
 
-using ::google::internal::federated::plan::ServerAggregationConfig;
-
 // Creates an INVALID_ARGUMENT error with the provided error message.
 absl::Status ServerAggregationConfigArgumentError(
-    const ServerAggregationConfig& aggregation_config,
+    const Configuration::ServerAggregationConfig& aggregation_config,
     absl::string_view error_message) {
   return absl::InvalidArgumentError(
       absl::StrFormat("ServerAggregationConfig: %s\n:%s", error_message,
@@ -54,7 +52,7 @@ absl::Status ServerAggregationConfigArgumentError(
 // Creates an aggregation intrinsic based on the intrinsic configuration.
 absl::StatusOr<SimpleAggregationProtocol::Intrinsic>
 SimpleAggregationProtocol::CreateIntrinsic(
-    const ServerAggregationConfig& aggregation_config) {
+    const Configuration::ServerAggregationConfig& aggregation_config) {
   // Resolve the intrinsic_uri to the registered TensorAggregatorFactory.
   FCP_ASSIGN_OR_RETURN(
       const TensorAggregatorFactory* factory,
@@ -89,7 +87,7 @@ SimpleAggregationProtocol::CreateIntrinsic(
 
 absl::Status SimpleAggregationProtocol::ValidateConfig(
     const Configuration& configuration) {
-  for (const ServerAggregationConfig& aggregation_config :
+  for (const Configuration::ServerAggregationConfig& aggregation_config :
        configuration.aggregation_configs()) {
     // TODO(team): Add support for other intrinsics after MVP launch.
     if (!GetAggregatorFactory(aggregation_config.intrinsic_uri()).ok()) {
@@ -129,7 +127,7 @@ SimpleAggregationProtocol::Create(
   FCP_RETURN_IF_ERROR(ValidateConfig(configuration));
 
   std::vector<Intrinsic> intrinsics;
-  for (const ServerAggregationConfig& aggregation_config :
+  for (const Configuration::ServerAggregationConfig& aggregation_config :
        configuration.aggregation_configs()) {
     FCP_ASSIGN_OR_RETURN(Intrinsic intrinsic,
                          CreateIntrinsic(aggregation_config));

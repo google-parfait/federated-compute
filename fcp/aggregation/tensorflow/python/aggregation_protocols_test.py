@@ -24,7 +24,6 @@ from fcp.aggregation.protocol import aggregation_protocol_messages_pb2 as apm_pb
 from fcp.aggregation.protocol import configuration_pb2
 from fcp.aggregation.protocol.python import aggregation_protocol
 from fcp.aggregation.tensorflow.python import aggregation_protocols
-from fcp.protos import plan_pb2
 from pybind11_abseil import status
 
 
@@ -75,11 +74,11 @@ class AggregationProtocolsTest(absltest.TestCase):
     input_tensor = tf.TensorSpec((), tf.int32, 'in')
     output_tensor = tf.TensorSpec((), tf.int32, 'out')
     config = configuration_pb2.Configuration(aggregation_configs=[
-        plan_pb2.ServerAggregationConfig(
+        configuration_pb2.Configuration.ServerAggregationConfig(
             intrinsic_uri='federated_sum',
             intrinsic_args=[
-                plan_pb2.ServerAggregationConfig.IntrinsicArg(
-                    input_tensor=input_tensor.experimental_as_proto()),
+                configuration_pb2.Configuration.ServerAggregationConfig.
+                IntrinsicArg(input_tensor=input_tensor.experimental_as_proto()),
             ],
             output_tensors=[output_tensor.experimental_as_proto()],
         ),

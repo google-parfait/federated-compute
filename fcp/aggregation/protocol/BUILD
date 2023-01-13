@@ -50,7 +50,7 @@ tf_proto_library(
     name = "configuration_proto",
     srcs = ["configuration.proto"],
     protodeps = [
-        "//fcp/protos:plan_proto",
+        "@org_tensorflow//tensorflow/core:protos_all",
     ],
 )
 

@@ -102,8 +102,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
 
   // Creates an aggregation intrinsic based on the intrinsic configuration.
   static absl::StatusOr<Intrinsic> CreateIntrinsic(
-      const google::internal::federated::plan::ServerAggregationConfig&
-          aggregation_config);
+      const Configuration::ServerAggregationConfig& aggregation_config);
 
   // Describes the overall protocol state.
   enum ProtocolState {

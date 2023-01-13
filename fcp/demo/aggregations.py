@@ -209,9 +209,11 @@ class Service:
         not aggregation_requirements.plan.phase[0].HasField('server_phase_v2')):
       raise ValueError('Plan must contain exactly one server_phase_v2.')
     agg_protocol = aggregation_protocols.create_simple_aggregation_protocol(
-        configuration_pb2.Configuration(
-            aggregation_configs=aggregation_requirements.plan.phase[0]
-            .server_phase_v2.aggregations), callback)
+        configuration_pb2.Configuration(aggregation_configs=[
+            self._translate_server_aggregation_config(aggregation_config)
+            for aggregation_config in
+            aggregation_requirements.plan.phase[0].server_phase_v2.aggregations
+        ]), callback)
     agg_protocol.Start(0)
 
     with self._sessions_lock:
@@ -301,6 +303,32 @@ class Service:
     with self._sessions_lock:
       self._sessions[session_id].authorization_tokens |= tokens
     return list(tokens)
+
+  def _translate_intrinsic_arg(
+      self, intrinsic_arg: plan_pb2.ServerAggregationConfig.IntrinsicArg
+  ) -> configuration_pb2.Configuration.ServerAggregationConfig.IntrinsicArg:
+    """Transform an aggregation intrinsic arg for the aggregation service."""
+    if intrinsic_arg.HasField('input_tensor'):
+      return configuration_pb2.Configuration.ServerAggregationConfig.IntrinsicArg(
+          input_tensor=intrinsic_arg.input_tensor)
+    elif intrinsic_arg.HasField('parameter'):
+      return configuration_pb2.Configuration.ServerAggregationConfig.IntrinsicArg(
+          parameter=intrinsic_arg.parameter)
+    else:
+      raise AssertionError(
+          'Cases should have exhausted all possible types of intrinsic args.')
+
+  def _translate_server_aggregation_config(
+      self, plan_aggregation_config: plan_pb2.ServerAggregationConfig
+  ) -> configuration_pb2.Configuration.ServerAggregationConfig:
+    """Transform the aggregation config for use by the aggregation service."""
+    return configuration_pb2.Configuration.ServerAggregationConfig(
+        intrinsic_uri=plan_aggregation_config.intrinsic_uri,
+        intrinsic_args=[
+            self._translate_intrinsic_arg(intrinsic_arg)
+            for intrinsic_arg in plan_aggregation_config.intrinsic_args
+        ],
+        output_tensors=plan_aggregation_config.output_tensors)
 
   def _get_session_status(self,
                           state: _AggregationSessionState) -> SessionStatus:

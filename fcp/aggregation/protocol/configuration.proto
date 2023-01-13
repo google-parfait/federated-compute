@@ -18,18 +18,46 @@ syntax = "proto3";
 
 package fcp.aggregation;
 
-import "fcp/protos/plan.proto";
+import "tensorflow/core/framework/tensor.proto";
+import "tensorflow/core/protobuf/struct.proto";
 
 option java_package = "fcp.aggregation";
 option java_multiple_files = true;
 
 // Configuration describing the kind of aggregation to perform.
 message Configuration {
+  // Represents a single aggregation operation, combining one or more input
+  // tensors from a collection of clients into one or more output tensors on the
+  // server.
+  // TODO(team): Remove usage of TensorFlow from this message.
+  message ServerAggregationConfig {
+    // The uri of the aggregation intrinsic (e.g. 'federated_sum').
+    string intrinsic_uri = 1;
+
+    // Describes an argument to the aggregation operation.
+    message IntrinsicArg {
+      oneof arg {
+        // Input tensor provided by each client.
+        tensorflow.TensorSpecProto input_tensor = 2;
+
+        // Constant parameter that is independent of client data (e.g. a modulus
+        // for a federated modular sum operation).
+        tensorflow.TensorProto parameter = 3;
+      }
+    }
+
+    // List of arguments for the aggregation operation. The arguments can be
+    // dependent on client data (in which case they must be retrieved from
+    // clients) or they can be independent of client data (in which case they
+    // can be configured server-side). For now we assume all client-independent
+    // arguments are constants. The arguments must be in the order expected by
+    // the server.
+    repeated IntrinsicArg intrinsic_args = 4;
+
+    // List of server-side outputs produced by the aggregation operation.
+    repeated tensorflow.TensorSpecProto output_tensors = 5;
+  }
+
   // A list of client-to-server aggregations to perform.
-  //
-  // ServerAggregationConfig represents a single aggregation operation,
-  // combining one or more input tensors from a collection of clients into one
-  // or more output tensors on the server.
-  repeated google.internal.federated.plan.ServerAggregationConfig
-      aggregation_configs = 1;
+  repeated ServerAggregationConfig aggregation_configs = 1;
 }
