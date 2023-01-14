@@ -18,7 +18,7 @@
 
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 
-#ifdef _FCP_BAREMETAL
+#ifdef FCP_BAREMETAL
 #include <unordered_map>
 #else
 #include "absl/container/flat_hash_map.h"
@@ -35,7 +35,7 @@ class Registry final {
                                  const TensorAggregatorFactory* factory) {
     FCP_CHECK(factory != nullptr);
 
-#ifndef _FCP_BAREMETAL
+#ifndef FCP_BAREMETAL
     absl::MutexLock lock(&mutex_);
 #endif
     FCP_CHECK(map_.find(intrinsic_uri) == map_.end())
@@ -48,7 +48,7 @@ class Registry final {
 
   StatusOr<const TensorAggregatorFactory*> GetAggregatorFactory(
       const std::string& intrinsic_uri) {
-#ifndef _FCP_BAREMETAL
+#ifndef FCP_BAREMETAL
     absl::MutexLock lock(&mutex_);
 #endif
     auto it = map_.find(intrinsic_uri);
@@ -60,7 +60,7 @@ class Registry final {
   }
 
  private:
-#ifdef _FCP_BAREMETAL
+#ifdef FCP_BAREMETAL
   std::unordered_map<std::string, const TensorAggregatorFactory*> map_;
 #else
   // Synchronization of potentially concurrent registry calls is done only in

@@ -74,7 +74,7 @@ class MonitoringTest : public ::testing::TestWithParam<bool> {
   BaremetalLogger logger_;
 };
 
-#ifdef _FCP_BAREMETAL
+#ifdef FCP_BAREMETAL
 INSTANTIATE_TEST_SUITE_P(Baremetal, MonitoringTest, testing::Values(true));
 #else
 INSTANTIATE_TEST_SUITE_P(Base, MonitoringTest, testing::Values(false));

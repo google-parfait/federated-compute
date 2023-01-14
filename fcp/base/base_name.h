@@ -19,7 +19,7 @@
 
 #include <string>
 
-#ifndef _FCP_BAREMETAL
+#ifndef FCP_BAREMETAL
 #include "absl/strings/string_view.h"
 #endif
 
@@ -30,7 +30,7 @@ namespace fcp {
  */
 std::string BaseName(const std::string& path);
 
-#ifndef _FCP_BAREMETAL
+#ifndef FCP_BAREMETAL
 inline std::string BaseName(const char* path) {
   return BaseName(std::string(path));
 }

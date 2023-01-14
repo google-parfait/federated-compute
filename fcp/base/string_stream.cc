@@ -1,6 +1,7 @@
 #include "fcp/base/string_stream.h"
 
-#include <cstdio>
+#include <stdio.h>
+
 #include <string>
 
 namespace fcp {
@@ -15,7 +16,7 @@ StringStream& AppendWithFormat(StringStream& string_buffer, const char* format,
                                T value) {
   char buf[64];
   // The buffer is large enough for any possible value.
-  std::sprintf(buf, format, value);  // NOLINT
+  sprintf(buf, format, value);  // NOLINT
   return string_buffer << buf;
 }
 

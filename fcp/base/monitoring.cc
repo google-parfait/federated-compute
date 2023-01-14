@@ -20,7 +20,7 @@
 
 #include <string>
 
-#ifndef _FCP_BAREMETAL
+#ifndef FCP_BAREMETAL
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -31,7 +31,7 @@
 #include <cstring>
 
 #include "absl/strings/str_format.h"
-#endif  // _FCP_BAREMETAL
+#endif  // FCP_BAREMETAL
 
 #include "fcp/base/base_name.h"
 
@@ -71,7 +71,7 @@ void set_logger(Logger* logger) { GetGlobalLogger() = logger; }
 
 void Logger::Log(const char* file, int line, LogSeverity severity,
                  const char* message) {
-#ifndef _FCP_BAREMETAL
+#ifndef FCP_BAREMETAL
   auto base_file_name = BaseName(file);
 #ifdef __ANDROID__
   bool log_to_logcat = true;
@@ -96,7 +96,7 @@ void Logger::Log(const char* file, int line, LogSeverity severity,
   // uses.
   absl::FPrintF(stderr, "%c %s:%d %s\n", absl::LogSeverityName(severity)[0],
                 base_file_name, line, message);
-#endif  // _FCP_BAREMETAL
+#endif  // FCP_BAREMETAL
 }
 
 StatusBuilder::StatusBuilder(StatusCode code, const char* file, int line)

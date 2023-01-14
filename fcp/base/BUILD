@@ -227,7 +227,8 @@ cc_test(
     srcs = [
         "monitoring_test.cc",
     ],
-    copts = FCP_COPTS + ["-D_FCP_BAREMETAL"],
+    copts = FCP_COPTS,
+    local_defines = ["FCP_BAREMETAL"],
     deps = [
         ":baremetal_base",
         "@com_google_absl//absl/base:log_severity",
@@ -242,7 +243,8 @@ cc_test(
     srcs = [
         "string_stream_test.cc",
     ],
-    copts = FCP_COPTS + ["-D_FCP_BAREMETAL"],
+    copts = FCP_COPTS,
+    local_defines = ["FCP_BAREMETAL"],
     deps = [
         ":baremetal_base",
         "@com_google_googletest//:gtest_main",

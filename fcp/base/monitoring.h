@@ -19,11 +19,12 @@
 #include <string>
 #include <utility>
 
-#ifdef _FCP_BAREMETAL
+#ifdef FCP_BAREMETAL
 #include "fcp/base/string_stream.h"
 #else
 #include <cstdlib>
 #include <iostream>
+#include <new>
 #include <ostream>
 #include <sstream>
 
@@ -32,7 +33,15 @@
 #include "absl/base/optimization.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#endif  // _FCP_BAREMETAL
+#endif  // FCP_BAREMETAL
+
+#ifdef FCP_NANOLIBC
+// Definition of placement operator new is used below by fcp::StatusOr. It is
+// neaded because nanolibc doesn't currently have it.
+// TODO(team): Move this to a <new> header in nanolibc or some other
+// shared header.
+inline void* operator new(size_t, void* p) noexcept { return p; }
+#endif  // FCP_NANOLIBC
 
 namespace fcp {
 
@@ -68,7 +77,7 @@ constexpr bool fcp_debug = false;
 /**
  * Log Severity
  */
-#ifdef _FCP_BAREMETAL
+#ifdef FCP_BAREMETAL
 enum class LogSeverity : int {
   kInfo = 0,
   kWarning = 1,
@@ -77,7 +86,7 @@ enum class LogSeverity : int {
 };
 #else
 using LogSeverity = absl::LogSeverity;
-#endif  // _FCP_BAREMETAL
+#endif  // FCP_BAREMETAL
 
 #define _FCP_LOG_INFO \
   ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kInfo)
@@ -88,7 +97,7 @@ using LogSeverity = absl::LogSeverity;
 #define _FCP_LOG_FATAL \
   ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kFatal)
 
-#ifdef _FCP_BAREMETAL
+#ifdef FCP_BAREMETAL
 #define FCP_PREDICT_FALSE(x) (x)
 #define FCP_PREDICT_TRUE(x) (x)
 #else
@@ -147,9 +156,9 @@ class Logger {
 Logger* logger();
 void set_logger(Logger* logger);
 
-#ifndef _FCP_BAREMETAL
+#ifndef FCP_BAREMETAL
 using StringStream = std::ostringstream;
-#endif  // _FCP_BAREMETAL
+#endif  // FCP_BAREMETAL
 
 /**
  * Object allowing to construct a log message by streaming into it. This is
@@ -166,7 +175,7 @@ class LogMessage {
     return *this;
   }
 
-#ifndef _FCP_BAREMETAL
+#ifndef FCP_BAREMETAL
   LogMessage& operator<<(std::ostream& (*pf)(std::ostream&)) {
     message_ << pf;
     return *this;
@@ -229,13 +238,13 @@ class LogMessageVoidify {
 #define FCP_STATUS(code) \
   ::fcp::internal::MakeStatusBuilder(code, __FILE__, __LINE__)
 
-#ifdef _FCP_BAREMETAL
+#ifdef FCP_BAREMETAL
 #define FCP_MUST_USE_RESULT __attribute__((warn_unused_result))
 #else
 #define FCP_MUST_USE_RESULT ABSL_MUST_USE_RESULT
 #endif
 
-#ifdef _FCP_BAREMETAL
+#ifdef FCP_BAREMETAL
 
 // The bare-metal implementation doesn't depend on Abseil library and
 // provides its own implementations of StatusCode, Status and StatusOr that are
@@ -421,7 +430,7 @@ using StatusCode = absl::StatusCode;
 template <typename T>
 using StatusOr = absl::StatusOr<T>;
 
-#endif  // _FCP_BAREMETAL
+#endif  // FCP_BAREMETAL
 
 constexpr auto OK = StatusCode::kOk;
 constexpr auto CANCELLED = StatusCode::kCancelled;

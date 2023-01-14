@@ -21,8 +21,13 @@ FCP_COPTS = [
 ]
 
 FCP_BAREMETAL_COPTS = FCP_COPTS + [
-    "-D_FCP_BAREMETAL",
+    "-DFCP_BAREMETAL",
     "-nostdlib",
     "-fno-exceptions",
     "-ffreestanding",
+    "-Wno-unused-parameter",
+]
+
+FCP_NANOLIBC_COPTS = FCP_BAREMETAL_COPTS + [
+    "-DFCP_NANOLIBC",
 ]

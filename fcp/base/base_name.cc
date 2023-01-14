@@ -16,20 +16,26 @@
 
 #include "fcp/base/base_name.h"
 
+#include <string.h>
+
+#include <cstdint>
 #include <string>
 
 namespace fcp {
 
 #ifdef _WIN32
-constexpr char kPathSeparator[] = "\\";
+constexpr char kPathSeparator = '\\';
 #else
-constexpr char kPathSeparator[] = "/";
+constexpr char kPathSeparator = '/';
 #endif
 
 std::string BaseName(const std::string& path) {
-  // Note that find_last_of returns npos if not found, and npos+1 is guaranteed
-  // to be zero.
-  return path.substr(path.find_last_of(kPathSeparator) + 1);
+  // Note: the code below needs to be compatible with baremetal build with
+  // nanolibc. Therefore it is implemented via the standard "C" library strrchr.
+  const char* separator_ptr = strrchr(path.c_str(), kPathSeparator);
+  if (separator_ptr == nullptr) return path;
+
+  return path.substr((separator_ptr - path.c_str()) + 1);
 }
 
 }  // namespace fcp

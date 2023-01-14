@@ -3,7 +3,7 @@
 
 #include <string>
 
-#ifndef _FCP_BAREMETAL
+#ifndef FCP_BAREMETAL
 static_assert(false,
               "StringStream should be used only when building FCP in bare "
               "metal configuration.");
