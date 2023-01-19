@@ -24,7 +24,8 @@
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // This class is the interface for the abstract factory that creates an instance
 // of a TensorAggregator derived class.
@@ -40,6 +41,7 @@ class TensorAggregatorFactory {
       DataType dtype, TensorShape shape) const = 0;
 };
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_TENSOR_AGGREGATOR_FACTORY_H_

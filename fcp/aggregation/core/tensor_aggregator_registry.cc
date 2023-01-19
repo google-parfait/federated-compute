@@ -25,7 +25,8 @@
 #include "absl/synchronization/mutex.h"
 #endif
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 namespace internal {
 
@@ -41,7 +42,7 @@ class Registry final {
     FCP_CHECK(map_.find(intrinsic_uri) == map_.end())
         << "A factory for intrinsic_uri '" << intrinsic_uri
         << "' is already registered.";
-    map_.emplace(intrinsic_uri, factory);
+    map_[intrinsic_uri] = factory;
     FCP_LOG(INFO) << "TensorAggregatorFactory for intrinsic_uri '"
                   << intrinsic_uri << "' is registered.";
   }
@@ -92,4 +93,5 @@ StatusOr<const TensorAggregatorFactory*> GetAggregatorFactory(
   return internal::GetRegistry()->GetAggregatorFactory(intrinsic_uri);
 }
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

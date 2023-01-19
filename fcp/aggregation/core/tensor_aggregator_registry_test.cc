@@ -22,7 +22,8 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 namespace {
 
 class MockFactory : public TensorAggregatorFactory {
@@ -44,4 +45,5 @@ TEST(TensorAggregatorRegistryTest, RepeatedRegistrationUnsuccessful) {
 }
 
 }  // namespace
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

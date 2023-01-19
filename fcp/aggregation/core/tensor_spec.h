@@ -23,7 +23,8 @@
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // A tuple representing tensor name, data type, and shape.
 class TensorSpec final {
@@ -41,6 +42,7 @@ class TensorSpec final {
   const TensorShape shape_;
 };
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_TENSOR_SPEC_H_

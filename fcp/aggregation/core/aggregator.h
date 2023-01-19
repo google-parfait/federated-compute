@@ -19,7 +19,8 @@
 
 #include "fcp/base/monitoring.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // Abstract base for aggregators that compute an aggregate of input items of
 // type T into a final aggregate of type R using a multi-stage process in which
@@ -67,6 +68,7 @@ class Aggregator {
   virtual StatusOr<R> Report() && = 0;
 };
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_AGGREGATOR_H_

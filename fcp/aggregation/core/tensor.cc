@@ -21,7 +21,8 @@
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/base/monitoring.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 Status Tensor::CheckValid() const {
   if (dtype_ == DT_INVALID) {
@@ -55,4 +56,5 @@ StatusOr<Tensor> Tensor::Create(DataType dtype, TensorShape shape,
   return std::move(tensor);
 }
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

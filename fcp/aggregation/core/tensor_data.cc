@@ -18,7 +18,8 @@
 
 #include "fcp/base/monitoring.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 bool TensorData::is_dense() const {
   if (num_slices() != 1) {
@@ -92,4 +93,5 @@ Status TensorData::CheckValid(size_t value_size) const {
   return FCP_STATUS(OK);
 }
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

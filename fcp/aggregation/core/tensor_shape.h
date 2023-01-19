@@ -20,21 +20,24 @@
 #include <initializer_list>
 #include <vector>
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // Represents a tensor shape as a collection of
 // dimension sizes.
 class TensorShape final {
  public:
-  TensorShape(std::initializer_list<size_t> dim_sizes)
-      : dim_sizes_(dim_sizes) {}
+  using DimSizesVector = std::vector<size_t>;
 
   template <typename ForwardIterator>
   TensorShape(ForwardIterator first, ForwardIterator last)
       : dim_sizes_(first, last) {}
 
+  TensorShape(std::initializer_list<size_t> dim_sizes)
+      : dim_sizes_(dim_sizes) {}
+
   // Gets the dimensions and their sizes.
-  const auto& dim_sizes() const { return dim_sizes_; }
+  const DimSizesVector& dim_sizes() const { return dim_sizes_; }
 
   // Gets the total number of elements (which is a multiplication of sizes of
   // all dimensions).
@@ -52,10 +55,10 @@ class TensorShape final {
  private:
   // TODO(team): Consider optimizing the storage for better inlining
   // of small number of dimensions.
-  using DimSizesVector = std::vector<size_t>;
   DimSizesVector dim_sizes_;
 };
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_TENSOR_SHAPE_H_

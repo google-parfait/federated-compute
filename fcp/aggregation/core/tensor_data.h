@@ -21,7 +21,8 @@
 
 #include "fcp/base/monitoring.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // Abstract representation of tensor data storage.
 //
@@ -94,6 +95,7 @@ class TensorData {
   Status CheckValid(size_t value_size) const;
 };
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_TENSOR_DATA_H_

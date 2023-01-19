@@ -14,7 +14,7 @@
 
 # Aggregation Core API
 
-load("//fcp:config.bzl", "FCP_BAREMETAL_COPTS", "FCP_COPTS")
+load("//fcp:config.bzl", "FCP_COPTS")
 
 package(
     default_visibility = ["//fcp/aggregation:internal"],
@@ -49,18 +49,6 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "baremetal_tensor",
-    srcs = TENSOR_SRCS,
-    hdrs = TENSOR_HDRS,
-    copts = FCP_BAREMETAL_COPTS,
-    features = ["-use_header_modules"],
-    linkstatic = True,
-    deps = [
-        "//fcp/base:baremetal_base",
-    ],
-)
-
 AGGREGATOR_SRCS = [
     "tensor_aggregator.cc",
     "tensor_aggregator_registry.cc",
@@ -84,19 +72,6 @@ cc_library(
         "//fcp/base",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/synchronization",
-    ],
-)
-
-cc_library(
-    name = "baremetal_aggregator",
-    srcs = AGGREGATOR_SRCS,
-    hdrs = AGGREGATOR_HDRS,
-    copts = FCP_BAREMETAL_COPTS,
-    features = ["-use_header_modules"],
-    linkstatic = True,
-    deps = [
-        ":baremetal_tensor",
-        "//fcp/base:baremetal_base",
     ],
 )
 

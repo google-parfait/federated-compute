@@ -28,7 +28,8 @@
 // Open-source version of benchmarking library
 #include "benchmark//benchmark.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 namespace {
 
 constexpr static int64_t kLength = 1000000;
@@ -55,4 +56,5 @@ static void BM_FederatedSumAccumulate(benchmark::State& state) {
 BENCHMARK(BM_FederatedSumAccumulate);
 
 }  // namespace
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

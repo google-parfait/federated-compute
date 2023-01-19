@@ -18,14 +18,14 @@
 #define FCP_AGGREGATION_CORE_AGG_VECTOR_H_
 
 #include <cstddef>
-#include <iterator>
 #include <memory>
 #include <utility>
 
 #include "fcp/aggregation/core/agg_vector_iterator.h"
 #include "fcp/aggregation/core/tensor_data.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // AggVector is flattened one-dimensional strongly typed span of tensor values
 // that provides immutable access to the values.
@@ -90,6 +90,7 @@ class AggVector final {
   const TensorData* data_;
 };
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_AGG_VECTOR_H_

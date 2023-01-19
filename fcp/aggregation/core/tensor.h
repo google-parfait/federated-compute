@@ -26,7 +26,8 @@
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // Tensor class is a container that packages the tensor data with the tensor
 // metadata such as the value type and the shape.
@@ -97,6 +98,7 @@ class Tensor final {
   std::unique_ptr<TensorData> data_;
 };
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_TENSOR_H_

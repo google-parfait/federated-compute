@@ -24,7 +24,8 @@
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/base/monitoring.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // TensorAggregator is a base class for implementing Aggregation intrinsics
 // with Tensor being an input and output type for the aggregation.
@@ -67,6 +68,7 @@ class TensorAggregator
   int num_inputs_;
 };
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_TENSOR_AGGREGATOR_H_

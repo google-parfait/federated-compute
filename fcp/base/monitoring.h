@@ -379,13 +379,13 @@ class FCP_MUST_USE_RESULT StatusOr final {
   }
   T&& value() && {
     CheckOk();
-    return value_;
+    return std::move(value_);
   }
 
   // Operator *
   const T& operator*() const& { return value(); }
   T& operator*() & { return value(); }
-  T&& operator*() && { return value(); }
+  T&& operator*() && { return std::move(value()); }
 
   // Operator ->
   const T* operator->() const { return &value(); }

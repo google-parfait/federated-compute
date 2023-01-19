@@ -18,7 +18,8 @@
 
 #include <utility>
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 Status TensorAggregator::CheckValid() const {
   return result_tensor_.CheckValid();
@@ -72,4 +73,5 @@ StatusOr<Tensor> TensorAggregator::Report() && {
   return std::move(*this).TakeTensor();
 }
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

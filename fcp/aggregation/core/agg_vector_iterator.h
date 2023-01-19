@@ -17,12 +17,10 @@
 #ifndef FCP_AGGREGATION_CORE_AGG_VECTOR_ITERATOR_H_
 #define FCP_AGGREGATION_CORE_AGG_VECTOR_ITERATOR_H_
 
-#include <cstddef>
-#include <iterator>
-
 #include "fcp/aggregation/core/tensor_data.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // Iterator for AggVector which allows to iterate over sparse values
 // as a collection of {index, value} pairs.
@@ -45,8 +43,7 @@ struct AggVectorIterator {
       return a.index != b.index || a.value != b.value;
     }
   };
-  using iterator_category = std::forward_iterator_tag;
-  using difference_type = std::ptrdiff_t;
+
   using value_type = IndexValuePair;
   using pointer = value_type*;
   using reference = value_type&;
@@ -127,6 +124,7 @@ struct AggVectorIterator {
   int slice_index;
 };
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_AGG_VECTOR_ITERATOR_H_

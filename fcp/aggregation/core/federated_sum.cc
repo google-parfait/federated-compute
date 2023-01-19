@@ -22,7 +22,8 @@
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/base/monitoring.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // Implementation of a generic sum aggregator.
 template <typename T>
@@ -33,8 +34,8 @@ class FederatedSum final : public AggVectorAggregator<T> {
 
  private:
   void AggregateVector(const AggVector<T>& agg_vector) override {
-    for (auto [i, v] : agg_vector) {
-      data()[i] += v;
+    for (auto v : agg_vector) {
+      data()[v.index] += v.value;
     }
   }
 };
@@ -53,11 +54,12 @@ class FederatedSumFactory final : public TensorAggregatorFactory {
     std::unique_ptr<TensorAggregator> aggregator;
     CASES(dtype, aggregator = std::unique_ptr<TensorAggregator>(
                      new FederatedSum<T>(dtype, shape)));
-    FCP_CHECK(aggregator != nullptr);
+    FCP_CHECK(aggregator.get() != nullptr);
     return aggregator;
   }
 };
 
 REGISTER_AGGREGATOR_FACTORY("federated_sum", FederatedSumFactory);
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

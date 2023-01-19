@@ -27,7 +27,8 @@
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/testing/testing.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 namespace {
 
 using ::testing::Eq;
@@ -127,4 +128,5 @@ TEST(AggVectorAggregationTest, Merge_Succeeds) {
 }
 
 }  // namespace
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

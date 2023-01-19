@@ -19,7 +19,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 namespace {
 
 using testing::ElementsAre;
@@ -55,4 +56,5 @@ TEST(TensorShapeTest, EqualityOperators) {
 }
 
 }  // namespace
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

@@ -21,7 +21,8 @@
 
 #include "fcp/base/monitoring.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // A list of supported tensor value types.
 enum DataType {
@@ -98,6 +99,7 @@ MATCH_TYPE_AND_DTYPE(int64_t, DT_INT64);
 
 }  // namespace internal
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_DATATYPE_H_

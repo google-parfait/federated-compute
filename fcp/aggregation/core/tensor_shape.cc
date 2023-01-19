@@ -16,7 +16,8 @@
 
 #include "fcp/aggregation/core/tensor_shape.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 size_t TensorShape::NumElements() const {
   size_t num_elements = 1;
@@ -26,4 +27,5 @@ size_t TensorShape::NumElements() const {
   return num_elements;
 }
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

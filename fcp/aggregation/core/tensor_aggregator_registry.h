@@ -21,7 +21,8 @@
 
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // Registers a factory instance for the given intrinsic type.
 void RegisterAggregatorFactory(const std::string& intrinsic_uri,
@@ -47,6 +48,7 @@ struct Registrar {
   static auto unused =                                          \
       ::fcp::aggregation::internal::Registrar<FactoryType>(intrinsic_uri);
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_TENSOR_AGGREGATOR_REGISTRY_H_

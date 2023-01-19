@@ -25,7 +25,8 @@
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 
 // AggVectorAggregatorData is a special implementation of TensorData used
 // by AggVectorAggregator that provides mutable access to the data. Also it
@@ -92,6 +93,7 @@ class AggVectorAggregator : public TensorAggregator {
   std::vector<T>& data_vector_;
 };
 
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
 
 #endif  // FCP_AGGREGATION_CORE_AGG_VECTOR_AGGREGATOR_H_

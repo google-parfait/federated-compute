@@ -23,7 +23,8 @@
 #include "gtest/gtest.h"
 #include "fcp/testing/testing.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 namespace {
 
 using testing::Eq;
@@ -137,4 +138,5 @@ TEST(TensorDataTest, CheckValid_Success) {
 }
 
 }  // namespace
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

@@ -24,7 +24,8 @@
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/testing/test_data.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 namespace {
 
 using ::testing::ElementsAre;
@@ -105,4 +106,5 @@ TEST(AggVectorTest, PreIncrementIterator) {
 }
 
 }  // namespace
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp

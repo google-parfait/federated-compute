@@ -25,7 +25,8 @@
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/testing/testing.h"
 
-namespace fcp::aggregation {
+namespace fcp {
+namespace aggregation {
 namespace {
 
 using testing::Eq;
@@ -91,4 +92,5 @@ TEST(TensorTest, AsAggVector_TypeCheckFailure) {
 }
 
 }  // namespace
-}  // namespace fcp::aggregation
+}  // namespace aggregation
+}  // namespace fcp
