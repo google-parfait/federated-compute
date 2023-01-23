@@ -493,6 +493,11 @@ message TensorflowSpec {
   // This is intended for use with operations that do not produce tensors, but
   // nonetheless are required to run (e.g. serializing checkpoints).
   repeated string target_node_names = 4;
+
+  // Map of Tensor names to constant inputs.
+  // Note: tensors specified via this message should not be included in
+  // input_tensor_specs.
+  map<string, tensorflow.TensorProto> constant_inputs = 5;
 }
 
 // The input and output router for Federated Compute plans.
