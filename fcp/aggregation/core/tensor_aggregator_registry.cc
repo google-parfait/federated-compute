@@ -74,8 +74,26 @@ class Registry final {
 #endif
 };
 
+#ifdef FCP_BAREMETAL
+// TODO(team): Revise the registration mechanism below.
+// In a baremetal build the static initialization mechanism isn't available
+// which means that all the aggregation intrinsics need to be explicitly
+// registered below.
+extern "C" void RegisterFederatedSum();
+
+void RegisterAll() { RegisterFederatedSum(); }
+#endif  // FCP_BAREMETAL
+
 Registry* GetRegistry() {
   static Registry* global_registry = new Registry();
+#ifdef FCP_BAREMETAL
+  // TODO(team): Revise the registration mechanism below.
+  static bool registration_done = false;
+  if (!registration_done) {
+    registration_done = true;
+    RegisterAll();
+  }
+#endif
   return global_registry;
 }
 
