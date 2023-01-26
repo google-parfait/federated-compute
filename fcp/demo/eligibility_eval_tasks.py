@@ -11,7 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Action handlers for the EligibilityEvalTasks service."""
+"""Action handlers for the EligibilityEvalTasks service.
+
+Eligibility Eval tasks are not currently supported by this demo implementation.
+"""
 
 import datetime
 import http

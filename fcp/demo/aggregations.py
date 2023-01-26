@@ -208,6 +208,12 @@ class Service:
     if (len(aggregation_requirements.plan.phase) != 1 or
         not aggregation_requirements.plan.phase[0].HasField('server_phase_v2')):
       raise ValueError('Plan must contain exactly one server_phase_v2.')
+
+    # NOTE: For simplicity, this implementation only creates a single,
+    # in-process aggregation shard. In a production implementation, there should
+    # be multiple shards running on separate servers to enable high rates of
+    # client contributions. Utilities for combining results from separate shards
+    # are still in development as of Jan 2023.
     agg_protocol = aggregation_protocols.create_simple_aggregation_protocol(
         configuration_pb2.Configuration(aggregation_configs=[
             self._translate_server_aggregation_config(aggregation_config)
