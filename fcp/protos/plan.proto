@@ -1135,6 +1135,8 @@ message Plan {
 // training, known as personalization.
 // NEXT_TAG: 6
 message ClientOnlyPlan {
+  reserved 3;
+
   // The graph to use for training, in binary form.
   bytes graph = 1;
 
@@ -1145,10 +1147,6 @@ message ClientOnlyPlan {
 
   // The client phase to execute.
   ClientPhase phase = 2;
-
-  // Describes how metrics should be aggregated. Deprecated and unused.
-  // TODO(team): Remove field after toolkit cleanup.
-  repeated OutputMetric output_metrics = 3 [deprecated = true];
 
   // A TensorFlow ConfigProto.
   google.protobuf.Any tensorflow_config_proto = 4;
