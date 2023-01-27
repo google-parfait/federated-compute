@@ -1045,7 +1045,7 @@ message TEContextServerEligibilityIORouter {
 // different production parts, e.g. server and client side.
 // NEXT_TAG: 13
 message Plan {
-  reserved 1, 3;
+  reserved 1, 3, 5;
 
   // Optional. The TensorFlow graph used for all server processing. For
   // personalization, this will not be set.
@@ -1100,11 +1100,6 @@ message Plan {
 
   // A pair of client and server computations to run.
   repeated Phase phase = 4;
-
-  // Optional phase for calculating accuracy or loss. Not used on
-  // production side currently.
-  // Deprecated: See b/64019527.
-  Phase evaluation = 5 [deprecated = true];
 
   // Metrics that are persistent across different phases. This
   // includes, for example, counters that track how much work of
