@@ -130,6 +130,42 @@ class Service:
 
   @http_actions.proto_action(
       service='google.internal.federatedcompute.v1.TaskAssignments',
+      method='PerformMultipleTaskAssignments')
+  def perform_multiple_task_assignments(
+      self, request: task_assignments_pb2.PerformMultipleTaskAssignmentsRequest
+  ) -> task_assignments_pb2.PerformMultipleTaskAssignmentsResponse:
+    """Handles a PerformMultipleTaskAssignments request."""
+    if request.population_name != self._population_name:
+      raise http_actions.HttpError(http.HTTPStatus.NOT_FOUND)
+
+    task_assignments = []
+    with self._tasks_lock:
+      for task in self._tasks:
+        if task.task_name not in request.task_names:
+          continue
+
+        # NOTE: A production implementation should consider whether the task
+        # supports `request.client_version` before assigning the client.
+
+        authorization_token = self._aggregations_service.pre_authorize_clients(
+            task.aggregation_session_id, num_tokens=1)[0]
+        task_assignments.append(
+            task_assignments_pb2.TaskAssignment(
+                aggregation_data_forwarding_info=self._forwarding_info(),
+                aggregation_info=(
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
+                session_id=request.session_id,
+                aggregation_id=task.aggregation_session_id,
+                authorization_token=authorization_token,
+                task_name=task.task_name,
+                init_checkpoint=task.init_checkpoint,
+                plan=task.plan))
+
+    return task_assignments_pb2.PerformMultipleTaskAssignmentsResponse(
+        task_assignments=task_assignments)
+
+  @http_actions.proto_action(
+      service='google.internal.federatedcompute.v1.TaskAssignments',
       method='ReportTaskResult')
   def report_task_result(
       self, request: task_assignments_pb2.ReportTaskResultRequest

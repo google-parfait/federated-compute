@@ -71,7 +71,7 @@ class TaskAssignmentsTest(absltest.TestCase):
             rejection_info=common_pb2.RejectionInfo()))
 
   @mock.patch.object(uuid, 'uuid4', return_value=uuid.uuid4(), autospec=True)
-  def test_start_task_assignment_with_tasks(self, mock_uuid):
+  def test_start_task_assignment_with_one_task(self, mock_uuid):
     service = task_assignments.Service(POPULATION_NAME, lambda: FORWARDING_INFO,
                                        self.mock_aggregations_service)
 
@@ -113,7 +113,7 @@ class TaskAssignmentsTest(absltest.TestCase):
     self.mock_aggregations_service.pre_authorize_clients.assert_called_once_with(
         'aggregation-session', num_tokens=1)
 
-  def test_multiple_tasks(self):
+  def test_start_task_assignment_with_multiple_tasks(self):
     service = task_assignments.Service(POPULATION_NAME, lambda: FORWARDING_INFO,
                                        self.mock_aggregations_service)
 
@@ -185,6 +185,76 @@ class TaskAssignmentsTest(absltest.TestCase):
         response,
         task_assignments_pb2.StartTaskAssignmentResponse(
             rejection_info=common_pb2.RejectionInfo()))
+
+  def test_perform_multiple_task_assignments_with_wrong_population(self):
+    service = task_assignments.Service(POPULATION_NAME, lambda: FORWARDING_INFO,
+                                       self.mock_aggregations_service)
+    request = task_assignments_pb2.PerformMultipleTaskAssignmentsRequest(
+        population_name='other/population',
+        session_id='session-id',
+        task_names=['task1', 'task2', 'task3'])
+    with self.assertRaises(http_actions.HttpError) as cm:
+      service.perform_multiple_task_assignments(request)
+    self.assertEqual(cm.exception.code, http.HTTPStatus.NOT_FOUND)
+
+  def test_perform_multiple_task_assignments_without_tasks(self):
+    service = task_assignments.Service(POPULATION_NAME, lambda: FORWARDING_INFO,
+                                       self.mock_aggregations_service)
+
+    request = task_assignments_pb2.PerformMultipleTaskAssignmentsRequest(
+        population_name=POPULATION_NAME,
+        session_id='session-id',
+        task_names=['task1', 'task2', 'task3'])
+    self.assertEqual(
+        service.perform_multiple_task_assignments(request),
+        task_assignments_pb2.PerformMultipleTaskAssignmentsResponse())
+
+  def test_perform_multiple_task_assignments_with_multiple_tasks(self):
+    self.mock_aggregations_service.pre_authorize_clients.side_effect = (
+        lambda session_id, num_tokens=1: [f'token-for-{session_id}'])
+    service = task_assignments.Service(POPULATION_NAME, lambda: FORWARDING_INFO,
+                                       self.mock_aggregations_service)
+
+    task1_plan = common_pb2.Resource(uri='https://task1.example/plan')
+    task1_checkpoint = common_pb2.Resource(
+        uri='https://task1.example/checkpoint')
+    service.add_task('task1', 'aggregation-session1', task1_plan,
+                     task1_checkpoint)
+    task2_plan = common_pb2.Resource(uri='https://task2.example/plan')
+    task2_checkpoint = common_pb2.Resource(
+        uri='https://task2.example/checkpoint')
+    service.add_task('task2', 'aggregation-session2', task2_plan,
+                     task2_checkpoint)
+
+    request = task_assignments_pb2.PerformMultipleTaskAssignmentsRequest(
+        population_name=POPULATION_NAME,
+        session_id='session-id',
+        task_names=['task1', 'task2', 'task3'])
+    self.assertCountEqual(
+        service.perform_multiple_task_assignments(request).task_assignments,
+        [
+            task_assignments_pb2.TaskAssignment(
+                aggregation_data_forwarding_info=FORWARDING_INFO,
+                aggregation_info=(
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
+                session_id=request.session_id,
+                aggregation_id='aggregation-session1',
+                authorization_token='token-for-aggregation-session1',
+                task_name='task1',
+                plan=task1_plan,
+                init_checkpoint=task1_checkpoint),
+            task_assignments_pb2.TaskAssignment(
+                aggregation_data_forwarding_info=FORWARDING_INFO,
+                aggregation_info=(
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
+                session_id=request.session_id,
+                aggregation_id='aggregation-session2',
+                authorization_token='token-for-aggregation-session2',
+                task_name='task2',
+                plan=task2_plan,
+                init_checkpoint=task2_checkpoint),
+            # 'task3' should be omitted since there isn't a corresponding task.
+        ])
 
   def test_remove_missing_task(self):
     service = task_assignments.Service(POPULATION_NAME, lambda: FORWARDING_INFO,
