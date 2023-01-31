@@ -120,12 +120,6 @@ class Flags {
         static_cast<int32_t>(absl::StatusCode::kUnimplemented)};
   }
 
-  // Whether to set "earliest_trustworthy_time" field in OpStatsDb.
-  // DEPRECATED: should always be true.
-  virtual bool record_earliest_trustworthy_time_for_opstats() const {
-    return true;
-  }
-
   // Whether use TFLite for training.
   virtual bool use_tflite_training() const { return false; }
 
