@@ -201,6 +201,10 @@ class Flags {
   virtual bool opstats_last_successful_contribution_criteria() const {
     return false;
   }
+
+  // If true, enables support for the `TensorflowSpec.constant_inputs` field. If
+  // false, then the field will be ignored.
+  virtual bool support_constant_tf_inputs() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
