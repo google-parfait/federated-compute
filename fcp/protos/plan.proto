@@ -821,12 +821,11 @@ message ServerAggregationConfig {
   // Describes an argument to the aggregation operation.
   message IntrinsicArg {
     oneof arg {
-      // Input tensor provided by each client.
+      // Refers to a tensor within the checkpoint provided by each client.
       tensorflow.TensorSpecProto input_tensor = 2;
 
-      // Constant parameter that is independent of client data (e.g. a modulus
-      // for a federated modular sum operation).
-      tensorflow.TensorProto parameter = 3;
+      // Refers to a tensor within the intermediate server state checkpoint.
+      tensorflow.TensorSpecProto state_tensor = 3;
     }
   }
 

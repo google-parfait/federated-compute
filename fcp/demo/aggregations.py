@@ -317,9 +317,10 @@ class Service:
     if intrinsic_arg.HasField('input_tensor'):
       return configuration_pb2.Configuration.ServerAggregationConfig.IntrinsicArg(
           input_tensor=intrinsic_arg.input_tensor)
-    elif intrinsic_arg.HasField('parameter'):
-      return configuration_pb2.Configuration.ServerAggregationConfig.IntrinsicArg(
-          parameter=intrinsic_arg.parameter)
+    elif intrinsic_arg.HasField('state_tensor'):
+      raise ValueError(
+          'Non-client intrinsic args are not supported in this demo.'
+      )
     else:
       raise AssertionError(
           'Cases should have exhausted all possible types of intrinsic args.')
