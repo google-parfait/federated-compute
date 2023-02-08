@@ -32,7 +32,8 @@ class FederatedComputation(tff.Computation):
       name: A unique name for the computation.
     """
     tff.backends.mapreduce.check_computation_compatible_with_map_reduce_form(
-        comp)
+        comp
+    )  # pytype: disable=wrong-arg-types
     if not COMPUTATION_NAME_REGEX.fullmatch(name):
       raise ValueError(f'name must match "{COMPUTATION_NAME_REGEX.pattern}".')
     self._comp = comp

@@ -67,8 +67,9 @@ def embed_data_logic(
 
   # Embeds data source computation into the current graph.
   for index, data_comp in enumerate(data_sources):
-    ds_values = import_tensorflow('data_{}'.format(index), data_comp,
-                                  import_args)
+    ds_values = import_tensorflow(
+        'data_{}'.format(index), data_comp, import_args
+    )  # pytype: disable=wrong-arg-types
     if len(ds_values) != 1:
       raise ValueError(
           'Expected one dataset output from a data source, found {}.'.format(

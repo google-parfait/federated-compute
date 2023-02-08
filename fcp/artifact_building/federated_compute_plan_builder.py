@@ -844,9 +844,11 @@ def _build_client_graph_with_tensorflow_spec(
     # Embed the graph coming from TFF into the client work graph.
     combined_update_tensors = graph_helpers.import_tensorflow(
         'work',
-        client_work_comp, (data_values, weights_from_server),
+        client_work_comp,
+        (data_values, weights_from_server),
         split_outputs=False,
-        session_token_tensor=token_placeholder)
+        session_token_tensor=token_placeholder,
+    )  # pytype: disable=wrong-arg-types
 
     num_simpleagg_tensors = len(tff.structure.flatten(simpleagg_update_type))
     simpleagg_tensors = combined_update_tensors[:num_simpleagg_tensors]
