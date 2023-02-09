@@ -379,10 +379,16 @@ message ClientPhase {
   // data from (at least) specified number of participants.
   int32 minimum_number_of_participants = 3;
 
-  // A functional interface for the TensorFlow logic the client should perform.
-  //
   // If populated, `io_router` must be specified.
-  TensorflowSpec tensorflow_spec = 4 [lazy = true];
+  oneof spec {
+    // A functional interface for the TensorFlow logic the client should
+    // perform.
+    TensorflowSpec tensorflow_spec = 4 [lazy = true];
+    // Spec for client plans that issue example queries and send the query
+    // results directly to an aggregator with no or little additional
+    // processing.
+    ExampleQuerySpec example_query_spec = 9 [lazy = true];
+  }
 
   // The specification of the inputs coming either from customer apps
   // (Local Compute) or the federated protocol (Federated Compute).
@@ -391,6 +397,7 @@ message ClientPhase {
     LocalComputeIORouter local_compute = 6 [lazy = true];
     FederatedComputeEligibilityIORouter federated_compute_eligibility = 7
         [lazy = true];
+    FederatedExampleQueryIORouter federated_example_query = 8 [lazy = true];
   }
 
   reserved 1;
@@ -500,6 +507,55 @@ message TensorflowSpec {
   map<string, tensorflow.TensorProto> constant_inputs = 5;
 }
 
+// ExampleQuerySpec message describes client execution that issues example
+// queries and sends the query results directly to an aggregator with no or
+// little additional processing.
+// This message describes one or more example store queries that perform the
+// client side analytics computation in C++. The corresponding output vectors
+// will be converted into the expected federated protocol output format.
+// This must be used in conjunction with the `FederatedExampleQueryIORouter`.
+message ExampleQuerySpec {
+  message OutputVectorSpec {
+    // The output vector name.
+    string vector_name = 1;
+
+    // Supported data types for the vector of information.
+    enum DataType {
+      UNSPECIFIED = 0;
+      INT32 = 1;
+      INT64 = 2;
+      BOOL = 3;
+      FLOAT = 4;
+      DOUBLE = 5;
+      BYTES = 6;
+      STRING = 7;
+    }
+
+    // The data type for each entry in the vector.
+    DataType data_type = 2;
+  }
+
+  message ExampleQuery {
+    // The `ExampleSelector` to issue the query with.
+    ExampleSelector example_selector = 1;
+
+    // Indicates that the query returns vector data and must return a single
+    // ExampleQueryResult result containing a VectorData entry matching each
+    // OutputVectorSpec.vector_name.
+    //
+    // If the query instead returns no result, then it will be treated as is if
+    // an error was returned. In that case, or if the query explicitly returns
+    // an error, then the client will abort its session.
+    //
+    // The keys in the map are the names the vectors should be aggregated under,
+    // and must match the keys in FederatedExampleQueryIORouter.aggregations.
+    map<string, OutputVectorSpec> output_vector_specs = 2;
+  }
+
+  // The queries to run.
+  repeated ExampleQuery example_queries = 1;
+}
+
 // The input and output router for Federated Compute plans.
 //
 // This proto is the glue between the federated protocol and the TensorFlow
@@ -565,6 +621,19 @@ message FederatedComputeIORouter {
   map<string, AggregationConfig> aggregations = 3;
 }
 
+// The input and output router for client plans that do not use TensorFlow.
+//
+// This proto is the glue between the federated protocol and the example query
+// execution engine, describing how the query results should ultimately be
+// aggregated.
+message FederatedExampleQueryIORouter {
+  // Describes how each output vector should be aggregated using an aggregation
+  // protocol, and the configuration for those protocols.
+  // Keys must match the keys in ExampleQuerySpec.output_vector_specs.
+  // Note that currently only the TFV1CheckpointAggregation config is supported.
+  map<string, AggregationConfig> aggregations = 1;
+}
+
 // The specification for how to aggregate the associated tensor across clients
 // on the server.
 message AggregationConfig {
@@ -576,6 +645,15 @@ message AggregationConfig {
     // Note: in the future we could add a `SimpleAggregationConfig` to add
     // support for simple aggregation without writing to an intermediate
     // checkpoint file first.
+
+    // Indicates that the given output tensor or vector (e.g. as produced by an
+    // ExampleQuerySpec) should be placed in an output TF v1 checkpoint.
+    //
+    // Currently only ExampleQuerySpec output vectors are supported by this
+    // aggregation type (i.e. it cannot be used with TensorflowSpec output
+    // tensors). The vectors will be stored in the checkpoint as a 1-D Tensor of
+    // its corresponding data type.
+    TFV1CheckpointAggregation tf_v1_checkpoint_aggregation = 3;
   }
 }
 
@@ -584,6 +662,14 @@ message AggregationConfig {
 // Currently only the server uses the SecAgg parameters, so we only use this
 // message to signify usage of SecAgg.
 message SecureAggregationConfig {}
+
+// Parameters for the TFV1 Checkpoint Aggregation protocol.
+//
+// Currently only ExampleQuerySpec output vectors are supported by this
+// aggregation type (i.e. it cannot be used with TensorflowSpec output
+// tensors). The vectors will be stored in the checkpoint as a 1-D Tensor of
+// its corresponding data type.
+message TFV1CheckpointAggregation {}
 
 // The input and output router for eligibility-computing plans. These plans
 // compute which other plans a client is eligible to run, and are returned by
