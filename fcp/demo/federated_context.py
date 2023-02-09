@@ -21,8 +21,11 @@ from typing import Any, Optional, Union
 import uuid
 
 from absl import logging
+import attr
+import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
+import tree
 
 from fcp.artifact_building import artifact_constants
 from fcp.artifact_building import checkpoint_utils
@@ -152,6 +155,38 @@ class FederatedContext(tff.program.FederatedContext):
     return tff.types.type_to_py_container(result_value_ref,
                                           comp.type_signature.result)
 
+  def _is_state_structure_of_allowed_types(
+      self,
+      structure: Union[
+          tff.structure.Struct,
+          tf.Tensor,
+          tff.program.MaterializableValue,
+      ],
+  ) -> bool:
+    """Checks if each node in `structure` is an allowed type for `state`."""
+    if isinstance(structure, tff.structure.Struct):
+      structure = tff.structure.flatten(structure)
+    else:
+      structure = tree.flatten(structure)
+    for item in structure:
+      if not (
+          tf.is_tensor(item)
+          or isinstance(
+              item,
+              (
+                  np.ndarray,
+                  np.number,
+                  int,
+                  float,
+                  str,
+                  bytes,
+                  tff.program.MaterializableValueReference,
+              ),
+          )
+      ):
+        return False
+    return True
+
   def _parse_arg(
       self, arg: tff.structure.Struct
   ) -> tuple[Union[tff.structure.Struct, tf.Tensor,
@@ -162,14 +197,20 @@ class FederatedContext(tff.program.FederatedContext):
       raise ValueError(f'The argument structure is unsupported: {arg}.')
 
     state, config = arg
-    if (not isinstance(state, tff.structure.Struct) and
-        not tf.is_tensor(state) and
-        not isinstance(state, tff.program.MaterializableValueReference)):
-      try:
-        state = tf.convert_to_tensor(state)
-      except (TypeError, ValueError) as e:
-        raise TypeError('arg[0] must be a struct, Tensor, or '
-                        'MaterializableValueReference.') from e
+    if attr.has(type(state)):
+      state = tff.structure.from_container(state, recursive=True)
+    if not self._is_state_structure_of_allowed_types(state):
+      raise TypeError(
+          'arg[0] must be a value or structure of values of '
+          '`MaterializableValueReference`s, `tf.Tensor`s, '
+          '`np.ndarray`s, `np.number`s, or Python scalars. Got: '
+          f'{tf.nest.map_structure(type, state)!r})'
+      )
+
+    # Code below assumes single values are always `tf.Tensor`s.
+    if isinstance(state, (int, float, str, bytes, np.ndarray, np.number)):
+      state = tf.convert_to_tensor(state)
+
     if not isinstance(config, federated_data_source.DataSelectionConfig):
       raise TypeError('arg[1] must be the result of '
                       'FederatedDataSource.iterator().select().')

@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from absl.testing import absltest
+import attr
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -55,6 +56,46 @@ def count_clients(state, client_data):
   num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
   non_state = tff.federated_value((), tff.SERVER)
   return state + num_clients, non_state
+
+
+@tff.federated_computation(
+    tff.type_at_server(tff.StructType([('foo', tf.int32), ('bar', tf.int32)])),
+    tff.type_at_clients(tff.SequenceType(tf.string)),
+)
+def irregular_arrays(state, client_data):
+  """Example TFF computation that returns irregular data."""
+  del client_data
+  num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
+  non_state = tff.federated_value(1, tff.SERVER)
+  return state, non_state + num_clients
+
+
+@attr.s(eq=False, frozen=True, slots=True)
+class TestClass:
+  """An attrs class."""
+
+  field_one = attr.ib()
+  field_two = attr.ib()
+
+
+@tff.tf_computation
+def init():
+  return TestClass(field_one=1, field_two=2)
+
+
+attrs_type = init.type_signature.result
+
+
+@tff.federated_computation(
+    tff.type_at_server(attrs_type),
+    tff.type_at_clients(tff.SequenceType(tf.string)),
+)
+def attrs_computation(state, client_data):
+  """Example TFF computation that returns an attrs class."""
+  del client_data
+  num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
+  non_state = tff.federated_value(1, tff.SERVER)
+  return state, non_state + num_clients
 
 
 def build_result_checkpoint(state: int) -> bytes:
@@ -118,8 +159,8 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
     with tff.framework.get_context_stack().install(ctx):
       with self.assertRaisesRegex(
-          TypeError, r'arg\[0\] must be a struct, Tensor, or '
-          'MaterializableValueReference'):
+          TypeError, r'arg\[0\] must be a value or structure of values'
+      ):
         comp(plan_pb2.Plan(), DATA_SOURCE.iterator().select(1))
 
   def test_invoke_with_invalid_data_source_type(self):
@@ -131,6 +172,28 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
           TypeError, r'arg\[1\] must be the result of '
           r'FederatedDataSource.iterator\(\).select\(\)'):
         comp(0, plan_pb2.Plan())
+
+  def test_invoke_succeeds_with_structure_state_type(self):
+    comp = federated_computation.FederatedComputation(
+        irregular_arrays, name='x'
+    )
+    ctx = federated_context.FederatedContext(
+        POPULATION_NAME, address_family=ADDRESS_FAMILY
+    )
+    with tff.framework.get_context_stack().install(ctx):
+      state = {'foo': (3, 1), 'bar': (4, 5, 6)}
+      comp(state, DATA_SOURCE.iterator().select(1))
+
+  def test_invoke_succeeds_with_attrs_state_type(self):
+    comp = federated_computation.FederatedComputation(
+        attrs_computation, name='x'
+    )
+    ctx = federated_context.FederatedContext(
+        POPULATION_NAME, address_family=ADDRESS_FAMILY
+    )
+    with tff.framework.get_context_stack().install(ctx):
+      state = TestClass(field_one=1, field_two=2)
+      comp(state, DATA_SOURCE.iterator().select(1))
 
   def test_invoke_with_mismatched_population_names(self):
     comp = federated_computation.FederatedComputation(count_clients, name='x')
@@ -209,8 +272,8 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
     with tff.framework.get_context_stack().install(ctx):
       with self.assertRaisesRegex(
-          TypeError, r'arg\[0\] must be a struct, Tensor, or '
-          'MaterializableValueReference'):
+          TypeError, r'arg\[0\] must be a value or structure of values'
+      ):
         comp(None, DATA_SOURCE.iterator().select(1))
 
   @mock.patch.object(server.InProcessServer, 'run_computation', autospec=True)
