@@ -207,8 +207,7 @@ cc_library(
     name = "http_secagg_send_to_server_impl",
     srcs = ["http_secagg_send_to_server_impl.cc"],
     hdrs = ["http_secagg_send_to_server_impl.h"],
-    # Limit visibility to this directory and its subdirectories.
-    visibility = ["//fcp/client/http:__subpackages__"],
+    visibility = ["//visibility:private"],
     deps = [
         ":http_client_util",
         ":protocol_request_helper",
