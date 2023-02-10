@@ -93,7 +93,7 @@ def make_measurement(
   return plan_pb2.Measurement(
       read_op_name=t.name,
       name=name,
-      tff_type=tff.framework.serialize_type(tff_type).SerializeToString(),
+      tff_type=tff.types.serialize_type(tff_type).SerializeToString(),
   )
 
 
