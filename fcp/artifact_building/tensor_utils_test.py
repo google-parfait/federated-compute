@@ -68,7 +68,8 @@ class TensorUtilsTest(parameterized.TestCase, tf.test.TestCase):
     graph_def_any.Pack(graph_def)
     # Graph object doesn't have equality, so we check that the graph defs match.
     self.assertEqual(
-        tensor_utils.import_graph_def_from_any(graph_def_any), g.as_graph_def())
+        tensor_utils.import_graph_def_from_any(graph_def_any), g.as_graph_def()
+    )
 
   def test_save_and_restore_in_eager_mode(self):
     filename = tf.constant(self.create_tempfile().full_path)
@@ -80,13 +81,15 @@ class TensorUtilsTest(parameterized.TestCase, tf.test.TestCase):
 
   @parameterized.named_parameters(
       ('scalar_tensor', tf.constant(1.0)),
-      ('non_scalar_tensor', tf.constant([1.0, 2.0])))
+      ('non_scalar_tensor', tf.constant([1.0, 2.0])),
+  )
   def test_save_and_restore_with_shape_info_in_eager_mode(self, tensor):
     filename = tf.constant(self.create_tempfile().full_path)
     tensor_name = 'a'
     tensor_utils.save(filename, [tensor_name], [tensor])
-    restored_tensor = tensor_utils.restore(filename, tensor_name, tensor.dtype,
-                                           tensor.shape)
+    restored_tensor = tensor_utils.restore(
+        filename, tensor_name, tensor.dtype, tensor.shape
+    )
     self.assertAllEqual(tensor, restored_tensor)
 
   def _assert_op_in_graph(self, expected_op, graph):
@@ -98,8 +101,11 @@ class TensorUtilsTest(parameterized.TestCase, tf.test.TestCase):
     graph_def = graph.as_graph_def()
     node_name_to_value_dict = {node.name: node for node in graph_def.node}
     self.assertIn('restore/shape_and_slices', node_name_to_value_dict)
-    return node_name_to_value_dict['restore/shape_and_slices'].attr[
-        'value'].tensor.string_val[0]
+    return (
+        node_name_to_value_dict['restore/shape_and_slices']
+        .attr['value']
+        .tensor.string_val[0]
+    )
 
   def test_save_and_restore_in_graph_mode(self):
     temp_file = self.create_tempfile().full_path
@@ -120,9 +126,11 @@ class TensorUtilsTest(parameterized.TestCase, tf.test.TestCase):
 
   @parameterized.named_parameters(
       ('scalar_tensor', lambda: tf.constant(1.0), b''),
-      ('non_scalar_tensor', lambda: tf.constant([1.0, 2.0]), b'2 :-'))
+      ('non_scalar_tensor', lambda: tf.constant([1.0, 2.0]), b'2 :-'),
+  )
   def test_save_and_restore_with_shape_info_in_graph_mode(
-      self, tensor_builder, expected_shape_and_slices_value):
+      self, tensor_builder, expected_shape_and_slices_value
+  ):
     temp_file = self.create_tempfile().full_path
     graph = tf.Graph()
     with graph.as_default():
@@ -130,16 +138,19 @@ class TensorUtilsTest(parameterized.TestCase, tf.test.TestCase):
       tensor_name = 'a'
       tensor = tensor_builder()
       save_op = tensor_utils.save(filename, [tensor_name], [tensor])
-      restored = tensor_utils.restore(filename, tensor_name, tensor.dtype,
-                                      tensor.shape)
+      restored = tensor_utils.restore(
+          filename, tensor_name, tensor.dtype, tensor.shape
+      )
     with tf.compat.v1.Session(graph=graph) as sess:
       sess.run(save_op)
       expected_tensor, restored_tensor = sess.run([tensor, restored])
       self.assertAllEqual(expected_tensor, restored_tensor)
       self._assert_op_in_graph(expected_op='SaveSlices', graph=graph)
       self._assert_op_in_graph(expected_op='RestoreV2', graph=graph)
-      self.assertEqual(expected_shape_and_slices_value,
-                       self._get_shape_and_slices_value(graph))
+      self.assertEqual(
+          expected_shape_and_slices_value,
+          self._get_shape_and_slices_value(graph),
+      )
 
 
 if __name__ == '__main__':

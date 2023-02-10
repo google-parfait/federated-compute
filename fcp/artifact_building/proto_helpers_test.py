@@ -27,10 +27,12 @@ class MakeMetricTest(tf.test.TestCase):
   def test_make_metric(self):
     with tf.Graph().as_default():
       v = variable_helpers.create_vars_for_tff_type(
-          tff.to_type(collections.OrderedDict([("bar", tf.int32)])), name="foo")
+          tff.to_type(collections.OrderedDict([("bar", tf.int32)])), name="foo"
+      )
       self.assertProtoEquals(
           "variable_name: 'Identity:0' stat_name: 'client/bar'",
-          proto_helpers.make_metric(v[0], "client"))
+          proto_helpers.make_metric(v[0], "client"),
+      )
 
 
 class MakeTensorSpecTest(tf.test.TestCase):
@@ -41,79 +43,109 @@ class MakeTensorSpecTest(tf.test.TestCase):
       with self.subTest("no_hint"):
         tensor_spec = proto_helpers.make_tensor_spec_from_tensor(test_tensor)
         self.assertProtoEquals(
-            "name: 'Const:0' "
-            "shape { "
-            "  dim { size: 2 } "
-            "  dim { size: 1 } "
-            "} "
-            "dtype: DT_INT32", tensor_spec.experimental_as_proto())
+            (
+                "name: 'Const:0' "
+                "shape { "
+                "  dim { size: 2 } "
+                "  dim { size: 1 } "
+                "} "
+                "dtype: DT_INT32"
+            ),
+            tensor_spec.experimental_as_proto(),
+        )
       with self.subTest("ignored_hint"):
         # Supplied shape hint is incompatible, but ignored because tensor is
         # fully defined.
         tensor_spec = proto_helpers.make_tensor_spec_from_tensor(
-            test_tensor, shape_hint=tf.TensorShape([1, 4]))
+            test_tensor, shape_hint=tf.TensorShape([1, 4])
+        )
         self.assertProtoEquals(
-            "name: 'Const:0' "
-            "shape { "
-            "  dim { size: 2 } "
-            "  dim { size: 1 } "
-            "} "
-            "dtype: DT_INT32", tensor_spec.experimental_as_proto())
+            (
+                "name: 'Const:0' "
+                "shape { "
+                "  dim { size: 2 } "
+                "  dim { size: 1 } "
+                "} "
+                "dtype: DT_INT32"
+            ),
+            tensor_spec.experimental_as_proto(),
+        )
 
   def test_undefined_shape(self):
     with tf.Graph().as_default():
       # Create a undefined shape tensor via a placeholder and an op that doesn't
       # alter shape.
       test_tensor = tf.clip_by_value(
-          tf.compat.v1.placeholder(dtype=tf.int32), 0, 1)
+          tf.compat.v1.placeholder(dtype=tf.int32), 0, 1
+      )
       with self.subTest("no_hint"):
         tensor_spec = proto_helpers.make_tensor_spec_from_tensor(test_tensor)
         self.assertProtoEquals(
-            "name: 'clip_by_value:0' "
-            "shape { "
-            " unknown_rank: true "
-            "} "
-            "dtype: DT_INT32", tensor_spec.experimental_as_proto())
+            (
+                "name: 'clip_by_value:0' "
+                "shape { "
+                " unknown_rank: true "
+                "} "
+                "dtype: DT_INT32"
+            ),
+            tensor_spec.experimental_as_proto(),
+        )
       with self.subTest("hint"):
         tensor_spec = proto_helpers.make_tensor_spec_from_tensor(
-            test_tensor, shape_hint=tf.TensorShape([1, 4]))
+            test_tensor, shape_hint=tf.TensorShape([1, 4])
+        )
         self.assertProtoEquals(
-            "name: 'clip_by_value:0' "
-            "shape { "
-            "  dim { size: 1 } "
-            "  dim { size: 4 } "
-            "} "
-            "dtype: DT_INT32", tensor_spec.experimental_as_proto())
+            (
+                "name: 'clip_by_value:0' "
+                "shape { "
+                "  dim { size: 1 } "
+                "  dim { size: 4 } "
+                "} "
+                "dtype: DT_INT32"
+            ),
+            tensor_spec.experimental_as_proto(),
+        )
 
   def test_partially_defined_shape(self):
     with tf.Graph().as_default():
       # Create a partially defined shape tensor via a placeholder and a reshape
       # to specify some dimensions.
       test_tensor = tf.reshape(
-          tf.compat.v1.placeholder(dtype=tf.int32), [2, -1])
+          tf.compat.v1.placeholder(dtype=tf.int32), [2, -1]
+      )
       with self.subTest("no_hint"):
         tensor_spec = proto_helpers.make_tensor_spec_from_tensor(test_tensor)
         self.assertProtoEquals(
-            "name: 'Reshape:0' "
-            "shape { "
-            "  dim { size: 2 } "
-            "  dim { size: -1 } "
-            "} "
-            "dtype: DT_INT32", tensor_spec.experimental_as_proto())
+            (
+                "name: 'Reshape:0' "
+                "shape { "
+                "  dim { size: 2 } "
+                "  dim { size: -1 } "
+                "} "
+                "dtype: DT_INT32"
+            ),
+            tensor_spec.experimental_as_proto(),
+        )
       with self.subTest("hint"):
         tensor_spec = proto_helpers.make_tensor_spec_from_tensor(
-            test_tensor, shape_hint=tf.TensorShape([2, 4]))
+            test_tensor, shape_hint=tf.TensorShape([2, 4])
+        )
         self.assertProtoEquals(
-            "name: 'Reshape:0' "
-            "shape { "
-            "  dim { size: 2 } "
-            "  dim { size: 4} "
-            "} "
-            "dtype: DT_INT32", tensor_spec.experimental_as_proto())
+            (
+                "name: 'Reshape:0' "
+                "shape { "
+                "  dim { size: 2 } "
+                "  dim { size: 4} "
+                "} "
+                "dtype: DT_INT32"
+            ),
+            tensor_spec.experimental_as_proto(),
+        )
       with self.subTest("invalid_hint"):
         with self.assertRaises(TypeError):
           _ = proto_helpers.make_tensor_spec_from_tensor(
-              test_tensor, shape_hint=tf.TensorShape([1, 4]))
+              test_tensor, shape_hint=tf.TensorShape([1, 4])
+          )
 
 
 class MakeMeasurementTest(tf.test.TestCase):
@@ -123,12 +155,13 @@ class MakeMeasurementTest(tf.test.TestCase):
       tensor = tf.constant(1)
       tff_type = tff.types.TensorType(tensor.dtype, tensor.shape)
       m = proto_helpers.make_measurement(
-          t=tensor, name="test", tff_type=tff_type)
+          t=tensor, name="test", tff_type=tff_type
+      )
 
       self.assertEqual(m.name, "test")
       self.assertProtoEquals(
-          m.tff_type,
-          tff.framework.serialize_type(tff_type).SerializeToString())
+          m.tff_type, tff.framework.serialize_type(tff_type).SerializeToString()
+      )
 
   def test_fails_for_non_matching_dtype(self):
     with tf.Graph().as_default():

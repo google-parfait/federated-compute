@@ -31,24 +31,28 @@ def _format_name_for_error(name: Optional[Any]) -> str:
   return f'`{name}`' if name else 'argument'
 
 
-def check_type(obj: Any,
-               t: Union[Type[Any], Tuple[Type[Any], ...]],
-               name: Optional[str] = None) -> None:
+def check_type(
+    obj: Any,
+    t: Union[Type[Any], Tuple[Type[Any], ...]],
+    name: Optional[str] = None,
+) -> None:
   """Checks if an object is an instance of a type.
 
   Args:
     obj: The object to check.
     t: The type to test whether `obj` is an instance or not.
-    name: Optional name of the object being checked. Will be included in
-      the error message if specified.
+    name: Optional name of the object being checked. Will be included in the
+      error message if specified.
 
   Raises:
     TypeError: If `obj` is not an instance of `t`.
   """
   if not isinstance(obj, t):
     msg_name = _format_name_for_error(name)
-    raise TypeError(f'Expected {msg_name} to be an instance of type {t!r}, but '
-                    f'found an instance of type {type(obj)!r}.')
+    raise TypeError(
+        f'Expected {msg_name} to be an instance of type {t!r}, but '
+        f'found an instance of type {type(obj)!r}.'
+    )
 
 
 def check_callable(obj: Any, name: Optional[str] = None) -> None:
@@ -56,21 +60,26 @@ def check_callable(obj: Any, name: Optional[str] = None) -> None:
 
   Args:
     obj: The object to check.
-    name: Optional name of the object being checked. Will be included in
-      the error message if specified.
+    name: Optional name of the object being checked. Will be included in the
+      error message if specified.
 
   Raises:
     TypeError: If `obj` is not a Python callable.
   """
   if not callable(obj):
     msg_name = _format_name_for_error(name)
-    raise TypeError(f'Expected {msg_name} to be callable, but found an '
-                    f'instance of {type(obj)!r}.')
+    raise TypeError(
+        f'Expected {msg_name} to be callable, but found an '
+        f'instance of {type(obj)!r}.'
+    )
 
 
-def check_dataset(obj: Union[tf.data.Dataset, tf.compat.v1.data.Dataset,
-                             tf.compat.v2.data.Dataset],
-                  name: Optional[str] = None) -> None:
+def check_dataset(
+    obj: Union[
+        tf.data.Dataset, tf.compat.v1.data.Dataset, tf.compat.v2.data.Dataset
+    ],
+    name: Optional[str] = None,
+) -> None:
   """Checks that the runtime type of the input is a Tensorflow Dataset.
 
   Tensorflow has many classes which conform to the Dataset API. This method
@@ -88,5 +97,7 @@ def check_dataset(obj: Union[tf.data.Dataset, tf.compat.v1.data.Dataset,
   )
   if not isinstance(obj, dataset_types):
     msg_name = _format_name_for_error(name)
-    raise TypeError(f'Expected {msg_name} to be a Dataset; but found an '
-                    f'instance of {type(obj).__name__}.')
+    raise TypeError(
+        f'Expected {msg_name} to be a Dataset; but found an '
+        f'instance of {type(obj).__name__}.'
+    )

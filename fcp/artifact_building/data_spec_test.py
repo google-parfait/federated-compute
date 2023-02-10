@@ -24,7 +24,8 @@ from fcp.artifact_building import data_spec
 from fcp.protos import plan_pb2
 
 _TEST_EXAMPLE_SELECTOR = plan_pb2.ExampleSelector(
-    collection_uri='app://fake_uri')
+    collection_uri='app://fake_uri'
+)
 
 
 class DataSpecTest(absltest.TestCase):
@@ -45,7 +46,6 @@ class DataSpecTest(absltest.TestCase):
     self.assertFalse(data_spec.is_data_spec_or_structure({'a': 10}))
 
   def test_type_signature(self):
-
     def parsing_fn(serialized_example):
       parsing_dict = {
           'key': tf.io.FixedLenFeature(shape=[1], dtype=tf.int64),
@@ -58,9 +58,11 @@ class DataSpecTest(absltest.TestCase):
 
     expected_type = tff.SequenceType(
         tff.types.to_type(
-            collections.OrderedDict([('key',
-                                      tf.TensorSpec(shape=(1,),
-                                                    dtype=tf.int64))])))
+            collections.OrderedDict(
+                [('key', tf.TensorSpec(shape=(1,), dtype=tf.int64))]
+            )
+        )
+    )
     self.assertEqual(ds.type_signature, expected_type)
 
 

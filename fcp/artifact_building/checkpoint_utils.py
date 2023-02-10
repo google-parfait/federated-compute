@@ -35,10 +35,15 @@ def create_server_checkpoint_vars_and_savepoint(
     server_state_type: tff.StructType,
     server_metrics_type: Optional[tff.StructType] = None,
     write_metrics_to_checkpoint: bool = True,
-    additional_checkpoint_metadata_var_fn: Optional[Callable[
-        [tff.StructType, tff.StructType, bool], list[tf.Variable]]] = None
-) -> tuple[list[tf.Variable], list[tf.Variable], list[tf.Variable],
-           plan_pb2.CheckpointOp]:
+    additional_checkpoint_metadata_var_fn: Optional[
+        Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
+    ] = None,
+) -> tuple[
+    list[tf.Variable],
+    list[tf.Variable],
+    list[tf.Variable],
+    plan_pb2.CheckpointOp,
+]:
   """Creates tf.Variables for a server checkpoint and the associated savepoint.
 
   The variables and the associated saver are constructed in the default graph.
@@ -83,17 +88,21 @@ def create_server_checkpoint_vars_and_savepoint(
   save_tensor_name = None
   type_checks.check_type(server_state_type, tff.Type, name='server_state_type')
   state_vars = variable_helpers.create_vars_for_tff_type(
-      server_state_type, artifact_constants.SERVER_STATE_VAR_PREFIX)
+      server_state_type, artifact_constants.SERVER_STATE_VAR_PREFIX
+  )
   var_names = list(map(tensor_utils.bare_name, state_vars))
   metadata_vars = []
   if server_metrics_type is not None:
     type_checks.check_type(
-        server_metrics_type, tff.Type, name='server_metrics_type')
+        server_metrics_type, tff.Type, name='server_metrics_type'
+    )
     metric_vars = variable_helpers.create_vars_for_tff_type(
-        server_metrics_type, artifact_constants.SERVER_METRICS_VAR_PREFIX)
+        server_metrics_type, artifact_constants.SERVER_METRICS_VAR_PREFIX
+    )
     if additional_checkpoint_metadata_var_fn:
       metadata_vars = additional_checkpoint_metadata_var_fn(
-          state_vars, metric_vars, write_metrics_to_checkpoint)
+          state_vars, metric_vars, write_metrics_to_checkpoint
+      )
 
     has_metrics = bool(tff.structure.flatten(server_metrics_type))
     if has_metrics and write_metrics_to_checkpoint:
@@ -101,17 +110,20 @@ def create_server_checkpoint_vars_and_savepoint(
 
       temp_saver_for_all_vars = create_deterministic_saver(
           var_list=state_vars + metadata_vars + metric_vars,
-          name=SAVE_SERVER_SAVEPOINT_NAME)
+          name=SAVE_SERVER_SAVEPOINT_NAME,
+      )
       temp_saver_def = temp_saver_for_all_vars.as_saver_def()
       save_tensor_name = temp_saver_def.save_tensor_name
   else:
     if additional_checkpoint_metadata_var_fn:
       metadata_vars = additional_checkpoint_metadata_var_fn(
-          state_vars, None, write_metrics_to_checkpoint)
+          state_vars, None, write_metrics_to_checkpoint
+      )
 
   saver = create_deterministic_saver(
       var_list=state_vars + metadata_vars,
-      name='{}_savepoint'.format(artifact_constants.SERVER_STATE_VAR_PREFIX))
+      name='{}_savepoint'.format(artifact_constants.SERVER_STATE_VAR_PREFIX),
+  )
   savepoint = plan_pb2.CheckpointOp()
   savepoint.saver_def.CopyFrom(saver.as_saver_def())
 
@@ -128,8 +140,8 @@ def create_server_checkpoint_vars_and_savepoint(
 
 
 def create_state_vars_and_savepoint(
-    type_spec: variable_helpers.AllowedTffTypes,
-    name: str) -> tuple[list[tf.Variable], plan_pb2.CheckpointOp]:
+    type_spec: variable_helpers.AllowedTffTypes, name: str
+) -> tuple[list[tf.Variable], plan_pb2.CheckpointOp]:
   """Creates state variables and their savepoint as a `plan_pb2.CheckpointOp`.
 
   The variables and the associated saver are constructed in the default graph.
@@ -155,8 +167,8 @@ def create_state_vars_and_savepoint(
 
 
 def create_state_vars_and_saver(
-    type_spec: variable_helpers.AllowedTffTypes,
-    name: str) -> tuple[list[tf.Variable], tf.compat.v1.train.Saver]:
+    type_spec: variable_helpers.AllowedTffTypes, name: str
+) -> tuple[list[tf.Variable], tf.compat.v1.train.Saver]:
   """Creates state variables and the associated saver.
 
   The variables and the associated saver are constructed in the default graph.
@@ -180,13 +192,14 @@ def create_state_vars_and_saver(
     raise ValueError('Name cannot be empty.')
   state_vars = variable_helpers.create_vars_for_tff_type(type_spec, name)
   saver = create_deterministic_saver(
-      state_vars, name='{}_savepoint'.format(name))
+      state_vars, name='{}_savepoint'.format(name)
+  )
   return state_vars, saver
 
 
 def restore_tensors_from_savepoint(
-    tensor_specs: Iterable[tf.TensorSpec],
-    filepath_tensor: tf.Tensor) -> list[tf.Tensor]:
+    tensor_specs: Iterable[tf.TensorSpec], filepath_tensor: tf.Tensor
+) -> list[tf.Tensor]:
   """Restores tensors from a checkpoint designated by a tensor filepath.
 
   Args:
@@ -199,14 +212,18 @@ def restore_tensors_from_savepoint(
     A list of restored tensors.
   """
   return [
-      tensor_utils.restore(filepath_tensor, tensor_utils.bare_name(spec.name),
-                           spec.dtype) for spec in tensor_specs
+      tensor_utils.restore(
+          filepath_tensor, tensor_utils.bare_name(spec.name), spec.dtype
+      )
+      for spec in tensor_specs
   ]
 
 
-def create_deterministic_saver(var_list: Union[Iterable[tf.Variable],
-                                               Mapping[str, tf.Variable]],
-                               *args, **kwargs) -> tf.compat.v1.train.Saver:
+def create_deterministic_saver(
+    var_list: Union[Iterable[tf.Variable], Mapping[str, tf.Variable]],
+    *args,
+    **kwargs,
+) -> tf.compat.v1.train.Saver:
   """Creates a `tf.compat.v1.Saver` that is deterministic.
 
   This method sorts the `var_list` to ensure a deterministic ordering which
@@ -234,16 +251,20 @@ def create_deterministic_saver(var_list: Union[Iterable[tf.Variable],
     raise ValueError(
         'Do not know how to make a deterministic saver for '
         '`var_list` of type [{t}]. Must be a Mapping or Sequence'.format(
-            t=type(var_list)))
+            t=type(var_list)
+        )
+    )
   return tf.compat.v1.train.Saver(
       determinisic_names,
       write_version=tf.compat.v1.train.SaverDef.V1,
       *args,
-      **kwargs)
+      **kwargs,
+  )
 
 
 def tff_type_to_dtype_list(
-    tff_type: variable_helpers.AllowedTffTypes) -> list[tf.DType]:
+    tff_type: variable_helpers.AllowedTffTypes,
+) -> list[tf.DType]:
   """Creates a flat list of `tf.DType`s for tensors in a `tff.Type`.
 
   Args:
@@ -253,8 +274,9 @@ def tff_type_to_dtype_list(
   Returns:
     A flat list of `tf.DType`s.
   """
-  type_checks.check_type(tff_type,
-                         (tff.TensorType, tff.FederatedType, tff.StructType))
+  type_checks.check_type(
+      tff_type, (tff.TensorType, tff.FederatedType, tff.StructType)
+  )
   if isinstance(tff_type, tff.TensorType):
     return [tff_type.dtype]
   elif isinstance(tff_type, tff.FederatedType):
@@ -267,7 +289,8 @@ def tff_type_to_dtype_list(
 
 
 def tff_type_to_tensor_spec_list(
-    tff_type: variable_helpers.AllowedTffTypes) -> list[tf.TensorSpec]:
+    tff_type: variable_helpers.AllowedTffTypes,
+) -> list[tf.TensorSpec]:
   """Creates a flat list of tensor specs for tensors in a `tff.Type`.
 
   Args:
@@ -277,8 +300,9 @@ def tff_type_to_tensor_spec_list(
   Returns:
     A flat list of `tf.TensorSpec`s.
   """
-  type_checks.check_type(tff_type,
-                         (tff.TensorType, tff.FederatedType, tff.StructType))
+  type_checks.check_type(
+      tff_type, (tff.TensorType, tff.FederatedType, tff.StructType)
+  )
   if isinstance(tff_type, tff.TensorType):
     return [tf.TensorSpec(tff_type.shape, dtype=tff_type.dtype)]
   elif isinstance(tff_type, tff.FederatedType):
@@ -290,8 +314,9 @@ def tff_type_to_tensor_spec_list(
     return elem_list
 
 
-def pack_tff_value(tff_type: variable_helpers.AllowedTffTypes,
-                   value_list: Any) -> Any:
+def pack_tff_value(
+    tff_type: variable_helpers.AllowedTffTypes, value_list: Any
+) -> Any:
   """Packs a list of values into a shape specified by a `tff.Type`.
 
   Args:
@@ -306,8 +331,9 @@ def pack_tff_value(tff_type: variable_helpers.AllowedTffTypes,
     ValueError: If the number of leaves in `tff_type` does not match the length
     of `value_list`, or `tff_type` is of a disallowed type.
   """
-  type_checks.check_type(tff_type,
-                         (tff.TensorType, tff.FederatedType, tff.StructType))
+  type_checks.check_type(
+      tff_type, (tff.TensorType, tff.FederatedType, tff.StructType)
+  )
 
   # We must "unwrap" any FederatedTypes because the
   # `tff.structure.pack_sequence_as` call below will fail to recurse into them.
@@ -315,7 +341,8 @@ def pack_tff_value(tff_type: variable_helpers.AllowedTffTypes,
   # build up a Python tree structure that matches the struct/tensor types from a
   # list of values.
   def remove_federated_types(
-      type_spec: tff.Type) -> Union[tff.StructType, tff.TensorType]:
+      type_spec: tff.Type,
+  ) -> Union[tff.StructType, tff.TensorType]:
     """Removes `FederatedType` from a type tree, returning a new tree."""
     if type_spec.is_tensor():
       return type_spec
@@ -324,38 +351,46 @@ def pack_tff_value(tff_type: variable_helpers.AllowedTffTypes,
     elif type_spec.is_struct():
       return tff.StructType(
           (elem_name, remove_federated_types(elem_type))
-          for elem_name, elem_type in tff.structure.iter_elements(type_spec))
+          for elem_name, elem_type in tff.structure.iter_elements(type_spec)
+      )
     else:
       raise ValueError(
           'Must be either tff.TensorType, tff.FederatedType, or tff.StructType.'
-          f' Got a {type(type_spec)}')
+          f' Got a {type(type_spec)}'
+      )
 
   try:
     tff_type = remove_federated_types(tff_type)
   except ValueError as e:
-    raise ValueError('`tff_type` is not packable, see earlier error. '
-                     f'Attempted to pack type: {tff_type}') from e
+    raise ValueError(
+        '`tff_type` is not packable, see earlier error. '
+        f'Attempted to pack type: {tff_type}'
+    ) from e
 
   ordered_dtypes = tff_type_to_dtype_list(tff_type)
   if len(ordered_dtypes) != len(value_list):
-    raise ValueError('The number of leaves in `tff_type` must equals the length'
-                     ' of `value_list`. Found `tff_type` with'
-                     f' {len(ordered_dtypes)} leaves and `value_list` of length'
-                     f' {len(value_list)}.')
+    raise ValueError(
+        'The number of leaves in `tff_type` must equals the length'
+        ' of `value_list`. Found `tff_type` with'
+        f' {len(ordered_dtypes)} leaves and `value_list` of length'
+        f' {len(value_list)}.'
+    )
 
   if tff_type.is_tensor():
     return value_list[0]
   elif tff_type.is_struct():
     return tff.structure.pack_sequence_as(tff_type, value_list)
   else:
-    raise ValueError('`tff_type` must be either tff.TensorType or '
-                     'tff.StructType, reaching here is an internal coding '
-                     'error, please file a bug.')
+    raise ValueError(
+        '`tff_type` must be either tff.TensorType or '
+        'tff.StructType, reaching here is an internal coding '
+        'error, please file a bug.'
+    )
 
 
-def variable_names_from_structure(tff_structure: Union[tff.structure.Struct,
-                                                       tf.Tensor],
-                                  name: str = 'v') -> list[str]:
+def variable_names_from_structure(
+    tff_structure: Union[tff.structure.Struct, tf.Tensor], name: str = 'v'
+) -> list[str]:
   """Creates a flattened list of variable names for the given structure.
 
   If the `tff_structure` is a `tf.Tensor`, the name is the `name` parameter if
@@ -391,44 +426,60 @@ def variable_names_from_structure(tff_structure: Union[tff.structure.Struct,
     TypeError: If either argument is of the wrong type.
   """
   type_checks.check_type(
-      tff_structure, (tff.structure.Struct, tf.Tensor), name='structure_type')
+      tff_structure, (tff.structure.Struct, tf.Tensor), name='structure_type'
+  )
   type_checks.check_type(name, str, name='name')
   if isinstance(tff_structure, tf.Tensor):
     return [name]
   elif isinstance(tff_structure, tff.structure.Struct):
     result = []
     fields = tff.structure.iter_elements(tff_structure)
-    for (index, (field_name, field_type)) in enumerate(fields):
+    for index, (field_name, field_type) in enumerate(fields):
       # Default the name of the element to its index so that we don't wind up
       # with multiple child fields listed under `/v/`
       field_name = field_name or str(index)
       result.extend(
           variable_names_from_structure(
-              field_type, name=name + '/' + field_name))
+              field_type, name=name + '/' + field_name
+          )
+      )
     return result
   else:
-    raise TypeError('Cannot create variable names from [{t}] type. '
-                    'Short-hand: {s}'.format(
-                        t=type(tff_structure), s=tff_structure))
+    raise TypeError(
+        'Cannot create variable names from [{t}] type. Short-hand: {s}'.format(
+            t=type(tff_structure), s=tff_structure
+        )
+    )
 
 
 def is_structure_of_allowed_types(
-    structure: Union[tff.structure.Struct, tf.Tensor, np.ndarray, np.number,
-                     int, float, str, bytes]
+    structure: Union[
+        tff.structure.Struct,
+        tf.Tensor,
+        np.ndarray,
+        np.number,
+        int,
+        float,
+        str,
+        bytes,
+    ]
 ) -> bool:
   """Checks if each node in `structure` is an allowed type for serialization."""
   flattened_structure = tff.structure.flatten(structure)
   for item in flattened_structure:
-    if not (tf.is_tensor(item) or
-            isinstance(item, (np.ndarray, np.number, int, float, str, bytes))):
+    if not (
+        tf.is_tensor(item)
+        or isinstance(item, (np.ndarray, np.number, int, float, str, bytes))
+    ):
       return False
   return True
 
 
-def save_tff_structure_to_checkpoint(tff_structure: Union[tff.structure.Struct,
-                                                          tf.Tensor],
-                                     ordered_var_names: list[str],
-                                     output_checkpoint_path: str) -> None:
+def save_tff_structure_to_checkpoint(
+    tff_structure: Union[tff.structure.Struct, tf.Tensor],
+    ordered_var_names: list[str],
+    output_checkpoint_path: str,
+) -> None:
   """Saves a TFF structure to a checkpoint file.
 
   The input `tff_structure` is a either `tff.structure.Struct` or a single
@@ -450,15 +501,20 @@ def save_tff_structure_to_checkpoint(tff_structure: Union[tff.structure.Struct,
       the size of `ordered_var_names`.
   """
   if not is_structure_of_allowed_types(tff_structure):
-    raise TypeError('Not all leaves in `tff_structure` are `tf.Tensor`s, '
-                    '`np.ndarray`s, `np.number`s, or Python scalars. Got: '
-                    f'{tf.nest.map_structure(type, tff_structure)!r})')
+    raise TypeError(
+        'Not all leaves in `tff_structure` are `tf.Tensor`s, '
+        '`np.ndarray`s, `np.number`s, or Python scalars. Got: '
+        f'{tf.nest.map_structure(type, tff_structure)!r})'
+    )
 
   tensors = tff.structure.flatten(tff_structure)
   if len(tensors) != len(ordered_var_names):
-    raise ValueError('The length of `ordered_var_names` does not match the '
-                     'number of tensors in `tff_structure`:'
-                     f'{len(ordered_var_names)} != {len(tensors)}')
+    raise ValueError(
+        'The length of `ordered_var_names` does not match the '
+        'number of tensors in `tff_structure`:'
+        f'{len(ordered_var_names)} != {len(tensors)}'
+    )
 
   tensor_utils.save(
-      output_checkpoint_path, tensor_names=ordered_var_names, tensors=tensors)
+      output_checkpoint_path, tensor_names=ordered_var_names, tensors=tensors
+  )

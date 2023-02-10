@@ -18,8 +18,10 @@ import tensorflow as tf
 from fcp.protos import plan_pb2
 
 
-def set_checkpoint_op(checkpoint_op_proto: plan_pb2.CheckpointOp,
-                      saver: tf.compat.v1.train.SaverDef):
+def set_checkpoint_op(
+    checkpoint_op_proto: plan_pb2.CheckpointOp,
+    saver: tf.compat.v1.train.SaverDef,
+):
   """Sets the saver_def from saver onto checkpoint_op_proto and fixes a name."""
   if not saver:
     return
@@ -32,6 +34,7 @@ def set_checkpoint_op(checkpoint_op_proto: plan_pb2.CheckpointOp,
   # tensor's value. So, we only strip the ":0" in the case of
   # plan execution, where we use the write_checkpoint and
   # read_checkpoint methods below instead of the Saver.
-  saver_def_proto.save_tensor_name = (
-      saver_def_proto.save_tensor_name.replace(':0', ''))
+  saver_def_proto.save_tensor_name = saver_def_proto.save_tensor_name.replace(
+      ':0', ''
+  )
   assert saver_def_proto.save_tensor_name.rfind(':') == -1

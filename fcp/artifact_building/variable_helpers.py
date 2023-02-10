@@ -40,8 +40,9 @@ SIDECHANNEL_NAME_PREFIX = 'sidechannel_'
 _TF_TENSOR_NAME_SUFFIX = ':0'
 
 
-def _create_var_for_tff_tensor(tff_type: tff.TensorType, name: str,
-                               **kwargs) -> tf.Variable:
+def _create_var_for_tff_tensor(
+    tff_type: tff.TensorType, name: str, **kwargs
+) -> tf.Variable:
   """Creates a TensorFlow variable to hold a value of the `tff.TensorType`."""
   type_checks.check_type(tff_type, tff.TensorType)
   type_checks.check_type(name, str)
@@ -65,7 +66,8 @@ def _create_var_for_tff_tensor(tff_type: tff.TensorType, name: str,
       name=name,
       dtype=tff_type.dtype,
       shape=variable_shape,
-      **kwargs)
+      **kwargs,
+  )
 
 
 # Build the TensorSpec for the values we will send to the client so that the
@@ -80,12 +82,13 @@ def tensorspec_from_var(var: tf.Variable) -> tf.TensorSpec:
     An instance of `tf.TensorSpec` corresponding to the input `tf.Variable`.
   """
   return tf.TensorSpec(
-      shape=var.shape, dtype=var.dtype, name=tensor_utils.bare_name(var.name))
+      shape=var.shape, dtype=var.dtype, name=tensor_utils.bare_name(var.name)
+  )
 
 
-def create_vars_for_tff_type(tff_type: AllowedTffTypes,
-                             name: Optional[str] = None,
-                             **kwargs) -> list[tf.Variable]:
+def create_vars_for_tff_type(
+    tff_type: AllowedTffTypes, name: Optional[str] = None, **kwargs
+) -> list[tf.Variable]:
   """Creates TensorFlow variables to hold a value of the given `tff_type`.
 
   The variables are created in the default graph and scope. The variables are
@@ -106,8 +109,10 @@ def create_vars_for_tff_type(tff_type: AllowedTffTypes,
     TypeError: If the argument is of the wrong type or has the wrong placement.
   """
   type_checks.check_type(
-      tff_type, (tff.TensorType, tff.StructType, tff.FederatedType),
-      name='tff_type')
+      tff_type,
+      (tff.TensorType, tff.StructType, tff.FederatedType),
+      name='tff_type',
+  )
   if name is not None:
     type_checks.check_type(name, str)
   else:
@@ -116,25 +121,29 @@ def create_vars_for_tff_type(tff_type: AllowedTffTypes,
     return [_create_var_for_tff_tensor(tff_type, name, **kwargs)]
   elif isinstance(tff_type, tff.FederatedType):
     if tff_type.placement != tff.SERVER:
-      raise TypeError('Can only create vars for unplaced types or types placed '
-                      'on the SERVER.')
+      raise TypeError(
+          'Can only create vars for unplaced types or types placed '
+          'on the SERVER.'
+      )
     return create_vars_for_tff_type(tff_type.member, name, **kwargs)
   else:  # tff.StructType
     result = []
     with tf.compat.v1.variable_scope(name):
       fields = tff.structure.to_elements(tff_type)
-      for (index, (field_name, field_type)) in enumerate(fields):
+      for index, (field_name, field_type) in enumerate(fields):
         # Default the name of the element to its index so that we don't wind up
         # with multiple child fields listed under `/v/`
         if field_name is None:
           field_name = str(index)
         result.extend(
-            create_vars_for_tff_type(field_type, name=field_name, **kwargs))
+            create_vars_for_tff_type(field_type, name=field_name, **kwargs)
+        )
     return result
 
 
-def variable_names_from_type(tff_type: AllowedTffTypes,
-                             name: str = 'v') -> list[str]:
+def variable_names_from_type(
+    tff_type: AllowedTffTypes, name: str = 'v'
+) -> list[str]:
   """Creates a flattened list of variables names for the given `tff_type`.
 
   If `tff_type` is a `tff.TensorType`, the name is the `name` parameter if
@@ -167,8 +176,10 @@ def variable_names_from_type(tff_type: AllowedTffTypes,
     TypeError: If the argument is of the wrong type.
   """
   type_checks.check_type(
-      tff_type, (tff.TensorType, tff.FederatedType, tff.StructType),
-      name='tff_type')
+      tff_type,
+      (tff.TensorType, tff.FederatedType, tff.StructType),
+      name='tff_type',
+  )
   type_checks.check_type(name, str, name='name')
   if isinstance(tff_type, tff.TensorType):
     return [name]
@@ -177,20 +188,24 @@ def variable_names_from_type(tff_type: AllowedTffTypes,
   elif isinstance(tff_type, tff.StructType):
     result = []
     fields = tff.structure.iter_elements(tff_type)
-    for (index, (field_name, field_type)) in enumerate(fields):
+    for index, (field_name, field_type) in enumerate(fields):
       # Default the name of the element to its index so that we don't wind up
       # with multiple child fields listed under `/v/`
       field_name = field_name or str(index)
       result.extend(
-          variable_names_from_type(field_type, name=name + '/' + field_name))
+          variable_names_from_type(field_type, name=name + '/' + field_name)
+      )
     return result
   else:
-    raise TypeError('Cannot create variable names from [{t}] TFF type. '
-                    'Short-hand: {s}'.format(t=type(tff_type), s=tff_type))
+    raise TypeError(
+        'Cannot create variable names from [{t}] TFF type. '
+        'Short-hand: {s}'.format(t=type(tff_type), s=tff_type)
+    )
 
 
-def get_shared_secagg_tensor_names(intrinsic_name: str,
-                                   tff_type: AllowedTffTypes) -> list[str]:
+def get_shared_secagg_tensor_names(
+    intrinsic_name: str, tff_type: AllowedTffTypes
+) -> list[str]:
   """Creates the shared name of secagg tensors in client and server graph.
 
   This is the canonical function for ensuring the secagg tensor names in the
@@ -208,8 +223,9 @@ def get_shared_secagg_tensor_names(intrinsic_name: str,
   Returns:
     A list of variable names created from the input TFF type.
   """
-  tensor_names = variable_names_from_type(tff_type,
-                                          f'secagg_{intrinsic_name}_update')
+  tensor_names = variable_names_from_type(
+      tff_type, f'secagg_{intrinsic_name}_update'
+  )
   return [
       SIDECHANNEL_NAME_PREFIX + name + _TF_TENSOR_NAME_SUFFIX
       for name in tensor_names

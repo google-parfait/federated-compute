@@ -23,6 +23,7 @@ class CheckpointFormatType(enum.Enum):
       appended slices format. This setting has the smallest write memory
       overhead.
   """
+
   TF1_SAVE_SLICES = 'tf1_save_slices'
   APPEND_SLICES_MERGE_WRITE = 'append_slices_merge_write'
   APPEND_SLICES_MERGE_READ = 'append_slices_merge_read'

@@ -87,18 +87,19 @@ class PlanUtilsTest(tf.test.TestCase):
       x = tf.compat.v1.placeholder(tf.int32, shape=[], name='x')
       _ = tf.math.pow(x, 2, name='y')
     input_tensor_spec = tf.TensorSpec(
-        shape=tf.TensorShape([]), dtype=tf.int32,
-        name='x:0').experimental_as_proto()
+        shape=tf.TensorShape([]), dtype=tf.int32, name='x:0'
+    ).experimental_as_proto()
     output_tensor_spec = tf.TensorSpec(
-        shape=tf.TensorShape([]), dtype=tf.int32,
-        name='y:0').experimental_as_proto()
+        shape=tf.TensorShape([]), dtype=tf.int32, name='y:0'
+    ).experimental_as_proto()
 
     tensorflow_spec = plan_pb2.TensorflowSpec()
     tensorflow_spec.input_tensor_specs.append(input_tensor_spec)
     tensorflow_spec.output_tensor_specs.append(output_tensor_spec)
 
     flatbuffer = plan_utils.convert_graphdef_to_flatbuffer(
-        graph.as_graph_def(), tensorflow_spec)
+        graph.as_graph_def(), tensorflow_spec
+    )
 
     interpreter = tf.lite.Interpreter(model_content=flatbuffer)
     interpreter.allocate_tensors()
@@ -119,34 +120,41 @@ class TfLiteTest(tf.test.TestCase):
     plan = plan_pb2.Plan()
     plan.client_graph_bytes.Pack(tf.compat.v1.GraphDef())
     plan.phase.add()
-    with self.assertRaisesRegex(RuntimeError,
-                                'Failure during TFLite conversion'):
+    with self.assertRaisesRegex(
+        RuntimeError, 'Failure during TFLite conversion'
+    ):
       plan_utils.generate_and_add_flat_buffer_to_plan(
-          plan, forgive_tflite_conversion_failure=False)
+          plan, forgive_tflite_conversion_failure=False
+      )
 
   def test_forgive_tflite_conversion_failure_for_plan(self):
     plan = plan_pb2.Plan()
     plan.client_graph_bytes.Pack(tf.compat.v1.GraphDef())
     plan.phase.add()
     plan_after_conversion = plan_utils.generate_and_add_flat_buffer_to_plan(
-        plan, forgive_tflite_conversion_failure=True)
+        plan, forgive_tflite_conversion_failure=True
+    )
     self.assertIsInstance(plan_after_conversion, plan_pb2.Plan)
     self.assertEmpty(plan_after_conversion.client_tflite_graph_bytes)
 
   def test_caught_exception_in_tflite_conversion_failure_for_client_only_plan(
-      self):
+      self,
+  ):
     client_only_plan = plan_pb2.ClientOnlyPlan()
     client_only_plan.graph = tf.compat.v1.GraphDef().SerializeToString()
-    with self.assertRaisesRegex(RuntimeError,
-                                'Failure during TFLite conversion'):
+    with self.assertRaisesRegex(
+        RuntimeError, 'Failure during TFLite conversion'
+    ):
       plan_utils.generate_and_add_flat_buffer_to_plan(
-          client_only_plan, forgive_tflite_conversion_failure=False)
+          client_only_plan, forgive_tflite_conversion_failure=False
+      )
 
   def test_forgive_tflite_conversion_failure_for_client_only_plan(self):
     client_only_plan = plan_pb2.ClientOnlyPlan()
     client_only_plan.graph = tf.compat.v1.GraphDef().SerializeToString()
     plan_after_conversion = plan_utils.generate_and_add_flat_buffer_to_plan(
-        client_only_plan, forgive_tflite_conversion_failure=True)
+        client_only_plan, forgive_tflite_conversion_failure=True
+    )
     self.assertIsInstance(plan_after_conversion, plan_pb2.ClientOnlyPlan)
     self.assertEmpty(plan_after_conversion.tflite_graph)
 
@@ -157,11 +165,11 @@ class TfLiteTest(tf.test.TestCase):
       x = tf.compat.v1.placeholder(tf.int32, shape=[], name='x')
       _ = tf.math.pow(x, 2, name='y')
     input_tensor_spec = tf.TensorSpec(
-        shape=tf.TensorShape([]), dtype=tf.int32,
-        name='x:0').experimental_as_proto()
+        shape=tf.TensorShape([]), dtype=tf.int32, name='x:0'
+    ).experimental_as_proto()
     output_tensor_spec = tf.TensorSpec(
-        shape=tf.TensorShape([]), dtype=tf.int32,
-        name='y:0').experimental_as_proto()
+        shape=tf.TensorShape([]), dtype=tf.int32, name='y:0'
+    ).experimental_as_proto()
     return graph, input_tensor_spec, output_tensor_spec
 
   def _assert_tflite_flatbuffer_is_equivalent_to_test_graph(self, tflite_graph):
@@ -182,7 +190,8 @@ class TfLiteTest(tf.test.TestCase):
     """Tests that the generated tflite model is identical to the tf.Graph."""
 
     graph, input_tensor_spec, output_tensor_spec = (
-        self._create_test_graph_with_associated_tensor_specs())
+        self._create_test_graph_with_associated_tensor_specs()
+    )
 
     # Create a fairly empty Plan with just the graph and the
     # TensorSpecProtos populated (since that is all that is needed for
@@ -191,24 +200,29 @@ class TfLiteTest(tf.test.TestCase):
     plan_proto.client_graph_bytes.Pack(graph.as_graph_def())
     plan_proto.phase.add()
     plan_proto.phase[0].client_phase.tensorflow_spec.input_tensor_specs.append(
-        input_tensor_spec)
+        input_tensor_spec
+    )
     plan_proto.phase[0].client_phase.tensorflow_spec.output_tensor_specs.append(
-        output_tensor_spec)
+        output_tensor_spec
+    )
 
     # Generate the TFLite model.
-    plan_after_conversion = (
-        plan_utils.generate_and_add_flat_buffer_to_plan(plan_proto))
+    plan_after_conversion = plan_utils.generate_and_add_flat_buffer_to_plan(
+        plan_proto
+    )
 
     self.assertIsInstance(plan_after_conversion, plan_pb2.Plan)
     self.assertEqual(plan_after_conversion, plan_proto)
     self._assert_tflite_flatbuffer_is_equivalent_to_test_graph(
-        plan_after_conversion.client_tflite_graph_bytes)
+        plan_after_conversion.client_tflite_graph_bytes
+    )
 
   def test_add_equivalent_tflite_model_to_client_only_plan(self):
     """Tests that the generated tflite model is identical to the tf.Graph."""
 
     graph, input_tensor_spec, output_tensor_spec = (
-        self._create_test_graph_with_associated_tensor_specs())
+        self._create_test_graph_with_associated_tensor_specs()
+    )
 
     # Create a fairly empty ClientOnlyPlan with just the graph and the
     # TensorSpecProtos populated (since that is all that is needed for
@@ -216,18 +230,22 @@ class TfLiteTest(tf.test.TestCase):
     client_only_plan_proto = plan_pb2.ClientOnlyPlan()
     client_only_plan_proto.graph = graph.as_graph_def().SerializeToString()
     client_only_plan_proto.phase.tensorflow_spec.input_tensor_specs.append(
-        input_tensor_spec)
+        input_tensor_spec
+    )
     client_only_plan_proto.phase.tensorflow_spec.output_tensor_specs.append(
-        output_tensor_spec)
+        output_tensor_spec
+    )
 
     # Generate the TFLite model.
-    plan_after_conversion = (
-        plan_utils.generate_and_add_flat_buffer_to_plan(client_only_plan_proto))
+    plan_after_conversion = plan_utils.generate_and_add_flat_buffer_to_plan(
+        client_only_plan_proto
+    )
 
     self.assertIsInstance(plan_after_conversion, plan_pb2.ClientOnlyPlan)
     self.assertEqual(plan_after_conversion, client_only_plan_proto)
     self._assert_tflite_flatbuffer_is_equivalent_to_test_graph(
-        plan_after_conversion.tflite_graph)
+        plan_after_conversion.tflite_graph
+    )
 
 
 if __name__ == '__main__':

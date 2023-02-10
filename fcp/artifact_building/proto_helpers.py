@@ -23,9 +23,9 @@ from fcp.artifact_building import type_checks
 from fcp.protos import plan_pb2
 
 
-def make_tensor_spec_from_tensor(t: tf.Tensor,
-                                 shape_hint: Optional[tf.TensorShape] = None
-                                ) -> tf.TensorSpec:
+def make_tensor_spec_from_tensor(
+    t: tf.Tensor, shape_hint: Optional[tf.TensorShape] = None
+) -> tf.TensorSpec:
   """Creates a `TensorSpec` from Tensor w/ optional shape hint.
 
   Args:
@@ -44,22 +44,26 @@ def make_tensor_spec_from_tensor(t: tf.Tensor,
       runtime shape of `t`.
   """
   if not tf.is_tensor(t):
-    raise NotImplementedError('Cannot handle type {t}: {v}'.format(
-        t=type(t), v=t))
+    raise NotImplementedError(
+        'Cannot handle type {t}: {v}'.format(t=type(t), v=t)
+    )
   derived_shape = tf.TensorShape(t.shape)
   if not derived_shape.is_fully_defined() and shape_hint is not None:
     if derived_shape.is_compatible_with(shape_hint):
       shape = shape_hint
     else:
-      raise TypeError('shape_hint is not compatible with tensor ('
-                      f'{shape_hint} vs {derived_shape})')
+      raise TypeError(
+          'shape_hint is not compatible with tensor ('
+          f'{shape_hint} vs {derived_shape})'
+      )
   else:
     shape = derived_shape
   return tf.TensorSpec(shape, t.dtype, name=t.name)
 
 
-def make_measurement(t: tf.Tensor, name: str,
-                     tff_type: tff.types.TensorType) -> plan_pb2.Measurement:
+def make_measurement(
+    t: tf.Tensor, name: str, tff_type: tff.types.TensorType
+) -> plan_pb2.Measurement:
   """Creates a `plan_pb.Measurement` descriptor for a tensor.
 
   Args:
@@ -76,16 +80,21 @@ def make_measurement(t: tf.Tensor, name: str,
   """
   type_checks.check_type(tff_type, tff.types.TensorType)
   if tff_type.dtype != t.dtype:
-    raise ValueError(f'`tff_type.dtype`: {tff_type.dtype} does not match '
-                     f'provided tensor\'s dtype: {t.dtype}.')
+    raise ValueError(
+        f'`tff_type.dtype`: {tff_type.dtype} does not match '
+        f"provided tensor's dtype: {t.dtype}."
+    )
   if tff_type.shape.is_fully_defined() and t.shape.is_fully_defined():
     if tff_type.shape.as_list() != t.shape.as_list():
-      raise ValueError(f'`tff_type.shape`: {tff_type.shape} does not match '
-                       f'provided tensor\'s shape: {t.shape}.')
+      raise ValueError(
+          f'`tff_type.shape`: {tff_type.shape} does not match '
+          f"provided tensor's shape: {t.shape}."
+      )
   return plan_pb2.Measurement(
       read_op_name=t.name,
       name=name,
-      tff_type=tff.framework.serialize_type(tff_type).SerializeToString())
+      tff_type=tff.framework.serialize_type(tff_type).SerializeToString(),
+  )
 
 
 def make_metric(v: tf.Variable, stat_name_prefix: str) -> plan_pb2.Metric:
@@ -112,7 +121,9 @@ def make_metric(v: tf.Variable, stat_name_prefix: str) -> plan_pb2.Metric:
   bare_name = tensor_utils.bare_name(v.name)
   if '/' not in bare_name:
     raise ValueError(
-        'Expected a prefix in the name, found none in {}.'.format(bare_name))
-  stat_name = '{}/{}'.format(stat_name_prefix,
-                             bare_name[(bare_name.find('/') + 1):])
+        'Expected a prefix in the name, found none in {}.'.format(bare_name)
+    )
+  stat_name = '{}/{}'.format(
+      stat_name_prefix, bare_name[(bare_name.find('/') + 1) :]
+  )
   return plan_pb2.Metric(variable_name=v.read_value().name, stat_name=stat_name)

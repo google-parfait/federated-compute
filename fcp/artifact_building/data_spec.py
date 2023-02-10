@@ -26,13 +26,20 @@ from fcp.protos import plan_pb2
 class DataSpec:
   """A specification of a single dataset input."""
 
-  __slots__ = ('_example_selector_proto', '_preprocessing_fn',
-               '_preprocessing_comp', '_fingerprint')
+  __slots__ = (
+      '_example_selector_proto',
+      '_preprocessing_fn',
+      '_preprocessing_comp',
+      '_fingerprint',
+  )
 
-  def __init__(self,
-               example_selector_proto: plan_pb2.ExampleSelector,
-               preprocessing_fn: Optional[Callable[[tf.data.Dataset],
-                                                   tf.data.Dataset]] = None):
+  def __init__(
+      self,
+      example_selector_proto: plan_pb2.ExampleSelector,
+      preprocessing_fn: Optional[
+          Callable[[tf.data.Dataset], tf.data.Dataset]
+      ] = None,
+  ):
     """Constructs a specification of a dataset input.
 
     Args:
@@ -51,7 +58,8 @@ class DataSpec:
     type_checks.check_type(
         example_selector_proto,
         plan_pb2.ExampleSelector,
-        name='example_selector_proto')
+        name='example_selector_proto',
+    )
     if preprocessing_fn is not None:
       type_checks.check_callable(preprocessing_fn, name='preprocessing_fn')
     self._example_selector_proto = example_selector_proto
@@ -66,7 +74,8 @@ class DataSpec:
 
   @property
   def preprocessing_fn(
-      self) -> Optional[Callable[[tf.data.Dataset], tf.data.Dataset]]:
+      self,
+  ) -> Optional[Callable[[tf.data.Dataset], tf.data.Dataset]]:
     return self._preprocessing_fn
 
   @property
@@ -74,10 +83,13 @@ class DataSpec:
     """Returns the preprocessing computation for the input dataset."""
     if self._preprocessing_comp is None:
       if self.preprocessing_fn is None:
-        raise ValueError('DataSpec\'s preprocessing_fn is None so a '
-                         'preprocessing tff.Computation cannot be generated.')
-      self._preprocessing_comp = tff.tf_computation(self.preprocessing_fn,
-                                                    tff.SequenceType(tf.string))
+        raise ValueError(
+            "DataSpec's preprocessing_fn is None so a "
+            'preprocessing tff.Computation cannot be generated.'
+        )
+      self._preprocessing_comp = tff.tf_computation(
+          self.preprocessing_fn, tff.SequenceType(tf.string)
+      )
     return self._preprocessing_comp
 
   @property
@@ -99,7 +111,8 @@ def is_data_spec_or_structure(x: Any) -> bool:
   try:
     x = tff.structure.from_container(x)
     return all(
-        is_data_spec_or_structure(y) for _, y in tff.structure.to_elements(x))
+        is_data_spec_or_structure(y) for _, y in tff.structure.to_elements(x)
+    )
   except TypeError:
     return False
 
@@ -107,8 +120,10 @@ def is_data_spec_or_structure(x: Any) -> bool:
 def check_data_spec_or_structure(x: Any, name: str):
   """Raises error iff `x` is not a `DataSpec` or a nested structure of it."""
   if not is_data_spec_or_structure(x):
-    raise TypeError(f'Expected `{name}` to be a `DataSpec` or a nested '
-                    f'structure of it, found {str(x)}.')
+    raise TypeError(
+        f'Expected `{name}` to be a `DataSpec` or a nested '
+        f'structure of it, found {str(x)}.'
+    )
 
 
 NestedDataSpec = Union[DataSpec, dict[str, 'NestedDataSpec']]

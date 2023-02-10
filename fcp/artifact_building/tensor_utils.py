@@ -73,12 +73,14 @@ def import_graph_def_from_any(an) -> tf.compat.v1.GraphDef:
 #
 
 
-def save(filename: Union[tf.Tensor, str],
-         tensor_names: list[str],
-         tensors: list[tf.Tensor],
-         tensor_slices: Optional[list[str]] = None,
-         name: str = 'save',
-         save_op: Callable[..., Any] = tf.raw_ops.SaveSlices) -> tf.Operation:
+def save(
+    filename: Union[tf.Tensor, str],
+    tensor_names: list[str],
+    tensors: list[tf.Tensor],
+    tensor_slices: Optional[list[str]] = None,
+    name: str = 'save',
+    save_op: Callable[..., Any] = tf.raw_ops.SaveSlices,
+) -> tf.Operation:
   """Saves a list of tensors to file.
 
   This function always passes a value for the `tensor_slices` argument in order
@@ -94,7 +96,7 @@ def save(filename: Union[tf.Tensor, str],
       specified, each tensor is saved as a full slice.
     name: An optional name for the op.
     save_op: A callable that creates the op(s) to use for performing the tensor
-    save. Defaults to `tf.raw_ops.SaveSlices`.
+      save. Defaults to `tf.raw_ops.SaveSlices`.
 
   Returns:
     A `SaveSlices` op in graph mode or None in eager mode.
@@ -105,14 +107,17 @@ def save(filename: Union[tf.Tensor, str],
       tensor_names=tensor_names,
       shapes_and_slices=tensor_slices,
       data=tensors,
-      name=name)
+      name=name,
+  )
 
 
-def restore(filename: Union[tf.Tensor, str],
-            tensor_name: str,
-            tensor_type: tf.DType,
-            tensor_shape: Optional[tf.TensorShape] = None,
-            name: str = 'restore') -> tf.Tensor:
+def restore(
+    filename: Union[tf.Tensor, str],
+    tensor_name: str,
+    tensor_type: tf.DType,
+    tensor_shape: Optional[tf.TensorShape] = None,
+    name: str = 'restore',
+) -> tf.Tensor:
   """Restores a tensor from the file.
 
   It is a wrapper of `tf.raw_ops.RestoreV2`. When used in graph mode, it adds a
@@ -143,5 +148,6 @@ def restore(filename: Union[tf.Tensor, str],
       tensor_names=[tensor_name],
       shape_and_slices=[shape_str + slice_str],
       dtypes=[tensor_type],
-      name=name)
+      name=name,
+  )
   return restored_tensors[0]

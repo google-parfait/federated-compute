@@ -38,7 +38,7 @@ class TypeChecksTest(absltest.TestCase):
 
     type_checks.check_callable(foo)
 
-    class Bar():
+    class Bar:
 
       def __call__(self):
         pass
@@ -96,7 +96,8 @@ class TypeChecksTest(absltest.TestCase):
 
     with self.assertRaisesWithLiteralMatch(
         TypeError,
-        'Expected argument to be a Dataset; but found an instance of int.'):
+        'Expected argument to be a Dataset; but found an instance of int.',
+    ):
       type_checks.check_dataset(1234)
 
   def test_check_dataset_failure_message_with_name(self):

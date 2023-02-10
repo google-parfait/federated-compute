@@ -46,7 +46,9 @@ class EmbedDataLogicTest(absltest.TestCase):
       token_placeholder, data_values = graph_helpers.embed_data_logic(
           tff.SequenceType((tf.string)),
           data_spec.DataSpec(
-              plan_pb2.ExampleSelector(collection_uri='app://fake_uri')))
+              plan_pb2.ExampleSelector(collection_uri='app://fake_uri')
+          ),
+      )
 
     self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
     self.assertLen(data_values, 1)
@@ -56,12 +58,17 @@ class EmbedDataLogicTest(absltest.TestCase):
     with tf.Graph().as_default():
       token_placeholder, data_values = graph_helpers.embed_data_logic(
           collections.OrderedDict(
-              A=tff.SequenceType((tf.string)), B=tff.SequenceType((tf.string))),
+              A=tff.SequenceType((tf.string)), B=tff.SequenceType((tf.string))
+          ),
           collections.OrderedDict(
               A=data_spec.DataSpec(
-                  plan_pb2.ExampleSelector(collection_uri='app://foo')),
+                  plan_pb2.ExampleSelector(collection_uri='app://foo')
+              ),
               B=data_spec.DataSpec(
-                  plan_pb2.ExampleSelector(collection_uri='app://bar'))))
+                  plan_pb2.ExampleSelector(collection_uri='app://bar')
+              ),
+          ),
+      )
 
     self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
 
@@ -73,11 +80,16 @@ class EmbedDataLogicTest(absltest.TestCase):
     with tf.Graph().as_default():
       token_placeholder, data_values = graph_helpers.embed_data_logic(
           collections.OrderedDict(
-              A=collections.OrderedDict(B=tff.SequenceType((tf.string)))),
+              A=collections.OrderedDict(B=tff.SequenceType((tf.string)))
+          ),
           collections.OrderedDict(
               A=collections.OrderedDict(
                   B=data_spec.DataSpec(
-                      plan_pb2.ExampleSelector(collection_uri='app://foo')))))
+                      plan_pb2.ExampleSelector(collection_uri='app://foo')
+                  )
+              )
+          ),
+      )
 
     self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
     self.assertLen(data_values, 1)
@@ -97,16 +109,17 @@ class GraphHelperTest(absltest.TestCase):
       ds = tf.data.experimental.to_variant(tf.data.Dataset.range(3))
       v = tf.constant(10, dtype=tf.int64)
       y, ds2_variant = graph_helpers.import_tensorflow(
-          'work', work, ([ds], [v]), split_outputs=True)
-      ds2 = tf.data.experimental.from_variant(ds2_variant[0],
-                                              tf.TensorSpec([], tf.int64))
+          'work', work, ([ds], [v]), split_outputs=True
+      )
+      ds2 = tf.data.experimental.from_variant(
+          ds2_variant[0], tf.TensorSpec([], tf.int64)
+      )
       z = ds2.reduce(np.int64(0), lambda x, y: x + y)
       with tf.compat.v1.Session() as sess:
         self.assertEqual(sess.run(y[0]), 11)
         self.assertEqual(sess.run(z), 33)
 
   def test_import_tensorflow_with_session_token(self):
-
     @tff.tf_computation
     def return_value():
       return tff.framework.get_session_token()
@@ -114,7 +127,8 @@ class GraphHelperTest(absltest.TestCase):
     with tf.Graph().as_default():
       x = tf.compat.v1.placeholder(dtype=tf.string)
       output = graph_helpers.import_tensorflow(
-          'return_value', comp=return_value, session_token_tensor=x)
+          'return_value', comp=return_value, session_token_tensor=x
+      )
       with tf.compat.v1.Session() as sess:
         self.assertEqual(sess.run(output[0], feed_dict={x: 'value'}), b'value')
 
@@ -130,7 +144,8 @@ class GraphHelperTest(absltest.TestCase):
       x = tf.compat.v1.placeholder(dtype=tf.int64)
       y = tf.compat.v1.placeholder(dtype=tf.int64)
       output = graph_helpers.import_tensorflow(
-          'control_dep_graph', comp=work, args=[x, y])
+          'control_dep_graph', comp=work, args=[x, y]
+      )
       with tf.compat.v1.Session() as sess:
         self.assertEqual(sess.run(output, feed_dict={x: 10, y: 20})[0], 10)
 
@@ -148,21 +163,28 @@ class GraphHelperTest(absltest.TestCase):
     #     \   //   \\    ||
     #      bak        baz
     #
-    graph_def = tf.compat.v1.GraphDef(node=[
-        tf.compat.v1.NodeDef(name='foo', input=[]),
-        tf.compat.v1.NodeDef(name='bar', input=['foo']),
-        tf.compat.v1.NodeDef(name='baz', input=['foo', 'bar']),
-        tf.compat.v1.NodeDef(name='bak', input=['bar', '^abc']),
-        tf.compat.v1.NodeDef(name='abc', input=['def:0']),
-        tf.compat.v1.NodeDef(name='def', input=['^ghi']),
-        tf.compat.v1.NodeDef(name='ghi', input=[]),
-    ])
+    graph_def = tf.compat.v1.GraphDef(
+        node=[
+            tf.compat.v1.NodeDef(name='foo', input=[]),
+            tf.compat.v1.NodeDef(name='bar', input=['foo']),
+            tf.compat.v1.NodeDef(name='baz', input=['foo', 'bar']),
+            tf.compat.v1.NodeDef(name='bak', input=['bar', '^abc']),
+            tf.compat.v1.NodeDef(name='abc', input=['def:0']),
+            tf.compat.v1.NodeDef(name='def', input=['^ghi']),
+            tf.compat.v1.NodeDef(name='ghi', input=[]),
+        ]
+    )
     new_graph_def = graph_helpers.add_control_deps_for_init_op(graph_def, 'abc')
     self.assertEqual(
-        ','.join('{}({})'.format(node.name, ','.join(node.input))
-                 for node in new_graph_def.node),
-        'foo(^abc),bar(foo,^abc),baz(foo,bar,^abc),'
-        'bak(bar,^abc),abc(def:0),def(^ghi),ghi()')
+        ','.join(
+            '{}({})'.format(node.name, ','.join(node.input))
+            for node in new_graph_def.node
+        ),
+        (
+            'foo(^abc),bar(foo,^abc),baz(foo,bar,^abc),'
+            'bak(bar,^abc),abc(def:0),def(^ghi),ghi()'
+        ),
+    )
 
   def test_create_tensor_map_with_sequence_binding_and_variant(self):
     with tf.Graph().as_default():
@@ -170,7 +192,11 @@ class GraphHelperTest(absltest.TestCase):
       input_map = graph_helpers.create_tensor_map(
           computation_pb2.TensorFlow.Binding(
               sequence=computation_pb2.TensorFlow.SequenceBinding(
-                  variant_tensor_name='foo')), [variant_tensor])
+                  variant_tensor_name='foo'
+              )
+          ),
+          [variant_tensor],
+      )
       self.assertLen(input_map, 1)
       self.assertCountEqual(list(input_map.keys()), ['foo'])
       self.assertIs(input_map['foo'], variant_tensor)
@@ -182,8 +208,11 @@ class GraphHelperTest(absltest.TestCase):
         graph_helpers.create_tensor_map(
             computation_pb2.TensorFlow.Binding(
                 sequence=computation_pb2.TensorFlow.SequenceBinding(
-                    variant_tensor_name='foo')),
-            [variant_tensor, variant_tensor])
+                    variant_tensor_name='foo'
+                )
+            ),
+            [variant_tensor, variant_tensor],
+        )
 
   def test_create_tensor_map_with_sequence_binding_and_non_variant(self):
     with tf.Graph().as_default():
@@ -192,25 +221,40 @@ class GraphHelperTest(absltest.TestCase):
         graph_helpers.create_tensor_map(
             computation_pb2.TensorFlow.Binding(
                 sequence=computation_pb2.TensorFlow.SequenceBinding(
-                    variant_tensor_name='foo')), [non_variant_tensor])
+                    variant_tensor_name='foo'
+                )
+            ),
+            [non_variant_tensor],
+        )
 
   def test_create_tensor_map_with_non_sequence_binding_and_vars(self):
     with tf.Graph().as_default():
       vars_list = variable_helpers.create_vars_for_tff_type(
-          tff.to_type([('a', tf.int32), ('b', tf.int32)]))
+          tff.to_type([('a', tf.int32), ('b', tf.int32)])
+      )
       init_op = tf.compat.v1.global_variables_initializer()
       assign_op = tf.group(
-          *(v.assign(tf.constant(k + 1)) for k, v in enumerate(vars_list)))
+          *(v.assign(tf.constant(k + 1)) for k, v in enumerate(vars_list))
+      )
       input_map = graph_helpers.create_tensor_map(
           computation_pb2.TensorFlow.Binding(
-              struct=computation_pb2.TensorFlow.StructBinding(element=[
-                  computation_pb2.TensorFlow.Binding(
-                      tensor=computation_pb2.TensorFlow.TensorBinding(
-                          tensor_name='foo')),
-                  computation_pb2.TensorFlow.Binding(
-                      tensor=computation_pb2.TensorFlow.TensorBinding(
-                          tensor_name='bar'))
-              ])), vars_list)
+              struct=computation_pb2.TensorFlow.StructBinding(
+                  element=[
+                      computation_pb2.TensorFlow.Binding(
+                          tensor=computation_pb2.TensorFlow.TensorBinding(
+                              tensor_name='foo'
+                          )
+                      ),
+                      computation_pb2.TensorFlow.Binding(
+                          tensor=computation_pb2.TensorFlow.TensorBinding(
+                              tensor_name='bar'
+                          )
+                      ),
+                  ]
+              )
+          ),
+          vars_list,
+      )
       with tf.compat.v1.Session() as sess:
         sess.run(init_op)
         sess.run(assign_op)
@@ -231,19 +275,22 @@ class GraphHelperTest(absltest.TestCase):
     #    |
     #   ghi
     #
-    graph_def = tf.compat.v1.GraphDef(node=[
-        tf.compat.v1.NodeDef(name='foo', input=[]),
-        tf.compat.v1.NodeDef(name='bar', input=['foo:0']),
-        tf.compat.v1.NodeDef(name='baz', input=['foo:1', 'bar']),
-        tf.compat.v1.NodeDef(name='bak', input=['bar', '^abc']),
-        tf.compat.v1.NodeDef(name='abc', input=[]),
-        tf.compat.v1.NodeDef(name='def', input=['abc:0']),
-        tf.compat.v1.NodeDef(name='ghi', input=['^def']),
-    ])
+    graph_def = tf.compat.v1.GraphDef(
+        node=[
+            tf.compat.v1.NodeDef(name='foo', input=[]),
+            tf.compat.v1.NodeDef(name='bar', input=['foo:0']),
+            tf.compat.v1.NodeDef(name='baz', input=['foo:1', 'bar']),
+            tf.compat.v1.NodeDef(name='bak', input=['bar', '^abc']),
+            tf.compat.v1.NodeDef(name='abc', input=[]),
+            tf.compat.v1.NodeDef(name='def', input=['abc:0']),
+            tf.compat.v1.NodeDef(name='ghi', input=['^def']),
+        ]
+    )
 
     def _get_deps(x):
       return ','.join(
-          sorted(list(graph_helpers._get_deps_for_graph_node(graph_def, x))))
+          sorted(list(graph_helpers._get_deps_for_graph_node(graph_def, x)))
+      )
 
     self.assertEqual(_get_deps('foo'), '')
     self.assertEqual(_get_deps('bar'), 'foo')
@@ -255,32 +302,50 @@ class GraphHelperTest(absltest.TestCase):
 
   def test_list_tensor_names_in_binding(self):
     binding = computation_pb2.TensorFlow.Binding(
-        struct=computation_pb2.TensorFlow.StructBinding(element=[
-            computation_pb2.TensorFlow.Binding(
-                tensor=computation_pb2.TensorFlow.TensorBinding(
-                    tensor_name='a')),
-            computation_pb2.TensorFlow.Binding(
-                struct=computation_pb2.TensorFlow.StructBinding(element=[
-                    computation_pb2.TensorFlow.Binding(
-                        tensor=computation_pb2.TensorFlow.TensorBinding(
-                            tensor_name='b')),
-                    computation_pb2.TensorFlow.Binding(
-                        tensor=computation_pb2.TensorFlow.TensorBinding(
-                            tensor_name='c'))
-                ])),
-            computation_pb2.TensorFlow.Binding(
-                tensor=computation_pb2.TensorFlow.TensorBinding(
-                    tensor_name='d')),
-            computation_pb2.TensorFlow.Binding(
-                sequence=computation_pb2.TensorFlow.SequenceBinding(
-                    variant_tensor_name='e')),
-        ]))
+        struct=computation_pb2.TensorFlow.StructBinding(
+            element=[
+                computation_pb2.TensorFlow.Binding(
+                    tensor=computation_pb2.TensorFlow.TensorBinding(
+                        tensor_name='a'
+                    )
+                ),
+                computation_pb2.TensorFlow.Binding(
+                    struct=computation_pb2.TensorFlow.StructBinding(
+                        element=[
+                            computation_pb2.TensorFlow.Binding(
+                                tensor=computation_pb2.TensorFlow.TensorBinding(
+                                    tensor_name='b'
+                                )
+                            ),
+                            computation_pb2.TensorFlow.Binding(
+                                tensor=computation_pb2.TensorFlow.TensorBinding(
+                                    tensor_name='c'
+                                )
+                            ),
+                        ]
+                    )
+                ),
+                computation_pb2.TensorFlow.Binding(
+                    tensor=computation_pb2.TensorFlow.TensorBinding(
+                        tensor_name='d'
+                    )
+                ),
+                computation_pb2.TensorFlow.Binding(
+                    sequence=computation_pb2.TensorFlow.SequenceBinding(
+                        variant_tensor_name='e'
+                    )
+                ),
+            ]
+        )
+    )
     self.assertEqual(
         graph_helpers._list_tensor_names_in_binding(binding),
-        ['a', 'b', 'c', 'd', 'e'])
+        ['a', 'b', 'c', 'd', 'e'],
+    )
 
 
 if __name__ == '__main__':
   with tff.framework.get_context_stack().install(
-      tff.test.create_runtime_error_context()):
+      tff.test.create_runtime_error_context()
+  ):
     absltest.main()
