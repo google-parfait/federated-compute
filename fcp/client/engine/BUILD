@@ -153,6 +153,7 @@ cc_test(
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/core/kernels:string_join_op",
+        "@org_tensorflow//tensorflow/core/ops:string_ops_op_lib",
     ],
 )
 
