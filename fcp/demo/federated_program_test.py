@@ -141,8 +141,7 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         [2, 4],
     ]
 
-    # TFF 0.44.0 defaults to the TFF-C++ runtime, which isn't cross-platform.
-    base_context = tff.backends.native.create_local_python_execution_context()
+    base_context = tff.backends.native.create_sync_local_cpp_execution_context()
 
     with demo.FederatedContext(
         POPULATION_NAME,
