@@ -40,10 +40,6 @@ TEST(AggVectorTest, Size) {
 
   auto t2 = Tensor::Create(DT_FLOAT, {3}, CreateTestData<float>({0, 1, 2}));
   EXPECT_EQ(t2->AsAggVector<float>().size(), 3);
-
-  auto t3 = Tensor::Create(DT_INT64, {2, 3, 4},
-                           CreateTestData<int64_t>(24, {{4, {2, 3, 4, 5}}}));
-  EXPECT_EQ(t3->AsAggVector<int64_t>().size(), 24);
 }
 
 TEST(AggVectorTest, PostIncrementIterator_ScalarTensor) {
@@ -57,34 +53,10 @@ TEST(AggVectorTest, PostIncrementIterator_DenseTensor) {
               ElementsAre(Pair<int>{0, 3}, Pair<int>{1, 14}));
 }
 
-TEST(AggVectorTest, PostIncrementIterator_TensorWithNoSlice) {
-  auto t = Tensor::Create(DT_FLOAT, {8}, CreateTestData<float>(8));
-  EXPECT_THAT(t->AsAggVector<float>(), ElementsAre());
-}
-
-TEST(AggVectorTest, PostIncrementIterator_SparseTensorWithOneSlice) {
-  auto t = Tensor::Create(DT_INT32, {8},
-                          CreateTestData<int>(8, {{4, {2, 3, 4, 5}}}));
-  EXPECT_THAT(t->AsAggVector<int>(),
-              ElementsAre(Pair<int>{4, 2}, Pair<int>{5, 3}, Pair<int>{6, 4},
-                          Pair<int>{7, 5}));
-}
-
-TEST(AggVectorTest, PostIncrementIterator_SparseTensorWithTwoSlices) {
-  auto data = CreateTestData<int>(8);
-  auto data_ptr = data.get();
-  auto t = Tensor::Create(DT_INT32, {8}, std::move(data));
-  data_ptr->AddSlice(1, {2, 3});
-  data_ptr->AddSlice(5, {7});
-  EXPECT_THAT(t->AsAggVector<int>(),
-              ElementsAre(Pair<int>{1, 2}, Pair<int>{2, 3}, Pair<int>{5, 7}));
-}
-
 TEST(AggVectorTest, PostIncrementIterator_ForLoopIterator) {
-  auto t = Tensor::Create(DT_FLOAT, {8},
-                          CreateTestData<float>(8, {{4, {2, 3, 4, 5}}}));
+  auto t = Tensor::Create(DT_FLOAT, {4}, CreateTestData<float>({2, 3, 4, 5}));
   float sum = 0;
-  size_t expected_index = 4;
+  size_t expected_index = 0;
   for (auto [index, value] : t->AsAggVector<float>()) {
     EXPECT_THAT(index, Eq(expected_index++));
     sum += value;
@@ -93,11 +65,10 @@ TEST(AggVectorTest, PostIncrementIterator_ForLoopIterator) {
 }
 
 TEST(AggVectorTest, PreIncrementIterator) {
-  auto t = Tensor::Create(DT_FLOAT, {8},
-                          CreateTestData<float>(8, {{4, {2, 3, 4, 5}}}));
+  auto t = Tensor::Create(DT_FLOAT, {4}, CreateTestData<float>({2, 3, 4, 5}));
   auto agg_vector = t->AsAggVector<float>();
   float sum = 0;
-  size_t expected_index = 4;
+  size_t expected_index = 0;
   for (auto it = agg_vector.begin(); it != agg_vector.end(); it++) {
     EXPECT_THAT(it.index(), Eq(expected_index++));
     sum += it.value();

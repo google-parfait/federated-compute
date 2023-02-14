@@ -74,15 +74,5 @@ TEST(CheckpointWriterTest, WriteTensors) {
   EXPECT_THAT(*checkpoint_reader->GetTensor("c"), IsTensor<double>({}, {3.14}));
 }
 
-TEST(CheckpointWriterTest, SparseTensorFailure) {
-  CheckpointWriter checkpoint_writer(TemporaryTestFile(".ckpt"));
-  // This creates a tensor with zero slices.
-  Tensor t =
-      Tensor::Create(DT_INT32, TensorShape({10}), CreateTestData<int32_t>(10))
-          .value();
-  EXPECT_DEATH(checkpoint_writer.Add("foo", t).IgnoreError(),
-               "Only dense tensors with one slice are supported");
-}
-
 }  // namespace
 }  // namespace fcp::aggregation::tensorflow

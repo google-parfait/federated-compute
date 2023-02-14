@@ -74,7 +74,8 @@ class Tensor final {
   const TensorData& data() const { return *data_; }
 
   // Returns true is the current tensor data is dense.
-  bool is_dense() const { return data_->is_dense(); }
+  // TODO(team): Implement sparse tensors.
+  bool is_dense() const { return true; }
 
   // Provides access to the tensor data via a strongly typed AggVector.
   template <typename T>

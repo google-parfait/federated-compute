@@ -77,35 +77,6 @@ TEST(FederatedSumTest, DenseAggregation_Succeeds) {
   EXPECT_TRUE(result->is_dense());
 }
 
-TEST(FederatedSumTest, SparseAggregation_Succeeds) {
-  const TensorShape shape = {4, 3};
-  auto aggregator =
-      (*GetAggregatorFactory("federated_sum"))->Create(DT_INT32, shape).value();
-  Tensor t1 = Tensor::Create(DT_INT32, shape,
-                             CreateTestData<int32_t>(12, {{0, {1, 2, 3}}}))
-                  .value();
-  Tensor t2 = Tensor::Create(
-                  DT_INT32, shape,
-                  CreateTestData<int32_t>(12, {{6, {10, 11, 12, 13, 14, 15}}}))
-                  .value();
-  Tensor t3 = Tensor::Create(
-                  DT_INT32, shape,
-                  CreateTestData<int32_t>(12, {{0, {4, 4, 4}}, {9, {4, 4, 4}}}))
-                  .value();
-  EXPECT_THAT(aggregator->Accumulate(t1), IsOk());
-  EXPECT_THAT(aggregator->Accumulate(t2), IsOk());
-  EXPECT_THAT(aggregator->Accumulate(t3), IsOk());
-  EXPECT_THAT(aggregator->CanReport(), IsTrue());
-  EXPECT_THAT(aggregator->num_inputs(), Eq(3));
-
-  auto result = std::move(*aggregator).Report();
-  EXPECT_THAT(result, IsOk());
-  EXPECT_THAT(result.value(),
-              IsTensor(shape, {5, 6, 7, 0, 0, 0, 10, 11, 12, 17, 18, 19}));
-  // Also ensure that the resulting tensor is dense.
-  EXPECT_TRUE(result->is_dense());
-}
-
 TEST(AggVectorAggregationTest, Merge_Succeeds) {
   auto aggregator1 =
       (*GetAggregatorFactory("federated_sum"))->Create(DT_INT32, {}).value();

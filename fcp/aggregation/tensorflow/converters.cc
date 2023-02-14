@@ -75,14 +75,9 @@ class TensorDataAdapter : public TensorData {
   explicit TensorDataAdapter(std::unique_ptr<tf::Tensor> tensor)
       : tensor_(std::move(tensor)) {}
 
-  // The source tf::Tensor has the data as one continues blob.
-  int num_slices() const override { return 1; }
+  // The source tf::Tensor has the data as one continuous blob.
   size_t byte_size() const override { return tensor_->tensor_data().size(); }
-
-  Slice get_slice(int n) const override {
-    FCP_CHECK(n == 0);
-    return {0, tensor_->tensor_data().size(), tensor_->tensor_data().data()};
-  }
+  const void* data() const override { return tensor_->tensor_data().data(); }
 
  private:
   std::unique_ptr<tf::Tensor> tensor_;

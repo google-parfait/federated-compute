@@ -37,6 +37,7 @@ TENSOR_HDRS = [
     "tensor_data.h",
     "tensor_shape.h",
     "tensor_spec.h",
+    "vector_data.h",
 ]
 
 cc_library(
@@ -170,7 +171,6 @@ cc_binary(
         ":aggregator",
         ":federated_sum",
         ":tensor",
-        "//fcp/aggregation/testing:test_data",
         "@com_google_benchmark//:benchmark_main",
     ],
 )

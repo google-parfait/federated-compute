@@ -16,6 +16,7 @@
 
 #include "fcp/aggregation/core/tensor.h"
 
+#include <memory>
 #include <utility>
 
 #include "fcp/aggregation/core/datatype.h"
@@ -33,13 +34,12 @@ Status Tensor::CheckValid() const {
   CASES(dtype_, value_size = sizeof(T));
 
   // Verify that the storage is consistent with the value size in terms of
-  // sparsity and alignment.
-  // TODO(team): is there a more advanced sparsity validation that
-  // needs to be done at this point?
+  // size and alignment.
   FCP_RETURN_IF_ERROR(data_->CheckValid(value_size));
 
   // Verify that the total size of the data is consistent with the value type
   // and the shape.
+  // TODO(team): Implement sparse tensors.
   if (data_->byte_size() != shape_.NumElements() * value_size) {
     return FCP_STATUS(FAILED_PRECONDITION)
            << "TensorData byte_size is inconsistent with the Tensor dtype and "

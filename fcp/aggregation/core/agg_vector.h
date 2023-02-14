@@ -27,39 +27,20 @@
 namespace fcp {
 namespace aggregation {
 
-// AggVector is flattened one-dimensional strongly typed span of tensor values
-// that provides immutable access to the values.
+// AggVector is flattened one-dimensional strongly typed view of tensor that
+// provides immutable access to the values.
 //
-// AggVectors are more like views into the tensor data. The actual data
-// continues to be owned by the tensors.
+// AggVector hides the actual data organization of the tensor. The only
+// way to acceess the tensor values is through the iterator that returns
+// {index, value} pairs where each index is the dense index corresponding to
+// the value.
 //
-// Each AggVector is organized as a list of slices of contiguous blocks of
-// strongly typed values. Each slice has a span of values and a start index -
-// the position where the slice's span of values starts within the overall
-// vector of values.
+// Example:
 //
-// Slices are ordered by the start index and are non-overlapping, and the gaps
-// between the slices are assumed to have zero values.
-//
-// Each AggVector::Slice provides vector-like access to its values, including
-// random access to the values and the standard c++ iterator implementation.
-//
-// Slices are copyable objects, however the actual slice data is owned by
-// the containing Tensor and slices have just pointers to the data.
-// A care should be taken to not access the slice data after the slice owning
-// Tensor instance has been destroyed.
-//
-// Here is an example of code that accumulates an AggVector values into
-// a dense vector:
-// void Accumulate(
-//     const AggVector<float>& agg_vector, std::vector<float>* result) {
-//   for (int i = 0; i < agg_vector.num_slices(); i++) {
-//     const auto& slice = agg_vector.get_slice(i);
-//     // Start aggregation at the start_index for each slice.
-//     float* dst = &result->at(slice.start_index());
-//     for (auto v : slice) {
-//       *(dst++) += v;
-//     }
+// template <typename T>
+// void Iterate(const AggVector<T>& agg_vector) {
+//   for (const auto& [index, value] : agg_vector) {
+//     // Aggregate the `value` at the given `index`.
 //   }
 // }
 //
@@ -75,7 +56,7 @@ class AggVector final {
   // Iterator end() function.
   const_iterator end() const { return AggVectorIterator<T>::end(); }
 
-  // Entire AggVector length including gaps between the slices.
+  // Entire AggVector length.
   size_t size() const { return size_; }
 
  private:

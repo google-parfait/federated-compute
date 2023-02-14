@@ -18,6 +18,7 @@
 #define FCP_AGGREGATION_CORE_AGG_VECTOR_ITERATOR_H_
 
 #include "fcp/aggregation/core/tensor_data.h"
+#include "fcp/base/monitoring.h"
 
 namespace fcp {
 namespace aggregation {
@@ -49,7 +50,7 @@ struct AggVectorIterator {
   using reference = value_type&;
 
   explicit AggVectorIterator(const TensorData* data)
-      : AggVectorIterator(data, 0, get_slice(data, 0)) {}
+      : AggVectorIterator(get_start_ptr(data), get_end_ptr(data), 0) {}
 
   // Current dense index corresponding to the current value.
   size_t index() const { return dense_index; }
@@ -60,11 +61,9 @@ struct AggVectorIterator {
   IndexValuePair operator*() const { return {dense_index, *ptr}; }
 
   AggVectorIterator& operator++() {
-    if (++ptr == slice_end_ptr) {
-      TensorData::Slice slice = get_slice(data, ++slice_index);
-      ptr = slice_begin(slice);
-      slice_end_ptr = slice_end(slice);
-      dense_index = slice_start_index(slice);
+    FCP_CHECK(ptr != end_ptr);
+    if (++ptr == end_ptr) {
+      *this = end();
     } else {
       dense_index++;
     }
@@ -88,40 +87,24 @@ struct AggVectorIterator {
   }
 
   static AggVectorIterator end() {
-    return AggVectorIterator(nullptr, 0, TensorData::Slice{0, 0, nullptr});
+    return AggVectorIterator(nullptr, nullptr, 0);
   }
 
  private:
-  AggVectorIterator(const TensorData* data, int slice_index,
-                    TensorData::Slice slice)
-      : ptr(slice_begin(slice)),
-        slice_end_ptr(slice_end(slice)),
-        dense_index(slice_start_index(slice)),
-        data(data),
-        slice_index(slice_index) {}
+  AggVectorIterator(const T* ptr, const T* end_ptr, size_t dense_index)
+      : ptr(ptr), end_ptr(end_ptr), dense_index(dense_index) {}
 
-  static TensorData::Slice get_slice(const TensorData* data, int slice_index) {
-    return slice_index < data->num_slices() ? data->get_slice(slice_index)
-                                            : TensorData::Slice{0, 0, nullptr};
+  static const T* get_start_ptr(const TensorData* data) {
+    return static_cast<const T*>(data->data());
   }
 
-  static const T* slice_begin(const TensorData::Slice& slice) {
-    return static_cast<const T*>(slice.data);
-  }
-
-  static const T* slice_end(const TensorData::Slice& slice) {
-    return slice_begin(slice) + slice.byte_size / sizeof(T);
-  }
-
-  static size_t slice_start_index(const TensorData::Slice& slice) {
-    return slice.byte_offset / sizeof(T);
+  static const T* get_end_ptr(const TensorData* data) {
+    return get_start_ptr(data) + data->byte_size() / sizeof(T);
   }
 
   const T* ptr;
-  const T* slice_end_ptr;
+  const T* end_ptr;
   size_t dense_index;
-  const TensorData* data;
-  int slice_index;
 };
 
 }  // namespace aggregation
