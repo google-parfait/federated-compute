@@ -741,3 +741,21 @@ java_proto_library(
     visibility = ["//visibility:public"],
     deps = [":selector_context_proto"],
 )
+
+# --------------------------------------------------------------------
+# example_query_result.proto
+
+proto_library(
+    name = "example_query_result_proto",
+    srcs = ["example_query_result.proto"],
+)
+
+java_proto_library(
+    name = "example_query_result_java_proto",
+    deps = [":example_query_result_proto"],
+)
+
+cc_proto_library(
+    name = "example_query_result_cc_proto",
+    deps = [":example_query_result_proto"],
+)
