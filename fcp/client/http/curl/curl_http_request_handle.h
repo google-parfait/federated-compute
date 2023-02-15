@@ -63,7 +63,8 @@ class CurlHttpRequestHandle : public HttpRequestHandle {
   CURLcode InitializeConnection(const std::string& test_cert_path)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   // Initializes headers from external_headers
-  CURLcode InitializeHeaders(const HeaderList& extra_headers)
+  CURLcode InitializeHeaders(const HeaderList& extra_headers,
+                             HttpRequest::Method method)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   // A helper function called _sequentially_ when a response header received.
   static size_t HeaderCallback(char* buffer, size_t size, size_t n_items,

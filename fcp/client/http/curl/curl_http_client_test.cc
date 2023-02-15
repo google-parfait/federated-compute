@@ -38,8 +38,8 @@ using ::testing::UnorderedElementsAreArray;
 void SetUpOnResponseStarted(
     StrictMock<MockHttpRequestCallback>* request_callback,
     const std::string& request_uri, HttpRequest::Method method,
-    const HeaderList& expected_request_extra_headers, bool has_body,
-    const HeaderList& expected_response_headers) {
+    int response_code, const HeaderList& expected_request_extra_headers,
+    bool has_body, const HeaderList& expected_response_headers) {
   EXPECT_CALL(*request_callback, OnResponseStarted(_, _))
       .WillOnce(::testing::Invoke([=, &request_uri](
                                       const HttpRequest& request,
@@ -49,7 +49,7 @@ void SetUpOnResponseStarted(
         EXPECT_THAT(request.extra_headers(),
                     UnorderedElementsAreArray(expected_request_extra_headers));
         EXPECT_THAT(request.HasBody(), has_body);
-        EXPECT_THAT(response.code(), 200);
+        EXPECT_THAT(response.code(), response_code);
         EXPECT_THAT(response.headers(),
                     UnorderedElementsAreArray(expected_response_headers));
         return absl::OkStatus();
@@ -58,7 +58,7 @@ void SetUpOnResponseStarted(
 
 void SetUpOnResponseBody(StrictMock<MockHttpRequestCallback>* request_callback,
                          const std::string& request_uri,
-                         HttpRequest::Method method,
+                         HttpRequest::Method method, int response_code,
                          const HeaderList& expected_request_extra_headers,
                          bool has_body,
                          const HeaderList& expected_response_headers,
@@ -72,7 +72,7 @@ void SetUpOnResponseBody(StrictMock<MockHttpRequestCallback>* request_callback,
         EXPECT_THAT(request.extra_headers(),
                     UnorderedElementsAreArray(expected_request_extra_headers));
         EXPECT_THAT(request.HasBody(), has_body);
-        EXPECT_THAT(response.code(), 200);
+        EXPECT_THAT(response.code(), response_code);
         EXPECT_THAT(response.headers(),
                     UnorderedElementsAreArray(expected_response_headers));
         EXPECT_THAT(data, expected_response_body);
@@ -82,7 +82,7 @@ void SetUpOnResponseBody(StrictMock<MockHttpRequestCallback>* request_callback,
 
 void SetUpOnResponseBody(StrictMock<MockHttpRequestCallback>* request_callback,
                          const std::string& request_uri,
-                         HttpRequest::Method method,
+                         HttpRequest::Method method, int response_code,
                          const HeaderList& expected_request_extra_headers,
                          bool has_body,
                          const HeaderList& expected_response_headers,
@@ -99,7 +99,7 @@ void SetUpOnResponseBody(StrictMock<MockHttpRequestCallback>* request_callback,
                 request.extra_headers(),
                 UnorderedElementsAreArray(expected_request_extra_headers));
             EXPECT_THAT(request.HasBody(), has_body);
-            EXPECT_THAT(response.code(), 200);
+            EXPECT_THAT(response.code(), response_code);
             EXPECT_THAT(response.headers(),
                         UnorderedElementsAreArray(expected_response_headers));
             EXPECT_THAT(data, expected_response_body);
@@ -111,8 +111,8 @@ void SetUpOnResponseBody(StrictMock<MockHttpRequestCallback>* request_callback,
 void SetUpOnResponseCompleted(
     StrictMock<MockHttpRequestCallback>* request_callback,
     const std::string& request_uri, HttpRequest::Method method,
-    const HeaderList& expected_request_extra_headers, bool has_body,
-    const HeaderList& expected_response_headers) {
+    int response_code, const HeaderList& expected_request_extra_headers,
+    bool has_body, const HeaderList& expected_response_headers) {
   EXPECT_CALL(*request_callback, OnResponseCompleted(_, _))
       .WillOnce(::testing::Invoke([=, &request_uri](
                                       const HttpRequest& request,
@@ -122,7 +122,7 @@ void SetUpOnResponseCompleted(
         EXPECT_THAT(request.extra_headers(),
                     UnorderedElementsAreArray(expected_request_extra_headers));
         EXPECT_THAT(request.HasBody(), has_body);
-        EXPECT_THAT(response.code(), 200);
+        EXPECT_THAT(response.code(), response_code);
         EXPECT_THAT(response.headers(),
                     UnorderedElementsAreArray(expected_response_headers));
       }));
@@ -135,16 +135,16 @@ void SetUpGetRequestCallback(
     const HeaderList& expected_response_headers,
     const std::string& expected_response_body, size_t& total_bytes_downloaded) {
   SetUpOnResponseStarted(request_callback, request_uri,
-                         HttpRequest::Method::kGet,
+                         HttpRequest::Method::kGet, /*response_code*/ 200,
                          expected_request_extra_headers,
                          /*has_body*/ false, expected_response_headers);
   SetUpOnResponseBody(request_callback, request_uri, HttpRequest::Method::kGet,
-                      expected_request_extra_headers,
+                      /*response_code*/ 200, expected_request_extra_headers,
                       /*has_body*/ false, expected_response_headers,
                       expected_response_body, total_bytes_downloaded);
 
   SetUpOnResponseCompleted(request_callback, request_uri,
-                           HttpRequest::Method::kGet,
+                           HttpRequest::Method::kGet, /*response_code*/ 200,
                            expected_request_extra_headers,
                            /*has_body*/ false, expected_response_headers);
 }
@@ -156,17 +156,39 @@ void SetUpPostRequestCallback(
     const HeaderList& expected_response_headers,
     const std::string& expected_response_body, size_t& total_bytes_downloaded) {
   SetUpOnResponseStarted(request_callback, request_uri,
-                         HttpRequest::Method::kPost,
+                         HttpRequest::Method::kPost, /*response_code*/ 200,
                          expected_request_extra_headers,
                          /*has_body*/ true, expected_response_headers);
 
   SetUpOnResponseBody(request_callback, request_uri, HttpRequest::Method::kPost,
-                      expected_request_extra_headers,
+                      /*response_code*/ 200, expected_request_extra_headers,
                       /*has_body*/ true, expected_response_headers,
                       expected_response_body, total_bytes_downloaded);
 
   SetUpOnResponseCompleted(request_callback, request_uri,
-                           HttpRequest::Method::kPost,
+                           HttpRequest::Method::kPost, /*response_code*/ 200,
+                           expected_request_extra_headers,
+                           /*has_body*/ true, expected_response_headers);
+}
+
+void SetUpPutRequestCallback(
+    StrictMock<MockHttpRequestCallback>* request_callback,
+    const std::string& request_uri,
+    const HeaderList& expected_request_extra_headers,
+    const HeaderList& expected_response_headers,
+    const std::string& expected_response_body, size_t& total_bytes_downloaded) {
+  SetUpOnResponseStarted(request_callback, request_uri,
+                         HttpRequest::Method::kPut, /*response_code*/ 200,
+                         expected_request_extra_headers,
+                         /*has_body*/ true, expected_response_headers);
+
+  SetUpOnResponseBody(request_callback, request_uri, HttpRequest::Method::kPut,
+                      /*response_code*/ 200, expected_request_extra_headers,
+                      /*has_body*/ true, expected_response_headers,
+                      expected_response_body, total_bytes_downloaded);
+
+  SetUpOnResponseCompleted(request_callback, request_uri,
+                           HttpRequest::Method::kPut, /*response_code*/ 200,
                            expected_request_extra_headers,
                            /*has_body*/ true, expected_response_headers);
 }
@@ -260,6 +282,67 @@ TEST(CurlHttpClientTest, PerformTwoRequestsInParallelInOneThread) {
   EXPECT_THAT(http_server.value()->StartAcceptingRequests(), true);
 
   PerformTwoRequests(http_client.get(), port, request_uri, request_uri);
+
+  curl_api.reset();
+  http_server.value()->Terminate();
+  http_server.value()->WaitForTermination();
+}
+
+TEST(CurlHttpClientTest, PutRequest) {
+  const int port = 4568;
+  const std::string request_uri =
+      absl::StrCat("http://localhost:", port, "/test");
+
+  auto curl_api = std::make_unique<CurlApi>();
+  auto http_client = std::make_unique<CurlHttpClient>(curl_api.get());
+  auto http_server = CreateHttpTestServer("/test", port, /*num_threads*/ 5);
+  EXPECT_THAT(http_server.ok(), true);
+  EXPECT_THAT(http_server.value()->StartAcceptingRequests(), true);
+
+  std::string request_body = "test: 123-45";
+
+  auto request = InMemoryHttpRequest::Create(
+      request_uri, HttpRequest::Method::kPut, HeaderList(), request_body,
+      /*use_compression*/ false);
+  ASSERT_OK(request);
+
+  auto handle = http_client->EnqueueRequest(std::move(request.value()));
+
+  auto request_callback =
+      std::make_unique<StrictMock<MockHttpRequestCallback>>();
+
+  size_t total_bytes_downloaded_handle = 0;
+
+  HeaderList expected_request_extra_headers{{"Content-Length", "12"}};
+  HeaderList expected_response_headers{
+      {"Content-Type", "text/html"},
+      {"Date",
+       absl::FormatTime("%a, %d %b %Y %H", absl::Now(), absl::UTCTimeZone())}};
+
+  auto expected_response_body =
+      absl::StrCat("HTTP Method: PUT\nRequest Uri: /test\n",
+                   "Request Headers:\nHost: localhost:", port,
+                   "\nAccept: */*\nAccept-Encoding: gzip\n",
+                   "Content-Length: 12\n", "Request Body:\ntest: 123-45");
+
+  SetUpPutRequestCallback(request_callback.get(), request_uri,
+                          expected_request_extra_headers,
+                          expected_response_headers, expected_response_body,
+                          total_bytes_downloaded_handle);
+
+  std::vector<std::pair<HttpRequestHandle*, HttpRequestCallback*>> requests{
+      std::make_pair(handle.get(), request_callback.get())};
+
+  EXPECT_THAT(handle->TotalSentReceivedBytes(), FieldsAre(0, 0));
+
+  absl::Status status = http_client->PerformRequests(requests);
+
+  EXPECT_THAT(status, absl::OkStatus());
+  EXPECT_THAT(handle->TotalSentReceivedBytes(),
+              AllOf(Field(&HttpRequestHandle::SentReceivedBytes::sent_bytes,
+                          request_body.size()),
+                    Field(&HttpRequestHandle::SentReceivedBytes::received_bytes,
+                          total_bytes_downloaded_handle)));
 
   curl_api.reset();
   http_server.value()->Terminate();
@@ -373,7 +456,7 @@ TEST(CurlHttpClientTest, CancelRequest) {
 
   SetUpOnResponseBody(
       request_callback2.get(), request_uri2, HttpRequest::Method::kPost,
-      expected_request_extra_headers,
+      /*response_code*/ 200, expected_request_extra_headers,
       /*has_body*/ true, expected_response_headers, expected_response_body2);
 
   EXPECT_CALL(*request_callback2, OnResponseBodyError(_, _, _))
@@ -452,17 +535,17 @@ TEST(CurlHttpClientTest, TestExtraHeaders) {
                    "Content-Length: 12\n", "Request Body:\ntest: 123-45");
 
   SetUpOnResponseStarted(request_callback.get(), request_uri,
-                         HttpRequest::Method::kPost,
+                         HttpRequest::Method::kPost, /*response_code*/ 200,
                          expected_request_extra_headers,
                          /*has_body*/ true, expected_response_headers);
 
   SetUpOnResponseBody(
       request_callback.get(), request_uri, HttpRequest::Method::kPost,
-      expected_request_extra_headers,
+      /*response_code*/ 200, expected_request_extra_headers,
       /*has_body*/ true, expected_response_headers, expected_response_body);
 
   SetUpOnResponseCompleted(request_callback.get(), request_uri,
-                           HttpRequest::Method::kPost,
+                           HttpRequest::Method::kPost, /*response_code*/ 200,
                            expected_request_extra_headers,
                            /*has_body*/ true, expected_response_headers);
 

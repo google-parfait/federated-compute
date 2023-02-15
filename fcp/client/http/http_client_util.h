@@ -33,6 +33,7 @@ inline static constexpr char kAcceptEncodingHdr[] = "Accept-Encoding";
 inline static constexpr char kContentLengthHdr[] = "Content-Length";
 inline static constexpr char kContentEncodingHdr[] = "Content-Encoding";
 inline static constexpr char kContentTypeHdr[] = "Content-Type";
+inline static constexpr char kExpectHdr[] = "Expect";
 inline static constexpr char kTransferEncodingHdr[] = "Transfer-Encoding";
 inline static constexpr char kApiKeyHdr[] = "x-goog-api-key";
 // The "Transfer-Encoding" header value when the header is present but indicates

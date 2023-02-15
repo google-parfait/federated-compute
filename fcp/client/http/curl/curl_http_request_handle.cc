@@ -50,6 +50,18 @@ inline CURLcode AsCode(CURLcode code) { return code; }
       return (__code);                                    \
     }                                                     \
   } while (false)
+
+// Add a new element to a C-style list.
+curl_slist* AddToCurlHeaderList(curl_slist* header_list, const std::string& key,
+                                const std::string& value) {
+  // A null pointer is returned if anything went wrong, otherwise a new
+  // list pointer is returned.
+  curl_slist* tmp =
+      curl_slist_append(header_list, absl::StrCat(key, ": ", value).c_str());
+  FCP_CHECK(tmp != nullptr);
+  return tmp;
+}
+
 }  // namespace
 
 size_t CurlHttpRequestHandle::HeaderCallback(char* buffer, size_t size,
@@ -315,18 +327,19 @@ CURLcode CurlHttpRequestHandle::InitializeConnection(
       CURL_RETURN_IF_ERROR(easy_handle_->SetOpt(CURLOPT_POSTFIELDS, nullptr));
       break;
     case HttpRequest::Method::kPut:
+      CURL_RETURN_IF_ERROR(easy_handle_->SetOpt(CURLOPT_UPLOAD, 1L));
+      break;
     case HttpRequest::Method::kPatch:
     case HttpRequest::Method::kDelete:
-      // TODO(team): Implement the requests when they are needed
       FCP_LOG(ERROR) << "Unsupported request type";
       return CURLE_UNSUPPORTED_PROTOCOL;
   }
 
-  return InitializeHeaders(request_->extra_headers());
+  return InitializeHeaders(request_->extra_headers(), request_->method());
 }
 
 CURLcode CurlHttpRequestHandle::InitializeHeaders(
-    const HeaderList& extra_headers) {
+    const HeaderList& extra_headers, HttpRequest::Method method) {
   // If no "Accept-Encoding" request header is explicitly specified
   // advertise an "Accept-Encoding: gzip" else leave decoded.
   std::optional<std::string> accept_encoding =
@@ -346,14 +359,24 @@ CURLcode CurlHttpRequestHandle::InitializeHeaders(
     if (absl::EqualsIgnoreCase(key, kAcceptEncodingHdr)) {
       continue;
     } else if (absl::EqualsIgnoreCase(key, kContentLengthHdr)) {
-      // For post less than 2GB
-      CURL_RETURN_IF_ERROR(
-          easy_handle_->SetOpt(CURLOPT_POSTFIELDSIZE, std::stol(value)));
+      if (method == HttpRequest::Method::kPost) {
+        // For post less than 2GB
+        CURL_RETURN_IF_ERROR(
+            easy_handle_->SetOpt(CURLOPT_POSTFIELDSIZE, std::stol(value)));
+
+        // Removes the header to prevent libcurl from setting it
+        // to 'Expect: 100-continue' by default, which causes an additional
+        // and unnecessary network round trip.
+        header_list_ = AddToCurlHeaderList(header_list_, kExpectHdr, "");
+      } else if (method == HttpRequest::Method::kPut) {
+        CURL_RETURN_IF_ERROR(
+            easy_handle_->SetOpt(CURLOPT_INFILESIZE, std::stol(value)));
+        header_list_ = AddToCurlHeaderList(header_list_, kExpectHdr, "");
+      }
     } else {
-      curl_slist* tmp = curl_slist_append(
-          header_list_, absl::StrCat(key, ": ", value).c_str());
-      FCP_CHECK(tmp != nullptr);
-      header_list_ = tmp;
+      // A user-defined "Expect" header is not supported.
+      FCP_CHECK(!absl::EqualsIgnoreCase(key, kExpectHdr));
+      header_list_ = AddToCurlHeaderList(header_list_, key, value);
     }
   }
 
