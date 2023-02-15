@@ -22,6 +22,11 @@ import tensorflow_federated as tff
 from fcp.demo import federated_computation as fc
 
 
+@tff.tf_computation(tf.int32, tf.int32)
+def add_values(x, y):
+  return x + y
+
+
 @tff.federated_computation(
     tff.type_at_server(tf.int32),
     tff.type_at_clients(tff.SequenceType(tf.string)))
@@ -31,7 +36,7 @@ def count_clients(state, client_data):
   client_value = tff.federated_value(1, tff.CLIENTS)
   aggregated_count = tff.federated_sum(client_value)
   metrics = tff.federated_value(tff.structure.Struct(()), tff.SERVER)
-  return state + aggregated_count, metrics
+  return tff.federated_map(add_values, (state, aggregated_count)), metrics
 
 
 @tff.federated_computation(
@@ -47,7 +52,7 @@ def count_examples(state, client_data):
   client_counts = tff.federated_map(client_work, client_data)
   aggregated_count = tff.federated_sum(client_counts)
   metrics = tff.federated_value(tff.structure.Struct(()), tff.SERVER)
-  return state + aggregated_count, metrics
+  return tff.federated_map(add_values, (state, aggregated_count)), metrics
 
 
 class FederatedComputationTest(absltest.TestCase):
@@ -76,11 +81,39 @@ class FederatedComputationTest(absltest.TestCase):
     # comp1 should return the number of clients.
     self.assertEqual(
         tff.backends.mapreduce.get_computation_for_map_reduce_form(
-            comp1.map_reduce_form)(0, [['', '']] * 3), (3, ()))
+            comp1.map_reduce_form
+        )(0, [['', '']] * 3),
+        (3, ()),
+    )
     # comp2 should return the number of examples across all clients.
     self.assertEqual(
         tff.backends.mapreduce.get_computation_for_map_reduce_form(
             comp2.map_reduce_form)(0, [['', '']] * 3), (6, ()))
+
+  @tff.test.with_context(tff.backends.test.create_test_python_execution_context)
+  def test_distribute_aggregate_form(self):
+    comp1 = fc.FederatedComputation(count_clients, name='comp1')
+    comp2 = fc.FederatedComputation(count_examples, name='comp2')
+    self.assertNotEqual(
+        comp1.distribute_aggregate_form, comp2.distribute_aggregate_form
+    )
+
+    # While we treat the DAF contents as an implementation detail, we can verify
+    # the invocation results of the corresponding computation.
+    # comp1 should return the number of clients.
+    self.assertEqual(
+        tff.backends.mapreduce.get_computation_for_distribute_aggregate_form(
+            comp1.distribute_aggregate_form
+        )(0, [['', '']] * 3),
+        (3, ()),
+    )
+    # comp2 should return the number of examples across all clients.
+    self.assertEqual(
+        tff.backends.mapreduce.get_computation_for_distribute_aggregate_form(
+            comp2.distribute_aggregate_form
+        )(0, [['', '']] * 3),
+        (6, ()),
+    )
 
   def test_wrapped_computation(self):
     comp = fc.FederatedComputation(count_clients, name='comp')

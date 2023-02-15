@@ -28,7 +28,8 @@ class FederatedComputation(tff.Computation):
     """Constructs a new FederatedComputation object.
 
     Args:
-      comp: The MapReduceForm-compatible computation that will be run.
+      comp: The MapReduceForm- and DistributeAggregateForm- compatible
+        computation that will be run.
       name: A unique name for the computation.
     """
     tff.backends.mapreduce.check_computation_compatible_with_map_reduce_form(
@@ -41,9 +42,18 @@ class FederatedComputation(tff.Computation):
 
   @functools.cached_property
   def map_reduce_form(self) -> tff.backends.mapreduce.MapReduceForm:
-    """The underlying computation that will be run."""
+    """The underlying MapReduceForm representation."""
     return tff.backends.mapreduce.get_map_reduce_form_for_computation(
         self._comp)
+
+  @functools.cached_property
+  def distribute_aggregate_form(
+      self,
+  ) -> tff.backends.mapreduce.DistributeAggregateForm:
+    """The underlying DistributeAggregateForm representation."""
+    return tff.backends.mapreduce.get_distribute_aggregate_form_for_computation(
+        self._comp
+    )
 
   @property
   def wrapped_computation(self) -> tff.Computation:
