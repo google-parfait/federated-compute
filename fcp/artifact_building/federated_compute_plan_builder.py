@@ -348,81 +348,96 @@ def _merge_secagg_vars(
 
 
 def _build_server_phase_v2(
-    mrf: tff.backends.mapreduce.MapReduceForm,
+    daf: tff.backends.mapreduce.DistributeAggregateForm,
 ) -> plan_pb2.ServerPhaseV2:
-  """Produces the ServerPhaseV2 message.
+  """Generates a ServerPhaseV2 message based on DistributeAggregateForm."""
+  # TODO(team): Use DistributeAggregateForm to produce a new server-side
+  # TF graph and ServerPhaseV2 message that support producing the client
+  # checkpoint with a single sess.run call and producing the final checkpoints
+  # with a second sess.run call. For now the ServerPhaseV2 message only contains
+  # the aggregation information.
 
-  Args:
-    mrf: A `MapReduceForm` object containing sub-computations.
+  # The client_to_server_aggregation computation is guaranteed to conform to
+  # a specific structure. It is a lambda computation whose result block contains
+  # locals that are exclusively aggregation-type intrinsics.
+  aggregations_bb = daf.client_to_server_aggregation.to_building_block()
+  aggregations_bb.check_lambda()
+  aggregations_bb.result.check_block()
 
-  Returns:
-    ServerPhaseV2 proto message.
-  """
+  # Get lists of the TensorSpecProtos for the inputs and outputs of all
+  # intrinsic calls. These lists are formatted such that the ith entry
+  # represents the TensorSpecProtos for the ith intrinsic in the aggregation
+  # computation. Since intrinsics may have one or more args, the ith entry in
+  # the input TensorSpecProto list is itself a list, where the jth entry
+  # represents the TensorSpecProtos corresponding to the jth argument of the
+  # ith intrinsic.
+  grouped_input_tensor_specs = variable_helpers.get_grouped_input_tensor_specs_for_aggregations(
+      aggregations_bb,
+      artifact_constants.AGGREGATION_INTRINSIC_ARG_SELECTION_INDEX_TO_NAME_DICT,
+  )
+  grouped_output_tensor_specs = (
+      variable_helpers.get_grouped_output_tensor_specs_for_aggregations(
+          aggregations_bb
+      )
+  )
+  assert len(grouped_input_tensor_specs) == len(grouped_output_tensor_specs)
 
-  def flattened_tensor_specs(
-      tff_type: variable_helpers.AllowedTffTypes, name: str
-  ) -> list[tf.TensorSpec]:
-    # Use the same naming logic as variable_helpers.variable_names_from_type.
-    type_checks.check_type(
-        tff_type,
-        (tff.TensorType, tff.FederatedType, tff.StructType),
-        name='tff_type',
-    )
-    type_checks.check_type(name, str, name='name')
-    if isinstance(tff_type, tff.TensorType):
-      tensor_spec = tf.TensorSpec(tff_type.shape, tff_type.dtype, name=name)
-      return [tensor_spec]
-    elif isinstance(tff_type, tff.FederatedType):
-      return flattened_tensor_specs(tff_type.member, name)
-    elif isinstance(tff_type, tff.StructType):
-      result = []
-      fields = tff.structure.iter_elements(tff_type)
-      for index, (field_name, field_type) in enumerate(fields):
-        # Default the name of the element to its index so that we don't wind up
-        # with multiple child fields listed under `/v/`
-        field_name = field_name or str(index)
-        result.extend(
-            flattened_tensor_specs(field_type, name=name + '/' + field_name)
-        )
-      return result
-    else:
-      raise TypeError(
-          'Cannot create TensorSpecs from [{t}] TFF type. '
-          'Short-hand: {s}'.format(t=type(tff_type), s=tff_type)
+  intrinsic_uris = [
+      local_value.function.intrinsic_def().uri
+      for _, local_value in aggregations_bb.result.locals
+  ]
+  assert len(intrinsic_uris) == len(grouped_output_tensor_specs)
+
+  # Each intrinsic input arg can be a struct or even a nested struct, which
+  # requires the intrinsic to be applied independently to each element (e.g. a
+  # tff.federated_sum call applied to a struct will result in a federated_sum
+  # aggregation message for each element of the struct). Note that elements of
+  # structs can themselves be multi-dimensional tensors. When an intrinsic call
+  # has multiple args with mismatching structure (e.g. a federated_weighted_mean
+  # intrinsic applied to a 2D struct value arg and scalar weight arg), some args
+  # will need to be "scaled up" via repetition to match the args with the
+  # "largest" structure.
+  aggregations = []
+  for intrinsic_index, (input_tensor_specs, output_tensor_specs) in enumerate(
+      zip(grouped_input_tensor_specs, grouped_output_tensor_specs)
+  ):
+    # Generate the aggregation messages for this intrinsic call.
+    max_input_struct_length = max([len(x) for x in input_tensor_specs])
+    max_struct_length = max(max_input_struct_length, len(output_tensor_specs))
+    for i in range(max_struct_length):
+      intrinsic_args = []
+      for j, _ in enumerate(input_tensor_specs):
+        # Scale up any "smaller" structure args by reusing their last element.
+        tensor_spec = input_tensor_specs[j][
+            min(i, len(input_tensor_specs[j]) - 1)
+        ]
+        if tensor_spec.name.startswith('update'):
+          intrinsic_args.append(
+              plan_pb2.ServerAggregationConfig.IntrinsicArg(
+                  input_tensor=tensor_spec.experimental_as_proto()
+              )
+          )
+        else:
+          intrinsic_args.append(
+              plan_pb2.ServerAggregationConfig.IntrinsicArg(
+                  state_tensor=tensor_spec.experimental_as_proto()
+              )
+          )
+      aggregations.append(
+          plan_pb2.ServerAggregationConfig(
+              intrinsic_uri=intrinsic_uris[intrinsic_index],
+              intrinsic_args=intrinsic_args,
+              # Scale up the output structure by reusing the last element if
+              # needed.
+              output_tensors=[
+                  output_tensor_specs[
+                      min(i, len(output_tensor_specs) - 1)
+                  ].experimental_as_proto()
+              ],
+          )
       )
 
-  # The client outputs (AKA inputs to the aggregation) correspond to
-  # the first element in the MRF 'work' computation.
-  input_tensor_specs = []
-  for ts in flattened_tensor_specs(
-      mrf.work.type_signature.result[0], name='update'
-  ):
-    input_tensor_specs.append(ts.experimental_as_proto())
-  # Use an outer struct for the aggregation output tensors since we need to
-  # match the type of 'combined_intermediate_update_vars', which is the variable
-  # from the existing ServerPhase graph that will be accepting the aggregation
-  # service checkpoint results in the MVP.
-  output_tensor_specs = []
-  for ts in flattened_tensor_specs(
-      tff.StructType([mrf.zero.type_signature.result]),
-      name='intermediate_update',
-  ):
-    output_tensor_specs.append(ts.experimental_as_proto())
-
-  server_phase_v2 = plan_pb2.ServerPhaseV2()
-  for input_tensor_spec, output_tensor_spec in zip(
-      input_tensor_specs, output_tensor_specs
-  ):
-    server_phase_v2.aggregations.add(
-        intrinsic_uri='federated_sum',
-        intrinsic_args=[
-            plan_pb2.ServerAggregationConfig.IntrinsicArg(
-                input_tensor=input_tensor_spec
-            )
-        ],
-        output_tensors=[output_tensor_spec],
-    )
-  return server_phase_v2
+  return plan_pb2.ServerPhaseV2(aggregations=aggregations)
 
 
 def _build_server_graph(
@@ -1090,6 +1105,7 @@ def _build_client_graph_with_tensorflow_spec(
 
 def build_plan(
     mrf: tff.backends.mapreduce.MapReduceForm,
+    daf: Optional[tff.backends.mapreduce.DistributeAggregateForm],
     dataspec: data_spec.NestedDataSpec,
     additional_checkpoint_metadata_var_fn: Optional[
         Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
@@ -1125,6 +1141,7 @@ def build_plan(
 
   Args:
     mrf: An instance of `tff.backends.mapreduce.MapReduceForm`.
+    daf: An instance of `tff.backends.mapreduce.DistributeAggregateForm`.
     dataspec: Either an instance of `data_spec.DataSpec` or a nested structure
       of these that matches the structure of the first element of the input to
       client-side processing computation `mrf.work`.
@@ -1207,11 +1224,9 @@ def build_plan(
         server_phase=server_phase, client_phase=client_phase
     )
 
-    # TODO(team): Once new TFF functionality is available to split a
-    # computation in such a way that preserves information about the aggregation
-    # intrinsics, produce the ServerPhaseV2 message for all computations.
     if generate_server_phase_v2:
-      combined_phases.server_phase_v2.CopyFrom(_build_server_phase_v2(mrf))
+      assert daf
+      combined_phases.server_phase_v2.CopyFrom(_build_server_phase_v2(daf))
 
     plan = plan_pb2.Plan(
         version=1, server_savepoint=server_savepoint, phase=[combined_phases]

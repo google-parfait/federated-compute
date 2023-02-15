@@ -230,3 +230,231 @@ def get_shared_secagg_tensor_names(
       SIDECHANNEL_NAME_PREFIX + name + _TF_TENSOR_NAME_SUFFIX
       for name in tensor_names
   ]
+
+
+def get_flattened_tensor_specs(
+    tff_type: AllowedTffTypes, name: str
+) -> list[tf.TensorSpec]:
+  """Generates TensorSpecs for a flattened version of the given `tff_type`.
+
+  This function uses the same naming logic as `variable_names_from_type`. Please
+  see that function's docstring.
+
+  Args:
+    tff_type: Either a `tff.StructType`, a `tff.FederatedType` or a
+      `tff.TensorType` object.
+    name: The preferred name to use at the top-most level (if not None, must be
+      a string). If `tff_type` is a `tff.StructType`, the names of the inner
+      fields will be scoped under `name`, e.g. `some_name/field_name`.
+
+  Returns:
+    A flat Python `list` of `TensorSpec`s.
+
+  Raises:
+    TypeError: If the argument is of the wrong type.
+  """
+  type_checks.check_type(
+      tff_type,
+      (tff.TensorType, tff.FederatedType, tff.StructType),
+      name='tff_type',
+  )
+  type_checks.check_type(name, str, name='name')
+  if isinstance(tff_type, tff.TensorType):
+    return [tf.TensorSpec(tff_type.shape, tff_type.dtype, name=name)]
+  elif isinstance(tff_type, tff.FederatedType):
+    return get_flattened_tensor_specs(tff_type.member, name)
+  elif isinstance(tff_type, tff.StructType):
+    result = []
+    fields = tff.structure.iter_elements(tff_type)
+    for index, (field_name, field_type) in enumerate(fields):
+      # Default the name of the element to its index so that we don't wind up
+      # with multiple child fields listed under `/v/`
+      field_name = field_name or str(index)
+      result.extend(
+          get_flattened_tensor_specs(field_type, name=name + '/' + field_name)
+      )
+    return result
+  else:
+    raise TypeError(
+        'Cannot create TensorSpecs from [{t}] TFF type. Short-hand: {s}'.format(
+            t=type(tff_type), s=tff_type
+        )
+    )
+
+
+def get_grouped_input_tensor_specs_for_aggregations(
+    aggregation_comp: tff.framework.ComputationBuildingBlock,
+    names: dict[int, str],
+) -> list[list[list[tf.TensorSpec]]]:
+  """Gets the input TensorSpecs for an aggregation computation.
+
+  This function can be used to generate the TensorSpecs that are assigned to
+  ServerAggregationConfig.IntrinsicArg messages to represent the aggregation
+  intrinsic calls in DistributeAggregateForm.client_to_server_aggregation.
+
+  It derives the tensor name(s) for each intrinsic input argument by following
+  naming logic similar to `variable_names_from_type`. DistributeAggregateForm
+  does guarantee that each intrinsic input argument will be a
+  `building_block.Selection` or a (potentially nested) struct of
+  `building_block.Selection`s. The first element of the path is used to
+  determine the top-level name, which must match the top-level name that was
+  used to construct the tensor that will be getting consumed by this argument.
+
+  Args:
+    aggregation_comp: The aggregation computation.
+    names: A dictionary describing how to map the first element of the path to a
+      top-level name.
+
+  Returns:
+    A `list` where the ith entry represents the input tensor specs for the
+    ith intrinsic in the aggregation computation. The ith entry is itself a list
+    where the jth entry represents the input tensor specs for the jth argument
+    of the ith intrinsic in the aggregation computation.
+
+  Raises:
+    TypeError: If the argument is of the wrong type.
+    ValueError: If the argument contains an unexpected
+      `building_block.Selection` index.
+  """
+
+  def _get_selection_path(
+      selection: tff.framework.ComputationBuildingBlock,
+  ) -> list[int]:
+    """Gets the list of selection indices for a building_blocks.Selection."""
+
+    path = []
+    while selection.is_selection():
+      path.append(selection.index)
+      selection = selection.source
+    # In ASTs like x[0][1], we'll see the last (outermost) selection first.
+    path.reverse()
+    return path
+
+  def _get_input_tensor_specs_for_aggregation_arg(
+      value: tff.framework.ComputationBuildingBlock, names: dict[int, str]
+  ) -> list[tf.TensorSpec]:
+    """Gets the input TensorSpecs for a single intrinsic argument."""
+
+    # An intrinsic arg may be a `building_block.Selection` or a (potentially
+    # nested) struct of `building_block.Selection`s. Start by creating a
+    # flattened list of the `building_block.Selection`s.
+    inner_values = []
+    if value.is_struct():
+      inner_values = tff.structure.flatten(value)
+    else:
+      inner_values = [value]
+
+    # For each `building_block.Selection`, reconstruct the tensor name that
+    # will be used to supply that value. The first index of the selection path
+    # indicates whether the tensor will be coming from the intermediate state
+    # checkpoint (0) or from the client checkpoint (1), since TFF condenses
+    # daf.client_to_server_aggregation(temp_server_state, client_update)
+    # into a 1-arg function. Since the tensors within the checkpoints
+    # corresponding to temp_server_state and work_at_clients will be named using
+    # variable_names_from_type, which uses a simple filepath-like naming pattern
+    # to refer to the tensors within a struct, we can reconstruct the relevant
+    # tensor name by concatenating together the remaining indices of each
+    # selection path.
+    tensor_specs = []
+    for inner_value in inner_values:
+      inner_value.check_selection()
+      path = _get_selection_path(inner_value)
+      arg_index = path[0]
+      if arg_index in names:
+        prefix = names[arg_index]
+      else:
+        raise ValueError('Unexpected arg index for aggregation selection')
+      prefix += '/' + '/'.join([str(x) for x in path[1:]])
+      tensor_specs.extend(
+          get_flattened_tensor_specs(inner_value.type_signature, name=prefix)
+      )
+
+    return tensor_specs
+
+  grouped_input_tensor_specs = []
+
+  for _, local_value in aggregation_comp.result.locals:
+    local_value.check_call()
+    local_value.function.check_intrinsic()
+    assert local_value.function.intrinsic_def().aggregation_kind
+
+    # Collect the input TensorFlowSpecs for each argument for this intrinsic.
+    input_tensor_specs_for_intrinsic = []
+    if (
+        local_value.function.intrinsic_def().type_signature.parameter.is_struct()
+    ):
+      for element in local_value.argument.children():
+        input_tensor_specs_for_intrinsic.append(
+            _get_input_tensor_specs_for_aggregation_arg(element, names)
+        )
+    else:
+      input_tensor_specs_for_intrinsic.append(
+          _get_input_tensor_specs_for_aggregation_arg(
+              local_value.argument, names
+          )
+      )
+
+    grouped_input_tensor_specs.append(input_tensor_specs_for_intrinsic)
+
+  return grouped_input_tensor_specs
+
+
+def get_grouped_output_tensor_specs_for_aggregations(
+    aggregation_comp: tff.framework.ComputationBuildingBlock,
+) -> list[list[tf.TensorSpec]]:
+  """Gets the output TensorSpecs for an aggregation computation.
+
+  This function can be used to generate the TensorSpecs that are assigned
+  to the output_tensors value in ServerAggregationConfig messages to represent
+  the aggregation intrinsic calls in
+  DistributeAggregateForm.client_to_server_aggregation.
+
+  It derives the tensor name(s) for each intrinsic output argument by following
+  naming logic similar to `variable_names_from_type`. It must produce tensor
+  names that match the tensor names that are expected by the post-aggregation
+  computation.
+
+  Args:
+    aggregation_comp: The aggregation computation.
+
+  Returns:
+    A list where the ith entry represents the output tensor specs for the ith
+    intrinsic in the aggregation computation.
+
+  Raises:
+    TypeError: If the argument is of the wrong type.
+  """
+  # TensorflowSpecs for all the intrinsic results. These TensorflowSpecs must
+  # have names that mirror the result of calling variable_names_from_type on
+  # the output type of DistributeAggregateForm.client_to_server_aggregation
+  # (which is the same as the type of the aggregation result input arg in
+  # DistributeAggregateForm.server_result).
+  output_tensor_specs = get_flattened_tensor_specs(
+      tff.StructType([aggregation_comp.type_signature.result]),
+      name='intermediate_update',
+  )
+  output_tensor_spec_index = 0
+
+  grouped_output_tensor_specs = []
+
+  for _, local_value in aggregation_comp.result.locals:
+    local_value.check_call()
+    local_value.function.check_intrinsic()
+    local_value.type_signature.check_federated()
+    assert local_value.function.intrinsic_def().aggregation_kind
+
+    tensor_specs = []
+    # If the output is a struct, select the appropriate number of
+    # TensorflowSpecs.
+    if local_value.type_signature.member.is_struct():
+      num_specs = len(tff.structure.flatten(local_value.type_signature.member))
+      tensor_specs = output_tensor_specs[
+          output_tensor_spec_index : output_tensor_spec_index + num_specs
+      ]
+      output_tensor_spec_index += num_specs
+    else:
+      tensor_specs.append(output_tensor_specs[output_tensor_spec_index])
+      output_tensor_spec_index += 1
+    grouped_output_tensor_specs.append(tensor_specs)
+
+  return grouped_output_tensor_specs

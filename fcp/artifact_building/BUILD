@@ -253,5 +253,8 @@ py_test(
     srcs = ["variable_helpers_test.py"],
     python_version = "PY3",
     srcs_version = "PY3",
-    deps = [":variable_helpers"],
+    deps = [
+        ":artifact_constants",
+        ":variable_helpers",
+    ],
 )

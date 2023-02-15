@@ -18,7 +18,18 @@ from absl.testing import absltest
 import tensorflow as tf
 import tensorflow_federated as tff
 
+from fcp.artifact_building import artifact_constants
 from fcp.artifact_building import variable_helpers
+
+
+@tff.federated_computation(
+    tff.type_at_server(tf.int32), tff.type_at_clients(tf.float32)
+)
+def sample_comp(x, y):
+  a = tff.federated_broadcast(x)
+  output1 = tff.federated_secure_sum_bitwidth(a, 5)
+  output2 = tff.federated_mean([y, y], y)
+  return output1, output2
 
 
 class VariableHelpersTest(absltest.TestCase):
@@ -147,6 +158,170 @@ class VariableHelpersTest(absltest.TestCase):
         'test_name',
     )
     self.assertEqual(names, ['test_name/0', 'test_name/b/0', 'test_name/b/d'])
+
+  def test_get_flattened_tensor_specs_with_tensor_type(self):
+    specs = variable_helpers.get_flattened_tensor_specs(
+        tff.TensorType(dtype=tf.int32, shape=tf.TensorShape([3, 5])),
+        'test_name',
+    )
+    self.assertEqual(
+        specs,
+        [
+            tf.TensorSpec(
+                name='test_name',
+                shape=tf.TensorShape([3, 5]),
+                dtype=tf.int32,
+            )
+        ],
+    )
+
+  def test_get_flattened_tensor_specs_with_federated_type(self):
+    specs = variable_helpers.get_flattened_tensor_specs(
+        tff.FederatedType(
+            tff.TensorType(dtype=tf.int32, shape=tf.TensorShape([3, 5])),
+            tff.SERVER,
+        ),
+        'test_name',
+    )
+    self.assertEqual(
+        specs,
+        [
+            tf.TensorSpec(
+                name='test_name',
+                shape=tf.TensorShape([3, 5]),
+                dtype=tf.int32,
+            )
+        ],
+    )
+
+  def test_get_flattened_tensor_specs_with_tuple_type(self):
+    specs = variable_helpers.get_flattened_tensor_specs(
+        tff.StructType([
+            (
+                'a',
+                tff.TensorType(dtype=tf.int32, shape=tf.TensorShape([3, 5])),
+            ),
+            (
+                'b',
+                tff.StructType([
+                    (tff.TensorType(dtype=tf.bool, shape=tf.TensorShape([4]))),
+                    (
+                        'd',
+                        tff.TensorType(
+                            dtype=tf.float32,
+                            shape=tf.TensorShape([1, 3, 5]),
+                        ),
+                    ),
+                ]),
+            ),
+        ]),
+        'test_name',
+    )
+    self.assertEqual(
+        specs,
+        [
+            tf.TensorSpec(
+                name='test_name/a',
+                shape=tf.TensorShape([3, 5]),
+                dtype=tf.int32,
+            ),
+            tf.TensorSpec(
+                name='test_name/b/0',
+                shape=tf.TensorShape([4]),
+                dtype=tf.bool,
+            ),
+            tf.TensorSpec(
+                name='test_name/b/d',
+                shape=tf.TensorShape([1, 3, 5]),
+                dtype=tf.float32,
+            ),
+        ],
+    )
+
+  def test_get_grouped_input_tensor_specs_for_aggregations(self):
+    daf = tff.backends.mapreduce.get_distribute_aggregate_form_for_computation(
+        sample_comp
+    )
+    grouped_input_tensor_specs = variable_helpers.get_grouped_input_tensor_specs_for_aggregations(
+        daf.client_to_server_aggregation.to_building_block(),
+        artifact_constants.AGGREGATION_INTRINSIC_ARG_SELECTION_INDEX_TO_NAME_DICT,
+    )
+    self.assertEqual(
+        grouped_input_tensor_specs,
+        [
+            [  # federated_weighted_mean intrinsic args
+                [  # federated_weighted_mean value arg
+                    tf.TensorSpec(
+                        name='update/0/0',
+                        shape=tf.TensorShape([]),
+                        dtype=tf.float32,
+                    ),
+                    tf.TensorSpec(
+                        name='update/0/1',
+                        shape=tf.TensorShape([]),
+                        dtype=tf.float32,
+                    ),
+                ],
+                [  # federated_weighted_mean weight arg
+                    tf.TensorSpec(
+                        name='update/1',
+                        shape=tf.TensorShape([]),
+                        dtype=tf.float32,
+                    )
+                ],
+            ],
+            [  # federated_secure_sum_bitwidth intrinsic args
+                [  # federated_secure_sum_bitwidth value arg
+                    tf.TensorSpec(
+                        name='update/2',
+                        shape=tf.TensorShape([]),
+                        dtype=tf.int32,
+                    )
+                ],
+                [  # federated_secure_sum_bitwidth bitwidth arg
+                    tf.TensorSpec(
+                        name='intermediate_state/0',
+                        shape=tf.TensorShape([]),
+                        dtype=tf.int32,
+                    )
+                ],
+            ],
+        ],
+    )
+
+  def test_get_grouped_output_tensor_specs_for_aggregations(self):
+    daf = tff.backends.mapreduce.get_distribute_aggregate_form_for_computation(
+        sample_comp
+    )
+    grouped_output_tensor_specs = (
+        variable_helpers.get_grouped_output_tensor_specs_for_aggregations(
+            daf.client_to_server_aggregation.to_building_block()
+        )
+    )
+    self.assertEqual(
+        grouped_output_tensor_specs,
+        [
+            [  # federated_weighted_mean intrinsic output
+                tf.TensorSpec(
+                    name='intermediate_update/0/0/0',
+                    shape=tf.TensorShape([]),
+                    dtype=tf.float32,
+                ),
+                tf.TensorSpec(
+                    name='intermediate_update/0/0/1',
+                    shape=tf.TensorShape([]),
+                    dtype=tf.float32,
+                ),
+            ],
+            [  # federated_secure_sum_bitwidth intrinsic output
+                tf.TensorSpec(
+                    name='intermediate_update/0/1',
+                    shape=tf.TensorShape([]),
+                    dtype=tf.int32,
+                )
+            ],
+        ],
+    )
 
 
 if __name__ == '__main__':

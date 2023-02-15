@@ -137,8 +137,10 @@ class FederatedContext(tff.program.FederatedContext):
     except KeyError:
       plan = federated_compute_plan_builder.build_plan(
           comp.map_reduce_form,
+          comp.distribute_aggregate_form,
           self._get_nested_data_spec(config.example_selector),
-          generate_server_phase_v2=True)
+          generate_server_phase_v2=True,
+      )
       # Add the TF Lite flatbuffer to the plan. If the conversion fails, the
       # flatbuffer will be silently omitted and the client will use the
       # TensorFlow graph in `plan.client_graph_bytes` instead.

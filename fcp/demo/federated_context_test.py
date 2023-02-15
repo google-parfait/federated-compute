@@ -341,8 +341,14 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
     self.build_plan.assert_called_once()
     self.assertEqual(self.build_plan.call_args.args[0],
                      self.count_clients_comp1.map_reduce_form)
-    self.assertEqual(self.build_plan.call_args.args[1].example_selector_proto,
-                     self.data_source1.example_selector)
+    self.assertEqual(
+        self.build_plan.call_args.args[1],
+        self.count_clients_comp1.distribute_aggregate_form,
+    )
+    self.assertEqual(
+        self.build_plan.call_args.args[2].example_selector_proto,
+        self.data_source1.example_selector,
+    )
     self.run_computation.assert_called_once()
     self.build_plan.reset_mock()
     self.run_computation.reset_mock()
@@ -392,8 +398,14 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
     self.build_plan.assert_called_once()
     self.assertEqual(self.build_plan.call_args.args[0],
                      self.identity_comp.map_reduce_form)
-    self.assertEqual(self.build_plan.call_args.args[1].example_selector_proto,
-                     self.data_source1.example_selector)
+    self.assertEqual(
+        self.build_plan.call_args.args[1],
+        self.identity_comp.distribute_aggregate_form,
+    )
+    self.assertEqual(
+        self.build_plan.call_args.args[2].example_selector_proto,
+        self.data_source1.example_selector,
+    )
     self.run_computation.assert_called_once()
 
   async def test_rebuild_with_different_data_source(self):
@@ -405,8 +417,14 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
     self.build_plan.assert_called_once()
     self.assertEqual(self.build_plan.call_args.args[0],
                      self.count_clients_comp1.map_reduce_form)
-    self.assertEqual(self.build_plan.call_args.args[1].example_selector_proto,
-                     self.data_source2.example_selector)
+    self.assertEqual(
+        self.build_plan.call_args.args[1],
+        self.count_clients_comp1.distribute_aggregate_form,
+    )
+    self.assertEqual(
+        self.build_plan.call_args.args[2].example_selector_proto,
+        self.data_source2.example_selector,
+    )
     self.run_computation.assert_called_once()
 
 
