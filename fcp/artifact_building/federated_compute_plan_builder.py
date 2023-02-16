@@ -362,7 +362,7 @@ def _build_server_phase_v2(
   # locals that are exclusively aggregation-type intrinsics.
   aggregations_bb = daf.client_to_server_aggregation.to_building_block()
   aggregations_bb.check_lambda()
-  aggregations_bb.result.check_block()
+  aggregations_bb.result.check_block()  # pytype: disable=attribute-error
 
   # Get lists of the TensorSpecProtos for the inputs and outputs of all
   # intrinsic calls. These lists are formatted such that the ith entry
@@ -384,7 +384,7 @@ def _build_server_phase_v2(
 
   intrinsic_uris = [
       local_value.function.intrinsic_def().uri
-      for _, local_value in aggregations_bb.result.locals
+      for _, local_value in aggregations_bb.result.locals  # pytype: disable=attribute-error
   ]
   assert len(intrinsic_uris) == len(grouped_output_tensor_specs)
 

@@ -324,8 +324,8 @@ def get_grouped_input_tensor_specs_for_aggregations(
 
     path = []
     while selection.is_selection():
-      path.append(selection.index)
-      selection = selection.source
+      path.append(selection.index)  # pytype: disable=attribute-error
+      selection = selection.source  # pytype: disable=attribute-error
     # In ASTs like x[0][1], we'll see the last (outermost) selection first.
     path.reverse()
     return path
@@ -373,7 +373,7 @@ def get_grouped_input_tensor_specs_for_aggregations(
 
   grouped_input_tensor_specs = []
 
-  for _, local_value in aggregation_comp.result.locals:
+  for _, local_value in aggregation_comp.result.locals:  # pytype: disable=attribute-error
     local_value.check_call()
     local_value.function.check_intrinsic()
     assert local_value.function.intrinsic_def().aggregation_kind
@@ -437,7 +437,7 @@ def get_grouped_output_tensor_specs_for_aggregations(
 
   grouped_output_tensor_specs = []
 
-  for _, local_value in aggregation_comp.result.locals:
+  for _, local_value in aggregation_comp.result.locals:  # pytype: disable=attribute-error
     local_value.check_call()
     local_value.function.check_intrinsic()
     local_value.type_signature.check_federated()
