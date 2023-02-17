@@ -43,15 +43,16 @@ class FederatedComputation(tff.Computation):
   @functools.cached_property
   def map_reduce_form(self) -> tff.backends.mapreduce.MapReduceForm:
     """The underlying MapReduceForm representation."""
-    return tff.backends.mapreduce.get_map_reduce_form_for_computation(
-        self._comp)
+    return tff.backends.mapreduce.get_map_reduce_form_for_computation(  # pytype: disable=wrong-arg-types
+        self._comp
+    )
 
   @functools.cached_property
   def distribute_aggregate_form(
       self,
   ) -> tff.backends.mapreduce.DistributeAggregateForm:
     """The underlying DistributeAggregateForm representation."""
-    return tff.backends.mapreduce.get_distribute_aggregate_form_for_computation(
+    return tff.backends.mapreduce.get_distribute_aggregate_form_for_computation(  # pytype: disable=wrong-arg-types
         self._comp
     )
 
