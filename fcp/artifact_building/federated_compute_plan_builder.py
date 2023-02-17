@@ -19,6 +19,7 @@ output by the TFF compiler pipeline.
 
 import collections
 from collections.abc import Callable, Iterable, Mapping, Sequence
+import enum
 from typing import Optional, TypeVar, Union
 
 import attr
@@ -45,7 +46,20 @@ SECURE_MODULAR_SUM_URI = 'federated_secure_modular_sum'
 class SecureAggregationTensorShapeError(Exception):
   """Error raised when secagg tensors do not have fully defined shape."""
 
-  pass
+
+@enum.unique
+class ClientPlanType(enum.Enum):
+  """Option adjusting client plan type during plan building.
+
+  Values:
+    TENSORFLOW: The default value. Uses a TF client graph for client
+      computation.
+    EXAMPLE_QUERY: Uses an example query containing client computation logic in
+      the provided example selector(s).
+  """
+
+  TENSORFLOW = 'tensorflow'
+  EXAMPLE_QUERY = 'example_query'
 
 
 # A type representing a potentially nested struct of integers.
@@ -612,7 +626,7 @@ def _build_server_graph(
       # Run the initializer for update vars prior to restoring the client update
       update_vars, read_update = (
           checkpoint_utils.create_state_vars_and_savepoint(
-              simpleagg_update_type, 'update'
+              simpleagg_update_type, artifact_constants.UPDATE
           )
       )
       update_vars_initializer = tf.compat.v1.variables_initializer(
@@ -770,7 +784,7 @@ def _build_server_graph(
     )
     new_server_state_values, server_metrics_values = (
         graph_helpers.import_tensorflow(
-            'update',
+            artifact_constants.UPDATE,
             mrf.update,
             (server_state_vars, combined_update_vars),
             split_outputs=True,
@@ -1049,7 +1063,7 @@ def _build_client_graph_with_tensorflow_spec(
           dtype=tf.string, shape=(), name='output_filepath'
       )
       simpleagg_variable_names = variable_helpers.variable_names_from_type(
-          simpleagg_update_type, name='update'
+          simpleagg_update_type, name=artifact_constants.UPDATE
       )
       if experimental_checkpoint_write in [
           checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_WRITE,
@@ -1103,10 +1117,71 @@ def _build_client_graph_with_tensorflow_spec(
   )
 
 
+def _build_client_phase_with_example_query_spec(
+    client_work_comp: tff.Computation,
+    example_query_spec: plan_pb2.ExampleQuerySpec,
+) -> plan_pb2.ClientPhase:
+  """Builds the ClientPhase with `ExampleQuerySpec` populated.
+
+  Args:
+    client_work_comp: A `tff.Computation` that represents the TensorFlow logic
+      run on-device.
+    example_query_spec: Field containing output vector information for client
+      example query. The output vector names listed in the spec are expected to
+      be consistent with the output names we would produce in the
+      `MapReduceForm` client work computation, if we were to build a TF-based
+      plan from that `MapReduceForm`.
+
+  Returns:
+    A client phase part of the federated protocol.
+  """
+  expected_vector_names = set(
+      variable_helpers.variable_names_from_type(
+          client_work_comp.type_signature.result[0], artifact_constants.UPDATE
+      )
+  )
+  used_names = set()
+  io_router = plan_pb2.FederatedExampleQueryIORouter()
+  for example_query in example_query_spec.example_queries:
+    vector_names = set(example_query.output_vector_specs.keys())
+    if not all([name in expected_vector_names for name in vector_names]):
+      raise ValueError(
+          'Found unexpected vector names in supplied `example_query_spec`. '
+          f'Expected names: {expected_vector_names}. '
+          f'Found unexpected names: {vector_names-expected_vector_names}.'
+      )
+
+    if any([name in used_names for name in vector_names]):
+      raise ValueError(
+          'Duplicate vector names found in supplied `example_query_spec`. '
+          f'Duplicates: {vector_names.intersection(used_names)}'
+      )
+
+    used_names.update(vector_names)
+
+    for vector_name in vector_names:
+      io_router.aggregations[vector_name].CopyFrom(
+          plan_pb2.AggregationConfig(
+              tf_v1_checkpoint_aggregation=plan_pb2.TFV1CheckpointAggregation()
+          )
+      )
+
+  if used_names != expected_vector_names:
+    raise ValueError(
+        'Not all expected vector names were in supplied `example_query_spec`.'
+        f' Expected names: {expected_vector_names}. Names not present in'
+        f' `example_query_spec`: {expected_vector_names-vector_names}'
+    )
+  return plan_pb2.ClientPhase(
+      example_query_spec=example_query_spec, federated_example_query=io_router
+  )
+
+
 def build_plan(
     mrf: tff.backends.mapreduce.MapReduceForm,
     daf: Optional[tff.backends.mapreduce.DistributeAggregateForm],
-    dataspec: data_spec.NestedDataSpec,
+    dataspec: Optional[data_spec.NestedDataSpec] = None,
+    example_query_spec: Optional[plan_pb2.ExampleQuerySpec] = None,
     additional_checkpoint_metadata_var_fn: Optional[
         Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
     ] = None,
@@ -1144,7 +1219,13 @@ def build_plan(
     daf: An instance of `tff.backends.mapreduce.DistributeAggregateForm`.
     dataspec: Either an instance of `data_spec.DataSpec` or a nested structure
       of these that matches the structure of the first element of the input to
-      client-side processing computation `mrf.work`.
+      client-side processing computation `mrf.work`. Can only supply one of
+      `dataspec` or `example_query_spec`.
+    example_query_spec: An instance of `plan_pb2.ExampleQuerySpec`. If provided
+      it is assumed a light weight client plan should be constructed. No client
+      graph will be included in the produced plan object. Instead the generated
+      plan will have an `ExampleQuerySpec` and `FederatedExampleQueryIORouter`.
+      Can only supply one of `dataspec` or `example_query_spec`.
     additional_checkpoint_metadata_var_fn: An optional method that takes in a
       server state type, a server metrics type, and a boolean determining
       whether to revert to legacy metrics behavior to produce additional
@@ -1167,7 +1248,22 @@ def build_plan(
     ValueError: If any of the arguments are found to be in an unexpected form.
   """
   type_checks.check_type(mrf, tff.backends.mapreduce.MapReduceForm, name='mrf')
-  assert dataspec
+  client_plan_type = (
+      ClientPlanType.TENSORFLOW
+      if example_query_spec is None
+      else ClientPlanType.EXAMPLE_QUERY
+  )
+  if example_query_spec is None and dataspec is None:
+    raise ValueError(
+        'Exactly one of `example_query_spec` or `dataspec` must be specified.'
+    )
+
+  if example_query_spec is not None:
+    if dataspec is not None:
+      raise ValueError(
+          'Exactly one of `example_query_spec` or `dataspec` should be '
+          'specified.'
+      )
 
   with tff.framework.get_context_stack().install(
       tff.test.create_runtime_error_context()
@@ -1212,13 +1308,22 @@ def build_plan(
         experimental_client_update_format=experimental_client_checkpoint_write,
     )
 
-    client_graph_def, client_phase = _build_client_graph_with_tensorflow_spec(
-        mrf.work,
-        dataspec,
-        broadcasted_tensor_specs,
-        is_broadcast_empty,
-        experimental_checkpoint_write=experimental_client_checkpoint_write,
-    )
+    if client_plan_type == ClientPlanType.TENSORFLOW:
+      client_graph_def, client_phase = _build_client_graph_with_tensorflow_spec(
+          mrf.work,
+          dataspec,
+          broadcasted_tensor_specs,
+          is_broadcast_empty,
+          experimental_checkpoint_write=experimental_client_checkpoint_write,
+      )
+    elif client_plan_type == ClientPlanType.EXAMPLE_QUERY:
+      client_phase = _build_client_phase_with_example_query_spec(
+          mrf.work, example_query_spec
+      )
+    else:
+      raise ValueError(
+          f'Unexpected value for `client_plan_type`: {client_plan_type}'
+      )
 
     combined_phases = plan_pb2.Plan.Phase(
         server_phase=server_phase, client_phase=client_phase
@@ -1233,7 +1338,8 @@ def build_plan(
     )
 
     plan.server_graph_bytes.Pack(server_graph_def)
-    plan.client_graph_bytes.Pack(client_graph_def)
+    if client_plan_type == ClientPlanType.TENSORFLOW:
+      plan.client_graph_bytes.Pack(client_graph_def)
   return plan
 
 
@@ -1355,7 +1461,7 @@ def build_cross_round_aggregation_execution(
         simpleagg_reported_values + secagg_final_accumulator_vars
     )
     (_, server_metric_values) = graph_helpers.import_tensorflow(
-        'update',
+        artifact_constants.UPDATE,
         mrf.update,
         (server_state_vars, combined_final_vars),
         split_outputs=True,

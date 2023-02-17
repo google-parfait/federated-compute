@@ -18,6 +18,9 @@
 SERVER_STATE_VAR_PREFIX = 'server'
 SERVER_METRICS_VAR_PREFIX = 'metrics'
 
+# The name given to variables part of the client 'update' name space.
+UPDATE = 'update'
+
 # Indices into DistributeAggregateForm.client_to_server_aggregation parameter.
 INTERMEDIATE_STATE_INDEX = 0
 CLIENT_CHECKPOINT_INDEX = 1
