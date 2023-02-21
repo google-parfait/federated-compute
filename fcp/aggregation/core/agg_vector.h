@@ -31,7 +31,7 @@ namespace aggregation {
 // provides immutable access to the values.
 //
 // AggVector hides the actual data organization of the tensor. The only
-// way to acceess the tensor values is through the iterator that returns
+// way to access the tensor values is through the iterator that returns
 // {index, value} pairs where each index is the dense index corresponding to
 // the value.
 //

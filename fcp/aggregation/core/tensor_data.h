@@ -48,7 +48,7 @@ namespace aggregation {
 //   (2,0,0), (2,0,1), (2,0,2), (2,0,3)
 //   (2,1,0), (2,1,1), (2,1,2), (2,1,3)
 //
-// If the tensor is sparse, than the order of values in the array is arbitrary
+// If the tensor is sparse, then the order of values in the array is arbitrary
 // and can be described by the tensor SparsityParameters which describes the
 // mapping from the value indices in tensor data to indices in the dense tensor
 // flattened the way described above.
