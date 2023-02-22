@@ -40,12 +40,23 @@ TENSOR_HDRS = [
     "vector_data.h",
 ]
 
+proto_library(
+    name = "tensor_proto",
+    srcs = ["tensor.proto"],
+)
+
+cc_proto_library(
+    name = "tensor_cc_proto",
+    deps = [":tensor_proto"],
+)
+
 cc_library(
     name = "tensor",
     srcs = TENSOR_SRCS,
     hdrs = TENSOR_HDRS,
     copts = FCP_COPTS,
     deps = [
+        ":tensor_cc_proto",
         "//fcp/base",
     ],
 )

@@ -21,10 +21,15 @@
 
 #include "fcp/base/monitoring.h"
 
+#ifndef FCP_NANOLIBC
+#include "fcp/aggregation/core/tensor.pb.h"
+#endif
+
 namespace fcp {
 namespace aggregation {
 
-// A list of supported tensor value types.
+#ifdef FCP_NANOLIBC
+// TODO(team): Derive these values from tensor.proto built with Nanopb
 enum DataType {
   // The constants below should be kept in sync with tensorflow::Datatype:
   // https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/types.proto
@@ -42,6 +47,7 @@ enum DataType {
   // When a tensor DT_ type is added here, it must also be added to the list of
   // MATCH_TYPE_AND_DTYPE macros below and to the CASES macro.
 };
+#endif  // FCP_NANOLIBC
 
 namespace internal {
 
