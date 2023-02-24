@@ -96,8 +96,7 @@ cc_library(
     srcs = ["plan_engine_helpers.cc"],
     hdrs = ["plan_engine_helpers.h"],
     copts = FCP_COPTS,
-    visibility = default_visibility + [
-    ],
+    visibility = default_visibility,
     deps = [
         ":common",
         ":example_iterator_factory",
