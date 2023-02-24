@@ -13,7 +13,7 @@ There are some basic tools and packages you will need on your machine:
 For example, on Debian:
 
 ```
-sudo apt install -y git gcc python3 python3-venv
+sudo apt install -y git gcc python3 python3-dev python3-venv
 ```
 
 > ⚠️ The project maintainers internally test with Clang only, so the GCC-based
