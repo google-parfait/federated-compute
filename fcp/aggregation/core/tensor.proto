@@ -31,3 +31,64 @@ enum DataType {
   DT_INT64 = 9;
   // TODO(team): Add other types
 }
+
+// Tensor shape (e.g. dimensions)
+message TensorShapeProto {
+  // Sizes of each dimension in the tensor.
+  // Values must be >= -1, however values of -1 are reserved for "unknown".
+  //
+  // The order of entries in `dim_sizes` matters: It indicates the layout of the
+  // values in the tensor in-memory representation.
+  //
+  // The first entry in `dim_sizes` is the outermost dimension used to layout
+  // the values, the last entry is the innermost dimension.  This matches the
+  // in-memory layout of row-major tensors.
+  //
+  // A scalar tensor has a shape with zero dimensions.
+  repeated int64 dim_sizes = 1;
+}
+
+// This message describes aggregation tensor name, type, and shape.
+message TensorSpecProto {
+  // Tensor name
+  string name = 1;
+
+  // Type of the tensor values.
+  DataType dtype = 2;
+
+  // Shape of the tensor.
+  TensorShapeProto shape = 3;
+}
+
+// Optional descriptor of the sparse index encoding, that is applicable only
+// to sparse tensors. If this message is empty (default) that means that
+// the tensor is dense.
+// The best way to think about SparsityEncoding as a way to describe mapping
+// of the indices in the tensor content to the indices in the dense tensor.
+message SparsityEncoding {
+  // TODO(team): Implement SparsityEncoding.
+}
+
+// Protocol buffer representation of a tensor.
+message TensorProto {
+  // Type of the tensor values.
+  DataType dtype = 1;
+
+  // Shape of the tensor.
+  TensorShapeProto shape = 2;
+
+  // Optional descriptor of sparse index encoding.
+  SparsityEncoding sparsity_encoding = 3;
+
+  // Serialized tensor values packed into a single blob.
+  // The exact format of the blob depends on dtype.
+  //
+  // For numeric data types, the following applies:
+  // For a dense tensor, the content matches in-memory representation of a
+  // C-style row-major multi-dimensional array of values.
+  // For a sparse tensor, the content matches in-memory representation of a
+  // one dimensional array of non-zero values, which order is described by
+  // the `sparsity_encoding`.
+  // The values must be encoded using little-endian byte layout.
+  bytes content = 4;
+}
