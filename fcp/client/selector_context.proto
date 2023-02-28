@@ -47,6 +47,20 @@ message QueryTimeComputationProperties {
 
   // Additional context data.
   bytes context_data = 6;
+
+  enum ExampleIteratorOutputFormat {
+    // The specific serialization format is left unspecified and up to the
+    // ExampleStore implementation and TensorFlow-based tasks.
+    // In most cases, data is encoded in binary-serialized `tf.train.Example`
+    // protos.
+    UNSPECIFIED = 0;
+
+    // Data encoded in binary-serialized `fcp.client.ExampleQueryResult` protos.
+    EXAMPLE_QUERY_RESULT = 1;
+  }
+
+  // Expected output format from the example iterator.
+  ExampleIteratorOutputFormat example_iterator_output_format = 7;
 }
 
 // On-device, local computation only. No aggregation.
