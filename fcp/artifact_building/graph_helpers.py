@@ -33,9 +33,62 @@ Result = Argument
 MaybeSplitOutputs = Union[Result, tuple[Result, ...]]
 
 
+EXAMPLE_SELECTOR_PLACEHOLDER_PREFIX = 'example_selector'
+
+
+def generate_example_selector_placeholders(
+    type_spec: tff.Type,
+    name_prefix: str,
+):
+  """Generates list of tff.compat.v1.placeholders for each leaf in a type spec.
+
+  The order of the placeholders aligns with the order given by
+  tff.structure.to_elements().
+
+  Placeholders will be named by concatenating the name_prefix arg with the list
+  of indexes at each level of the struct to get to the placeholder's leaf in the
+  tff.Type.
+
+  Args:
+    type_spec: A type spec to infer the list of placeholders from. This is
+      expected to be a tff.SequenceType or a tff.StructType, and if it is a
+      tff.StructType, it is expected to be a tree of tff.StructTypes with
+      tff.SequenceTypes at the leaves. This is expected to reflect the TFF type
+      signature of the input client data.
+    name_prefix: The name prefix that should be used when naming each
+      placeholder.
+
+  Returns:
+    A list of tf.compat.v2.placeholders.
+  """
+  type_spec = tff.to_type(type_spec)
+  type_checks.check_type(
+      type_spec, (tff.SequenceType, tff.StructType), name='type_spec'
+  )
+  if type_spec.is_sequence():
+    # Each client input is a sequence of serialized `tf.Example`s, which is why
+    # the leaves of these TFF type signatures are sequences. Each input sequence
+    # of `tf.Example`s requires a single `ExampleSelector` that determines that
+    # stream of `tf.Example`s is selected from the data store, which is why we
+    # only have a single placeholder for the `ExampleSelector`.
+    return [tf.compat.v1.placeholder(tf.string, shape=[], name=name_prefix)]
+  else:
+    type_spec.check_struct()
+    type_spec_elements = tff.structure.to_elements(type_spec)
+    placeholders = []
+    for element_index, (_, element_type) in enumerate(type_spec_elements):
+      placeholders.extend(
+          generate_example_selector_placeholders(
+              element_type, f'{name_prefix}_{element_index}'
+          )
+      )
+    return placeholders
+
+
 def embed_data_logic(
-    client_data_type: tff.Type, dataspec: data_spec.NestedDataSpec
-) -> tuple[tf.Tensor, list[MaybeSplitOutputs]]:
+    client_data_type: tff.Type,
+    dataspec: Optional[data_spec.NestedDataSpec] = None,
+) -> tuple[tf.Tensor, list[MaybeSplitOutputs], list[tf.Tensor]]:
   """Embeds the data logic into the current TensorFlow graph.
 
   Adds dataset ops to the current graph, using the custom `ExternalDataset`
@@ -44,32 +97,44 @@ def embed_data_logic(
 
   Args:
     client_data_type: The TFF type signature of the input client data.
-    dataspec: Either an instance of `data_spec.DataSpec` or a nested structure
-      of these that matches the structure of the first element of the input to
-      the client work part of the computation.
+    dataspec: If provided, either an instance of `data_spec.DataSpec` or a
+      nested structure of these that matches the structure of the first element
+      of the input to the client work part of the computation.
 
   Returns:
     A `tuple` containing the following (in order):
-      token_placeholder: A tuple of dataset token tensor
+      token_placeholder: A dataset token placeholder tensor
       data_values: A list of dataset output values
+      example_selector_placeholders: A possibly empty list of placeholders used
+        for passing in example selector information into the client graph. This
+        list will be empty iff dataspec is supplied.
 
   Raises:
     ValueError: If the number of dataset output from one data source is not 1.
   """
-  assert dataspec
-
   data_values = []
   # Embeds the token placeholder for the custom ExternalDataset op.
   token_placeholder = tf.compat.v1.placeholder(
       tf.string, shape=[], name='data_token'
   )
-  import_args = [token_placeholder]
-  data_sources = make_data_sources(client_data_type, dataspec)
 
-  # Embeds data source computation into the current graph.
+  example_selector_placeholders = []
+  if dataspec is None:
+    example_selector_placeholders = generate_example_selector_placeholders(
+        client_data_type, EXAMPLE_SELECTOR_PLACEHOLDER_PREFIX
+    )
+    data_sources = make_data_sources_without_dataspec(client_data_type)
+    assert len(example_selector_placeholders) == len(data_sources)
+  else:
+    data_sources = make_data_sources_with_dataspec(client_data_type, dataspec)
+
+  # Embeds data source computations into the current graph.
   for index, data_comp in enumerate(data_sources):
+    data_comp_import_args = [token_placeholder]
+    if example_selector_placeholders:
+      data_comp_import_args.append(example_selector_placeholders[index])
     ds_values = import_tensorflow(
-        'data_{}'.format(index), data_comp, import_args
+        'data_{}'.format(index), data_comp, data_comp_import_args
     )  # pytype: disable=wrong-arg-types
     if len(ds_values) != 1:
       raise ValueError(
@@ -79,7 +144,7 @@ def embed_data_logic(
       )
     data_values.extend(ds_values)
 
-  return token_placeholder, data_values
+  return token_placeholder, data_values, example_selector_placeholders
 
 
 def import_tensorflow(
@@ -359,8 +424,31 @@ def create_tensor_map(
     }
 
 
-def make_data_sources(type_spec, ds) -> list[tff.Computation]:
-  """Creates a list of computations that feed data using the custom ExternalDataset op.
+def _validate_data_comp(data_comp: tff.Computation, type_spec: tff.Type):
+  type_checks.check_type(data_comp.type_signature, tff.FunctionType)
+  if not type_spec.is_assignable_from(data_comp.type_signature.result):
+    type_mismatch_string = tff.types.type_mismatch_error_message(
+        type_spec,
+        data_comp.type_signature.result,
+        tff.types.TypeRelation.ASSIGNABLE,
+    )
+    raise TypeError(
+        'The data source constructed with the supplied dataspec returns data '
+        'which does not match type of request. Details of the mismatch:\n'
+        + type_mismatch_string
+    )
+
+
+def make_data_sources_with_dataspec(
+    type_spec: tff.Type, ds: data_spec.NestedDataSpec
+) -> list[tff.Computation]:
+  """Creates a list of computations that feed data into the graph using specified example selectors.
+
+  The computations use the custom ExternalDataset op to feed in example data.
+  The computations will expect one input:
+    -- A token specifying where the data store is on the device.
+  Example selectors that describes what data to take from the on-device data
+  store will be hard-coded into the computations.
 
   Args:
     type_spec: The TFF type signature of the output, which must be either a
@@ -380,6 +468,7 @@ def make_data_sources(type_spec, ds) -> list[tff.Computation]:
   Raises:
     TypeError: If the arguments are of the wrong types.
   """
+  assert ds
   type_spec = tff.to_type(type_spec)
   type_checks.check_type(
       type_spec, (tff.SequenceType, tff.StructType), name='type_spec'
@@ -387,6 +476,7 @@ def make_data_sources(type_spec, ds) -> list[tff.Computation]:
   if type_spec.is_sequence():
     type_checks.check_type(ds, data_spec.DataSpec)
     assert isinstance(ds, data_spec.DataSpec)
+    assert ds.example_selector_proto is not None
     sel_bytes = ds.example_selector_proto.SerializeToString()
 
     @tff.tf_computation(tf.string)
@@ -415,18 +505,7 @@ def make_data_sources(type_spec, ds) -> list[tff.Computation]:
         )
       return processed_ds
 
-    type_checks.check_type(data_comp.type_signature, tff.FunctionType)
-    if not type_spec.is_assignable_from(data_comp.type_signature.result):
-      type_mismatch_string = tff.types.type_mismatch_error_message(
-          type_spec,
-          data_comp.type_signature.result,
-          tff.types.TypeRelation.ASSIGNABLE,
-      )
-      raise TypeError(
-          'The data source constructed with the supplied dataspec returns data '
-          'which does not match type of request. Details of the mismatch:\n'
-          + type_mismatch_string
-      )
+    _validate_data_comp(data_comp, type_spec)
     return [data_comp]
   else:
     type_spec.check_struct()
@@ -450,7 +529,72 @@ def make_data_sources(type_spec, ds) -> list[tff.Computation]:
       )
     elements = []
     for element_index, (_, element_type) in enumerate(type_spec_elements):
-      elements.extend(make_data_sources(element_type, ds[element_index]))
+      elements.extend(
+          make_data_sources_with_dataspec(element_type, ds[element_index])
+      )
+    return elements
+
+
+def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
+  """Creates a list of computations that feed data into the graph.
+
+  The computations use the custom ExternalDataset op to feed in example data.
+  The computations will expect two inputs:
+    -- A token specifying where the data store is on the device.
+    -- An example selector that describes what data to take from the on-device
+      data store.
+
+  Args:
+    type_spec: The TFF type signature of the output, which must be either a
+      sequence, or a named tuple of sequences.
+
+  Returns:
+    A list of `tff.Computation`s, each of which accepts a single `string`-typed
+    tensor as input (the token for the ExternalDataset op) and returns a
+    sequence as output (with the result that matches the corresponding part of
+    `type_spec`). The computations appear on the list in a depth-first order
+    (matching exactly the convention used in the
+    `_list_tensor_names_in_binding()` method below).
+
+  Raises:
+    TypeError: If the arguments are of the wrong types.
+  """
+  type_spec = tff.to_type(type_spec)
+  type_checks.check_type(
+      type_spec, (tff.SequenceType, tff.StructType), name='type_spec'
+  )
+  if type_spec.is_sequence():
+
+    @tff.tf_computation(tf.string, tf.string)
+    def data_comp(token, example_selector):
+      """The data source computation.
+
+      Args:
+        token: The token placeholder tensor (`tf.string`).
+        example_selector: The example selector placeholder tensor (`tf.string`).
+
+      Returns:
+        An instance of `tf.data.Dataset`.
+      """
+      processed_ds = external_dataset.ExternalDataset(
+          token=token, selector=example_selector
+      )
+
+      if 'Dataset' not in type(processed_ds).__name__:
+        raise TypeError(
+            'The preprocessing function returned an unrecognized non-dataset '
+            'type {!r}.'.format(type(processed_ds))
+        )
+      return processed_ds
+
+    _validate_data_comp(data_comp, type_spec)
+    return [data_comp]
+  else:  # type_spec is a struct.
+    type_spec.check_struct()
+    type_spec_elements = tff.structure.to_elements(type_spec)
+    elements = []
+    for _, element_type in type_spec_elements:
+      elements.extend(make_data_sources_without_dataspec(element_type))
     return elements
 
 

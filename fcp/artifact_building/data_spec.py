@@ -127,3 +127,24 @@ def check_data_spec_or_structure(x: Any, name: str):
 
 
 NestedDataSpec = Union[DataSpec, dict[str, 'NestedDataSpec']]
+
+
+def generate_example_selector_bytes_list(ds: NestedDataSpec):
+  """Returns an ordered list of the bytes of each DataSpec's example selector.
+
+  The order aligns with the order of a struct given by
+  tff.structure.to_elements().
+
+  Args:
+    ds: A `NestedDataSpec`.
+  """
+  if isinstance(ds, DataSpec):
+    return [ds.example_selector_proto.SerializeToString()]
+  else:
+    ds = tff.structure.from_container(ds)
+    assert isinstance(ds, tff.structure.Struct)
+    data_spec_elements = tff.structure.to_elements(ds)
+    selector_bytes_list = []
+    for _, element in data_spec_elements:
+      selector_bytes_list.extend(generate_example_selector_bytes_list(element))
+    return selector_bytes_list

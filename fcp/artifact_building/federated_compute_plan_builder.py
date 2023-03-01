@@ -966,9 +966,6 @@ def _build_client_graph_with_tensorflow_spec(
         )
     )
 
-  if not dataspec:
-    raise ValueError('dataspec should not be None.')
-
   (
       simpleagg_update_type,
       secure_sum_bitwidth_update_type,
@@ -1008,8 +1005,10 @@ def _build_client_graph_with_tensorflow_spec(
       weights_from_server = []
 
     # Add the custom Dataset ops to the graph.
-    token_placeholder, data_values = graph_helpers.embed_data_logic(
-        client_work_comp.type_signature.parameter[0], dataspec
+    token_placeholder, data_values, example_selector_placeholders = (
+        graph_helpers.embed_data_logic(
+            client_work_comp.type_signature.parameter[0], dataspec
+        )
     )
 
     # Embed the graph coming from TFF into the client work graph.
@@ -1099,6 +1098,14 @@ def _build_client_graph_with_tensorflow_spec(
     tensorflow_spec.output_tensor_specs.extend(output_tensor_specs)
   if target_nodes:
     tensorflow_spec.target_node_names.extend(target_nodes)
+  if example_selector_placeholders:
+    for placeholder in example_selector_placeholders:
+      # Generating the default TensorProto will create a TensorProto with an
+      # DT_INVALID DType. This identifies that there is a placeholder that is
+      # needed. In order to have the Plan proto be completely runnable, the
+      # value will need to be filled in with a real TensorProto that matches
+      # the shape/type of the expected input.
+      tensorflow_spec.constant_inputs[placeholder.name].dtype = 0
 
   io_router = plan_pb2.FederatedComputeIORouter()
   if input_filepath_placeholder is not None:
@@ -1217,10 +1224,15 @@ def build_plan(
   Args:
     mrf: An instance of `tff.backends.mapreduce.MapReduceForm`.
     daf: An instance of `tff.backends.mapreduce.DistributeAggregateForm`.
-    dataspec: Either an instance of `data_spec.DataSpec` or a nested structure
-      of these that matches the structure of the first element of the input to
-      client-side processing computation `mrf.work`. Can only supply one of
-      `dataspec` or `example_query_spec`.
+    dataspec: If provided, either an instance of `data_spec.DataSpec` or a
+      nested structure of these that matches the structure of the first element
+      of the input to client-side processing computation `mrf.work`. If not
+      provided and `example_query_spec` is also not provided, then placeholders
+      are added to the client graph via `embed_data_logic()` and the example
+      selectors will need to be passed to the client via the `constant_inputs`
+      part of the `TensorflowSpec`. The constant_inputs field needs to be
+      populated outside of `build_plan()`. Can only provide one of `dataspec` or
+      `example_query_spec`.
     example_query_spec: An instance of `plan_pb2.ExampleQuerySpec`. If provided
       it is assumed a light weight client plan should be constructed. No client
       graph will be included in the produced plan object. Instead the generated
@@ -1253,16 +1265,11 @@ def build_plan(
       if example_query_spec is None
       else ClientPlanType.EXAMPLE_QUERY
   )
-  if example_query_spec is None and dataspec is None:
-    raise ValueError(
-        'Exactly one of `example_query_spec` or `dataspec` must be specified.'
-    )
 
   if example_query_spec is not None:
     if dataspec is not None:
       raise ValueError(
-          'Exactly one of `example_query_spec` or `dataspec` should be '
-          'specified.'
+          '`example_query_spec` or `dataspec` cannot both be specified.'
       )
 
   with tff.framework.get_context_stack().install(

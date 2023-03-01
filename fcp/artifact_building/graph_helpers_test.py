@@ -41,33 +41,39 @@ class EmbedDataLogicTest(absltest.TestCase):
     self.assertEqual(tensor.shape, shape)
     self.assertEqual(tensor.dtype, dtype)
 
-  def test_one_dataset_of_integers(self):
+  def test_one_dataset_of_integers_w_dataspec(self):
     with tf.Graph().as_default():
-      token_placeholder, data_values = graph_helpers.embed_data_logic(
-          tff.SequenceType((tf.string)),
-          data_spec.DataSpec(
-              plan_pb2.ExampleSelector(collection_uri='app://fake_uri')
-          ),
+      token_placeholder, data_values, placeholders = (
+          graph_helpers.embed_data_logic(
+              tff.SequenceType((tf.string)),
+              data_spec.DataSpec(
+                  plan_pb2.ExampleSelector(collection_uri='app://fake_uri')
+              ),
+          )
       )
 
     self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
     self.assertLen(data_values, 1)
     self.assertTensorSpec(data_values[0], 'data_0/Identity:0', [], tf.variant)
+    self.assertEmpty(placeholders)
 
-  def test_two_datasets_of_integers(self):
+  def test_two_datasets_of_integers_w_dataspec(self):
     with tf.Graph().as_default():
-      token_placeholder, data_values = graph_helpers.embed_data_logic(
-          collections.OrderedDict(
-              A=tff.SequenceType((tf.string)), B=tff.SequenceType((tf.string))
-          ),
-          collections.OrderedDict(
-              A=data_spec.DataSpec(
-                  plan_pb2.ExampleSelector(collection_uri='app://foo')
+      token_placeholder, data_values, placeholders = (
+          graph_helpers.embed_data_logic(
+              collections.OrderedDict(
+                  A=tff.SequenceType((tf.string)),
+                  B=tff.SequenceType((tf.string)),
               ),
-              B=data_spec.DataSpec(
-                  plan_pb2.ExampleSelector(collection_uri='app://bar')
+              collections.OrderedDict(
+                  A=data_spec.DataSpec(
+                      plan_pb2.ExampleSelector(collection_uri='app://foo')
+                  ),
+                  B=data_spec.DataSpec(
+                      plan_pb2.ExampleSelector(collection_uri='app://bar')
+                  ),
               ),
-          ),
+          )
       )
 
     self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
@@ -75,25 +81,77 @@ class EmbedDataLogicTest(absltest.TestCase):
     self.assertLen(data_values, 2)
     self.assertTensorSpec(data_values[0], 'data_0/Identity:0', [], tf.variant)
     self.assertTensorSpec(data_values[1], 'data_1/Identity:0', [], tf.variant)
+    self.assertEmpty(placeholders)
 
   def test_nested_dataspec(self):
     with tf.Graph().as_default():
-      token_placeholder, data_values = graph_helpers.embed_data_logic(
-          collections.OrderedDict(
-              A=collections.OrderedDict(B=tff.SequenceType((tf.string)))
-          ),
-          collections.OrderedDict(
-              A=collections.OrderedDict(
-                  B=data_spec.DataSpec(
-                      plan_pb2.ExampleSelector(collection_uri='app://foo')
+      token_placeholder, data_values, placeholders = (
+          graph_helpers.embed_data_logic(
+              collections.OrderedDict(
+                  A=collections.OrderedDict(B=tff.SequenceType((tf.string)))
+              ),
+              collections.OrderedDict(
+                  A=collections.OrderedDict(
+                      B=data_spec.DataSpec(
+                          plan_pb2.ExampleSelector(collection_uri='app://foo')
+                      )
                   )
-              )
-          ),
+              ),
+          )
       )
 
     self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
     self.assertLen(data_values, 1)
     self.assertTensorSpec(data_values[0], 'data_0/Identity:0', [], tf.variant)
+    self.assertEmpty(placeholders)
+
+  def test_one_dataset_of_integers_without_dataspec(self):
+    with tf.Graph().as_default():
+      token_placeholder, data_values, placeholders = (
+          graph_helpers.embed_data_logic(tff.SequenceType((tf.string)))
+      )
+
+    self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
+    self.assertLen(data_values, 1)
+    self.assertTensorSpec(data_values[0], 'data_0/Identity:0', [], tf.variant)
+    self.assertLen(placeholders, 1)
+    self.assertEqual(placeholders[0].name, 'example_selector:0')
+
+  def test_two_datasets_of_integers_without_dataspec(self):
+    with tf.Graph().as_default():
+      token_placeholder, data_values, placeholders = (
+          graph_helpers.embed_data_logic(
+              collections.OrderedDict(
+                  A=tff.SequenceType((tf.string)),
+                  B=tff.SequenceType((tf.string)),
+              )
+          )
+      )
+
+    self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
+
+    self.assertLen(data_values, 2)
+    self.assertTensorSpec(data_values[0], 'data_0/Identity:0', [], tf.variant)
+    self.assertTensorSpec(data_values[1], 'data_1/Identity:0', [], tf.variant)
+    self.assertLen(placeholders, 2)
+    self.assertEqual(placeholders[0].name, 'example_selector_0:0')
+    self.assertEqual(placeholders[1].name, 'example_selector_1:0')
+
+  def test_nested_input_without_dataspec(self):
+    with tf.Graph().as_default():
+      token_placeholder, data_values, placeholders = (
+          graph_helpers.embed_data_logic(
+              collections.OrderedDict(
+                  A=collections.OrderedDict(B=tff.SequenceType((tf.string)))
+              )
+          )
+      )
+
+    self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
+    self.assertLen(data_values, 1)
+    self.assertTensorSpec(data_values[0], 'data_0/Identity:0', [], tf.variant)
+    self.assertLen(placeholders, 1)
+    self.assertEqual(placeholders[0].name, 'example_selector_0_0:0')
 
 
 class GraphHelperTest(absltest.TestCase):
