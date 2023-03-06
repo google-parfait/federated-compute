@@ -39,6 +39,7 @@ cc_library(
         "//fcp/aggregation/protocol:aggregation_protocol",
         "//fcp/aggregation/protocol:cc_proto",
         "//fcp/aggregation/protocol:configuration_cc_proto",
+        "//fcp/aggregation/protocol:resource_resolver",
         "//fcp/aggregation/tensorflow:converters",
         "//fcp/base",
         "//fcp/protos:plan_cc_proto",

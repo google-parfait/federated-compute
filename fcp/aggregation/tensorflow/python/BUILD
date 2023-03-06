@@ -15,6 +15,7 @@ pybind_extension(
     deps = [
         "//fcp/aggregation/protocol:aggregation_protocol",
         "//fcp/aggregation/protocol:configuration_cc_proto",
+        "//fcp/aggregation/protocol:resource_resolver",
         "//fcp/aggregation/protocol/simple_aggregation",
         "//fcp/aggregation/tensorflow:tensorflow_checkpoint_builder_factory",
         "//fcp/aggregation/tensorflow:tensorflow_checkpoint_parser_factory",

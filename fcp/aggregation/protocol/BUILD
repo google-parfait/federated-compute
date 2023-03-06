@@ -79,3 +79,15 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
     ],
 )
+
+cc_library(
+    name = "resource_resolver",
+    hdrs = [
+        "resource_resolver.h",
+    ],
+    copts = FCP_COPTS,
+    deps = [
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
+    ],
+)

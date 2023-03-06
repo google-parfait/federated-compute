@@ -34,6 +34,7 @@
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
+#include "fcp/aggregation/protocol/resource_resolver.h"
 #include "fcp/aggregation/protocol/simple_aggregation/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/simple_aggregation/checkpoint_parser.h"
 
@@ -59,14 +60,12 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
       const Configuration& configuration,
       AggregationProtocol::Callback* callback,
       const CheckpointParserFactory* checkpoint_parser_factory,
-      const CheckpointBuilderFactory* checkpoint_builder_factory);
+      const CheckpointBuilderFactory* checkpoint_builder_factory,
+      ResourceResolver* resource_resolver);
 
   // Implementation of the overridden Aggregation Protocol methods.
   absl::Status Start(int64_t num_clients) override;
   absl::Status AddClients(int64_t num_clients) override;
-  ABSL_DEPRECATED("Use ReceiveClientMessage instead")
-  absl::Status ReceiveClientInput(int64_t client_id,
-                                  absl::Cord report) override;
   absl::Status ReceiveClientMessage(int64_t client_id,
                                     const ClientMessage& message) override;
   absl::Status CloseClient(int64_t client_id,
@@ -98,7 +97,8 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
       std::vector<Intrinsic> intrinsics,
       AggregationProtocol::Callback* callback,
       const CheckpointParserFactory* checkpoint_parser_factory,
-      const CheckpointBuilderFactory* checkpoint_builder_factory);
+      const CheckpointBuilderFactory* checkpoint_builder_factory,
+      ResourceResolver* resource_resolver);
 
   // Creates an aggregation intrinsic based on the intrinsic configuration.
   static absl::StatusOr<Intrinsic> CreateIntrinsic(
@@ -121,7 +121,8 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
     // No input received from the client yet.
     CLIENT_PENDING,
     // Client input received but the aggregation still pending, which may
-    // be the case when there are multiple concurrent ReceiveClientInput calls.
+    // be the case when there are multiple concurrent ReceiveClientMessage
+    // calls.
     CLIENT_RECEIVED_INPUT_AND_PENDING,
     // Client input has been successfully aggregated.
     CLIENT_COMPLETED,
@@ -209,6 +210,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   AggregationProtocol::Callback* const callback_;
   const CheckpointParserFactory* const checkpoint_parser_factory_;
   const CheckpointBuilderFactory* const checkpoint_builder_factory_;
+  ResourceResolver* const resource_resolver_;
 };
 }  // namespace fcp::aggregation
 

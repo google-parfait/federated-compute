@@ -72,20 +72,6 @@ class AggregationProtocol {
   // AcceptClients callback is expected in response to this method.
   virtual absl::Status AddClients(int64_t num_clients) = 0;
 
-  // Handles a contributing input from a given client.
-  //
-  // Each client is expected to submit no more than one input.  The format of
-  // the input blob is unspecified and can be different for each specific
-  // aggregation protocol implementation.
-  //
-  // This method should return an error status only if there is an unrecoverable
-  // error which must result in aborting the protocol.  Any client specific
-  // error, like an invalid report, should result in closing the protocol with
-  // that specific client only, but this method should still return OK status.
-  ABSL_DEPRECATED("Use ReceiveClientMessage instead")
-  virtual absl::Status ReceiveClientInput(int64_t client_id,
-                                          absl::Cord report) = 0;
-
   // Handles a message from a given client.
   //
   // This method is optional - not all aggregation protocol implementations have

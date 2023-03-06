@@ -120,10 +120,12 @@ absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>>
 SimpleAggregationProtocol::Create(
     const Configuration& configuration, AggregationProtocol::Callback* callback,
     const CheckpointParserFactory* checkpoint_parser_factory,
-    const CheckpointBuilderFactory* checkpoint_builder_factory) {
+    const CheckpointBuilderFactory* checkpoint_builder_factory,
+    ResourceResolver* resource_resolver) {
   FCP_CHECK(callback != nullptr);
   FCP_CHECK(checkpoint_parser_factory != nullptr);
   FCP_CHECK(checkpoint_builder_factory != nullptr);
+  FCP_CHECK(resource_resolver != nullptr);
   FCP_RETURN_IF_ERROR(ValidateConfig(configuration));
 
   std::vector<Intrinsic> intrinsics;
@@ -136,18 +138,20 @@ SimpleAggregationProtocol::Create(
 
   return absl::WrapUnique(new SimpleAggregationProtocol(
       std::move(intrinsics), callback, checkpoint_parser_factory,
-      checkpoint_builder_factory));
+      checkpoint_builder_factory, resource_resolver));
 }
 
 SimpleAggregationProtocol::SimpleAggregationProtocol(
     std::vector<Intrinsic> intrinsics, AggregationProtocol::Callback* callback,
     const CheckpointParserFactory* checkpoint_parser_factory,
-    const CheckpointBuilderFactory* checkpoint_builder_factory)
+    const CheckpointBuilderFactory* checkpoint_builder_factory,
+    ResourceResolver* resource_resolver)
     : protocol_state_(PROTOCOL_CREATED),
       intrinsics_(std::move(intrinsics)),
       callback_(callback),
       checkpoint_parser_factory_(checkpoint_parser_factory),
-      checkpoint_builder_factory_(checkpoint_builder_factory) {}
+      checkpoint_builder_factory_(checkpoint_builder_factory),
+      resource_resolver_(resource_resolver) {}
 
 absl::string_view SimpleAggregationProtocol::ProtocolStateDebugString(
     ProtocolState state) {
@@ -350,15 +354,6 @@ absl::Status SimpleAggregationProtocol::AddClients(int64_t num_clients) {
   return absl::OkStatus();
 }
 
-absl::Status SimpleAggregationProtocol::ReceiveClientInput(int64_t client_id,
-                                                           absl::Cord report) {
-  ClientMessage message;
-  *message.mutable_simple_aggregation()
-       ->mutable_input()
-       ->mutable_inline_bytes() = static_cast<std::string>(report);
-  return ReceiveClientMessage(client_id, message);
-}
-
 absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
     int64_t client_id, const ClientMessage& message) {
   if (!message.has_simple_aggregation() ||
@@ -366,10 +361,10 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
     return absl::InvalidArgumentError("Unexpected message");
   }
 
-  // TODO(team): Support fetching input by uri.
-  if (!message.simple_aggregation().input().has_inline_bytes()) {
+  if (!message.simple_aggregation().input().has_inline_bytes() &&
+      !message.simple_aggregation().input().has_uri()) {
     return absl::InvalidArgumentError(
-        "Only inline_bytes type of input is supported");
+        "Only inline_bytes or uri type of input is supported");
   }
 
   // Verify the state.
@@ -394,25 +389,45 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
   absl::Status client_completion_status = absl::OkStatus();
   ClientState client_completion_state = CLIENT_COMPLETED;
 
-  // Parse the client input concurrently with other protocol calls.
-  absl::Cord report =
-      absl::Cord(message.simple_aggregation().input().inline_bytes());
-  absl::StatusOr<TensorMap> tensor_map_or_status =
-      ParseCheckpoint(std::move(report));
-  if (!tensor_map_or_status.ok()) {
-    client_completion_status = tensor_map_or_status.status();
-    client_completion_state = CLIENT_FAILED;
-    FCP_LOG(WARNING) << "Client " << client_id << " input can't be parsed: "
-                     << client_completion_status.ToString();
+  absl::Cord report;
+  if (message.simple_aggregation().input().has_inline_bytes()) {
+    // Parse the client input concurrently with other protocol calls.
+    report =
+        absl::Cord(message.simple_aggregation().input().inline_bytes());
   } else {
-    // Aggregate the client input which would block on aggregation_mu_ if there
-    // are any concurrent AggregateClientInput calls.
-    client_completion_status =
-        AggregateClientInput(std::move(tensor_map_or_status).value());
-    if (!client_completion_status.ok()) {
-      client_completion_state = CLIENT_DISCARDED;
-      FCP_LOG(INFO) << "Client " << client_id << " input is discarded: "
-                    << client_completion_status.ToString();
+    absl::StatusOr<absl::Cord> report_or_status =
+        resource_resolver_->RetrieveResource(
+            message.simple_aggregation().input().uri());
+    if (!report_or_status.ok()) {
+      client_completion_status = report_or_status.status();
+      client_completion_state = CLIENT_FAILED;
+      FCP_LOG(WARNING) << "Report with resource uri "
+                       << message.simple_aggregation().input().uri()
+                       << " for client " << client_id << "is missing. "
+                       << client_completion_status.ToString();
+    } else {
+      report = std::move(report_or_status.value());
+    }
+  }
+
+  if (client_completion_state != CLIENT_FAILED) {
+    absl::StatusOr<TensorMap> tensor_map_or_status =
+        ParseCheckpoint(std::move(report));
+    if (!tensor_map_or_status.ok()) {
+      client_completion_status = tensor_map_or_status.status();
+      client_completion_state = CLIENT_FAILED;
+      FCP_LOG(WARNING) << "Client " << client_id << " input can't be parsed: "
+                       << client_completion_status.ToString();
+    } else {
+      // Aggregate the client input which would block on aggregation_mu_ if
+      // there are any concurrent AggregateClientInput calls.
+      client_completion_status =
+          AggregateClientInput(std::move(tensor_map_or_status).value());
+      if (!client_completion_status.ok()) {
+        client_completion_state = CLIENT_DISCARDED;
+        FCP_LOG(INFO) << "Client " << client_id << " input is discarded: "
+                      << client_completion_status.ToString();
+      }
     }
   }
 

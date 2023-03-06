@@ -77,6 +77,12 @@ class MockCheckpointBuilderFactory : public CheckpointBuilderFactory {
   MOCK_METHOD(std::unique_ptr<CheckpointBuilder>, Create, (), (const override));
 };
 
+class MockResourceResolver : public ResourceResolver {
+ public:
+  MOCK_METHOD(absl::StatusOr<absl::Cord>, RetrieveResource,
+              (const std::string& uri), (override));
+};
+
 class SimpleAggregationProtocolTest : public ::testing::Test {
  protected:
   // Returns default configuration.
@@ -104,6 +110,7 @@ class SimpleAggregationProtocolTest : public ::testing::Test {
 
   MockCheckpointParserFactory checkpoint_parser_factory_;
   MockCheckpointBuilderFactory checkpoint_builder_factory_;
+  MockResourceResolver resource_resolver_;
 
  private:
   std::unique_ptr<MockCheckpointBuilder> wrapped_checkpoint_builder_ =
@@ -137,7 +144,7 @@ SimpleAggregationProtocolTest::CreateProtocol(Configuration config) {
   absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>>
       protocol_or_status = SimpleAggregationProtocol::Create(
           config, &callback_, &checkpoint_parser_factory_,
-          &checkpoint_builder_factory_);
+          &checkpoint_builder_factory_, &resource_resolver_);
   EXPECT_THAT(protocol_or_status, IsOk());
   return std::move(protocol_or_status).value();
 }
@@ -173,9 +180,9 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedNumberOfInputs) {
       }
     }
   )pb");
-  EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
-                                                &checkpoint_parser_factory_,
-                                                &checkpoint_builder_factory_),
+  EXPECT_THAT(SimpleAggregationProtocol::Create(
+                  config_message, &callback_, &checkpoint_parser_factory_,
+                  &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -202,9 +209,9 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedNumberOfOutputs) {
       }
     }
   )pb");
-  EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
-                                                &checkpoint_parser_factory_,
-                                                &checkpoint_builder_factory_),
+  EXPECT_THAT(SimpleAggregationProtocol::Create(
+                  config_message, &callback_, &checkpoint_parser_factory_,
+                  &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -220,9 +227,9 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedInputType) {
       }
     }
   )pb");
-  EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
-                                                &checkpoint_parser_factory_,
-                                                &checkpoint_builder_factory_),
+  EXPECT_THAT(SimpleAggregationProtocol::Create(
+                  config_message, &callback_, &checkpoint_parser_factory_,
+                  &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -244,9 +251,9 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedIntrinsicUri) {
       }
     }
   )pb");
-  EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
-                                                &checkpoint_parser_factory_,
-                                                &checkpoint_builder_factory_),
+  EXPECT_THAT(SimpleAggregationProtocol::Create(
+                  config_message, &callback_, &checkpoint_parser_factory_,
+                  &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -268,9 +275,9 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedInputSpec) {
       }
     }
   )pb");
-  EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
-                                                &checkpoint_parser_factory_,
-                                                &checkpoint_builder_factory_),
+  EXPECT_THAT(SimpleAggregationProtocol::Create(
+                  config_message, &callback_, &checkpoint_parser_factory_,
+                  &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -292,9 +299,9 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnmatchingInputAndOutputDataType) {
       }
     }
   )pb");
-  EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
-                                                &checkpoint_parser_factory_,
-                                                &checkpoint_builder_factory_),
+  EXPECT_THAT(SimpleAggregationProtocol::Create(
+                  config_message, &callback_, &checkpoint_parser_factory_,
+                  &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -316,9 +323,9 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnmatchingInputAndOutputShape) {
       }
     }
   )pb");
-  EXPECT_THAT(SimpleAggregationProtocol::Create(config_message, &callback_,
-                                                &checkpoint_parser_factory_,
-                                                &checkpoint_builder_factory_),
+  EXPECT_THAT(SimpleAggregationProtocol::Create(
+                  config_message, &callback_, &checkpoint_parser_factory_,
+                  &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -407,10 +414,6 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_InvalidMessage) {
               IsCode(INVALID_ARGUMENT));
   // Message with empty input.
   message.mutable_simple_aggregation()->mutable_input();
-  EXPECT_THAT(protocol->ReceiveClientMessage(0, message),
-              IsCode(INVALID_ARGUMENT));
-  // Message with the unsupported input type.
-  message.mutable_simple_aggregation()->mutable_input()->set_uri("foo");
   EXPECT_THAT(protocol->ReceiveClientMessage(0, message),
               IsCode(INVALID_ARGUMENT));
 }
@@ -523,6 +526,50 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MismatchingTensor) {
 
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
+}
+
+TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_UriType_Success) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_CALL(callback_, OnAcceptClients);
+  EXPECT_THAT(protocol->Start(1), IsOk());
+  auto parser = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_INT32, {}, CreateTestData({1}));
+  }));
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_))
+      .WillOnce(Return(ByMove(std::move(parser))));
+
+  // Receive input for the client #0
+  EXPECT_CALL(resource_resolver_, RetrieveResource(StrEq("foo_uri")))
+      .WillOnce(Return(absl::Cord{}));
+  ClientMessage message;
+  message.mutable_simple_aggregation()->mutable_input()->set_uri("foo_uri");
+  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(OK)));
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, message), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 1 num_inputs_aggregated_and_included: 1")));
+}
+
+TEST_F(SimpleAggregationProtocolTest,
+       ReceiveClientMessage_UriType_FailToParse) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_CALL(callback_, OnAcceptClients);
+  EXPECT_THAT(protocol->Start(1), IsOk());
+
+  // Receive invalid input for the client #0
+  EXPECT_CALL(resource_resolver_, RetrieveResource(_))
+      .WillOnce(Return(absl::InvalidArgumentError("Invalid uri")));
+  ClientMessage message;
+  message.mutable_simple_aggregation()->mutable_input()->set_uri("foo_uri");
+  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(INVALID_ARGUMENT)));
+
+  // Receiving the client input should still succeed.
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, message), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));

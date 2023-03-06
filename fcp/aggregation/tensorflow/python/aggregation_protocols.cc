@@ -17,6 +17,7 @@
 #include <pybind11/pybind11.h>
 
 #include <memory>
+#include <string>
 
 #include "absl/status/statusor.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
@@ -31,10 +32,18 @@ namespace py = ::pybind11;
 
 using ::fcp::aggregation::AggregationProtocol;
 using ::fcp::aggregation::Configuration;
+using ::fcp::aggregation::ResourceResolver;
 using ::fcp::aggregation::tensorflow::TensorflowCheckpointBuilderFactory;
 using ::fcp::aggregation::tensorflow::TensorflowCheckpointParserFactory;
 
 PYBIND11_MODULE(aggregation_protocols, m) {
+  class DefaultResourceResolver : public ResourceResolver {
+    absl::StatusOr<absl::Cord> RetrieveResource(
+        const std::string& uri) override {
+      return absl::UnimplementedError("GetAndDelete() is not supported.");
+    }
+  };
+
   pybind11::google::ImportStatusModule();
   pybind11_protobuf::ImportNativeProtoCasters();
 
@@ -42,6 +51,7 @@ PYBIND11_MODULE(aggregation_protocols, m) {
       kCheckpointBuilderFactory = new TensorflowCheckpointBuilderFactory();
   static const TensorflowCheckpointParserFactory* const
       kCheckpointParserFactory = new TensorflowCheckpointParserFactory();
+  static ResourceResolver* kResourceResolver = new DefaultResourceResolver();
 
   m.def(
       "create_simple_aggregation_protocol",
@@ -50,7 +60,7 @@ PYBIND11_MODULE(aggregation_protocols, m) {
           -> absl::StatusOr<std::unique_ptr<AggregationProtocol>> {
         return fcp::aggregation::SimpleAggregationProtocol::Create(
             configuration, callback, kCheckpointParserFactory,
-            kCheckpointBuilderFactory);
+            kCheckpointBuilderFactory, kResourceResolver);
       },
       // Ensure the Callback object outlives the AggregationProtocol.
       py::keep_alive<0, 2>());
