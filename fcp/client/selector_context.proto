@@ -53,7 +53,7 @@ message QueryTimeComputationProperties {
     // ExampleStore implementation and TensorFlow-based tasks.
     // In most cases, data is encoded in binary-serialized `tf.train.Example`
     // protos.
-    UNSPECIFIED = 0;
+    EXAMPLE_ITERATOR_OUTPUT_FORMAT_UNSPECIFIED = 0;
 
     // Data encoded in binary-serialized `fcp.client.ExampleQueryResult` protos.
     EXAMPLE_QUERY_RESULT = 1;
