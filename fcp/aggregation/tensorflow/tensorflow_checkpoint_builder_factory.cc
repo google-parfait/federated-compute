@@ -29,7 +29,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "fcp/aggregation/core/tensor.h"
-#include "fcp/aggregation/protocol/simple_aggregation/checkpoint_builder.h"
+#include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/tensorflow/checkpoint_writer.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/tensorflow/status.h"

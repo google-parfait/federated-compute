@@ -33,10 +33,10 @@
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
+#include "fcp/aggregation/protocol/checkpoint_builder.h"
+#include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/protocol/resource_resolver.h"
-#include "fcp/aggregation/protocol/simple_aggregation/checkpoint_builder.h"
-#include "fcp/aggregation/protocol/simple_aggregation/checkpoint_parser.h"
 
 namespace fcp::aggregation {
 

@@ -19,7 +19,7 @@
 
 #include <memory>
 
-#include "fcp/aggregation/protocol/simple_aggregation/checkpoint_builder.h"
+#include "fcp/aggregation/protocol/checkpoint_builder.h"
 
 namespace fcp::aggregation::tensorflow {
 

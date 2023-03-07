@@ -24,7 +24,7 @@
 #include "gtest/gtest.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
-#include "fcp/aggregation/protocol/simple_aggregation/checkpoint_parser.h"
+#include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/platform.h"
 #include "fcp/tensorflow/status.h"

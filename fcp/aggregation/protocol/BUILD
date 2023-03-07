@@ -91,3 +91,30 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
     ],
 )
+
+cc_library(
+    name = "checkpoint_builder",
+    hdrs = [
+        "checkpoint_builder.h",
+    ],
+    copts = FCP_COPTS,
+    deps = [
+        "//fcp/aggregation/core:tensor",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
+    ],
+)
+
+cc_library(
+    name = "checkpoint_parser",
+    hdrs = [
+        "checkpoint_parser.h",
+    ],
+    copts = FCP_COPTS,
+    deps = [
+        "//fcp/aggregation/core:tensor",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
+    ],
+)
