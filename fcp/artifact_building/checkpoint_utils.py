@@ -504,7 +504,7 @@ def save_tff_structure_to_checkpoint(
     raise TypeError(
         'Not all leaves in `tff_structure` are `tf.Tensor`s, '
         '`np.ndarray`s, `np.number`s, or Python scalars. Got: '
-        f'{tf.nest.map_structure(type, tff_structure)!r})'
+        f'{tff.structure.map_structure(type, tff_structure)!r})'
     )
 
   tensors = tff.structure.flatten(tff_structure)
