@@ -279,7 +279,10 @@ TEST(ExternalDatasetOpTest, TokenNotFound) {
   auto session = PrepareExampleGraphSession();
   tensorflow::Status status =
       RunSession(session.get(), RandomToken::Generate(), selector, nullptr);
-  EXPECT_THAT(status.code(), Eq(tensorflow::error::INVALID_ARGUMENT));
+  // Remove the cast after TF 2.12 is released and used in FCP.
+  EXPECT_THAT(
+      status.code(),
+      Eq(static_cast<tsl::errors::Code>(absl::StatusCode::kInvalidArgument)));
 }
 
 TEST(ExternalDatasetOpTest, FailingIterator) {
@@ -308,7 +311,10 @@ TEST(ExternalDatasetOpTest, RunExampleGraph_InvalidSelector) {
   auto session = PrepareExampleGraphSession();
   tensorflow::Status status =
       RunSession(session.get(), stub_reg.token(), bad_selector_tensor, nullptr);
-  EXPECT_THAT(status.code(), Eq(tensorflow::error::INVALID_ARGUMENT));
+  // Remove the cast after TF 2.12 is released and used in FCP.
+  EXPECT_THAT(
+      status.code(),
+      Eq(static_cast<tsl::errors::Code>(absl::StatusCode::kInvalidArgument)));
 }
 
 }  // namespace fcp

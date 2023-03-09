@@ -31,8 +31,10 @@ TEST(StatusTest, ToTensorFlow_Ok) {
 TEST(StatusTest, ToTensorFlow_Error) {
   Status error = FCP_STATUS(NOT_FOUND) << "Where is my mind?";
   EXPECT_THAT(ConvertToTensorFlowStatus(error),
-              Eq(tensorflow::Status(tensorflow::error::Code::NOT_FOUND,
-                                    error.message())));
+              // Remove the cast after TF 2.12 is released and used in FCP.
+              Eq(tensorflow::Status(
+                  static_cast<tsl::errors::Code>(absl::StatusCode::kNotFound),
+                  error.message())));
 }
 
 }  // namespace fcp

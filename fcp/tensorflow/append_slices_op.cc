@@ -463,7 +463,8 @@ tensorflow::Status LoadAndMergeAppendedSlices(const std::string& filename) {
     for (const tensorflow::SavedSliceMeta& slice_meta : sts.meta().tensor()) {
       if (slices_added.find(slice_meta.name()) != slices_added.end()) {
         return tensorflow::Status(
-            tensorflow::error::INVALID_ARGUMENT,
+            // Remove the cast after TF 2.12 is released and used in FCP.
+            static_cast<tsl::errors::Code>(absl::StatusCode::kInvalidArgument),
             absl::StrCat(
                 "Attempted to merge two checkpoint entries for slice name: `",
                 slice_meta.name(), "`. Only one entry per name is permitted."));

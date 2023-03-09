@@ -18,75 +18,21 @@
 
 namespace fcp {
 
-#define MAP_TO_TENSORFLOW_STATUS(name) \
-  case fcp::name:                      \
-    return tensorflow::error::Code::name;
-
-#define MAP_FROM_TENSORFLOW_STATUS(name) \
-  case tensorflow::error::Code::name:    \
-    return fcp::name;
-
-tensorflow::error::Code ToTensorFlowStatusCode(StatusCode code) {
-  switch (code) {
-    MAP_TO_TENSORFLOW_STATUS(OK)
-    MAP_TO_TENSORFLOW_STATUS(CANCELLED)
-    MAP_TO_TENSORFLOW_STATUS(UNKNOWN)
-    MAP_TO_TENSORFLOW_STATUS(INVALID_ARGUMENT)
-    MAP_TO_TENSORFLOW_STATUS(DEADLINE_EXCEEDED)
-    MAP_TO_TENSORFLOW_STATUS(NOT_FOUND)
-    MAP_TO_TENSORFLOW_STATUS(ALREADY_EXISTS)
-    MAP_TO_TENSORFLOW_STATUS(PERMISSION_DENIED)
-    MAP_TO_TENSORFLOW_STATUS(UNAUTHENTICATED)
-    MAP_TO_TENSORFLOW_STATUS(RESOURCE_EXHAUSTED)
-    MAP_TO_TENSORFLOW_STATUS(FAILED_PRECONDITION)
-    MAP_TO_TENSORFLOW_STATUS(ABORTED)
-    MAP_TO_TENSORFLOW_STATUS(OUT_OF_RANGE)
-    MAP_TO_TENSORFLOW_STATUS(UNIMPLEMENTED)
-    MAP_TO_TENSORFLOW_STATUS(INTERNAL)
-    MAP_TO_TENSORFLOW_STATUS(UNAVAILABLE)
-    MAP_TO_TENSORFLOW_STATUS(DATA_LOSS)
-    default:
-      return tensorflow::error::Code::UNKNOWN;
-  }
-}
-
-StatusCode FromTensorFlowStatusCode(tensorflow::error::Code code) {
-  switch (code) {
-    MAP_FROM_TENSORFLOW_STATUS(OK)
-    MAP_FROM_TENSORFLOW_STATUS(CANCELLED)
-    MAP_FROM_TENSORFLOW_STATUS(UNKNOWN)
-    MAP_FROM_TENSORFLOW_STATUS(INVALID_ARGUMENT)
-    MAP_FROM_TENSORFLOW_STATUS(DEADLINE_EXCEEDED)
-    MAP_FROM_TENSORFLOW_STATUS(NOT_FOUND)
-    MAP_FROM_TENSORFLOW_STATUS(ALREADY_EXISTS)
-    MAP_FROM_TENSORFLOW_STATUS(PERMISSION_DENIED)
-    MAP_FROM_TENSORFLOW_STATUS(UNAUTHENTICATED)
-    MAP_FROM_TENSORFLOW_STATUS(RESOURCE_EXHAUSTED)
-    MAP_FROM_TENSORFLOW_STATUS(FAILED_PRECONDITION)
-    MAP_FROM_TENSORFLOW_STATUS(ABORTED)
-    MAP_FROM_TENSORFLOW_STATUS(OUT_OF_RANGE)
-    MAP_FROM_TENSORFLOW_STATUS(UNIMPLEMENTED)
-    MAP_FROM_TENSORFLOW_STATUS(INTERNAL)
-    MAP_FROM_TENSORFLOW_STATUS(UNAVAILABLE)
-    MAP_FROM_TENSORFLOW_STATUS(DATA_LOSS)
-    default:
-      return StatusCode::kUnknown;
-  }
-}
-
 tensorflow::Status ConvertToTensorFlowStatus(Status const& status) {
-  tensorflow::error::Code code = ToTensorFlowStatusCode(status.code());
-  if (code == tensorflow::error::Code::OK) {
+  absl::StatusCode code = status.code();
+  if (code == absl::StatusCode::kOk) {
     return tensorflow::Status();
   } else {
     // tensorflow::Status constructor asserts that code != OK if a message is
     // provided.
-    return tensorflow::Status(code, status.message());
+    // Remove the cast after TF 2.12 is released and used in FCP.
+    return tensorflow::Status(static_cast<tsl::errors::Code>(code),
+                              status.message());
   }
 }
 
 Status ConvertFromTensorFlowStatus(tensorflow::Status const& tf_status) {
-  return Status(FromTensorFlowStatusCode(tf_status.code()),
+  return Status(static_cast<absl::StatusCode>(tf_status.code()),
                 tf_status.error_message());
 }
 

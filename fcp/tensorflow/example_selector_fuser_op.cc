@@ -75,7 +75,8 @@ class ExampleSelectorFuserOp : public OpKernel {
     if (!example_selector.ParseFromString(
             std::string(example_selector_str.data()))) {
       ctx->SetStatus(tensorflow::Status(
-          tensorflow::error::INVALID_ARGUMENT,
+          // Remove the cast after TF 2.12 is released and used in FCP.
+          static_cast<tsl::errors::Code>(absl::StatusCode::kInvalidArgument),
           tensorflow::StringPiece("Cannot parse ExampleSelector")));
       return;
     }

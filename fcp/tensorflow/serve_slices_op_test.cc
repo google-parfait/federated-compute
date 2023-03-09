@@ -166,9 +166,12 @@ TEST_F(ServeSlicesOpTest, SessionRunFailsOnMissingCallback) {
   tensorflow::Tensor served_at_id_out;
   tensorflow::Status status =
       RunSession(callback_token_tensor, served_at_id_out);
-  EXPECT_THAT(status, tensorflow::testing::StatusIs(
-                          tensorflow::error::INVALID_ARGUMENT,
-                          HasSubstr("No `ServeSlices` callback found")));
+  // Remove the cast after TF 2.12 is released and used in FCP.
+  EXPECT_THAT(
+      status,
+      tensorflow::testing::StatusIs(
+          static_cast<tsl::errors::Code>(absl::StatusCode::kInvalidArgument),
+          HasSubstr("No `ServeSlices` callback found")));
 }
 
 }  // namespace
