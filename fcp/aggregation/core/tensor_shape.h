@@ -17,8 +17,17 @@
 #ifndef FCP_AGGREGATION_CORE_TENSOR_SHAPE_H_
 #define FCP_AGGREGATION_CORE_TENSOR_SHAPE_H_
 
+#include <cstddef>
+#include <cstdint>
 #include <initializer_list>
+#include <utility>
 #include <vector>
+
+#include "fcp/base/monitoring.h"
+
+#ifndef FCP_NANOLIBC
+#include "fcp/aggregation/core/tensor.pb.h"
+#endif
 
 namespace fcp {
 namespace aggregation {
@@ -35,6 +44,15 @@ class TensorShape final {
 
   TensorShape(std::initializer_list<size_t> dim_sizes)
       : dim_sizes_(dim_sizes) {}
+
+#ifndef FCP_NANOLIBC
+  // Creates a TensorShape from a TensorShapeProto.
+  // Returns an error if any of the shape dimensions are unknown.
+  static StatusOr<TensorShape> FromProto(const TensorShapeProto& shape_proto);
+
+  // Returns a TensorShapeProto representation of the tensor shape.
+  TensorShapeProto ToProto() const;
+#endif
 
   // Gets the dimensions and their sizes.
   const DimSizesVector& dim_sizes() const { return dim_sizes_; }
@@ -53,6 +71,9 @@ class TensorShape final {
   }
 
  private:
+  explicit TensorShape(DimSizesVector&& dim_sizes)
+      : dim_sizes_(std::move(dim_sizes)) {}
+
   // TODO(team): Consider optimizing the storage for better inlining
   // of small number of dimensions.
   DimSizesVector dim_sizes_;

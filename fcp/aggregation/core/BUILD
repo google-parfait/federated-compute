@@ -97,7 +97,10 @@ cc_test(
     copts = FCP_COPTS,
     deps = [
         ":tensor",
+        ":tensor_cc_proto",
+        "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],
