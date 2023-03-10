@@ -397,7 +397,7 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
   } else {
     absl::StatusOr<absl::Cord> report_or_status =
         resource_resolver_->RetrieveResource(
-            message.simple_aggregation().input().uri());
+            client_id, message.simple_aggregation().input().uri());
     if (!report_or_status.ok()) {
       client_completion_status = report_or_status.status();
       client_completion_state = CLIENT_FAILED;

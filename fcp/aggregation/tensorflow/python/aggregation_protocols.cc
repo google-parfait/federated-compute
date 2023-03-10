@@ -39,8 +39,8 @@ using ::fcp::aggregation::tensorflow::TensorflowCheckpointParserFactory;
 PYBIND11_MODULE(aggregation_protocols, m) {
   class DefaultResourceResolver : public ResourceResolver {
     absl::StatusOr<absl::Cord> RetrieveResource(
-        const std::string& uri) override {
-      return absl::UnimplementedError("GetAndDelete() is not supported.");
+        int64_t client_id, const std::string& uri) override {
+      return absl::UnimplementedError("RetrieveResource() is not supported.");
     }
   };
 

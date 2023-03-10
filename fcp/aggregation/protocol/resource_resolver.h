@@ -25,16 +25,17 @@
 
 namespace fcp::aggregation {
 
-// Describes an abstract interface for resolving a resource from a given uri.
+// Describes an abstract interface for resolving a resource from a given client
+// and uri.
 class ResourceResolver {
  public:
   virtual ~ResourceResolver() = default;
 
-  // Retrieves a resource from the uri and deletes it from storage.
-  // The resource for a given uri can be accessed exactly once and must be
-  // deleted (best-effort) after it is returned.
+  // Retrieves a resource for the given `client_id` and `uri` combination.
+  // The resource can be accessed exactly once and must be deleted (best-effort)
+  // after it is returned.
   virtual absl::StatusOr<absl::Cord> RetrieveResource(
-      const std::string& uri) = 0;
+      int64_t client_id, const std::string& uri) = 0;
 };
 }  // namespace fcp::aggregation
 

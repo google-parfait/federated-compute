@@ -80,7 +80,7 @@ class MockCheckpointBuilderFactory : public CheckpointBuilderFactory {
 class MockResourceResolver : public ResourceResolver {
  public:
   MOCK_METHOD(absl::StatusOr<absl::Cord>, RetrieveResource,
-              (const std::string& uri), (override));
+              (int64_t client_id, const std::string& uri), (override));
 };
 
 class SimpleAggregationProtocolTest : public ::testing::Test {
@@ -543,7 +543,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_UriType_Success) {
       .WillOnce(Return(ByMove(std::move(parser))));
 
   // Receive input for the client #0
-  EXPECT_CALL(resource_resolver_, RetrieveResource(StrEq("foo_uri")))
+  EXPECT_CALL(resource_resolver_, RetrieveResource(0, StrEq("foo_uri")))
       .WillOnce(Return(absl::Cord{}));
   ClientMessage message;
   message.mutable_simple_aggregation()->mutable_input()->set_uri("foo_uri");
@@ -562,7 +562,7 @@ TEST_F(SimpleAggregationProtocolTest,
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   // Receive invalid input for the client #0
-  EXPECT_CALL(resource_resolver_, RetrieveResource(_))
+  EXPECT_CALL(resource_resolver_, RetrieveResource(0, _))
       .WillOnce(Return(absl::InvalidArgumentError("Invalid uri")));
   ClientMessage message;
   message.mutable_simple_aggregation()->mutable_input()->set_uri("foo_uri");
