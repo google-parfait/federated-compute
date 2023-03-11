@@ -318,6 +318,19 @@ message EligibilityEvalCheckinRequest {
   // This field has the same semantics as `CheckinRequest.client_version`. See
   // that field for details.
   string client_version = 6 ;
+
+  // The client's capabilities when downloading and running Eligibility Eval
+  // tasks.
+  EligibilityEvalTaskCapabilities eligibility_eval_task_capabilities = 7;
+}
+
+// The client's capabilities for determining task eligibility.
+message EligibilityEvalTaskCapabilities {
+  // Whether the client supports multiple task assignment
+  // (/TaskAssignments.PerformMultipleTaskAssignments). If false, the client
+  // will not be provided information about tasks that require multiple task
+  // assignment.
+  bool supports_multiple_task_assignment = 1;
 }
 
 // Response to the `EligibilityEvalCheckinRequest`, sent to the
@@ -362,6 +375,15 @@ message EligibilityEvalPayload {
 
     // A URI and other metadata of the plan to be used for execution.
     UriResource plan_resource = 5;
+  }
+
+  oneof population_eligibility_spec_type {
+    // A serialized PopulationEligibilitySpec describing the eligibility
+    // criteria for tasks in the population.
+    bytes population_eligibility_spec = 6;
+
+    // A URI and other metadata of the population eligibility spec to be used.
+    UriResource population_eligibility_spec_resource = 7;
   }
 
   // The opaque id of the eligibility evaluation plan payload the client is
