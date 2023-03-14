@@ -42,4 +42,4 @@ class VectorData : public std::vector<T>, public TensorData {
 }  // namespace aggregation
 }  // namespace fcp
 
-#endif  // FCP_AGGREGATION_CORE_VECTOR_TENSOR_DATA_H_
+#endif  // FCP_AGGREGATION_CORE_VECTOR_DATA_H_
