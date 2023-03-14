@@ -306,7 +306,7 @@ genrule(
     srcs = [],
     outs = ["external_dataset_test.pbtxt"],
     cmd = "$(location :make_external_dataset_test_graph) --output \"$@\"",
-    exec_tools = [":make_external_dataset_test_graph"],
+    tools = [":make_external_dataset_test_graph"],
 )
 
 # Selector proto used in test dataset stubs and example selector fuser op.
@@ -568,7 +568,7 @@ genrule(
     srcs = [],
     outs = ["serve_slices_test.pbtxt"],
     cmd = "$(location :make_serve_slices_test_graph) --output \"$@\"",
-    exec_tools = [":make_serve_slices_test_graph"],
+    tools = [":make_serve_slices_test_graph"],
 )
 
 tf_cc_test(
