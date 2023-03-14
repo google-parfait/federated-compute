@@ -35,3 +35,16 @@ def delete_file(filename: tf.Tensor) -> tf.Operation:
     The created `Operation`.
   """
   return gen_delete_file_py.delete_file(filename)
+
+
+def delete_dir(dirname: tf.Tensor, recursively: bool = False) -> tf.Operation:
+  """Delete directory if the dirname exists.
+
+  Args:
+    dirname: The directory to delete.
+    recursively: If true the op attempts to delete also the content.
+
+  Returns:
+    The created `Operation`.
+  """
+  return gen_delete_file_py.delete_dir(dirname, recursively)

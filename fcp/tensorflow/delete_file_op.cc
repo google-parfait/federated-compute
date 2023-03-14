@@ -13,39 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <algorithm>
-#include <functional>
-#include <memory>
-#include <numeric>
-#include <queue>
-#include <string>
-#include <utility>
-
-#include "absl/base/attributes.h"
-#include "absl/base/const_init.h"
-#include "absl/synchronization/mutex.h"
-#include "tensorflow/core/framework/bounds_check.h"
-#include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/op_requires.h"
-#include "tensorflow/core/framework/register_types.h"
-#include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/framework/tensor_slice.h"
-#include "tensorflow/core/framework/types.pb.h"
 #include "tensorflow/core/framework/versions.pb.h"
-#include "tensorflow/core/lib/io/table.h"
-#include "tensorflow/core/lib/io/table_builder.h"
-#include "tensorflow/core/lib/io/table_options.h"
 #include "tensorflow/core/platform/errors.h"
-#include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/platform/stringpiece.h"
-#include "tensorflow/core/protobuf/error_codes.pb.h"
 #include "tensorflow/core/util/saved_tensor_slice.pb.h"
-#include "tensorflow/core/util/saved_tensor_slice_util.h"
-#include "tensorflow/core/util/tensor_slice_reader.h"
-#include "tensorflow/core/util/tensor_slice_writer.h"
+#include "tensorflow/tsl/platform/status.h"
 
 namespace fcp {
 namespace {
@@ -55,6 +30,66 @@ using ::tensorflow::OpKernelConstruction;
 using ::tensorflow::OpKernelContext;
 
 }  // namespace
+
+class DeleteDirOp : public OpKernel {
+ public:
+  explicit DeleteDirOp(OpKernelConstruction* context) : OpKernel(context) {}
+
+  void Compute(OpKernelContext* context) override {
+    const tensorflow::Tensor& dirname_t = context->input(0);
+    const tensorflow::Tensor& recursively_t = context->input(1);
+    {
+      const int64_t size = dirname_t.NumElements();
+      OP_REQUIRES(
+          context, size == 1,
+          tensorflow::errors::InvalidArgument(
+              "Input 0 (dirname) must be a string scalar; got a tensor of ",
+              size, "elements"));
+    }
+    {
+      const int64_t size = recursively_t.NumElements();
+      OP_REQUIRES(
+          context, size == 1,
+          tensorflow::errors::InvalidArgument(
+              "Input 1 (recursively) must be a string scalar; got a tensor of ",
+              size, "elements"));
+    }
+    const tensorflow::tstring& dirname =
+        dirname_t.scalar<tensorflow::tstring>()();
+    const bool recursively = recursively_t.scalar<bool>()();
+    if (context->env()->IsDirectory(dirname).ok()) {
+      if (recursively) {
+        int64_t undeleted_files = 0;
+        int64_t undeleted_dirs = 0;
+        tsl::Status delete_status = context->env()->DeleteRecursively(
+            dirname, &undeleted_files, &undeleted_dirs);
+        if (!delete_status.ok()) {
+          // The directory could be already deleted by another op. Let's not
+          // propagate this error.
+          LOG(WARNING) << "Failed to recursively delete the directory '"
+                       << dirname << "' (remaining files: " << undeleted_files
+                       << ", remaining dirs: " << undeleted_dirs << "). "
+                       << delete_status.error_message();
+        }
+      } else {
+        tsl::Status delete_status = context->env()->DeleteDir(dirname);
+        if (!delete_status.ok()) {
+          // The directory could be already deleted by another op. Let's not
+          // propagate this error.
+          LOG(WARNING) << "Failed to delete the directory '" << dirname << "'. "
+                       << delete_status.error_message();
+        }
+      }
+    }
+  }
+};
+
+REGISTER_OP("DeleteDir")
+    .Input("dirname: string")
+    .Input("recursively: bool")
+    .SetIsStateful();
+REGISTER_KERNEL_BUILDER(Name("DeleteDir").Device(tensorflow::DEVICE_CPU),
+                        DeleteDirOp);
 
 class DeleteFileOp : public OpKernel {
  public:
@@ -74,10 +109,12 @@ class DeleteFileOp : public OpKernel {
     const tensorflow::tstring& filename =
         filename_t.scalar<tensorflow::tstring>()();
     if (context->env()->FileExists(filename).ok()) {
-      if (!context->env()->DeleteFile(filename).ok()) {
+      tsl::Status delete_status = context->env()->DeleteFile(filename);
+      if (!delete_status.ok()) {
         // The file could be already deleted by another op. Let's not propagate
         // this error.
-        LOG(WARNING) << "Failed to delete the file." << filename;
+        LOG(WARNING) << "Failed to delete the file '" << filename << "'. "
+                     << delete_status.error_message();
       }
     }
   }
