@@ -14,86 +14,38 @@
 """Tests for the `delete_file` custom op."""
 
 import os
-
 import tensorflow as tf
 
 from fcp.tensorflow import delete_file
 
 
-class DeleteOpTest(tf.test.TestCase):
+class DeleteFileTest(tf.test.TestCase):
 
-  def setup_temp_dir(self) -> tuple[str, str]:
-    """Sets up a temporary directory suitable for testing.
-
-    The filesystem consist of directory with one file inside.
-
-    Returns:
-      Tuple of directory and checkpoint paths.
-    """
-    temp_dir = self.create_tempdir().full_path
-    temp_file = os.path.join(temp_dir, 'checkpoint.ckp')
-
-    expected_content = 'content'
-    tf.io.write_file(temp_file, expected_content)
-    read_content = tf.io.read_file(temp_file)
-    self.assertEqual(expected_content, read_content)
-
-    self.assertTrue(os.path.isdir(temp_dir))
-    self.assertTrue(os.path.exists(temp_file))
-    return temp_dir, temp_file
+  def new_tempfile_path(self):
+    """Returns a path that can be used to store a new tempfile."""
+    return os.path.join(self.create_tempdir(), 'checkpoint.ckp')
 
   def test_delete_file_op(self):
-    _, temp_file = self.setup_temp_dir()
-
-    delete_file.delete_file(temp_file)
+    output_file = self.new_tempfile_path()
+    expected_content = 'content'
+    tf.io.write_file(output_file, expected_content)
+    read_content = tf.io.read_file(output_file)
+    self.assertEqual(expected_content, read_content)
+    delete_file.delete_file(output_file)
     # Delete one more time to make sure no error when the file doesn't exist.
-    delete_file.delete_file(temp_file)
-    self.assertFalse(os.path.exists(temp_file))
+    delete_file.delete_file(output_file)
+    check_if_exists = os.path.exists(output_file)
+    self.assertEqual(False, check_if_exists)
 
-  def test_delete_file_op_exceptions(self):
+  def test_exceptions(self):
     with self.subTest(name='non_string_dtype'):
       with self.assertRaises(TypeError):
         delete_file.delete_file(1.0)
     with self.subTest(name='non_scalar'):
       with self.assertRaisesRegex(tf.errors.InvalidArgumentError,
                                   '.*must be a string scalar.*'):
-        _, checkpoint_path = self.setup_temp_dir()
+        checkpoint_path = self.new_tempfile_path()
         delete_file.delete_file([checkpoint_path, checkpoint_path])
-
-  def test_delete_file_and_dir_succeeds(self):
-    temp_dir, temp_file = self.setup_temp_dir()
-    delete_file.delete_file(temp_file)
-    self.assertFalse(os.path.exists(temp_file))
-
-    delete_file.delete_dir(temp_dir)
-    # Delete dir more time to make sure no error when the dir doesn't exist.
-    delete_file.delete_dir(temp_dir)
-    self.assertFalse(os.path.isdir(temp_dir))
-
-  def test_delete_non_empty_dir_fails(self):
-    temp_dir, temp_file = self.setup_temp_dir()
-
-    delete_file.delete_dir(temp_dir)
-    self.assertTrue(os.path.isdir(temp_dir))
-    self.assertTrue(os.path.exists(temp_file))
-
-  def test_recursive_delete_non_empty_dir_succeeds(self):
-    temp_dir, temp_file = self.setup_temp_dir()
-
-    delete_file.delete_dir(temp_dir, recursively=True)
-    self.assertFalse(os.path.isdir(temp_dir))
-    self.assertFalse(os.path.exists(temp_file))
-
-  def test_delete_dir_op_exceptions(self):
-    with self.subTest(name='non_string_dtype'):
-      with self.assertRaises(TypeError):
-        delete_file.delete_dir(1.0)
-    with self.subTest(name='non_scalar'):
-      with self.assertRaisesRegex(
-          tf.errors.InvalidArgumentError, '.*must be a string scalar.*'
-      ):
-        temp_dir, _ = self.setup_temp_dir()
-        delete_file.delete_dir([temp_dir, temp_dir])
 
 
 if __name__ == '__main__':

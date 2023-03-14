@@ -751,7 +751,6 @@ cc_library(
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:lib",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
-        "@org_tensorflow//tensorflow/tsl/platform:status",
     ],
     # Uses TensorFlow's registration macros
     alwayslink = 1,
