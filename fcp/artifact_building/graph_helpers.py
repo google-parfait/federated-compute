@@ -111,6 +111,8 @@ def embed_data_logic(
 
   Raises:
     ValueError: If the number of dataset output from one data source is not 1.
+    ValueError: If a node exists in the graph already that contains a node with
+      the same name as the example selector placeholders.
   """
   data_values = []
   # Embeds the token placeholder for the custom ExternalDataset op.
@@ -123,6 +125,26 @@ def embed_data_logic(
     example_selector_placeholders = generate_example_selector_placeholders(
         client_data_type, EXAMPLE_SELECTOR_PLACEHOLDER_PREFIX
     )
+    # If the first placeholder does not have the expected prefix, then it is due
+    # to other variables in the graph, likely created from the input
+    # tff.Computation, having the special name. This check ensures that no other
+    # variables use this special example selector placeholder name and we can
+    # easily extract example selector placeholders in the generated artifact.
+    if example_selector_placeholders and (
+        not (
+            example_selector_placeholders[0].name.startswith(
+                f'{EXAMPLE_SELECTOR_PLACEHOLDER_PREFIX}:'
+            )
+            or example_selector_placeholders[0].name.startswith(
+                f'{EXAMPLE_SELECTOR_PLACEHOLDER_PREFIX}_0'
+            )
+        )
+    ):
+      raise ValueError(
+          'Graph already contains a placeholder with name '
+          f'{EXAMPLE_SELECTOR_PLACEHOLDER_PREFIX}. Please '
+          'avoid the use of this special name.'
+      )
     data_sources = make_data_sources_without_dataspec(client_data_type)
     assert len(example_selector_placeholders) == len(data_sources)
   else:
