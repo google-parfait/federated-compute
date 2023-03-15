@@ -30,8 +30,13 @@ from google.longrunning import operations_pb2
 from fcp.demo import server
 from fcp.demo import test_utils
 from fcp.protos import plan_pb2
+from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
 from fcp.protos.federatedcompute import task_assignments_pb2
 from fcp.tensorflow import external_dataset
+
+_TaskAssignmentMode = (
+    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+)
 
 POPULATION_NAME = 'test/population'
 CAP_TENSOR_NAME = 'cap'
@@ -176,8 +181,14 @@ class ServerTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         COUNT_TENSOR_NAME: initial_count,
     })
     run_computation_task = asyncio.create_task(
-        self.server.run_computation('task/name', create_plan(), checkpoint,
-                                    len(examples_per_client)))
+        self.server.run_computation(
+            'task/name',
+            create_plan(),
+            checkpoint,
+            _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE,
+            len(examples_per_client),
+        )
+    )
 
     # Wait for task assignment to return a task.
     wait_task = asyncio.create_task(self.wait_for_task())

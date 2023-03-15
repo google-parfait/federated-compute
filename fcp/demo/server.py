@@ -31,6 +31,11 @@ from fcp.demo import plan_utils
 from fcp.demo import task_assignments
 from fcp.protos import plan_pb2
 from fcp.protos.federatedcompute import common_pb2
+from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
+
+_TaskAssignmentMode = (
+    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+)
 
 
 class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -47,19 +52,27 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
                                                       self._media_service)
     self._task_assignments_service = task_assignments.Service(
         population_name, self._get_forwarding_info, self._aggregations_service)
-    eligibility_eval_tasks_service = eligibility_eval_tasks.Service(
-        population_name, self._get_forwarding_info)
-    handler = http_actions.create_handler(self._media_service,
-                                          self._aggregations_service,
-                                          self._task_assignments_service,
-                                          eligibility_eval_tasks_service)
+    self._eligibility_eval_tasks_service = eligibility_eval_tasks.Service(
+        population_name, self._get_forwarding_info
+    )
+    handler = http_actions.create_handler(
+        self._media_service,
+        self._aggregations_service,
+        self._task_assignments_service,
+        self._eligibility_eval_tasks_service,
+    )
     if address_family is not None:
       self.address_family = address_family
     http.server.HTTPServer.__init__(self, (host, port), handler)
 
-  async def run_computation(self, task_name: str, plan: plan_pb2.Plan,
-                            server_checkpoint: bytes,
-                            number_of_clients: int) -> bytes:
+  async def run_computation(
+      self,
+      task_name: str,
+      plan: plan_pb2.Plan,
+      server_checkpoint: bytes,
+      task_assignment_mode: _TaskAssignmentMode,
+      number_of_clients: int,
+  ) -> bytes:
     """Runs a computation, returning the resulting checkpoint.
 
     If there's already a computation in progress, the new computation will
@@ -69,6 +82,7 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
       task_name: The name of the task.
       plan: The Plan proto containing the client and server computations.
       server_checkpoint: The starting server checkpoint.
+      task_assignment_mode: The task assignment mode to use for the computation.
       number_of_clients: The minimum number of clients to include.
 
     Returns:
@@ -91,9 +105,16 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
               'checkpoint',
               gzip.compress(session.client_checkpoint),
               content_type='application/octet-stream+gzip')
+          self._eligibility_eval_tasks_service.add_task(
+              task_name, task_assignment_mode
+          )
           self._task_assignments_service.add_task(
-              task_name, session_id, common_pb2.Resource(uri=plan_url),
-              common_pb2.Resource(uri=checkpoint_url))
+              task_name,
+              task_assignment_mode,
+              session_id,
+              common_pb2.Resource(uri=plan_url),
+              common_pb2.Resource(uri=checkpoint_url),
+          )
           try:
             status = await self._aggregations_service.wait(
                 session_id,
@@ -102,6 +123,7 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
               raise ValueError('Aggregation failed.')
           finally:
             self._task_assignments_service.remove_task(session_id)
+            self._eligibility_eval_tasks_service.remove_task(task_name)
 
           stack.pop_all()
           status, intermedia_update = (

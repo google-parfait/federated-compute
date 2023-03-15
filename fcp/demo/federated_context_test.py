@@ -221,8 +221,14 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
 
     self.assertEqual(release_manager.values()['result'][0], 7)
 
-    run_computation.assert_called_once_with(mock.ANY, comp.name, mock.ANY,
-                                            mock.ANY, 10)
+    run_computation.assert_called_once_with(
+        mock.ANY,
+        comp.name,
+        mock.ANY,
+        mock.ANY,
+        DATA_SOURCE.task_assignment_mode,
+        10,
+    )
     plan = run_computation.call_args.args[2]
     self.assertIsInstance(plan, plan_pb2.Plan)
     self.assertNotEmpty(plan.client_tflite_graph_bytes)

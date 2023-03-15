@@ -24,7 +24,12 @@ from fcp.demo import aggregations
 from fcp.demo import http_actions
 from fcp.demo import task_assignments
 from fcp.protos.federatedcompute import common_pb2
+from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
 from fcp.protos.federatedcompute import task_assignments_pb2
+
+_TaskAssignmentMode = (
+    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+)
 
 POPULATION_NAME = 'test/population'
 FORWARDING_INFO = common_pb2.ForwardingInfo(
@@ -68,6 +73,33 @@ class TaskAssignmentsTest(absltest.TestCase):
     self.assertEqual(
         response,
         task_assignments_pb2.StartTaskAssignmentResponse(
+            rejection_info=common_pb2.RejectionInfo()
+        ),
+    )
+
+  def test_start_task_assignment_with_multiple_assignment_task(self):
+    service = task_assignments.Service(
+        POPULATION_NAME, lambda: FORWARDING_INFO, self.mock_aggregations_service
+    )
+    service.add_task(
+        'task',
+        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
+        'aggregation-session',
+        common_pb2.Resource(uri='https://task.example/plan'),
+        common_pb2.Resource(uri='https://task.example/checkpoint'),
+    )
+
+    request = task_assignments_pb2.StartTaskAssignmentRequest(
+        population_name=POPULATION_NAME, session_id='session-id'
+    )
+    operation = service.start_task_assignment(request)
+    self.assertTrue(operation.done)
+
+    response = task_assignments_pb2.StartTaskAssignmentResponse()
+    operation.response.Unpack(response)
+    self.assertEqual(
+        response,
+        task_assignments_pb2.StartTaskAssignmentResponse(
             rejection_info=common_pb2.RejectionInfo()))
 
   @mock.patch.object(uuid, 'uuid4', return_value=uuid.uuid4(), autospec=True)
@@ -81,7 +113,13 @@ class TaskAssignmentsTest(absltest.TestCase):
 
     task_plan = common_pb2.Resource(uri='https://task.example/plan')
     task_checkpoint = common_pb2.Resource(uri='https://task.example/checkpoint')
-    service.add_task('task', 'aggregation-session', task_plan, task_checkpoint)
+    service.add_task(
+        'task',
+        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE,
+        'aggregation-session',
+        task_plan,
+        task_checkpoint,
+    )
 
     request = task_assignments_pb2.StartTaskAssignmentRequest(
         population_name=POPULATION_NAME, session_id='session-id')
@@ -124,13 +162,23 @@ class TaskAssignmentsTest(absltest.TestCase):
     task1_plan = common_pb2.Resource(uri='https://task1.example/plan')
     task1_checkpoint = common_pb2.Resource(
         uri='https://task1.example/checkpoint')
-    service.add_task('task1', 'aggregation-session1', task1_plan,
-                     task1_checkpoint)
+    service.add_task(
+        'task1',
+        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE,
+        'aggregation-session1',
+        task1_plan,
+        task1_checkpoint,
+    )
     task2_plan = common_pb2.Resource(uri='https://task2.example/plan')
     task2_checkpoint = common_pb2.Resource(
         uri='https://task2.example/checkpoint')
-    service.add_task('task2', 'aggregation-session2', task2_plan,
-                     task2_checkpoint)
+    service.add_task(
+        'task2',
+        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE,
+        'aggregation-session2',
+        task2_plan,
+        task2_checkpoint,
+    )
 
     request = task_assignments_pb2.StartTaskAssignmentRequest(
         population_name=POPULATION_NAME, session_id='session-id')
@@ -218,13 +266,35 @@ class TaskAssignmentsTest(absltest.TestCase):
     task1_plan = common_pb2.Resource(uri='https://task1.example/plan')
     task1_checkpoint = common_pb2.Resource(
         uri='https://task1.example/checkpoint')
-    service.add_task('task1', 'aggregation-session1', task1_plan,
-                     task1_checkpoint)
+    service.add_task(
+        'task1',
+        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
+        'aggregation-session1',
+        task1_plan,
+        task1_checkpoint,
+    )
     task2_plan = common_pb2.Resource(uri='https://task2.example/plan')
     task2_checkpoint = common_pb2.Resource(
         uri='https://task2.example/checkpoint')
-    service.add_task('task2', 'aggregation-session2', task2_plan,
-                     task2_checkpoint)
+    service.add_task(
+        'task2',
+        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
+        'aggregation-session2',
+        task2_plan,
+        task2_checkpoint,
+    )
+    # Tasks using other TaskAssignmentModes should be skipped.
+    task3_plan = common_pb2.Resource(uri='https://task3.example/plan')
+    task3_checkpoint = common_pb2.Resource(
+        uri='https://task3.example/checkpoint'
+    )
+    service.add_task(
+        'task3',
+        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE,
+        'aggregation-session3',
+        task3_plan,
+        task3_checkpoint,
+    )
 
     request = task_assignments_pb2.PerformMultipleTaskAssignmentsRequest(
         population_name=POPULATION_NAME,
@@ -255,6 +325,41 @@ class TaskAssignmentsTest(absltest.TestCase):
                 init_checkpoint=task2_checkpoint),
             # 'task3' should be omitted since there isn't a corresponding task.
         ])
+
+  def test_add_task_with_invalid_task_assignment_mode(self):
+    service = task_assignments.Service(
+        POPULATION_NAME, lambda: FORWARDING_INFO, self.mock_aggregations_service
+    )
+    with self.assertRaises(ValueError):
+      service.add_task(
+          'task',
+          _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_UNSPECIFIED,
+          'aggregation-session',
+          common_pb2.Resource(uri='https://task.example/plan'),
+          common_pb2.Resource(uri='https://task.example/checkpoint'),
+      )
+
+  def test_remove_multiple_assignment_task(self):
+    service = task_assignments.Service(
+        POPULATION_NAME, lambda: FORWARDING_INFO, self.mock_aggregations_service
+    )
+    service.add_task(
+        'task',
+        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
+        'aggregation-session',
+        common_pb2.Resource(uri='https://task.example/plan'),
+        common_pb2.Resource(uri='https://task.example/checkpoint'),
+    )
+    service.remove_task('aggregation-session')
+
+    request = task_assignments_pb2.PerformMultipleTaskAssignmentsRequest(
+        population_name=POPULATION_NAME,
+        session_id='session-id',
+        task_names=['task'],
+    )
+    self.assertEmpty(
+        service.perform_multiple_task_assignments(request).task_assignments
+    )
 
   def test_remove_missing_task(self):
     service = task_assignments.Service(POPULATION_NAME, lambda: FORWARDING_INFO,

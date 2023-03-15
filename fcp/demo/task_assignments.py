@@ -28,7 +28,12 @@ from google.protobuf import text_format
 from fcp.demo import aggregations
 from fcp.demo import http_actions
 from fcp.protos.federatedcompute import common_pb2
+from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
 from fcp.protos.federatedcompute import task_assignments_pb2
+
+_TaskAssignmentMode = (
+    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -48,33 +53,58 @@ class Service:
     self._population_name = population_name
     self._forwarding_info = forwarding_info
     self._aggregations_service = aggregations_service
-    self._tasks = collections.deque()
+    self._single_assignment_tasks = collections.deque()
+    self._multiple_assignment_tasks: list[_Task] = []
     self._tasks_lock = threading.Lock()
 
-  def add_task(self, task_name: str, aggregation_session_id: str,
-               plan: common_pb2.Resource, init_checkpoint: common_pb2.Resource):
+  def add_task(
+      self,
+      task_name: str,
+      task_assignment_mode: _TaskAssignmentMode,
+      aggregation_session_id: str,
+      plan: common_pb2.Resource,
+      init_checkpoint: common_pb2.Resource,
+  ):
     """Adds a new task to the service."""
-    with self._tasks_lock:
-      self._tasks.append(
-          _Task(
-              task_name=task_name,
-              aggregation_session_id=aggregation_session_id,
-              init_checkpoint=init_checkpoint,
-              plan=plan))
+    task = _Task(
+        task_name=task_name,
+        aggregation_session_id=aggregation_session_id,
+        init_checkpoint=init_checkpoint,
+        plan=plan,
+    )
+    if task_assignment_mode == _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE:
+      with self._tasks_lock:
+        self._single_assignment_tasks.append(task)
+    elif (
+        task_assignment_mode
+        == _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE
+    ):
+      with self._tasks_lock:
+        self._multiple_assignment_tasks.append(task)
+    else:
+      raise ValueError(f'Unsupport TaskAssignmentMode {task_assignment_mode}.')
 
   def remove_task(self, aggregation_session_id: str):
     """Removes a task from the service."""
     with self._tasks_lock:
-      for task in self._tasks:
+      for task in self._single_assignment_tasks:
         if task.aggregation_session_id == aggregation_session_id:
-          self._tasks.remove(task)
+          self._single_assignment_tasks.remove(task)
           return
-    raise KeyError(aggregation_session_id)
+      for task in self._multiple_assignment_tasks:
+        if task.aggregation_session_id == aggregation_session_id:
+          self._multiple_assignment_tasks.remove(task)
+          return
+      raise KeyError(aggregation_session_id)
 
   @property
   def _current_task(self) -> Optional[_Task]:
     with self._tasks_lock:
-      return self._tasks[0] if self._tasks else None
+      return (
+          self._single_assignment_tasks[0]
+          if self._single_assignment_tasks
+          else None
+      )
 
   @http_actions.proto_action(
       service='google.internal.federatedcompute.v1.TaskAssignments',
@@ -140,7 +170,7 @@ class Service:
 
     task_assignments = []
     with self._tasks_lock:
-      for task in self._tasks:
+      for task in self._multiple_assignment_tasks:
         if task.task_name not in request.task_names:
           continue
 

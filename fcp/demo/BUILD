@@ -164,7 +164,10 @@ py_library(
     name = "federated_data_source",
     srcs = ["federated_data_source.py"],
     srcs_version = "PY3",
-    deps = ["//fcp/protos:plan_py_pb2"],
+    deps = [
+        "//fcp/protos:plan_py_pb2",
+        "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+    ],
 )
 
 py_test(
@@ -175,6 +178,7 @@ py_test(
     deps = [
         ":federated_data_source",
         "//fcp/protos:plan_py_pb2",
+        "//fcp/protos/federatedcompute:federated_compute_py_pb2",
     ],
 )
 

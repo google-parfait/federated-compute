@@ -26,6 +26,10 @@ from fcp.demo import http_actions
 from fcp.protos.federatedcompute import common_pb2
 from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
 
+_TaskAssignmentMode = (
+    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+)
+
 POPULATION_NAME = 'test/population'
 FORWARDING_INFO = common_pb2.ForwardingInfo(
     target_uri_prefix='https://forwarding.example/')
@@ -37,6 +41,7 @@ class EligibilityEvalTasksTest(absltest.TestCase):
   def test_request_eligibility_eval_task(self, mock_uuid):
     service = eligibility_eval_tasks.Service(POPULATION_NAME,
                                              lambda: FORWARDING_INFO)
+    service.add_task('task1', _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE)
     request = eligibility_eval_tasks_pb2.EligibilityEvalTaskRequest(
         population_name=POPULATION_NAME)
     retry_window = common_pb2.RetryWindow()
@@ -51,6 +56,49 @@ class EligibilityEvalTasksTest(absltest.TestCase):
                 eligibility_eval_tasks_pb2.NoEligibilityEvalConfigured()),
             retry_window_if_accepted=retry_window,
             retry_window_if_rejected=retry_window))
+
+  def test_request_eligibility_eval_task_with_multiple_assignment(self):
+    service = eligibility_eval_tasks.Service(
+        POPULATION_NAME, lambda: FORWARDING_INFO
+    )
+    service.add_task('task1', _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE)
+    service.add_task('task2', _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE)
+
+    request = eligibility_eval_tasks_pb2.EligibilityEvalTaskRequest(
+        population_name=POPULATION_NAME,
+        eligibility_eval_task_capabilities=(
+            eligibility_eval_tasks_pb2.EligibilityEvalTaskCapabilities(
+                supports_multiple_task_assignment=True
+            )
+        ),
+    )
+    response = service.request_eligibility_eval_task(request)
+    self.assertTrue(response.HasField('eligibility_eval_task'))
+    spec_resource = response.eligibility_eval_task.population_eligibility_spec
+    population_eligibility_spec = (
+        eligibility_eval_tasks_pb2.PopulationEligibilitySpec.FromString(
+            spec_resource.inline_resource.data
+        )
+    )
+    self.assertEqual(
+        population_eligibility_spec,
+        eligibility_eval_tasks_pb2.PopulationEligibilitySpec(
+            task_info=[
+                eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo(
+                    task_name='task1',
+                    task_assignment_mode=(
+                        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE
+                    ),
+                ),
+                eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo(
+                    task_name='task2',
+                    task_assignment_mode=(
+                        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE
+                    ),
+                ),
+            ],
+        ),
+    )
 
   def test_request_eligibility_eval_task_with_wrong_population(self):
     service = eligibility_eval_tasks.Service(POPULATION_NAME,
@@ -82,6 +130,39 @@ class EligibilityEvalTasksTest(absltest.TestCase):
     with self.assertRaises(http_actions.HttpError) as cm:
       service.report_eligibility_eval_task_result(request)
     self.assertEqual(cm.exception.code, http.HTTPStatus.NOT_FOUND)
+
+  def test_remove_task(self):
+    service = eligibility_eval_tasks.Service(
+        POPULATION_NAME, lambda: FORWARDING_INFO
+    )
+    service.add_task('task', _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE)
+    service.remove_task('task')
+    request = eligibility_eval_tasks_pb2.EligibilityEvalTaskRequest(
+        population_name=POPULATION_NAME,
+        eligibility_eval_task_capabilities=(
+            eligibility_eval_tasks_pb2.EligibilityEvalTaskCapabilities(
+                supports_multiple_task_assignment=True
+            )
+        ),
+    )
+    response = service.request_eligibility_eval_task(request)
+    spec_resource = response.eligibility_eval_task.population_eligibility_spec
+    population_eligibility_spec = (
+        eligibility_eval_tasks_pb2.PopulationEligibilitySpec.FromString(
+            spec_resource.inline_resource.data
+        )
+    )
+    self.assertEqual(
+        population_eligibility_spec,
+        eligibility_eval_tasks_pb2.PopulationEligibilitySpec(),
+    )
+
+  def test_remove_missing_task(self):
+    service = eligibility_eval_tasks.Service(
+        POPULATION_NAME, lambda: FORWARDING_INFO
+    )
+    with self.assertRaises(KeyError):
+      service.remove_task('does-not-exist')
 
 
 if __name__ == '__main__':

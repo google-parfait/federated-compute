@@ -16,8 +16,10 @@
 Eligibility Eval tasks are not currently supported by this demo implementation.
 """
 
+import dataclasses
 import datetime
 import http
+import threading
 from typing import Callable
 import uuid
 
@@ -28,6 +30,16 @@ from fcp.demo import http_actions
 from fcp.protos.federatedcompute import common_pb2
 from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
 
+_TaskAssignmentMode = (
+    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class _Task:
+  task_name: str
+  task_assignment_mode: _TaskAssignmentMode
+
 
 class Service:
   """Implements the EligibilityEvalTasks service."""
@@ -36,6 +48,33 @@ class Service:
                forwarding_info: Callable[[], common_pb2.ForwardingInfo]):
     self._population_name = population_name
     self._forwarding_info = forwarding_info
+    self._tasks: dict[str, _Task] = {}
+    self._tasks_lock = threading.Lock()
+
+  def add_task(self, task_name: str, task_assignment_mode: _TaskAssignmentMode):
+    """Informs the service that a new task has been added to the system."""
+    with self._tasks_lock:
+      self._tasks[task_name] = _Task(task_name, task_assignment_mode)
+
+  def remove_task(self, task_name: str):
+    """Informs the service that a task has been removed from the system."""
+    with self._tasks_lock:
+      del self._tasks[task_name]
+
+  @property
+  def _population_eligibility_spec(
+      self,
+  ) -> eligibility_eval_tasks_pb2.PopulationEligibilitySpec:
+    with self._tasks_lock:
+      return eligibility_eval_tasks_pb2.PopulationEligibilitySpec(
+          task_info=[
+              eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo(
+                  task_name=task.task_name,
+                  task_assignment_mode=task.task_assignment_mode,
+              )
+              for task in self._tasks.values()
+          ]
+      )
 
   @http_actions.proto_action(
       service='google.internal.federatedcompute.v1.EligibilityEvalTasks',
@@ -58,15 +97,27 @@ class Service:
     retry_window.delay_min.FromTimedelta(datetime.timedelta(seconds=10))
     retry_window.delay_max.FromTimedelta(datetime.timedelta(seconds=30))
 
-    # This implementation does not support Eligibility Eval tasks, so we always
-    # return NoEligibilityEvalConfigured.
-    return eligibility_eval_tasks_pb2.EligibilityEvalTaskResponse(
+    response = eligibility_eval_tasks_pb2.EligibilityEvalTaskResponse(
         task_assignment_forwarding_info=self._forwarding_info(),
         session_id=str(uuid.uuid4()),
-        no_eligibility_eval_configured=(
-            eligibility_eval_tasks_pb2.NoEligibilityEvalConfigured()),
         retry_window_if_accepted=retry_window,
-        retry_window_if_rejected=retry_window)
+        retry_window_if_rejected=retry_window,
+    )
+
+    # This implementation does not support Eligibility Eval tasks. However, the
+    # EligibilityEvalTask response is also used to provide the
+    # PopulationEligibilitySpec to clients, so the service returns an
+    # EligibilityEvalTask instead of NoEligibilityEvalConfigured if the client
+    # supports multiple task assignment.
+    capabilities = request.eligibility_eval_task_capabilities
+    if capabilities.supports_multiple_task_assignment:
+      spec_resource = response.eligibility_eval_task.population_eligibility_spec
+      spec_resource.inline_resource.data = (
+          self._population_eligibility_spec.SerializeToString()
+      )
+    else:
+      response.no_eligibility_eval_configured.SetInParent()
+    return response
 
   @http_actions.proto_action(
       service='google.internal.federatedcompute.v1.EligibilityEvalTasks',

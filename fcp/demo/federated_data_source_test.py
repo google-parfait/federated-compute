@@ -19,6 +19,11 @@ import tensorflow_federated as tff
 
 from fcp.demo import federated_data_source as fds
 from fcp.protos import plan_pb2
+from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
+
+_TaskAssignmentMode = (
+    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+)
 
 POPULATION_NAME = 'test/name'
 EXAMPLE_SELECTOR = plan_pb2.ExampleSelector(collection_uri='app://test')
@@ -37,6 +42,23 @@ class FederatedDataSourceTest(absltest.TestCase):
   def test_example_selector(self):
     ds = fds.FederatedDataSource(POPULATION_NAME, EXAMPLE_SELECTOR)
     self.assertEqual(ds.example_selector, EXAMPLE_SELECTOR)
+
+  def test_default_task_assignment_mode(self):
+    ds = fds.FederatedDataSource(POPULATION_NAME, EXAMPLE_SELECTOR)
+    self.assertEqual(
+        ds.task_assignment_mode, _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE
+    )
+
+  def test_task_assignment_mode(self):
+    ds = fds.FederatedDataSource(
+        POPULATION_NAME,
+        EXAMPLE_SELECTOR,
+        task_assignment_mode=_TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
+    )
+    self.assertEqual(
+        ds.task_assignment_mode,
+        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
+    )
 
   def test_federated_type(self):
     ds = fds.FederatedDataSource(POPULATION_NAME, EXAMPLE_SELECTOR)
@@ -77,10 +99,20 @@ class FederatedDataSourceTest(absltest.TestCase):
     self.assertEqual(ds.iterator().federated_type, ds.federated_type)
 
   def test_iterator_select(self):
-    ds = fds.FederatedDataSource(POPULATION_NAME, EXAMPLE_SELECTOR)
+    ds = fds.FederatedDataSource(
+        POPULATION_NAME,
+        EXAMPLE_SELECTOR,
+        _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
+    )
     self.assertEqual(
         ds.iterator().select(10),
-        fds.DataSelectionConfig(POPULATION_NAME, EXAMPLE_SELECTOR, 10))
+        fds.DataSelectionConfig(
+            POPULATION_NAME,
+            EXAMPLE_SELECTOR,
+            _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
+            10,
+        ),
+    )
 
   def test_iterator_select_with_invalid_num_clients(self):
     ds = fds.FederatedDataSource(POPULATION_NAME, EXAMPLE_SELECTOR)

@@ -237,8 +237,13 @@ class FederatedContext(tff.program.FederatedContext):
         input_type, await self._resolve_value_references(input_state))
     try:
       logging.log(logging.INFO, 'Started running %s', name)
-      return await self._server.run_computation(name, plan, input_checkpoint,
-                                                config.num_clients)
+      return await self._server.run_computation(
+          name,
+          plan,
+          input_checkpoint,
+          config.task_assignment_mode,
+          config.num_clients,
+      )
     finally:
       logging.log(logging.INFO, 'Finished running %s', name)
 
