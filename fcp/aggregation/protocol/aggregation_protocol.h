@@ -17,10 +17,8 @@
 #ifndef FCP_AGGREGATION_PROTOCOL_AGGREGATION_PROTOCOL_H_
 #define FCP_AGGREGATION_PROTOCOL_AGGREGATION_PROTOCOL_H_
 
-#include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/strings/cord.h"
-#include "absl/strings/string_view.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 
 namespace fcp::aggregation {
@@ -74,9 +72,8 @@ class AggregationProtocol {
 
   // Handles a message from a given client.
   //
-  // This method is optional - not all aggregation protocol implementations have
-  // to implement it.  Depending on the specific protocol implementation there
-  // may be multiple messages exchanged with each clients.
+  // Depending on the specific protocol implementation there may be multiple
+  // messages exchanged with each clients.
   //
   // This method should return an error status only if there is an unrecoverable
   // error which must result in aborting the protocol.  Any client specific
