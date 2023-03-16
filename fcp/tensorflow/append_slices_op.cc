@@ -319,8 +319,9 @@ class PartialRandomAccessFile : public tensorflow::RandomAccessFile {
         absl::StrCat("Reading from PartialRandomAccessFile at offset ", offset,
                      " from start position ", start_));
     if (read_too_long) {
-      return tensorflow::Status(tensorflow::error::OUT_OF_RANGE,
-                                "Attempted to read past end of file chunk.");
+      return tensorflow::Status(
+          static_cast<tensorflow::errors::Code>(absl::StatusCode::kOutOfRange),
+          "Attempted to read past end of file chunk.");
     }
     return tensorflow::OkStatus();
   }
@@ -369,7 +370,7 @@ tensorflow::Status MetadataFromString(absl::string_view serialized,
   // rather than a `absl::string_view`.
   if (!meta_out.ParseFromString(std::string(serialized))) {
     return tensorflow::Status(
-        tensorflow::error::INTERNAL,
+        static_cast<tensorflow::errors::Code>(absl::StatusCode::kInternal),
         absl::StrCat("Failed to parse table entry as `SavedTensorSlices`: ",
                      serialized));
   }
@@ -440,14 +441,15 @@ tensorflow::Status LoadAndMergeAppendedSlices(const std::string& filename) {
     std::unique_ptr<tensorflow::table::Iterator> iterator(raw_iterator);
     iterator->SeekToFirst();
     if (!iterator->Valid()) {
-      return tensorflow::Status(tensorflow::error::INTERNAL,
-                                "Unexpected immediately-invalid iterator. "
-                                "Expected table to iterator to have at least a "
-                                "single entry (metadata)");
+      return tensorflow::Status(
+          static_cast<tensorflow::errors::Code>(absl::StatusCode::kInternal),
+          "Unexpected immediately-invalid iterator. "
+          "Expected table to iterator to have at least a "
+          "single entry (metadata)");
     }
     if (iterator->key() != kSavedTensorSlicesKey) {
       return tensorflow::Status(
-          tensorflow::error::INTERNAL,
+          static_cast<tensorflow::errors::Code>(absl::StatusCode::kInternal),
           absl::StrCat("Expected table iterator to have an initial metadata "
                        "entry with key `",
                        kSavedTensorSlicesKey, "`, found key `", iterator->key(),
