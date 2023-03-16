@@ -16,9 +16,7 @@
 #ifndef FCP_CLIENT_ENGINE_EXAMPLE_QUERY_PLAN_ENGINE_H_
 #define FCP_CLIENT_ENGINE_EXAMPLE_QUERY_PLAN_ENGINE_H_
 
-#include <functional>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "fcp/client/engine/common.h"
