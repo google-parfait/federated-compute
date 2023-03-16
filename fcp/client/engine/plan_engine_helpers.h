@@ -16,8 +16,11 @@
 #ifndef FCP_CLIENT_ENGINE_PLAN_ENGINE_HELPERS_H_
 #define FCP_CLIENT_ENGINE_PLAN_ENGINE_HELPERS_H_
 
+#include <atomic>
 #include <functional>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -30,6 +33,7 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
+#include "fcp/tensorflow/external_dataset.h"
 #include "fcp/tensorflow/host_object.h"
 #include "tensorflow/core/framework/tensor.h"
 
@@ -91,6 +95,38 @@ class ExampleIteratorStatus {
   mutable absl::Mutex mu_;
 };
 
+// A class to iterate over a given example iterator.
+class DatasetIterator : public ExternalDatasetIterator {
+ public:
+  DatasetIterator(std::unique_ptr<ExampleIterator> example_iterator,
+                  opstats::OpStatsLogger* opstats_logger,
+                  std::atomic<int>* total_example_count,
+                  std::atomic<int64_t>* total_example_size_bytes,
+                  ExampleIteratorStatus* example_iterator_status,
+                  const std::string& collection_uri, bool collect_stats);
+  ~DatasetIterator() override;
+
+  // Returns the next entry from the dataset.
+  absl::StatusOr<std::string> GetNext() final;
+
+ private:
+  std::unique_ptr<ExampleIterator> example_iterator_
+      ABSL_GUARDED_BY(iterator_lock_);
+  opstats::OpStatsLogger* opstats_logger_;
+  absl::Time iterator_start_time_;
+  // Example stats across all datasets.
+  std::atomic<int>* total_example_count_;
+  std::atomic<int64_t>* total_example_size_bytes_;
+  ExampleIteratorStatus* example_iterator_status_;
+  // Example stats only for this dataset.
+  std::atomic<int> example_count_;
+  std::atomic<int64_t> example_size_bytes_;
+  const std::string collection_uri_;
+  bool iterator_finished_ ABSL_GUARDED_BY(iterator_lock_);
+  const bool collect_stats_;
+  absl::Mutex iterator_lock_;
+};
+
 // Sets up a ExternalDatasetProvider that is registered with the global
 // HostObjectRegistry. Adds a tensor representing the HostObjectRegistration
 // token to the input tensors with the provided dataset_token_tensor_name key.
@@ -140,6 +176,12 @@ std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
 PlanResult CreateComputationErrorPlanResult(
     absl::Status example_iterator_status,
     absl::Status computation_error_status);
+
+// Finds a suitable example iterator factory out of provided factories based on
+// the provided selector.
+ExampleIteratorFactory* FindExampleIteratorFactory(
+    const google::internal::federated::plan::ExampleSelector& selector,
+    std::vector<ExampleIteratorFactory*> example_iterator_factories);
 
 }  // namespace engine
 }  // namespace client

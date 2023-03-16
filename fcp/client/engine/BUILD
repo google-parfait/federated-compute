@@ -55,6 +55,46 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "example_query_plan_engine",
+    srcs = [
+        "example_query_plan_engine.cc",
+    ],
+    hdrs = [
+        "example_query_plan_engine.h",
+    ],
+    copts = FCP_COPTS,
+    visibility = default_visibility,
+    deps = [
+        ":common",
+        ":example_iterator_factory",
+        ":plan_engine_helpers",
+        "//fcp/client:example_query_result_cc_proto",
+        "//fcp/client:simple_task_environment",
+        "//fcp/client/opstats:opstats_logger",
+        "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "example_query_plan_engine_test",
+    srcs = ["example_query_plan_engine_test.cc"],
+    deps = [
+        ":common",
+        ":example_query_plan_engine",
+        "//fcp/client:client_runner",
+        "//fcp/client:example_query_result_cc_proto",
+        "//fcp/client:test_helpers",
+        "//fcp/protos:plan_cc_proto",
+        "//fcp/tensorflow:external_dataset_op_lib",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 # A plan-engine independent wrapper around TF that supports cancellation.
 cc_library(
     name = "tf_wrapper",

@@ -38,77 +38,6 @@ using ::fcp::client::opstats::OpStatsLoggerImpl;
 using ::fcp::client::opstats::PdsBackedOpStatsDb;
 using ::google::internal::federated::plan::ExampleSelector;
 
-class DatasetIterator : public ExternalDatasetIterator {
- public:
-  DatasetIterator(std::unique_ptr<ExampleIterator> example_iterator,
-                  OpStatsLogger* opstats_logger,
-                  std::atomic<int>* total_example_count,
-                  std::atomic<int64_t>* total_example_size_bytes,
-                  ExampleIteratorStatus* example_iterator_status,
-                  const std::string& collection_uri, bool collect_stats)
-      : example_iterator_(std::move(example_iterator)),
-        opstats_logger_(opstats_logger),
-        iterator_start_time_(absl::Now()),
-        total_example_count_(total_example_count),
-        total_example_size_bytes_(total_example_size_bytes),
-        example_iterator_status_(example_iterator_status),
-        example_count_(0),
-        example_size_bytes_(0),
-        collection_uri_(collection_uri),
-        iterator_finished_(false),
-        collect_stats_(collect_stats) {}
-
-  ~DatasetIterator() override {
-    if (collect_stats_) {
-      opstats_logger_->UpdateDatasetStats(collection_uri_, example_count_,
-                                          example_size_bytes_);
-    }
-  }
-
-  absl::StatusOr<std::string> GetNext() final {
-    absl::MutexLock locked(&iterator_lock_);
-    if (iterator_finished_) {
-      // If we've reached the end of the iterator, always return OUT_OF_RANGE.
-      return absl::OutOfRangeError("End of iterator reached");
-    }
-    absl::StatusOr<std::string> example = example_iterator_->Next();
-    absl::StatusCode error_code = example.status().code();
-      example_iterator_status_->SetStatus(example.status());
-      if (error_code == absl::StatusCode::kOutOfRange) {
-        example_iterator_->Close();
-        iterator_finished_ = true;
-      }
-    // If we're not forwarding an OUT_OF_RANGE to the caller, record example
-    // stats for metrics logging.
-      if (collect_stats_ && example.ok()) {
-        // TODO(team): Consider reducing logic duplication in
-        // cross-dataset and single-dataset example stat variables.
-        *total_example_count_ += 1;
-        *total_example_size_bytes_ += example->size();
-        example_count_ += 1;
-        example_size_bytes_ += example->size();
-      }
-    return example;
-  }
-
- private:
-  std::unique_ptr<ExampleIterator> example_iterator_
-      ABSL_GUARDED_BY(iterator_lock_);
-  OpStatsLogger* opstats_logger_;
-  absl::Time iterator_start_time_;
-  // Example stats across all datasets.
-  std::atomic<int>* total_example_count_;
-  std::atomic<int64_t>* total_example_size_bytes_;
-  ExampleIteratorStatus* example_iterator_status_;
-  // Example stats only for this dataset.
-  std::atomic<int> example_count_;
-  std::atomic<int64_t> example_size_bytes_;
-  const std::string collection_uri_;
-  bool iterator_finished_ ABSL_GUARDED_BY(iterator_lock_);
-  const bool collect_stats_;
-  absl::Mutex iterator_lock_;
-};
-
 /** An iterator that forwards the failing status from the external dataset to
  * TensorFlow. */
 class FailingDatasetIterator : public ExternalDatasetIterator {
@@ -120,17 +49,6 @@ class FailingDatasetIterator : public ExternalDatasetIterator {
  private:
   const absl::Status status_;
 };
-
-ExampleIteratorFactory* FindExampleIteratorFactory(
-    const ExampleSelector& selector,
-    std::vector<ExampleIteratorFactory*> example_iterator_factories) {
-  for (ExampleIteratorFactory* factory : example_iterator_factories) {
-    if (factory->CanHandle(selector)) {
-        return factory;
-    }
-  }
-  return nullptr;
-}
 
 class TrainingDatasetProvider
     : public ExternalDatasetProvider::UsingProtoSelector<ExampleSelector> {
@@ -190,6 +108,59 @@ class TrainingDatasetProvider
 };
 
 }  // namespace
+
+DatasetIterator::DatasetIterator(
+    std::unique_ptr<ExampleIterator> example_iterator,
+    opstats::OpStatsLogger* opstats_logger,
+    std::atomic<int>* total_example_count,
+    std::atomic<int64_t>* total_example_size_bytes,
+    ExampleIteratorStatus* example_iterator_status,
+    const std::string& collection_uri, bool collect_stats)
+    : example_iterator_(std::move(example_iterator)),
+      opstats_logger_(opstats_logger),
+      iterator_start_time_(absl::Now()),
+      total_example_count_(total_example_count),
+      total_example_size_bytes_(total_example_size_bytes),
+      example_iterator_status_(example_iterator_status),
+      example_count_(0),
+      example_size_bytes_(0),
+      collection_uri_(collection_uri),
+      iterator_finished_(false),
+      collect_stats_(collect_stats) {}
+
+DatasetIterator::~DatasetIterator() {
+  if (collect_stats_) {
+    opstats_logger_->UpdateDatasetStats(collection_uri_, example_count_,
+                                        example_size_bytes_);
+  }
+}
+
+// Returns the next entry from the dataset.
+absl::StatusOr<std::string> DatasetIterator::GetNext() {
+  absl::MutexLock locked(&iterator_lock_);
+  if (iterator_finished_) {
+    // If we've reached the end of the iterator, always return OUT_OF_RANGE.
+    return absl::OutOfRangeError("End of iterator reached");
+  }
+  absl::StatusOr<std::string> example = example_iterator_->Next();
+  absl::StatusCode error_code = example.status().code();
+  example_iterator_status_->SetStatus(example.status());
+  if (error_code == absl::StatusCode::kOutOfRange) {
+    example_iterator_->Close();
+    iterator_finished_ = true;
+  }
+  // If we're not forwarding an OUT_OF_RANGE to the caller, record example
+  // stats for metrics logging.
+  if (collect_stats_ && example.ok()) {
+    // TODO(team): Consider reducing logic duplication in
+    // cross-dataset and single-dataset example stat variables.
+    *total_example_count_ += 1;
+    *total_example_size_bytes_ += example->size();
+    example_count_ += 1;
+    example_size_bytes_ += example->size();
+  }
+  return example;
+}
 
 void ExampleIteratorStatus::SetStatus(absl::Status status) {
   absl::MutexLock lock(&mu_);
@@ -296,6 +267,17 @@ PlanResult CreateComputationErrorPlanResult(
       return PlanResult(PlanOutcome::kExampleIteratorError,
                         example_iterator_status);
   }
+}
+
+ExampleIteratorFactory* FindExampleIteratorFactory(
+    const ExampleSelector& selector,
+    std::vector<ExampleIteratorFactory*> example_iterator_factories) {
+  for (ExampleIteratorFactory* factory : example_iterator_factories) {
+    if (factory->CanHandle(selector)) {
+      return factory;
+    }
+  }
+  return nullptr;
 }
 
 }  // namespace engine
