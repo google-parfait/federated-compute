@@ -389,6 +389,7 @@ cc_library(
         ":simple_task_environment",
         ":phase_logger",
         ":phase_logger_impl",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",

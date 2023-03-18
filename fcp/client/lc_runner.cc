@@ -17,9 +17,12 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
@@ -51,18 +54,37 @@ using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federated::plan::LocalComputeIORouter;
 
 using TfLiteInputs = absl::flat_hash_map<std::string, std::string>;
+using TfMobileInputs = std::vector<std::pair<std::string, tensorflow::Tensor>>;
 
 namespace {
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
-std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
-ConstructInputsForTensorflowSpecPlan(const LocalComputeIORouter& local_compute,
-                                     const std::string& input_dir_uri,
-                                     const std::string& output_dir_uri) {
+absl::StatusOr<std::unique_ptr<TfMobileInputs>>
+ConstructInputsForTensorflowSpecPlan(
+    const LocalComputeIORouter& local_compute, const std::string& input_dir_uri,
+    const std::string& output_dir_uri,
+    const absl::flat_hash_map<std::string, std::string>& input_resources) {
   auto inputs = std::make_unique<
       std::vector<std::pair<std::string, tensorflow::Tensor>>>();
-  tensorflow::Tensor input_dirpath(tensorflow::DT_STRING, {});
-  input_dirpath.scalar<tensorflow::tstring>()() = input_dir_uri;
-  inputs->push_back({local_compute.input_dir_tensor_name(), input_dirpath});
+  if (local_compute.has_multiple_input_resources()) {
+    auto input_resource_tensor_name_map =
+        local_compute.multiple_input_resources()
+            .input_resource_tensor_name_map();
+    for (const auto& resource : input_resources) {
+      tensorflow::Tensor resource_tensor(tensorflow::DT_STRING, {});
+      resource_tensor.scalar<tensorflow::tstring>()() = resource.second;
+      if (!input_resource_tensor_name_map.contains(resource.first)) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("User provided input resource:", resource.first,
+                         " is missing in LocalComputeIORouter."));
+      }
+      std::string tensor_name = input_resource_tensor_name_map[resource.first];
+      inputs->push_back({tensor_name, resource_tensor});
+    }
+  } else {
+    tensorflow::Tensor input_dirpath(tensorflow::DT_STRING, {});
+    input_dirpath.scalar<tensorflow::tstring>()() = input_dir_uri;
+    inputs->push_back({local_compute.input_dir_tensor_name(), input_dirpath});
+  }
   tensorflow::Tensor output_dirpath(tensorflow::DT_STRING, {});
   output_dirpath.scalar<tensorflow::tstring>()() = output_dir_uri;
   inputs->push_back({local_compute.output_dir_tensor_name(), output_dirpath});
@@ -70,11 +92,33 @@ ConstructInputsForTensorflowSpecPlan(const LocalComputeIORouter& local_compute,
 }
 #endif
 
-std::unique_ptr<TfLiteInputs> ConstructInputsForTFLitePlan(
+absl::StatusOr<std::unique_ptr<TfLiteInputs>> ConstructInputsForTFLitePlan(
     const LocalComputeIORouter& local_compute, const std::string& input_dir_uri,
-    const std::string& output_dir_uri) {
+    const std::string& output_dir_uri,
+    const absl::flat_hash_map<std::string, std::string>& input_resources) {
   auto inputs = std::make_unique<TfLiteInputs>();
-  (*inputs)[local_compute.input_dir_tensor_name()] = input_dir_uri;
+  if (local_compute.has_multiple_input_resources()) {
+    if (!input_dir_uri.empty()) {
+      return absl::InvalidArgumentError(
+          "Both input dir and input resources are provided.");
+    }
+    auto input_resource_tensor_name_map =
+        local_compute.multiple_input_resources()
+            .input_resource_tensor_name_map();
+    for (const auto& resource : input_resources) {
+      if (!input_resource_tensor_name_map.contains(resource.first)) {
+        // If the user provided more input resources than required in the
+        // LocalComputeIORouter, we simply continue without throwing an error.
+        // In this way, the user could update their scheduling logic separately
+        // from their local computation definitions.
+        continue;
+      }
+      std::string tensor_name = input_resource_tensor_name_map[resource.first];
+      (*inputs)[tensor_name] = resource.second;
+    }
+  } else {
+    (*inputs)[local_compute.input_dir_tensor_name()] = input_dir_uri;
+  }
   (*inputs)[local_compute.output_dir_tensor_name()] = output_dir_uri;
   return inputs;
 }
@@ -142,6 +186,7 @@ absl::Status RunPlanWithTensorflowSpec(
     OpStatsLogger* opstats_logger, const Flags* flags,
     const ClientOnlyPlan& client_plan, const std::string& input_dir_uri,
     const std::string& output_dir_uri,
+    const absl::flat_hash_map<std::string, std::string>& input_resources,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time run_plan_start_time, const absl::Time reference_time) {
   // Check that this is a TensorflowSpec-based plan for local computation.
@@ -170,13 +215,19 @@ absl::Status RunPlanWithTensorflowSpec(
 
   if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
     auto inputs = ConstructInputsForTFLitePlan(
-        client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
+        client_plan.phase().local_compute(), input_dir_uri, output_dir_uri,
+        input_resources);
+    if (!inputs.ok()) {
+      phase_logger.LogComputationInvalidArgument(
+          inputs.status(), ExampleStats(), NetworkStats(), run_plan_start_time);
+      return inputs.status();
+    }
     engine::TfLitePlanEngine plan_engine(example_iterator_factories,
                                          should_abort, log_manager,
                                          opstats_logger, flags, &timing_config);
     engine::PlanResult plan_result = plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
-        std::move(inputs), output_names_unused);
+        std::move(*inputs), output_names_unused);
     engine::PlanOutcome outcome = plan_result.outcome;
     LogComputationOutcome(std::move(plan_result), phase_logger,
                           run_plan_start_time, reference_time);
@@ -187,13 +238,19 @@ absl::Status RunPlanWithTensorflowSpec(
   // Construct input tensors based on the values in the LocalComputeIORouter
   // message.
   auto inputs = ConstructInputsForTensorflowSpecPlan(
-      client_plan.phase().local_compute(), input_dir_uri, output_dir_uri);
+      client_plan.phase().local_compute(), input_dir_uri, output_dir_uri,
+      input_resources);
+  if (!inputs.ok()) {
+    phase_logger.LogComputationInvalidArgument(
+        inputs.status(), ExampleStats(), NetworkStats(), run_plan_start_time);
+    return inputs.status();
+  }
   engine::SimplePlanEngine plan_engine(example_iterator_factories, should_abort,
                                        log_manager, opstats_logger,
                                        &timing_config);
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
-      client_plan.tensorflow_config_proto(), std::move(inputs),
+      client_plan.tensorflow_config_proto(), std::move(*inputs),
       output_names_unused);
   engine::PlanOutcome outcome = plan_result.outcome;
   LogComputationOutcome(std::move(plan_result), phase_logger,
@@ -205,13 +262,12 @@ absl::Status RunPlanWithTensorflowSpec(
 }
 }  // anonymous namespace
 
-absl::Status RunLocalComputation(SimpleTaskEnvironment* env_deps,
-                                 EventPublisher* event_publisher,
-                                 LogManager* log_manager, const Flags* flags,
-                                 const std::string& session_name,
-                                 const std::string& plan_uri,
-                                 const std::string& input_dir_uri,
-                                 const std::string& output_dir_uri) {
+absl::Status RunLocalComputation(
+    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
+    LogManager* log_manager, const Flags* flags,
+    const std::string& session_name, const std::string& plan_uri,
+    const std::string& input_dir_uri, const std::string& output_dir_uri,
+    const absl::flat_hash_map<std::string, std::string>& input_resources) {
   auto opstats_logger = engine::CreateOpStatsLogger(
       env_deps->GetBaseDir(), flags, log_manager, session_name,
       /*population_name=*/"");
@@ -221,13 +277,16 @@ absl::Status RunLocalComputation(SimpleTaskEnvironment* env_deps,
   LocalComputation computation = LocalComputation();
   computation.set_input_dir(input_dir_uri);
   computation.set_output_dir(output_dir_uri);
+  computation.mutable_input_resource_map()->insert(input_resources.begin(),
+                                                   input_resources.end());
   *selector_context.mutable_computation_properties()->mutable_local_compute() =
       computation;
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
                                log_manager, flags);
   return RunLocalComputation(phase_logger, env_deps, log_manager,
                              opstats_logger.get(), flags, plan_uri,
-                             input_dir_uri, output_dir_uri, selector_context);
+                             input_dir_uri, output_dir_uri, input_resources,
+                             selector_context);
 }
 
 absl::Status RunLocalComputation(
@@ -235,6 +294,7 @@ absl::Status RunLocalComputation(
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     const std::string& plan_uri, const std::string& input_dir_uri,
     const std::string& output_dir_uri,
+    const absl::flat_hash_map<std::string, std::string>& input_resources,
     const SelectorContext& selector_context) {
   absl::Time reference_time = absl::Now();
   absl::Duration polling_period =
@@ -291,8 +351,8 @@ absl::Status RunLocalComputation(
   std::vector<tensorflow::Tensor> output_tensors;
   return RunPlanWithTensorflowSpec(
       phase_logger, example_iterator_factories, should_abort, log_manager,
-      opstats_logger, flags, plan, input_dir_uri, output_dir_uri, timing_config,
-      run_plan_start_time, reference_time);
+      opstats_logger, flags, plan, input_dir_uri, output_dir_uri,
+      input_resources, timing_config, run_plan_start_time, reference_time);
 }
 
 }  // namespace client

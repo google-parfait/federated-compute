@@ -69,6 +69,9 @@ message LocalComputation {
   string input_dir = 1;
   // The absolute path to the output directory.
   string output_dir = 2;
+  // The map of input resources where the key is the name of the resource, and
+  // the value is the absolute paths to the resource.
+  map<string, string> input_resource_map = 3;
 }
 
 // ElgibilityEval computation, no aggregation.

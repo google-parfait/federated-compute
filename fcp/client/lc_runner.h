@@ -18,6 +18,7 @@
 
 #include <string>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/event_publisher.h"
@@ -42,13 +43,12 @@ namespace client {
 // output dir, return INVALID_ARGUMENT status.
 // If Tensorflow completes, return OK status.
 // If Tensorflow was interrupted, return CANCELLED status.
-absl::Status RunLocalComputation(SimpleTaskEnvironment* env_deps,
-                                 EventPublisher* event_publisher,
-                                 LogManager* log_manager, const Flags* flags,
-                                 const std::string& session_name,
-                                 const std::string& plan_uri,
-                                 const std::string& input_dir_uri,
-                                 const std::string& output_dir_uri);
+absl::Status RunLocalComputation(
+    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
+    LogManager* log_manager, const Flags* flags,
+    const std::string& session_name, const std::string& plan_uri,
+    const std::string& input_dir_uri, const std::string& output_dir_uri,
+    const absl::flat_hash_map<std::string, std::string>& input_resources);
 
 // This is exposed for use in tests that require a mocked OpStatsLogger.
 // Otherwise, this is used internally by the other RunLocalComputation
@@ -58,7 +58,9 @@ absl::Status RunLocalComputation(
     LogManager* log_manager,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
     const std::string& plan_uri, const std::string& input_dir_uri,
-    const std::string& output_dir_uri, const SelectorContext& selector_context);
+    const std::string& output_dir_uri,
+    const absl::flat_hash_map<std::string, std::string>& input_resources,
+    const SelectorContext& selector_context);
 
 }  // namespace client
 }  // namespace fcp
