@@ -36,7 +36,7 @@ class VectorData : public std::vector<T>, public TensorData {
 
   // Implementation of the base class methods.
   size_t byte_size() const override { return this->size() * sizeof(T); }
-  const void* data() const override { return this->vector::data(); }
+  const void* data() const override { return this->std::vector<T>::data(); }
 };
 
 }  // namespace aggregation
