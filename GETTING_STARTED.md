@@ -7,7 +7,7 @@
 There are some basic tools and packages you will need on your machine:
 
 *   Git
-*   A C++ compiler (e.g., GCC or Clang)
+*   A C++ compiler (e.g., Clang or GCC, but see note about GCC below)
 *   Python 3.9 or greater, including the `venv` module
 
 For example, on Debian:
@@ -16,10 +16,15 @@ For example, on Debian:
 sudo apt install -y git gcc python3 python3-dev python3-venv
 ```
 
-> ⚠️ The project maintainers internally test with Clang only, so the GCC-based
-> build may at times be broken. Please see
-> [Building with Clang](#building-with-clang) for instructions on how to use
-> Clang instead.
+> ⚠️ The project maintainers internally test with Clang only, so support for
+> GCC-based builds is provided only on a best-effort basis and may at times be
+> broken.
+>
+> If using GCC then we recommend using a recent version (e.g., at least as
+> recent as what Debian stable uses, preferably newer than that).
+>
+> If using Clang then please see [Building with Clang](#building-with-clang) for
+> further Clang-specific instructions.
 
 ### Install Bazelisk
 
