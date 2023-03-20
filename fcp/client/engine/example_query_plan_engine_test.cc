@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -98,6 +99,55 @@ class NoIteratorExampleIteratorFactory : public ExampleIteratorFactory {
   }
 
   bool ShouldCollectStats() override { return false; }
+};
+
+class TwoExampleIteratorsFactory : public ExampleIteratorFactory {
+ public:
+  explicit TwoExampleIteratorsFactory(
+      std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
+          const google::internal::federated::plan::ExampleSelector&
+
+          )>
+          create_first_iterator_func,
+      std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
+          const google::internal::federated::plan::ExampleSelector&
+
+          )>
+          create_second_iterator_func,
+      const std::string& first_collection_uri,
+      const std::string& second_collection_uri)
+      : create_first_iterator_func_(create_first_iterator_func),
+        create_second_iterator_func_(create_second_iterator_func),
+        first_collection_uri_(first_collection_uri),
+        second_collection_uri_(second_collection_uri) {}
+
+  bool CanHandle(const google::internal::federated::plan::ExampleSelector&
+                     example_selector) override {
+    return true;
+  }
+
+  absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
+      const google::internal::federated::plan::ExampleSelector&
+          example_selector) override {
+    if (example_selector.collection_uri() == first_collection_uri_) {
+      return create_first_iterator_func_(example_selector);
+    } else if (example_selector.collection_uri() == second_collection_uri_) {
+      return create_second_iterator_func_(example_selector);
+    }
+    return absl::InvalidArgumentError("Unknown collection URI");
+  }
+
+  bool ShouldCollectStats() override { return false; }
+
+ private:
+  std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
+      const google::internal::federated::plan::ExampleSelector&)>
+      create_first_iterator_func_;
+  std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
+      const google::internal::federated::plan::ExampleSelector&)>
+      create_second_iterator_func_;
+  std::string first_collection_uri_;
+  std::string second_collection_uri_;
 };
 
 absl::StatusOr<absl::flat_hash_map<std::string, tf::Tensor>> ReadTensors(
@@ -242,18 +292,64 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceeds) {
 TEST_F(ExampleQueryPlanEngineTest, MultipleQueries) {
   Initialize();
 
-  ExampleQuerySpec::ExampleQuery example_query1;
-  example_query1.mutable_example_selector()->set_collection_uri("collection1");
-  ExampleQuerySpec::ExampleQuery example_query2;
-  example_query2.mutable_example_selector()->set_collection_uri("collection2");
+  ExampleQuerySpec::OutputVectorSpec float_vector_spec;
+  float_vector_spec.set_vector_name("float_vector");
+  float_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::FLOAT);
+  ExampleQuerySpec::OutputVectorSpec string_vector_spec;
+  // Same vector name as in the other ExampleQuery, but with a different output
+  // one to make sure these vectors are distinguished in
+  // example_query_plan_engine.
+  string_vector_spec.set_vector_name(kOutputStringVectorName);
+  string_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::STRING);
+
+  ExampleQuerySpec::ExampleQuery second_example_query;
+  second_example_query.mutable_example_selector()->set_collection_uri(
+      "app:/second_collection");
+  (*second_example_query.mutable_output_vector_specs())["float_tensor"] =
+      float_vector_spec;
+  (*second_example_query
+        .mutable_output_vector_specs())["another_string_tensor"] =
+      string_vector_spec;
   client_only_plan_.mutable_phase()
       ->mutable_example_query_spec()
       ->mutable_example_queries()
-      ->Add(std::move(example_query1));
-  client_only_plan_.mutable_phase()
-      ->mutable_example_query_spec()
-      ->mutable_example_queries()
-      ->Add(std::move(example_query2));
+      ->Add(std::move(second_example_query));
+
+  AggregationConfig aggregation_config;
+  aggregation_config.mutable_tf_v1_checkpoint_aggregation();
+  (*client_only_plan_.mutable_phase()
+        ->mutable_federated_example_query()
+        ->mutable_aggregations())["float_tensor"] = aggregation_config;
+
+  ExampleQueryResult second_example_query_result;
+  ExampleQueryResult::VectorData::Values float_values;
+  float_values.mutable_float_values()->add_value(0.24f);
+  float_values.mutable_float_values()->add_value(0.42f);
+  float_values.mutable_float_values()->add_value(0.33f);
+  ExampleQueryResult::VectorData::Values string_values;
+  string_values.mutable_string_values()->add_value("another_string_value");
+  (*second_example_query_result.mutable_vector_data()
+        ->mutable_vectors())["float_vector"] = float_values;
+  (*second_example_query_result.mutable_vector_data()
+        ->mutable_vectors())[kOutputStringVectorName] = string_values;
+  std::string example = second_example_query_result.SerializeAsString();
+
+  Dataset::ClientDataset dataset;
+  dataset.set_client_id("second_client_id");
+  dataset.add_example(example);
+  Dataset second_dataset;
+  second_dataset.mutable_client_data()->Add(std::move(dataset));
+
+  example_iterator_factory_ = std::make_unique<TwoExampleIteratorsFactory>(
+      [&dataset = dataset_](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      [&dataset = second_dataset](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      kCollectionUri, "app:/second_collection");
 
   ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
                                      &mock_opstats_logger_);
@@ -261,7 +357,46 @@ TEST_F(ExampleQueryPlanEngineTest, MultipleQueries) {
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
 
-  EXPECT_THAT(result.outcome, PlanOutcome::kInvalidArgument);
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+
+  auto tensors = ReadTensors(output_checkpoint_filename_);
+  ASSERT_OK(tensors);
+  tf::Tensor int_tensor = tensors.value()[kOutputIntTensorName];
+  ASSERT_EQ(int_tensor.shape(), tf::TensorShape({2}));
+  ASSERT_EQ(int_tensor.dtype(), tf::DT_INT64);
+  auto int_data = static_cast<int64_t*>(int_tensor.data());
+  std::vector<int64_t> expected_int_data({42, 24});
+  for (int i = 0; i < 2; ++i) {
+    ASSERT_EQ(int_data[i], expected_int_data[i]);
+  }
+
+  tf::Tensor string_tensor = tensors.value()[kOutputStringTensorName];
+  ASSERT_EQ(string_tensor.shape(), tf::TensorShape({2}));
+  ASSERT_EQ(string_tensor.dtype(), tf::DT_STRING);
+  auto string_data = static_cast<tf::tstring*>(string_tensor.data());
+  std::vector<std::string> expected_string_data({"value1", "value2"});
+  for (int i = 0; i < 2; ++i) {
+    ASSERT_EQ(static_cast<std::string>(string_data[i]),
+              expected_string_data[i]);
+  }
+
+  tf::Tensor float_tensor = tensors.value()["float_tensor"];
+  ASSERT_EQ(float_tensor.shape(), tf::TensorShape({3}));
+  ASSERT_EQ(float_tensor.dtype(), tf::DT_FLOAT);
+  auto float_data = static_cast<float*>(float_tensor.data());
+  std::vector<float> expected_float_data({0.24f, 0.42f, 0.33f});
+  for (int i = 0; i < 3; ++i) {
+    ASSERT_EQ(float_data[i], expected_float_data[i]);
+  }
+
+  tf::Tensor second_query_string_tensor =
+      tensors.value()["another_string_tensor"];
+  ASSERT_EQ(second_query_string_tensor.shape(), tf::TensorShape({1}));
+  ASSERT_EQ(second_query_string_tensor.dtype(), tf::DT_STRING);
+  auto second_query_string_data =
+      static_cast<tf::tstring*>(second_query_string_tensor.data());
+  ASSERT_EQ(static_cast<std::string>(*second_query_string_data),
+            "another_string_value");
 }
 
 TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
