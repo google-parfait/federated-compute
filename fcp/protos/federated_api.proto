@@ -548,6 +548,8 @@ message AcceptanceInfo {
 
   // Info for how to generate URIs for fetching slices at runtime.
   FederatedSelectUriInfo federated_select_uri_info = 11;
+
+  reserved 12, 13;
 }
 
 // Info for how to generate URIs for fetching slices that the task might request
