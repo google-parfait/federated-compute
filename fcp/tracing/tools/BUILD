@@ -41,8 +41,8 @@ cc_test(
         "testdata/*.baseline",
         "testdata/*.fbs",
     ]) + [
-        ":tracing_traits_generator",
         ":test_codegen_runner.sh",
+        ":tracing_traits_generator",
         "//fcp/tracing:tracing_schema_common.fbs",
         "@flatbuffers//:flatc",
     ],
