@@ -18,6 +18,7 @@ def _force_system_provided_tf_transition_impl(settings, attr):
     cxxopts = list(settings["//command_line_option:cxxopt"])
     linkopts = list(settings["//command_line_option:linkopt"])
     copts += %{COPTS}
+    cxxopts += %{CXXOPTS}
     linkopts += %{LINKOPTS}
     # TensorFlow's pip package was built with libstdc++; ensure the right
     # standard library is used if the compiler supports multiple.

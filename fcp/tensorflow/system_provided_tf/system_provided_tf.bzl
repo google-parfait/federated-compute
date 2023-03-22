@@ -36,11 +36,14 @@ def _process_compile_flags(repository_ctx, python3, headers_dir):
         fail("Failed to determine TensorFlow compile flags; is TensorFlow installed?")
     include_dir = None
     copts = []
+    cxxopts = []
     for flag in result.stdout.strip().split("\0"):
         if flag.startswith("-I"):
             if include_dir != None:
                 fail("Only one TensorFlow headers directory is supported.")
             include_dir = flag[2:]
+        elif flag.startswith("--std=c++"):  # Don't add C++-only flags to copts.
+            cxxopts.append(flag)
         else:
             copts.append(flag)
 
@@ -48,7 +51,7 @@ def _process_compile_flags(repository_ctx, python3, headers_dir):
         fail("Unable to find TensorFlow headers directory.")
     repository_ctx.symlink(include_dir, headers_dir)
 
-    return copts
+    return copts, cxxopts
 
 def _process_link_flags(repository_ctx, python3, library_file):
     """Processes linker flags required by the system-provided TF package.
@@ -112,7 +115,7 @@ def _tf_custom_op_configure_impl(repository_ctx):
     # Name of the file that will link to libtensorflow_framework.so.
     library_file = "libtensorflow_framework.so"
 
-    copts = _process_compile_flags(repository_ctx, python3, headers_dir)
+    copts, cxxopts = _process_compile_flags(repository_ctx, python3, headers_dir)
     linkopts = _process_link_flags(repository_ctx, python3, library_file)
 
     # Create a BUILD file providing targets for the TensorFlow C++ headers and
@@ -134,6 +137,7 @@ def _tf_custom_op_configure_impl(repository_ctx):
         Label("//fcp/tensorflow/system_provided_tf:templates/system_provided_tf.bzl.tpl"),
         substitutions = {
             "%{COPTS}": str(copts),
+            "%{CXXOPTS}": str(cxxopts),
             "%{LINKOPTS}": str(linkopts),
             "%{REPOSITORY_NAME}": repository_ctx.name,
         },
