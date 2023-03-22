@@ -627,6 +627,8 @@ message Report {
   repeated google.protobuf.Any serialized_train_event = 4;
 
   reserved 2;
+
+  reserved 6;
 }
 
 // This message is used to report duration to the server.
