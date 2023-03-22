@@ -66,6 +66,10 @@ ConstructInputsForTensorflowSpecPlan(
   auto inputs = std::make_unique<
       std::vector<std::pair<std::string, tensorflow::Tensor>>>();
   if (local_compute.has_multiple_input_resources()) {
+    if (!input_dir_uri.empty()) {
+      return absl::InvalidArgumentError(
+          "Both input dir and input resources are provided.");
+    }
     auto input_resource_tensor_name_map =
         local_compute.multiple_input_resources()
             .input_resource_tensor_name_map();
