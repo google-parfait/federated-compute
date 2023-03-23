@@ -25,4 +25,4 @@ protobuf~=3.19
 # The TensorFlow version should match what's specified in the WORKSPACE file for
 # C++ targets.
 tensorflow==2.11.0
-tensorflow-federated~=0.49
+tensorflow-federated~=0.52
