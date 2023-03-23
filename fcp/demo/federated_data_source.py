@@ -117,6 +117,15 @@ class _FederatedDataSourceIterator(tff.program.FederatedDataSourceIterator):
   def __init__(self, data_source: FederatedDataSource):
     self._data_source = data_source
 
+  @classmethod
+  def from_bytes(cls, data: bytes) -> '_FederatedDataSourceIterator':
+    """Deserializes the object from bytes."""
+    raise NotImplementedError
+
+  def to_bytes(self) -> bytes:
+    """Serializes the object to bytes."""
+    raise NotImplementedError
+
   @property
   def federated_type(self):
     return self._data_source.federated_type
