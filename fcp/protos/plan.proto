@@ -410,7 +410,7 @@ message ClientPhase {
 // computation, generally reading from one or more datasets, and provide some
 // outputs.
 //
-// Conceptually, the client code is going use this proto along with the IORouter
+// Conceptually, client or server code uses this proto along with an IORouter
 // to build maps of names to input tensors, vectors of output tensor names,
 // and vectors of target nodes:
 //
@@ -442,20 +442,20 @@ message ClientPhase {
 //
 // Assertions:
 //   - all names in `input_tensor_specs`, `output_tensor_specs`, and
-//     `target_node_names` must appear in serialized GraphDef stored in
-//     `Plan.client_graph_bytes`.
+//     `target_node_names` must appear in the serialized GraphDef where
+//     the TF execution will be invoked.
 //   - `output_tensor_specs` or `target_node_names` must be non-empty, otherwise
 //     there is nothing to execute in the graph.
 message TensorflowSpec {
-  // Tensor name into which the dataset token will be fed. The dataset token is
-  // something that gets generated from within the execution engine.
+  // The name of a tensor into which a unique token for the current session
+  // should be written. The corresponding tensor is a scalar string tensor and
+  // is separate from `input_tensors` as there is only one.
   //
-  // The dataset_token is a scalar string tensor and is separate from
-  // `input_tensors` as there is only one.
-  //
-  // Note: a single dataset_token is valid for multiple `tf.data.Dataset`
-  // objects. The token can be thought of as a handle to a dataset factory,
-  // hence only one is needed.
+  // A session token allows TensorFlow ops such as `ServeSlices` or
+  // `ExternalDataset` to refer to callbacks and other session-global objects
+  // registered before running the session. In the `ExternalDataset` case, a
+  // single dataset_token is valid for multiple `tf.data.Dataset` objects as
+  // the token can be thought of as a handle to a dataset factory.
   string dataset_token_tensor_name = 1;
 
   // TensorSpecs of inputs which will be passed to TF.
@@ -464,10 +464,9 @@ message TensorflowSpec {
   // TensorFlow's Python API, excluding the dataset_token listed above.
   //
   // Assertions:
-  //   - All the tensor names designated as inputs in the
-  //     FederatedComputeIORouter and LocalComputeIORouter must be listed
-  //     here (otherwise the InputRouter work is unused).
-  //   - All placeholders in the client graph must be listed here, with the
+  //   - All the tensor names designated as inputs in the corresponding IORouter
+  //     must be listed (otherwise the IORouter input work is unused).
+  //   - All placeholders in the TF graph must be listed here, with the
   //     exception of the dataset_token which is explicitly set above (otherwise
   //     TensorFlow will fail to execute).
   repeated tensorflow.TensorSpecProto input_tensor_specs = 2;
@@ -478,16 +477,9 @@ message TensorflowSpec {
   // TensorFlow's Python API, and the `output_tensor_names` in TensorFlow's C++
   // API.
   //
-  // Note: the SecAgg client will read the dimensions of the output tensor
-  // specs for those that are configured in the `FederatedComputeIORouter` to go
-  // back to the server using SecAgg.
-  //
   // Assertions:
-  //   - The set of tensor names here must strictly match all in the keys of
-  //     `FederatedComputeIORouter.aggregations` (hence only includes tensors
-  //     that will be communicated back to the server outside the TensorFlow
-  //     checkpoint).
-  //   - Local Compute tasks must not set this field.
+  //   - The set of tensor names here must strictly match the tensor names
+  //     designated as outputs in the corresponding IORouter (if any exist).
   repeated tensorflow.TensorSpecProto output_tensor_specs = 3;
 
   // Node names in the graph that should be executed, but the output not
@@ -877,24 +869,107 @@ message SlicesTestData {
 // Server Phase V2
 // ===============
 
-// Represents a server phase which implements native aggregation of multiple
-// client updates.
+// Represents a server phase with three distinct components: pre-broadcast,
+// aggregation, and post-aggregation.
 //
-// Each aggregation operation is described with a ServerAggregationConfig
-// message.
+// The pre-broadcast and post-aggregation components are described with
+// the tensorflow_spec_prepare and tensorflow_spec_result TensorflowSpec
+// messages, respectively. These messages in combination with the server
+// IORouter messages specify how to set up a single TF sess.run call for each
+// component.
 //
-// TODO(team): Add fields to support simplified pre- and post-aggregation
-// TensorFlow computations on the server. For now, the pre- and post-aggregation
-// logic in the original ServerPhase message must be used. The results of native
-// aggregation performed according to the ServerAggregationConfig messages can
-// be consumed by a 'L2' servers running operations described in the original
-// ServerPhase message.
+// The pre-broadcast logic is obtained by transforming the server_prepare TFF
+// computation in the DistributeAggregateForm. It takes the server state as
+// input, and it generates the checkpoint to broadcast to the clients and
+// potentially an intermediate server state. The intermediate server state may
+// be used by the aggregation and post-aggregation logic.
+//
+// The aggregation logic represents the aggregation of client results at the
+// server and is described using a list of ServerAggregationConfig messages.
+// Each ServerAggregationConfig message describes a single aggregation operation
+// on a set of input/output tensors. The input tensors may represent parts of
+// either the client results or the intermediate server state. These messages
+// are obtained by transforming the client_to_server_aggregation TFF computation
+// in the DistributeAggregateForm.
+//
+// The post-aggregation logic is obtained by transforming the server_result TFF
+// computation in the DistributeAggregateForm. It takes the intermediate server
+// state and the aggregated client results as input, and it generates the new
+// server state and potentially other server-side output.
+//
+// Note that while a ServerPhaseV2 message can be generated for all types of
+// intrinsics, it is currently only compatible with the ClientPhase message if
+// the aggregations being used are exclusively federated_sum (not SecAgg). If
+// this compatibility requirement is satisfied, it is also valid to run the
+// aggregation portion of this ServerPhaseV2 message alongside the pre- and
+// post-aggregation logic from the original ServerPhase message. Ultimately,
+// we expect the full ServerPhaseV2 message to be run and the ServerPhase
+// message to be deprecated.
 message ServerPhaseV2 {
   // A short CamelCase name for the ServerPhaseV2.
   string name = 1;
 
+  // A functional interface for the TensorFlow logic the server should perform
+  // prior to the server-to-client broadcast. This should be used with the
+  // TensorFlow graph defined in server_graph_prepare_bytes.
+  TensorflowSpec tensorflow_spec_prepare = 3;
+
+  // The specification of inputs needed by the server_prepare TF logic.
+  oneof server_prepare_io_router {
+    ServerPrepareIORouter prepare_router = 4;
+  }
+
   // A list of client-to-server aggregations to perform.
   repeated ServerAggregationConfig aggregations = 2;
+
+  // A functional interface for the TensorFlow logic the server should perform
+  // post-aggregation. This should be used with the TensorFlow graph defined
+  // in server_graph_result_bytes.
+  TensorflowSpec tensorflow_spec_result = 5;
+
+  // The specification of inputs and outputs needed by the server_result TF
+  // logic.
+  oneof server_result_io_router {
+    ServerResultIORouter result_router = 6;
+  }
+}
+
+// Routing for server_prepare graph
+message ServerPrepareIORouter {
+  // The name of the scalar string tensor in the server_prepare TF graph that
+  // is fed the filepath to the initial server state checkpoint. The
+  // server_prepare logic reads from this filepath.
+  string prepare_server_state_input_filepath_tensor_name = 1;
+
+  // The name of the scalar string tensor in the server_prepare TF graph that
+  // is fed the filepath where the client checkpoint should be stored. The
+  // server_prepare logic writes to this filepath.
+  string prepare_output_filepath_tensor_name = 2;
+
+  // The name of the scalar string tensor in the server_prepare TF graph that
+  // is fed the filepath where the intermediate state checkpoint should be
+  // stored. The server_prepare logic writes to this filepath. The intermediate
+  // state checkpoint will be consumed by both the logic used to set parameters
+  // for aggregation and the post-aggregation logic.
+  string prepare_intermediate_state_output_filepath_tensor_name = 3;
+}
+
+// Routing for server_result graph
+message ServerResultIORouter {
+  // The name of the scalar string tensor in the server_result TF graph that is
+  // fed the filepath to the intermediate state checkpoint. The server_result
+  // logic reads from this filepath.
+  string result_intermediate_state_input_filepath_tensor_name = 1;
+
+  // The name of the scalar string tensor in the server_result TF graph that is
+  // fed the filepath to the aggregated client result checkpoint. The
+  // server_result logic reads from this filepath.
+  string result_aggregate_result_input_filepath_tensor_name = 2;
+
+  // The name of the scalar string tensor in the server_result TF graph that is
+  // fed the filepath where the updated server state should be stored. The
+  // server_result logic writes to this filepath.
+  string result_server_state_output_filepath_tensor_name = 3;
 }
 
 // Represents a single aggregation operation, combining one or more input
@@ -946,6 +1021,12 @@ message ServerAggregationConfig {
 // servers, the first in the 'L1' servers and the second in the
 // 'L2' servers, so we use this nomenclature to describe these
 // phases below.
+//
+// The ServerPhase message is currently in the process of being replaced by the
+// ServerPhaseV2 message as we switch the plan building pipeline to use
+// DistributeAggregateForm instead of MapReduceForm. During the migration
+// process, we may generate both messages and use components from either
+// message during execution.
 //
 message ServerPhase {
   // A short CamelCase name for the ServerPhase.
@@ -1124,29 +1205,46 @@ message TEContextServerEligibilityIORouter {
 // Plan
 // =====
 
-// Represents the overall plan for performing federated optimization
-// or personalization, as handed over to the production system.
-// This will typically be split down into individual pieces for
-// different production parts, e.g. server and client side.
-// NEXT_TAG: 13
+// Represents the overall plan for performing federated optimization or
+// personalization, as handed over to the production system. This will
+// typically be split down into individual pieces for different production
+// parts, e.g. server and client side.
+// NEXT_TAG: 15
 message Plan {
   reserved 1, 3, 5;
 
-  // Optional. The TensorFlow graph used for all server processing. For
-  // personalization, this will not be set.
-  //
-  // The actual type is expected to be tensorflow.GraphDef.
-  // The TensorFlow graph is stored in serialized form for two reasons.
+  // The actual type of the server_*_graph_bytes fields below is expected to be
+  // tensorflow.GraphDef. The TensorFlow graphs are stored in serialized form
+  // for two reasons.
   // 1) We may use execution engines other than TensorFlow.
   // 2) We wish to avoid the cost of deserialized and re-serializing large
   // graphs, in the Federated Learning service.
+
+  // While we migrate from ServerPhase to ServerPhaseV2, server_graph_bytes,
+  // server_graph_prepare_bytes, and server_graph_result_bytes may all be set.
+  // If we're using a MapReduceForm-based server implementation, only
+  // server_graph_bytes will be used. If we're using a DistributeAggregateForm-
+  // based server implementation, only server_graph_prepare_bytes and
+  // server_graph_result_bytes will be used.
+
+  // Optional. The TensorFlow graph used for all server processing described by
+  // ServerPhase. For personalization, this will not be set.
   google.protobuf.Any server_graph_bytes = 7;
+
+  // Optional. The TensorFlow graph used for all server processing described by
+  // ServerPhaseV2.tensorflow_spec_prepare.
+  google.protobuf.Any server_graph_prepare_bytes = 13;
+
+  // Optional. The TensorFlow graph used for all server processing described by
+  // ServerPhaseV2.tensorflow_spec_result.
+  google.protobuf.Any server_graph_result_bytes = 14;
 
   // A savepoint to sync the server checkpoint with a persistent
   // storage system.  The storage initially holds a seeded checkpoint
   // which can subsequently read and updated by this savepoint.
   // Optional-- not present in eligibility computation plans (those with a
-  // ServerEligibilityComputationPhase).
+  // ServerEligibilityComputationPhase). This is used in conjunction with
+  // ServerPhase only.
   CheckpointOp server_savepoint = 2;
 
   // Required. The TensorFlow graph that describes the TensorFlow logic a client

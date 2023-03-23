@@ -361,16 +361,130 @@ def _merge_secagg_vars(
   return ops
 
 
-def _build_server_phase_v2(
+def _build_server_graphs_from_distribute_aggregate_form(
     daf: tff.backends.mapreduce.DistributeAggregateForm,
-) -> plan_pb2.ServerPhaseV2:
-  """Generates a ServerPhaseV2 message based on DistributeAggregateForm."""
-  # TODO(team): Use DistributeAggregateForm to produce a new server-side
-  # TF graph and ServerPhaseV2 message that support producing the client
-  # checkpoint with a single sess.run call and producing the final checkpoints
-  # with a second sess.run call. For now the ServerPhaseV2 message only contains
-  # the aggregation information.
+    is_broadcast_empty: bool,
+    grappler_config: tf.compat.v1.ConfigProto,
+) -> tuple[
+    tf.compat.v1.GraphDef, tf.compat.v1.GraphDef, plan_pb2.ServerPhaseV2
+]:
+  """Generates the server plan components based on DistributeAggregateForm.
 
+  Derives the pre-broadcast, aggregation, and post-aggregation logical
+  components in the ServerPhaseV2 message that will be executed on the server.
+  The pre-broadcast and post-aggregation components are to be executed with a
+  single TF sess.run call using the corresponding GraphDef. The aggregation
+  component is to be executed natively (i.e. not using TensorFlow) according to
+  the aggregation messages contained in the ServerPhaseV2 message.
+
+  Args:
+    daf: An instance of `tff.backends.mapreduce.DistributeAggregateForm`.
+    is_broadcast_empty: A boolean indicating whether the broadcasted value from
+      the server is expected to be empty based on the DistributeAggregateForm,
+      in which case the server should broadcast a placeholder tf.int32 tensor as
+      empty checkpoints are not supported.
+    grappler_config: The config specifying Grappler optimizations for TFF-
+      generated graphs.
+
+  Returns:
+    A tuple containing the server_prepare GraphDef, the server_result GraphDef,
+    and the ServerPhaseV2 message.
+  """
+  # Generate the TensorFlow graph needed to execute the server_prepare step,
+  # including reading input checkpoints and writing output checkpoints.
+  server_prepare_input_tensors = []
+  server_prepare_target_nodes = []
+  with tf.Graph().as_default() as server_prepare_graph:
+    # Create the placeholders for the input and output filenames needed by
+    # the server_prepare step.
+    server_prepare_server_state_input_filepath_placeholder = (
+        tf.compat.v1.placeholder(
+            name='server_state_input_filepath', shape=(), dtype=tf.string
+        )
+    )
+    server_prepare_output_filepath_placeholder = tf.compat.v1.placeholder(
+        name='server_prepare_output_filepath', shape=(), dtype=tf.string
+    )
+    server_prepare_intermediate_state_output_filepath_placeholder = (
+        tf.compat.v1.placeholder(
+            name='server_intermediate_state_output_filepath',
+            shape=(),
+            dtype=tf.string,
+        )
+    )
+    server_prepare_input_tensors.extend([
+        server_prepare_server_state_input_filepath_placeholder,
+        server_prepare_output_filepath_placeholder,
+        server_prepare_intermediate_state_output_filepath_placeholder,
+    ])
+
+    # Restore the server state.
+    server_state_type = daf.server_prepare.type_signature.parameter
+    server_state_vars = variable_helpers.create_vars_for_tff_type(
+        server_state_type, name='server'
+    )
+    server_state_tensor_specs = tf.nest.map_structure(
+        variable_helpers.tensorspec_from_var, server_state_vars
+    )
+    server_state = checkpoint_utils.restore_tensors_from_savepoint(
+        server_state_tensor_specs,
+        server_prepare_server_state_input_filepath_placeholder,
+    )
+
+    # TODO(team): Add support for federated select slice generation.
+
+    # Perform the server_prepare step.
+    prepared_values, intermediate_state_values = (
+        graph_helpers.import_tensorflow(
+            'server_prepare',
+            tff.framework.ConcreteComputation.from_building_block(
+                tff.backends.mapreduce.consolidate_and_extract_local_processing(
+                    daf.server_prepare.to_building_block(), grappler_config
+                )
+            ),
+            server_state,
+            split_outputs=True,
+        )
+    )
+
+    # Create checkpoints storing the broadcast values and intermediate server
+    # state. If there is no broadcast value, create a checkpoint containing a
+    # placeholder tf.int32 constant since empty broadcasts are not supported.
+    # If there is no intermediate server state, don't create an intermediate
+    # server state checkpoint.
+    save_tensor_names = variable_helpers.variable_names_from_type(
+        daf.server_prepare.type_signature.result[0], name='client'
+    )
+    save_tensors = prepared_values
+    if is_broadcast_empty:
+      save_tensor_names = variable_helpers.variable_names_from_type(
+          tff.StructType([tf.int32]), name='client'
+      )
+      save_tensors = [tf.constant(0, tf.int32)]
+    prepared_values_save_op = tensor_utils.save(
+        filename=server_prepare_output_filepath_placeholder,
+        tensor_names=save_tensor_names,
+        tensors=save_tensors,
+        name='save_prepared_values_tensors',
+    )
+    server_prepare_target_nodes.append(prepared_values_save_op.name)
+
+    intermediate_state_empty = (
+        isinstance(daf.server_prepare.type_signature.result[1], tff.StructType)
+        and not daf.server_prepare.type_signature.result[1]
+    )
+    if not intermediate_state_empty:
+      intermediate_state_values_save_op = tensor_utils.save(
+          filename=server_prepare_intermediate_state_output_filepath_placeholder,
+          tensor_names=variable_helpers.variable_names_from_type(
+              daf.server_prepare.type_signature.result[1], 'intermediate_state'
+          ),
+          tensors=intermediate_state_values,
+          name='save_intermediate_state_values_tensors',
+      )
+      server_prepare_target_nodes.append(intermediate_state_values_save_op.name)
+
+  # Build aggregations.
   # The client_to_server_aggregation computation is guaranteed to conform to
   # a specific structure. It is a lambda computation whose result block contains
   # locals that are exclusively aggregation-type intrinsics.
@@ -451,7 +565,155 @@ def _build_server_phase_v2(
           )
       )
 
-  return plan_pb2.ServerPhaseV2(aggregations=aggregations)
+  # Generate the TensorFlow graph needed to execute the server_result step,
+  # including reading input checkpoints, writing output checkpoints, and
+  # generating output tensors.
+  server_result_input_tensors = []
+  server_result_output_tensors = []
+  server_result_target_nodes = []
+  with tf.Graph().as_default() as server_result_graph:
+    # Create the placeholders for the input and output filenames needed by
+    # the server_result step.
+    server_result_intermediate_state_input_filepath_placeholder = (
+        tf.compat.v1.placeholder(
+            name='server_intermediate_state_input_filepath',
+            shape=(),
+            dtype=tf.string,
+        )
+    )
+    server_result_aggregate_result_input_filepath_placeholder = (
+        tf.compat.v1.placeholder(
+            name='aggregate_result_input_filepath', shape=(), dtype=tf.string
+        )
+    )
+    server_result_server_state_output_filepath_placeholder = (
+        tf.compat.v1.placeholder(
+            name='server_state_output_filepath', shape=(), dtype=tf.string
+        )
+    )
+    server_result_input_tensors.extend([
+        server_result_intermediate_state_input_filepath_placeholder,
+        server_result_aggregate_result_input_filepath_placeholder,
+        server_result_server_state_output_filepath_placeholder,
+    ])
+
+    # Restore the intermediate server state.
+    intermediate_state = []
+    if not intermediate_state_empty:
+      intermediate_state_type = daf.server_result.type_signature.parameter[0]
+      intermediate_state_vars = variable_helpers.create_vars_for_tff_type(
+          intermediate_state_type, 'intermediate_state'
+      )
+      intermediate_state_tensor_specs = tf.nest.map_structure(
+          variable_helpers.tensorspec_from_var, intermediate_state_vars
+      )
+      intermediate_state = checkpoint_utils.restore_tensors_from_savepoint(
+          intermediate_state_tensor_specs,
+          server_result_intermediate_state_input_filepath_placeholder,
+      )
+
+    # Restore the aggregation results.
+    aggregate_result_type = tff.StructType(
+        [daf.server_result.type_signature.parameter[1]]
+    )
+    aggregate_result_vars = variable_helpers.create_vars_for_tff_type(
+        aggregate_result_type, 'intermediate_update'
+    )
+    aggregate_result_tensor_specs = tf.nest.map_structure(
+        variable_helpers.tensorspec_from_var, aggregate_result_vars
+    )
+    aggregate_result = checkpoint_utils.restore_tensors_from_savepoint(
+        aggregate_result_tensor_specs,
+        server_result_aggregate_result_input_filepath_placeholder,
+    )
+
+    # Perform the server_result step.
+    server_state_values, server_output_values = graph_helpers.import_tensorflow(
+        'server_result',
+        tff.framework.ConcreteComputation.from_building_block(
+            tff.backends.mapreduce.consolidate_and_extract_local_processing(
+                daf.server_result.to_building_block(), grappler_config
+            )
+        ),
+        (intermediate_state, aggregate_result),
+        split_outputs=True,
+    )
+
+    # Create checkpoints storing the updated server state.
+    server_state_save_op = tensor_utils.save(
+        filename=server_result_server_state_output_filepath_placeholder,
+        tensor_names=variable_helpers.variable_names_from_type(
+            daf.server_result.type_signature.result[0], 'server'
+        ),
+        tensors=server_state_values,
+        name='save_server_state_tensors',
+    )
+    server_result_target_nodes.append(server_state_save_op.name)
+
+    # Generate the output TensorSpecProtos for the server metrics if some exist.
+    server_output_empty = (
+        isinstance(daf.server_result.type_signature.result[1], tff.StructType)
+        and not daf.server_result.type_signature.result[1]
+    )
+    if not server_output_empty:
+      metric_names = variable_helpers.variable_names_from_type(
+          daf.server_result.type_signature.result[1], 'server'
+      )
+      metric_tensors = [
+          tf.identity(tensor, name)
+          for tensor, name in zip(server_output_values, metric_names)
+      ]
+      for metric in metric_tensors:
+        server_result_output_tensors.append(
+            proto_helpers.make_tensor_spec_from_tensor(
+                metric
+            ).experimental_as_proto()
+        )
+
+  # Create the TensorflowSpec messages for the pre-broadcast (server_prepare)
+  # and post-aggregation (server_result) steps.
+  tensorflow_spec_prepare = plan_pb2.TensorflowSpec(
+      input_tensor_specs=[
+          proto_helpers.make_tensor_spec_from_tensor(t).experimental_as_proto()
+          for t in server_prepare_input_tensors
+      ],
+      target_node_names=server_prepare_target_nodes,
+  )
+  tensorflow_spec_result = plan_pb2.TensorflowSpec(
+      input_tensor_specs=[
+          proto_helpers.make_tensor_spec_from_tensor(t).experimental_as_proto()
+          for t in server_result_input_tensors
+      ],
+      output_tensor_specs=server_result_output_tensors,
+      target_node_names=server_result_target_nodes,
+  )
+
+  # Create the IORouter messages for the pre-broadcast (server_prepare) and
+  # post-aggregation (server_result) steps.
+  server_prepare_io_router = plan_pb2.ServerPrepareIORouter(
+      prepare_server_state_input_filepath_tensor_name=server_prepare_server_state_input_filepath_placeholder.name,
+      prepare_output_filepath_tensor_name=server_prepare_output_filepath_placeholder.name,
+      prepare_intermediate_state_output_filepath_tensor_name=server_prepare_intermediate_state_output_filepath_placeholder.name,
+  )
+  server_result_io_router = plan_pb2.ServerResultIORouter(
+      result_intermediate_state_input_filepath_tensor_name=server_result_intermediate_state_input_filepath_placeholder.name,
+      result_aggregate_result_input_filepath_tensor_name=server_result_aggregate_result_input_filepath_placeholder.name,
+      result_server_state_output_filepath_tensor_name=server_result_server_state_output_filepath_placeholder.name,
+  )
+
+  server_phase_v2 = plan_pb2.ServerPhaseV2(
+      tensorflow_spec_prepare=tensorflow_spec_prepare,
+      prepare_router=server_prepare_io_router,
+      aggregations=aggregations,
+      tensorflow_spec_result=tensorflow_spec_result,
+      result_router=server_result_io_router,
+  )
+
+  return (
+      server_prepare_graph.as_graph_def(),
+      server_result_graph.as_graph_def(),
+      server_phase_v2,
+  )
 
 
 def _build_server_graph(
@@ -1186,9 +1448,10 @@ def _build_client_phase_with_example_query_spec(
 
 def build_plan(
     mrf: tff.backends.mapreduce.MapReduceForm,
-    daf: Optional[tff.backends.mapreduce.DistributeAggregateForm],
+    daf: Optional[tff.backends.mapreduce.DistributeAggregateForm] = None,
     dataspec: Optional[data_spec.NestedDataSpec] = None,
     example_query_spec: Optional[plan_pb2.ExampleQuerySpec] = None,
+    grappler_config: Optional[tf.compat.v1.ConfigProto] = None,
     additional_checkpoint_metadata_var_fn: Optional[
         Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
     ] = None,
@@ -1238,6 +1501,8 @@ def build_plan(
       graph will be included in the produced plan object. Instead the generated
       plan will have an `ExampleQuerySpec` and `FederatedExampleQueryIORouter`.
       Can only supply one of `dataspec` or `example_query_spec`.
+    grappler_config: The config specifying Grappler optimizations for TFF-
+      generated graphs. Should be provided if daf is provided.
     additional_checkpoint_metadata_var_fn: An optional method that takes in a
       server state type, a server metrics type, and a boolean determining
       whether to revert to legacy metrics behavior to produce additional
@@ -1338,7 +1603,13 @@ def build_plan(
 
     if generate_server_phase_v2:
       assert daf
-      combined_phases.server_phase_v2.CopyFrom(_build_server_phase_v2(daf))
+      assert grappler_config
+      (server_graph_def_prepare, server_graph_def_result, server_phase_v2) = (
+          _build_server_graphs_from_distribute_aggregate_form(
+              daf, is_broadcast_empty, grappler_config
+          )
+      )
+      combined_phases.server_phase_v2.CopyFrom(server_phase_v2)
 
     plan = plan_pb2.Plan(
         version=1, server_savepoint=server_savepoint, phase=[combined_phases]
@@ -1347,6 +1618,10 @@ def build_plan(
     plan.server_graph_bytes.Pack(server_graph_def)
     if client_plan_type == ClientPlanType.TENSORFLOW:
       plan.client_graph_bytes.Pack(client_graph_def)
+
+    if generate_server_phase_v2:
+      plan.server_graph_prepare_bytes.Pack(server_graph_def_prepare)
+      plan.server_graph_result_bytes.Pack(server_graph_def_result)
   return plan
 
 

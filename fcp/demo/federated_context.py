@@ -139,6 +139,7 @@ class FederatedContext(tff.program.FederatedContext):
           comp.map_reduce_form,
           comp.distribute_aggregate_form,
           self._get_nested_data_spec(config.example_selector),
+          grappler_config=tf.compat.v1.ConfigProto(),
           generate_server_phase_v2=True,
       )
       # Add the TF Lite flatbuffer to the plan. If the conversion fails, the
