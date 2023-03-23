@@ -86,8 +86,15 @@ def create_plan(log_file: Optional[str] = None) -> plan_pb2.Plan:
     write_client_init_op = create_checkpoint_op(
         'write_client_init',
         write_client_init_filename,
-        save_op=tf.io.write_file(write_client_init_filename,
-                                 client_checkpoint_data.initialized_value()))
+        save_op=tf.io.write_file(
+            write_client_init_filename,
+            tf.cond(
+                tf.compat.v1.is_variable_initialized(client_checkpoint_data),
+                client_checkpoint_data.read_value,
+                lambda: client_checkpoint_data.initial_value,
+            ),
+        ),
+    )
 
     read_intermediate_update_filename = tf.compat.v1.placeholder(
         tf.string, shape=())
