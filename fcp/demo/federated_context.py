@@ -254,7 +254,7 @@ class FederatedContext(tff.program.FederatedContext):
   ) -> Union[tff.structure.Struct, tf.Tensor]:
     """Dereferences any MaterializableValueReferences in a struct."""
     if isinstance(structure, tff.program.MaterializableValueReference):
-      return await structure.get_value()
+      return await structure.get_value()  # pytype: disable=bad-return-type  # numpy-scalars
     elif tf.is_tensor(structure):
       return structure
     elif isinstance(structure, tff.structure.Struct):
