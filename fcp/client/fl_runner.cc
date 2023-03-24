@@ -25,6 +25,7 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -35,8 +36,10 @@
 #include "fcp/base/platform.h"
 #include "fcp/client/cache/file_backed_resource_cache.h"
 #include "fcp/client/cache/resource_cache.h"
+#include "fcp/client/engine/common.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/engine/example_query_plan_engine.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/opstats/opstats_utils.h"
 
@@ -150,59 +153,64 @@ struct PlanResultAndCheckpointFile {
       delete;
 };
 
+// Creates computation results. The method checks for SecAgg tensors only if
+// `tensorflow_spec != nullptr`.
 absl::StatusOr<ComputationResults> CreateComputationResults(
-    const TensorflowSpec& tensorflow_spec,
+    const TensorflowSpec* tensorflow_spec,
     const PlanResultAndCheckpointFile& plan_result_and_checkpoint_file) {
   const auto& [plan_result, checkpoint_file] = plan_result_and_checkpoint_file;
   if (plan_result.outcome != engine::PlanOutcome::kSuccess) {
     return absl::InvalidArgumentError("Computation failed.");
   }
   ComputationResults computation_results;
-  for (int i = 0; i < plan_result.output_names.size(); i++) {
-    QuantizedTensor quantized;
-    const auto& output_tensor = plan_result.output_tensors[i];
-    switch (output_tensor.dtype()) {
-      case tensorflow::DT_INT8:
-        AddValuesToQuantized<int8_t>(&quantized, output_tensor);
-        quantized.bitwidth = 7;
-        break;
-      case tensorflow::DT_UINT8:
-        AddValuesToQuantized<uint8_t>(&quantized, output_tensor);
-        quantized.bitwidth = 8;
-        break;
-      case tensorflow::DT_INT16:
-        AddValuesToQuantized<int16_t>(&quantized, output_tensor);
-        quantized.bitwidth = 15;
-        break;
-      case tensorflow::DT_UINT16:
-        AddValuesToQuantized<uint16_t>(&quantized, output_tensor);
-        quantized.bitwidth = 16;
-        break;
-      case tensorflow::DT_INT32:
-        AddValuesToQuantized<int32_t>(&quantized, output_tensor);
-        quantized.bitwidth = 31;
-        break;
-      case tensorflow::DT_INT64:
-        AddValuesToQuantized<tensorflow::int64>(&quantized, output_tensor);
-        quantized.bitwidth = 62;
-        break;
-      default:
-        return absl::InvalidArgumentError(absl::StrCat(
-            "Tensor of type", tensorflow::DataType_Name(output_tensor.dtype()),
-            "could not be converted to quantized value"));
+  if (tensorflow_spec != nullptr) {
+    for (int i = 0; i < plan_result.output_names.size(); i++) {
+      QuantizedTensor quantized;
+      const auto& output_tensor = plan_result.output_tensors[i];
+      switch (output_tensor.dtype()) {
+        case tensorflow::DT_INT8:
+          AddValuesToQuantized<int8_t>(&quantized, output_tensor);
+          quantized.bitwidth = 7;
+          break;
+        case tensorflow::DT_UINT8:
+          AddValuesToQuantized<uint8_t>(&quantized, output_tensor);
+          quantized.bitwidth = 8;
+          break;
+        case tensorflow::DT_INT16:
+          AddValuesToQuantized<int16_t>(&quantized, output_tensor);
+          quantized.bitwidth = 15;
+          break;
+        case tensorflow::DT_UINT16:
+          AddValuesToQuantized<uint16_t>(&quantized, output_tensor);
+          quantized.bitwidth = 16;
+          break;
+        case tensorflow::DT_INT32:
+          AddValuesToQuantized<int32_t>(&quantized, output_tensor);
+          quantized.bitwidth = 31;
+          break;
+        case tensorflow::DT_INT64:
+          AddValuesToQuantized<tensorflow::int64>(&quantized, output_tensor);
+          quantized.bitwidth = 62;
+          break;
+        default:
+          return absl::InvalidArgumentError(
+              absl::StrCat("Tensor of type",
+                           tensorflow::DataType_Name(output_tensor.dtype()),
+                           "could not be converted to quantized value"));
+      }
+      computation_results[plan_result.output_names[i]] = std::move(quantized);
     }
-    computation_results[plan_result.output_names[i]] = std::move(quantized);
-  }
 
-  // Add dimensions to QuantizedTensors.
-  for (const tensorflow::TensorSpecProto& tensor_spec :
-       tensorflow_spec.output_tensor_specs()) {
-    if (computation_results.find(tensor_spec.name()) !=
-        computation_results.end()) {
-      for (const tensorflow::TensorShapeProto_Dim& dim :
-           tensor_spec.shape().dim()) {
-        absl::get<QuantizedTensor>(computation_results[tensor_spec.name()])
-            .dimensions.push_back(dim.size());
+    // Add dimensions to QuantizedTensors.
+    for (const tensorflow::TensorSpecProto& tensor_spec :
+         tensorflow_spec->output_tensor_specs()) {
+      if (computation_results.find(tensor_spec.name()) !=
+          computation_results.end()) {
+        for (const tensorflow::TensorShapeProto_Dim& dim :
+             tensor_spec.shape().dim()) {
+          std::get<QuantizedTensor>(computation_results[tensor_spec.name()])
+              .dimensions.push_back(dim.size());
+        }
       }
     }
   }
@@ -540,6 +548,54 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
 #endif
 }
 
+PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+    OpStatsLogger* opstats_logger, const Flags* flags,
+    const ClientOnlyPlan& client_plan,
+    const std::string& checkpoint_output_filename) {
+  if (!client_plan.phase().has_example_query_spec()) {
+    return PlanResultAndCheckpointFile(engine::PlanResult(
+        engine::PlanOutcome::kInvalidArgument,
+        absl::InvalidArgumentError("Plan must include ExampleQuerySpec")));
+  }
+  if (!flags->enable_example_query_plan_engine()) {
+    // Example query plan received while the flag is off.
+    return PlanResultAndCheckpointFile(engine::PlanResult(
+        engine::PlanOutcome::kInvalidArgument,
+        absl::InvalidArgumentError(
+            "Example query plan received while the flag is off")));
+  }
+  if (!client_plan.phase().has_federated_example_query()) {
+    return PlanResultAndCheckpointFile(engine::PlanResult(
+        engine::PlanOutcome::kInvalidArgument,
+        absl::InvalidArgumentError("Invalid ExampleQuerySpec-based plan")));
+  }
+  for (const auto& example_query :
+       client_plan.phase().example_query_spec().example_queries()) {
+    for (auto const& [vector_name, spec] :
+         example_query.output_vector_specs()) {
+      const auto& aggregations =
+          client_plan.phase().federated_example_query().aggregations();
+      if ((aggregations.find(vector_name) == aggregations.end()) ||
+          !aggregations.at(vector_name).has_tf_v1_checkpoint_aggregation()) {
+        return PlanResultAndCheckpointFile(engine::PlanResult(
+            engine::PlanOutcome::kInvalidArgument,
+            absl::InvalidArgumentError("Output vector is missing in "
+                                       "AggregationConfig, or has unsupported "
+                                       "aggregation type.")));
+      }
+    }
+  }
+
+  engine::ExampleQueryPlanEngine plan_engine(example_iterator_factories,
+                                             opstats_logger);
+  engine::PlanResult plan_result = plan_engine.RunPlan(
+      client_plan.phase().example_query_spec(), checkpoint_output_filename);
+  PlanResultAndCheckpointFile result(std::move(plan_result));
+  result.checkpoint_file = checkpoint_output_filename;
+  return result;
+}
+
 void LogEligibilityEvalComputationOutcome(
     PhaseLogger& phase_logger, engine::PlanResult plan_result,
     const absl::Status& eligibility_info_parsing_status,
@@ -671,7 +727,7 @@ void LogFailureUploadStatus(PhaseLogger& phase_logger, absl::Status result,
   }
 }
 
-absl::Status ReportTensorflowSpecPlanResult(
+absl::Status ReportPlanResult(
     FederatedProtocol* federated_protocol, PhaseLogger& phase_logger,
     absl::StatusOr<ComputationResults> computation_results,
     absl::Time run_plan_start_time, absl::Time reference_time) {
@@ -1190,20 +1246,25 @@ absl::StatusOr<CheckinResult> IssueCheckin(
             ->minimum_clients_in_server_visible_aggregate;
   }
 
-  absl::StatusOr<std::string> checkpoint_input_filename =
-      CreateInputCheckpointFile(files, task_assignment.payloads.checkpoint);
-  if (!checkpoint_input_filename.ok()) {
-    auto status = checkpoint_input_filename.status();
-    auto message = absl::StrCat(
-        "Failed to create checkpoint input file: code: ", status.code(),
-        ", message: ", status.message());
-    phase_logger.LogCheckinIOError(
-        status,
-        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
-                             network_stats_before_plan_download),
-        time_before_plan_download, reference_time);
-    FCP_LOG(ERROR) << message;
-    return status;
+  absl::StatusOr<std::string> checkpoint_input_filename = "";
+  // Example query plan does not have an input checkpoint.
+  if (!plan.phase().has_example_query_spec()) {
+    checkpoint_input_filename =
+        CreateInputCheckpointFile(files, task_assignment.payloads.checkpoint);
+    if (!checkpoint_input_filename.ok()) {
+      auto status = checkpoint_input_filename.status();
+      auto message = absl::StrCat(
+          "Failed to create checkpoint input file: code: ", status.code(),
+          ", message: ", status.message());
+      phase_logger.LogCheckinIOError(
+          status,
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_plan_download),
+          time_before_plan_download, reference_time);
+      FCP_LOG(ERROR) << message;
+      return status;
+    }
   }
   if (!flags->enable_plan_uri_received_logs()) {
     task_name = ExtractTaskNameFromAggregationSessionId(
@@ -1472,27 +1533,37 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     }
   }
 
-  const auto& federated_compute_io_router =
-      checkin_result->plan.phase().federated_compute();
-  const bool has_simpleagg_tensors =
-      !federated_compute_io_router.output_filepath_tensor_name().empty();
-  bool all_aggregations_are_secagg = true;
-  for (const auto& aggregation : federated_compute_io_router.aggregations()) {
-    all_aggregations_are_secagg &= aggregation.second.protocol_config_case() ==
-                                   AggregationConfig::kSecureAggregation;
-  }
-  if (!has_simpleagg_tensors && all_aggregations_are_secagg) {
-    federated_selector_context_with_task_name.mutable_computation_properties()
-        ->mutable_federated()
-        ->mutable_secure_aggregation()
-        ->set_minimum_clients_in_server_visible_aggregate(
-            checkin_result->minimum_clients_in_server_visible_aggregate);
-  } else {
-    // Has an output checkpoint, so some tensors must be simply aggregated.
+  if (checkin_result->plan.phase().has_example_query_spec()) {
+    // Example query plan only supports simple agg for now.
     *(federated_selector_context_with_task_name
           .mutable_computation_properties()
           ->mutable_federated()
           ->mutable_simple_aggregation()) = SimpleAggregation();
+  } else {
+    const auto& federated_compute_io_router =
+        checkin_result->plan.phase().federated_compute();
+    const bool has_simpleagg_tensors =
+        !federated_compute_io_router.output_filepath_tensor_name().empty();
+    bool all_aggregations_are_secagg = true;
+    for (const auto& aggregation : federated_compute_io_router.aggregations()) {
+      all_aggregations_are_secagg &=
+          aggregation.second.protocol_config_case() ==
+          AggregationConfig::kSecureAggregation;
+    }
+    if (!has_simpleagg_tensors && all_aggregations_are_secagg) {
+      federated_selector_context_with_task_name
+          .mutable_computation_properties()
+          ->mutable_federated()
+          ->mutable_secure_aggregation()
+          ->set_minimum_clients_in_server_visible_aggregate(
+              checkin_result->minimum_clients_in_server_visible_aggregate);
+    } else {
+      // Has an output checkpoint, so some tensors must be simply aggregated.
+      *(federated_selector_context_with_task_name
+            .mutable_computation_properties()
+            ->mutable_federated()
+            ->mutable_simple_aggregation()) = SimpleAggregation();
+    }
   }
 
   RetryWindow report_retry_window;
@@ -1529,11 +1600,15 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       &opstats_example_iterator_factory, env_example_iterator_factory.get()};
 
   PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
-      RunPlanWithTensorflowSpec(example_iterator_factories, should_abort,
-                                log_manager, opstats_logger, flags,
-                                checkin_result->plan,
-                                checkin_result->checkpoint_input_filename,
-                                *checkpoint_output_filename, timing_config);
+      checkin_result->plan.phase().has_example_query_spec()
+          ? RunPlanWithExampleQuerySpec(
+                example_iterator_factories, opstats_logger, flags,
+                checkin_result->plan, *checkpoint_output_filename)
+          : RunPlanWithTensorflowSpec(
+                example_iterator_factories, should_abort, log_manager,
+                opstats_logger, flags, checkin_result->plan,
+                checkin_result->checkpoint_input_filename,
+                *checkpoint_output_filename, timing_config);
   // Update the FLRunnerResult fields to account for any network usage during
   // the execution of the plan (e.g. due to Federated Select slices having been
   // fetched).
@@ -1542,9 +1617,11 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
   absl::StatusOr<ComputationResults> computation_results;
   if (outcome == engine::PlanOutcome::kSuccess) {
-    computation_results =
-        CreateComputationResults(checkin_result->plan.phase().tensorflow_spec(),
-                                 plan_result_and_checkpoint_file);
+    computation_results = CreateComputationResults(
+        checkin_result->plan.phase().has_example_query_spec()
+            ? nullptr
+            : &checkin_result->plan.phase().tensorflow_spec(),
+        plan_result_and_checkpoint_file);
   }
   LogComputationOutcome(
       plan_result_and_checkpoint_file.plan_result, computation_results.status(),
@@ -1552,7 +1629,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       GetNetworkStatsSince(federated_protocol, fedselect_manager,
                            run_plan_start_network_stats),
       run_plan_start_time, reference_time);
-  absl::Status report_result = ReportTensorflowSpecPlanResult(
+  absl::Status report_result = ReportPlanResult(
       federated_protocol, phase_logger, std::move(computation_results),
       run_plan_start_time, reference_time);
   if (outcome == engine::PlanOutcome::kSuccess && report_result.ok()) {
