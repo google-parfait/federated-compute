@@ -1506,11 +1506,16 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   federated_selector_context_with_task_name.mutable_computation_properties()
       ->mutable_federated()
       ->set_task_name(checkin_result->task_name);
-
   if (flags->enable_computation_id()) {
     federated_selector_context_with_task_name.mutable_computation_properties()
         ->mutable_federated()
         ->set_computation_id(checkin_result->computation_id);
+  }
+  if (checkin_result->plan.phase().has_example_query_spec()) {
+    federated_selector_context_with_task_name.mutable_computation_properties()
+        ->set_example_iterator_output_format(
+            ::fcp::client::QueryTimeComputationProperties::
+                EXAMPLE_QUERY_RESULT);
   }
 
   // Include the last successful contribution timestamp in the SelectorContext.
