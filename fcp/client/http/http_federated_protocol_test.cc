@@ -148,6 +148,7 @@ constexpr char kAttestationMeasurement[] = "ATTESTATION_MEASUREMENT";
 constexpr char kClientSessionId[] = "CLIENT_SESSION_ID";
 constexpr char kAggregationSessionId[] = "AGGREGATION_SESSION_ID";
 constexpr char kAuthorizationToken[] = "AUTHORIZATION_TOKEN";
+constexpr char kTaskName[] = "TASK_NAME";
 constexpr char kClientToken[] = "CLIENT_TOKEN";
 constexpr char kResourceName[] = "CHECKPOINT_RESOURCE";
 constexpr char kFederatedSelectUriTemplate[] = "https://federated.select";
@@ -380,6 +381,7 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
   task_assignment->set_session_id(kClientSessionId);
   task_assignment->set_aggregation_id(aggregation_session_id);
   task_assignment->set_authorization_token(kAuthorizationToken);
+  task_assignment->set_task_name(kTaskName);
   *task_assignment->mutable_plan() = plan;
   *task_assignment->mutable_init_checkpoint() = checkpoint;
   task_assignment->mutable_federated_select_uri_info()->set_uri_template(
@@ -395,10 +397,11 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
 }
 
 ReportTaskResultRequest GetExpectedReportTaskResultRequest(
-    absl::string_view aggregation_id, ::google::rpc::Code code,
-    absl::Duration train_duration) {
+    absl::string_view aggregation_id, absl::string_view task_name,
+    ::google::rpc::Code code, absl::Duration train_duration) {
   ReportTaskResultRequest request;
   request.set_aggregation_id(std::string(aggregation_id));
+  request.set_task_name(std::string(task_name));
   request.set_computation_status_code(code);
   ClientStats client_stats;
   *client_stats.mutable_computation_execution_duration() =
@@ -618,7 +621,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
 
   void ExpectSuccessfulReportTaskResultRequest(
       absl::string_view expected_report_result_uri,
-      absl::string_view aggregation_session_id, absl::Duration plan_duration) {
+      absl::string_view aggregation_session_id, absl::string_view task_name,
+      absl::Duration plan_duration) {
     ReportTaskResultResponse report_task_result_response;
     EXPECT_CALL(mock_http_client_,
                 PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -626,8 +630,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
                     HttpRequest::Method::kPost, _,
                     ReportTaskResultRequestMatcher(
                         EqualsProto(GetExpectedReportTaskResultRequest(
-                            aggregation_session_id, google::rpc::Code::OK,
-                            plan_duration))))))
+                            aggregation_session_id, task_name,
+                            google::rpc::Code::OK, plan_duration))))))
         .WillOnce(Return(CreateEmptySuccessHttpResponse()));
   }
 
@@ -2041,7 +2045,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSimpleAggSuccess) {
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
       "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
@@ -2076,7 +2080,7 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
 
   StartAggregationDataUploadResponse start_aggregation_data_upload_response =
       GetFakeStartAggregationDataUploadResponse(
@@ -2147,7 +2151,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://aggregation.uri/v1/secureaggregations/"
@@ -2250,7 +2254,7 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://aggregation.uri/v1/secureaggregations/"
@@ -2345,8 +2349,8 @@ TEST_F(HttpFederatedProtocolTest,
                   HttpRequest::Method::kPost, _,
                   ReportTaskResultRequestMatcher(
                       EqualsProto(GetExpectedReportTaskResultRequest(
-                          kAggregationSessionId, google::rpc::Code::OK,
-                          plan_duration))))))
+                          kAggregationSessionId, kTaskName,
+                          google::rpc::Code::OK, plan_duration))))))
       .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
   EXPECT_CALL(mock_log_manager_,
               LogDiag(ProdDiagCode::HTTP_REPORT_TASK_RESULT_REQUEST_FAILED));
@@ -2399,7 +2403,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedStartSecAggFailed) {
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://aggregation.uri/v1/secureaggregations/"
@@ -2434,7 +2438,7 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://aggregation.uri/v1/secureaggregations/"
@@ -2476,8 +2480,8 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
                   HttpRequest::Method::kPost, _,
                   ReportTaskResultRequestMatcher(
                       EqualsProto(GetExpectedReportTaskResultRequest(
-                          kAggregationSessionId, google::rpc::Code::OK,
-                          plan_duration))))))
+                          kAggregationSessionId, kTaskName,
+                          google::rpc::Code::OK, plan_duration))))))
       .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
   EXPECT_CALL(mock_log_manager_,
               LogDiag(ProdDiagCode::HTTP_REPORT_TASK_RESULT_REQUEST_FAILED));
@@ -2518,7 +2522,7 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2552,7 +2556,7 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   Operation pending_operation_response =
       CreatePendingOperation("operations/foo#bar");
   EXPECT_CALL(
@@ -2596,7 +2600,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
       "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
@@ -2631,7 +2635,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadAbortedByServer) {
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
       "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
@@ -2669,7 +2673,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadInterrupted) {
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
       "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
@@ -2731,7 +2735,7 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, plan_duration);
+      kAggregationSessionId, kTaskName, plan_duration);
   ExpectSuccessfulStartAggregationDataUploadRequest(
       "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
       "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
@@ -2774,8 +2778,8 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {
                   HttpRequest::Method::kPost, _,
                   ReportTaskResultRequestMatcher(
                       EqualsProto(GetExpectedReportTaskResultRequest(
-                          kAggregationSessionId, ::google::rpc::Code::INTERNAL,
-                          plan_duration))))))
+                          kAggregationSessionId, kTaskName,
+                          ::google::rpc::Code::INTERNAL, plan_duration))))))
       .WillOnce(Return(
           FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
 

@@ -254,9 +254,10 @@ absl::StatusOr<UriOrInlineData> ConvertResourceToUriOrInlineData(
 
 absl::StatusOr<ReportTaskResultRequest> CreateReportTaskResultRequest(
     engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
-    absl::string_view aggregation_id) {
+    absl::string_view aggregation_id, absl::string_view task_name) {
   ReportTaskResultRequest request;
   request.set_aggregation_id(std::string(aggregation_id));
+  request.set_task_name(std::string(task_name));
   request.set_computation_status_code(
       ConvertPhaseOutcomeToRpcCode(phase_outcome));
   ClientStats* client_stats = request.mutable_client_stats();
@@ -704,6 +705,7 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   session_id_ = task_assignment.session_id();
   aggregation_session_id_ = task_assignment.aggregation_id();
   aggregation_authorization_token_ = task_assignment.authorization_token();
+  task_name_ = task_assignment.task_name();
 
   return std::move(result);
 }
@@ -758,10 +760,10 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(
 absl::StatusOr<InMemoryHttpResponse>
 HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
     absl::Duration plan_duration) {
-  FCP_ASSIGN_OR_RETURN(
-      ReportTaskResultRequest report_task_result_request,
-      CreateReportTaskResultRequest(engine::PhaseOutcome::COMPLETED,
-                                    plan_duration, aggregation_session_id_));
+  FCP_ASSIGN_OR_RETURN(ReportTaskResultRequest report_task_result_request,
+                       CreateReportTaskResultRequest(
+                           engine::PhaseOutcome::COMPLETED, plan_duration,
+                           aggregation_session_id_, task_name_));
   FCP_ASSIGN_OR_RETURN(
       std::string report_task_result_uri_suffix,
       CreateReportTaskResultUriSuffix(population_name_, session_id_));
@@ -1026,10 +1028,10 @@ HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
   FCP_ASSIGN_OR_RETURN(
       std::string report_task_result_uri_suffix,
       CreateReportTaskResultUriSuffix(population_name_, session_id_));
-  FCP_ASSIGN_OR_RETURN(
-      ReportTaskResultRequest report_task_result_request,
-      CreateReportTaskResultRequest(engine::PhaseOutcome::COMPLETED,
-                                    plan_duration, aggregation_session_id_));
+  FCP_ASSIGN_OR_RETURN(ReportTaskResultRequest report_task_result_request,
+                       CreateReportTaskResultRequest(
+                           engine::PhaseOutcome::COMPLETED, plan_duration,
+                           aggregation_session_id_, task_name_));
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> report_task_result_http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
@@ -1085,7 +1087,7 @@ absl::Status HttpFederatedProtocol::ReportNotCompleted(
   FCP_ASSIGN_OR_RETURN(
       ReportTaskResultRequest request,
       CreateReportTaskResultRequest(phase_outcome, plan_duration,
-                                    aggregation_session_id_));
+                                    aggregation_session_id_, task_name_));
   // Construct the URI suffix.
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,

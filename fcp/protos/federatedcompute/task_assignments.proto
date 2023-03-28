@@ -279,6 +279,9 @@ message ReportTaskResultRequest {
   string aggregation_id = 5
       ;
 
+  // The name identifying the task that was assigned.
+  string task_name = 6;
+
   // Computation status code reported by client.
   // Code.OK indicates that the client computation completed successfully. Any
   // other code indicates unsuccessful computation execution and termination of

@@ -245,6 +245,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   std::string aggregation_session_id_;
   // The token authorizing the client to participate in an aggregation session.
   std::string aggregation_authorization_token_;
+  // The name identifying the task that was assigned.
+  std::string task_name_;
   // Unique identifier for the client's participation in an aggregation session.
   std::string aggregation_client_token_;
   // Resource name for the checkpoint in simple aggregation.
