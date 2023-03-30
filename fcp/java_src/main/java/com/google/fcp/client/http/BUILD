@@ -25,7 +25,7 @@ java_library(
         "HttpClientForNative.java",
     ],
     deps = [
-        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@fcp_maven//:com_google_errorprone_error_prone_annotations",
     ],
 )
 
@@ -42,7 +42,7 @@ java_library(
         "//fcp/java_src/main/java/com/google/fcp/client",
         "@com_google_googleapis//google/rpc:rpc_java_proto",
         "@com_google_protobuf//:protobuf_java",
-        "@maven//:com_google_code_findbugs_jsr305",
-        "@maven//:com_google_guava_guava",
+        "@fcp_maven//:com_google_code_findbugs_jsr305",
+        "@fcp_maven//:com_google_guava_guava",
     ],
 )

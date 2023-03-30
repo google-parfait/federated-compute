@@ -21,8 +21,8 @@
 # versioning scheme or reasoning.
 
 absl-py>=1.0,==1.*
-protobuf~=3.19
+protobuf~=3.20
 # The TensorFlow version should match what's specified in the WORKSPACE file for
 # C++ targets.
-tensorflow==2.11.0
-tensorflow-federated~=0.52
+tensorflow==2.12.0
+tensorflow-federated~=0.53
