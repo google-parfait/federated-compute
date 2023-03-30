@@ -24,8 +24,12 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/simple_task_environment.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 
 namespace fcp {
@@ -39,12 +43,14 @@ SimplePlanEngine::SimplePlanEngine(
     std::vector<ExampleIteratorFactory*> example_iterator_factories,
     std::function<bool()> should_abort, LogManager* log_manager,
     OpStatsLogger* opstats_logger,
-    const InterruptibleRunner::TimingConfig* timing_config)
+    const InterruptibleRunner::TimingConfig* timing_config,
+    const bool support_constant_tf_inputs)
     : example_iterator_factories_(example_iterator_factories),
       should_abort_(should_abort),
       log_manager_(log_manager),
       opstats_logger_(opstats_logger),
-      timing_config_(timing_config) {}
+      timing_config_(timing_config),
+      support_constant_tf_inputs_(support_constant_tf_inputs) {}
 
 PlanResult SimplePlanEngine::RunPlan(
     const TensorflowSpec& tensorflow_spec, const std::string& graph,
@@ -130,6 +136,21 @@ SimplePlanEngine::RunPlanInternal(
        tensorflow_spec.target_node_names()) {
     target_names.push_back(target_node_name);
   }
+  if (support_constant_tf_inputs_ &&
+      !tensorflow_spec.constant_inputs().empty()) {
+    // If the server-side constant inputs message is provided, copy over these
+    // values to the set of input tensors.
+    for (const auto& [name, tensor_proto] : tensorflow_spec.constant_inputs()) {
+      tensorflow::Tensor input_tensor;
+      if (!input_tensor.FromProto(tensor_proto)) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("unable to convert constant_input to tensor: %s",
+                         tensor_proto.DebugString()));
+      }
+      inputs->push_back({name, std::move(input_tensor)});
+    }
+  }
+
   FCP_ASSIGN_OR_RETURN(
       auto result,
       RunTensorFlowInternal(tf_wrapper, *inputs, output_names, target_names));

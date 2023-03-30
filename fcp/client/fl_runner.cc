@@ -366,9 +366,9 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
   auto inputs = ConstructInputsForEligibilityEvalPlan(
       io_router, checkpoint_input_filename);
   // Run plan and get a set of output tensors back.
-  engine::SimplePlanEngine plan_engine(example_iterator_factories, should_abort,
-                                       log_manager, opstats_logger,
-                                       &timing_config);
+  engine::SimplePlanEngine plan_engine(
+      example_iterator_factories, should_abort, log_manager, opstats_logger,
+      &timing_config, flags->support_constant_tf_inputs());
   return plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs), output_names);
@@ -530,9 +530,9 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
   auto inputs = ConstructInputsForTensorflowSpecPlan(
       client_plan.phase().federated_compute(), checkpoint_input_filename,
       checkpoint_output_filename);
-  engine::SimplePlanEngine plan_engine(example_iterator_factories, should_abort,
-                                       log_manager, opstats_logger,
-                                       &timing_config);
+  engine::SimplePlanEngine plan_engine(
+      example_iterator_factories, should_abort, log_manager, opstats_logger,
+      &timing_config, flags->support_constant_tf_inputs());
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(inputs), *output_names);

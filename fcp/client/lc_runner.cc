@@ -35,9 +35,8 @@
 #include "fcp/client/engine/simple_plan_engine.h"
 #endif
 
-#include "fcp/client/opstats/opstats_example_store.h"
-
 #include "fcp/client/engine/tflite_plan_engine.h"
+#include "fcp/client/opstats/opstats_example_store.h"
 #include "fcp/client/phase_logger_impl.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -249,9 +248,9 @@ absl::Status RunPlanWithTensorflowSpec(
         inputs.status(), ExampleStats(), NetworkStats(), run_plan_start_time);
     return inputs.status();
   }
-  engine::SimplePlanEngine plan_engine(example_iterator_factories, should_abort,
-                                       log_manager, opstats_logger,
-                                       &timing_config);
+  engine::SimplePlanEngine plan_engine(
+      example_iterator_factories, should_abort, log_manager, opstats_logger,
+      &timing_config, flags->support_constant_tf_inputs());
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(*inputs),

@@ -572,6 +572,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, disable_tflite_delegate_clustering, (), (const, override));
   MOCK_METHOD(bool, enable_plan_uri_received_logs, (), (const, override));
   MOCK_METHOD(bool, enable_example_query_plan_engine, (), (const, override));
+  MOCK_METHOD(bool, support_constant_tf_inputs, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

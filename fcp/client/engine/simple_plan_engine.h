@@ -55,7 +55,8 @@ class SimplePlanEngine {
       std::vector<ExampleIteratorFactory*> example_iterator_factories,
       std::function<bool()> should_abort, LogManager* log_manager,
       ::fcp::client::opstats::OpStatsLogger* opstats_logger,
-      const InterruptibleRunner::TimingConfig* timing_config);
+      const InterruptibleRunner::TimingConfig* timing_config,
+      bool support_constant_tf_inputs);
 
   PlanResult RunPlan(
       const google::internal::federated::plan::TensorflowSpec& tensorflow_spec,
@@ -95,6 +96,7 @@ class SimplePlanEngine {
   LogManager* log_manager_;
   ::fcp::client::opstats::OpStatsLogger* opstats_logger_;
   const InterruptibleRunner::TimingConfig* timing_config_;
+  const bool support_constant_tf_inputs_;
 };
 
 }  // namespace engine
