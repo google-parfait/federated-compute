@@ -37,7 +37,7 @@ Status Tensor::CheckValid() const {
   }
 
   size_t value_size = 0;
-  CASES(dtype_, value_size = sizeof(T));
+  DTYPE_CASES(dtype_, T, value_size = sizeof(T));
 
   // Verify that the storage is consistent with the value size in terms of
   // size and alignment.
@@ -96,7 +96,8 @@ StatusOr<Tensor> Tensor::FromProto(const TensorProto& tensor_proto) {
   FCP_ASSIGN_OR_RETURN(TensorShape shape,
                        TensorShape::FromProto(tensor_proto.shape()));
   std::unique_ptr<TensorData> data;
-  CASES(tensor_proto.dtype(), data = DecodeContent<T>(tensor_proto.content()));
+  DTYPE_CASES(tensor_proto.dtype(), T,
+              data = DecodeContent<T>(tensor_proto.content()));
   return Create(tensor_proto.dtype(), std::move(shape), std::move(data));
 }
 
@@ -105,7 +106,8 @@ StatusOr<Tensor> Tensor::FromProto(TensorProto&& tensor_proto) {
                        TensorShape::FromProto(tensor_proto.shape()));
   std::string content = std::move(*tensor_proto.mutable_content());
   std::unique_ptr<TensorData> data;
-  CASES(tensor_proto.dtype(), data = DecodeContent<T>(std::move(content)));
+  DTYPE_CASES(tensor_proto.dtype(), T,
+              data = DecodeContent<T>(std::move(content)));
   return Create(tensor_proto.dtype(), std::move(shape), std::move(data));
 }
 
@@ -115,7 +117,7 @@ TensorProto Tensor::ToProto() const {
   *(tensor_proto.mutable_shape()) = shape_.ToProto();
 
   std::string content;
-  CASES(dtype_, content = EncodeContent<T>(data_.get()));
+  DTYPE_CASES(dtype_, T, content = EncodeContent<T>(data_.get()));
   *(tensor_proto.mutable_content()) = std::move(content);
   return tensor_proto;
 }

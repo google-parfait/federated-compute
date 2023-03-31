@@ -52,8 +52,9 @@ class FederatedSumFactory final : public TensorAggregatorFactory {
   StatusOr<std::unique_ptr<TensorAggregator>> Create(
       DataType dtype, TensorShape shape) const override {
     std::unique_ptr<TensorAggregator> aggregator;
-    CASES(dtype, aggregator = std::unique_ptr<TensorAggregator>(
-                     new FederatedSum<T>(dtype, shape)));
+    DTYPE_CASES(dtype, T,
+                aggregator = std::unique_ptr<TensorAggregator>(
+                    new FederatedSum<T>(dtype, shape)));
     FCP_CHECK(aggregator.get() != nullptr);
     return aggregator;
   }

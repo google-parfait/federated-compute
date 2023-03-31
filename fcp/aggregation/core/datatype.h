@@ -71,36 +71,40 @@ MATCH_TYPE_AND_DTYPE(double, DT_DOUBLE);
 MATCH_TYPE_AND_DTYPE(int32_t, DT_INT32);
 MATCH_TYPE_AND_DTYPE(int64_t, DT_INT64);
 
-// The macros CASE and CASES are used to translate Tensor DataType to strongly
-// typed calls of code parameterized with the template typename T.
+// The macros DTYPE_CASE and DTYPE_CASES are used to translate Tensor DataType
+// to strongly typed calls of code parameterized with the template typename
+// TYPE_ARG.
 //
 // For example, let's say there is a function that takes an AggVector<T>:
 // template <typename T>
 // void DoSomething(AggVector<T> agg_vector) { ... }
 //
 // Given a Tensor, the following code can be used to make a DoSomething call:
-// CASES(tensor.dtype(), DoSomething(tensor.AsAggVector<T>()));
+// DTYPE_CASES(tensor.dtype(), T, DoSomething(tensor.AsAggVector<T>()));
+//
+// The second parameter specifies the type argument to be used as the template
+// parameter in the statement in the third argument.
 
 #define SINGLE_ARG(...) __VA_ARGS__
-#define CASE(TYPE, STMTS)                       \
+#define DTYPE_CASE(TYPE, TYPE_ARG, STMTS)       \
   case internal::TypeTraits<TYPE>::kDataType: { \
-    typedef TYPE T;                             \
+    typedef TYPE TYPE_ARG;                      \
     STMTS;                                      \
     break;                                      \
   }
 
 // TODO(team): Add other types.
-#define CASES(TYPE_ENUM, STMTS)         \
-  switch (TYPE_ENUM) {                  \
-    CASE(float, SINGLE_ARG(STMTS))      \
-    CASE(double, SINGLE_ARG(STMTS))     \
-    CASE(int32_t, SINGLE_ARG(STMTS))    \
-    CASE(int64_t, SINGLE_ARG(STMTS))    \
-    case DT_INVALID:                    \
-      FCP_LOG(FATAL) << "Invalid type"; \
-      break;                            \
-    default:                            \
-      FCP_LOG(FATAL) << "Unknown type"; \
+#define DTYPE_CASES(TYPE_ENUM, TYPE_ARG, STMTS)      \
+  switch (TYPE_ENUM) {                               \
+    DTYPE_CASE(float, TYPE_ARG, SINGLE_ARG(STMTS))   \
+    DTYPE_CASE(double, TYPE_ARG, SINGLE_ARG(STMTS))  \
+    DTYPE_CASE(int32_t, TYPE_ARG, SINGLE_ARG(STMTS)) \
+    DTYPE_CASE(int64_t, TYPE_ARG, SINGLE_ARG(STMTS)) \
+    case DT_INVALID:                                 \
+      FCP_LOG(FATAL) << "Invalid type";              \
+      break;                                         \
+    default:                                         \
+      FCP_LOG(FATAL) << "Unknown type";              \
   }
 
 }  // namespace internal

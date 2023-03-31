@@ -61,9 +61,9 @@ absl::Status CheckpointWriter::Add(const std::string& tensor_name,
   tf::TensorShape tf_shape = ConvertShape(tensor.shape());
   tf::Status tf_status;
   tf::TensorSlice tf_slice(tf_shape.dims());
-  CASES(tensor.dtype(),
-        tf_status = tensorflow_writer_.Add(tensor_name, tf_shape, tf_slice,
-                                           GetTensorData<T>(tensor)));
+  DTYPE_CASES(tensor.dtype(), T,
+              tf_status = tensorflow_writer_.Add(
+                  tensor_name, tf_shape, tf_slice, GetTensorData<T>(tensor)));
   return ConvertFromTensorFlowStatus(tf_status);
 }
 

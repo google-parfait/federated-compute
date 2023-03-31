@@ -39,8 +39,9 @@ using ::tensorflow::TF_StatusPtr;
 using ::tensorflow::checkpoint::CheckpointReader;
 
 std::ostream& operator<<(std::ostream& os, const Tensor& tensor) {
-  CASES(tensor.dtype(), DescribeTensor<T>(&os, tensor.dtype(), tensor.shape(),
-                                          TensorValuesToVector<T>(tensor)));
+  DTYPE_CASES(tensor.dtype(), T,
+              DescribeTensor<T>(&os, tensor.dtype(), tensor.shape(),
+                                TensorValuesToVector<T>(tensor)));
   return os;
 }
 
