@@ -18,25 +18,26 @@
 
 #include <memory>
 #include <string>
-#include <tuple>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/container/flat_hash_map.h"
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/str_cat.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp::aggregation::tensorflow {
 namespace {
 
+using ::testing::AllOf;
+using ::testing::Each;
 using ::testing::Pair;
+using ::testing::SizeIs;
+using ::testing::StartsWith;
 using ::testing::UnorderedElementsAre;
 
 TEST(TensorflowCheckpointBuilderFactoryTest, BuildCheckpoint) {
@@ -85,6 +86,29 @@ TEST(TensorflowCheckpointBuilderFactoryTest, SimultaneousWrites) {
   auto summary2 = SummarizeCheckpoint(*checkpoint2);
   ASSERT_OK(summary2.status());
   EXPECT_THAT(*summary2, UnorderedElementsAre(Pair("t2", "5 6")));
+}
+
+TEST(TensorflowCheckpointBuilderFactoryTest, LargeCheckpoint) {
+  TensorflowCheckpointBuilderFactory factory;
+  std::unique_ptr<CheckpointBuilder> builder = factory.Create();
+
+  // Add 10 tensors that each require at least 8kB to exercise reading and
+  // writing in multiple chunks.
+  static constexpr int kTensorSize = 1024;
+  absl::StatusOr<Tensor> t =
+      Tensor::Create(DT_INT64, TensorShape({kTensorSize}),
+                     std::make_unique<VectorData<int64_t>>(kTensorSize));
+  ASSERT_OK(t.status());
+  for (int i = 0; i < 10; ++i) {
+    EXPECT_OK(builder->Add(absl::StrCat("t", i), *t));
+  }
+  absl::StatusOr<absl::Cord> checkpoint = builder->Build();
+  ASSERT_OK(checkpoint.status());
+  auto summary = SummarizeCheckpoint(*checkpoint);
+  ASSERT_OK(summary.status());
+  EXPECT_THAT(*summary,
+              AllOf(SizeIs(10), Each(Pair(StartsWith("t"),
+                                          StartsWith("0 0 0 0 0 0 0 0 0")))));
 }
 
 }  // namespace

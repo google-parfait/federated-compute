@@ -68,10 +68,10 @@ class TensorflowCheckpointBuilder : public CheckpointBuilder {
     absl::Cord output;
     for (;;) {
       char scratch[4096];
-      absl::string_view result;
+      absl::string_view read_result;
       ::tensorflow::Status status =
-          file->Read(result.size(), sizeof(scratch), &result, scratch);
-      output.Append(result);
+          file->Read(output.size(), sizeof(scratch), &read_result, scratch);
+      output.Append(read_result);
       if (status.code() == ::tensorflow::error::OUT_OF_RANGE) {
         return output;
       } else if (!status.ok()) {
