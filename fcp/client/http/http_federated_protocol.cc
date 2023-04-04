@@ -785,6 +785,10 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
           start_aggregation_data_upload_uri_suffix, {},
           HttpRequest::Method::kPost, start_upload_request.SerializeAsString(),
           /*is_protobuf_encoded=*/true));
+  FCP_LOG(INFO) << "StartAggregationDataUpload request uri is: "
+                << http_start_aggregation_data_upload_request->uri();
+  FCP_LOG(INFO) << "ReportTaskResult request uri is: "
+                << http_report_task_result_request->uri();
   std::vector<std::unique_ptr<HttpRequest>> requests;
   requests.push_back(std::move(http_start_aggregation_data_upload_request));
   requests.push_back(std::move(http_report_task_result_request));
@@ -884,6 +888,7 @@ absl::Status HttpFederatedProtocol::UploadDataViaSimpleAgg(
       data_upload_request_creator_->CreateProtocolRequest(
           uri_suffix, {{"upload_protocol", "raw"}}, HttpRequest::Method::kPost,
           std::move(tf_checkpoint), /*is_protobuf_encoded=*/false));
+  FCP_LOG(INFO) << "ByteStream.Write request URI is: " << http_request->uri();
   auto http_response = protocol_request_helper_.PerformProtocolRequest(
       std::move(http_request), *interruptible_runner_);
   if (!http_response.ok()) {
@@ -907,6 +912,8 @@ absl::Status HttpFederatedProtocol::SubmitAggregationResult() {
       aggregation_request_creator_->CreateProtocolRequest(
           uri_suffix, {}, HttpRequest::Method::kPost,
           request.SerializeAsString(), /*is_protobuf_encoded=*/true));
+  FCP_LOG(INFO) << "SubmitAggregationResult request URI is: "
+                << http_request->uri();
   auto http_response = protocol_request_helper_.PerformProtocolRequest(
       std::move(http_request), *interruptible_runner_);
   if (!http_response.ok()) {
