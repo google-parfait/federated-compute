@@ -301,6 +301,9 @@ class FCP_MUST_USE_RESULT Status final {
 template <typename T>
 class FCP_MUST_USE_RESULT StatusOr final {
  public:
+  // Default constructor initializes StatusOr with kUnknown code.
+  explicit StatusOr() : StatusOr(StatusCode::kUnknown) {}
+
   // Constructs a StatusOr from a failed status. The passed status must not be
   // OK. This constructor is expected to be implicitly called.
   StatusOr(Status status)  // NOLINT

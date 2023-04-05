@@ -156,6 +156,10 @@ TEST_P(MonitoringTest, CheckFails) {
 }
 
 TEST_P(MonitoringTest, StatusOr) {
+  StatusOr<int> default_constructed_status;
+  ASSERT_FALSE(default_constructed_status.ok());
+  ASSERT_EQ(default_constructed_status.status().code(), UNKNOWN);
+
   StatusOr<int> fail_status = FCP_STATUS(ABORTED) << "operation aborted";
   ASSERT_FALSE(fail_status.ok());
   ASSERT_EQ(fail_status.status().code(), ABORTED);
