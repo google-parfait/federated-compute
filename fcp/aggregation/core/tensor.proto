@@ -28,6 +28,7 @@ enum DataType {
   DT_FLOAT = 1;
   DT_DOUBLE = 2;
   DT_INT32 = 3;
+  DT_STRING = 7;
   DT_INT64 = 9;
   // TODO(team): Add other types
 }

@@ -58,6 +58,8 @@ cc_library(
     deps = [
         ":tensor_cc_proto",
         "//fcp/base",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -155,6 +157,7 @@ cc_library(
     copts = FCP_COPTS,
     deps = [
         ":aggregator",
+        ":tensor",
         "//fcp/base",
     ],
     alwayslink = 1,

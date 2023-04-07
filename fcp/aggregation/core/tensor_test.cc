@@ -24,6 +24,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
@@ -43,6 +44,16 @@ TEST(TensorTest, Create_Dense) {
   EXPECT_THAT(t->shape(), Eq(TensorShape{3}));
   EXPECT_TRUE(t->is_dense());
   EXPECT_THAT(t->AsAggVector<float>().size(), Eq(3));
+}
+
+TEST(TensorTest, Create_StringTensor) {
+  auto t = Tensor::Create(DT_STRING, {2},
+                          CreateTestData<string_view>({"foo", "bar"}));
+  EXPECT_THAT(t, IsOk());
+  EXPECT_THAT(t->dtype(), Eq(DT_STRING));
+  EXPECT_THAT(t->shape(), Eq(TensorShape{2}));
+  EXPECT_TRUE(t->is_dense());
+  EXPECT_THAT(t->AsAggVector<string_view>().size(), Eq(2));
 }
 
 TEST(TensorTest, Create_DataValidationError) {
@@ -69,7 +80,26 @@ std::string ToProtoContent(std::initializer_list<T> values) {
                      values.size() * sizeof(T));
 }
 
-TEST(TensorTest, ToProto_Success) {
+template <>
+std::string ToProtoContent(std::initializer_list<string_view> values) {
+  // The following is the simplified version of serializing the string values
+  // that works only for short strings that are shorter than 128 characters, in
+  // which case string lengths can be encoded with one byte each.
+  std::string content(values.size(), '\0');
+  size_t index = 0;
+  // Write sizes of strings first.
+  for (string_view value : values) {
+    FCP_CHECK(value.size() < 128);
+    content[index++] = static_cast<char>(value.size());
+  }
+  // Append data of all strings.
+  for (string_view value : values) {
+    content.append(value.data(), value.size());
+  }
+  return content;
+}
+
+TEST(TensorTest, ToProto_Numeric_Success) {
   std::initializer_list<int32_t> values{1, 2, 3, 4};
   auto t = Tensor::Create(DT_INT32, {2, 2}, CreateTestData(values));
   TensorProto expected_proto;
@@ -80,7 +110,19 @@ TEST(TensorTest, ToProto_Success) {
   EXPECT_THAT(t->ToProto(), EqualsProto(expected_proto));
 }
 
-TEST(TensorTest, FromProto_Success) {
+TEST(TensorTest, ToProto_String_Success) {
+  std::initializer_list<string_view> values{"abc",  "de",    "",
+                                            "fghi", "jklmn", "o"};
+  auto t = Tensor::Create(DT_STRING, {2, 3}, CreateTestData(values));
+  TensorProto expected_proto;
+  expected_proto.set_dtype(DT_STRING);
+  expected_proto.mutable_shape()->add_dim_sizes(2);
+  expected_proto.mutable_shape()->add_dim_sizes(3);
+  expected_proto.set_content(ToProtoContent(values));
+  EXPECT_THAT(t->ToProto(), EqualsProto(expected_proto));
+}
+
+TEST(TensorTest, FromProto_Numeric_Success) {
   std::initializer_list<int32_t> values{5, 6, 7, 8, 9, 10};
   TensorProto tensor_proto;
   tensor_proto.set_dtype(DT_INT32);
@@ -90,6 +132,29 @@ TEST(TensorTest, FromProto_Success) {
   auto t = Tensor::FromProto(tensor_proto);
   EXPECT_THAT(t, IsOk());
   EXPECT_THAT(*t, IsTensor({2, 3}, values));
+}
+
+TEST(TensorTest, FromProto_String_Success) {
+  std::initializer_list<string_view> values{"aaaaaaaa", "b", "cccc", "ddddddd"};
+  TensorProto tensor_proto;
+  tensor_proto.set_dtype(DT_STRING);
+  tensor_proto.mutable_shape()->add_dim_sizes(2);
+  tensor_proto.mutable_shape()->add_dim_sizes(2);
+  tensor_proto.set_content(ToProtoContent(values));
+  auto t = Tensor::FromProto(tensor_proto);
+  EXPECT_THAT(t, IsOk());
+  EXPECT_THAT(*t, IsTensor({2, 2}, values));
+}
+
+TEST(TensorTest, LargeStringValuesSerialization) {
+  std::string s1(123456, 'a');
+  std::string s2(7890, 'b');
+  std::string s3(1357924, 'c');
+  auto t1 =
+      Tensor::Create(DT_STRING, {3}, CreateTestData<string_view>({s1, s2, s3}));
+  auto proto = t1->ToProto();
+  auto t2 = Tensor::FromProto(proto);
+  EXPECT_THAT(*t2, IsTensor<string_view>({3}, {s1, s2, s3}));
 }
 
 TEST(TensorTest, FromProto_Mutable_Success) {
@@ -106,11 +171,27 @@ TEST(TensorTest, FromProto_Mutable_Success) {
   EXPECT_EQ(data_ptr, t->data().data());
 }
 
-TEST(TensorTest, FromProto_NegativeSize) {
+TEST(TensorTest, FromProto_NegativeDimSize) {
   TensorProto tensor_proto;
   tensor_proto.set_dtype(DT_INT32);
   tensor_proto.mutable_shape()->add_dim_sizes(-1);
   tensor_proto.set_content(ToProtoContent<int32_t>({1}));
+  EXPECT_THAT(Tensor::FromProto(tensor_proto), IsCode(INVALID_ARGUMENT));
+}
+
+TEST(TensorTest, FromProto_InvalidStringContent) {
+  TensorProto tensor_proto;
+  tensor_proto.set_dtype(DT_STRING);
+  tensor_proto.mutable_shape()->add_dim_sizes(1);
+  tensor_proto.set_content("");
+  EXPECT_THAT(Tensor::FromProto(tensor_proto), IsCode(INVALID_ARGUMENT));
+
+  std::string content(1, '\5');
+  tensor_proto.set_content(content);
+  EXPECT_THAT(Tensor::FromProto(tensor_proto), IsCode(INVALID_ARGUMENT));
+
+  content.append("abc");
+  tensor_proto.set_content(content);
   EXPECT_THAT(Tensor::FromProto(tensor_proto), IsCode(INVALID_ARGUMENT));
 }
 

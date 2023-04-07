@@ -26,6 +26,7 @@
 #include "fcp/tensorflow/status.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_slice.h"
+#include "tensorflow/core/platform/tstring.h"
 
 namespace fcp::aggregation::tensorflow {
 
@@ -41,10 +42,28 @@ tf::TensorShape ConvertShape(const TensorShape& shape) {
 }
 
 template <typename T>
-const T* GetTensorData(const Tensor& tensor) {
+struct TypeToTensorflowType {
+  using type = T;
+};
+
+template <>
+struct TypeToTensorflowType<string_view> {
+  using type = tf::tstring;
+};
+
+template <typename T, typename TF_T = typename TypeToTensorflowType<T>::type>
+const TF_T* GetTensorData(const Tensor& tensor) {
   FCP_CHECK(tensor.is_dense())
       << "Only dense tensors with one slice are supported";
-  return static_cast<const T*>(tensor.data().data());
+  return static_cast<const TF_T*>(tensor.data().data());
+}
+
+template <>
+const tf::tstring* GetTensorData<string_view>(const Tensor& tensor) {
+  // TODO(team): Support conversion to tensorflow DT_STRING type.
+  FCP_LOG(FATAL)
+      << "Unsupported conversion of DT_STRING to tensorflow tstring.";
+  return nullptr;
 }
 
 CheckpointWriter::CheckpointWriter(const std::string& filename)

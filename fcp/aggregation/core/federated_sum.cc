@@ -16,10 +16,13 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "fcp/aggregation/core/agg_vector_aggregator.h"
+#include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
+#include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
@@ -40,6 +43,20 @@ class FederatedSum final : public AggVectorAggregator<T> {
   }
 };
 
+template <typename T>
+StatusOr<std::unique_ptr<TensorAggregator>> CreateFederatedSum(
+    DataType dtype, TensorShape shape) {
+  return std::unique_ptr<TensorAggregator>(new FederatedSum<T>(dtype, shape));
+}
+
+// Not supported for DT_STRING
+template <>
+StatusOr<std::unique_ptr<TensorAggregator>> CreateFederatedSum<string_view>(
+    DataType dtype, TensorShape shape) {
+  return FCP_STATUS(INVALID_ARGUMENT)
+         << "FederatedSum isn't supported for DT_STRING datatype.";
+}
+
 // Factory class for the FederatedSum.
 class FederatedSumFactory final : public TensorAggregatorFactory {
  public:
@@ -51,11 +68,9 @@ class FederatedSumFactory final : public TensorAggregatorFactory {
 
   StatusOr<std::unique_ptr<TensorAggregator>> Create(
       DataType dtype, TensorShape shape) const override {
-    std::unique_ptr<TensorAggregator> aggregator;
+    StatusOr<std::unique_ptr<TensorAggregator>> aggregator;
     DTYPE_CASES(dtype, T,
-                aggregator = std::unique_ptr<TensorAggregator>(
-                    new FederatedSum<T>(dtype, shape)));
-    FCP_CHECK(aggregator.get() != nullptr);
+                aggregator = CreateFederatedSum<T>(dtype, std::move(shape)));
     return aggregator;
   }
 };
