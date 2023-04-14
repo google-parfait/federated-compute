@@ -426,9 +426,6 @@ tf_custom_op_library(
     name = "_example_selector_fuser_op.so",
     srcs = EXAMPLE_SELECTOR_FUSER_OP_SRCS,
     copts = FCP_COPTS,
-    # This op uses Bazel-built protocol buffers, which are incompatible with
-    # the headers provided by the tensorflow pip package.
-    tags = ["manual"],
     deps = EXAMPLE_SELECTOR_FUSER_OP_DEPS,
 )
 
@@ -448,7 +445,6 @@ tf_custom_op_py_library(
     kernels = [
         ":example_selector_fuser_op_lib",
     ],
-    tags = ["manual"],  # :_example_selector_fuser_op.so is manual
     visibility = ["//visibility:public"],
     deps = [":gen_example_selector_fuser_op"],
 )
@@ -465,7 +461,6 @@ py_test(
     name = "example_selector_fuser_test",
     srcs = ["example_selector_fuser_test.py"],
     python_version = "PY3",
-    tags = ["manual"],  # :example_selector_fuser_py is manual
     deps = [
         ":example_selector_fuser_py",
         ":test_selector_py_pb2",
@@ -620,9 +615,6 @@ tf_custom_op_library(
     name = "_make_slices_selector_example_selector_op.so",
     srcs = MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_SRCS,
     copts = FCP_COPTS,
-    # This op uses Bazel-built protocol buffers, which are incompatible with
-    # the headers provided by the tensorflow pip package.
-    tags = ["manual"],
     deps = ["@com_google_protobuf//:protobuf"] + MAKE_SLICES_SELECTOR_EXAMPLE_SELECTOR_OP_DEPS,
 )
 
@@ -645,7 +637,6 @@ tf_custom_op_py_library(
     kernels = [
         ":make_slices_selector_example_selector_op_lib",
     ],
-    tags = ["manual"],  # :_make_slices_selector_example_selector_op.so is manual
     visibility = ["//visibility:public"],
     deps = [":gen_make_slices_selector_example_selector_py"],
 )
@@ -656,7 +647,6 @@ py_test(
     testonly = True,
     srcs = ["make_slices_selector_example_selector_test.py"],
     python_version = "PY3",
-    tags = ["manual"],  # :make_slices_selector_example_selector_py is manual
     deps = [
         ":make_slices_selector_example_selector_py",
         "//fcp/protos:plan_py_pb2",
@@ -691,9 +681,6 @@ tf_custom_op_library(
     name = "_append_slices_op.so",
     srcs = APPEND_SLICES_OP_SRCS,
     copts = FCP_COPTS,
-    # This op uses Bazel-built protocol buffers, which are incompatible with
-    # the headers provided by the tensorflow pip package.
-    tags = ["manual"],
     deps = APPEND_SLICES_OP_DEPS,
 )
 
@@ -716,7 +703,6 @@ tf_custom_op_py_library(
     kernels = [
         ":append_slices_op_lib",
     ],
-    tags = ["manual"],  # :_append_slices_op.so is manual
     visibility = ["//visibility:public"],
     deps = [":gen_append_slices_py"],
 )
@@ -727,7 +713,6 @@ py_test(
     testonly = True,
     srcs = ["append_slices_test.py"],
     python_version = "PY3",
-    tags = ["manual"],  # :append_slices_py is manual
     deps = [
         ":append_slices_py",
         ":delete_file_py",
@@ -879,9 +864,6 @@ tf_custom_op_library(
     name = "_task_eligibility_info_ops.so",
     srcs = TASK_ELIGIBILITY_INFO_OPS_SRCS,
     copts = FCP_COPTS,
-    # This op uses Bazel-built protocol buffers, which are incompatible with
-    # the headers provided by the tensorflow pip package.
-    tags = ["manual"],
     deps = TASK_ELIGIBILITY_INFO_OPS_DEPS,
 )
 
@@ -905,7 +887,6 @@ tf_custom_op_py_library(
     kernels = [
         ":task_eligibility_info_ops_lib",
     ],
-    tags = ["manual"],  # :_task_eligibility_info_ops.so is manual
     visibility = ["//visibility:public"],
     deps = [":gen_task_eligibility_info_ops_py"],
 )
@@ -914,7 +895,6 @@ py_test(
     name = "task_eligibility_info_ops_test",
     srcs = ["task_eligibility_info_ops_test.py"],
     python_version = "PY3",
-    tags = ["manual"],  # :task_eligibility_info_ops_py is manual
     deps = [
         ":task_eligibility_info_ops_py",
         "//fcp/protos:federated_api_py_pb2",
@@ -948,9 +928,6 @@ tf_custom_op_library(
     name = "_dictionary_ops.so",
     srcs = DICTIONARY_OPS_SRCS,
     copts = FCP_COPTS,
-    # This op uses Bazel-built protocol buffers, which are incompatible with
-    # the headers provided by the tensorflow pip package.
-    tags = ["manual"],
     deps = DICTIONARY_OPS_DEPS,
 )
 
@@ -973,7 +950,6 @@ tf_custom_op_py_library(
     kernels = [
         ":dictionary_ops_lib",
     ],
-    tags = ["manual"],  # :_dictionary_ops.so is manual
     visibility = ["//visibility:public"],
     deps = [
         ":gen_dictionary_ops_py",
@@ -985,7 +961,6 @@ py_test(
     name = "dictionary_ops_test",
     srcs = ["dictionary_ops_test.py"],
     python_version = "PY3",
-    tags = ["manual"],  # :dictionary_ops_py is manual
     deps = [
         ":dictionary_ops_py",
         "//fcp/dictionary:dictionary_py_pb2",
