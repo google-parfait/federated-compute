@@ -26,7 +26,9 @@ cc_library(
     copts = FCP_COPTS,
     deps = [
         "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/core:tensor_cc_proto",
         "//fcp/base",
+        "@com_google_absl//absl/strings",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
     ],

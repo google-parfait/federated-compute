@@ -45,6 +45,18 @@ std::ostream& operator<<(std::ostream& os, const Tensor& tensor) {
   return os;
 }
 
+tf::Tensor CreateStringTfTensor(std::initializer_list<int64_t> dim_sizes,
+                                std::initializer_list<string_view> values) {
+  tf::TensorShape shape;
+  EXPECT_TRUE(tf::TensorShape::BuildTensorShape(dim_sizes, &shape).ok());
+  tf::Tensor tensor(tf::DT_STRING, shape);
+  auto* tensor_data_ptr = reinterpret_cast<tf::tstring*>(tensor.data());
+  for (auto value : values) {
+    *tensor_data_ptr++ = value;
+  }
+  return tensor;
+}
+
 tf::Status CreateTfCheckpoint(tf::Input filename, tf::Input tensor_names,
                               tf::InputList tensors) {
   tf::Scope scope = tf::Scope::NewRootScope();

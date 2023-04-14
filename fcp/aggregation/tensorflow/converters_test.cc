@@ -63,10 +63,11 @@ TEST(ConvertersTest, ConvertDataType_Success) {
   EXPECT_EQ(*ConvertDataType(tf::DT_DOUBLE), DT_DOUBLE);
   EXPECT_EQ(*ConvertDataType(tf::DT_INT32), DT_INT32);
   EXPECT_EQ(*ConvertDataType(tf::DT_INT64), DT_INT64);
+  EXPECT_EQ(*ConvertDataType(tf::DT_STRING), DT_STRING);
 }
 
 TEST(ConvertersTest, ConvertDataType_Unsupported) {
-  EXPECT_THAT(ConvertDataType(tf::DT_STRING), IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(ConvertDataType(tf::DT_VARIANT), IsCode(INVALID_ARGUMENT));
 }
 
 TEST(ConvertersTest, ConvertShape_Success) {
@@ -86,7 +87,7 @@ TEST(ConvertersTest, ConvertTensorSpec_Success) {
 
 TEST(ConvertersTest, ConvertTensorSpec_UnsupportedDataType) {
   EXPECT_THAT(
-      ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_STRING, {1, 2, 3})),
+      ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_VARIANT, {1, 2, 3})),
       IsCode(INVALID_ARGUMENT));
 }
 
@@ -96,7 +97,7 @@ TEST(ConvertersTest, ConvertTensorSpec_UnsupportedShape) {
       IsCode(INVALID_ARGUMENT));
 }
 
-TEST(ConvertersTest, ConvertTensor_Success) {
+TEST(ConvertersTest, ConvertTensor_Numeric) {
   tf::TensorProto tensor_proto = PARSE_TEXT_PROTO(R"pb(
     dtype: DT_FLOAT
     tensor_shape {
@@ -116,8 +117,34 @@ TEST(ConvertersTest, ConvertTensor_Success) {
               IsTensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
 }
 
+TEST(ConvertersTest, ConvertTensor_String) {
+  tf::TensorProto tensor_proto = PARSE_TEXT_PROTO(R"pb(
+    dtype: DT_STRING
+    tensor_shape { dim { size: 3 } }
+    string_val: "abcd"
+    string_val: "foobar"
+    string_val: "zzzzzzzzzzzzzz"
+  )pb");
+  auto tensor = std::make_unique<tf::Tensor>();
+  ASSERT_TRUE(tensor->FromProto(tensor_proto));
+  EXPECT_THAT(*ConvertTensor(std::move(tensor)),
+              IsTensor<string_view>({3}, {"abcd", "foobar", "zzzzzzzzzzzzzz"}));
+}
+
+TEST(ConvertersTest, ConvertTensor_ScalarString) {
+  tf::TensorProto tensor_proto = PARSE_TEXT_PROTO(R"pb(
+    dtype: DT_STRING
+    tensor_shape {}
+    string_val: "0123456789"
+  )pb");
+  auto tensor = std::make_unique<tf::Tensor>();
+  ASSERT_TRUE(tensor->FromProto(tensor_proto));
+  EXPECT_THAT(*ConvertTensor(std::move(tensor)),
+              IsTensor<string_view>({}, {"0123456789"}));
+}
+
 TEST(ConvertersTest, ConvertTensor_UnsupportedDataType) {
-  auto tensor = std::make_unique<tf::Tensor>(tf::DT_STRING, CreateTfShape({}));
+  auto tensor = std::make_unique<tf::Tensor>(tf::DT_VARIANT, CreateTfShape({}));
   EXPECT_THAT(ConvertTensor(std::move(tensor)), IsCode(INVALID_ARGUMENT));
 }
 

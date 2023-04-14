@@ -20,8 +20,11 @@
 #include <utility>
 #include <vector>
 
+#include "absl/strings/string_view.h"
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/base/monitoring.h"
+#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 
@@ -39,6 +42,8 @@ StatusOr<DataType> ConvertDataType(tf::DataType dtype) {
       return DT_INT32;
     case tf::DT_INT64:
       return DT_INT64;
+    case tf::DT_STRING:
+      return DT_STRING;
     default:
       return FCP_STATUS(INVALID_ARGUMENT)
              << "Unsupported tf::DataType: " << dtype;
@@ -68,11 +73,11 @@ StatusOr<TensorSpec> ConvertTensorSpec(
 
 // A primitive TensorData implementation that wraps the original
 // tf::Tensor data.
-// TensorDataAdapter gets the ownership of the wrapped tensor, which keeps
-// the underlying data alive.
-class TensorDataAdapter : public TensorData {
+// NumericTensorDataAdapter gets the ownership of the wrapped tensor, which
+// keeps the underlying data alive.
+class NumericTensorDataAdapter : public TensorData {
  public:
-  explicit TensorDataAdapter(std::unique_ptr<tf::Tensor> tensor)
+  explicit NumericTensorDataAdapter(std::unique_ptr<tf::Tensor> tensor)
       : tensor_(std::move(tensor)) {}
 
   // The source tf::Tensor has the data as one continuous blob.
@@ -83,11 +88,50 @@ class TensorDataAdapter : public TensorData {
   std::unique_ptr<tf::Tensor> tensor_;
 };
 
+// Similar to  NumericTensorDataAdapter but performs additional conversion
+// of the original tensor tstring values to string_view while keeping the
+// the tstring values owned by the original tensor.
+class StringTensorDataAdapter : public TensorData {
+ public:
+  explicit StringTensorDataAdapter(std::unique_ptr<tf::Tensor> tensor)
+      : tensor_(std::move(tensor)), string_views_(tensor_->NumElements()) {
+    auto string_values = tensor_->flat<tf::tstring>();
+    for (size_t i = 0; i < string_values.size(); ++i) {
+      string_views_[i] = string_values(i);
+    }
+  }
+
+  size_t byte_size() const override {
+    return string_views_.size() * sizeof(string_view);
+  }
+  const void* data() const override { return string_views_.data(); }
+
+ private:
+  std::unique_ptr<tf::Tensor> tensor_;
+  std::vector<string_view> string_views_;
+};
+
+// Conversion of tensor data for numeric data types, which can be
+// done by simply wrapping the original tensorflow tensor data.
+template <typename t>
+std::unique_ptr<TensorData> ConvertTensorData(
+    std::unique_ptr<tf::Tensor> tensor) {
+  return std::make_unique<NumericTensorDataAdapter>(std::move(tensor));
+}
+
+// Specialization of ConvertTensorData for the DT_STRING data type.
+template <>
+std::unique_ptr<TensorData> ConvertTensorData<string_view>(
+    std::unique_ptr<tf::Tensor> tensor) {
+  return std::make_unique<StringTensorDataAdapter>(std::move(tensor));
+}
+
 StatusOr<Tensor> ConvertTensor(std::unique_ptr<tf::Tensor> tensor) {
   FCP_ASSIGN_OR_RETURN(DataType dtype, ConvertDataType(tensor->dtype()));
   TensorShape shape = ConvertShape(tensor->shape());
-  return Tensor::Create(dtype, std::move(shape),
-                        std::make_unique<TensorDataAdapter>(std::move(tensor)));
+  std::unique_ptr<TensorData> data;
+  DTYPE_CASES(dtype, T, data = ConvertTensorData<T>(std::move(tensor)));
+  return Tensor::Create(dtype, std::move(shape), std::move(data));
 }
 
 }  // namespace fcp::aggregation::tensorflow

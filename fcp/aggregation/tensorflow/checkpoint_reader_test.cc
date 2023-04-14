@@ -43,7 +43,7 @@ TEST(CheckpointReaderTest, ReadTensors) {
       CreateTfTensor<float>(tf::DT_FLOAT, {4}, {1.0, 2.0, 3.0, 4.0});
   auto tensor_b =
       CreateTfTensor<int32_t>(tf::DT_INT32, {2, 3}, {11, 12, 13, 14, 15, 16});
-  auto tensor_c = CreateTfTensor<double>(tf::DT_DOUBLE, {}, {3.14});
+  auto tensor_c = CreateStringTfTensor({}, {"foobar"});
   EXPECT_TRUE(CreateTfCheckpoint(temp_filename, {"a", "b", "c"},
                                  {tensor_a, tensor_b, tensor_c})
                   .ok());
@@ -63,7 +63,8 @@ TEST(CheckpointReaderTest, ReadTensors) {
               IsTensor<float>({4}, {1.0, 2.0, 3.0, 4.0}));
   EXPECT_THAT(*checkpoint_reader->GetTensor("b"),
               IsTensor<int32_t>({2, 3}, {11, 12, 13, 14, 15, 16}));
-  EXPECT_THAT(*checkpoint_reader->GetTensor("c"), IsTensor<double>({}, {3.14}));
+  EXPECT_THAT(*checkpoint_reader->GetTensor("c"),
+              IsTensor<string_view>({}, {"foobar"}));
 }
 
 TEST(CheckpointReaderTest, InvalidFileName) {

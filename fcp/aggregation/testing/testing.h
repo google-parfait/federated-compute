@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_shape.h"
@@ -47,6 +48,9 @@ tf::Tensor CreateTfTensor(tf::DataType data_type,
   }
   return tensor;
 }
+
+tf::Tensor CreateStringTfTensor(std::initializer_list<int64_t> dim_sizes,
+                                std::initializer_list<string_view> values);
 
 // Wrapper around tf::ops::Save that sets up and runs the op.
 tf::Status CreateTfCheckpoint(tf::Input filename, tf::Input tensor_names,
