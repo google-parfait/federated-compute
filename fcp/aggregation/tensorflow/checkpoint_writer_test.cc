@@ -47,7 +47,9 @@ TEST(CheckpointWriterTest, WriteTensors) {
                            CreateTestData<int32_t>({11, 12, 13, 14, 15, 16}))
                 .value();
   auto t3 =
-      Tensor::Create(DT_DOUBLE, TensorShape({}), CreateTestData<double>({3.14}))
+      Tensor::Create(
+          DT_STRING, TensorShape({3}),
+          CreateTestData<string_view>({"foo", "bar", "bazzzzzzzzzzzzzzzzzzz"}))
           .value();
 
   CheckpointWriter checkpoint_writer(temp_filename);
@@ -71,7 +73,9 @@ TEST(CheckpointWriterTest, WriteTensors) {
               IsTensor<float>({4}, {1.0, 2.0, 3.0, 4.0}));
   EXPECT_THAT(*checkpoint_reader->GetTensor("b"),
               IsTensor<int32_t>({2, 3}, {11, 12, 13, 14, 15, 16}));
-  EXPECT_THAT(*checkpoint_reader->GetTensor("c"), IsTensor<double>({}, {3.14}));
+  EXPECT_THAT(
+      *checkpoint_reader->GetTensor("c"),
+      IsTensor<string_view>({3}, {"foo", "bar", "bazzzzzzzzzzzzzzzzzzz"}));
 }
 
 }  // namespace

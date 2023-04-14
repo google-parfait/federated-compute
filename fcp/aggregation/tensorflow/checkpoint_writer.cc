@@ -17,6 +17,7 @@
 #include "fcp/aggregation/tensorflow/checkpoint_writer.h"
 
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
@@ -42,28 +43,25 @@ tf::TensorShape ConvertShape(const TensorShape& shape) {
 }
 
 template <typename T>
-struct TypeToTensorflowType {
-  using type = T;
-};
-
-template <>
-struct TypeToTensorflowType<string_view> {
-  using type = tf::tstring;
-};
-
-template <typename T, typename TF_T = typename TypeToTensorflowType<T>::type>
-const TF_T* GetTensorData(const Tensor& tensor) {
-  FCP_CHECK(tensor.is_dense())
-      << "Only dense tensors with one slice are supported";
-  return static_cast<const TF_T*>(tensor.data().data());
+tf::Status AddTensorSlice(tf::checkpoint::TensorSliceWriter* writer,
+                          const std::string& name, const tf::TensorShape& shape,
+                          const tf::TensorSlice& slice, const Tensor& tensor) {
+  return writer->Add<T>(name, shape, slice,
+                        static_cast<const T*>(tensor.data().data()));
 }
 
 template <>
-const tf::tstring* GetTensorData<string_view>(const Tensor& tensor) {
-  // TODO(team): Support conversion to tensorflow DT_STRING type.
-  FCP_LOG(FATAL)
-      << "Unsupported conversion of DT_STRING to tensorflow tstring.";
-  return nullptr;
+tf::Status AddTensorSlice<string_view>(
+    tf::checkpoint::TensorSliceWriter* writer, const std::string& name,
+    const tf::TensorShape& shape, const tf::TensorSlice& slice,
+    const Tensor& tensor) {
+  std::vector<tf::tstring> values(tensor.shape().NumElements());
+  const auto* string_views =
+      static_cast<const string_view*>(tensor.data().data());
+  for (size_t i = 0; i < values.size(); ++i) {
+    values[i].assign_as_view(string_views[i].data(), string_views[i].size());
+  }
+  return writer->Add(name, shape, slice, values.data());
 }
 
 CheckpointWriter::CheckpointWriter(const std::string& filename)
@@ -78,11 +76,13 @@ CheckpointWriter::CheckpointWriter(
 absl::Status CheckpointWriter::Add(const std::string& tensor_name,
                                    const Tensor& tensor) {
   tf::TensorShape tf_shape = ConvertShape(tensor.shape());
-  tf::Status tf_status;
   tf::TensorSlice tf_slice(tf_shape.dims());
+  FCP_CHECK(tensor.is_dense())
+      << "Only dense tensors with one slice are supported";
+  tf::Status tf_status;
   DTYPE_CASES(tensor.dtype(), T,
-              tf_status = tensorflow_writer_.Add(
-                  tensor_name, tf_shape, tf_slice, GetTensorData<T>(tensor)));
+              tf_status = AddTensorSlice<T>(&tensorflow_writer_, tensor_name,
+                                            tf_shape, tf_slice, tensor));
   return ConvertFromTensorFlowStatus(tf_status);
 }
 
