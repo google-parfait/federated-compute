@@ -163,6 +163,13 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "input_tensor_list",
+    srcs = ["input_tensor_list.cc"],
+    hdrs = ["input_tensor_list.h"],
+    deps = [":tensor"],
+)
+
 cc_test(
     name = "federated_sum_test",
     srcs = ["federated_sum_test.cc"],
@@ -174,6 +181,17 @@ cc_test(
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "input_tensor_list_test",
+    srcs = ["input_tensor_list_test.cc"],
+    deps = [
+        ":input_tensor_list",
+        ":tensor",
+        "//fcp/aggregation/testing:test_data",
         "@com_google_googletest//:gtest_main",
     ],
 )
