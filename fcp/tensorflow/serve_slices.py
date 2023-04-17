@@ -19,6 +19,7 @@ are loaded.
 
 import tensorflow as tf
 
+from fcp.tensorflow import _serve_slices_op
 from fcp.tensorflow import gen_serve_slices_py
 
 _serve_slices_so = tf.load_op_library(
@@ -91,3 +92,16 @@ def serve_slices(callback_token, server_val, max_key, select_fn_initialize_op,
           select_fn_filename_input_tensor_name, dtype=tf.string),
       select_fn_target_tensor_name=tf.convert_to_tensor(
           select_fn_target_tensor_name, dtype=tf.string))
+
+
+def register_serve_slices_callback(callback):
+  """Registers a callback to be invoked by the `ServeSlices` op."""
+  def callback_adapter(callback_token, server_val, *args):
+    # Convert the serialized TensorProtos to ndarrays.
+    tensor_proto = tf.make_tensor_proto(0)
+    converted_server_val = [
+        tf.make_ndarray(tensor_proto.FromString(val)) for val in server_val
+    ]
+    return callback(callback_token, converted_server_val, *args)
+
+  return _serve_slices_op.register_serve_slices_callback(callback_adapter)

@@ -520,9 +520,15 @@ cc_library(
 # wrappers. See explanation above starting with "The targets below...".
 tf_custom_op_library(
     name = "_serve_slices_op.so",
-    srcs = SERVE_SLICES_OP_SRCS,
+    srcs = SERVE_SLICES_OP_SRCS + [
+        # Bundling the registry and op ensures that the same HostObjectRegistry is used by both.
+        "//fcp/tensorflow/python:serve_slices_registry.cc",
+    ],
     copts = FCP_COPTS,
-    deps = SERVE_SLICES_OP_DEPS,
+    deps = SERVE_SLICES_OP_DEPS + [
+        "@pybind11",
+        "@pybind11_abseil//pybind11_abseil:absl_casters",
+    ],
 )
 
 # Generates the basic op wrapper for use in Python.
