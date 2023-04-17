@@ -89,6 +89,7 @@ py_library(
         ":type_checks",
         ":variable_helpers",
         "//fcp/protos:plan_py_pb2",
+        "//fcp/tensorflow:append_slices_py",
         "//fcp/tensorflow:delete_file_py",
     ],
 )

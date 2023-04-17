@@ -36,6 +36,7 @@ from fcp.artifact_building import tensor_utils
 from fcp.artifact_building import type_checks
 from fcp.artifact_building import variable_helpers
 from fcp.protos import plan_pb2
+from fcp.tensorflow import append_slices
 from fcp.tensorflow import delete_file
 
 SECURE_SUM_BITWIDTH_URI = 'federated_secure_sum_bitwidth'
@@ -1330,7 +1331,32 @@ def _build_client_graph_with_tensorflow_spec(
           checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_WRITE,
           checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_READ,
       ]:
-        raise NotImplementedError
+        delete_op = delete_file.delete_file(output_filepath_placeholder)
+        with tf.control_dependencies([delete_op]):
+          append_ops = []
+          for tensor_name, tensor in zip(
+              simpleagg_variable_names, simpleagg_tensors
+          ):
+            append_ops.append(
+                tensor_utils.save(
+                    filename=output_filepath_placeholder,
+                    tensor_names=[tensor_name],
+                    tensors=[tensor],
+                    save_op=append_slices.append_slices,
+                )
+            )
+        if (
+            experimental_checkpoint_write
+            == checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_WRITE
+        ):
+          with tf.control_dependencies(append_ops):
+            save_op = append_slices.merge_appended_slices(
+                filename=output_filepath_placeholder
+            )
+        else:
+          # APPEND_SLICES_MERGE_READ
+          save_op = tf.group(*append_ops)
+
       elif (
           experimental_checkpoint_write
           == checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES
