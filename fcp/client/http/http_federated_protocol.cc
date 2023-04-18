@@ -54,6 +54,7 @@
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/parsing_utils.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
@@ -75,6 +76,7 @@ using ::google::internal::federatedcompute::v1::AbortAggregationRequest;
 using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
+using ::google::internal::federatedcompute::v1::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::
     ReportEligibilityEvalTaskResultRequest;
 using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
@@ -380,8 +382,11 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   request.mutable_attestation_measurement()->set_value(
       attestation_measurement_);
 
-    request.mutable_resource_capabilities()->add_supported_compression_formats(
-        ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  request.mutable_resource_capabilities()->add_supported_compression_formats(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  request.mutable_eligibility_eval_task_capabilities()
+      ->set_supports_multiple_task_assignment(
+          flags_->http_protocol_supports_multiple_task_assignments());
 
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,
@@ -463,6 +468,12 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
           result.payloads,
           FetchTaskResources(
               {.plan = task.plan(), .checkpoint = task.init_checkpoint()}));
+      if (task.has_population_eligibility_spec() &&
+          flags_->http_protocol_supports_multiple_task_assignments()) {
+        FCP_ASSIGN_OR_RETURN(
+            result.population_eligibility_spec,
+            FetchPopulationEligibilitySpec(task.population_eligibility_spec()));
+      }
 
       object_state_ = ObjectState::kEligibilityEvalEnabled;
       return std::move(result);
@@ -1221,6 +1232,45 @@ HttpFederatedProtocol::FetchTaskResources(
 
   return PlanAndCheckpointPayloads{plan_data_response->body,
                                    checkpoint_data_response->body};
+}
+
+absl::StatusOr<PopulationEligibilitySpec>
+HttpFederatedProtocol::FetchPopulationEligibilitySpec(
+    const Resource& population_eligibility_spec_resource) {
+  FCP_ASSIGN_OR_RETURN(
+      UriOrInlineData population_eligibility_spec_uri_or_data,
+      ConvertResourceToUriOrInlineData(population_eligibility_spec_resource));
+
+  // Fetch the plan and init checkpoint resources if they need to be fetched
+  // (using the inline data instead if available).
+  absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
+      resource_responses;
+  {
+    auto started_stopwatch = network_stopwatch_->Start();
+    resource_responses = FetchResourcesInMemory(
+        *http_client_, *interruptible_runner_,
+        {population_eligibility_spec_uri_or_data}, &bytes_downloaded_,
+        &bytes_uploaded_, resource_cache_);
+  }
+  FCP_RETURN_IF_ERROR(resource_responses);
+  auto& response = (*resource_responses)[0];
+
+  // Note: we forward any error during the fetching of the plan/checkpoint
+  // resources resources to the caller, which means that these error codes
+  // will be checked against the set of 'permanent' error codes, just like the
+  // errors in response to the protocol request are.
+  if (!response.ok()) {
+    return absl::Status(
+        response.status().code(),
+        absl::StrCat("population eligibility spec fetch failed: ",
+                     response.status().ToString()));
+  }
+  PopulationEligibilitySpec population_eligibility_spec;
+  if (!ParseFromStringOrCord(population_eligibility_spec, response->body)) {
+    return absl::InvalidArgumentError(
+        "Unable to parse PopulationEligibilitySpec.");
+  }
+  return population_eligibility_spec;
 }
 
 void HttpFederatedProtocol::UpdateObjectStateIfPermanentError(

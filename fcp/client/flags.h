@@ -209,6 +209,11 @@ class Flags {
   // If true, enables an Example Query plan engine to be invoked for
   // non-TensorFlow tasks.
   virtual bool enable_example_query_plan_engine() const { return false; }
+
+  // If true, the HTTP federated protocol supports multiple task assignments.
+  virtual bool http_protocol_supports_multiple_task_assignments() const {
+    return false;
+  }
 };
 }  // namespace client
 }  // namespace fcp

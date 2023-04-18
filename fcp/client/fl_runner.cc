@@ -42,6 +42,7 @@
 #include "fcp/client/engine/example_query_plan_engine.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/opstats/opstats_utils.h"
+#include "fcp/client/parsing_utils.h"
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
 #include "fcp/client/engine/simple_plan_engine.h"
@@ -68,6 +69,7 @@
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
+#include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "openssl/digest.h"
@@ -86,6 +88,7 @@ using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federated::plan::FederatedComputeEligibilityIORouter;
 using ::google::internal::federated::plan::FederatedComputeIORouter;
 using ::google::internal::federated::plan::TensorflowSpec;
+using ::google::internal::federatedcompute::v1::PopulationEligibilitySpec;
 using ::google::internal::federatedml::v2::RetryWindow;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 
@@ -100,18 +103,6 @@ void AddValuesToQuantized(QuantizedTensor* quantized,
   quantized->values.reserve(quantized->values.size() + flat_tensor.size());
   for (int i = 0; i < flat_tensor.size(); i++) {
     quantized->values.push_back(flat_tensor(i));
-  }
-}
-
-// Parses a proto from either an std::string or an absl::Cord. This allows the
-// proto data to be provided in either format.
-template <typename MessageT>
-bool ParseFromStringOrCord(MessageT& proto,
-                           std::variant<std::string, absl::Cord> data) {
-  if (std::holds_alternative<std::string>(data)) {
-    return proto.ParseFromString(std::get<std::string>(data));
-  } else {
-    return proto.ParseFromString(std::string(std::get<absl::Cord>(data)));
   }
 }
 
@@ -860,6 +851,49 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
   return task_eligibility_info;
 }
 
+struct EligibilityEvalResult {
+  std::optional<TaskEligibilityInfo> task_eligibility_info;
+  std::vector<std::string> task_names_for_multiple_task_assignments;
+};
+
+// Create an EligibilityEvalResult from a TaskEligibilityInfo and
+// PopulationEligibilitySpec.  If both population_spec and task_eligibility_info
+// are present, the returned EligibilityEvalResult will contain a
+// TaskEligibilityInfo which only contains the tasks for single task assignment,
+// and a vector of task names for multiple task assignment.
+EligibilityEvalResult CreateEligibilityEvalResult(
+    const std::optional<TaskEligibilityInfo>& task_eligibility_info,
+    const std::optional<PopulationEligibilitySpec>& population_spec) {
+  EligibilityEvalResult result;
+  if (population_spec.has_value() && task_eligibility_info.has_value()) {
+    absl::flat_hash_set<std::string> task_names_for_multiple_task_assignments;
+    for (const auto& task_info : population_spec.value().task_info()) {
+      if (task_info.task_assignment_mode() ==
+          PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE) {
+        task_names_for_multiple_task_assignments.insert(task_info.task_name());
+      }
+    }
+    TaskEligibilityInfo single_task_assignment_eligibility_info;
+    single_task_assignment_eligibility_info.set_version(
+        task_eligibility_info.value().version());
+    for (const auto& task_weight :
+         task_eligibility_info.value().task_weights()) {
+      if (task_names_for_multiple_task_assignments.contains(
+              task_weight.task_name())) {
+        result.task_names_for_multiple_task_assignments.push_back(
+            task_weight.task_name());
+      } else {
+        *single_task_assignment_eligibility_info.mutable_task_weights()->Add() =
+            task_weight;
+      }
+    }
+    result.task_eligibility_info = single_task_assignment_eligibility_info;
+  } else {
+    result.task_eligibility_info = task_eligibility_info;
+  }
+  return result;
+}
+
 // Issues an eligibility eval checkin request and executes the eligibility eval
 // task if the server returns one.
 //
@@ -874,8 +908,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
 // - an INTERNAL error if the server rejects the client or another error occurs
 //   that should abort the training run. The error will already have been logged
 //   appropriately.
-absl::StatusOr<std::optional<TaskEligibilityInfo>>
-IssueEligibilityEvalCheckinAndRunPlan(
+absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     std::function<bool()> should_abort, PhaseLogger& phase_logger, Files* files,
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
@@ -1001,6 +1034,8 @@ IssueEligibilityEvalCheckinAndRunPlan(
     return absl::InternalError("");
   }
 
+  EligibilityEvalResult result;
+
   if (std::holds_alternative<FederatedProtocol::Rejection>(
           *eligibility_checkin_result)) {
     phase_logger.LogEligibilityEvalCheckinTurnedAway(
@@ -1022,15 +1057,16 @@ IssueEligibilityEvalCheckinAndRunPlan(
     // the population then there is nothing more to do. We simply proceed to
     // the "checkin" phase below without providing it a TaskEligibilityInfo
     // proto.
-    return std::nullopt;
+    result.task_eligibility_info = std::nullopt;
+    return result;
   }
 
-  // Parse and run the eligibility eval task if the server returned one.
-  // Now we have a EligibilityEvalTask, if an error happens, we will report to
-  // the server via the ReportEligibilityEvalError.
   auto eligibility_eval_task =
       absl::get<FederatedProtocol::EligibilityEvalTask>(
           *eligibility_checkin_result);
+  // Parse and run the eligibility eval task if the server returned one.
+  // Now we have a EligibilityEvalTask, if an error happens, we will report to
+  // the server via the ReportEligibilityEvalError.
   absl::StatusOr<std::optional<TaskEligibilityInfo>> task_eligibility_info =
       RunEligibilityEvalPlan(
           eligibility_eval_task, example_iterator_factories, should_abort,
@@ -1055,7 +1091,9 @@ IssueEligibilityEvalCheckinAndRunPlan(
                                      phase_logger, fl_runner_result);
     return task_eligibility_info.status();
   }
-  return task_eligibility_info;
+  return CreateEligibilityEvalResult(
+      *task_eligibility_info,
+      eligibility_eval_task.population_eligibility_spec);
 }
 
 struct CheckinResult {
@@ -1483,7 +1521,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   // Note that this method will update fl_runner_result's fields with values
   // received over the course of the eligibility eval protocol interaction.
-  absl::StatusOr<std::optional<TaskEligibilityInfo>> eligibility_eval_result =
+  absl::StatusOr<EligibilityEvalResult> eligibility_eval_result =
       IssueEligibilityEvalCheckinAndRunPlan(
           eligibility_example_iterator_factories, should_abort, phase_logger,
           files, log_manager, opstats_logger, flags, federated_protocol,
@@ -1494,8 +1532,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
 
   auto checkin_result =
       IssueCheckin(phase_logger, log_manager, files, federated_protocol,
-                   std::move(*eligibility_eval_result), reference_time,
-                   population_name, fl_runner_result, flags);
+                   std::move(eligibility_eval_result->task_eligibility_info),
+                   reference_time, population_name, fl_runner_result, flags);
 
   if (!checkin_result.ok()) {
     return fl_runner_result;

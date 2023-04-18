@@ -31,6 +31,7 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
+#include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp {
@@ -104,6 +105,9 @@ class FederatedProtocol {
   struct EligibilityEvalTask {
     PlanAndCheckpointPayloads payloads;
     std::string execution_id;
+    std::optional<
+        google::internal::federatedcompute::v1::PopulationEligibilitySpec>
+        population_eligibility_spec;
   };
   // A rejection of a client by the server.
   struct Rejection {};
@@ -240,9 +244,8 @@ class FederatedProtocol {
   //     message.
   //   - INTERNAL for other unexpected client-side errors.
   //   - any server-provided error code.
-  virtual absl::Status ReportCompleted(
-      ComputationResults results,
-      absl::Duration plan_duration) = 0;
+  virtual absl::Status ReportCompleted(ComputationResults results,
+                                       absl::Duration plan_duration) = 0;
 
   // Reports the unsuccessful result of a federated computation to the server.
   // Must only be called once and after a successful call to Checkin().

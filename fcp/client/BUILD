@@ -142,6 +142,7 @@ cc_library(
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
+        "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -343,6 +344,7 @@ cc_library(
         ":histogram_counters_cc_proto",
         ":interfaces",
         ":interruptible_runner",
+        ":parsing_utils",
         ":phase_logger",
         ":phase_logger_impl",
         ":secagg_runner",
@@ -366,6 +368,7 @@ cc_library(
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
         "//fcp/protos:plan_cc_proto",
+        "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@boringssl//:crypto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -483,6 +486,12 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
     ],
+)
+
+cc_library(
+    name = "parsing_utils",
+    hdrs = ["parsing_utils.h"],
+    deps = ["@com_google_absl//absl/strings:cord"],
 )
 
 cc_test(

@@ -142,6 +142,7 @@ cc_library(
         "//fcp/client:fl_runner_cc_proto",
         "//fcp/client:interfaces",
         "//fcp/client:interruptible_runner",
+        "//fcp/client:parsing_utils",
         "//fcp/client:secagg_runner",
         "//fcp/client:selector_context_cc_proto",
         "//fcp/client/cache:resource_cache",

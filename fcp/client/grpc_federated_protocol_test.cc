@@ -778,7 +778,8 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   // The 'EET received' callback should be called, even if the task resource
   // data was available inline.
   EXPECT_CALL(mock_eet_received_callback_,
-              Call(FieldsAre(FieldsAre("", ""), expected_execution_id)));
+              Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
+                             Eq(std::nullopt))));
 
   auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction());
@@ -792,12 +793,12 @@ TEST_P(GrpcFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
                 VariantWith<FederatedProtocol::EligibilityEvalTask>(
                     FieldsAre(FieldsAre(absl::Cord(expected_plan),
                                         absl::Cord(expected_checkpoint)),
-                              expected_execution_id)));
+                              expected_execution_id, Eq(std::nullopt))));
   } else {
     EXPECT_THAT(*eligibility_checkin_result,
                 VariantWith<FederatedProtocol::EligibilityEvalTask>(
                     FieldsAre(FieldsAre(expected_plan, expected_checkpoint),
-                              expected_execution_id)));
+                              expected_execution_id, Eq(std::nullopt))));
   }
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
@@ -841,7 +842,8 @@ TEST_P(GrpcFederatedProtocolTest,
     // The 'EET received' callback should be called *before* the actual task
     // resources are fetched.
     EXPECT_CALL(mock_eet_received_callback_,
-                Call(FieldsAre(FieldsAre("", ""), expected_execution_id)));
+                Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
+                               Eq(std::nullopt))));
 
     EXPECT_CALL(mock_http_client_,
                 PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -876,7 +878,7 @@ TEST_P(GrpcFederatedProtocolTest,
       *eligibility_checkin_result,
       VariantWith<FederatedProtocol::EligibilityEvalTask>(FieldsAre(
           FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
-          expected_execution_id)));
+          expected_execution_id, Eq(std::nullopt))));
 }
 
 TEST_P(GrpcFederatedProtocolTest,

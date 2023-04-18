@@ -191,6 +191,13 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   absl::StatusOr<PlanAndCheckpointPayloads> FetchTaskResources(
       TaskResources task_resources);
 
+  // Helper function for fetching the PopulationEligibilitySpec.
+  absl::StatusOr<
+      google::internal::federatedcompute::v1::PopulationEligibilitySpec>
+  FetchPopulationEligibilitySpec(
+      const ::google::internal::federatedcompute::v1::Resource&
+          population_eligibility_spec_resource);
+
   // Helper that moves to the given object state if the given status represents
   // a permanent error.
   void UpdateObjectStateIfPermanentError(

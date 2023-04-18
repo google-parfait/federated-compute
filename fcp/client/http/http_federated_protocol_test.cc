@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -77,6 +78,7 @@ using ::google::internal::federatedcompute::v1::EligibilityEvalTask;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
+using ::google::internal::federatedcompute::v1::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::
     ReportEligibilityEvalTaskResultRequest;
 using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;
@@ -287,7 +289,8 @@ void ExpectRejectedRetryWindow(
   EXPECT_THAT(retry_window.delay_max(), EqualsProto(retry_window.delay_min()));
 }
 
-EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest() {
+EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest(
+    bool supports_multiple_task_assignments = false) {
   EligibilityEvalTaskRequest request;
   // Note: we don't expect population_name to be set, since it should be set in
   // the URI instead.
@@ -296,13 +299,16 @@ EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest() {
   request.mutable_resource_capabilities()
       ->mutable_supported_compression_formats()
       ->Add(ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
-
+  request.mutable_eligibility_eval_task_capabilities()
+      ->set_supports_multiple_task_assignment(
+          supports_multiple_task_assignments);
   return request;
 }
 
 EligibilityEvalTaskResponse GetFakeEnabledEligibilityEvalTaskResponse(
     const Resource& plan, const Resource& checkpoint,
     const std::string& execution_id,
+    std::optional<Resource> population_eligibility_spec = std::nullopt,
     const RetryWindow& accepted_retry_window = GetAcceptedRetryWindow(),
     const RetryWindow& rejected_retry_window = GetRejectedRetryWindow()) {
   EligibilityEvalTaskResponse response;
@@ -310,6 +316,10 @@ EligibilityEvalTaskResponse GetFakeEnabledEligibilityEvalTaskResponse(
   EligibilityEvalTask* eval_task = response.mutable_eligibility_eval_task();
   *eval_task->mutable_plan() = plan;
   *eval_task->mutable_init_checkpoint() = checkpoint;
+  if (population_eligibility_spec.has_value()) {
+    *eval_task->mutable_population_eligibility_spec() =
+        population_eligibility_spec.value();
+  }
   eval_task->set_execution_id(execution_id);
   ForwardingInfo* forwarding_info =
       response.mutable_task_assignment_forwarding_info();
@@ -461,6 +471,9 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     EXPECT_CALL(mock_flags_, waiting_period_sec_for_cancellation)
         .WillRepeatedly(Return(kCancellationWaitingPeriodSec));
 
+    EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+        .WillRepeatedly(Return(false));
+
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
     // before the HttpFederatedProtocol constructor is called. Using
@@ -537,9 +550,9 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     // The 'EET received' callback should be called, even if the task resource
     // data was available inline.
     if (eligibility_eval_enabled) {
-      EXPECT_CALL(
-          mock_eet_received_callback_,
-          Call(FieldsAre(FieldsAre("", ""), kEligibilityEvalExecutionId)));
+      EXPECT_CALL(mock_eet_received_callback_,
+                  Call(FieldsAre(FieldsAre("", ""), kEligibilityEvalExecutionId,
+                                 Eq(std::nullopt))));
     }
 
     return federated_protocol_
@@ -930,7 +943,8 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   // The 'EET received' callback should be called *before* the actual task
   // resources are fetched.
   EXPECT_CALL(mock_eet_received_callback_,
-              Call(FieldsAre(FieldsAre("", ""), expected_execution_id)));
+              Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
+                             Eq(std::nullopt))));
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -948,8 +962,135 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
                       absl::Cord(expected_plan)),
                 Field(&FederatedProtocol::PlanAndCheckpointPayloads::checkpoint,
                       absl::Cord(expected_checkpoint))),
-          expected_execution_id)));
+          expected_execution_id, Eq(std::nullopt))));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestEligibilityEvalCheckinWithPopulationEligibilitySpec) {
+  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+      .WillRepeatedly(Return(true));
+  // We return a fake response which requires fetching the plan via HTTP,
+  // but which has the checkpoint data available inline.
+  std::string expected_plan = kPlan;
+  std::string plan_uri = "https://fake.uri/plan";
+  Resource plan_resource;
+  plan_resource.set_uri(plan_uri);
+  std::string expected_checkpoint = kInitCheckpoint;
+  Resource checkpoint_resource;
+  checkpoint_resource.mutable_inline_resource()->set_data(expected_checkpoint);
+
+  PopulationEligibilitySpec expected_population_eligibility_spec;
+  auto task_info = expected_population_eligibility_spec.add_task_info();
+  task_info->set_task_name("task_1");
+  task_info->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  std::string population_eligibility_spec_uri =
+      "https://fake.uri/population_eligibility_spec";
+  Resource population_eligibility_spec;
+  population_eligibility_spec.set_uri(population_eligibility_spec_uri);
+  std::string expected_execution_id = kEligibilityEvalExecutionId;
+  EligibilityEvalTaskResponse eval_task_response =
+      GetFakeEnabledEligibilityEvalTaskResponse(
+          plan_resource, checkpoint_resource, expected_execution_id,
+          population_eligibility_spec);
+
+  InSequence seq;
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  EligibilityEvalTaskRequestMatcher(
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest(
+                          /* supports_multiple_task_assignments= */ true))))))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
+
+  // The 'EET received' callback should be called *before* the actual task
+  // resources are fetched.
+  EXPECT_CALL(mock_eet_received_callback_,
+              Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
+                             Eq(std::nullopt))));
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  plan_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan)));
+  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
+                                     population_eligibility_spec_uri,
+                                     HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          expected_population_eligibility_spec.SerializeAsString())));
+
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
+
+  ASSERT_OK(eligibility_checkin_result);
+  EXPECT_THAT(
+      *eligibility_checkin_result,
+      VariantWith<FederatedProtocol::EligibilityEvalTask>(FieldsAre(
+          AllOf(Field(&FederatedProtocol::PlanAndCheckpointPayloads::plan,
+                      absl::Cord(expected_plan)),
+                Field(&FederatedProtocol::PlanAndCheckpointPayloads::checkpoint,
+                      absl::Cord(expected_checkpoint))),
+          expected_execution_id,
+          Optional(EqualsProto(expected_population_eligibility_spec)))));
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestEligibilityEvalCheckinWithPopulationEligibilitySpecInvalidFormat) {
+  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+      .WillRepeatedly(Return(true));
+  // We return a fake response which requires fetching the plan via HTTP,
+  // but which has the checkpoint data available inline.
+  std::string expected_plan = kPlan;
+  std::string plan_uri = "https://fake.uri/plan";
+  Resource plan_resource;
+  plan_resource.set_uri(plan_uri);
+  std::string expected_checkpoint = kInitCheckpoint;
+  Resource checkpoint_resource;
+  checkpoint_resource.mutable_inline_resource()->set_data(expected_checkpoint);
+
+  Resource population_eligibility_spec;
+  population_eligibility_spec.mutable_inline_resource()->set_data(
+      "Invalid_spec");
+  std::string expected_execution_id = kEligibilityEvalExecutionId;
+  EligibilityEvalTaskResponse eval_task_response =
+      GetFakeEnabledEligibilityEvalTaskResponse(
+          plan_resource, checkpoint_resource, expected_execution_id,
+          population_eligibility_spec);
+
+  InSequence seq;
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/eligibilityevaltasks/"
+                  "TEST%2FPOPULATION:request?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  EligibilityEvalTaskRequestMatcher(
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest(
+                          /* supports_multiple_task_assignments= */ true))))))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(), eval_task_response.SerializeAsString())));
+
+  // The 'EET received' callback should be called *before* the actual task
+  // resources are fetched.
+  EXPECT_CALL(mock_eet_received_callback_,
+              Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
+                             Eq(std::nullopt))));
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  plan_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan)));
+
+  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
+      mock_eet_received_callback_.AsStdFunction());
+
+  ASSERT_THAT(eligibility_checkin_result, IsCode(INVALID_ARGUMENT));
+  ExpectPermanentErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
 TEST_F(HttpFederatedProtocolTest,
@@ -993,7 +1134,7 @@ TEST_F(HttpFederatedProtocolTest,
                       absl::Cord(expected_plan)),
                 Field(&FederatedProtocol::PlanAndCheckpointPayloads::checkpoint,
                       absl::Cord(expected_checkpoint))),
-          expected_execution_id)));
+          expected_execution_id, Eq(std::nullopt))));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -1129,9 +1270,9 @@ TEST_F(HttpFederatedProtocolTest,
   expected_retry_window.mutable_delay_max()->set_seconds(0);
 
   EligibilityEvalTaskResponse eval_task_response =
-      GetFakeEnabledEligibilityEvalTaskResponse(Resource(), Resource(),
-                                                kEligibilityEvalExecutionId,
-                                                retry_window, retry_window);
+      GetFakeEnabledEligibilityEvalTaskResponse(
+          Resource(), Resource(), kEligibilityEvalExecutionId, std::nullopt,
+          retry_window, retry_window);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
@@ -1164,9 +1305,9 @@ TEST_F(HttpFederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
   retry_window.mutable_delay_max()->set_seconds(1233);  // less than delay_min
 
   EligibilityEvalTaskResponse eval_task_response =
-      GetFakeEnabledEligibilityEvalTaskResponse(Resource(), Resource(),
-                                                kEligibilityEvalExecutionId,
-                                                retry_window, retry_window);
+      GetFakeEnabledEligibilityEvalTaskResponse(
+          Resource(), Resource(), kEligibilityEvalExecutionId, std::nullopt,
+          retry_window, retry_window);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
@@ -2844,6 +2985,8 @@ TEST_F(HttpFederatedProtocolTest,
   expected_eligibility_request.mutable_resource_capabilities()
       ->add_supported_compression_formats(
           ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  expected_eligibility_request.mutable_eligibility_eval_task_capabilities()
+      ->set_supports_multiple_task_assignment(false);
 
   // Issue an eligibility eval checkin so we can validate the field is set.
   Resource eligibility_plan_resource;
