@@ -87,6 +87,7 @@ class TaskAssignmentsTest(absltest.TestCase):
         'aggregation-session',
         common_pb2.Resource(uri='https://task.example/plan'),
         common_pb2.Resource(uri='https://task.example/checkpoint'),
+        'https://task.example/{key_base10}',
     )
 
     request = task_assignments_pb2.StartTaskAssignmentRequest(
@@ -113,12 +114,14 @@ class TaskAssignmentsTest(absltest.TestCase):
 
     task_plan = common_pb2.Resource(uri='https://task.example/plan')
     task_checkpoint = common_pb2.Resource(uri='https://task.example/checkpoint')
+    task_federated_select_uri_template = 'https://task.example/{key_base10}'
     service.add_task(
         'task',
         _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE,
         'aggregation-session',
         task_plan,
         task_checkpoint,
+        task_federated_select_uri_template,
     )
 
     request = task_assignments_pb2.StartTaskAssignmentRequest(
@@ -140,13 +143,22 @@ class TaskAssignmentsTest(absltest.TestCase):
             task_assignment=task_assignments_pb2.TaskAssignment(
                 aggregation_data_forwarding_info=FORWARDING_INFO,
                 aggregation_info=(
-                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()
+                ),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session',
                 authorization_token='token',
                 task_name='task',
                 plan=task_plan,
-                init_checkpoint=task_checkpoint)))
+                init_checkpoint=task_checkpoint,
+                federated_select_uri_info=(
+                    task_assignments_pb2.FederatedSelectUriInfo(
+                        uri_template=task_federated_select_uri_template
+                    )
+                ),
+            )
+        ),
+    )
 
     self.mock_aggregations_service.pre_authorize_clients.assert_called_once_with(
         'aggregation-session', num_tokens=1)
@@ -162,22 +174,26 @@ class TaskAssignmentsTest(absltest.TestCase):
     task1_plan = common_pb2.Resource(uri='https://task1.example/plan')
     task1_checkpoint = common_pb2.Resource(
         uri='https://task1.example/checkpoint')
+    task1_federated_select_uri_template = 'https://task1.example/{key_base10}'
     service.add_task(
         'task1',
         _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE,
         'aggregation-session1',
         task1_plan,
         task1_checkpoint,
+        task1_federated_select_uri_template,
     )
     task2_plan = common_pb2.Resource(uri='https://task2.example/plan')
     task2_checkpoint = common_pb2.Resource(
         uri='https://task2.example/checkpoint')
+    task2_federated_select_uri_template = 'https://task2.example/{key_base10}'
     service.add_task(
         'task2',
         _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE,
         'aggregation-session2',
         task2_plan,
         task2_checkpoint,
+        task2_federated_select_uri_template,
     )
 
     request = task_assignments_pb2.StartTaskAssignmentRequest(
@@ -193,13 +209,22 @@ class TaskAssignmentsTest(absltest.TestCase):
             task_assignment=task_assignments_pb2.TaskAssignment(
                 aggregation_data_forwarding_info=FORWARDING_INFO,
                 aggregation_info=(
-                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()
+                ),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session1',
                 authorization_token='token',
                 task_name='task1',
                 plan=task1_plan,
-                init_checkpoint=task1_checkpoint)))
+                init_checkpoint=task1_checkpoint,
+                federated_select_uri_info=(
+                    task_assignments_pb2.FederatedSelectUriInfo(
+                        uri_template=task1_federated_select_uri_template
+                    )
+                ),
+            )
+        ),
+    )
     self.mock_aggregations_service.pre_authorize_clients.assert_called_with(
         'aggregation-session1', num_tokens=1)
 
@@ -214,13 +239,22 @@ class TaskAssignmentsTest(absltest.TestCase):
             task_assignment=task_assignments_pb2.TaskAssignment(
                 aggregation_data_forwarding_info=FORWARDING_INFO,
                 aggregation_info=(
-                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()
+                ),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session2',
                 authorization_token='token',
                 task_name='task2',
                 plan=task2_plan,
-                init_checkpoint=task2_checkpoint)))
+                init_checkpoint=task2_checkpoint,
+                federated_select_uri_info=(
+                    task_assignments_pb2.FederatedSelectUriInfo(
+                        uri_template=task2_federated_select_uri_template
+                    )
+                ),
+            )
+        ),
+    )
     self.mock_aggregations_service.pre_authorize_clients.assert_called_with(
         'aggregation-session2', num_tokens=1)
 
@@ -266,34 +300,40 @@ class TaskAssignmentsTest(absltest.TestCase):
     task1_plan = common_pb2.Resource(uri='https://task1.example/plan')
     task1_checkpoint = common_pb2.Resource(
         uri='https://task1.example/checkpoint')
+    task1_federated_select_uri_template = 'https://task1.example/{key_base10}'
     service.add_task(
         'task1',
         _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
         'aggregation-session1',
         task1_plan,
         task1_checkpoint,
+        task1_federated_select_uri_template,
     )
     task2_plan = common_pb2.Resource(uri='https://task2.example/plan')
     task2_checkpoint = common_pb2.Resource(
         uri='https://task2.example/checkpoint')
+    task2_federated_select_uri_template = 'https://task2.example/{key_base10}'
     service.add_task(
         'task2',
         _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
         'aggregation-session2',
         task2_plan,
         task2_checkpoint,
+        task2_federated_select_uri_template,
     )
     # Tasks using other TaskAssignmentModes should be skipped.
     task3_plan = common_pb2.Resource(uri='https://task3.example/plan')
     task3_checkpoint = common_pb2.Resource(
         uri='https://task3.example/checkpoint'
     )
+    task3_federated_select_uri_template = 'https://task3.example/{key_base10}'
     service.add_task(
         'task3',
         _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE,
         'aggregation-session3',
         task3_plan,
         task3_checkpoint,
+        task3_federated_select_uri_template,
     )
 
     request = task_assignments_pb2.PerformMultipleTaskAssignmentsRequest(
@@ -306,25 +346,40 @@ class TaskAssignmentsTest(absltest.TestCase):
             task_assignments_pb2.TaskAssignment(
                 aggregation_data_forwarding_info=FORWARDING_INFO,
                 aggregation_info=(
-                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()
+                ),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session1',
                 authorization_token='token-for-aggregation-session1',
                 task_name='task1',
                 plan=task1_plan,
-                init_checkpoint=task1_checkpoint),
+                init_checkpoint=task1_checkpoint,
+                federated_select_uri_info=(
+                    task_assignments_pb2.FederatedSelectUriInfo(
+                        uri_template=task1_federated_select_uri_template
+                    )
+                ),
+            ),
             task_assignments_pb2.TaskAssignment(
                 aggregation_data_forwarding_info=FORWARDING_INFO,
                 aggregation_info=(
-                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()
+                ),
                 session_id=request.session_id,
                 aggregation_id='aggregation-session2',
                 authorization_token='token-for-aggregation-session2',
                 task_name='task2',
                 plan=task2_plan,
-                init_checkpoint=task2_checkpoint),
+                init_checkpoint=task2_checkpoint,
+                federated_select_uri_info=(
+                    task_assignments_pb2.FederatedSelectUriInfo(
+                        uri_template=task2_federated_select_uri_template
+                    )
+                ),
+            ),
             # 'task3' should be omitted since there isn't a corresponding task.
-        ])
+        ],
+    )
 
   def test_add_task_with_invalid_task_assignment_mode(self):
     service = task_assignments.Service(
@@ -337,6 +392,7 @@ class TaskAssignmentsTest(absltest.TestCase):
           'aggregation-session',
           common_pb2.Resource(uri='https://task.example/plan'),
           common_pb2.Resource(uri='https://task.example/checkpoint'),
+          'https://task.example/{key_base10}',
       )
 
   def test_remove_multiple_assignment_task(self):
@@ -349,6 +405,7 @@ class TaskAssignmentsTest(absltest.TestCase):
         'aggregation-session',
         common_pb2.Resource(uri='https://task.example/plan'),
         common_pb2.Resource(uri='https://task.example/checkpoint'),
+        'https://task.example/{key_base10}',
     )
     service.remove_task('aggregation-session')
 

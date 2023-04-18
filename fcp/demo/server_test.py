@@ -14,12 +14,15 @@
 """Tests for server."""
 
 import asyncio
+import gzip
 import http
 import http.client
 import os
 import threading
 import unittest
+from unittest import mock
 import urllib.parse
+import urllib.request
 
 from absl import flags
 from absl import logging
@@ -27,6 +30,7 @@ from absl.testing import absltest
 import tensorflow as tf
 
 from google.longrunning import operations_pb2
+from fcp.demo import plan_utils
 from fcp.demo import server
 from fcp.demo import test_utils
 from fcp.protos import plan_pb2
@@ -41,6 +45,10 @@ _TaskAssignmentMode = (
 POPULATION_NAME = 'test/population'
 CAP_TENSOR_NAME = 'cap'
 COUNT_TENSOR_NAME = 'count'
+TEST_SLICES = {
+    'id1': [b'1-1', b'1-2', b'1-3'],
+    'id2': [b'2-1', b'2-2'],
+}
 
 
 def create_plan() -> plan_pb2.Plan:
@@ -154,7 +162,7 @@ class ServerTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     self.server.server_close()
     super().tearDown()
 
-  async def wait_for_task(self):
+  async def wait_for_task(self) -> task_assignments_pb2.TaskAssignment:
     """Polls the server until a task is being served."""
     pop = urllib.parse.quote(POPULATION_NAME, safe='')
     url = f'/v1/populations/{pop}/taskassignments/test:start?%24alt=proto'
@@ -169,7 +177,7 @@ class ServerTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         if response.HasField('task_assignment'):
           logging.info('wait_for_task received assignment to %s',
                        response.task_assignment.task_name)
-          break
+          return response.task_assignment
       await asyncio.sleep(0.5)
 
   async def test_run_computation(self):
@@ -227,6 +235,49 @@ class ServerTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         run_computation_task.result(), COUNT_TENSOR_NAME, tf.int32)
     self.assertEqual(
         result, initial_count + sum([min(n, cap) for n in examples_per_client]))
+
+  @mock.patch.object(
+      plan_utils.Session,
+      'slices',
+      new=property(lambda unused_self: TEST_SLICES),
+  )
+  async def test_federated_select(self):
+    checkpoint = test_utils.create_checkpoint({
+        CAP_TENSOR_NAME: 100,
+        COUNT_TENSOR_NAME: 0,
+    })
+    run_computation_task = asyncio.create_task(
+        self.server.run_computation(
+            'task/name',
+            create_plan(),
+            checkpoint,
+            _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE,
+            1,
+        )
+    )
+
+    # Wait for task assignment to return a task.
+    wait_task = asyncio.create_task(self.wait_for_task())
+    await asyncio.wait(
+        [run_computation_task, wait_task],
+        timeout=10,
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    self.assertTrue(wait_task.done())
+    uri_template = wait_task.result().federated_select_uri_info.uri_template
+    self.assertNotEmpty(uri_template)
+
+    # Check the contents of the slices.
+    for served_at_id, slices in TEST_SLICES.items():
+      for i, slice_data in enumerate(slices):
+        with urllib.request.urlopen(
+            uri_template.format(served_at_id=served_at_id, key_base10=str(i))
+        ) as response:
+          self.assertEqual(
+              response.getheader('Content-Type'),
+              'application/octet-stream+gzip',
+          )
+          self.assertEqual(gzip.decompress(response.read()), slice_data)
 
 
 if __name__ == '__main__':

@@ -37,6 +37,17 @@ _TaskAssignmentMode = (
     eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
 )
 
+# Template for file name for federated select slices. See
+# `FederatedSelectUriInfo.uri_template` for the meaning of the "{served_at_id}"
+# and "{key_base10}" substrings.
+_FEDERATED_SELECT_NAME_TEMPLATE = '{served_at_id}_{key_base10}'
+
+# Content type used for serialized and compressed Plan messages.
+_PLAN_CONTENT_TYPE = 'application/x-protobuf+gzip'
+
+# Content type used for serialzied and compressed TensorFlow checkpoints.
+_CHECKPOINT_CONTENT_TYPE = 'application/octet-stream+gzip'
+
 
 class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
   """An in-process HTTP server implementing the Federated Compute protocol."""
@@ -100,11 +111,22 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
           plan_url = group.add(
               'plan',
               gzip.compress(session.client_plan),
-              content_type='application/x-protobuf+gzip')
+              content_type=_PLAN_CONTENT_TYPE,
+          )
           checkpoint_url = group.add(
               'checkpoint',
               gzip.compress(session.client_checkpoint),
-              content_type='application/octet-stream+gzip')
+              content_type=_CHECKPOINT_CONTENT_TYPE,
+          )
+          for served_at_id, slices in session.slices.items():
+            for i, slice_data in enumerate(slices):
+              group.add(
+                  _FEDERATED_SELECT_NAME_TEMPLATE.format(
+                      served_at_id=served_at_id, key_base10=str(i)
+                  ),
+                  gzip.compress(slice_data),
+                  content_type=_CHECKPOINT_CONTENT_TYPE,
+              )
           self._eligibility_eval_tasks_service.add_task(
               task_name, task_assignment_mode
           )
@@ -114,6 +136,7 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
               session_id,
               common_pb2.Resource(uri=plan_url),
               common_pb2.Resource(uri=checkpoint_url),
+              group.prefix + _FEDERATED_SELECT_NAME_TEMPLATE,
           )
           try:
             status = await self._aggregations_service.wait(

@@ -19,11 +19,14 @@ and when it should be run.
 
 import functools
 import tempfile
+from typing import Any, Optional
+import uuid
 
 import tensorflow as tf
 
 from google.protobuf import message
 from fcp.protos import plan_pb2
+from fcp.tensorflow import serve_slices as serve_slices_registry
 
 
 class Session:
@@ -51,8 +54,23 @@ class Session:
     self._plan = plan
     self._restore_state(plan.server_savepoint, checkpoint)
     self._maybe_run(plan.phase[0].server_phase.phase_init_op)
-    self._client_checkpoint = self._save_state(
-        plan.phase[0].server_phase.write_client_init)
+
+    serve_slices_calls = []
+
+    def record_serve_slices_call(*args):
+      served_at_id = str(uuid.uuid4())
+      serve_slices_calls.append((served_at_id, args))
+      return served_at_id
+
+    with serve_slices_registry.register_serve_slices_callback(
+        record_serve_slices_call
+    ) as token:
+      self._client_checkpoint = self._save_state(
+          plan.phase[0].server_phase.write_client_init, session_token=token
+      )
+    self._slices = {
+        k: self._build_slices(*args) for k, args in serve_slices_calls
+    }
 
   def __enter__(self) -> 'Session':
     self._session.__enter__()
@@ -65,10 +83,12 @@ class Session:
     """Closes the session, releasing resources."""
     self._session.close()
 
-  def _maybe_run(self, op: str) -> None:
+  def _maybe_run(
+      self, op: str, feed_dict: Optional[dict[str, Any]] = None
+  ) -> None:
     """Runs an operation if it's non-empty."""
     if op:
-      self._session.run(op)
+      self._session.run(op, feed_dict=feed_dict)
 
   def _restore_state(self, checkpoint_op: plan_pb2.CheckpointOp,
                      checkpoint: bytes) -> None:
@@ -83,21 +103,69 @@ class Session:
             {checkpoint_op.saver_def.filename_tensor_name: tmpfile.name})
     self._maybe_run(checkpoint_op.after_restore_op)
 
-  def _save_state(self, checkpoint_op: plan_pb2.CheckpointOp) -> bytes:
+  def _save_state(
+      self,
+      checkpoint_op: plan_pb2.CheckpointOp,
+      session_token: Optional[bytes] = None,
+  ) -> bytes:
     """Saves state to a TensorFlow checkpoint."""
-    self._maybe_run(checkpoint_op.before_save_op)
+    before_and_after_inputs = {}
+    if session_token and checkpoint_op.session_token_tensor_name:
+      before_and_after_inputs[checkpoint_op.session_token_tensor_name] = (
+          session_token
+      )
+
+    self._maybe_run(
+        checkpoint_op.before_save_op, feed_dict=before_and_after_inputs
+    )
     result = b''
     if checkpoint_op.HasField('saver_def'):
       with tempfile.NamedTemporaryFile() as tmpfile:
+        save_tensor_inputs = before_and_after_inputs.copy()
+        save_tensor_inputs[checkpoint_op.saver_def.filename_tensor_name] = (
+            tmpfile.name
+        )
         self._session.run(
             checkpoint_op.saver_def.save_tensor_name,
-            {checkpoint_op.saver_def.filename_tensor_name: tmpfile.name})
+            feed_dict=save_tensor_inputs,
+        )
         # TensorFlow overwrites (via move) the output file, so the data can't be
         # read from the filehandle. Deletion still works properly, though.
         with open(tmpfile.name, 'rb') as f:
           result = f.read()
-    self._maybe_run(checkpoint_op.after_save_op)
+    self._maybe_run(
+        checkpoint_op.after_save_op, feed_dict=before_and_after_inputs
+    )
     return result
+
+  def _build_slices(
+      self,
+      callback_token: bytes,
+      server_val: list[Any],
+      max_key: int,
+      select_fn_initialize_op: str,
+      select_fn_server_val_input_tensor_names: list[str],
+      select_fn_key_input_tensor_name: str,
+      select_fn_filename_input_tensor_name: str,
+      select_fn_target_tensor_name: str,
+  ):
+    """Builds the slices for a ServeSlices call."""
+    del callback_token
+    slices: list[bytes] = []
+    for i in range(0, max_key + 1):
+      self._maybe_run(select_fn_initialize_op)
+      with tempfile.NamedTemporaryFile() as tmpfile:
+        feed_dict = dict(
+            zip(select_fn_server_val_input_tensor_names, server_val)
+        )
+        feed_dict[select_fn_key_input_tensor_name] = i
+        feed_dict[select_fn_filename_input_tensor_name] = tmpfile.name
+        self._session.run(select_fn_target_tensor_name, feed_dict=feed_dict)
+        # TensorFlow overwrites (via move) the output file, so the data can't be
+        # read from the filehandle. Deletion still works properly, though.
+        with open(tmpfile.name, 'rb') as f:
+          slices.append(f.read())
+    return slices
 
   @functools.cached_property
   def client_plan(self) -> bytes:
@@ -127,3 +195,9 @@ class Session:
     self._maybe_run(
         self._plan.phase[0].server_phase.apply_aggregrated_updates_op)
     return self._save_state(self._plan.server_savepoint)
+
+  @property
+  def slices(self) -> dict[str, list[bytes]]:
+    """The Federated Select slices, keyed by served_at_id."""
+    # Return a copy to prevent mutations.
+    return self._slices.copy()

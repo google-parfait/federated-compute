@@ -42,6 +42,7 @@ class _Task:
   aggregation_session_id: str
   init_checkpoint: common_pb2.Resource
   plan: common_pb2.Resource
+  federated_select_uri_template: str
 
 
 class Service:
@@ -64,6 +65,7 @@ class Service:
       aggregation_session_id: str,
       plan: common_pb2.Resource,
       init_checkpoint: common_pb2.Resource,
+      federated_select_uri_template: str,
   ):
     """Adds a new task to the service."""
     task = _Task(
@@ -71,6 +73,7 @@ class Service:
         aggregation_session_id=aggregation_session_id,
         init_checkpoint=init_checkpoint,
         plan=plan,
+        federated_select_uri_template=federated_select_uri_template,
     )
     if task_assignment_mode == _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE:
       with self._tasks_lock:
@@ -134,13 +137,21 @@ class Service:
           task_assignment=task_assignments_pb2.TaskAssignment(
               aggregation_data_forwarding_info=self._forwarding_info(),
               aggregation_info=(
-                  task_assignments_pb2.TaskAssignment.AggregationInfo()),
+                  task_assignments_pb2.TaskAssignment.AggregationInfo()
+              ),
               session_id=request.session_id,
               aggregation_id=task.aggregation_session_id,
               authorization_token=authorization_token,
               task_name=task.task_name,
               init_checkpoint=task.init_checkpoint,
-              plan=task.plan))
+              plan=task.plan,
+              federated_select_uri_info=(
+                  task_assignments_pb2.FederatedSelectUriInfo(
+                      uri_template=task.federated_select_uri_template
+                  )
+              ),
+          )
+      )
     else:
       # NOTE: Instead of immediately rejecting clients, a production
       # implementation may keep around some number of clients to be assigned to
@@ -183,13 +194,21 @@ class Service:
             task_assignments_pb2.TaskAssignment(
                 aggregation_data_forwarding_info=self._forwarding_info(),
                 aggregation_info=(
-                    task_assignments_pb2.TaskAssignment.AggregationInfo()),
+                    task_assignments_pb2.TaskAssignment.AggregationInfo()
+                ),
                 session_id=request.session_id,
                 aggregation_id=task.aggregation_session_id,
                 authorization_token=authorization_token,
                 task_name=task.task_name,
                 init_checkpoint=task.init_checkpoint,
-                plan=task.plan))
+                plan=task.plan,
+                federated_select_uri_info=(
+                    task_assignments_pb2.FederatedSelectUriInfo(
+                        uri_template=task.federated_select_uri_template
+                    )
+                ),
+            )
+        )
 
     return task_assignments_pb2.PerformMultipleTaskAssignmentsResponse(
         task_assignments=task_assignments)
