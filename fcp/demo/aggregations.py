@@ -329,6 +329,8 @@ class Service:
       self, plan_aggregation_config: plan_pb2.ServerAggregationConfig
   ) -> configuration_pb2.Configuration.ServerAggregationConfig:
     """Transform the aggregation config for use by the aggregation service."""
+    if plan_aggregation_config.inner_aggregations:
+      raise AssertionError('Nested intrinsic structrues are not supported yet.')
     return configuration_pb2.Configuration.ServerAggregationConfig(
         intrinsic_uri=plan_aggregation_config.intrinsic_uri,
         intrinsic_args=[

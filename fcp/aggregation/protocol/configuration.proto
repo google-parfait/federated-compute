@@ -56,6 +56,11 @@ message Configuration {
 
     // List of server-side outputs produced by the aggregation operation.
     repeated tensorflow.TensorSpecProto output_tensors = 5;
+
+    // List of inner aggregation intrinsics. This can be used to delegate parts
+    // of the aggregation logic (e.g. a groupby intrinsic may want to delegate
+    // a sum operation to a sum intrinsic).
+    repeated ServerAggregationConfig inner_aggregations = 6;
   }
 
   // A list of client-to-server aggregations to perform.
