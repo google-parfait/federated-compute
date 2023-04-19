@@ -68,7 +68,7 @@ class DeleteDirOp : public OpKernel {
           LOG(WARNING) << "Failed to recursively delete the directory '"
                        << dirname << "' (remaining files: " << undeleted_files
                        << ", remaining dirs: " << undeleted_dirs << "). "
-                       << delete_status.error_message();
+                       << delete_status;
         }
       } else {
         tensorflow::Status delete_status = context->env()->DeleteDir(dirname);
@@ -76,7 +76,7 @@ class DeleteDirOp : public OpKernel {
           // The directory could be already deleted by another op. Let's not
           // propagate this error.
           LOG(WARNING) << "Failed to delete the directory '" << dirname << "'. "
-                       << delete_status.error_message();
+                       << delete_status;
         }
       }
     }
@@ -113,7 +113,7 @@ class DeleteFileOp : public OpKernel {
         // The file could be already deleted by another op. Let's not propagate
         // this error.
         LOG(WARNING) << "Failed to delete the file '" << filename << "'. "
-                     << delete_status.error_message();
+                     << delete_status;
       }
     }
   }

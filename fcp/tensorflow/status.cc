@@ -16,6 +16,8 @@
 
 #include "fcp/tensorflow/status.h"
 
+#include "tensorflow/core/public/version.h"
+
 namespace fcp {
 
 tensorflow::Status ConvertToTensorFlowStatus(Status const& status) {
@@ -33,7 +35,11 @@ tensorflow::Status ConvertToTensorFlowStatus(Status const& status) {
 
 Status ConvertFromTensorFlowStatus(tensorflow::Status const& tf_status) {
   return Status(static_cast<absl::StatusCode>(tf_status.code()),
+#if TF_GRAPH_DEF_VERSION < 1467
                 tf_status.error_message());
+#else
+                tf_status.message());
+#endif
 }
 
 }  // namespace fcp

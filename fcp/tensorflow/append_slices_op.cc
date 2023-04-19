@@ -42,6 +42,7 @@
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/platform/stringpiece.h"
 #include "tensorflow/core/protobuf/error_codes.pb.h"
+#include "tensorflow/core/public/version.h"
 #include "tensorflow/core/util/saved_tensor_slice.pb.h"
 #include "tensorflow/core/util/saved_tensor_slice_util.h"
 #include "tensorflow/core/util/tensor_slice_reader.h"
@@ -253,8 +254,13 @@ class TableBuilder : public tensorflow::checkpoint::TensorSliceWriter::Builder {
       }
     }
     if (!s.ok()) {
-      s = tensorflow::errors::Internal("Error writing (tmp) checkpoint file: ",
-                                       name_, ": ", s.error_message());
+      s = tensorflow::errors::Internal(
+#if TF_GRAPH_DEF_VERSION < 1467
+          "Error writing (tmp) checkpoint file: ", name_, ": ",
+          s.error_message());
+#else
+          "Error writing (tmp) checkpoint file: ", name_, ": ", s.message());
+#endif
     }
     return s;
   }

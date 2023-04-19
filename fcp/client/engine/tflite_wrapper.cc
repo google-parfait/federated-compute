@@ -25,6 +25,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "fcp/base/monitoring.h"
+#include "tensorflow/core/public/version.h"
 #include "tensorflow/lite/delegates/flex/util.h"
 #include "tensorflow/lite/interpreter.h"
 #include "tensorflow/lite/interpreter_builder.h"
@@ -192,7 +193,11 @@ absl::StatusOr<OutputTensors> TfLiteWrapper::ConstructOutputs() {
     auto tensor = tflite::flex::CreateTfTensorFromTfLiteTensor(
         interpreter_->tensor(output_tensor_index));
     if (!tensor.ok()) {
+#if TF_GRAPH_DEF_VERSION < 1467
       return absl::InvalidArgumentError(tensor.status().error_message());
+#else
+      return absl::InvalidArgumentError(tensor.status().message());
+#endif
     }
     output_tensors.output_tensors.push_back(*tensor);
   }

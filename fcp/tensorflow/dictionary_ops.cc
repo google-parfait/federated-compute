@@ -28,6 +28,7 @@
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/public/version.h"
 
 namespace tf = tensorflow;
 
@@ -109,7 +110,11 @@ class DictionarySize : public AbstractDictionaryOp {
     auto status =
         context->allocate_output(0, tf::TensorShape({}), &size_tensor);
     if (!status.ok()) {
+#if TF_GRAPH_DEF_VERSION < 1467
       return absl::InternalError(status.error_message());
+#else
+      return absl::InternalError(status.message());
+#endif
     }
     size_tensor->flat<int64_t>()(0) = dictionary.Size();
     return absl::OkStatus();
@@ -144,7 +149,11 @@ class DictionaryLookup : public AbstractDictionaryOp {
     auto status =
         context->allocate_output(0, token_tensor.shape(), &ids_tensor);
     if (!status.ok()) {
+#if TF_GRAPH_DEF_VERSION < 1467
       return absl::InternalError(status.error_message());
+#else
+      return absl::InternalError(status.message());
+#endif
     }
 
     if (token_tensor.dtype() != tf::DataType::DT_STRING) {
@@ -196,7 +205,11 @@ class DictionaryReverseLookup : public AbstractDictionaryOp {
     auto status =
         context->allocate_output(0, ids_tensor.shape(), &token_tensor);
     if (!status.ok()) {
+#if TF_GRAPH_DEF_VERSION < 1467
       return absl::InternalError(status.error_message());
+#else
+      return absl::InternalError(status.message());
+#endif
     }
 
     if (token_tensor->dtype() != tf::DataType::DT_STRING) {

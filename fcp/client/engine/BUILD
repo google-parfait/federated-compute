@@ -184,6 +184,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_protobuf//:protobuf",
+        "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/lite:framework_stable",
         "@org_tensorflow//tensorflow/lite:string_util",
         "@org_tensorflow//tensorflow/lite/delegates/flex:delegate_only_runtime",
