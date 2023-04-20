@@ -65,7 +65,7 @@ service TaskAssignments {
   rpc PerformMultipleTaskAssignments(PerformMultipleTaskAssignmentsRequest)
       returns (PerformMultipleTaskAssignmentsResponse) {
     option (google.api.http) = {
-      post: "/v1/populations/{population_name}/taskassignments:performmultiple"
+      post: "/v1/populations/{population_name}/taskassignments/{session_id}:performmultiple"
       body: "*"
     };
   }
