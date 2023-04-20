@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef FCP_AGGREGATION_CORE_VECTOR_DATA_H_
-#define FCP_AGGREGATION_CORE_VECTOR_DATA_H_
+#ifndef FCP_AGGREGATION_CORE_MUTABLE_VECTOR_DATA_H_
+#define FCP_AGGREGATION_CORE_MUTABLE_VECTOR_DATA_H_
 
 #include <cstddef>
 #include <vector>
@@ -25,15 +25,16 @@
 namespace fcp {
 namespace aggregation {
 
-// VectorData implements TensorData by wrapping std::vector and using it as
-// a backing storage. VectorData can be mutated using std::vector methods.
+// MutableVectorData implements TensorData by wrapping std::vector and using it
+// as a backing storage. MutableVectorData can be mutated using std::vector
+// methods.
 template <typename T>
-class VectorData : public std::vector<T>, public TensorData {
+class MutableVectorData : public std::vector<T>, public TensorData {
  public:
   // Derive constructors from the base vector class.
   using std::vector<T>::vector;
 
-  ~VectorData() override = default;
+  ~MutableVectorData() override = default;
 
   // Implementation of the base class methods.
   size_t byte_size() const override { return this->size() * sizeof(T); }
@@ -43,4 +44,4 @@ class VectorData : public std::vector<T>, public TensorData {
 }  // namespace aggregation
 }  // namespace fcp
 
-#endif  // FCP_AGGREGATION_CORE_VECTOR_DATA_H_
+#endif  // FCP_AGGREGATION_CORE_MUTABLE_VECTOR_DATA_H_

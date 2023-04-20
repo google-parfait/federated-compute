@@ -26,10 +26,10 @@
 
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
+#include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_shape.h"
-#include "fcp/aggregation/core/vector_data.h"
 #include "fcp/aggregation/core/vector_string_data.h"
 #include "fcp/base/monitoring.h"
 
@@ -114,7 +114,7 @@ void CopyToDest<string_view>(const void*& source_ptr, uint64_t* dest_ptr,
 template <typename T>
 StatusOr<Tensor> GetTensorForType(
     const std::vector<const uint64_t*>& key_iters) {
-  auto output_tensor_data = std::make_unique<VectorData<T>>();
+  auto output_tensor_data = std::make_unique<MutableVectorData<T>>();
   output_tensor_data->reserve(key_iters.size());
   for (const uint64_t* key_it : key_iters) {
     const T* ptr = reinterpret_cast<const T*>(key_it);
@@ -182,7 +182,7 @@ StatusOr<Tensor> CompositeKeyCombiner::Accumulate(
 
   // Iterate over all the TensorDataIterators at once to get the value for the
   // composite key.
-  auto ordinals = std::make_unique<VectorData<int64_t>>();
+  auto ordinals = std::make_unique<MutableVectorData<int64_t>>();
   for (int i = 0; i < shape.NumElements(); ++i) {
     // Create a string with the correct amount of memory to store an int64
     // representation of the element in each input tensor at the current

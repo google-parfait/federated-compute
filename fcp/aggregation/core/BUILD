@@ -37,7 +37,7 @@ TENSOR_HDRS = [
     "tensor_data.h",
     "tensor_shape.h",
     "tensor_spec.h",
-    "vector_data.h",
+    "mutable_vector_data.h",
 ]
 
 proto_library(
@@ -234,8 +234,8 @@ cc_test(
 )
 
 cc_test(
-    name = "vector_data_test",
-    srcs = ["vector_data_test.cc"],
+    name = "mutable_vector_data_test",
+    srcs = ["mutable_vector_data_test.cc"],
     deps = [
         ":tensor",
         "//fcp/testing",

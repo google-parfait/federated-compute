@@ -20,14 +20,15 @@
 #include <initializer_list>
 #include <memory>
 
-#include "fcp/aggregation/core/vector_data.h"
+#include "fcp/aggregation/core/mutable_vector_data.h"
 
 namespace fcp::aggregation {
 
 // Creates test tensor data based on a vector<T>.
 template <typename T>
-std::unique_ptr<VectorData<T>> CreateTestData(std::initializer_list<T> values) {
-  return std::make_unique<VectorData<T>>(values);
+std::unique_ptr<MutableVectorData<T>> CreateTestData(
+    std::initializer_list<T> values) {
+  return std::make_unique<MutableVectorData<T>>(values);
 }
 
 }  // namespace fcp::aggregation

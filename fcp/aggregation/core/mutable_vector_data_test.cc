@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "fcp/aggregation/core/vector_data.h"
+#include "fcp/aggregation/core/mutable_vector_data.h"
 
 #include <cstdint>
 
@@ -25,8 +25,8 @@ namespace fcp {
 namespace aggregation {
 namespace {
 
-TEST(VectorDataTest, VectorDataValid) {
-  VectorData<int64_t> vector_data;
+TEST(MutableVectorDataTest, MutableVectorDataValid) {
+  MutableVectorData<int64_t> vector_data;
   vector_data.push_back(1);
   vector_data.push_back(2);
   vector_data.push_back(3);

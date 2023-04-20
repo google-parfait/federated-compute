@@ -24,6 +24,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
+#include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/testing/test_data.h"
@@ -97,7 +98,7 @@ TEST(TensorflowCheckpointBuilderFactoryTest, LargeCheckpoint) {
   static constexpr int kTensorSize = 1024;
   absl::StatusOr<Tensor> t =
       Tensor::Create(DT_INT64, TensorShape({kTensorSize}),
-                     std::make_unique<VectorData<int64_t>>(kTensorSize));
+                     std::make_unique<MutableVectorData<int64_t>>(kTensorSize));
   ASSERT_OK(t.status());
   for (int i = 0; i < 10; ++i) {
     EXPECT_OK(builder->Add(absl::StrCat("t", i), *t));

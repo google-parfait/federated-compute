@@ -20,10 +20,10 @@
 #include <memory>
 #include <vector>
 
+#include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_data.h"
 #include "fcp/aggregation/core/tensor_shape.h"
-#include "fcp/aggregation/core/vector_data.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
@@ -36,7 +36,7 @@ class AggVectorAggregator : public TensorAggregator {
  public:
   AggVectorAggregator(DataType dtype, TensorShape shape)
       : AggVectorAggregator(dtype, shape,
-                            new VectorData<T>(shape.NumElements())) {}
+                            new MutableVectorData<T>(shape.NumElements())) {}
 
   // Provides mutable access to the aggregator data as a vector<T>
   inline std::vector<T>& data() { return data_vector_; }
@@ -55,7 +55,8 @@ class AggVectorAggregator : public TensorAggregator {
   virtual void AggregateVector(const AggVector<T>& agg_vector) = 0;
 
  private:
-  AggVectorAggregator(DataType dtype, TensorShape shape, VectorData<T>* data)
+  AggVectorAggregator(DataType dtype, TensorShape shape,
+                      MutableVectorData<T>* data)
       : TensorAggregator(
             Tensor::Create(dtype, shape, std::unique_ptr<TensorData>(data))
                 .value()),
