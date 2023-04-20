@@ -17,6 +17,7 @@
 #ifndef FCP_AGGREGATION_CORE_VECTOR_DATA_H_
 #define FCP_AGGREGATION_CORE_VECTOR_DATA_H_
 
+#include <cstddef>
 #include <vector>
 
 #include "fcp/aggregation/core/tensor_data.h"

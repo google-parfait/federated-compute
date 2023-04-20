@@ -170,6 +170,27 @@ cc_library(
     deps = [":tensor"],
 )
 
+cc_library(
+    name = "composite_key_combiner",
+    srcs = ["composite_key_combiner.cc"],
+    hdrs = ["composite_key_combiner.h"],
+    deps = [
+        ":input_tensor_list",
+        ":tensor",
+        ":tensor_cc_proto",
+        ":vector_string_data",
+        "//fcp/base",
+    ],
+)
+
+# Separate target from :tensor is required for vector_string_data as string_view is not yet
+# supported for nanolibc.
+cc_library(
+    name = "vector_string_data",
+    hdrs = ["vector_string_data.h"],
+    deps = [":tensor"],
+)
+
 cc_test(
     name = "federated_sum_test",
     srcs = ["federated_sum_test.cc"],
@@ -192,6 +213,43 @@ cc_test(
         ":input_tensor_list",
         ":tensor",
         "//fcp/aggregation/testing:test_data",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "composite_key_combiner_test",
+    srcs = ["composite_key_combiner_test.cc"],
+    deps = [
+        ":composite_key_combiner",
+        ":input_tensor_list",
+        ":tensor",
+        ":tensor_cc_proto",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "vector_data_test",
+    srcs = ["vector_data_test.cc"],
+    deps = [
+        ":tensor",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "vector_string_data_test",
+    srcs = ["vector_string_data_test.cc"],
+    deps = [
+        ":tensor",
+        ":vector_string_data",
+        "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],
 )
