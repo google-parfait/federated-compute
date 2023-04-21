@@ -31,6 +31,7 @@ cc_library(
         "base_name.h",
         "monitoring.h",
         "move_to_lambda.h",
+        "new.h",
         "platform.h",
     ],
     copts = FCP_COPTS,
@@ -63,6 +64,7 @@ cc_library(
     hdrs = [
         "base_name.h",
         "monitoring.h",
+        "new.h",
         "string_stream.h",
     ],
     copts = FCP_BAREMETAL_COPTS,

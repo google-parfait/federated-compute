@@ -27,6 +27,7 @@ TENSOR_SRCS = [
     "tensor.cc",
     "tensor_data.cc",
     "tensor_shape.cc",
+    "input_tensor_list.cc",
 ]
 
 TENSOR_HDRS = [
@@ -38,6 +39,7 @@ TENSOR_HDRS = [
     "tensor_shape.h",
     "tensor_spec.h",
     "mutable_vector_data.h",
+    "input_tensor_list.h",
 ]
 
 proto_library(
@@ -128,8 +130,10 @@ cc_test(
     deps = [
         ":aggregator",
         ":tensor",
+        ":tensor_cc_proto",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],
@@ -164,18 +168,10 @@ cc_library(
 )
 
 cc_library(
-    name = "input_tensor_list",
-    srcs = ["input_tensor_list.cc"],
-    hdrs = ["input_tensor_list.h"],
-    deps = [":tensor"],
-)
-
-cc_library(
     name = "composite_key_combiner",
     srcs = ["composite_key_combiner.cc"],
     hdrs = ["composite_key_combiner.h"],
     deps = [
-        ":input_tensor_list",
         ":tensor",
         ":tensor_cc_proto",
         ":vector_string_data",
@@ -210,7 +206,6 @@ cc_test(
     name = "input_tensor_list_test",
     srcs = ["input_tensor_list_test.cc"],
     deps = [
-        ":input_tensor_list",
         ":tensor",
         "//fcp/aggregation/testing:test_data",
         "@com_google_googletest//:gtest_main",
@@ -222,7 +217,6 @@ cc_test(
     srcs = ["composite_key_combiner_test.cc"],
     deps = [
         ":composite_key_combiner",
-        ":input_tensor_list",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",

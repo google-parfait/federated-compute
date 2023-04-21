@@ -28,6 +28,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
@@ -308,9 +309,11 @@ absl::StatusOr<absl::Cord> SimpleAggregationProtocol::CreateReport() {
   std::unique_ptr<CheckpointBuilder> checkpoint_builder =
       checkpoint_builder_factory_->Create();
   for (auto& intrinsic : intrinsics_) {
-    // TODO(team): Support multiple output tensors per intrinsic.
-    FCP_ASSIGN_OR_RETURN(Tensor tensor,
+    FCP_ASSIGN_OR_RETURN(OutputTensorList output_tensors,
                          std::move(*intrinsic.aggregator).Report());
+    // TODO(team): Support multiple output tensors per intrinsic.
+    FCP_CHECK(output_tensors.size() == 1);
+    const Tensor& tensor = output_tensors[0];
     FCP_CHECK(tensor.dtype() == intrinsic.output.dtype());
     FCP_CHECK(tensor.shape() == intrinsic.output.shape());
     FCP_RETURN_IF_ERROR(

@@ -49,7 +49,8 @@ TEST(FederatedSumTest, ScalarAggregation_Succeeds) {
   EXPECT_THAT(result, IsOk());
 
   // Verify the resulting tensor.
-  EXPECT_THAT(result.value(), IsTensor({}, {6}));
+  EXPECT_THAT(result.value().size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor({}, {6}));
 }
 
 TEST(FederatedSumTest, DenseAggregation_Succeeds) {
@@ -72,9 +73,10 @@ TEST(FederatedSumTest, DenseAggregation_Succeeds) {
   EXPECT_THAT(result, IsOk());
 
   // Verify the resulting tensor.
-  EXPECT_THAT(result.value(), IsTensor(shape, {14, 19, 23, 49}));
+  EXPECT_THAT(result.value().size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor(shape, {14, 19, 23, 49}));
   // Also ensure that the resulting tensor is dense.
-  EXPECT_TRUE(result->is_dense());
+  EXPECT_TRUE(result.value()[0].is_dense());
 }
 
 TEST(AggVectorAggregationTest, Merge_Succeeds) {
@@ -95,7 +97,8 @@ TEST(AggVectorAggregationTest, Merge_Succeeds) {
 
   auto result = std::move(*aggregator1).Report();
   EXPECT_THAT(result, IsOk());
-  EXPECT_THAT(result.value(), IsTensor({}, {6}));
+  EXPECT_THAT(result.value().size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor({}, {6}));
 }
 
 }  // namespace

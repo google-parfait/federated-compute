@@ -18,30 +18,18 @@
 
 #include <utility>
 
+#include "fcp/aggregation/core/input_tensor_list.h"
+#include "fcp/base/monitoring.h"
+
 namespace fcp {
 namespace aggregation {
 
-Status TensorAggregator::CheckValid() const {
-  return result_tensor_.CheckValid();
-}
-
-Tensor TensorAggregator::TakeTensor() && { return std::move(result_tensor_); }
-
-Status TensorAggregator::Accumulate(const Tensor& tensor) {
+Status TensorAggregator::Accumulate(InputTensorList tensors) {
   FCP_RETURN_IF_ERROR(CheckValid());
-  if (tensor.dtype() != result_tensor_.dtype()) {
-    return FCP_STATUS(INVALID_ARGUMENT)
-           << "TensorAggregator::Accumulate: dtype mismatch";
-  }
-  if (tensor.shape() != result_tensor_.shape()) {
-    return FCP_STATUS(INVALID_ARGUMENT)
-           << "TensorAggregator::Accumulate: tensor shape mismatch";
-  }
 
   // Delegate aggregation to the derived class.
   num_inputs_++;
-  AggregateTensor(tensor);
-  return FCP_STATUS(OK);
+  return AggregateTensors(std::move(tensors));
 }
 
 bool TensorAggregator::CanReport() const { return CheckValid().ok(); }
@@ -50,27 +38,17 @@ Status TensorAggregator::MergeWith(TensorAggregator&& other) {
   FCP_RETURN_IF_ERROR(CheckValid());
   FCP_RETURN_IF_ERROR(other.CheckValid());
 
-  if (other.result_tensor_.dtype() != result_tensor_.dtype()) {
-    return FCP_STATUS(INVALID_ARGUMENT)
-           << "TensorAggregator::MergeWith: dtype mismatch";
-  }
-  if (other.result_tensor_.shape() != result_tensor_.shape()) {
-    return FCP_STATUS(INVALID_ARGUMENT)
-           << "TensorAggregator::MergeWith: tensor shape mismatch";
-  }
-
   num_inputs_ += other.num_inputs_;
-  AggregateTensor(std::move(other).TakeTensor());
-  return FCP_STATUS(OK);
+  return MergeOutputTensors(std::move(other).TakeOutputs());
 }
 
-StatusOr<Tensor> TensorAggregator::Report() && {
+StatusOr<OutputTensorList> TensorAggregator::Report() && {
   FCP_RETURN_IF_ERROR(CheckValid());
   if (!CanReport()) {
     return FCP_STATUS(FAILED_PRECONDITION)
            << "TensorAggregator::Report: the report goal isn't met";
   }
-  return std::move(*this).TakeTensor();
+  return std::move(*this).TakeOutputs();
 }
 
 }  // namespace aggregation

@@ -19,12 +19,13 @@
 #include <string>
 #include <utility>
 
+#include "fcp/base/new.h"
+
 #ifdef FCP_BAREMETAL
 #include "fcp/base/string_stream.h"
 #else
 #include <cstdlib>
 #include <iostream>
-#include <new>
 #include <ostream>
 #include <sstream>
 
@@ -34,14 +35,6 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #endif  // FCP_BAREMETAL
-
-#ifdef FCP_NANOLIBC
-// Definition of placement operator new is used below by fcp::StatusOr. It is
-// neaded because nanolibc doesn't currently have it.
-// TODO(team): Move this to a <new> header in nanolibc or some other
-// shared header.
-inline void* operator new(size_t, void* p) noexcept { return p; }
-#endif  // FCP_NANOLIBC
 
 namespace fcp {
 

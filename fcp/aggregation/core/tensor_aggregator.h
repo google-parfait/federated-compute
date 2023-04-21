@@ -17,54 +17,57 @@
 #ifndef FCP_AGGREGATION_CORE_TENSOR_AGGREGATOR_H_
 #define FCP_AGGREGATION_CORE_TENSOR_AGGREGATOR_H_
 
-#include <memory>
-#include <utility>
+#include <vector>
 
 #include "fcp/aggregation/core/aggregator.h"
+#include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
 namespace aggregation {
 
+using OutputTensorList = std::vector<Tensor>;
+
 // TensorAggregator is a base class for implementing Aggregation intrinsics
 // with Tensor being an input and output type for the aggregation.
-// TODO(team): Generalize this to the case with multiple input and
-// output tensors.
 class TensorAggregator
-    : public Aggregator<const Tensor&, Tensor, TensorAggregator> {
+    : public Aggregator<InputTensorList, OutputTensorList, TensorAggregator> {
  public:
   ~TensorAggregator() override = default;
 
   // Implementation of the base Aggregator class methods.
-  Status Accumulate(const Tensor& tensor) override;
+  Status Accumulate(InputTensorList tensors) override;
   Status MergeWith(TensorAggregator&& other) override;
   bool CanReport() const override;
-  StatusOr<Tensor> Report() && override;
+  StatusOr<OutputTensorList> Report() && override;
 
   // Returns the number of aggregated inputs.
   int num_inputs() const { return num_inputs_; }
 
  protected:
-  // Construct TensorAggregator for the given tensor type and shape
-  explicit TensorAggregator(Tensor result_tensor)
-      : result_tensor_(std::move(result_tensor)), num_inputs_(0) {
-    FCP_CHECK(CheckValid().ok());
-  }
+  // Construct TensorAggregator
+  explicit TensorAggregator() : num_inputs_(0) {}
 
   // The actual implementation of the tensor aggregation to be provided by
   // a derived class.
-  virtual void AggregateTensor(const Tensor& tensor) = 0;
+  virtual Status AggregateTensors(InputTensorList tensors) = 0;
 
-  // Checks if the current TensorAggregator is valid e.g. the resulting tensor
+  // The actual implementation of merging a list of output tensors from another
+  // instance of TensorAggregator, to be provided by the derived class.
+  virtual Status MergeOutputTensors(OutputTensorList other) = 0;
+
+  // Checks if the current TensorAggregator is valid e.g. the resulting output
   // hasn't been consumed.
-  Status CheckValid() const;
+  virtual Status CheckValid() const = 0;
+
+  // Consumes the output of this TensorAggregator.
+  virtual OutputTensorList TakeOutputs() && = 0;
 
  private:
   // Extracts the aggregated tensor and makes the current aggregator "consumed".
-  Tensor TakeTensor() &&;
+  OutputTensorList TakeTensors() &&;
 
-  Tensor result_tensor_;
   int num_inputs_;
 };
 

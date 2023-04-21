@@ -45,6 +45,9 @@ class InputTensorList final {
   // Creates an InputTensorList with the provided elements.
   InputTensorList(std::initializer_list<const Tensor*> list);
 
+  // Creates an InputTensorList with a single input tensor.
+  InputTensorList(const Tensor& tensor) : InputTensorList({&tensor}) {}
+
   // Creates an InputTensorList of a specific size. All elements will initially
   // be set to nullptr.
   explicit InputTensorList(size_t size);

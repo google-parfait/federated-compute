@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/base/new.h"
 
 namespace fcp {
 namespace aggregation {
@@ -74,7 +75,7 @@ void InputTensorList::MoveData(InputTensorList&& other) {
   } else {
     // If the storage is inlined copy the data; this is cheap since
     // size_ < kInlinedSize.
-    for (int i = 0; i < size_; ++i) {
+    for (size_t i = 0; i < size_; ++i) {
       data_storage_.inlined[i] = other.data_storage_.inlined[i];
     }
     data_ptr_ = data_storage_.inlined;

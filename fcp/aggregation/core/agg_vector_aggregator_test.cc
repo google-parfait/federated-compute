@@ -16,16 +16,22 @@
 
 #include "fcp/aggregation/core/agg_vector_aggregator.h"
 
+#include <cstdint>
 #include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
+
+#ifndef FCP_NANOLIBC
+#include "fcp/aggregation/core/tensor.pb.h"
+#endif
 
 namespace fcp {
 namespace aggregation {
@@ -62,9 +68,9 @@ TEST(AggVectorAggregatorTest, ScalarAggregation_Succeeds) {
 
   auto result = std::move(aggregator).Report();
   EXPECT_THAT(result, IsOk());
-
+  EXPECT_THAT(result.value().size(), Eq(1));
   // Verify the resulting tensor.
-  EXPECT_THAT(result.value(), IsTensor({}, {6}));
+  EXPECT_THAT(result.value()[0], IsTensor({}, {6}));
 }
 
 TEST(AggVectorAggregatorTest, DenseAggregation_Succeeds) {
@@ -84,11 +90,11 @@ TEST(AggVectorAggregatorTest, DenseAggregation_Succeeds) {
 
   auto result = std::move(aggregator).Report();
   EXPECT_THAT(result, IsOk());
-
+  EXPECT_THAT(result.value().size(), Eq(1));
   // Verify the resulting tensor.
-  EXPECT_THAT(result.value(), IsTensor(shape, {14, 19, 23, 49}));
+  EXPECT_THAT(result.value()[0], IsTensor(shape, {14, 19, 23, 49}));
   // Also ensure that the resulting tensor is dense.
-  EXPECT_TRUE(result->is_dense());
+  EXPECT_TRUE(result.value()[0].is_dense());
 }
 
 TEST(AggVectorAggregationTest, Merge_Succeeds) {
@@ -107,7 +113,8 @@ TEST(AggVectorAggregationTest, Merge_Succeeds) {
 
   auto result = std::move(aggregator1).Report();
   EXPECT_THAT(result, IsOk());
-  EXPECT_THAT(result.value(), IsTensor({}, {6}));
+  EXPECT_THAT(result.value().size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor({}, {6}));
 }
 
 TEST(AggVectorAggregationTest, Aggregate_IncompatibleDataType) {

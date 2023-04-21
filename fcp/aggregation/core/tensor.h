@@ -61,6 +61,12 @@ class Tensor final {
     return *this;
   }
 
+  // Define a default constructor to allow for initalization of array
+  // to enable creation of a vector of Tensors.
+  // A tensor created with the default constructor is not valid and thus should
+  // not actually be used.
+  Tensor() : dtype_(DT_INVALID), shape_{}, data_(nullptr) {}
+
   // Validates parameters and creates a Tensor instance.
   static StatusOr<Tensor> Create(DataType dtype, TensorShape shape,
                                  std::unique_ptr<TensorData> data);

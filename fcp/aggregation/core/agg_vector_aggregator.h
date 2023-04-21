@@ -18,9 +18,14 @@
 #define FCP_AGGREGATION_CORE_AGG_VECTOR_AGGREGATOR_H_
 
 #include <memory>
+#include <utility>
 #include <vector>
 
+#include "fcp/aggregation/core/agg_vector.h"
+#include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/mutable_vector_data.h"
+#include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_data.h"
 #include "fcp/aggregation/core/tensor_shape.h"
@@ -43,12 +48,50 @@ class AggVectorAggregator : public TensorAggregator {
 
  protected:
   // Implementation of the tensor aggregation.
-  void AggregateTensor(const Tensor& tensor) override {
-    FCP_CHECK(internal::TypeTraits<T>::kDataType == tensor.dtype())
-        << "Incompatible tensor dtype()";
+  Status AggregateTensors(InputTensorList tensors) override {
+    FCP_CHECK(tensors.size() == 1)
+        << "AggVectorAggregator should operate on a single input tensor";
+
+    const Tensor* tensor = tensors[0];
+    if (tensor->dtype() != internal::TypeTraits<T>::kDataType) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "AggVectorAggregator::AggregateTensors: dtype mismatch";
+    }
+    if (tensor->shape() != result_tensor_.shape()) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "AggVectorAggregator::AggregateTensors: tensor shape mismatch";
+    }
     // Delegate the actual aggregation to the specific aggregation
     // intrinsic implementation.
-    AggregateVector(tensor.AsAggVector<T>());
+    AggregateVector(tensor->AsAggVector<T>());
+    return FCP_STATUS(OK);
+  }
+
+  Status MergeOutputTensors(OutputTensorList output_tensors) override {
+    FCP_CHECK(output_tensors.size() == 1)
+        << "AggVectorAggregator should produce a single output tensor";
+    const Tensor& output = output_tensors[0];
+    if (output.dtype() != internal::TypeTraits<T>::kDataType) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "AggVectorAggregator::MergeOutputTensors: dtype mismatch";
+    }
+    if (output.shape() != result_tensor_.shape()) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "AggVectorAggregator::MergeOutputTensors: tensor shape "
+                "mismatch";
+    }
+    // Delegate the actual aggregation to the specific aggregation
+    // intrinsic implementation.
+    AggregateVector(output.AsAggVector<T>());
+    return FCP_STATUS(OK);
+  }
+
+  Status CheckValid() const override { return result_tensor_.CheckValid(); }
+
+  OutputTensorList TakeOutputs() && override {
+    OutputTensorList outputs = std::vector<Tensor>();
+    outputs.push_back(std::move(result_tensor_));
+    return outputs;
   }
 
   // Delegates AggVector aggregation to a derived class.
@@ -57,7 +100,7 @@ class AggVectorAggregator : public TensorAggregator {
  private:
   AggVectorAggregator(DataType dtype, TensorShape shape,
                       MutableVectorData<T>* data)
-      : TensorAggregator(
+      : result_tensor_(
             Tensor::Create(dtype, shape, std::unique_ptr<TensorData>(data))
                 .value()),
         data_vector_(*data) {
@@ -65,6 +108,7 @@ class AggVectorAggregator : public TensorAggregator {
         << "Incompatible dtype";
   }
 
+  Tensor result_tensor_;
   std::vector<T>& data_vector_;
 };
 
