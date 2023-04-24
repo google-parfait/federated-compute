@@ -164,12 +164,10 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinInvalidPayloadError(
 
 void PhaseLoggerImpl::LogEligibilityEvalCheckinPlanUriReceived(
     const NetworkStats& network_stats, absl::Time time_before_checkin) {
-  if (enable_plan_uri_received_logs_) {
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_ELIGIBILITY_PLAN_URI_RECEIVED);
-    event_publisher_->PublishEligibilityEvalPlanUriReceived(
-        network_stats, absl::Now() - time_before_checkin);
-  }
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_PLAN_URI_RECEIVED);
+  event_publisher_->PublishEligibilityEvalPlanUriReceived(
+      network_stats, absl::Now() - time_before_checkin);
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalCheckinCompleted(
@@ -177,14 +175,11 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinCompleted(
     absl::Time time_before_plan_download) {
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED);
-  absl::Time before_time = enable_plan_uri_received_logs_
-                               ? time_before_plan_download
-                               : time_before_checkin;
+  absl::Time before_time = time_before_plan_download;
   event_publisher_->PublishEligibilityEvalPlanReceived(
       network_stats, absl::Now() - before_time);
 
-  // Regardless of the `enable_plan_uri_received_logs_` flag value, the
-  // 'EligibilityEvalCheckinLatency' should cover the whole period from
+  // The 'EligibilityEvalCheckinLatency' should cover the whole period from
   // eligibility eval checkin to completion (and not just the period from EET
   // plan URIs being received to completion).
   LogEligibilityEvalCheckinLatency(time_before_checkin);
@@ -345,13 +340,11 @@ void PhaseLoggerImpl::LogCheckinInvalidPayload(
 void PhaseLoggerImpl::LogCheckinPlanUriReceived(
     absl::string_view task_name, const NetworkStats& network_stats,
     absl::Time time_before_checkin) {
-  if (enable_plan_uri_received_logs_) {
-    event_publisher_->PublishCheckinPlanUriReceived(
-        network_stats, absl::Now() - time_before_checkin);
-    opstats_logger_->AddEventAndSetTaskName(
-        std::string(task_name),
-        OperationalStats::Event::EVENT_KIND_CHECKIN_PLAN_URI_RECEIVED);
-  }
+  event_publisher_->PublishCheckinPlanUriReceived(
+      network_stats, absl::Now() - time_before_checkin);
+  opstats_logger_->AddEventAndSetTaskName(
+      std::string(task_name),
+      OperationalStats::Event::EVENT_KIND_CHECKIN_PLAN_URI_RECEIVED);
 }
 
 void PhaseLoggerImpl::LogCheckinCompleted(absl::string_view task_name,
@@ -359,23 +352,13 @@ void PhaseLoggerImpl::LogCheckinCompleted(absl::string_view task_name,
                                           absl::Time time_before_checkin,
                                           absl::Time time_before_plan_download,
                                           absl::Time reference_time) {
-  absl::Duration duration =
-      absl::Now() - (enable_plan_uri_received_logs_ ? time_before_plan_download
-                                                    : time_before_checkin);
+  absl::Duration duration = absl::Now() - time_before_plan_download;
   event_publisher_->PublishCheckinFinishedV2(network_stats, duration);
-  // If the enable_plan_uri_received_logs_ flag is true then we'll already have
-  // set the task name when LogCheckinPlanUriReceived was called, so we only
-  // have to add the event.
-  if (enable_plan_uri_received_logs_) {
-    opstats_logger_->AddEvent(
-        OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-  } else {
-    opstats_logger_->AddEventAndSetTaskName(
-        std::string(task_name),
-        OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-  }
-  // Regardless of the `enable_plan_uri_received_logs_` flag value, the
-  // 'EligibilityEvalCheckinLatency' should cover the whole period from
+  // We already have set the task name when LogCheckinPlanUriReceived was
+  // called, so we only have to add the event.
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
+  // The 'EligibilityEvalCheckinLatency' should cover the whole period from
   // eligibility eval checkin to completion (and not just the period from EET
   // plan URIs being received to completion).
   LogCheckinLatency(time_before_checkin, reference_time);

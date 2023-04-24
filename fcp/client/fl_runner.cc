@@ -920,17 +920,11 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
       GetCumulativeNetworkStats(federated_protocol,
                                 /*fedselect_manager=*/nullptr);
 
-  // When the enable_plan_uri_received_logs flag is on, these fields will,
-  // after a successful checkin that resulted in an EET being received, contain
-  // the time at which the EET plan/checkpoint URIs were received (but not yet
-  // downloaded), as well as the cumulative network stats at that point,
-  // allowing us to separately calculate how long it took to then download the
-  // actual payloads.
-  //
-  // When the flag is off, these fields will simply equal the time/stats from
-  // before the checkin request is issued at all (thereby *not* distinguishing
-  // separately between the time spent checkin in vs. downloading the
-  // resources).
+  // These fields will, after a successful checkin that resulted in an EET being
+  // received, contain the time at which the EET plan/checkpoint URIs were
+  // received (but not yet downloaded), as well as the cumulative network stats
+  // at that point, allowing us to separately calculate how long it took to then
+  // download the actual payloads.
   absl::Time time_before_plan_download = time_before_checkin;
   NetworkStats network_stats_before_plan_download =
       network_stats_before_checkin;
@@ -941,41 +935,35 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
   // Issue the eligibility eval checkin request (providing a callback that will
   // be called when an EET is assigned to the task but before its
   // plan/checkpoint URIs have actually been downloaded).
-  std::function<void(const FederatedProtocol::EligibilityEvalTask&)>
-      plan_uris_received_callback;
   bool plan_uris_received_callback_called = false;
-  if (flags->enable_plan_uri_received_logs()) {
-    plan_uris_received_callback =
-        [&time_before_plan_download, &network_stats_before_plan_download,
-         &time_before_checkin, &network_stats_before_checkin,
-         &federated_protocol, &phase_logger,
-         &plan_uris_received_callback_called](
-            const FederatedProtocol::EligibilityEvalTask& task) {
-          // When the plan URIs have been received, we already know the name of
-          // the task we have been assigned, so let's tell the PhaseLogger.
-          phase_logger.SetModelIdentifier(task.execution_id);
+  std::function<void(const FederatedProtocol::EligibilityEvalTask&)>
+      plan_uris_received_callback =
+          [&time_before_plan_download, &network_stats_before_plan_download,
+           &time_before_checkin, &network_stats_before_checkin,
+           &federated_protocol, &phase_logger,
+           &plan_uris_received_callback_called](
+              const FederatedProtocol::EligibilityEvalTask& task) {
+            // When the plan URIs have been received, we already know the name
+            // of the task we have been assigned, so let's tell the PhaseLogger.
+            phase_logger.SetModelIdentifier(task.execution_id);
 
-          // We also should log a corresponding log event.
-          phase_logger.LogEligibilityEvalCheckinPlanUriReceived(
-              GetNetworkStatsSince(federated_protocol,
-                                   /*fedselect_manager=*/nullptr,
-                                   network_stats_before_checkin),
-              time_before_checkin);
+            // We also should log a corresponding log event.
+            phase_logger.LogEligibilityEvalCheckinPlanUriReceived(
+                GetNetworkStatsSince(federated_protocol,
+                                     /*fedselect_manager=*/nullptr,
+                                     network_stats_before_checkin),
+                time_before_checkin);
 
-          // And we must take a snapshot of the current time & network stats, so
-          // we can distinguish between the duration/network stats incurred for
-          // the checkin request vs. the actual downloading of the
-          // plan/checkpoint resources.
-          time_before_plan_download = absl::Now();
-          network_stats_before_plan_download =
-              GetCumulativeNetworkStats(federated_protocol,
-                                        /*fedselect_manager=*/nullptr);
-          plan_uris_received_callback_called = true;
-        };
-  } else {
-    plan_uris_received_callback =
-        [](const FederatedProtocol::EligibilityEvalTask& task) {};
-  }
+            // And we must take a snapshot of the current time & network stats,
+            // so we can distinguish between the duration/network stats incurred
+            // for the checkin request vs. the actual downloading of the
+            // plan/checkpoint resources.
+            time_before_plan_download = absl::Now();
+            network_stats_before_plan_download =
+                GetCumulativeNetworkStats(federated_protocol,
+                                          /*fedselect_manager=*/nullptr);
+            plan_uris_received_callback_called = true;
+          };
   absl::StatusOr<FederatedProtocol::EligibilityEvalCheckinResult>
       eligibility_checkin_result = federated_protocol->EligibilityEvalCheckin(
           plan_uris_received_callback);
@@ -991,17 +979,10 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
   if (eligibility_checkin_result.ok() &&
       std::holds_alternative<FederatedProtocol::EligibilityEvalTask>(
           *eligibility_checkin_result)) {
-    if (!flags->enable_plan_uri_received_logs()) {
-      auto model_identifier = std::get<FederatedProtocol::EligibilityEvalTask>(
-                                  *eligibility_checkin_result)
-                                  .execution_id;
-      phase_logger.SetModelIdentifier(model_identifier);
-    } else {
-      // Make sure that if we received an EligibilityEvalTask, then the
-      // callback should have already been called by this point by the
-      // protocol (ensuring that SetModelIdentifier has been called etc.).
-      FCP_CHECK(plan_uris_received_callback_called);
-    }
+    // Make sure that if we received an EligibilityEvalTask, then the callback
+    // should have already been called by this point by the protocol (ensuring
+    // that SetModelIdentifier has been called etc.).
+    FCP_CHECK(plan_uris_received_callback_called);
   }
 
   if (!eligibility_checkin_result.ok()) {
@@ -1117,17 +1098,11 @@ absl::StatusOr<CheckinResult> IssueCheckin(
       GetCumulativeNetworkStats(federated_protocol,
                                 /*fedselect_manager=*/nullptr);
 
-  // When the enable_plan_uri_received_logs flag is on, these fields will,
-  // after a successful checkin that resulted in a task being assigned, contain
-  // the time at which the task plan/checkpoint URIs were received (but not yet
-  // downloaded), as well as the cumulative network stats at that point,
-  // allowing us to separately calculate how long it took to then download the
-  // actual payloads.
-  //
-  // When the flag is off, these fields will simply equal the time/stats from
-  // before the checkin request is issued at all (thereby *not* distinguishing
-  // separately between the time spent checkin in vs. downloading the
-  // resources).
+  // These fields will, after a successful checkin that resulted in a task being
+  // assigned, contain the time at which the task plan/checkpoint URIs were
+  // received (but not yet downloaded), as well as the cumulative network stats
+  // at that point, allowing us to separately calculate how long it took to then
+  // download the actual payloads.
   absl::Time time_before_plan_download = time_before_checkin;
   NetworkStats network_stats_before_plan_download =
       network_stats_before_checkin;
@@ -1142,44 +1117,38 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   // Issue the checkin request (providing a callback that will be called when an
   // EET is assigned to the task but before its plan/checkpoint URIs have
   // actually been downloaded).
-  std::function<void(const FederatedProtocol::TaskAssignment&)>
-      plan_uris_received_callback;
   bool plan_uris_received_callback_called = false;
-  if (flags->enable_plan_uri_received_logs()) {
-    plan_uris_received_callback =
-        [&time_before_plan_download, &network_stats_before_plan_download,
-         &time_before_checkin, &network_stats_before_checkin, &task_name,
-         &federated_protocol, &population_name, &log_manager, &phase_logger,
-         &plan_uris_received_callback_called](
-            const FederatedProtocol::TaskAssignment& task_assignment) {
-          // When the plan URIs have been received, we already know the name of
-          // the task we have been assigned, so let's tell the PhaseLogger.
-          auto model_identifier = task_assignment.aggregation_session_id;
-          phase_logger.SetModelIdentifier(model_identifier);
+  std::function<void(const FederatedProtocol::TaskAssignment&)>
+      plan_uris_received_callback =
+          [&time_before_plan_download, &network_stats_before_plan_download,
+           &time_before_checkin, &network_stats_before_checkin, &task_name,
+           &federated_protocol, &population_name, &log_manager, &phase_logger,
+           &plan_uris_received_callback_called](
+              const FederatedProtocol::TaskAssignment& task_assignment) {
+            // When the plan URIs have been received, we already know the name
+            // of the task we have been assigned, so let's tell the PhaseLogger.
+            auto model_identifier = task_assignment.aggregation_session_id;
+            phase_logger.SetModelIdentifier(model_identifier);
 
-          // We also should log a corresponding log event.
-          task_name = ExtractTaskNameFromAggregationSessionId(
-              model_identifier, population_name, *log_manager);
-          phase_logger.LogCheckinPlanUriReceived(
-              task_name,
-              GetNetworkStatsSince(federated_protocol,
-                                   /*fedselect_manager=*/nullptr,
-                                   network_stats_before_checkin),
-              time_before_checkin);
+            // We also should log a corresponding log event.
+            task_name = ExtractTaskNameFromAggregationSessionId(
+                model_identifier, population_name, *log_manager);
+            phase_logger.LogCheckinPlanUriReceived(
+                task_name,
+                GetNetworkStatsSince(federated_protocol,
+                                     /*fedselect_manager=*/nullptr,
+                                     network_stats_before_checkin),
+                time_before_checkin);
 
-          // And we must take a snapshot of the current time & network stats, so
-          // we can distinguish between the duration/network stats incurred for
-          // the checkin request vs. the actual downloading of the
-          // plan/checkpoint resources.
-          time_before_plan_download = absl::Now();
-          network_stats_before_plan_download = GetCumulativeNetworkStats(
-              federated_protocol, /*fedselect_manager=*/nullptr);
-          plan_uris_received_callback_called = true;
-        };
-  } else {
-    plan_uris_received_callback =
-        [](const FederatedProtocol::TaskAssignment& task_assignment) {};
-  }
+            // And we must take a snapshot of the current time & network stats,
+            // so we can distinguish between the duration/network stats incurred
+            // for the checkin request vs. the actual downloading of the
+            // plan/checkpoint resources.
+            time_before_plan_download = absl::Now();
+            network_stats_before_plan_download = GetCumulativeNetworkStats(
+                federated_protocol, /*fedselect_manager=*/nullptr);
+            plan_uris_received_callback_called = true;
+          };
   absl::StatusOr<FederatedProtocol::CheckinResult> checkin_result =
       federated_protocol->Checkin(task_eligibility_info,
                                   plan_uris_received_callback);
@@ -1195,17 +1164,10 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   if (checkin_result.ok() &&
       std::holds_alternative<FederatedProtocol::TaskAssignment>(
           *checkin_result)) {
-    if (!flags->enable_plan_uri_received_logs()) {
-      auto model_identifier =
-          std::get<FederatedProtocol::TaskAssignment>(*checkin_result)
-              .aggregation_session_id;
-      phase_logger.SetModelIdentifier(model_identifier);
-    } else {
-      // Make sure that if we received a TaskAssignment, then the callback
-      // should have already been called by this point by the protocol (ensuring
-      // that SetModelIdentifier has been called etc.).
-      FCP_CHECK(plan_uris_received_callback_called);
-    }
+    // Make sure that if we received a TaskAssignment, then the callback should
+    // have already been called by this point by the protocol (ensuring that
+    // SetModelIdentifier has been called etc.).
+    FCP_CHECK(plan_uris_received_callback_called);
   }
 
   if (!checkin_result.ok()) {
@@ -1303,10 +1265,6 @@ absl::StatusOr<CheckinResult> IssueCheckin(
       FCP_LOG(ERROR) << message;
       return status;
     }
-  }
-  if (!flags->enable_plan_uri_received_logs()) {
-    task_name = ExtractTaskNameFromAggregationSessionId(
-        task_assignment.aggregation_session_id, population_name, *log_manager);
   }
   phase_logger.LogCheckinCompleted(
       task_name,

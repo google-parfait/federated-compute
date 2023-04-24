@@ -37,8 +37,7 @@ class PhaseLoggerImpl : public PhaseLogger {
       : event_publisher_(event_publisher),
         opstats_logger_(opstats_logger),
         log_manager_(log_manager),
-        log_tensorflow_error_messages_(flags->log_tensorflow_error_messages()),
-        enable_plan_uri_received_logs_(flags->enable_plan_uri_received_logs()) {
+        log_tensorflow_error_messages_(flags->log_tensorflow_error_messages()) {
   }
 
   void UpdateRetryWindowAndNetworkStats(
@@ -207,7 +206,6 @@ class PhaseLoggerImpl : public PhaseLogger {
   opstats::OpStatsLogger* opstats_logger_;
   LogManager* log_manager_;
   const bool log_tensorflow_error_messages_;
-  const bool enable_plan_uri_received_logs_;
 };
 
 }  // namespace client

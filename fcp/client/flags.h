@@ -185,11 +185,6 @@ class Flags {
   // The number of threads that TFLite interpreter will use.
   virtual int32_t num_threads_for_tflite() const { return 1; }
 
-  // If true, the client will log events when it has received plan/checkpoint
-  // URIs in response to its requests, but before it has starting fetching those
-  // resources.
-  virtual bool enable_plan_uri_received_logs() const { return false; }
-
   // If true, Opstats initialization errors will be logged via
   // PhaseLogger.LogNonfatalInitializationError(). Execution will still be
   // allowed to continue with a no-op implementation like before.
