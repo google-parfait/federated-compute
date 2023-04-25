@@ -548,9 +548,8 @@ absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
       payload_uris_received_callback);
 
   // Update the object state to ensure we return the correct retry delay.
-  UpdateObjectStateIfPermanentError(
-      response.status(),
-      ObjectState::kEligibilityEvalCheckinFailedPermanentError);
+  UpdateObjectStateIfPermanentError(response.status(),
+                                    ObjectState::kCheckinFailedPermanentError);
   return response;
 }
 
