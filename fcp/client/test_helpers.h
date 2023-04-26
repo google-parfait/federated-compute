@@ -408,24 +408,42 @@ class MockFederatedProtocol : public FederatedProtocol {
                   ::google::internal::federatedml::v2::TaskEligibilityInfo>&
                    task_eligibility_info));
 
-  absl::Status ReportCompleted(ComputationResults results,
-                               absl::Duration plan_duration) final {
+  absl::StatusOr<MultipleTaskAssignments> PerformMultipleTaskAssignments(
+      const std::vector<std::string>& task_names) final {
+    absl::StatusOr<MultipleTaskAssignments> result =
+        MockPerformMultipleTaskAssignments(task_names);
+    retry_window_ = GetPostCheckinRetryWindow();
+    network_stats_ = kPostCheckinPlanUriReceivedNetworkStats;
+    return result;
+  };
+
+  MOCK_METHOD(absl::StatusOr<MultipleTaskAssignments>,
+              MockPerformMultipleTaskAssignments,
+              (const std::vector<std::string>& task_names));
+
+  absl::Status ReportCompleted(
+      ComputationResults results, absl::Duration plan_duration,
+      std::optional<std::string> aggregation_session_id) final {
     network_stats_ = kPostReportCompletedNetworkStats;
     retry_window_ = GetPostReportCompletedRetryWindow();
-    return MockReportCompleted(std::move(results), plan_duration);
+    return MockReportCompleted(std::move(results), plan_duration,
+                               aggregation_session_id);
   };
   MOCK_METHOD(absl::Status, MockReportCompleted,
-              (ComputationResults results, absl::Duration plan_duration));
+              (ComputationResults results, absl::Duration plan_duration,
+               std::optional<std::string> aggregation_session_id));
 
-  absl::Status ReportNotCompleted(engine::PhaseOutcome phase_outcome,
-                                  absl::Duration plan_duration) final {
+  absl::Status ReportNotCompleted(
+      engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
+      std::optional<std::string> aggregation_session_id) final {
     network_stats_ = kPostReportNotCompletedNetworkStats;
     retry_window_ = GetPostReportNotCompletedRetryWindow();
-    return MockReportNotCompleted(phase_outcome, plan_duration);
+    return MockReportNotCompleted(phase_outcome, plan_duration,
+                                  aggregation_session_id);
   };
   MOCK_METHOD(absl::Status, MockReportNotCompleted,
-              (engine::PhaseOutcome phase_outcome,
-               absl::Duration plan_duration));
+              (engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
+               std::optional<std::string> aggregation_session_id));
 
   ::google::internal::federatedml::v2::RetryWindow GetLatestRetryWindow()
       final {

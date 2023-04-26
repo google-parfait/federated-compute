@@ -86,7 +86,7 @@ TracingSpanImpl* TextTracingRecorderImpl::GetRootSpan() {
 std::unique_ptr<TracingSpanImpl> TextTracingRecorderImpl::CreateChildSpan(
     TracingSpanId parent_span_id, flatbuffers::DetachedBuffer&& buf,
     const TracingTraitsBase& traits) {
-  // NOTE: team - is defined in a base class, so it returns
+  // NOTE: shared_from_this() is defined in a base class, so it returns
   // std::shared_ptr<TracingRecorderImpl> and we have to (safely) cast it here:
   auto shared_this =
       std::static_pointer_cast<TextTracingRecorderImpl>(shared_from_this());

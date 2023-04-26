@@ -2199,8 +2199,8 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSimpleAggSuccess) {
       "https://aggregation.second.uri/v1/aggregations/"
       "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto");
 
-  EXPECT_OK(
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
 }
 
 // TODO(team): Remove this test once client_token is always populated in
@@ -2250,8 +2250,8 @@ TEST_F(HttpFederatedProtocolTest,
       "https://aggregation.second.uri/v1/aggregations/"
       "AGGREGATION_SESSION_ID/clients/AUTHORIZATION_TOKEN:submit?%24alt=proto");
 
-  EXPECT_OK(
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
 }
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
@@ -2350,8 +2350,8 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
         return mock_secagg_runner;
       }));
 
-  EXPECT_OK(
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
 }
 
 // TODO(team): Remove this test once client_token is always populated in
@@ -2442,8 +2442,8 @@ TEST_F(HttpFederatedProtocolTest,
         return mock_secagg_runner;
       }));
 
-  EXPECT_OK(
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
 }
 
 TEST_F(HttpFederatedProtocolTest,
@@ -2531,8 +2531,8 @@ TEST_F(HttpFederatedProtocolTest,
                                             IsEmpty(), 0, IsEmpty()))))))
       .WillOnce(Return(absl::OkStatus()));
 
-  EXPECT_OK(
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
 }
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedStartSecAggFailed) {
@@ -2564,9 +2564,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedStartSecAggFailed) {
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   results.emplace("secagg_tensor", QuantizedTensor());
 
-  EXPECT_THAT(
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration),
-      IsCode(absl::StatusCode::kInternal));
+  EXPECT_THAT(federated_protocol_->ReportCompleted(std::move(results),
+                                                   plan_duration, std::nullopt),
+              IsCode(absl::StatusCode::kInternal));
 }
 
 TEST_F(HttpFederatedProtocolTest,
@@ -2595,9 +2595,9 @@ TEST_F(HttpFederatedProtocolTest,
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   results.emplace("secagg_tensor", QuantizedTensor());
 
-  EXPECT_THAT(
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration),
-      IsCode(absl::StatusCode::kPermissionDenied));
+  EXPECT_THAT(federated_protocol_->ReportCompleted(std::move(results),
+                                                   plan_duration, std::nullopt),
+              IsCode(absl::StatusCode::kPermissionDenied));
 }
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
@@ -2642,8 +2642,8 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
   // Despite the ReportTaskResult request failed, we still consider the overall
   // ReportCompleted succeeded because the rest of the steps succeeds, and the
   // ReportTaskResult is a just a metric reporting on a best effort basis.
-  EXPECT_OK(
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration));
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
 }
 
 TEST_F(HttpFederatedProtocolTest,
@@ -2672,8 +2672,8 @@ TEST_F(HttpFederatedProtocolTest,
           HttpRequest::Method::kPost, _,
           StartAggregationDataUploadRequest().SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
-  absl::Status report_result =
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  absl::Status report_result = federated_protocol_->ReportCompleted(
+      std::move(results), plan_duration, std::nullopt);
   ASSERT_THAT(report_result, IsCode(absl::StatusCode::kUnavailable));
   EXPECT_THAT(report_result.message(),
               HasSubstr("StartAggregationDataUpload request failed"));
@@ -2717,8 +2717,8 @@ TEST_F(HttpFederatedProtocolTest,
           HttpRequest::Method::kGet, _,
           GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
       .WillOnce(Return(FakeHttpResponse(401, HeaderList())));
-  absl::Status report_result =
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  absl::Status report_result = federated_protocol_->ReportCompleted(
+      std::move(results), plan_duration, std::nullopt);
   ASSERT_THAT(report_result, IsCode(absl::StatusCode::kUnauthenticated));
   EXPECT_THAT(report_result.message(),
               HasSubstr("StartAggregationDataUpload request failed"));
@@ -2753,8 +2753,8 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
                   HttpRequest::Method::kPost, _, std::string(checkpoint_str))))
       .WillOnce(Return(FakeHttpResponse(501, HeaderList())));
   ExpectSuccessfulAbortAggregationRequest("https://aggregation.second.uri");
-  absl::Status report_result =
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  absl::Status report_result = federated_protocol_->ReportCompleted(
+      std::move(results), plan_duration, std::nullopt);
   ASSERT_THAT(report_result, IsCode(absl::StatusCode::kUnimplemented));
   EXPECT_THAT(report_result.message(), HasSubstr("Data upload failed"));
   EXPECT_THAT(report_result.message(), HasSubstr("501"));
@@ -2791,8 +2791,8 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadAbortedByServer) {
           CreateErrorOperation(kOperationName, absl::StatusCode::kAborted,
                                "The client update is no longer needed.")
               .SerializeAsString())));
-  absl::Status report_result =
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  absl::Status report_result = federated_protocol_->ReportCompleted(
+      std::move(results), plan_duration, std::nullopt);
   ASSERT_THAT(report_result, IsCode(absl::StatusCode::kAborted));
   EXPECT_THAT(report_result.message(), HasSubstr("Data upload failed"));
   EXPECT_THAT(report_result.message(), HasSubstr("409"));
@@ -2853,8 +2853,8 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadInterrupted) {
   EXPECT_CALL(mock_log_manager_,
               LogDiag(ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_HTTP));
   ExpectSuccessfulAbortAggregationRequest("https://aggregation.second.uri");
-  absl::Status report_result =
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  absl::Status report_result = federated_protocol_->ReportCompleted(
+      std::move(results), plan_duration, std::nullopt);
   ASSERT_THAT(report_result, IsCode(absl::StatusCode::kCancelled));
   EXPECT_THAT(report_result.message(), HasSubstr("Data upload failed"));
 }
@@ -2896,8 +2896,8 @@ TEST_F(HttpFederatedProtocolTest,
           HttpRequest::Method::kPost, _,
           submit_aggregation_result_request.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(409, HeaderList())));
-  absl::Status report_result =
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  absl::Status report_result = federated_protocol_->ReportCompleted(
+      std::move(results), plan_duration, std::nullopt);
 
   ASSERT_THAT(report_result, IsCode(absl::StatusCode::kAborted));
   EXPECT_THAT(report_result.message(),
@@ -2924,8 +2924,8 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {
       .WillOnce(Return(
           FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
 
-  ASSERT_OK(federated_protocol_->ReportNotCompleted(engine::PhaseOutcome::ERROR,
-                                                    plan_duration));
+  ASSERT_OK(federated_protocol_->ReportNotCompleted(
+      engine::PhaseOutcome::ERROR, plan_duration, std::nullopt));
 
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
@@ -2944,7 +2944,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedError) {
       .WillOnce(Return(FakeHttpResponse(503, HeaderList())));
 
   absl::Status status = federated_protocol_->ReportNotCompleted(
-      engine::PhaseOutcome::ERROR, absl::Minutes(5));
+      engine::PhaseOutcome::ERROR, absl::Minutes(5), std::nullopt);
   EXPECT_THAT(status, IsCode(UNAVAILABLE));
   EXPECT_THAT(
       status.message(),
@@ -2966,7 +2966,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
       .WillOnce(Return(FakeHttpResponse(404, HeaderList())));
 
   absl::Status status = federated_protocol_->ReportNotCompleted(
-      engine::PhaseOutcome::ERROR, absl::Minutes(5));
+      engine::PhaseOutcome::ERROR, absl::Minutes(5), std::nullopt);
   EXPECT_THAT(status, IsCode(NOT_FOUND));
   EXPECT_THAT(
       status.message(),

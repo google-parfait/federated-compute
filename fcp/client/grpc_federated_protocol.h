@@ -100,12 +100,17 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
       std::function<void(const TaskAssignment&)> payload_uris_received_callback)
       override;
 
-  absl::Status ReportCompleted(
-      ComputationResults results,
-      absl::Duration plan_duration) override;
+  absl::StatusOr<::fcp::client::FederatedProtocol::MultipleTaskAssignments>
+  PerformMultipleTaskAssignments(
+      const std::vector<std::string>& task_names) override;
 
-  absl::Status ReportNotCompleted(engine::PhaseOutcome phase_outcome,
-                                  absl::Duration plan_duration) override;
+  absl::Status ReportCompleted(
+      ComputationResults results, absl::Duration plan_duration,
+      std::optional<std::string> aggregation_session_id) override;
+
+  absl::Status ReportNotCompleted(
+      engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
+      std::optional<std::string> aggregation_session_id) override;
 
   google::internal::federatedml::v2::RetryWindow GetLatestRetryWindow()
       override;

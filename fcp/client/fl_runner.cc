@@ -738,7 +738,7 @@ absl::Status ReportPlanResult(
     FCP_RETURN_IF_ERROR(phase_logger.LogResultUploadStarted());
     result = federated_protocol->ReportCompleted(
         std::move(*computation_results),
-        /*plan_duration=*/absl::Now() - run_plan_start_time);
+        /*plan_duration=*/absl::Now() - run_plan_start_time, std::nullopt);
     LogResultUploadStatus(
         phase_logger, result,
         GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
@@ -748,7 +748,7 @@ absl::Status ReportPlanResult(
     FCP_RETURN_IF_ERROR(phase_logger.LogFailureUploadStarted());
     result = federated_protocol->ReportNotCompleted(
         engine::PhaseOutcome::ERROR,
-        /*plan_duration=*/absl::Now() - run_plan_start_time);
+        /*plan_duration=*/absl::Now() - run_plan_start_time, std::nullopt);
     LogFailureUploadStatus(
         phase_logger, result,
         GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,

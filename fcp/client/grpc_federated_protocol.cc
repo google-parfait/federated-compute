@@ -581,8 +581,17 @@ absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
   return response;
 }
 
+absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
+GrpcFederatedProtocol::PerformMultipleTaskAssignments(
+    const std::vector<std::string>& task_names) {
+  return absl::UnimplementedError(
+      "PerformMultipleTaskAssignments is not supported by "
+      "GrpcFederatedProtocol.");
+}
+
 absl::Status GrpcFederatedProtocol::ReportCompleted(
-    ComputationResults results, absl::Duration plan_duration) {
+    ComputationResults results, absl::Duration plan_duration,
+    std::optional<std::string> aggregation_session_id) {
   FCP_LOG(INFO) << "Reporting outcome: " << static_cast<int>(engine::COMPLETED);
   FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)
       << "Invalid call sequence";
@@ -595,7 +604,8 @@ absl::Status GrpcFederatedProtocol::ReportCompleted(
 }
 
 absl::Status GrpcFederatedProtocol::ReportNotCompleted(
-    engine::PhaseOutcome phase_outcome, absl::Duration plan_duration) {
+    engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
+    std::optional<std::string> aggregation_session_Id) {
   FCP_LOG(WARNING) << "Reporting outcome: " << static_cast<int>(phase_outcome);
   FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)
       << "Invalid call sequence";
@@ -913,6 +923,14 @@ RetryWindow GrpcFederatedProtocol::GetLatestRetryWindow() {
               ->federated_training_permanent_errors_retry_delay_jitter_percent(),
           // NOLINTEND
           bit_gen_);
+    case ObjectState::kMultipleTaskAssignmentsAccepted:
+    case ObjectState::kMultipleTaskAssignmentsFailed:
+    case ObjectState::kMultipleTaskAssignmentsFailedPermanentError:
+    case ObjectState::kMultipleTaskAssignmentsNoAvailableTask:
+    case ObjectState::kReportMultipleTaskPartialError:
+      FCP_LOG(FATAL) << "Multi-task assignments is not supported by gRPC.";
+      RetryWindow retry_window;
+      return retry_window;
   }
 }
 

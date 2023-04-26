@@ -1587,8 +1587,8 @@ TEST_P(GrpcFederatedProtocolTest, TestReportWithSecAgg) {
           .WillOnce(
               DoAll(SetArgPointee<0>(GetFakeReportResponse()),
                     Return(absl::OkStatus())));
-  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
-                                                 absl::ZeroDuration()));
+  EXPECT_OK(federated_protocol_->ReportCompleted(
+      std::move(results), absl::ZeroDuration(), std::nullopt));
 }
 
 TEST_P(GrpcFederatedProtocolTest, TestReportWithSecAggWithoutTFCheckpoint) {
@@ -1613,8 +1613,8 @@ TEST_P(GrpcFederatedProtocolTest, TestReportWithSecAggWithoutTFCheckpoint) {
           .WillOnce(
               DoAll(SetArgPointee<0>(GetFakeReportResponse()),
                     Return(absl::OkStatus())));
-  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
-                                                 absl::ZeroDuration()));
+  EXPECT_OK(federated_protocol_->ReportCompleted(
+      std::move(results), absl::ZeroDuration(), std::nullopt));
 }
 
 // This function tests the Report(...) method's Send code path, ensuring the
@@ -1653,8 +1653,8 @@ TEST_P(GrpcFederatedProtocolTest, TestReportSendFails) {
       .WillOnce(Return(absl::AbortedError("foo")));
 
   // 4. Test that ReportCompleted() sends the expected message.
-  auto report_result =
-      federated_protocol_->ReportCompleted(std::move(results), plan_duration);
+  auto report_result = federated_protocol_->ReportCompleted(
+      std::move(results), plan_duration, std::nullopt);
   EXPECT_THAT(report_result, IsCode(ABORTED));
   EXPECT_THAT(report_result.message(), HasSubstr("foo"));
 
@@ -1686,7 +1686,7 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccess) {
 
   // 3. Test that ReportCompleted() sends the expected message.
   auto report_result = federated_protocol_->ReportCompleted(
-      std::move(results), absl::ZeroDuration());
+      std::move(results), absl::ZeroDuration(), std::nullopt);
   EXPECT_OK(report_result);
 
   // If we made it to the Report protocol phase, then the client must've been
@@ -1726,7 +1726,7 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportNotCompleteSendFails) {
 
   // 4. Test that ReportNotCompleted() sends the expected message.
   auto report_result = federated_protocol_->ReportNotCompleted(
-      engine::PhaseOutcome::ERROR, plan_duration);
+      engine::PhaseOutcome::ERROR, plan_duration, std::nullopt);
   EXPECT_THAT(report_result, IsCode(ABORTED));
   EXPECT_THAT(report_result.message(), HasSubstr("foo"));
 
@@ -1758,7 +1758,7 @@ TEST_P(GrpcFederatedProtocolTest, TestPublishReportSuccessCommitsToOpstats) {
 
   // 3. Test that ReportCompleted() sends the expected message.
   auto report_result = federated_protocol_->ReportCompleted(
-      std::move(results), absl::ZeroDuration());
+      std::move(results), absl::ZeroDuration(), std::nullopt);
   EXPECT_OK(report_result);
 
   // If we made it to the Report protocol phase, then the client must've been

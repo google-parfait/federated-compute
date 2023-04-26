@@ -447,7 +447,7 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
     return Rejection{};
   }
 
-  session_id_ = response_proto.session_id();
+  pre_task_assignment_session_id_ = response_proto.session_id();
 
   FCP_ASSIGN_OR_RETURN(
       task_assignment_request_creator_,
@@ -496,7 +496,7 @@ HttpFederatedProtocol::CreateReportEligibilityEvalTaskResultRequest(
   request.set_status_code(static_cast<google::rpc::Code>(status.code()));
   FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
                        CreateReportEligibilityEvalTaskResultUriSuffix(
-                           population_name_, session_id_));
+                           population_name_, pre_task_assignment_session_id_));
   return eligibility_eval_request_creator_->CreateProtocolRequest(
       uri_suffix, QueryParams(), HttpRequest::Method::kPost,
       request.SerializeAsString(),
@@ -525,9 +525,17 @@ absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
     const std::optional<TaskEligibilityInfo>& task_eligibility_info,
     std::function<void(const TaskAssignment&)> payload_uris_received_callback) {
   // Checkin(...) must follow an earlier call to EligibilityEvalCheckin() that
-  // resulted in a CheckinResultPayload or an EligibilityEvalDisabled result.
+  // resulted in a CheckinResultPayload or an EligibilityEvalDisabled result. Or
+  // it must follow a PerformMultipleTaskAssignments(...) regardless of the
+  // outcome for the call.
   FCP_CHECK(object_state_ == ObjectState::kEligibilityEvalDisabled ||
-            object_state_ == ObjectState::kEligibilityEvalEnabled)
+            object_state_ == ObjectState::kEligibilityEvalEnabled ||
+            object_state_ == ObjectState::kMultipleTaskAssignmentsAccepted ||
+            object_state_ == ObjectState::kMultipleTaskAssignmentsFailed ||
+            object_state_ ==
+                ObjectState::kMultipleTaskAssignmentsFailedPermanentError ||
+            object_state_ ==
+                ObjectState::kMultipleTaskAssignmentsNoAvailableTask)
       << "Checkin(...) called despite failed/rejected earlier "
          "EligibilityEvalCheckin";
   if (object_state_ == ObjectState::kEligibilityEvalEnabled) {
@@ -572,9 +580,9 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   std::vector<std::unique_ptr<HttpRequest>> requests;
 
   // Construct the URI suffix.
-  FCP_ASSIGN_OR_RETURN(
-      std::string task_assignment_uri_suffix,
-      CreateStartTaskAssignmentUriSuffix(population_name_, session_id_));
+  FCP_ASSIGN_OR_RETURN(std::string task_assignment_uri_suffix,
+                       CreateStartTaskAssignmentUriSuffix(
+                           population_name_, pre_task_assignment_session_id_));
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> task_assignment_http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
@@ -685,7 +693,7 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   const auto& task_assignment = response_proto.task_assignment();
 
   FCP_ASSIGN_OR_RETURN(
-      aggregation_request_creator_,
+      default_task_info_.aggregation_request_creator,
       ProtocolRequestCreator::Create(
           api_key_, task_assignment.aggregation_data_forwarding_info(),
           !flags_->disable_http_request_body_compression()));
@@ -712,71 +720,106 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
                           .checkpoint = task_assignment.init_checkpoint()}));
 
   object_state_ = ObjectState::kCheckinAccepted;
-  session_id_ = task_assignment.session_id();
-  aggregation_session_id_ = task_assignment.aggregation_id();
-  aggregation_authorization_token_ = task_assignment.authorization_token();
-  task_name_ = task_assignment.task_name();
+  default_task_info_.state = ObjectState::kCheckinAccepted;
+  default_task_info_.session_id = task_assignment.session_id();
+  default_task_info_.aggregation_session_id = task_assignment.aggregation_id();
+  default_task_info_.aggregation_authorization_token =
+      task_assignment.authorization_token();
+  default_task_info_.task_name = task_assignment.task_name();
 
   return std::move(result);
 }
 
+absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
+HttpFederatedProtocol::PerformMultipleTaskAssignments(
+    const std::vector<std::string>& task_names) {
+  // PerformMultipleTaskAssignments(...) must follow an earlier call to
+  // EligibilityEvalCheckin() that resulted in a EligibilityEvalTask with
+  // PopulationEligibilitySpec.
+  FCP_CHECK(object_state_ == ObjectState::kEligibilityEvalDisabled ||
+            object_state_ == ObjectState::kEligibilityEvalEnabled)
+      << "PerformMultipleTaskAssignments(...) called despite failed/rejected "
+         "earlier "
+         "EligibilityEvalCheckin";
+  object_state_ = ObjectState::kMultipleTaskAssignmentsFailed;
+  return absl::UnimplementedError(
+      "PerformMultipleTaskAssignments is not yet implemented.");
+}
+
 absl::Status HttpFederatedProtocol::ReportCompleted(
-    ComputationResults results,
-    absl::Duration plan_duration) {
+    ComputationResults results, absl::Duration plan_duration,
+    std::optional<std::string> aggregation_session_id) {
   FCP_LOG(INFO) << "Reporting outcome: " << static_cast<int>(engine::COMPLETED);
-  FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)
+  PerTaskInfo* task_info;
+  if (aggregation_session_id.has_value()) {
+    if (!task_info_map_.contains(aggregation_session_id.value())) {
+      return absl::InvalidArgumentError("Unexpected aggregation_session_id.");
+    }
+    task_info = &task_info_map_[aggregation_session_id.value()];
+  } else {
+    task_info = &default_task_info_;
+  }
+  FCP_CHECK(task_info->state == ObjectState::kCheckinAccepted ||
+            task_info->state == ObjectState::kMultipleTaskAssignmentsAccepted)
       << "Invalid call sequence";
-  object_state_ = ObjectState::kReportCalled;
+  task_info->state = ObjectState::kReportCalled;
   auto find_secagg_tensor_lambda = [](const auto& item) {
     return std::holds_alternative<QuantizedTensor>(item.second);
   };
   if (std::find_if(results.begin(), results.end(), find_secagg_tensor_lambda) ==
       results.end()) {
-    return ReportViaSimpleAggregation(std::move(results), plan_duration);
+    return ReportViaSimpleAggregation(std::move(results), plan_duration,
+                                      *task_info);
   } else {
-    return ReportViaSecureAggregation(std::move(results), plan_duration);
+    return ReportViaSecureAggregation(std::move(results), plan_duration,
+                                      *task_info);
   }
 }
 
 absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(
-    ComputationResults results, absl::Duration plan_duration) {
+    ComputationResults results, absl::Duration plan_duration,
+    PerTaskInfo& task_info) {
   if (results.size() != 1 ||
       !std::holds_alternative<TFCheckpoint>(results.begin()->second)) {
     return absl::InternalError(
         "Simple Aggregation aggregands have unexpected format.");
   }
   auto start_upload_status = HandleStartDataAggregationUploadOperationResponse(
-      PerformStartDataUploadRequestAndReportTaskResult(plan_duration));
+      PerformStartDataUploadRequestAndReportTaskResult(plan_duration,
+                                                       task_info),
+      task_info);
   if (!start_upload_status.ok()) {
-    object_state_ = ObjectState::kReportFailedPermanentError;
+    task_info.state = ObjectState::kReportFailedPermanentError;
     return start_upload_status;
   }
   auto upload_status = UploadDataViaSimpleAgg(
-      std::get<TFCheckpoint>(std::move(results.begin()->second)));
+      std::get<TFCheckpoint>(std::move(results.begin()->second)), task_info);
   if (!upload_status.ok()) {
-    object_state_ = ObjectState::kReportFailedPermanentError;
+    task_info.state = ObjectState::kReportFailedPermanentError;
     if (upload_status.code() != absl::StatusCode::kAborted &&
         !AbortAggregation(upload_status,
-                          "Upload data via simple aggregation failed.")
+                          "Upload data via simple aggregation failed.",
+                          task_info)
              .ok()) {
       log_manager_->LogDiag(
           ProdDiagCode::HTTP_CANCELLATION_OR_ABORT_REQUEST_FAILED);
     }
     return upload_status;
   }
-  return SubmitAggregationResult();
+  return SubmitAggregationResult(task_info);
 }
 
 absl::StatusOr<InMemoryHttpResponse>
 HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
-    absl::Duration plan_duration) {
-  FCP_ASSIGN_OR_RETURN(ReportTaskResultRequest report_task_result_request,
-                       CreateReportTaskResultRequest(
-                           engine::PhaseOutcome::COMPLETED, plan_duration,
-                           aggregation_session_id_, task_name_));
+    absl::Duration plan_duration, PerTaskInfo& task_info) {
+  FCP_ASSIGN_OR_RETURN(
+      ReportTaskResultRequest report_task_result_request,
+      CreateReportTaskResultRequest(
+          engine::PhaseOutcome::COMPLETED, plan_duration,
+          task_info.aggregation_session_id, task_info.task_name));
   FCP_ASSIGN_OR_RETURN(
       std::string report_task_result_uri_suffix,
-      CreateReportTaskResultUriSuffix(population_name_, session_id_));
+      CreateReportTaskResultUriSuffix(population_name_, task_info.session_id));
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_report_task_result_request,
       task_assignment_request_creator_->CreateProtocolRequest(
@@ -785,13 +828,13 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
           /*is_protobuf_encoded=*/true));
 
   StartAggregationDataUploadRequest start_upload_request;
-  FCP_ASSIGN_OR_RETURN(
-      std::string start_aggregation_data_upload_uri_suffix,
-      CreateStartAggregationDataUploadUriSuffix(
-          aggregation_session_id_, aggregation_authorization_token_));
+  FCP_ASSIGN_OR_RETURN(std::string start_aggregation_data_upload_uri_suffix,
+                       CreateStartAggregationDataUploadUriSuffix(
+                           task_info.aggregation_session_id,
+                           task_info.aggregation_authorization_token));
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_start_aggregation_data_upload_request,
-      aggregation_request_creator_->CreateProtocolRequest(
+      task_info.aggregation_request_creator->CreateProtocolRequest(
           start_aggregation_data_upload_uri_suffix, {},
           HttpRequest::Method::kPost, start_upload_request.SerializeAsString(),
           /*is_protobuf_encoded=*/true));
@@ -821,7 +864,8 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
 
 absl::Status
 HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
-    absl::StatusOr<InMemoryHttpResponse> http_response) {
+    absl::StatusOr<InMemoryHttpResponse> http_response,
+    PerTaskInfo& task_info) {
   absl::StatusOr<Operation> operation =
       ParseOperationProtoFromHttpResponse(http_response);
   if (!operation.ok()) {
@@ -837,7 +881,8 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
   }
   absl::StatusOr<Operation> response_operation_proto =
       protocol_request_helper_.PollOperationResponseUntilDone(
-          *operation, *aggregation_request_creator_, *interruptible_runner_);
+          *operation, *task_info.aggregation_request_creator,
+          *interruptible_runner_);
   if (!response_operation_proto.ok()) {
     return absl::Status(
         response_operation_proto.status().code(),
@@ -869,33 +914,35 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
   // point onwards, subsequent aggregation protocol requests should go to the
   // endpoint identified in the aggregation_protocol_forwarding_info.
   FCP_ASSIGN_OR_RETURN(
-      aggregation_request_creator_,
+      task_info.aggregation_request_creator,
       ProtocolRequestCreator::Create(
           api_key_, response_proto.aggregation_protocol_forwarding_info(),
           !flags_->disable_http_request_body_compression()));
   auto upload_resource = response_proto.resource();
-  aggregation_resource_name_ = upload_resource.resource_name();
+  task_info.aggregation_resource_name = upload_resource.resource_name();
   FCP_ASSIGN_OR_RETURN(
-      data_upload_request_creator_,
+      task_info.data_upload_request_creator,
       ProtocolRequestCreator::Create(
           api_key_, upload_resource.data_upload_forwarding_info(),
           !flags_->disable_http_request_body_compression()));
   // TODO(team): Remove the authorization token fallback once
   // client_token is always populated.
-  aggregation_client_token_ = !response_proto.client_token().empty()
-                                  ? response_proto.client_token()
-                                  : aggregation_authorization_token_;
+  task_info.aggregation_client_token =
+      !response_proto.client_token().empty()
+          ? response_proto.client_token()
+          : task_info.aggregation_authorization_token;
   return absl::OkStatus();
 }
 
 absl::Status HttpFederatedProtocol::UploadDataViaSimpleAgg(
-    std::string tf_checkpoint) {
+    std::string tf_checkpoint, PerTaskInfo& task_info) {
   FCP_LOG(INFO) << "Uploading checkpoint with simple aggregation.";
-  FCP_ASSIGN_OR_RETURN(std::string uri_suffix, CreateByteStreamUploadUriSuffix(
-                                                   aggregation_resource_name_));
+  FCP_ASSIGN_OR_RETURN(
+      std::string uri_suffix,
+      CreateByteStreamUploadUriSuffix(task_info.aggregation_resource_name));
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
-      data_upload_request_creator_->CreateProtocolRequest(
+      task_info.data_upload_request_creator->CreateProtocolRequest(
           uri_suffix, {{"upload_protocol", "raw"}}, HttpRequest::Method::kPost,
           std::move(tf_checkpoint), /*is_protobuf_encoded=*/false));
   FCP_LOG(INFO) << "ByteStream.Write request URI is: " << http_request->uri();
@@ -910,16 +957,18 @@ absl::Status HttpFederatedProtocol::UploadDataViaSimpleAgg(
   return absl::OkStatus();
 }
 
-absl::Status HttpFederatedProtocol::SubmitAggregationResult() {
+absl::Status HttpFederatedProtocol::SubmitAggregationResult(
+    PerTaskInfo& task_info) {
   FCP_LOG(INFO) << "Notifying the server that data upload is complete.";
   FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
                        CreateSubmitAggregationResultUriSuffix(
-                           aggregation_session_id_, aggregation_client_token_));
+                           task_info.aggregation_session_id,
+                           task_info.aggregation_client_token));
   SubmitAggregationResultRequest request;
-  request.set_resource_name(aggregation_resource_name_);
+  request.set_resource_name(task_info.aggregation_resource_name);
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
-      aggregation_request_creator_->CreateProtocolRequest(
+      task_info.aggregation_request_creator->CreateProtocolRequest(
           uri_suffix, {}, HttpRequest::Method::kPost,
           request.SerializeAsString(), /*is_protobuf_encoded=*/true));
   FCP_LOG(INFO) << "SubmitAggregationResult request URI is: "
@@ -937,13 +986,14 @@ absl::Status HttpFederatedProtocol::SubmitAggregationResult() {
 
 absl::Status HttpFederatedProtocol::AbortAggregation(
     absl::Status original_error_status,
-    absl::string_view error_message_for_server) {
+    absl::string_view error_message_for_server, PerTaskInfo& task_info) {
   FCP_LOG(INFO) << "Aborting aggregation: " << original_error_status;
-  FCP_CHECK(object_state_ == ObjectState::kReportFailedPermanentError)
+  FCP_CHECK(task_info.state == ObjectState::kReportFailedPermanentError)
       << "Invalid call sequence";
-  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
-                       CreateAbortAggregationUriSuffix(
-                           aggregation_session_id_, aggregation_client_token_));
+  FCP_ASSIGN_OR_RETURN(
+      std::string uri_suffix,
+      CreateAbortAggregationUriSuffix(task_info.aggregation_session_id,
+                                      task_info.aggregation_client_token));
   // We only provide the server with a simplified error message.
   absl::Status error_status(original_error_status.code(),
                             error_message_for_server);
@@ -951,7 +1001,7 @@ absl::Status HttpFederatedProtocol::AbortAggregation(
   *request.mutable_status() = ConvertAbslStatusToRpcStatus(error_status);
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
-      aggregation_request_creator_->CreateProtocolRequest(
+      task_info.aggregation_request_creator->CreateProtocolRequest(
           uri_suffix, {}, HttpRequest::Method::kPost,
           request.SerializeAsString(), /*is_protobuf_encoded=*/true));
   std::unique_ptr<InterruptibleRunner> cancellation_runner =
@@ -964,17 +1014,19 @@ absl::Status HttpFederatedProtocol::AbortAggregation(
 }
 
 absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
-    ComputationResults results, absl::Duration plan_duration) {
+    ComputationResults results, absl::Duration plan_duration,
+    PerTaskInfo& task_info) {
   FCP_ASSIGN_OR_RETURN(
       StartSecureAggregationResponse response_proto,
-      StartSecureAggregationAndReportTaskResult(plan_duration));
+      StartSecureAggregationAndReportTaskResult(plan_duration, task_info));
   SecureAggregationProtocolExecutionInfo protocol_execution_info =
       response_proto.protocol_execution_info();
   // TODO(team): Remove the authorization token fallback once
   // client_token is always populated.
-  aggregation_client_token_ = !response_proto.client_token().empty()
-                                  ? response_proto.client_token()
-                                  : aggregation_authorization_token_;
+  task_info.aggregation_client_token =
+      !response_proto.client_token().empty()
+          ? response_proto.client_token()
+          : task_info.aggregation_authorization_token;
 
   // Move checkpoint out of ComputationResults, and put it into a std::optional.
   std::optional<TFCheckpoint> tf_checkpoint;
@@ -996,8 +1048,8 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
                 this->log_manager_, this->should_abort_, this->timing_config_,
                 deadline);
           },
-          &server_response_holder, aggregation_session_id_,
-          aggregation_client_token_,
+          &server_response_holder, task_info.aggregation_session_id,
+          task_info.aggregation_client_token,
           response_proto.secagg_protocol_forwarding_info(),
           response_proto.masked_result_resource(),
           response_proto.nonmasked_result_resource(), std::move(tf_checkpoint),
@@ -1029,14 +1081,14 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
 
 absl::StatusOr<StartSecureAggregationResponse>
 HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
-    absl::Duration plan_duration) {
-  FCP_ASSIGN_OR_RETURN(
-      std::string start_secure_aggregation_uri_suffix,
-      CreateStartSecureAggregationUriSuffix(aggregation_session_id_,
-                                            aggregation_authorization_token_));
+    absl::Duration plan_duration, PerTaskInfo& task_info) {
+  FCP_ASSIGN_OR_RETURN(std::string start_secure_aggregation_uri_suffix,
+                       CreateStartSecureAggregationUriSuffix(
+                           task_info.aggregation_session_id,
+                           task_info.aggregation_authorization_token));
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> start_secure_aggregation_http_request,
-      aggregation_request_creator_->CreateProtocolRequest(
+      task_info.aggregation_request_creator->CreateProtocolRequest(
           start_secure_aggregation_uri_suffix, QueryParams(),
           HttpRequest::Method::kPost,
           StartSecureAggregationRequest::default_instance().SerializeAsString(),
@@ -1044,11 +1096,12 @@ HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
 
   FCP_ASSIGN_OR_RETURN(
       std::string report_task_result_uri_suffix,
-      CreateReportTaskResultUriSuffix(population_name_, session_id_));
-  FCP_ASSIGN_OR_RETURN(ReportTaskResultRequest report_task_result_request,
-                       CreateReportTaskResultRequest(
-                           engine::PhaseOutcome::COMPLETED, plan_duration,
-                           aggregation_session_id_, task_name_));
+      CreateReportTaskResultUriSuffix(population_name_, task_info.session_id));
+  FCP_ASSIGN_OR_RETURN(
+      ReportTaskResultRequest report_task_result_request,
+      CreateReportTaskResultRequest(
+          engine::PhaseOutcome::COMPLETED, plan_duration,
+          task_info.aggregation_session_id, task_info.task_name));
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> report_task_result_http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
@@ -1074,10 +1127,11 @@ HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
   }
   FCP_ASSIGN_OR_RETURN(Operation initial_operation,
                        ParseOperationProtoFromHttpResponse(responses[0]));
-  FCP_ASSIGN_OR_RETURN(Operation completed_operation,
-                       protocol_request_helper_.PollOperationResponseUntilDone(
-                           initial_operation, *aggregation_request_creator_,
-                           *interruptible_runner_));
+  FCP_ASSIGN_OR_RETURN(
+      Operation completed_operation,
+      protocol_request_helper_.PollOperationResponseUntilDone(
+          initial_operation, *task_info.aggregation_request_creator,
+          *interruptible_runner_));
   // The Operation has finished. Check if it resulted in an error, and if so
   // forward it after converting it to an absl::Status error.
   if (completed_operation.has_error()) {
@@ -1096,19 +1150,31 @@ HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
 }
 
 absl::Status HttpFederatedProtocol::ReportNotCompleted(
-    engine::PhaseOutcome phase_outcome, absl::Duration plan_duration) {
+    engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
+    std::optional<std::string> aggregation_session_id) {
   FCP_LOG(WARNING) << "Reporting outcome: " << static_cast<int>(phase_outcome);
-  FCP_CHECK(object_state_ == ObjectState::kCheckinAccepted)
+  PerTaskInfo* task_info;
+  if (aggregation_session_id.has_value()) {
+    if (!task_info_map_.contains(aggregation_session_id.value())) {
+      return absl::InvalidArgumentError("Unexpected aggregation_session_id.");
+    }
+    task_info = &task_info_map_[aggregation_session_id.value()];
+  } else {
+    task_info = &default_task_info_;
+  }
+  FCP_CHECK(task_info->state == ObjectState::kCheckinAccepted ||
+            task_info->state == ObjectState::kMultipleTaskAssignmentsAccepted)
       << "Invalid call sequence";
-  object_state_ = ObjectState::kReportCalled;
+  task_info->state = ObjectState::kReportCalled;
   FCP_ASSIGN_OR_RETURN(
       ReportTaskResultRequest request,
       CreateReportTaskResultRequest(phase_outcome, plan_duration,
-                                    aggregation_session_id_, task_name_));
+                                    task_info->aggregation_session_id,
+                                    task_info->task_name));
   // Construct the URI suffix.
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,
-      CreateReportTaskResultUriSuffix(population_name_, session_id_));
+      CreateReportTaskResultUriSuffix(population_name_, task_info->session_id));
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       task_assignment_request_creator_->CreateProtocolRequest(
@@ -1130,12 +1196,14 @@ absl::Status HttpFederatedProtocol::ReportNotCompleted(
 
 ::google::internal::federatedml::v2::RetryWindow
 HttpFederatedProtocol::GetLatestRetryWindow() {
+  ObjectState state = GetTheLatestStateFromAllTasks();
   // We explicitly enumerate all possible states here rather than using
   // "default", to ensure that when new states are added later on, the author
   // is forced to update this method and consider which is the correct
   // RetryWindow to return.
-  switch (object_state_) {
+  switch (state) {
     case ObjectState::kCheckinAccepted:
+    case ObjectState::kMultipleTaskAssignmentsAccepted:
     case ObjectState::kReportCalled:
       // If a client makes it past the 'checkin acceptance' stage, we use the
       // 'accepted' RetryWindow unconditionally (unless a permanent error is
@@ -1148,12 +1216,15 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
     case ObjectState::kEligibilityEvalDisabled:
     case ObjectState::kEligibilityEvalEnabled:
     case ObjectState::kCheckinRejected:
+    case ObjectState::kMultipleTaskAssignmentsNoAvailableTask:
+    case ObjectState::kReportMultipleTaskPartialError:
       FCP_CHECK(retry_times_.has_value());
       return GenerateRetryWindowFromRetryTime(
           retry_times_->retry_time_if_rejected);
     case ObjectState::kInitialized:
     case ObjectState::kEligibilityEvalCheckinFailed:
     case ObjectState::kCheckinFailed:
+    case ObjectState::kMultipleTaskAssignmentsFailed:
       if (retry_times_.has_value()) {
         // If we already received a server-provided retry window, then use it.
         return GenerateRetryWindowFromRetryTime(
@@ -1171,6 +1242,7 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
           bit_gen_);
     case ObjectState::kEligibilityEvalCheckinFailedPermanentError:
     case ObjectState::kCheckinFailedPermanentError:
+    case ObjectState::kMultipleTaskAssignmentsFailedPermanentError:
     case ObjectState::kReportFailedPermanentError:
       // If we encountered a permanent error during the eligibility eval or
       // regular checkins, then we use the Flags-configured 'permanent error'
@@ -1278,6 +1350,53 @@ void HttpFederatedProtocol::UpdateObjectStateIfPermanentError(
   if (federated_training_permanent_error_codes_.contains(
           static_cast<int32_t>(status.code()))) {
     object_state_ = permanent_error_object_state;
+  }
+}
+
+FederatedProtocol::ObjectState
+HttpFederatedProtocol::GetTheLatestStateFromAllTasks() {
+  // If we didn't have successful check-in or multiple task assignments, we
+  // don't have to check the per task states.
+  if (object_state_ != ObjectState::kCheckinAccepted &&
+      object_state_ != ObjectState::kMultipleTaskAssignmentsAccepted) {
+    return object_state_;
+  }
+  if (!flags_->http_protocol_supports_multiple_task_assignments()) {
+    return default_task_info_.state;
+  }
+
+  int32_t success_cnt = 0;
+  int32_t permanent_failure_cnt = 0;
+  int32_t task_cnt = 0;
+  auto count_func = [&success_cnt, &permanent_failure_cnt](ObjectState state) {
+    if (state == ObjectState::kReportCalled) {
+      success_cnt++;
+    }
+    if (state == ObjectState::kReportFailedPermanentError) {
+      permanent_failure_cnt++;
+    }
+  };
+
+  if (default_task_info_.state != ObjectState::kInitialized) {
+    task_cnt++;
+    count_func(default_task_info_.state);
+  }
+
+  for (const auto& item : task_info_map_) {
+    task_cnt++;
+    count_func(item.second.state);
+  }
+
+  // If none of the tasks succeeds, assume all of them failed with permanent
+  // error and return kReportFailedPermanentError. If all of them succeeds,
+  // return kReportCalled. If only some of the tasks succeed, return
+  // kReportMultipleTaskPartialError.
+  if (permanent_failure_cnt == task_cnt) {
+    return ObjectState::kReportFailedPermanentError;
+  } else if (success_cnt == task_cnt) {
+    return ObjectState::kReportCalled;
+  } else {
+    return ObjectState::kReportMultipleTaskPartialError;
   }
 }
 

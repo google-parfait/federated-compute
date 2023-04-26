@@ -227,6 +227,39 @@ class FederatedProtocol {
       std::function<void(const TaskAssignment&)>
           payload_uris_received_callback) = 0;
 
+  // A list of absl::StatusOr<TaskAssignment> returned by
+  // PerformMultipleTaskAssignments. Individual absl::StatusOr<TaskAssignment>
+  // may be an error status due to failed to fetch the plan resources.
+  struct MultipleTaskAssignments {
+    std::vector<absl::StatusOr<TaskAssignment>> task_assignments;
+  };
+
+  // Checks in with a federated server to get multiple task assignments.
+  //
+  // Must only be called once after the following conditions are met:
+  //
+  // - the caller previously called `EligibilityEvalCheckin()` and,
+  // - received a payload, and the returned EligibilityEvalTask's
+  // `PopulationEligibilitySpec` contained at least one task with
+  // TASK_ASSIGNMENT_MODE_MULTIPLE, for which the device is eligible.
+  //
+  //
+  // Returns:
+  // - On success, a `MultipleTaskAssignments`.
+  // - On error:
+  //   - ABORTED when one of the I/O operations got aborted by the server.
+  //   - CANCELLED when one of the I/O operations was interrupted by the client
+  //     (possibly due to a positive result from the should_abort callback).
+  //   - UNAVAILABLE when server cannot be reached or URI is invalid.
+  //   - NOT_FOUND if the server responds with NOT_FOUND, e.g. because the
+  //     specified population name is incorrect.
+  //   - UNIMPLEMENTED if an unexpected server response is received.
+  //   - INTERNAL for other unexpected client-side errors.
+  //   - any server-provided error code.
+  virtual absl::StatusOr<MultipleTaskAssignments>
+  PerformMultipleTaskAssignments(
+      const std::vector<std::string>& task_names) = 0;
+
   // Reports the result of a federated computation to the server. Must only be
   // called once and after a successful call to Checkin().
   // @param checkpoint A checkpoint proto.
@@ -244,8 +277,9 @@ class FederatedProtocol {
   //     message.
   //   - INTERNAL for other unexpected client-side errors.
   //   - any server-provided error code.
-  virtual absl::Status ReportCompleted(ComputationResults results,
-                                       absl::Duration plan_duration) = 0;
+  virtual absl::Status ReportCompleted(
+      ComputationResults results, absl::Duration plan_duration,
+      std::optional<std::string> aggregation_session_id) = 0;
 
   // Reports the unsuccessful result of a federated computation to the server.
   // Must only be called once and after a successful call to Checkin().
@@ -262,8 +296,9 @@ class FederatedProtocol {
   //     message, or if the results to report require SecAgg support.
   //   - INTERNAL for other unexpected client-side errors.
   //   - any server-provided error code.
-  virtual absl::Status ReportNotCompleted(engine::PhaseOutcome phase_outcome,
-                                          absl::Duration plan_duration) = 0;
+  virtual absl::Status ReportNotCompleted(
+      engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
+      std::optional<std::string> aggregation_session_id) = 0;
 
   // Returns the RetryWindow the caller should use when rescheduling, based on
   // the current protocol phase. The value returned by this method may change
@@ -325,6 +360,22 @@ class FederatedProtocol {
     // Checkin(...) was called, and the server accepted the client and returned
     // a payload, which must then be run to produce a report.
     kCheckinAccepted,
+    // PerformMultipleTaskAssignments(...) was called but it failed with a
+    // 'transient' error, without receiving a single task assignment. If some
+    // task assignments were successfully received, but some others failed (e.g.
+    // because their resources failed to be downloaded), then this state won't
+    // be used.
+    kMultipleTaskAssignmentsFailed,
+    // PerformMultipleTaskAssignments(...) was called but it failed with a
+    // 'permanent' error.
+    kMultipleTaskAssignmentsFailedPermanentError,
+    // PerformMultipleTaskAssignments(...) was called but an empty list of tasks
+    // is returned by the server.
+    kMultipleTaskAssignmentsNoAvailableTask,
+    // PerformMultipleTaskAssignments(...) was called, and the server accepted
+    // the client and returned one or more payload, which must then be run to
+    // produce a report.
+    kMultipleTaskAssignmentsAccepted,
     // Report(...) was called.
     kReportCalled,
     // Report(...) was called and it resulted in a 'permanent' error.
@@ -333,7 +384,10 @@ class FederatedProtocol {
     // like the other phases have), because by the time the report phase is
     // reached, a set of RetryWindows is guaranteed to have been received from
     // the server.
-    kReportFailedPermanentError
+    kReportFailedPermanentError,
+    // Report(...) was called for multiple tasks, and only a subset of the tasks
+    // succeed.
+    kReportMultipleTaskPartialError,
   };
 };
 
