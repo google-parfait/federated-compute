@@ -38,24 +38,19 @@ class TensorAggregator
 
   // Implementation of the base Aggregator class methods.
   Status Accumulate(InputTensorList tensors) override;
-  Status MergeWith(TensorAggregator&& other) override;
   bool CanReport() const override;
   StatusOr<OutputTensorList> Report() && override;
 
   // Returns the number of aggregated inputs.
-  int num_inputs() const { return num_inputs_; }
+  virtual int GetNumInputs() const = 0;
 
  protected:
   // Construct TensorAggregator
-  explicit TensorAggregator() : num_inputs_(0) {}
+  explicit TensorAggregator() {}
 
   // The actual implementation of the tensor aggregation to be provided by
   // a derived class.
   virtual Status AggregateTensors(InputTensorList tensors) = 0;
-
-  // The actual implementation of merging a list of output tensors from another
-  // instance of TensorAggregator, to be provided by the derived class.
-  virtual Status MergeOutputTensors(OutputTensorList other) = 0;
 
   // Checks if the current TensorAggregator is valid e.g. the resulting output
   // hasn't been consumed.
@@ -67,8 +62,6 @@ class TensorAggregator
  private:
   // Extracts the aggregated tensor and makes the current aggregator "consumed".
   OutputTensorList TakeTensors() &&;
-
-  int num_inputs_;
 };
 
 }  // namespace aggregation

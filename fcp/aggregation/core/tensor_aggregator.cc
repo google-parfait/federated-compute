@@ -28,19 +28,10 @@ Status TensorAggregator::Accumulate(InputTensorList tensors) {
   FCP_RETURN_IF_ERROR(CheckValid());
 
   // Delegate aggregation to the derived class.
-  num_inputs_++;
   return AggregateTensors(std::move(tensors));
 }
 
 bool TensorAggregator::CanReport() const { return CheckValid().ok(); }
-
-Status TensorAggregator::MergeWith(TensorAggregator&& other) {
-  FCP_RETURN_IF_ERROR(CheckValid());
-  FCP_RETURN_IF_ERROR(other.CheckValid());
-
-  num_inputs_ += other.num_inputs_;
-  return MergeOutputTensors(std::move(other).TakeOutputs());
-}
 
 StatusOr<OutputTensorList> TensorAggregator::Report() && {
   FCP_RETURN_IF_ERROR(CheckValid());

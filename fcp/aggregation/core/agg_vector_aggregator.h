@@ -17,6 +17,7 @@
 #ifndef FCP_AGGREGATION_CORE_AGG_VECTOR_AGGREGATOR_H_
 #define FCP_AGGREGATION_CORE_AGG_VECTOR_AGGREGATOR_H_
 
+#include <cstdint>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -46,6 +47,30 @@ class AggVectorAggregator : public TensorAggregator {
   // Provides mutable access to the aggregator data as a vector<T>
   inline std::vector<T>& data() { return data_vector_; }
 
+  int GetNumInputs() const override { return num_inputs_; }
+
+  Status MergeWith(TensorAggregator&& other) override {
+    FCP_RETURN_IF_ERROR(CheckValid());
+    FCP_ASSIGN_OR_RETURN(AggVectorAggregator<T> * other_ptr, CastOther(other));
+    FCP_RETURN_IF_ERROR((*other_ptr).CheckValid());
+    int64_t other_num_inputs = other.GetNumInputs();
+    OutputTensorList output_tensors = std::move(*other_ptr).TakeOutputs();
+    FCP_CHECK(output_tensors.size() == 1)
+        << "AggVectorAggregator::MergeOutputTensors: AggVectorAggregator "
+           "should produce a single output tensor";
+    const Tensor& output = output_tensors[0];
+    if (output.shape() != result_tensor_.shape()) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "AggVectorAggregator::MergeOutputTensors: tensor shape "
+                "mismatch";
+    }
+    // Delegate the actual aggregation to the specific aggregation
+    // intrinsic implementation.
+    AggregateVector(output.AsAggVector<T>());
+    num_inputs_ += other_num_inputs;
+    return FCP_STATUS(OK);
+  }
+
  protected:
   // Implementation of the tensor aggregation.
   Status AggregateTensors(InputTensorList tensors) override {
@@ -64,25 +89,7 @@ class AggVectorAggregator : public TensorAggregator {
     // Delegate the actual aggregation to the specific aggregation
     // intrinsic implementation.
     AggregateVector(tensor->AsAggVector<T>());
-    return FCP_STATUS(OK);
-  }
-
-  Status MergeOutputTensors(OutputTensorList output_tensors) override {
-    FCP_CHECK(output_tensors.size() == 1)
-        << "AggVectorAggregator should produce a single output tensor";
-    const Tensor& output = output_tensors[0];
-    if (output.dtype() != internal::TypeTraits<T>::kDataType) {
-      return FCP_STATUS(INVALID_ARGUMENT)
-             << "AggVectorAggregator::MergeOutputTensors: dtype mismatch";
-    }
-    if (output.shape() != result_tensor_.shape()) {
-      return FCP_STATUS(INVALID_ARGUMENT)
-             << "AggVectorAggregator::MergeOutputTensors: tensor shape "
-                "mismatch";
-    }
-    // Delegate the actual aggregation to the specific aggregation
-    // intrinsic implementation.
-    AggregateVector(output.AsAggVector<T>());
+    num_inputs_++;
     return FCP_STATUS(OK);
   }
 
@@ -103,13 +110,38 @@ class AggVectorAggregator : public TensorAggregator {
       : result_tensor_(
             Tensor::Create(dtype, shape, std::unique_ptr<TensorData>(data))
                 .value()),
-        data_vector_(*data) {
+        data_vector_(*data),
+        num_inputs_(0) {
     FCP_CHECK(internal::TypeTraits<T>::kDataType == dtype)
         << "Incompatible dtype";
   }
 
+  StatusOr<AggVectorAggregator<T>*> CastOther(TensorAggregator& other) {
+#ifndef FCP_NANOLIBC
+    AggVectorAggregator<T>* other_ptr =
+        dynamic_cast<AggVectorAggregator<T>*>(&other);
+    if (other_ptr == nullptr) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "AggVectorAggregator::MergeOutputTensors: Can only merge with"
+             << "another AggVectorAggregator operating on the same dtype "
+             << internal::TypeTraits<T>::kDataType;
+    }
+    return other_ptr;
+#else /* FCP_NANOLIBC */
+    // When compiling in nanolibc we do not have access to runtime type
+    // information or std::type_traits. Thus we cannot use dynamic cast and use
+    // static_cast instead.
+    // This means we are relying on the caller to always call the MergeWith
+    // method on two TensorAggregators of the same underlying type, or the
+    // program will have undefined behavior due to a static_cast to the wrong
+    // type.
+    return static_cast<AggVectorAggregator<T>*>(&other);
+#endif
+  }
+
   Tensor result_tensor_;
   std::vector<T>& data_vector_;
+  int num_inputs_;
 };
 
 }  // namespace aggregation
