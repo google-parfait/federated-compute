@@ -72,6 +72,7 @@ AGGREGATOR_SRCS = [
 
 AGGREGATOR_HDRS = [
     "agg_vector_aggregator.h",
+    "one_dim_grouping_aggregator.h",
     "aggregator.h",
     "tensor_aggregator.h",
     "tensor_aggregator_factory.h",
@@ -243,6 +244,20 @@ cc_test(
     deps = [
         ":tensor",
         ":vector_string_data",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "one_dim_grouping_aggregator_test",
+    srcs = ["one_dim_grouping_aggregator_test.cc"],
+    deps = [
+        ":aggregator",
+        ":tensor",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],
