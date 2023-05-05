@@ -27,9 +27,14 @@
 namespace fcp {
 namespace aggregation {
 
-size_t TensorShape::NumElements() const {
+StatusOr<size_t> TensorShape::NumElements() const {
   size_t num_elements = 1;
   for (auto dim_size : dim_sizes_) {
+    // If there are any dimensions of unknown size, the total number of elements
+    // is also unknown.
+    if (dim_size == -1)
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "TensorShape with unknown size has unknown number of elements.";
     num_elements *= dim_size;
   }
   return num_elements;
@@ -41,13 +46,9 @@ StatusOr<TensorShape> TensorShape::FromProto(
     const TensorShapeProto& shape_proto) {
   TensorShape::DimSizesVector dim_sizes;
   for (int64_t dim_size : shape_proto.dim_sizes()) {
-    if (dim_size < 0) {
-      return FCP_STATUS(INVALID_ARGUMENT)
-             << "Negative dimension size isn't supported when converting from "
-             << "shape_proto: " << shape_proto.ShortDebugString();
-    }
     dim_sizes.push_back(dim_size);
   }
+  FCP_RETURN_IF_ERROR(CheckValidDimSizes(dim_sizes));
   return TensorShape(std::move(dim_sizes));
 }
 

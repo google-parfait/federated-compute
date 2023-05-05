@@ -50,7 +50,7 @@ Status Tensor::CheckValid() const {
   // Verify that the total size of the data is consistent with the value type
   // and the shape.
   // TODO(team): Implement sparse tensors.
-  if (data_->byte_size() != shape_.NumElements() * value_size) {
+  if (data_->byte_size() != shape_.NumElements().value() * value_size) {
     return FCP_STATUS(FAILED_PRECONDITION)
            << "TensorData byte_size is inconsistent with the Tensor dtype and "
               "shape.";
@@ -61,7 +61,8 @@ Status Tensor::CheckValid() const {
 
 StatusOr<Tensor> Tensor::Create(DataType dtype, TensorShape shape,
                                 std::unique_ptr<TensorData> data) {
-  Tensor tensor(dtype, std::move(shape), std::move(data));
+  FCP_ASSIGN_OR_RETURN(size_t num_elements, shape.NumElements());
+  Tensor tensor(dtype, std::move(shape), num_elements, std::move(data));
   FCP_RETURN_IF_ERROR(tensor.CheckValid());
   return std::move(tensor);
 }
@@ -216,7 +217,7 @@ StatusOr<Tensor> Tensor::FromProto(const TensorProto& tensor_proto) {
   FCP_ASSIGN_OR_RETURN(TensorShape shape,
                        TensorShape::FromProto(tensor_proto.shape()));
   // TODO(team): The num_values is valid only for dense tensors.
-  size_t num_values = shape.NumElements();
+  FCP_ASSIGN_OR_RETURN(size_t num_values, shape.NumElements());
   StatusOr<std::unique_ptr<TensorData>> data;
   DTYPE_CASES(tensor_proto.dtype(), T,
               data = DecodeContent<T>(tensor_proto.content(), num_values));
@@ -229,7 +230,7 @@ StatusOr<Tensor> Tensor::FromProto(TensorProto&& tensor_proto) {
   FCP_ASSIGN_OR_RETURN(TensorShape shape,
                        TensorShape::FromProto(tensor_proto.shape()));
   // TODO(team): The num_values is valid only for dense tensors.
-  size_t num_values = shape.NumElements();
+  FCP_ASSIGN_OR_RETURN(size_t num_values, shape.NumElements());
   std::string content = std::move(*tensor_proto.mutable_content());
   StatusOr<std::unique_ptr<TensorData>> data;
   DTYPE_CASES(tensor_proto.dtype(), T,
@@ -244,9 +245,10 @@ TensorProto Tensor::ToProto() const {
   tensor_proto.set_dtype(dtype_);
   *(tensor_proto.mutable_shape()) = shape_.ToProto();
   // TODO(team): The num_values is valid only for dense tensors.
-  size_t num_values = shape_.NumElements();
   std::string content;
-  DTYPE_CASES(dtype_, T, content = EncodeContent<T>(data_.get(), num_values));
+  DTYPE_CASES(
+      dtype_, T,
+      content = EncodeContent<T>(data_.get(), shape_.NumElements().value()));
   *(tensor_proto.mutable_content()) = std::move(content);
   return tensor_proto;
 }

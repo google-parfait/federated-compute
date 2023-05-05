@@ -91,6 +91,9 @@ class Tensor final {
   // Gets the tensor shape.
   const TensorShape& shape() const { return shape_; }
 
+  // Gets the number of elements in the tensor.
+  size_t num_elements() const { return shape_.NumElements().value(); }
+
   // Readonly access to the tensor data.
   const TensorData& data() const { return *data_; }
 
@@ -109,7 +112,8 @@ class Tensor final {
   // TODO(team): Add serialization functions.
 
  private:
-  Tensor(DataType dtype, TensorShape shape, std::unique_ptr<TensorData> data)
+  Tensor(DataType dtype, TensorShape shape, size_t num_elements,
+         std::unique_ptr<TensorData> data)
       : dtype_(dtype), shape_(std::move(shape)), data_(std::move(data)) {}
 
   // Tensor data type.

@@ -41,8 +41,7 @@ template <typename T>
 class AggVectorAggregator : public TensorAggregator {
  public:
   AggVectorAggregator(DataType dtype, TensorShape shape)
-      : AggVectorAggregator(dtype, shape,
-                            new MutableVectorData<T>(shape.NumElements())) {}
+      : AggVectorAggregator(dtype, shape, CreateData(shape)) {}
 
   // Provides mutable access to the aggregator data as a vector<T>
   inline std::vector<T>& data() { return data_vector_; }
@@ -114,6 +113,13 @@ class AggVectorAggregator : public TensorAggregator {
         num_inputs_(0) {
     FCP_CHECK(internal::TypeTraits<T>::kDataType == dtype)
         << "Incompatible dtype";
+  }
+
+  static MutableVectorData<T>* CreateData(const TensorShape& shape) {
+    StatusOr<size_t> num_elements = shape.NumElements();
+    FCP_CHECK(num_elements.ok()) << "AggVectorAggregator: All dimensions of "
+                                    "tensor shape must be known in advance.";
+    return new MutableVectorData<T>(num_elements.value());
   }
 
   StatusOr<AggVectorAggregator<T>*> CastOther(TensorAggregator& other) {

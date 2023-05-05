@@ -127,7 +127,7 @@ TEST_F(InputTensorListTest, Inlined_ForEachLoop) {
   InputTensorList tensor_list = CreateInlined();
   uint64_t expected_size = 1;
   for (const Tensor* t : tensor_list) {
-    EXPECT_THAT(t->shape().NumElements(), Eq(expected_size));
+    EXPECT_THAT(t->num_elements(), Eq(expected_size));
     expected_size++;
   }
 }
@@ -280,7 +280,7 @@ TEST_F(InputTensorListTest, Allocated_ForEachLoop) {
   InputTensorList tensor_list = CreateAllocated();
   uint64_t expected_size = 1;
   for (const Tensor* t : tensor_list) {
-    EXPECT_THAT(t->shape().NumElements(), Eq(expected_size));
+    EXPECT_THAT(t->num_elements(), Eq(expected_size));
     expected_size++;
   }
 }

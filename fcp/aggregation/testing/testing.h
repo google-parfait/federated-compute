@@ -63,7 +63,7 @@ SummarizeCheckpoint(const absl::Cord& checkpoint);
 // Converts a potentially sparse tensor to a flat vector of tensor values.
 template <typename T>
 std::vector<T> TensorValuesToVector(const Tensor& arg) {
-  std::vector<T> vec(arg.shape().NumElements());
+  std::vector<T> vec(arg.num_elements());
   AggVector<T> agg_vector = arg.AsAggVector<T>();
   for (auto [i, v] : agg_vector) {
     vec[i] = v;
@@ -77,7 +77,7 @@ void DescribeTensor(::std::ostream* os, DataType dtype, TensorShape shape,
                     std::vector<T> values) {
   // Max number of tensor values to be printed.
   constexpr int kMaxValues = 100;
-  // TODO(team): Print dtype name istead of number.
+  // TODO(team): Print dtype name instead of number.
   *os << "{dtype: " << dtype;
   *os << ", shape: {";
   bool insert_comma = false;

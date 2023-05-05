@@ -163,8 +163,12 @@ class OneDimGroupingAggregator : public TensorAggregator {
   OutputTensorList TakeOutputs() && override {
     OutputTensorList outputs = std::vector<Tensor>();
     if (!data_vector_->empty()) {
+      FCP_CHECK(data_vector_->size() <= LONG_MAX)
+          << "TensorShape: Dimension size too large to be represented as a "
+             "signed long.";
       outputs.push_back(Tensor::Create(internal::TypeTraits<T>::kDataType,
-                                       TensorShape{data_vector_->size()},
+                                       TensorShape{static_cast<int64_t>(
+                                           data_vector_->size())},
                                        std::move(data_vector_))
                             .value());
     }

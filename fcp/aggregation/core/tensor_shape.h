@@ -36,14 +36,17 @@ namespace aggregation {
 // dimension sizes.
 class TensorShape final {
  public:
-  using DimSizesVector = std::vector<size_t>;
+  using DimSizesVector = std::vector<int64_t>;
 
   template <typename ForwardIterator>
   TensorShape(ForwardIterator first, ForwardIterator last)
-      : dim_sizes_(first, last) {}
+      : dim_sizes_(first, last) {
+    Status status = CheckValidDimSizes(dim_sizes_);
+    FCP_CHECK(status.ok()) << status.message();
+  }
 
-  TensorShape(std::initializer_list<size_t> dim_sizes)
-      : dim_sizes_(dim_sizes) {}
+  TensorShape(std::initializer_list<int64_t> dim_sizes)
+      : TensorShape(dim_sizes.begin(), dim_sizes.end()) {}
 
 #ifndef FCP_NANOLIBC
   // Creates a TensorShape from a TensorShapeProto.
@@ -60,7 +63,9 @@ class TensorShape final {
   // Gets the total number of elements (which is a multiplication of sizes of
   // all dimensions).
   // For a scalar tensor with zero dimensions this returns 1.
-  size_t NumElements() const;
+  // For a tensor with any unknown dimensions this returns an INVALID_ARGUMENT
+  // status.
+  StatusOr<size_t> NumElements() const;
 
   friend bool operator==(const TensorShape& a, const TensorShape& b) {
     return a.dim_sizes_ == b.dim_sizes_;
@@ -73,6 +78,16 @@ class TensorShape final {
  private:
   explicit TensorShape(DimSizesVector&& dim_sizes)
       : dim_sizes_(std::move(dim_sizes)) {}
+
+  static Status CheckValidDimSizes(const DimSizesVector& dim_sizes) {
+    for (auto dim_size : dim_sizes) {
+      if (dim_size < -1) {
+        return FCP_STATUS(INVALID_ARGUMENT)
+               << "TensorShape: Dimension size less than -1 isn't supported.";
+      }
+    }
+    return FCP_STATUS(OK);
+  }
 
   // TODO(team): Consider optimizing the storage for better inlining
   // of small number of dimensions.

@@ -42,6 +42,7 @@ TEST(TensorTest, Create_Dense) {
   EXPECT_THAT(t, IsOk());
   EXPECT_THAT(t->dtype(), Eq(DT_FLOAT));
   EXPECT_THAT(t->shape(), Eq(TensorShape{3}));
+  EXPECT_THAT(t->num_elements(), Eq(3));
   EXPECT_TRUE(t->is_dense());
   EXPECT_THAT(t->AsAggVector<float>().size(), Eq(3));
 }
@@ -52,8 +53,14 @@ TEST(TensorTest, Create_StringTensor) {
   EXPECT_THAT(t, IsOk());
   EXPECT_THAT(t->dtype(), Eq(DT_STRING));
   EXPECT_THAT(t->shape(), Eq(TensorShape{2}));
+  EXPECT_THAT(t->num_elements(), Eq(2));
   EXPECT_TRUE(t->is_dense());
   EXPECT_THAT(t->AsAggVector<string_view>().size(), Eq(2));
+}
+
+TEST(TensorTest, Create_ShapeWithUnknownDimensions) {
+  auto t = Tensor::Create(DT_FLOAT, {-1}, CreateTestData<float>({1, 2, 3}));
+  EXPECT_THAT(t, IsCode(INVALID_ARGUMENT));
 }
 
 TEST(TensorTest, Create_DataValidationError) {

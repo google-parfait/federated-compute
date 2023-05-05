@@ -106,6 +106,13 @@ void CopyToDest<string_view>(const void*& source_ptr, uint64_t* dest_ptr,
   source_ptr = static_cast<const void*>(++string_view_ptr);
 }
 
+TensorShape GetTensorShapeForSize(size_t size) {
+  FCP_CHECK(size <= LONG_MAX)
+      << "TensorShape: Dimension size too large to be represented as a "
+         "signed long.";
+  return TensorShape({static_cast<int64_t>(size)});
+}
+
 // Given a vector of uint64_t pointers, where the data pointed to can be safely
 // interpreted as type T, returns a Tensor of underlying data type
 // corresponding to T and the same length as the input vector. Each element of
@@ -121,7 +128,7 @@ StatusOr<Tensor> GetTensorForType(
     output_tensor_data->push_back(*ptr);
   }
   return Tensor::Create(internal::TypeTraits<T>::kDataType,
-                        TensorShape{key_iters.size()},
+                        GetTensorShapeForSize(key_iters.size()),
                         std::move(output_tensor_data));
 }
 
@@ -146,7 +153,7 @@ StatusOr<Tensor> GetTensorForType<string_view>(
     strings_for_output.push_back(*ptr);
   }
   return Tensor::Create(
-      DT_STRING, TensorShape{key_iters.size()},
+      DT_STRING, GetTensorShapeForSize(key_iters.size()),
       std::make_unique<VectorStringData>(std::move(strings_for_output)));
 }
 
@@ -183,7 +190,8 @@ StatusOr<Tensor> CompositeKeyCombiner::Accumulate(
   // Iterate over all the TensorDataIterators at once to get the value for the
   // composite key.
   auto ordinals = std::make_unique<MutableVectorData<int64_t>>();
-  for (int i = 0; i < shape.NumElements(); ++i) {
+  FCP_ASSIGN_OR_RETURN(size_t num_elements, shape.NumElements());
+  for (int i = 0; i < num_elements; ++i) {
     // Create a string with the correct amount of memory to store an int64
     // representation of the element in each input tensor at the current
     // index.

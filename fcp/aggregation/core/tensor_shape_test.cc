@@ -16,8 +16,13 @@
 
 #include "fcp/aggregation/core/tensor_shape.h"
 
+#include <climits>
+#include <vector>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "fcp/base/monitoring.h"
+#include "fcp/testing/testing.h"
 
 namespace fcp {
 namespace aggregation {
@@ -31,20 +36,33 @@ TEST(TensorShapeTest, CreateFromInitializerList) {
 }
 
 TEST(TensorShapeTest, CreateFromIterator) {
-  std::vector<size_t> dim_sizes = {4, 8, 3, 2};
+  std::vector<int64_t> dim_sizes = {4, 8, 3, 2};
   TensorShape shape(dim_sizes.begin(), dim_sizes.end());
   EXPECT_THAT(shape.dim_sizes(), ElementsAre(4, 8, 3, 2));
 }
 
+TEST(TensorShapeTest, CreateFromIterator_UnknownDimension) {
+  std::vector<int64_t> dim_sizes = {4, 8, -1, 2};
+  TensorShape shape(dim_sizes.begin(), dim_sizes.end());
+  EXPECT_THAT(shape.dim_sizes(), ElementsAre(4, 8, -1, 2));
+}
+
 TEST(TensorShapeTest, NumElements) {
   TensorShape shape({2, 3, 5});
-  EXPECT_EQ(shape.NumElements(), 30);
+  EXPECT_THAT(shape.NumElements(), IsOk());
+  EXPECT_EQ(shape.NumElements().value(), 30);
+}
+
+TEST(TensorShapeTest, NumElements_UnknownDimension) {
+  TensorShape shape({2, -1, 5});
+  EXPECT_THAT(shape.NumElements(), IsCode(INVALID_ARGUMENT));
 }
 
 TEST(TensorShapeTest, ScalarShape) {
   TensorShape shape({});
   EXPECT_EQ(shape.dim_sizes().size(), 0);
-  EXPECT_EQ(shape.NumElements(), 1);
+  EXPECT_THAT(shape.NumElements(), IsOk());
+  EXPECT_EQ(shape.NumElements().value(), 1);
 }
 
 TEST(TensorShapeTest, EqualityOperators) {
@@ -53,6 +71,17 @@ TEST(TensorShapeTest, EqualityOperators) {
   EXPECT_NE(shape, TensorShape({}));
   EXPECT_NE(shape, TensorShape({1}));
   EXPECT_NE(shape, TensorShape({3, 4}));
+}
+
+TEST(TensorShapeDeathTest, CreateFromInitializerList_InvalidDimensionTooSmall) {
+  EXPECT_DEATH(new TensorShape({2, -3, 5}),
+               "TensorShape: Dimension size less than -1");
+}
+
+TEST(TensorShapeDeathTest, CreateFromIterator_InvalidDimensionTooSmall) {
+  std::vector<int64_t> dim_sizes = {4, 8, -3, 2};
+  EXPECT_DEATH(new TensorShape(dim_sizes.begin(), dim_sizes.end()),
+               "TensorShape: Dimension size less than -1");
 }
 
 }  // namespace

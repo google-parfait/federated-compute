@@ -20,7 +20,6 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/strings/str_format.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/base/monitoring.h"
@@ -55,7 +54,7 @@ tf::Status AddTensorSlice<string_view>(
     tf::checkpoint::TensorSliceWriter* writer, const std::string& name,
     const tf::TensorShape& shape, const tf::TensorSlice& slice,
     const Tensor& tensor) {
-  std::vector<tf::tstring> values(tensor.shape().NumElements());
+  std::vector<tf::tstring> values(tensor.num_elements());
   const auto* string_views =
       static_cast<const string_view*>(tensor.data().data());
   for (size_t i = 0; i < values.size(); ++i) {
