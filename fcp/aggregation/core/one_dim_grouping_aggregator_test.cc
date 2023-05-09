@@ -124,14 +124,14 @@ class MinGroupingAggregator final : public OneDimGroupingAggregator<int32_t> {
   int32_t GetDefaultValue() override { return INT_MAX; }
 };
 
-TEST(GroupingAggregatorTest, EmptyReport) {
+TEST(OneDimGroupingAggregatorTest, EmptyReport) {
   SumGroupingAggregator<int32_t> aggregator(DT_INT32);
   auto result = std::move(aggregator).Report();
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result->size(), Eq(0));
 }
 
-TEST(GroupingAggregatorTest, ScalarAggregation_Succeeds) {
+TEST(OneDimGroupingAggregatorTest, ScalarAggregation_Succeeds) {
   SumGroupingAggregator<int32_t> aggregator(DT_INT32);
   Tensor ordinal =
       Tensor::Create(DT_INT64, {}, CreateTestData<int64_t>({0})).value();
@@ -150,7 +150,7 @@ TEST(GroupingAggregatorTest, ScalarAggregation_Succeeds) {
   EXPECT_THAT(result.value()[0], IsTensor({1}, {6}));
 }
 
-TEST(GroupingAggregatorTest, DenseAggregation_Succeeds) {
+TEST(OneDimGroupingAggregatorTest, DenseAggregation_Succeeds) {
   const TensorShape shape = {4};
   SumGroupingAggregator<int32_t> aggregator(DT_INT32);
   Tensor ordinals =
@@ -177,7 +177,7 @@ TEST(GroupingAggregatorTest, DenseAggregation_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupingAggregatorTest, DifferentOrdinalsPerAccumulate_Succeeds) {
+TEST(OneDimGroupingAggregatorTest, DifferentOrdinalsPerAccumulate_Succeeds) {
   const TensorShape shape = {4};
   SumGroupingAggregator<int32_t> aggregator(DT_INT32);
   Tensor t1_ordinals =
@@ -213,7 +213,7 @@ TEST(GroupingAggregatorTest, DifferentOrdinalsPerAccumulate_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupingAggregatorTest, DifferentShapesPerAccumulate_Succeeds) {
+TEST(OneDimGroupingAggregatorTest, DifferentShapesPerAccumulate_Succeeds) {
   SumGroupingAggregator<int32_t> aggregator(DT_INT32);
   Tensor t1_ordinals =
       Tensor::Create(DT_INT64, {2}, CreateTestData<int64_t>({2, 0})).value();
@@ -247,7 +247,7 @@ TEST(GroupingAggregatorTest, DifferentShapesPerAccumulate_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupingAggregatorTest,
+TEST(OneDimGroupingAggregatorTest,
      DifferentShapesPerAccumulate_NonzeroDefaultValue_Succeeds) {
   // Use a MinGroupingAggregator which has a non-zero default value so we can
   // test that when the output grows, elements are set to the default value.
@@ -284,7 +284,7 @@ TEST(GroupingAggregatorTest,
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupingAggregatorTest, Merge_Succeeds) {
+TEST(OneDimGroupingAggregatorTest, Merge_Succeeds) {
   SumGroupingAggregator<int32_t> aggregator1(DT_INT32);
   SumGroupingAggregator<int32_t> aggregator2(DT_INT32);
   Tensor ordinal =
@@ -306,7 +306,7 @@ TEST(GroupingAggregatorTest, Merge_Succeeds) {
   EXPECT_THAT(result.value()[0], IsTensor({1}, {6}));
 }
 
-TEST(GroupingAggregatorTest, Merge_BothEmpty_Succeeds) {
+TEST(OneDimGroupingAggregatorTest, Merge_BothEmpty_Succeeds) {
   SumGroupingAggregator<int32_t> aggregator1(DT_INT32);
   SumGroupingAggregator<int32_t> aggregator2(DT_INT32);
 
@@ -320,7 +320,7 @@ TEST(GroupingAggregatorTest, Merge_BothEmpty_Succeeds) {
   EXPECT_THAT(result->size(), Eq(0));
 }
 
-TEST(GroupingAggregatorTest, Merge_ThisOutputEmpty_Succeeds) {
+TEST(OneDimGroupingAggregatorTest, Merge_ThisOutputEmpty_Succeeds) {
   SumGroupingAggregator<int32_t> aggregator1(DT_INT32);
   SumGroupingAggregator<int32_t> aggregator2(DT_INT32);
 
@@ -353,7 +353,7 @@ TEST(GroupingAggregatorTest, Merge_ThisOutputEmpty_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupingAggregatorTest, Merge_OtherOutputEmpty_Succeeds) {
+TEST(OneDimGroupingAggregatorTest, Merge_OtherOutputEmpty_Succeeds) {
   SumGroupingAggregator<int32_t> aggregator1(DT_INT32);
   SumGroupingAggregator<int32_t> aggregator2(DT_INT32);
 
@@ -386,7 +386,7 @@ TEST(GroupingAggregatorTest, Merge_OtherOutputEmpty_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupingAggregatorTest, Merge_OtherOutputHasFewerElements_Succeeds) {
+TEST(OneDimGroupingAggregatorTest, Merge_OtherOutputHasFewerElements_Succeeds) {
   SumGroupingAggregator<int32_t> aggregator1(DT_INT32);
   SumGroupingAggregator<int32_t> aggregator2(DT_INT32);
 
@@ -424,7 +424,7 @@ TEST(GroupingAggregatorTest, Merge_OtherOutputHasFewerElements_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupingAggregatorTest, Merge_OtherOutputHasMoreElements_Succeeds) {
+TEST(OneDimGroupingAggregatorTest, Merge_OtherOutputHasMoreElements_Succeeds) {
   SumGroupingAggregator<int32_t> aggregator1(DT_INT32);
   SumGroupingAggregator<int32_t> aggregator2(DT_INT32);
 
@@ -464,7 +464,7 @@ TEST(GroupingAggregatorTest, Merge_OtherOutputHasMoreElements_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupingAggregatorTest,
+TEST(OneDimGroupingAggregatorTest,
      Merge_OtherOutputHasMoreElements_NonzeroDefaultValue_Succeeds) {
   // Use a MinGroupingAggregator which has a non-zero default value so we can
   // test that when the output grows, elements are set to the default value.
@@ -505,7 +505,8 @@ TEST(GroupingAggregatorTest,
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupingAggregatorTest, Aggregate_OrdinalTensorHasIncompatibleDataType) {
+TEST(OneDimGroupingAggregatorTest,
+     Aggregate_OrdinalTensorHasIncompatibleDataType) {
   SumGroupingAggregator<int32_t> aggregator(DT_INT32);
   Tensor ordinal =
       Tensor::Create(DT_INT32, {}, CreateTestData<int32_t>({0})).value();
@@ -513,7 +514,7 @@ TEST(GroupingAggregatorTest, Aggregate_OrdinalTensorHasIncompatibleDataType) {
   EXPECT_THAT(aggregator.Accumulate({&ordinal, &t}), IsCode(INVALID_ARGUMENT));
 }
 
-TEST(GroupingAggregatorTest, Aggregate_IncompatibleDataType) {
+TEST(OneDimGroupingAggregatorTest, Aggregate_IncompatibleDataType) {
   SumGroupingAggregator<int32_t> aggregator(DT_INT32);
   Tensor ordinal =
       Tensor::Create(DT_INT64, {}, CreateTestData<int64_t>({0})).value();
@@ -521,7 +522,7 @@ TEST(GroupingAggregatorTest, Aggregate_IncompatibleDataType) {
   EXPECT_THAT(aggregator.Accumulate({&ordinal, &t}), IsCode(INVALID_ARGUMENT));
 }
 
-TEST(GroupingAggregatorTest,
+TEST(OneDimGroupingAggregatorTest,
      Aggregate_OrdinalAndValueTensorsHaveIncompatibleShapes) {
   SumGroupingAggregator<int32_t> aggregator(DT_INT32);
   Tensor ordinal =
@@ -530,7 +531,8 @@ TEST(GroupingAggregatorTest,
   EXPECT_THAT(aggregator.Accumulate({&ordinal, &t}), IsCode(INVALID_ARGUMENT));
 }
 
-TEST(GroupingAggregatorTest, Aggregate_MultidimensionalTensorsNotSupported) {
+TEST(OneDimGroupingAggregatorTest,
+     Aggregate_MultidimensionalTensorsNotSupported) {
   SumGroupingAggregator<int32_t> aggregator(DT_INT32);
   Tensor ordinal =
       Tensor::Create(DT_INT64, {2, 2}, CreateTestData<int64_t>({0, 0, 0, 0}))
@@ -540,14 +542,14 @@ TEST(GroupingAggregatorTest, Aggregate_MultidimensionalTensorsNotSupported) {
   EXPECT_THAT(aggregator.Accumulate({&ordinal, &t}), IsCode(INVALID_ARGUMENT));
 }
 
-TEST(GroupingAggregatorTest, Merge_IncompatibleDataType) {
+TEST(OneDimGroupingAggregatorTest, Merge_IncompatibleDataType) {
   SumGroupingAggregator<int32_t> aggregator1(DT_INT32);
   SumGroupingAggregator<float> aggregator2(DT_FLOAT);
   EXPECT_THAT(aggregator1.MergeWith(std::move(aggregator2)),
               IsCode(INVALID_ARGUMENT));
 }
 
-TEST(GroupingAggregatorTest, FailsAfterBeingConsumed) {
+TEST(OneDimGroupingAggregatorTest, FailsAfterBeingConsumed) {
   Tensor ordinal =
       Tensor::Create(DT_INT64, {}, CreateTestData<int64_t>({0})).value();
   Tensor t = Tensor::Create(DT_INT32, {}, CreateTestData({0})).value();
@@ -572,7 +574,7 @@ TEST(GroupingAggregatorTest, FailsAfterBeingConsumed) {
               IsCode(FAILED_PRECONDITION));
 }
 
-TEST(GroupingAggregatorTest, TypeCheckFailure) {
+TEST(OneDimGroupingAggregatorTest, TypeCheckFailure) {
   EXPECT_DEATH(new SumGroupingAggregator<float>(DT_INT32),
                "Incompatible dtype");
 }

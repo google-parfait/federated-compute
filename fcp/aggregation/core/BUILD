@@ -92,6 +92,32 @@ cc_library(
     ],
 )
 
+GROUP_BY_AGGREGATOR_SRCS = [
+    "group_by_aggregator.cc",
+    "composite_key_combiner.cc",
+]
+
+GROUP_BY_AGGREGATOR_HDRS = [
+    "one_dim_grouping_aggregator.h",
+    "intrinsic.h",
+    "group_by_aggregator.h",
+    "composite_key_combiner.h",
+]
+
+cc_library(
+    name = "group_by_aggregator",
+    srcs = GROUP_BY_AGGREGATOR_SRCS,
+    hdrs = GROUP_BY_AGGREGATOR_HDRS,
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        ":tensor",
+        ":tensor_cc_proto",
+        ":vector_string_data",
+        "//fcp/base",
+    ],
+)
+
 cc_test(
     name = "tensor_test",
     srcs = [
@@ -168,18 +194,6 @@ cc_library(
     alwayslink = 1,
 )
 
-cc_library(
-    name = "composite_key_combiner",
-    srcs = ["composite_key_combiner.cc"],
-    hdrs = ["composite_key_combiner.h"],
-    deps = [
-        ":tensor",
-        ":tensor_cc_proto",
-        ":vector_string_data",
-        "//fcp/base",
-    ],
-)
-
 # Separate target from :tensor is required for vector_string_data as string_view is not yet
 # supported for nanolibc.
 cc_library(
@@ -217,7 +231,8 @@ cc_test(
     name = "composite_key_combiner_test",
     srcs = ["composite_key_combiner_test.cc"],
     deps = [
-        ":composite_key_combiner",
+        ":aggregator",
+        ":group_by_aggregator",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",
@@ -253,8 +268,24 @@ cc_test(
     name = "one_dim_grouping_aggregator_test",
     srcs = ["one_dim_grouping_aggregator_test.cc"],
     deps = [
-        ":aggregator",
+        ":group_by_aggregator",
         ":tensor",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "group_by_aggregator_test",
+    srcs = ["group_by_aggregator_test.cc"],
+    deps = [
+        ":aggregator",
+        ":group_by_aggregator",
+        ":tensor",
+        ":tensor_cc_proto",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/base",

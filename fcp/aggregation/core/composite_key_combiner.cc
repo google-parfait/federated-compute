@@ -29,6 +29,7 @@
 #include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/core/vector_string_data.h"
 #include "fcp/base/monitoring.h"
@@ -222,8 +223,8 @@ StatusOr<Tensor> CompositeKeyCombiner::Accumulate(
                         std::move(ordinals));
 }
 
-StatusOr<std::vector<Tensor>> CompositeKeyCombiner::GetOutputKeys() const {
-  std::vector<Tensor> output_keys;
+OutputTensorList CompositeKeyCombiner::GetOutputKeys() const {
+  OutputTensorList output_keys;
   // Creating empty tensors is not allowed, so if there are no keys yet,
   // which could happen if GetOutputKeys is called before Accumulate, return
   // an empty vector.
@@ -238,7 +239,7 @@ StatusOr<std::vector<Tensor>> CompositeKeyCombiner::GetOutputKeys() const {
   for (DataType dtype : dtypes_) {
     StatusOr<Tensor> t;
     DTYPE_CASES(dtype, T, t = GetTensorForType<T>(key_iters));
-    FCP_RETURN_IF_ERROR(t.status());
+    FCP_CHECK(t.status().ok()) << t.status().message();
     output_keys.push_back(std::move(t.value()));
     for (auto key_it = key_iters.begin(); key_it != key_iters.end(); ++key_it) {
       ++*key_it;
@@ -280,8 +281,8 @@ StatusOr<TensorShape> CompositeKeyCombiner::CheckValidAndGetShape(
     DataType expected_dtype = dtypes_[i];
     if (expected_dtype != t->dtype()) {
       return FCP_STATUS(INVALID_ARGUMENT)
-             << "Tensor did not have expected dtype " << expected_dtype
-             << " and instead had dtype " << t->dtype();
+             << "Tensor at position " << i << " did not have expected dtype "
+             << expected_dtype << " and instead had dtype " << t->dtype();
     }
   }
   return *shape;

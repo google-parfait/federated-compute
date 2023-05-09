@@ -26,6 +26,7 @@
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
@@ -95,9 +96,8 @@ TEST(CompositeKeyCombinerTest, InputWithWrongTypes_Invalid) {
 
 TEST(CompositeKeyCombinerTest, OutputBeforeAccumulate_Empty) {
   CompositeKeyCombiner combiner(std::vector<DataType>{DT_FLOAT});
-  StatusOr<std::vector<Tensor>> output = combiner.GetOutputKeys();
-  ASSERT_OK(output);
-  EXPECT_THAT(output.value(), IsEmpty());
+  OutputTensorList output = combiner.GetOutputKeys();
+  EXPECT_THAT(output, IsEmpty());
 }
 
 TEST(CompositeKeyCombinerTest, AccumulateAndOutput_SingleElement) {
@@ -108,10 +108,9 @@ TEST(CompositeKeyCombinerTest, AccumulateAndOutput_SingleElement) {
   ASSERT_OK(result);
   EXPECT_THAT(result.value(), IsTensor<int64_t>({1}, {0}));
 
-  StatusOr<std::vector<Tensor>> output = combiner.GetOutputKeys();
-  ASSERT_OK(output);
-  EXPECT_THAT(output.value().size(), Eq(1));
-  EXPECT_THAT(output.value()[0], IsTensor<float>({1}, {1.3}));
+  OutputTensorList output = combiner.GetOutputKeys();
+  EXPECT_THAT(output.size(), Eq(1));
+  EXPECT_THAT(output[0], IsTensor<float>({1}, {1.3}));
 }
 
 TEST(CompositeKeyCombinerTest, AccumulateAndOutput_NumericTypes) {
@@ -129,12 +128,11 @@ TEST(CompositeKeyCombinerTest, AccumulateAndOutput_NumericTypes) {
   ASSERT_OK(result);
   EXPECT_THAT(result.value(), IsTensor<int64_t>({3}, {0, 1, 2}));
 
-  StatusOr<std::vector<Tensor>> output = combiner.GetOutputKeys();
-  ASSERT_OK(output);
-  EXPECT_THAT(output.value().size(), Eq(3));
-  EXPECT_THAT(output.value()[0], IsTensor<float>({3}, {1.1, 1.2, 1.3}));
-  EXPECT_THAT(output.value()[1], IsTensor<int32_t>({3}, {1, 2, 3}));
-  EXPECT_THAT(output.value()[2], IsTensor<int64_t>({3}, {4, 5, 6}));
+  OutputTensorList output = combiner.GetOutputKeys();
+  EXPECT_THAT(output.size(), Eq(3));
+  EXPECT_THAT(output[0], IsTensor<float>({3}, {1.1, 1.2, 1.3}));
+  EXPECT_THAT(output[1], IsTensor<int32_t>({3}, {1, 2, 3}));
+  EXPECT_THAT(output[2], IsTensor<int64_t>({3}, {4, 5, 6}));
 }
 
 TEST(CompositeKeyCombinerTest,
@@ -170,12 +168,11 @@ TEST(CompositeKeyCombinerTest,
   ASSERT_OK(result2);
   EXPECT_THAT(result2.value(), IsTensor<int64_t>({5}, {1, 2, 3, 2, 1}));
 
-  StatusOr<std::vector<Tensor>> output = combiner.GetOutputKeys();
-  ASSERT_OK(output);
-  EXPECT_THAT(output.value().size(), Eq(3));
-  EXPECT_THAT(output.value()[0], IsTensor<float>({4}, {1.1, 1.2, 1.1, 1.1}));
-  EXPECT_THAT(output.value()[1], IsTensor<int32_t>({4}, {1, 2, 3, 2}));
-  EXPECT_THAT(output.value()[2], IsTensor<int64_t>({4}, {4, 5, 6, 5}));
+  OutputTensorList output = combiner.GetOutputKeys();
+  EXPECT_THAT(output.size(), Eq(3));
+  EXPECT_THAT(output[0], IsTensor<float>({4}, {1.1, 1.2, 1.1, 1.1}));
+  EXPECT_THAT(output[1], IsTensor<int32_t>({4}, {1, 2, 3, 2}));
+  EXPECT_THAT(output[2], IsTensor<int64_t>({4}, {4, 5, 6, 5}));
 }
 
 TEST(CompositeKeyCombinerTest, AccumulateAndOutput_StringTypes) {
@@ -196,13 +193,11 @@ TEST(CompositeKeyCombinerTest, AccumulateAndOutput_StringTypes) {
   ASSERT_OK(result);
   EXPECT_THAT(result.value(), IsTensor<int64_t>({3}, {0, 1, 2}));
 
-  StatusOr<std::vector<Tensor>> output = combiner.GetOutputKeys();
-  ASSERT_OK(output);
-  EXPECT_THAT(output.value().size(), Eq(3));
-  EXPECT_THAT(output.value()[0], IsTensor<float>({3}, {1.1, 1.2, 1.3}));
-  EXPECT_THAT(output.value()[1], IsTensor<string_view>({3}, {"abc", "de", ""}));
-  EXPECT_THAT(output.value()[2],
-              IsTensor<string_view>({3}, {"fghi", "jklmn", "o"}));
+  OutputTensorList output = combiner.GetOutputKeys();
+  EXPECT_THAT(output.size(), Eq(3));
+  EXPECT_THAT(output[0], IsTensor<float>({3}, {1.1, 1.2, 1.3}));
+  EXPECT_THAT(output[1], IsTensor<string_view>({3}, {"abc", "de", ""}));
+  EXPECT_THAT(output[2], IsTensor<string_view>({3}, {"fghi", "jklmn", "o"}));
 }
 
 TEST(CompositeKeyCombinerTest,
@@ -243,12 +238,11 @@ TEST(CompositeKeyCombinerTest,
   ASSERT_OK(result2);
   EXPECT_THAT(result2.value(), IsTensor<int64_t>({5}, {2, 3, 0, 1, 0}));
 
-  StatusOr<std::vector<Tensor>> output = combiner.GetOutputKeys();
-  EXPECT_THAT(output.value().size(), Eq(3));
-  EXPECT_THAT(output.value()[0], IsTensor<float>({4}, {1.1, 1.2, 1.3, 1.4}));
-  EXPECT_THAT(output.value()[1],
-              IsTensor<string_view>({4}, {"abc", "de", "", "abc"}));
-  EXPECT_THAT(output.value()[2],
+  OutputTensorList output = combiner.GetOutputKeys();
+  EXPECT_THAT(output.size(), Eq(3));
+  EXPECT_THAT(output[0], IsTensor<float>({4}, {1.1, 1.2, 1.3, 1.4}));
+  EXPECT_THAT(output[1], IsTensor<string_view>({4}, {"abc", "de", "", "abc"}));
+  EXPECT_THAT(output[2],
               IsTensor<string_view>({4}, {"fghi", "jklmn", "o", "pqrs"}));
 }
 

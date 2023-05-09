@@ -27,6 +27,7 @@
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
 
@@ -52,7 +53,7 @@ namespace aggregation {
 // returned by Accumulate for that composite key was i, the composite key will
 // be found at position i in the output vector.
 //
-// This class is not threadsafe.
+// This class is not thread safe.
 class CompositeKeyCombiner {
  public:
   ~CompositeKeyCombiner() = default;
@@ -94,7 +95,10 @@ class CompositeKeyCombiner {
   // position 8 when it encountered this combination of elements in the input
   // tensor list at position 8, then the elements in the composite key will
   // appear at position 5 in the output tensors returned by this method.
-  StatusOr<std::vector<Tensor>> GetOutputKeys() const;
+  OutputTensorList GetOutputKeys() const;
+
+  // Gets a reference to the expected types for this CompositeKeyCombiner.
+  const std::vector<DataType>& dtypes() const { return dtypes_; }
 
  private:
   // Checks that the provided InputTensorList can be accumulated into this

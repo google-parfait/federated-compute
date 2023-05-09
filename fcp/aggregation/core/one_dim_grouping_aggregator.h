@@ -28,14 +28,13 @@
 #include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
-#include "fcp/aggregation/core/tensor_data.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
 namespace aggregation {
 
-// GroupingAggregator class is a specialization of TensorAggregator which
+// OneDimGroupingAggregator class is a specialization of TensorAggregator which
 // takes in a tensor containing ordinals and a tensor containing values, and
 // accumulates the values into the output positions indicated by the
 // corresponding ordinals.
@@ -46,6 +45,8 @@ namespace aggregation {
 // left to the subclass.
 //
 // The implementation operates on AggVector<T> instances rather than tensors.
+//
+// This class is not thread safe.
 template <typename T>
 class OneDimGroupingAggregator : public TensorAggregator {
  public:
@@ -65,7 +66,8 @@ class OneDimGroupingAggregator : public TensorAggregator {
         dynamic_cast<OneDimGroupingAggregator<T>*>(&other);
     if (other_ptr == nullptr) {
       return FCP_STATUS(INVALID_ARGUMENT)
-             << "GroupingAggregator::MergeOutputTensors: Can only merge with "
+             << "OneDimGroupingAggregator::MergeOutputTensors: Can only merge "
+                "with "
                 "another GroupingAggregator operating on the same dtype "
              << internal::TypeTraits<T>::kDataType;
     }
@@ -83,7 +85,7 @@ class OneDimGroupingAggregator : public TensorAggregator {
       // An empty output is valid and merging it into the current
       // GroupingAggregator is a no-op.
       FCP_CHECK(output_tensors.empty())
-          << "GroupingAggregator::MergeOutputTensors: GroupingAggregator "
+          << "OneDimGroupingAggregator::MergeOutputTensors: GroupingAggregator "
              "should produce at most a single output tensor.";
     }
 
@@ -92,6 +94,15 @@ class OneDimGroupingAggregator : public TensorAggregator {
   }
 
   int GetNumInputs() const override { return num_inputs_; }
+
+  Status CheckValid() const override {
+    if (data_vector_ == nullptr) {
+      return FCP_STATUS(FAILED_PRECONDITION)
+             << "OneDimGroupingAggregator::CheckValid: Output has already been "
+                "consumed.";
+    }
+    return FCP_STATUS(OK);
+  }
 
  protected:
   // Provides mutable access to the aggregator data as a vector<T>
@@ -105,36 +116,36 @@ class OneDimGroupingAggregator : public TensorAggregator {
   // indicated by the corresponding ordinals.
   Status AggregateTensors(InputTensorList tensors) override {
     FCP_CHECK(tensors.size() == 2)
-        << "GroupingAggregator should operate on 2 input tensors";
+        << "OneDimGroupingAggregator should operate on 2 input tensors";
 
     const Tensor* ordinals = tensors[0];
     if (ordinals->dtype() != DT_INT64) {
       return FCP_STATUS(INVALID_ARGUMENT)
-             << "GroupingAggregator::AggregateTensors: dtype mismatch for "
-                "tensor 0. Expected DT_INT64.";
+             << "OneDimGroupingAggregator::AggregateTensors: dtype mismatch "
+                "for tensor 0. Expected DT_INT64.";
     }
     const Tensor* tensor = tensors[1];
     if (tensor->dtype() != internal::TypeTraits<T>::kDataType) {
       return FCP_STATUS(INVALID_ARGUMENT)
-             << "GroupingAggregator::AggregateTensors: dtype mismatch for "
-                "tensor 1";
+             << "OneDimGroupingAggregator::AggregateTensors: dtype mismatch "
+                "for tensor 1";
     }
     if (ordinals->shape() != tensor->shape()) {
       return FCP_STATUS(INVALID_ARGUMENT)
-             << "GroupingAggregator::AggregateTensors: tensor shape mismatch. "
-                "Shape of both tensors must be the same.";
+             << "OneDimGroupingAggregator::AggregateTensors: tensor shape "
+                "mismatch. Shape of both tensors must be the same.";
     }
     int num_dimensions = tensor->shape().dim_sizes().size();
     if (num_dimensions > 1) {
       return FCP_STATUS(INVALID_ARGUMENT)
-             << "GroupingAggregator::AggregateTensors: Only 1 dimensional "
-                "tensors supported. Input tensor has "
+             << "OneDimGroupingAggregator::AggregateTensors: Only 1 "
+                "dimensional tensors supported. Input tensor has "
              << num_dimensions << " dimensions.";
     }
     if (!ordinals->is_dense() || !tensor->is_dense()) {
       return FCP_STATUS(INVALID_ARGUMENT)
-             << "GroupingAggregator::AggregateTensors: Only dense tensors are "
-                "supported.";
+             << "OneDimGroupingAggregator::AggregateTensors: Only dense "
+                "tensors are supported.";
     }
     num_inputs_++;
     AggVector<T> value_vector = tensor->AsAggVector<T>();
@@ -148,15 +159,6 @@ class OneDimGroupingAggregator : public TensorAggregator {
     // Resize once outside the loop to avoid quadratic behavior.
     data_vector_->resize(final_size, GetDefaultValue());
     AggregateVectorByOrdinals(ordinals_vector, value_vector);
-    return FCP_STATUS(OK);
-  }
-
-  Status CheckValid() const override {
-    if (data_vector_ == nullptr) {
-      return FCP_STATUS(FAILED_PRECONDITION)
-             << "GroupingAggregator::CheckValid: Output has already been "
-                "consumed.";
-    }
     return FCP_STATUS(OK);
   }
 

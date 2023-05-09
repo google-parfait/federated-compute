@@ -32,6 +32,13 @@ class TensorSpec final {
   TensorSpec(std::string name, DataType dtype, TensorShape shape)
       : name_(std::move(name)), dtype_(dtype), shape_(std::move(shape)) {}
 
+  bool operator==(const TensorSpec& other) const {
+    return name_ == other.name_ && dtype_ == other.dtype_ &&
+           shape_ == other.shape_;
+  }
+
+  bool operator!=(const TensorSpec& other) const { return !(*this == other); }
+
   const std::string& name() const { return name_; }
   DataType dtype() const { return dtype_; }
   const TensorShape& shape() const { return shape_; }
