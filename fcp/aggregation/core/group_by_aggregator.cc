@@ -16,6 +16,7 @@
 
 #include "fcp/aggregation/core/group_by_aggregator.h"
 
+#include <memory>
 #include <optional>
 #include <typeinfo>
 #include <utility>
@@ -77,15 +78,16 @@ GroupByAggregator::GroupByAggregator(
   num_tensors_per_input_ = num_keys_per_input_ + num_value_inputs;
   FCP_CHECK(num_tensors_per_input_ > 0)
       << "GroupByAggregator: Must operate on a nonzero number of tensors.";
-  // TODO(team): If there are no input keys we should support a columnar
-  // aggregation that aggregates all the values in each column and produces a
-  // single output value per column. This would be equivalent to having
-  // identical key values for all rows.
-  FCP_CHECK(num_keys_per_input_ > 0)
-      << "GroupByAggregator: Must group by a nonzero number of keys.";
   FCP_CHECK(num_keys_per_input_ == output_key_specs->size())
       << "GroupByAggregator: Size of input_key_specs must match size of "
          "output_key_specs.";
+  // If there are no input keys, support a columnar aggregation that aggregates
+  // all the values in each column and produces a single output value per
+  // column. This would be equivalent to having identical key values for all
+  // rows.
+  if (num_keys_per_input_ == 0) {
+    return;
+  }
   std::vector<DataType> key_types;
   key_types.reserve(num_keys_per_input_);
   for (int i = 0; i < num_keys_per_input_; ++i) {
@@ -118,18 +120,7 @@ Status GroupByAggregator::MergeWith(TensorAggregator&& other) {
               "another GroupByAggregator";
   }
   FCP_RETURN_IF_ERROR((*other_ptr).CheckValid());
-
-  if (!other_ptr->CompatibleKeySpecs(key_combiner_->dtypes(),
-                                     *output_key_specs_)) {
-    return FCP_STATUS(INVALID_ARGUMENT)
-           << "GroupByAggregator::MergeWith: Expected other "
-              "GroupByAggregator to have the same key input and output specs";
-  }
-  if (!other_ptr->CompatibleInnerIntrinsics(intrinsics_)) {
-    return FCP_STATUS(INVALID_ARGUMENT)
-           << "GroupByAggregator::MergeWith: Expected other "
-              "GroupByAggregator to use compatible inner intrinsics";
-  }
+  FCP_RETURN_IF_ERROR(other_ptr->IsCompatible(*this));
   int other_num_inputs = other_ptr->GetNumInputs();
   OutputTensorList other_output_tensors =
       std::move(*other_ptr).TakeOutputsInternal();
@@ -150,7 +141,7 @@ Status GroupByAggregator::AggregateTensors(InputTensorList tensors) {
 }
 
 Status GroupByAggregator::CheckValid() const {
-  if (key_combiner_ == std::nullopt) {
+  if (output_consumed_) {
     return FCP_STATUS(FAILED_PRECONDITION)
            << "GroupByAggregator::CheckValid: Output has already been "
               "consumed.";
@@ -224,12 +215,7 @@ Status GroupByAggregator::AggregateTensorsInternal(InputTensorList tensors) {
     }
   }
 
-  InputTensorList keys(num_keys_per_input_);
-  for (int i = 0; i < num_keys_per_input_; ++i) {
-    keys[i] = tensors[i];
-  }
-  FCP_ASSIGN_OR_RETURN(Tensor ordinals,
-                       key_combiner_->Accumulate(std::move(keys)));
+  FCP_ASSIGN_OR_RETURN(Tensor ordinals, CreateOrdinalsByGroupingKeys(tensors));
 
   input_index = num_keys_per_input_;
   for (Intrinsic& intrinsic : intrinsics_) {
@@ -251,9 +237,12 @@ Status GroupByAggregator::AggregateTensorsInternal(InputTensorList tensors) {
 }
 
 OutputTensorList GroupByAggregator::TakeOutputsInternal() && {
-  OutputTensorList outputs = key_combiner_->GetOutputKeys();
-  key_combiner_ = std::nullopt;
+  output_consumed_ = true;
+  OutputTensorList outputs;
   if (num_inputs_ == 0) return outputs;
+  if (key_combiner_.has_value()) {
+    outputs = key_combiner_->GetOutputKeys();
+  }
   outputs.reserve(outputs.size() + intrinsics_.size());
   for (auto& intrinsic : intrinsics_) {
     StatusOr<OutputTensorList> value_output =
@@ -266,21 +255,63 @@ OutputTensorList GroupByAggregator::TakeOutputsInternal() && {
   return outputs;
 }
 
-bool GroupByAggregator::CompatibleInnerIntrinsics(
-    const std::vector<Intrinsic>& intrinsics) const {
-  if (intrinsics.size() != intrinsics_.size()) return false;
-  for (int i = 0; i < intrinsics.size(); ++i) {
-    if (intrinsics[i].inputs() != intrinsics_[i].inputs()) return false;
-    if (intrinsics[i].outputs() != intrinsics_[i].outputs()) return false;
+StatusOr<Tensor> GroupByAggregator::CreateOrdinalsByGroupingKeys(
+    const InputTensorList& inputs) {
+  if (key_combiner_.has_value()) {
+    InputTensorList keys(num_keys_per_input_);
+    for (int i = 0; i < num_keys_per_input_; ++i) {
+      keys[i] = inputs[i];
+    }
+    return key_combiner_->Accumulate(std::move(keys));
   }
-  return true;
+  // If there are no keys, we should aggregate all elements in a column into one
+  // element, as if there were an imaginary key column with identical values for
+  // all rows.
+  auto ordinals =
+      std::make_unique<MutableVectorData<int64_t>>(inputs[0]->num_elements());
+  return Tensor::Create(internal::TypeTraits<int64_t>::kDataType,
+                        inputs[0]->shape(), std::move(ordinals));
 }
 
-bool GroupByAggregator::CompatibleKeySpecs(
-    const std::vector<DataType>& input_key_types,
-    const std::vector<TensorSpec>& output_key_specs) const {
-  return key_combiner_->dtypes() == input_key_types &&
-         output_key_specs == *output_key_specs_;
+Status GroupByAggregator::IsCompatible(const GroupByAggregator& other) const {
+  if (other.key_combiner_.has_value() != key_combiner_.has_value()) {
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "GroupByAggregator::MergeWith: "
+              "Expected other GroupByAggregator to have the same key input and "
+              "output specs";
+  }
+  if (!key_combiner_.has_value()) {
+    return FCP_STATUS(OK);
+  }
+  // The constructor validates that input key types match output key types, so
+  // checking that the output key types of both aggregators match is sufficient
+  // to verify key compatibility.
+  if (*(other.output_key_specs_) != *output_key_specs_) {
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "GroupByAggregator::MergeWith: "
+              "Expected other GroupByAggregator to have the same key input and "
+              "output specs";
+  }
+  if (other.intrinsics_.size() != intrinsics_.size()) {
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "GroupByAggregator::MergeWith: Expected other "
+              "GroupByAggregator to use the same number of inner intrinsics";
+  }
+  for (int i = 0; i < other.intrinsics_.size(); ++i) {
+    if (other.intrinsics_[i].inputs() != intrinsics_[i].inputs()) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "GroupByAggregator::MergeWith: Expected other "
+                "GroupByAggregator to use inner intrinsics with the same "
+                "inputs.";
+    }
+    if (other.intrinsics_[i].outputs() != intrinsics_[i].outputs()) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "GroupByAggregator::MergeWith: Expected other "
+                "GroupByAggregator to use inner intrinsics with the same "
+                "outputs.";
+    }
+  }
+  return FCP_STATUS(OK);
 }
 
 }  // namespace aggregation

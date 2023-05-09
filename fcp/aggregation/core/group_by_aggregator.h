@@ -127,23 +127,27 @@ class GroupByAggregator : public TensorAggregator {
   // Once this function is called, CheckValid will return false.
   OutputTensorList TakeOutputsInternal() &&;
 
-  // Returns true if the input and output tensor specs of the provided
-  // intrinsics match those of the sub-intrinsics held by this
-  // GroupByAggregator.
+  // If there are key tensors for this GroupByAggregator, then group key inputs
+  // into unique composite keys, and produce an ordinal for each element of the
+  // input corresponding to the index of the unique composite key in the output.
+  // Otherwise, produce an ordinals vector of the same shape as the inputs, but
+  // made up of all zeroes, so that all elements will be aggregated into a
+  // single output element.
+  StatusOr<Tensor> CreateOrdinalsByGroupingKeys(const InputTensorList& inputs);
+
+  // Returns OK if the input and output tensor specs of the intrinsics
+  // held by other match those of the sub-intrinsics held by this
+  // GroupByAggregator, and the data types of input keys and the TensorSpecs of
+  // output keys match those for this GroupByAggregator. Otherwise returns
+  // INVALID_ARGUMENT.
   // TODO(team): Also validate that intrinsic URIs match.
-  bool CompatibleInnerIntrinsics(
-      const std::vector<Intrinsic>& intrinsics) const;
+  Status IsCompatible(const GroupByAggregator& other) const;
 
-  // Returns true if the data types of input keys and the TensorSpecs of output
-  // keys match those for this GroupByAggregator.
-  bool CompatibleKeySpecs(
-      const std::vector<DataType>& input_key_types,
-      const std::vector<TensorSpec>& output_key_specs) const;
-
+  bool output_consumed_ = false;
   int num_inputs_;
   const size_t num_keys_per_input_;
   size_t num_tensors_per_input_;
-  std::optional<CompositeKeyCombiner> key_combiner_;
+  std::optional<CompositeKeyCombiner> key_combiner_ = std::nullopt;
   std::vector<Intrinsic> intrinsics_;
   const std::vector<TensorSpec>* output_key_specs_;
 };
