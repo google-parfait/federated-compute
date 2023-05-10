@@ -878,24 +878,30 @@ message SlicesTestData {
 // IORouter messages specify how to set up a single TF sess.run call for each
 // component.
 //
-// The pre-broadcast logic is obtained by transforming the server_prepare TFF
-// computation in the DistributeAggregateForm. It takes the server state as
-// input, and it generates the checkpoint to broadcast to the clients and
-// potentially an intermediate server state. The intermediate server state may
-// be used by the aggregation and post-aggregation logic.
+// For TFF tasks with a DistributeAggregateForm server_prepare TFF computation
+// that produces a client checkpoint and/or intermediate state, we generate
+// pre-broadcast logic. This logic is derived from the server_prepare TFF
+// computation. It takes the server state as input, and it generates the
+// checkpoint to broadcast to the clients and potentially an intermediate server
+// state. The intermediate server state may be used by the aggregation and
+// post-aggregation logic. Some TFF tasks or other task types may not require
+// any pre-broadcast logic.
 //
 // The aggregation logic represents the aggregation of client results at the
 // server and is described using a list of ServerAggregationConfig messages.
 // Each ServerAggregationConfig message describes a single aggregation operation
 // on a set of input/output tensors. The input tensors may represent parts of
-// either the client results or the intermediate server state. These messages
-// are obtained by transforming the client_to_server_aggregation TFF computation
-// in the DistributeAggregateForm.
+// either the client results or the intermediate server state. For TFF tasks,
+// these messages are obtained by transforming the client_to_server_aggregation
+// TFF computation in the DistributeAggregateForm.
 //
-// The post-aggregation logic is obtained by transforming the server_result TFF
-// computation in the DistributeAggregateForm. It takes the intermediate server
-// state and the aggregated client results as input, and it generates the new
-// server state and potentially other server-side output.
+// For TFF tasks, the post-aggregation logic is obtained by transforming the
+// server_result TFF computation in the DistributeAggregateForm. It takes the
+// intermediate server state (potentially empty) and the aggregated client
+// results as input, and it generates the new server state and other server-side
+// output, if needed. Other types of tasks may not require any post-aggregation
+// logic, in which case the aggregated client results will become the new server
+// state and the server output (i.e. metrics) will be empty.
 //
 // Note that while a ServerPhaseV2 message can be generated for all types of
 // intrinsics, it is currently only compatible with the ClientPhase message if
@@ -909,12 +915,15 @@ message ServerPhaseV2 {
   // A short CamelCase name for the ServerPhaseV2.
   string name = 1;
 
-  // A functional interface for the TensorFlow logic the server should perform
-  // prior to the server-to-client broadcast. This should be used with the
-  // TensorFlow graph defined in server_graph_prepare_bytes.
+  // Optional. A functional interface for the TensorFlow logic the server should
+  // perform prior to the server-to-client broadcast. This should be set iff
+  // server_graph_prepare_bytes is set. If unset, the client checkpoint and
+  // intermediate server state will both be empty.
   TensorflowSpec tensorflow_spec_prepare = 3;
 
-  // The specification of inputs needed by the server_prepare TF logic.
+  // Optional. The specification of inputs needed by the server_prepare TF
+  // logic. This should be set iff server_graph_prepare_bytes is set. If unset,
+  // the client checkpoint and intermediate server state will both be empty.
   oneof server_prepare_io_router {
     ServerPrepareIORouter prepare_router = 4;
   }
@@ -922,13 +931,16 @@ message ServerPhaseV2 {
   // A list of client-to-server aggregations to perform.
   repeated ServerAggregationConfig aggregations = 2;
 
-  // A functional interface for the TensorFlow logic the server should perform
-  // post-aggregation. This should be used with the TensorFlow graph defined
-  // in server_graph_result_bytes.
+  // Optional. A functional interface for the TensorFlow logic the server should
+  // perform post-aggregation. This should be set iff server_graph_result_bytes
+  // is set. If unset, the server output (i.e. metrics) will be empty and the
+  // updated server state will contain the aggregated client results.
   TensorflowSpec tensorflow_spec_result = 5;
 
-  // The specification of inputs and outputs needed by the server_result TF
-  // logic.
+  // Optional. The specification of inputs and outputs needed by the
+  // server_result TF logic. This should be set iff server_graph_result_bytes is
+  // set. If unset, the server output (i.e. metrics) will be empty and the
+  // updated server state will contain the aggregated client results.
   oneof server_result_io_router {
     ServerResultIORouter result_router = 6;
   }
