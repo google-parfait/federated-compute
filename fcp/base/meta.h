@@ -248,10 +248,6 @@ constexpr auto LookupTypeLink(LinkedTypeToken<T> t) -> decltype(TypeLink_(t)) {
 template <template <typename> class M, typename Z>
 struct UnwrapTemplateImpl {
   static constexpr bool kValid = false;
-
-  struct Type {
-    static_assert(FailIfReached<Z>(), "Z must be M<T> for some type T");
-  };
 };
 
 template <template <typename> class M, typename T>
