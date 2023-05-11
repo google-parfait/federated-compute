@@ -77,5 +77,5 @@ Use `--config=clang` to build with clang and libc++. On Debian, this requires
 installing several additional packages:
 
 ```
-sudo apt install -y clang lld libc++-dev libc++abi-dev`
+sudo apt install -y clang lld libc++-dev libc++abi-dev
 ```
