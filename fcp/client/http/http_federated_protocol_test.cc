@@ -78,6 +78,10 @@ using ::google::internal::federatedcompute::v1::EligibilityEvalTask;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
+using ::google::internal::federatedcompute::v1::
+    PerformMultipleTaskAssignmentsRequest;
+using ::google::internal::federatedcompute::v1::
+    PerformMultipleTaskAssignmentsResponse;
 using ::google::internal::federatedcompute::v1::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::
     ReportEligibilityEvalTaskResultRequest;
@@ -155,6 +159,12 @@ constexpr char kClientToken[] = "CLIENT_TOKEN";
 constexpr char kResourceName[] = "CHECKPOINT_RESOURCE";
 constexpr char kFederatedSelectUriTemplate[] = "https://federated.select";
 constexpr char kOperationName[] = "my_operation";
+constexpr char kMultiTaskId_1[] = "TASK_1";
+constexpr char kMultiTaskClientSessionId_1[] = "CLIENT_SESSION_ID_1";
+constexpr char kMultiTaskAggregationSessionId_1[] = "AGGREGATION_SESSION_ID_1";
+constexpr char kMultiTaskId_2[] = "TASK_2";
+constexpr char kMultiTaskClientSessionId_2[] = "CLIENT_SESSION_ID_2";
+constexpr char kMultiTaskAggregationSessionId_2[] = "AGGREGATION_SESSION_ID_2";
 
 const int32_t kCancellationWaitingPeriodSec = 1;
 const int32_t kMinimumClientsInServerVisibleAggregate = 2;
@@ -218,6 +228,13 @@ MATCHER_P(ReportTaskResultRequestMatcher, matcher,
     return false;
   }
   return ExplainMatchResult(matcher, request, result_listener);
+}
+
+MATCHER(IsOk, "") { return arg.ok(); }
+
+MATCHER_P(IsOkAndHolds, m, "") {
+  return testing::ExplainMatchResult(IsOk(), arg, result_listener) &&
+         testing::ExplainMatchResult(m, arg.value(), result_listener);
 }
 
 constexpr int kTransientErrorsRetryPeriodSecs = 10;
@@ -378,31 +395,44 @@ StartTaskAssignmentResponse GetFakeRejectedTaskAssignmentResponse() {
   return response;
 }
 
+TaskAssignment CreateTaskAssignment(
+    const Resource& plan, const Resource& checkpoint,
+    const std::string& federated_select_uri_template,
+    const std::string& client_session_id,
+    const std::string& aggregation_session_id, const std::string& task_name,
+    int32_t minimum_clients_in_server_visible_aggregate) {
+  TaskAssignment task_assignment;
+  ForwardingInfo* forwarding_info =
+      task_assignment.mutable_aggregation_data_forwarding_info();
+  forwarding_info->set_target_uri_prefix(kAggregationTargetUri);
+  task_assignment.set_session_id(client_session_id);
+  task_assignment.set_aggregation_id(aggregation_session_id);
+  task_assignment.set_authorization_token(kAuthorizationToken);
+  task_assignment.set_task_name(task_name);
+  *task_assignment.mutable_plan() = plan;
+  *task_assignment.mutable_init_checkpoint() = checkpoint;
+  task_assignment.mutable_federated_select_uri_info()->set_uri_template(
+      federated_select_uri_template);
+  if (minimum_clients_in_server_visible_aggregate > 0) {
+    task_assignment.mutable_secure_aggregation_info()
+        ->set_minimum_clients_in_server_visible_aggregate(
+            minimum_clients_in_server_visible_aggregate);
+  } else {
+    task_assignment.mutable_aggregation_info();
+  }
+  return task_assignment;
+}
+
 StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
     const Resource& plan, const Resource& checkpoint,
     const std::string& federated_select_uri_template,
     const std::string& aggregation_session_id,
     int32_t minimum_clients_in_server_visible_aggregate) {
   StartTaskAssignmentResponse response;
-  TaskAssignment* task_assignment = response.mutable_task_assignment();
-  ForwardingInfo* forwarding_info =
-      task_assignment->mutable_aggregation_data_forwarding_info();
-  forwarding_info->set_target_uri_prefix(kAggregationTargetUri);
-  task_assignment->set_session_id(kClientSessionId);
-  task_assignment->set_aggregation_id(aggregation_session_id);
-  task_assignment->set_authorization_token(kAuthorizationToken);
-  task_assignment->set_task_name(kTaskName);
-  *task_assignment->mutable_plan() = plan;
-  *task_assignment->mutable_init_checkpoint() = checkpoint;
-  task_assignment->mutable_federated_select_uri_info()->set_uri_template(
-      federated_select_uri_template);
-  if (minimum_clients_in_server_visible_aggregate > 0) {
-    task_assignment->mutable_secure_aggregation_info()
-        ->set_minimum_clients_in_server_visible_aggregate(
-            minimum_clients_in_server_visible_aggregate);
-  } else {
-    task_assignment->mutable_aggregation_info();
-  }
+  *response.mutable_task_assignment() =
+      CreateTaskAssignment(plan, checkpoint, federated_select_uri_template,
+                           kClientSessionId, aggregation_session_id, kTaskName,
+                           minimum_clients_in_server_visible_aggregate);
   return response;
 }
 
@@ -519,7 +549,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // successful execution of EligibilityEvalCheckin(). It returns a
   // absl::Status, which the caller should verify is OK using ASSERT_OK.
   absl::Status RunSuccessfulEligibilityEvalCheckin(
-      bool eligibility_eval_enabled = true) {
+      bool eligibility_eval_enabled = true,
+      bool support_multiple_task_assignments = false) {
     EligibilityEvalTaskResponse eval_task_response;
     if (eligibility_eval_enabled) {
       // We return a fake response which returns the plan/initial checkpoint
@@ -543,7 +574,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
                 PerformSingleRequest(SimpleHttpRequestMatcher(
                     request_uri, HttpRequest::Method::kPost, _,
                     EligibilityEvalTaskRequestMatcher(
-                        EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
+                        EqualsProto(GetExpectedEligibilityEvalTaskRequest(
+                            support_multiple_task_assignments))))))
         .WillOnce(Return(FakeHttpResponse(
             200, HeaderList(), eval_task_response.SerializeAsString())));
 
@@ -565,7 +597,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // utility function used by Report*() tests that depend on a prior,
   // successful execution of Checkin(). It returns a
   // absl::Status, which the caller should verify is OK using ASSERT_OK.
-  absl::Status RunSuccessfulCheckin(bool eligibility_eval_enabled = true) {
+  absl::Status RunSuccessfulCheckin(
+      bool report_eligibility_eval_result = true) {
     // We return a fake response which returns the plan/initial checkpoint
     // data inline, to keep things simple.
     std::string expected_plan = kPlan;
@@ -603,7 +636,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
                     plan_uri, HttpRequest::Method::kGet, _, "")))
         .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan)));
 
-    if (eligibility_eval_enabled) {
+    if (report_eligibility_eval_result) {
       std::string report_eet_request_uri =
           "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
           "eligibilityevaltasks/"
@@ -615,6 +648,90 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     return federated_protocol_
         ->Checkin(expected_eligibility_info,
                   mock_task_received_callback_.AsStdFunction())
+        .status();
+  }
+
+  absl::Status RunSuccessfulMultipleTaskAssignments(
+      bool eligibility_eval_enabled = true) {
+    if (eligibility_eval_enabled) {
+      std::string report_eet_request_uri =
+          "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+          "eligibilityevaltasks/"
+          "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+      ExpectSuccessfulReportEligibilityEvalTaskResultRequest(
+          report_eet_request_uri, absl::OkStatus());
+    }
+
+    std::vector<std::string> task_names{kMultiTaskId_1, kMultiTaskId_2};
+
+    PerformMultipleTaskAssignmentsRequest request;
+    request.mutable_client_version()->set_version_code(kClientVersion);
+    request.mutable_resource_capabilities()->add_supported_compression_formats(
+        ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+    for (const auto& task_name : task_names) {
+      request.add_task_names(task_name);
+    }
+
+    PerformMultipleTaskAssignmentsResponse response;
+    Resource plan_1;
+    std::string expected_plan_1 = "plan1";
+    *plan_1.mutable_inline_resource()->mutable_data() = expected_plan_1;
+    Resource checkpoint_1;
+    std::string expected_checkpoint_1 = "checkpoint1";
+    *checkpoint_1.mutable_inline_resource()->mutable_data() =
+        expected_checkpoint_1;
+    *response.add_task_assignments() = CreateTaskAssignment(
+        plan_1, checkpoint_1, kFederatedSelectUriTemplate,
+        kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
+        kMultiTaskId_1, kMinimumClientsInServerVisibleAggregate);
+    Resource plan_2;
+    std::string plan_uri = "https://fake.uri/plan";
+    plan_2.set_uri(plan_uri);
+    std::string checkpoint_uri = "https://fake.uri/checkpoint";
+    Resource checkpoint_2;
+    checkpoint_2.set_uri(checkpoint_uri);
+    *response.add_task_assignments() = CreateTaskAssignment(
+        plan_2, checkpoint_2, kFederatedSelectUriTemplate,
+        kMultiTaskClientSessionId_2, kMultiTaskAggregationSessionId_2,
+        kMultiTaskId_2, kMinimumClientsInServerVisibleAggregate);
+    std::string expected_plan_2 = "expected_plan_2";
+    std::string expected_checkpoint_2 = "expected_checkpoint_2";
+
+    EXPECT_CALL(
+        mock_http_client_,
+        PerformSingleRequest(SimpleHttpRequestMatcher(
+            "https://taskassignment.uri/v1/populations/"
+            "TEST%2FPOPULATION/"
+            "taskassignments/"
+            "ELIGIBILITY%2FSESSION%23ID:performmultiple?%24alt=proto",
+            HttpRequest::Method::kPost, _, request.SerializeAsString())))
+        .WillOnce(Return(
+            FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
+    EXPECT_CALL(
+        mock_task_received_callback_,
+        Call(FieldsAre(FieldsAre("", ""), kFederatedSelectUriTemplate,
+                       kMultiTaskAggregationSessionId_1,
+                       Optional(FieldsAre(
+                           _, Eq(kMinimumClientsInServerVisibleAggregate))))));
+    EXPECT_CALL(
+        mock_task_received_callback_,
+        Call(FieldsAre(FieldsAre("", ""), kFederatedSelectUriTemplate,
+                       kMultiTaskAggregationSessionId_2,
+                       Optional(FieldsAre(
+                           _, Eq(kMinimumClientsInServerVisibleAggregate))))));
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    checkpoint_uri, HttpRequest::Method::kGet, _, "")))
+        .WillOnce(
+            Return(FakeHttpResponse(200, HeaderList(), expected_checkpoint_2)));
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(SimpleHttpRequestMatcher(
+                    plan_uri, HttpRequest::Method::kGet, _, "")))
+        .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan_2)));
+
+    return federated_protocol_
+        ->PerformMultipleTaskAssignments(
+            task_names, mock_multiple_tasks_received_callback_.AsStdFunction())
         .status();
   }
 
@@ -728,6 +845,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   NiceMock<MockFunction<void(
       const ::fcp::client::FederatedProtocol::TaskAssignment&)>>
       mock_task_received_callback_;
+  NiceMock<MockFunction<void()>> mock_multiple_tasks_received_callback_;
 
   // The class under test.
   std::unique_ptr<HttpFederatedProtocol> federated_protocol_;
@@ -2168,6 +2286,325 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_THAT(checkin_result.status().message(), HasSubstr("503"));
   // The Checkin call is expected to return the rejected retry window from the
   // response to the first eligibility eval request.
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestPerformMultipleTaskAssignmentsNoTaskAvailable) {
+  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*support_multiple_task_assignments=*/true));
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
+
+  std::vector<std::string> task_names{kMultiTaskId_1, kMultiTaskId_2};
+
+  PerformMultipleTaskAssignmentsRequest request;
+  request.mutable_client_version()->set_version_code(kClientVersion);
+  request.mutable_resource_capabilities()->add_supported_compression_formats(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  for (const auto& task_name : task_names) {
+    request.add_task_names(task_name);
+  }
+  PerformMultipleTaskAssignmentsResponse response;
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+                  "taskassignments/"
+                  "ELIGIBILITY%2FSESSION%23ID:performmultiple?%24alt=proto",
+                  HttpRequest::Method::kPost, _, request.SerializeAsString())))
+      .WillOnce(Return(
+          FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
+
+  auto multiTaskAssignmentResult =
+      federated_protocol_->PerformMultipleTaskAssignments(
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+  EXPECT_OK(multiTaskAssignmentResult);
+  // The Checkin call is expected to return the rejected retry window from
+  // the response to the first eligibility eval request.
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsFailed) {
+  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*support_multiple_task_assignments=*/true));
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
+
+  std::vector<std::string> task_names{kMultiTaskId_1, kMultiTaskId_2};
+
+  PerformMultipleTaskAssignmentsRequest request;
+  request.mutable_client_version()->set_version_code(kClientVersion);
+  request.mutable_resource_capabilities()->add_supported_compression_formats(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  for (const auto& task_name : task_names) {
+    request.add_task_names(task_name);
+  }
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+                  "taskassignments/"
+                  "ELIGIBILITY%2FSESSION%23ID:performmultiple?%24alt=proto",
+                  HttpRequest::Method::kPost, _, request.SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(503, HeaderList(), "")));
+
+  auto multi_task_assignment_result =
+      federated_protocol_->PerformMultipleTaskAssignments(
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+  EXPECT_THAT(multi_task_assignment_result,
+              IsCode(absl::StatusCode::kUnavailable));
+  EXPECT_THAT(multi_task_assignment_result.status().message(),
+              HasSubstr("protocol request failed"));
+  // The original 500 HTTP response code should be included in the message as
+  // well.
+  EXPECT_THAT(multi_task_assignment_result.status().message(),
+              HasSubstr("503"));
+  // The Checkin call is expected to return the rejected retry window from
+  // the response to the first eligibility eval request.
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestPerformMultipleTaskAssignmentsFailedPermanentError) {
+  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*support_multiple_task_assignments=*/true));
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
+
+  std::vector<std::string> task_names{kMultiTaskId_1, kMultiTaskId_2};
+
+  PerformMultipleTaskAssignmentsRequest request;
+  request.mutable_client_version()->set_version_code(kClientVersion);
+  request.mutable_resource_capabilities()->add_supported_compression_formats(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  for (const auto& task_name : task_names) {
+    request.add_task_names(task_name);
+  }
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+                  "taskassignments/"
+                  "ELIGIBILITY%2FSESSION%23ID:performmultiple?%24alt=proto",
+                  HttpRequest::Method::kPost, _, request.SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(404, HeaderList(), "")));
+
+  auto multi_task_assignment_result =
+      federated_protocol_->PerformMultipleTaskAssignments(
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+  EXPECT_THAT(multi_task_assignment_result,
+              IsCode(absl::StatusCode::kNotFound));
+  EXPECT_THAT(multi_task_assignment_result.status().message(),
+              HasSubstr("protocol request failed"));
+  // The original 404 HTTP response code should be included in the message as
+  // well.
+  EXPECT_THAT(multi_task_assignment_result.status().message(),
+              HasSubstr("404"));
+  // The Checkin call is expected to return the permanent error retry window.
+  ExpectPermanentErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
+  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*support_multiple_task_assignments=*/true));
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
+
+  std::vector<std::string> task_names{kMultiTaskId_1, kMultiTaskId_2};
+
+  PerformMultipleTaskAssignmentsRequest request;
+  request.mutable_client_version()->set_version_code(kClientVersion);
+  request.mutable_resource_capabilities()->add_supported_compression_formats(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  for (const auto& task_name : task_names) {
+    request.add_task_names(task_name);
+  }
+
+  PerformMultipleTaskAssignmentsResponse response;
+  Resource plan_1;
+  std::string expected_plan_1 = "plan1";
+  *plan_1.mutable_inline_resource()->mutable_data() = expected_plan_1;
+  Resource checkpoint_1;
+  std::string expected_checkpoint_1 = "checkpoint1";
+  *checkpoint_1.mutable_inline_resource()->mutable_data() =
+      expected_checkpoint_1;
+  *response.add_task_assignments() = CreateTaskAssignment(
+      plan_1, checkpoint_1, kFederatedSelectUriTemplate,
+      kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
+      kMultiTaskId_1, kMinimumClientsInServerVisibleAggregate);
+  Resource plan_2;
+  std::string plan_uri = "https://fake.uri/plan";
+  plan_2.set_uri(plan_uri);
+  std::string checkpoint_uri = "https://fake.uri/checkpoint";
+  Resource checkpoint_2;
+  checkpoint_2.set_uri(checkpoint_uri);
+  *response.add_task_assignments() = CreateTaskAssignment(
+      plan_2, checkpoint_2, kFederatedSelectUriTemplate,
+      kMultiTaskClientSessionId_2, kMultiTaskAggregationSessionId_2,
+      kMultiTaskId_2, kMinimumClientsInServerVisibleAggregate);
+  std::string expected_plan_2 = "expected_plan_2";
+  std::string expected_checkpoint_2 = "expected_checkpoint_2";
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://taskassignment.uri/v1/populations/"
+                  "TEST%2FPOPULATION/"
+                  "taskassignments/"
+                  "ELIGIBILITY%2FSESSION%23ID:performmultiple?%24alt=proto",
+                  HttpRequest::Method::kPost, _, request.SerializeAsString())))
+      .WillOnce(Return(
+          FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
+  EXPECT_CALL(mock_multiple_tasks_received_callback_, Call());
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  checkpoint_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(
+          Return(FakeHttpResponse(200, HeaderList(), expected_checkpoint_2)));
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  plan_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan_2)));
+
+  auto multiple_task_assignment_result =
+      federated_protocol_->PerformMultipleTaskAssignments(
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+  ASSERT_OK(multiple_task_assignment_result);
+  EXPECT_THAT(
+      multiple_task_assignment_result->task_assignments,
+      UnorderedElementsAre(
+          IsOkAndHolds(FieldsAre(
+              FieldsAre(absl::Cord(expected_plan_1),
+                        absl::Cord(expected_checkpoint_1)),
+              kFederatedSelectUriTemplate, kMultiTaskAggregationSessionId_1,
+              Optional(
+                  FieldsAre(_, Eq(kMinimumClientsInServerVisibleAggregate))))),
+          IsOkAndHolds(FieldsAre(
+              FieldsAre(absl::Cord(expected_plan_2),
+                        absl::Cord(expected_checkpoint_2)),
+              kFederatedSelectUriTemplate, kMultiTaskAggregationSessionId_2,
+              Optional(FieldsAre(
+                  _, Eq(kMinimumClientsInServerVisibleAggregate)))))));
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestPerformMultipleTaskAssignmentsPayloadRetrievalFailed) {
+  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*support_multiple_task_assignments=*/true));
+  std::string report_eet_request_uri =
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "eligibilityevaltasks/"
+      "ELIGIBILITY%2FSESSION%23ID:reportresult?%24alt=proto";
+  ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
+                                                         absl::OkStatus());
+
+  std::vector<std::string> task_names{kMultiTaskId_1, kMultiTaskId_2};
+
+  PerformMultipleTaskAssignmentsRequest request;
+  request.mutable_client_version()->set_version_code(kClientVersion);
+  request.mutable_resource_capabilities()->add_supported_compression_formats(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  for (const auto& task_name : task_names) {
+    request.add_task_names(task_name);
+  }
+
+  PerformMultipleTaskAssignmentsResponse response;
+  Resource plan_1;
+  std::string expected_plan_1 = "plan1";
+  *plan_1.mutable_inline_resource()->mutable_data() = expected_plan_1;
+  Resource checkpoint_1;
+  std::string expected_checkpoint_1 = "checkpoint1";
+  *checkpoint_1.mutable_inline_resource()->mutable_data() =
+      expected_checkpoint_1;
+  *response.add_task_assignments() = CreateTaskAssignment(
+      plan_1, checkpoint_1, kFederatedSelectUriTemplate,
+      kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
+      kMultiTaskId_1, kMinimumClientsInServerVisibleAggregate);
+  Resource plan_2;
+  std::string plan_uri = "https://fake.uri/plan";
+  plan_2.set_uri(plan_uri);
+  std::string checkpoint_uri = "https://fake.uri/checkpoint";
+  Resource checkpoint_2;
+  checkpoint_2.set_uri(checkpoint_uri);
+  *response.add_task_assignments() = CreateTaskAssignment(
+      plan_2, checkpoint_2, kFederatedSelectUriTemplate,
+      kMultiTaskClientSessionId_2, kMultiTaskAggregationSessionId_2,
+      kMultiTaskId_2, kMinimumClientsInServerVisibleAggregate);
+
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://taskassignment.uri/v1/populations/"
+                  "TEST%2FPOPULATION/"
+                  "taskassignments/"
+                  "ELIGIBILITY%2FSESSION%23ID:performmultiple?%24alt=proto",
+                  HttpRequest::Method::kPost, _, request.SerializeAsString())))
+      .WillOnce(Return(
+          FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
+  EXPECT_CALL(mock_multiple_tasks_received_callback_, Call());
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  checkpoint_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(400, HeaderList(), "")));
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  plan_uri, HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "unused")));
+
+  auto multiple_task_assignment_result =
+      federated_protocol_->PerformMultipleTaskAssignments(
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+  // We expect the overall result is ok because the
+  // PerformMultipleTaskAssignments RPC succeeded. For the task assignments
+  // inside the PerformMultipleTaskAssignmentsResponse, we expect one successful
+  // result, one failure result.
+  ASSERT_OK(multiple_task_assignment_result);
+  EXPECT_THAT(
+      multiple_task_assignment_result->task_assignments,
+      UnorderedElementsAre(
+          IsOkAndHolds(FieldsAre(
+              FieldsAre(absl::Cord(expected_plan_1),
+                        absl::Cord(expected_checkpoint_1)),
+              kFederatedSelectUriTemplate, kMultiTaskAggregationSessionId_1,
+              Optional(
+                  FieldsAre(_, Eq(kMinimumClientsInServerVisibleAggregate))))),
+          IsCode(absl::StatusCode::kInvalidArgument)));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 

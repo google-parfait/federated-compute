@@ -409,9 +409,11 @@ class MockFederatedProtocol : public FederatedProtocol {
                    task_eligibility_info));
 
   absl::StatusOr<MultipleTaskAssignments> PerformMultipleTaskAssignments(
-      const std::vector<std::string>& task_names) final {
+      const std::vector<std::string>& task_names,
+      const std::function<void()>& payload_uris_received_callback) final {
     absl::StatusOr<MultipleTaskAssignments> result =
-        MockPerformMultipleTaskAssignments(task_names);
+        MockPerformMultipleTaskAssignments(task_names,
+                                           payload_uris_received_callback);
     retry_window_ = GetPostCheckinRetryWindow();
     network_stats_ = kPostCheckinPlanUriReceivedNetworkStats;
     return result;
@@ -419,7 +421,8 @@ class MockFederatedProtocol : public FederatedProtocol {
 
   MOCK_METHOD(absl::StatusOr<MultipleTaskAssignments>,
               MockPerformMultipleTaskAssignments,
-              (const std::vector<std::string>& task_names));
+              (const std::vector<std::string>& task_names,
+               const std::function<void()>& payload_uris_received_callback));
 
   absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,

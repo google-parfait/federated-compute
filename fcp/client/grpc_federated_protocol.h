@@ -102,7 +102,8 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
 
   absl::StatusOr<::fcp::client::FederatedProtocol::MultipleTaskAssignments>
   PerformMultipleTaskAssignments(
-      const std::vector<std::string>& task_names) override;
+      const std::vector<std::string>& task_names,
+      const std::function<void()>& payload_uris_received_callback) override;
 
   absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,

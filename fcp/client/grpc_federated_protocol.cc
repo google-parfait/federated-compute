@@ -583,7 +583,8 @@ absl::StatusOr<FederatedProtocol::CheckinResult> GrpcFederatedProtocol::Checkin(
 
 absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
 GrpcFederatedProtocol::PerformMultipleTaskAssignments(
-    const std::vector<std::string>& task_names) {
+    const std::vector<std::string>& task_names,
+    const std::function<void()>& payload_uris_received_callback) {
   return absl::UnimplementedError(
       "PerformMultipleTaskAssignments is not supported by "
       "GrpcFederatedProtocol.");

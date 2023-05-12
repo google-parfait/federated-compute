@@ -258,7 +258,8 @@ class FederatedProtocol {
   //   - any server-provided error code.
   virtual absl::StatusOr<MultipleTaskAssignments>
   PerformMultipleTaskAssignments(
-      const std::vector<std::string>& task_names) = 0;
+      const std::vector<std::string>& task_names,
+      const std::function<void()>& payload_uris_received_callback) = 0;
 
   // Reports the result of a federated computation to the server. Must only be
   // called once and after a successful call to Checkin().

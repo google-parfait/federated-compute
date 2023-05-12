@@ -76,6 +76,10 @@ using ::google::internal::federatedcompute::v1::AbortAggregationRequest;
 using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
+using ::google::internal::federatedcompute::v1::
+    PerformMultipleTaskAssignmentsRequest;
+using ::google::internal::federatedcompute::v1::
+    PerformMultipleTaskAssignmentsResponse;
 using ::google::internal::federatedcompute::v1::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::
     ReportEligibilityEvalTaskResultRequest;
@@ -147,6 +151,17 @@ absl::StatusOr<std::string> CreateReportTaskResultUriSuffix(
   FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
                        EncodeUriSinglePathSegment(session_id));
   // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_population_name, encoded_session_id);
+}
+
+absl::StatusOr<std::string> CreatePerformMultipleTaskAssignmentsRequestSuffix(
+    absl::string_view population_name, absl::string_view session_id) {
+  constexpr absl::string_view pattern =
+      "/v1/populations/$0/taskassignments/$1:performmultiple";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_population_name,
+                       EncodeUriSinglePathSegment(population_name));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_session_id,
+                       EncodeUriSinglePathSegment(session_id));
   return absl::Substitute(pattern, encoded_population_name, encoded_session_id);
 }
 
@@ -290,6 +305,31 @@ std::unique_ptr<InterruptibleRunner> CreateDelayedInterruptibleRunner(
           .interrupt_timeout_extended = ProdDiagCode::
               BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT});
 }
+
+absl::StatusOr<FederatedProtocol::PlanAndCheckpointPayloads>
+CreatePlanAndCheckpointPayloads(
+    absl::StatusOr<InMemoryHttpResponse>& plan_data_response,
+    absl::StatusOr<InMemoryHttpResponse>& checkpoint_data_response) {
+  // Note: we forward any error during the fetching of the plan/checkpoint
+  // resources resources to the caller, which means that these error codes
+  // will be checked against the set of 'permanent' error codes, just like the
+  // errors in response to the protocol request are.
+  if (!plan_data_response.ok()) {
+    return absl::Status(plan_data_response.status().code(),
+                        absl::StrCat("plan fetch failed: ",
+                                     plan_data_response.status().ToString()));
+  }
+  if (!checkpoint_data_response.ok()) {
+    return absl::Status(
+        checkpoint_data_response.status().code(),
+        absl::StrCat("checkpoint fetch failed: ",
+                     checkpoint_data_response.status().ToString()));
+  }
+
+  return FederatedProtocol::PlanAndCheckpointPayloads{
+      plan_data_response->body, checkpoint_data_response->body};
+}
+
 }  // namespace
 
 HttpFederatedProtocol::HttpFederatedProtocol(
@@ -465,9 +505,10 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
       // Fetch the task resources, returning any errors that may be encountered
       // in the process.
       FCP_ASSIGN_OR_RETURN(
-          result.payloads,
+          auto task_resources,
           FetchTaskResources(
-              {.plan = task.plan(), .checkpoint = task.init_checkpoint()}));
+              {{.plan = task.plan(), .checkpoint = task.init_checkpoint()}}));
+      FCP_ASSIGN_OR_RETURN(result.payloads, task_resources[0]);
       if (task.has_population_eligibility_spec() &&
           flags_->http_protocol_supports_multiple_task_assignments()) {
         FCP_ASSIGN_OR_RETURN(
@@ -590,12 +631,13 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
           request.SerializeAsString(), /*is_protobuf_encoded=*/true));
   requests.push_back(std::move(task_assignment_http_request));
 
-  if (eligibility_eval_enabled_) {
+  if (eligibility_eval_enabled_ && !report_eligibility_eval_result_called_) {
     FCP_ASSIGN_OR_RETURN(
         std::unique_ptr<HttpRequest>
             report_eligibility_eval_result_http_request,
         CreateReportEligibilityEvalTaskResultRequest(absl::OkStatus()));
     requests.push_back(std::move(report_eligibility_eval_result_http_request));
+    report_eligibility_eval_result_called_ = true;
   }
 
   // Issue the request.
@@ -606,7 +648,7 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   // The responses are returned in order. The first one is for the task
   // assignment request. The second one (optional) is for the report eligibility
   // eval task result request.  We only care about the first one.
-  if (eligibility_eval_enabled_ && !responses[1].ok()) {
+  if (responses.size() == 2 && !responses[1].ok()) {
     log_manager_->LogDiag(
         ProdDiagCode::HTTP_REPORT_ELIGIBILITY_EVAL_RESULT_REQUEST_FAILED);
   }
@@ -692,12 +734,27 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   }
   const auto& task_assignment = response_proto.task_assignment();
 
-  FCP_ASSIGN_OR_RETURN(
-      default_task_info_.aggregation_request_creator,
-      ProtocolRequestCreator::Create(
-          api_key_, task_assignment.aggregation_data_forwarding_info(),
-          !flags_->disable_http_request_body_compression()));
+  TaskAssignment result = CreateTaskAssignment(task_assignment);
+  payload_uris_received_callback(result);
 
+  // Fetch the task resources, returning any errors that may be encountered in
+  // the process.
+  FCP_ASSIGN_OR_RETURN(
+      auto task_resources,
+      FetchTaskResources({{.plan = task_assignment.plan(),
+                           .checkpoint = task_assignment.init_checkpoint()}}));
+  FCP_ASSIGN_OR_RETURN(result.payloads, task_resources[0]);
+  FCP_ASSIGN_OR_RETURN(default_task_info_,
+                       CreatePerTaskInfoFromTaskAssignment(
+                           task_assignment, ObjectState::kCheckinAccepted));
+
+  object_state_ = ObjectState::kCheckinAccepted;
+  return std::move(result);
+}
+
+FederatedProtocol::TaskAssignment HttpFederatedProtocol::CreateTaskAssignment(
+    const ::google::internal::federatedcompute::v1::TaskAssignment&
+        task_assignment) {
   TaskAssignment result = {
       .federated_select_uri_template =
           task_assignment.federated_select_uri_info().uri_template(),
@@ -709,41 +766,178 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
                        task_assignment.secure_aggregation_info()
                            .minimum_clients_in_server_visible_aggregate()};
   }
+  return result;
+}
 
-  payload_uris_received_callback(result);
-
-  // Fetch the task resources, returning any errors that may be encountered in
-  // the process.
+absl::StatusOr<HttpFederatedProtocol::PerTaskInfo>
+HttpFederatedProtocol::CreatePerTaskInfoFromTaskAssignment(
+    const ::google::internal::federatedcompute::v1::TaskAssignment&
+        task_assignment,
+    ObjectState state) {
+  PerTaskInfo task_info;
   FCP_ASSIGN_OR_RETURN(
-      result.payloads,
-      FetchTaskResources({.plan = task_assignment.plan(),
-                          .checkpoint = task_assignment.init_checkpoint()}));
-
-  object_state_ = ObjectState::kCheckinAccepted;
-  default_task_info_.state = ObjectState::kCheckinAccepted;
-  default_task_info_.session_id = task_assignment.session_id();
-  default_task_info_.aggregation_session_id = task_assignment.aggregation_id();
-  default_task_info_.aggregation_authorization_token =
+      task_info.aggregation_request_creator,
+      ProtocolRequestCreator::Create(
+          api_key_, task_assignment.aggregation_data_forwarding_info(),
+          !flags_->disable_http_request_body_compression()));
+  task_info.state = state;
+  task_info.session_id = task_assignment.session_id();
+  task_info.aggregation_session_id = task_assignment.aggregation_id();
+  task_info.aggregation_authorization_token =
       task_assignment.authorization_token();
-  default_task_info_.task_name = task_assignment.task_name();
-
-  return std::move(result);
+  task_info.task_name = task_assignment.task_name();
+  return std::move(task_info);
 }
 
 absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
 HttpFederatedProtocol::PerformMultipleTaskAssignments(
-    const std::vector<std::string>& task_names) {
+    const std::vector<std::string>& task_names,
+    const std::function<void()>& payload_uris_received_callback) {
   // PerformMultipleTaskAssignments(...) must follow an earlier call to
   // EligibilityEvalCheckin() that resulted in a EligibilityEvalTask with
   // PopulationEligibilitySpec.
   FCP_CHECK(object_state_ == ObjectState::kEligibilityEvalDisabled ||
             object_state_ == ObjectState::kEligibilityEvalEnabled)
       << "PerformMultipleTaskAssignments(...) called despite failed/rejected "
-         "earlier "
-         "EligibilityEvalCheckin";
+         "earlier EligibilityEvalCheckin";
   object_state_ = ObjectState::kMultipleTaskAssignmentsFailed;
-  return absl::UnimplementedError(
-      "PerformMultipleTaskAssignments is not yet implemented.");
+  // Send the request and parse the response.
+  auto response = HandleMultipleTaskAssignmentsInnerResponse(
+      PerformMultipleTaskAssignmentsAndReportEligibilityEvalResult(task_names),
+      payload_uris_received_callback);
+
+  // Update the object state to ensure we return the correct retry delay.
+  UpdateObjectStateIfPermanentError(
+      response.status(),
+      ObjectState::kMultipleTaskAssignmentsFailedPermanentError);
+  return response;
+}
+
+absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
+    PerformMultipleTaskAssignmentsAndReportEligibilityEvalResult(
+        const std::vector<std::string>& task_names) {
+  // Create and serialize the request body. Note that the `population_name`
+  // and `session_id` fields are set in the URI instead of in this request
+  // proto message.
+  PerformMultipleTaskAssignmentsRequest request;
+  request.mutable_client_version()->set_version_code(client_version_);
+  request.mutable_resource_capabilities()->add_supported_compression_formats(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  for (const auto& task_name : task_names) {
+    *request.add_task_names() = task_name;
+  }
+
+  std::vector<std::unique_ptr<HttpRequest>> requests;
+
+  // Construct the URI suffix.
+  FCP_ASSIGN_OR_RETURN(std::string multiple_task_assignments_uri_suffix,
+                       CreatePerformMultipleTaskAssignmentsRequestSuffix(
+                           population_name_, pre_task_assignment_session_id_));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<HttpRequest> multiple_task_assignments_http_request,
+      task_assignment_request_creator_->CreateProtocolRequest(
+          multiple_task_assignments_uri_suffix, {}, HttpRequest::Method::kPost,
+          request.SerializeAsString(), /*is_protobuf_encoded=*/true));
+  requests.push_back(std::move(multiple_task_assignments_http_request));
+
+  // PerformMultipleTaskAssignments should always be the first RPC which asks
+  // the server for task assignment, and hence we don't need to check whether
+  // ReportEligibilityEvalResult has been called.
+  if (eligibility_eval_enabled_) {
+    FCP_ASSIGN_OR_RETURN(
+        std::unique_ptr<HttpRequest>
+            report_eligibility_eval_result_http_request,
+        CreateReportEligibilityEvalTaskResultRequest(absl::OkStatus()));
+    requests.push_back(std::move(report_eligibility_eval_result_http_request));
+    report_eligibility_eval_result_called_ = true;
+  }
+
+  // Issue the request.
+  FCP_ASSIGN_OR_RETURN(
+      std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
+      protocol_request_helper_.PerformMultipleProtocolRequests(
+          std::move(requests), *interruptible_runner_));
+  // The responses are returned in order. The first one is for the task
+  // assignment request. The second one (optional) is for the report eligibility
+  // eval task result request.  We only care about the first one.
+  if (eligibility_eval_enabled_ && !responses[1].ok()) {
+    log_manager_->LogDiag(
+        ProdDiagCode::HTTP_REPORT_ELIGIBILITY_EVAL_RESULT_REQUEST_FAILED);
+  }
+  return responses[0];
+}
+
+absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
+HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
+    absl::StatusOr<InMemoryHttpResponse> http_response,
+    const std::function<void()>& payload_uris_received_callback) {
+  if (!http_response.ok()) {
+    // If the protocol request failed then forward the error, but add a prefix
+    // to the error message to ensure we can easily distinguish an HTTP error
+    // occurring in response to the protocol request from HTTP errors occurring
+    // during checkpoint/plan resource fetch requests later on.
+    return absl::Status(http_response.status().code(),
+                        absl::StrCat("protocol request failed: ",
+                                     http_response.status().ToString()));
+  }
+
+  PerformMultipleTaskAssignmentsResponse response_proto;
+    if (!response_proto.ParseFromString(std::string(http_response->body))) {
+    return absl::InvalidArgumentError("Could not parse response_proto");
+  }
+
+  MultipleTaskAssignments result;
+  if (response_proto.task_assignments().empty()) {
+    object_state_ = ObjectState::kMultipleTaskAssignmentsNoAvailableTask;
+    return result;
+  }
+
+  std::vector<TaskResources> resources_to_fetch;
+  std::vector<TaskAssignment> pending_fetch_task_assignments;
+  for (const auto& task_assignment : response_proto.task_assignments()) {
+    absl::StatusOr<PerTaskInfo> task_info = CreatePerTaskInfoFromTaskAssignment(
+        task_assignment, ObjectState::kMultipleTaskAssignmentsAccepted);
+    if (!task_info.ok()) {
+      result.task_assignments.push_back(task_info.status());
+      continue;
+    }
+    TaskResources task_resources{
+        .plan = task_assignment.plan(),
+        .checkpoint = task_assignment.init_checkpoint()};
+    resources_to_fetch.push_back(task_resources);
+
+    pending_fetch_task_assignments.push_back(
+        CreateTaskAssignment(task_assignment));
+
+    task_info_map_[task_assignment.aggregation_id()] = std::move(*task_info);
+  }
+
+  if (pending_fetch_task_assignments.empty()) {
+    return result;
+  }
+
+  payload_uris_received_callback();
+
+  FCP_ASSIGN_OR_RETURN(auto plan_and_checkpoint_payloads,
+                       FetchTaskResources(resources_to_fetch));
+
+  // Once all the resources have been fetched, iterate over the task assignments
+  // and the resource responses, in the same order that the resource requests
+  // were queued in, and produce a complete TaskAssignment with payloads for
+  // each one.
+  auto payloads_it = plan_and_checkpoint_payloads.begin();
+  for (auto& task_assignment : pending_fetch_task_assignments) {
+    auto payloads = payloads_it++;
+    if (!payloads->ok()) {
+      result.task_assignments.push_back(payloads->status());
+    } else {
+      task_assignment.payloads = std::move(**payloads);
+      result.task_assignments.push_back(std::move(task_assignment));
+    }
+  }
+
+  object_state_ = ObjectState::kMultipleTaskAssignmentsAccepted;
+  return std::move(result);
 }
 
 absl::Status HttpFederatedProtocol::ReportCompleted(
@@ -1203,7 +1397,6 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
   // RetryWindow to return.
   switch (state) {
     case ObjectState::kCheckinAccepted:
-    case ObjectState::kMultipleTaskAssignmentsAccepted:
     case ObjectState::kReportCalled:
       // If a client makes it past the 'checkin acceptance' stage, we use the
       // 'accepted' RetryWindow unconditionally (unless a permanent error is
@@ -1217,6 +1410,10 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
     case ObjectState::kEligibilityEvalEnabled:
     case ObjectState::kCheckinRejected:
     case ObjectState::kMultipleTaskAssignmentsNoAvailableTask:
+    // Although the PerformMultipleTaskAssignments returned a valid list of
+    // TaskAssignment, this state as the ending state indicate none of the
+    // report succeeded.
+    case ObjectState::kMultipleTaskAssignmentsAccepted:
     case ObjectState::kReportMultipleTaskPartialError:
       FCP_CHECK(retry_times_.has_value());
       return GenerateRetryWindowFromRetryTime(
@@ -1261,14 +1458,32 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
   }
 }
 
-absl::StatusOr<FederatedProtocol::PlanAndCheckpointPayloads>
+absl::StatusOr<
+    std::vector<absl::StatusOr<FederatedProtocol::PlanAndCheckpointPayloads>>>
 HttpFederatedProtocol::FetchTaskResources(
-    HttpFederatedProtocol::TaskResources task_resources) {
-  FCP_ASSIGN_OR_RETURN(UriOrInlineData plan_uri_or_data,
-                       ConvertResourceToUriOrInlineData(task_resources.plan));
-  FCP_ASSIGN_OR_RETURN(
-      UriOrInlineData checkpoint_uri_or_data,
-      ConvertResourceToUriOrInlineData(task_resources.checkpoint));
+    std::vector<HttpFederatedProtocol::TaskResources> task_resources_list) {
+  std::vector<absl::StatusOr<FederatedProtocol::PlanAndCheckpointPayloads>>
+      results;
+  std::vector<UriOrInlineData> uris_to_fetch;
+  for (TaskResources task_resources : task_resources_list) {
+    auto plan_uri_or_data =
+        ConvertResourceToUriOrInlineData(task_resources.plan);
+    if (!plan_uri_or_data.ok()) {
+      results.push_back(plan_uri_or_data.status());
+      continue;
+    }
+    auto checkpoint_uri_or_data =
+        ConvertResourceToUriOrInlineData(task_resources.checkpoint);
+    if (!checkpoint_uri_or_data.ok()) {
+      results.push_back(checkpoint_uri_or_data.status());
+      continue;
+    }
+    // We still need to fetch the resources, push an empty
+    // PlanAndCheckpointPayload as placeholder to the result vector.
+    results.push_back(PlanAndCheckpointPayloads{});
+    uris_to_fetch.push_back(*plan_uri_or_data);
+    uris_to_fetch.push_back(*checkpoint_uri_or_data);
+  }
 
   // Fetch the plan and init checkpoint resources if they need to be fetched
   // (using the inline data instead if available).
@@ -1277,32 +1492,24 @@ HttpFederatedProtocol::FetchTaskResources(
   {
     auto started_stopwatch = network_stopwatch_->Start();
     resource_responses = FetchResourcesInMemory(
-        *http_client_, *interruptible_runner_,
-        {plan_uri_or_data, checkpoint_uri_or_data}, &bytes_downloaded_,
-        &bytes_uploaded_, resource_cache_);
+        *http_client_, *interruptible_runner_, uris_to_fetch,
+        &bytes_downloaded_, &bytes_uploaded_, resource_cache_);
   }
+
   FCP_RETURN_IF_ERROR(resource_responses);
-  auto& plan_data_response = (*resource_responses)[0];
-  auto& checkpoint_data_response = (*resource_responses)[1];
-
-  // Note: we forward any error during the fetching of the plan/checkpoint
-  // resources resources to the caller, which means that these error codes
-  // will be checked against the set of 'permanent' error codes, just like the
-  // errors in response to the protocol request are.
-  if (!plan_data_response.ok()) {
-    return absl::Status(plan_data_response.status().code(),
-                        absl::StrCat("plan fetch failed: ",
-                                     plan_data_response.status().ToString()));
+  auto response_it = resource_responses->begin();
+  for (auto& pending_result : results) {
+    if (!pending_result.ok()) {
+      // We already hit an error earlier on, and so didn't actually issue
+      // a request for this TaskResources entry.
+      continue;
+    }
+    auto plan_data_response = response_it++;
+    auto checkpoint_data_response = response_it++;
+    pending_result = CreatePlanAndCheckpointPayloads(*plan_data_response,
+                                                     *checkpoint_data_response);
   }
-  if (!checkpoint_data_response.ok()) {
-    return absl::Status(
-        checkpoint_data_response.status().code(),
-        absl::StrCat("checkpoint fetch failed: ",
-                     checkpoint_data_response.status().ToString()));
-  }
-
-  return PlanAndCheckpointPayloads{plan_data_response->body,
-                                   checkpoint_data_response->body};
+  return results;
 }
 
 absl::StatusOr<PopulationEligibilitySpec>

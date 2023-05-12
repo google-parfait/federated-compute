@@ -90,7 +90,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       override;
 
   absl::StatusOr<MultipleTaskAssignments> PerformMultipleTaskAssignments(
-      const std::vector<std::string>& task_names) override;
+      const std::vector<std::string>& task_names,
+      const std::function<void()>& payload_uris_received_callback) override;
 
   absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
@@ -172,6 +173,17 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       std::function<void(const TaskAssignment&)>
           payload_uris_received_callback);
 
+  // Helper function to perform a multiple task assignments request and get its
+  // response.
+  absl::StatusOr<InMemoryHttpResponse>
+  PerformMultipleTaskAssignmentsAndReportEligibilityEvalResult(
+      const std::vector<std::string>& task_names);
+
+  absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
+  HandleMultipleTaskAssignmentsInnerResponse(
+      absl::StatusOr<InMemoryHttpResponse> http_response,
+      const std::function<void()>& payload_uris_received_callback);
+
   // Helper function for reporting result via simple aggregation.
   absl::Status ReportViaSimpleAggregation(ComputationResults results,
                                           absl::Duration plan_duration,
@@ -219,10 +231,10 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     const ::google::internal::federatedcompute::v1::Resource& checkpoint;
   };
 
-  // Helper function for fetching the checkpoint/plan resources for an
-  // eligibility eval task or regular task.
-  absl::StatusOr<PlanAndCheckpointPayloads> FetchTaskResources(
-      TaskResources task_resources);
+  // Helper function for fetching the checkpoint/plan resources for a list of
+  // eligibility eval tasks or regular tasks.
+  absl::StatusOr<std::vector<absl::StatusOr<PlanAndCheckpointPayloads>>>
+  FetchTaskResources(std::vector<TaskResources> task_resources_list);
 
   // Helper function for fetching the PopulationEligibilitySpec.
   absl::StatusOr<
@@ -237,6 +249,13 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::Status status, ObjectState permanent_error_object_state);
 
   ObjectState GetTheLatestStateFromAllTasks();
+  TaskAssignment CreateTaskAssignment(
+      const ::google::internal::federatedcompute::v1::TaskAssignment&
+          task_assignment);
+  absl::StatusOr<PerTaskInfo> CreatePerTaskInfoFromTaskAssignment(
+      const ::google::internal::federatedcompute::v1::TaskAssignment&
+          task_assignment,
+      ObjectState state);
 
   // This ObjectState tracks states until the end of check-in or multiple task
   // assignments.  Once a task is assigned, the state is tracked inside the
@@ -294,6 +313,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // Set this field to true if an eligibility eval task was received from the
   // server in the EligibilityEvalTaskResponse.
   bool eligibility_eval_enabled_ = false;
+  // Set this field to true if ReportEligibilityEvalResult has been called.
+  bool report_eligibility_eval_result_called_ = false;
   // `nullptr` if the feature is disabled.
   cache::ResourceCache* resource_cache_;
 };
