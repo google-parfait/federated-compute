@@ -1396,7 +1396,6 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
   // is forced to update this method and consider which is the correct
   // RetryWindow to return.
   switch (state) {
-    case ObjectState::kCheckinAccepted:
     case ObjectState::kReportCalled:
       // If a client makes it past the 'checkin acceptance' stage, we use the
       // 'accepted' RetryWindow unconditionally (unless a permanent error is
@@ -1418,6 +1417,15 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
       FCP_CHECK(retry_times_.has_value());
       return GenerateRetryWindowFromRetryTime(
           retry_times_->retry_time_if_rejected);
+    case ObjectState::kCheckinAccepted:
+      FCP_CHECK(retry_times_.has_value());
+      if (flags_->http_protocol_supports_multiple_task_assignments()) {
+        return GenerateRetryWindowFromRetryTime(
+            retry_times_->retry_time_if_rejected);
+      } else {
+        return GenerateRetryWindowFromRetryTime(
+            retry_times_->retry_time_if_accepted);
+      }
     case ObjectState::kInitialized:
     case ObjectState::kEligibilityEvalCheckinFailed:
     case ObjectState::kCheckinFailed:

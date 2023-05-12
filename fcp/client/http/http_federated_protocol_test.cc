@@ -2082,6 +2082,22 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
+// Tests whether a successful task assignment response is handled correctly.
+TEST_F(HttpFederatedProtocolTest,
+       TestCheckinTaskAssignedMultiTaskAssignmentEnabled) {
+  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*support_multiple_task_assignments=*/true));
+  ASSERT_OK(RunSuccessfulCheckin());
+  // The Checkin call is expected to return the rejection retry window from the
+  // response to the first eligibility eval request because Multiple task
+  // assignment is enabled.
+  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
 // Ensures that polling the Operation returned by a StartTaskAssignmentRequest
 // works as expected. This serves mostly as a high-level check. Further
 // polling-specific behavior is tested in more detail in
