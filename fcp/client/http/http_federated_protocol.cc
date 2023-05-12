@@ -579,7 +579,7 @@ absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
                 ObjectState::kMultipleTaskAssignmentsNoAvailableTask)
       << "Checkin(...) called despite failed/rejected earlier "
          "EligibilityEvalCheckin";
-  if (object_state_ == ObjectState::kEligibilityEvalEnabled) {
+  if (eligibility_eval_enabled_) {
     FCP_CHECK(task_eligibility_info.has_value())
         << "Missing TaskEligibilityInfo despite receiving prior "
            "EligibilityEvalCheckin payload";

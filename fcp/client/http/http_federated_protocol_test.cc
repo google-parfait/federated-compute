@@ -707,18 +707,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
             HttpRequest::Method::kPost, _, request.SerializeAsString())))
         .WillOnce(Return(
             FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
-    EXPECT_CALL(
-        mock_task_received_callback_,
-        Call(FieldsAre(FieldsAre("", ""), kFederatedSelectUriTemplate,
-                       kMultiTaskAggregationSessionId_1,
-                       Optional(FieldsAre(
-                           _, Eq(kMinimumClientsInServerVisibleAggregate))))));
-    EXPECT_CALL(
-        mock_task_received_callback_,
-        Call(FieldsAre(FieldsAre("", ""), kFederatedSelectUriTemplate,
-                       kMultiTaskAggregationSessionId_2,
-                       Optional(FieldsAre(
-                           _, Eq(kMinimumClientsInServerVisibleAggregate))))));
+    EXPECT_CALL(mock_multiple_tasks_received_callback_, Call());
     EXPECT_CALL(mock_http_client_,
                 PerformSingleRequest(SimpleHttpRequestMatcher(
                     checkpoint_uri, HttpRequest::Method::kGet, _, "")))
@@ -733,6 +722,45 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         ->PerformMultipleTaskAssignments(
             task_names, mock_multiple_tasks_received_callback_.AsStdFunction())
         .status();
+  }
+
+  absl::Status RunSuccessfulUploadViaSimpleAgg(
+      absl::string_view client_session_id,
+      absl::string_view aggregation_session_id, absl::string_view task_name,
+      absl::Duration plan_duration, absl::string_view checkpoint_str,
+      bool use_per_task_upload = true) {
+    std::string report_task_result_request_url = absl::StrCat(
+        "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+        "taskassignments/",
+        client_session_id, ":reportresult?%24alt=proto");
+    ExpectSuccessfulReportTaskResultRequest(report_task_result_request_url,
+                                            aggregation_session_id, task_name,
+                                            plan_duration);
+    std::string start_aggregation_data_upload_request_url = absl::StrCat(
+        "https://aggregation.uri/v1/aggregations/", aggregation_session_id,
+        "/clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto");
+    ExpectSuccessfulStartAggregationDataUploadRequest(
+        start_aggregation_data_upload_request_url, kResourceName,
+        kByteStreamTargetUri, kSecondStageAggregationTargetUri);
+    ExpectSuccessfulByteStreamUploadRequest(
+        "https://bytestream.uri/upload/v1/media/"
+        "CHECKPOINT_RESOURCE?upload_protocol=raw",
+        checkpoint_str);
+    std::string submit_aggregation_result_request_url = absl::StrCat(
+        "https://aggregation.second.uri/v1/aggregations/",
+        aggregation_session_id, "/clients/CLIENT_TOKEN:submit?%24alt=proto");
+    ExpectSuccessfulSubmitAggregationResultRequest(
+        submit_aggregation_result_request_url);
+    ComputationResults results;
+    results.emplace("tensorflow_checkpoint", std::string(checkpoint_str));
+    if (use_per_task_upload) {
+      return federated_protocol_->ReportCompleted(
+          std::move(results), plan_duration,
+          std::string(aggregation_session_id));
+    } else {
+      return federated_protocol_->ReportCompleted(std::move(results),
+                                                  plan_duration, std::nullopt);
+    }
   }
 
   void ExpectSuccessfulReportEligibilityEvalTaskResultRequest(
@@ -2082,7 +2110,6 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-// Tests whether a successful task assignment response is handled correctly.
 TEST_F(HttpFederatedProtocolTest,
        TestCheckinTaskAssignedMultiTaskAssignmentEnabled) {
   EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
@@ -2096,6 +2123,27 @@ TEST_F(HttpFederatedProtocolTest,
   // response to the first eligibility eval request because Multiple task
   // assignment is enabled.
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestMultiTaskAssignmentCalledAfterCheckinTaskAssigned) {
+  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*support_multiple_task_assignments=*/true));
+  ASSERT_OK(RunSuccessfulCheckin());
+  // A PerformMultipleTaskAssignments(...) request should now fail, because
+  // PerformMultipleTaskAssignments(...) should only be called before a
+  // CheckIn(...) request.
+  ASSERT_DEATH(
+      {
+        auto unused = federated_protocol_->PerformMultipleTaskAssignments(
+            {kMultiTaskId_1, kMultiTaskId_2},
+            mock_multiple_tasks_received_callback_.AsStdFunction());
+      },
+      _);
 }
 
 // Ensures that polling the Operation returned by a StartTaskAssignmentRequest
@@ -3425,6 +3473,42 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
       status.message(),
       AllOf(HasSubstr("ReportTaskResult request failed:"), HasSubstr("404")));
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest, TestFullProtocol) {
+  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*support_multiple_task_assignments=*/true));
+  // Issue a regular checkin
+  ASSERT_OK(RunSuccessfulMultipleTaskAssignments());
+
+  // Upload the result from the first task.
+  std::string checkpoint_str_1(32, 'X');
+  absl::Duration plan_duration_1 = absl::Minutes(5);
+  ASSERT_OK(RunSuccessfulUploadViaSimpleAgg(
+      kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
+      kMultiTaskId_1, plan_duration_1, checkpoint_str_1));
+
+  // Upload the result from the second task.
+  std::string checkpoint_str_2(32, 'Y');
+  absl::Duration plan_duration_2 = absl::Minutes(6);
+  ASSERT_OK(RunSuccessfulUploadViaSimpleAgg(
+      kMultiTaskClientSessionId_2, kMultiTaskAggregationSessionId_2,
+      kMultiTaskId_2, plan_duration_2, checkpoint_str_2));
+
+  // Run regular checkin, note we won't report eligibility eval result again
+  // since we have done that during PerformMultipleTaskAssignments.
+  ASSERT_OK(RunSuccessfulCheckin(/*report_eligibility_eval_result=*/false));
+
+  // Upload the result from the task returned by the regular checkin.
+  std::string checkpoint_str_3(32, 'Z');
+  absl::Duration plan_duration_3 = absl::Minutes(7);
+  ASSERT_OK(RunSuccessfulUploadViaSimpleAgg(
+      kClientSessionId, kAggregationSessionId, kTaskName, plan_duration_3,
+      checkpoint_str_3, /*use_per_task_upload=*/false));
 }
 
 TEST_F(HttpFederatedProtocolTest,
