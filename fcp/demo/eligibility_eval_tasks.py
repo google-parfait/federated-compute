@@ -27,11 +27,12 @@ from absl import logging
 
 from google.rpc import code_pb2
 from fcp.demo import http_actions
+from fcp.protos import population_eligibility_spec_pb2
 from fcp.protos.federatedcompute import common_pb2
 from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
 
 _TaskAssignmentMode = (
-    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+    population_eligibility_spec_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
 )
 
 
@@ -64,11 +65,11 @@ class Service:
   @property
   def _population_eligibility_spec(
       self,
-  ) -> eligibility_eval_tasks_pb2.PopulationEligibilitySpec:
+  ) -> population_eligibility_spec_pb2.PopulationEligibilitySpec:
     with self._tasks_lock:
-      return eligibility_eval_tasks_pb2.PopulationEligibilitySpec(
+      return population_eligibility_spec_pb2.PopulationEligibilitySpec(
           task_info=[
-              eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo(
+              population_eligibility_spec_pb2.PopulationEligibilitySpec.TaskInfo(
                   task_name=task.task_name,
                   task_assignment_mode=task.task_assignment_mode,
               )

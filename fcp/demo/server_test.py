@@ -34,12 +34,12 @@ from fcp.demo import plan_utils
 from fcp.demo import server
 from fcp.demo import test_utils
 from fcp.protos import plan_pb2
-from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
+from fcp.protos import population_eligibility_spec_pb2
 from fcp.protos.federatedcompute import task_assignments_pb2
 from fcp.tensorflow import external_dataset
 
 _TaskAssignmentMode = (
-    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+    population_eligibility_spec_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
 )
 
 POPULATION_NAME = 'test/population'

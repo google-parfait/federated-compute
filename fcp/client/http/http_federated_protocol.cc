@@ -59,10 +59,10 @@
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
-#include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
+#include "fcp/protos/population_eligibility_spec.pb.h"
 
 namespace fcp {
 namespace client {
@@ -72,6 +72,7 @@ namespace {
 using ::fcp::client::GenerateRetryWindowFromRetryTime;
 using ::fcp::client::GenerateRetryWindowFromTargetDelay;
 using ::fcp::client::PickRetryTimeFromRange;
+using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::AbortAggregationRequest;
 using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
@@ -80,7 +81,6 @@ using ::google::internal::federatedcompute::v1::
     PerformMultipleTaskAssignmentsRequest;
 using ::google::internal::federatedcompute::v1::
     PerformMultipleTaskAssignmentsResponse;
-using ::google::internal::federatedcompute::v1::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::
     ReportEligibilityEvalTaskResultRequest;
 using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;

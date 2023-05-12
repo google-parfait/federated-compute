@@ -31,8 +31,8 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
-#include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
 #include "fcp/protos/plan.pb.h"
+#include "fcp/protos/population_eligibility_spec.pb.h"
 
 namespace fcp {
 namespace client {
@@ -105,8 +105,9 @@ class FederatedProtocol {
   struct EligibilityEvalTask {
     PlanAndCheckpointPayloads payloads;
     std::string execution_id;
-    std::optional<
-        google::internal::federatedcompute::v1::PopulationEligibilitySpec>
+    // TODO(team): Replace this with absl::Cord and move the parsing to
+    // fl_runner.
+    std::optional<google::internal::federated::plan::PopulationEligibilitySpec>
         population_eligibility_spec;
   };
   // A rejection of a client by the server.

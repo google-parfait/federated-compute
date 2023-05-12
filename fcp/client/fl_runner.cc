@@ -69,9 +69,9 @@
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
-#include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/plan.pb.h"
+#include "fcp/protos/population_eligibility_spec.pb.h"
 #include "openssl/digest.h"
 #include "openssl/evp.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -87,8 +87,8 @@ using ::google::internal::federated::plan::AggregationConfig;
 using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federated::plan::FederatedComputeEligibilityIORouter;
 using ::google::internal::federated::plan::FederatedComputeIORouter;
+using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federated::plan::TensorflowSpec;
-using ::google::internal::federatedcompute::v1::PopulationEligibilitySpec;
 using ::google::internal::federatedml::v2::RetryWindow;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 

@@ -113,6 +113,31 @@ cc_proto_library(
 )
 
 # --------------------------------------------------------------------
+# population_eligibility_spec.proto
+
+proto_library(
+    name = "population_eligibility_spec_proto",
+    srcs = ["population_eligibility_spec.proto"],
+)
+
+cc_proto_library(
+    name = "population_eligibility_spec_cc_proto",
+    deps = [":population_eligibility_spec_proto"],
+)
+
+java_proto_library(
+    name = "population_eligibility_spec_java_proto",
+    deps = [":population_eligibility_spec_proto"],
+)
+
+py_proto_library(
+    name = "population_eligibility_spec_proto_py_pb2",
+    deps = [
+        ":population_eligibility_spec_proto",
+    ],
+)
+
+# --------------------------------------------------------------------
 # task_eligibility_context.proto
 
 proto_library(

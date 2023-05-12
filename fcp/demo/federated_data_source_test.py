@@ -19,10 +19,10 @@ import tensorflow_federated as tff
 
 from fcp.demo import federated_data_source as fds
 from fcp.protos import plan_pb2
-from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
+from fcp.protos import population_eligibility_spec_pb2
 
 _TaskAssignmentMode = (
-    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+    population_eligibility_spec_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
 )
 
 POPULATION_NAME = 'test/name'

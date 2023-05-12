@@ -30,11 +30,11 @@ from fcp.demo import media
 from fcp.demo import plan_utils
 from fcp.demo import task_assignments
 from fcp.protos import plan_pb2
+from fcp.protos import population_eligibility_spec_pb2
 from fcp.protos.federatedcompute import common_pb2
-from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
 
 _TaskAssignmentMode = (
-    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+    population_eligibility_spec_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
 )
 
 # Template for file name for federated select slices. See

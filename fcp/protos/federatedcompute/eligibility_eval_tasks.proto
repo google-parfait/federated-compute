@@ -170,29 +170,6 @@ message EligibilityEvalTask {
 // an eligibility-computing task configured.
 message NoEligibilityEvalConfigured {}
 
-// Provides the information needed to determine eligibility for tasks in a
-// population.
-message PopulationEligibilitySpec {
-  // Eligibility-related information about each task in the population.
-  repeated TaskInfo task_info = 1;
-
-  message TaskInfo {
-    // The name of the task.
-    string task_name = 1;
-
-    // The TaskAssignments method to use for the task.
-    TaskAssignmentMode task_assignment_mode = 2;
-
-    enum TaskAssignmentMode {
-      TASK_ASSIGNMENT_MODE_UNSPECIFIED = 0;
-      // Task assignment uses /TaskAssignments.StartTaskAssignment.
-      TASK_ASSIGNMENT_MODE_SINGLE = 1;
-      // Task assignment uses /TaskAssignments.PerformMultipleTaskAssignments.
-      TASK_ASSIGNMENT_MODE_MULTIPLE = 2;
-    }
-  }
-}
-
 message ReportEligibilityEvalTaskResultRequest {
   // The name of the population this client belongs to.
   //

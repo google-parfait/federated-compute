@@ -22,14 +22,14 @@ import tensorflow as tf
 import tensorflow_federated as tff
 
 from fcp.protos import plan_pb2
-from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
+from fcp.protos import population_eligibility_spec_pb2
 
 POPULATION_NAME_REGEX = re.compile(r'\w+(/\w+)*')
 
 _NestedExampleSelector = Union[plan_pb2.ExampleSelector,
                                dict[str, '_NestedExampleSelector']]
 _TaskAssignmentMode = (
-    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+    population_eligibility_spec_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
 )
 
 

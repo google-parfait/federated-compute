@@ -23,11 +23,12 @@ from absl.testing import absltest
 from google.rpc import code_pb2
 from fcp.demo import eligibility_eval_tasks
 from fcp.demo import http_actions
+from fcp.protos import population_eligibility_spec_pb2
 from fcp.protos.federatedcompute import common_pb2
 from fcp.protos.federatedcompute import eligibility_eval_tasks_pb2
 
 _TaskAssignmentMode = (
-    eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+    population_eligibility_spec_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
 )
 
 POPULATION_NAME = 'test/population'
@@ -76,21 +77,21 @@ class EligibilityEvalTasksTest(absltest.TestCase):
     self.assertTrue(response.HasField('eligibility_eval_task'))
     spec_resource = response.eligibility_eval_task.population_eligibility_spec
     population_eligibility_spec = (
-        eligibility_eval_tasks_pb2.PopulationEligibilitySpec.FromString(
+        population_eligibility_spec_pb2.PopulationEligibilitySpec.FromString(
             spec_resource.inline_resource.data
         )
     )
     self.assertEqual(
         population_eligibility_spec,
-        eligibility_eval_tasks_pb2.PopulationEligibilitySpec(
+        population_eligibility_spec_pb2.PopulationEligibilitySpec(
             task_info=[
-                eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo(
+                population_eligibility_spec_pb2.PopulationEligibilitySpec.TaskInfo(
                     task_name='task1',
                     task_assignment_mode=(
                         _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_SINGLE
                     ),
                 ),
-                eligibility_eval_tasks_pb2.PopulationEligibilitySpec.TaskInfo(
+                population_eligibility_spec_pb2.PopulationEligibilitySpec.TaskInfo(
                     task_name='task2',
                     task_assignment_mode=(
                         _TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE
@@ -148,13 +149,13 @@ class EligibilityEvalTasksTest(absltest.TestCase):
     response = service.request_eligibility_eval_task(request)
     spec_resource = response.eligibility_eval_task.population_eligibility_spec
     population_eligibility_spec = (
-        eligibility_eval_tasks_pb2.PopulationEligibilitySpec.FromString(
+        population_eligibility_spec_pb2.PopulationEligibilitySpec.FromString(
             spec_resource.inline_resource.data
         )
     )
     self.assertEqual(
         population_eligibility_spec,
-        eligibility_eval_tasks_pb2.PopulationEligibilitySpec(),
+        population_eligibility_spec_pb2.PopulationEligibilitySpec(),
     )
 
   def test_remove_missing_task(self):

@@ -60,6 +60,7 @@
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
+#include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
 #include "fcp/testing/testing.h"
 
@@ -72,6 +73,7 @@ using ::fcp::client::http::FakeHttpResponse;
 using ::fcp::client::http::MockableHttpClient;
 using ::fcp::client::http::MockHttpClient;
 using ::fcp::client::http::SimpleHttpRequestMatcher;
+using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::ByteStreamResource;
 using ::google::internal::federatedcompute::v1::ClientStats;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTask;
@@ -82,7 +84,6 @@ using ::google::internal::federatedcompute::v1::
     PerformMultipleTaskAssignmentsRequest;
 using ::google::internal::federatedcompute::v1::
     PerformMultipleTaskAssignmentsResponse;
-using ::google::internal::federatedcompute::v1::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::
     ReportEligibilityEvalTaskResultRequest;
 using ::google::internal::federatedcompute::v1::ReportTaskResultRequest;

@@ -52,6 +52,7 @@
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
+#include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/secagg/client/secagg_client.h"
 
 namespace fcp {
@@ -237,8 +238,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   FetchTaskResources(std::vector<TaskResources> task_resources_list);
 
   // Helper function for fetching the PopulationEligibilitySpec.
-  absl::StatusOr<
-      google::internal::federatedcompute::v1::PopulationEligibilitySpec>
+  absl::StatusOr<google::internal::federated::plan::PopulationEligibilitySpec>
   FetchPopulationEligibilitySpec(
       const ::google::internal::federatedcompute::v1::Resource&
           population_eligibility_spec_resource);
