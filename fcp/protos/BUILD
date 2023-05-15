@@ -115,14 +115,20 @@ cc_proto_library(
 # --------------------------------------------------------------------
 # population_eligibility_spec.proto
 
-proto_library(
+# tf_proto_library generates a _cc target for us.
+tf_proto_library(
     name = "population_eligibility_spec_proto",
     srcs = ["population_eligibility_spec.proto"],
+    protodeps = [
+        ":plan_proto",
+    ],
 )
 
-cc_proto_library(
+# Our cc protos follow the pattern `_cc_proto`, but tf_proto_library generates
+# `_proto_cc`. Add an alias here to make it consistent
+alias(
     name = "population_eligibility_spec_cc_proto",
-    deps = [":population_eligibility_spec_proto"],
+    actual = "population_eligibility_spec_proto_cc",
 )
 
 java_proto_library(
@@ -130,11 +136,9 @@ java_proto_library(
     deps = [":population_eligibility_spec_proto"],
 )
 
-py_proto_library(
-    name = "population_eligibility_spec_proto_py_pb2",
-    deps = [
-        ":population_eligibility_spec_proto",
-    ],
+alias(
+    name = "population_eligibility_spec_py_pb2",
+    actual = "population_eligibility_spec_proto_py",
 )
 
 # --------------------------------------------------------------------

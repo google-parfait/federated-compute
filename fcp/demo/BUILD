@@ -89,7 +89,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":http_actions",
-        "//fcp/protos:population_eligibility_spec_proto_py_pb2",
+        "//fcp/protos:population_eligibility_spec_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
         "@com_google_googleapis//google/rpc:code_py_proto",
     ],
@@ -103,7 +103,7 @@ py_test(
     deps = [
         ":eligibility_eval_tasks",
         ":http_actions",
-        "//fcp/protos:population_eligibility_spec_proto_py_pb2",
+        "//fcp/protos:population_eligibility_spec_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
         "@com_google_googleapis//google/rpc:code_py_proto",
     ],
@@ -168,7 +168,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         "//fcp/protos:plan_py_pb2",
-        "//fcp/protos:population_eligibility_spec_proto_py_pb2",
+        "//fcp/protos:population_eligibility_spec_py_pb2",
     ],
 )
 
@@ -180,7 +180,7 @@ py_test(
     deps = [
         ":federated_data_source",
         "//fcp/protos:plan_py_pb2",
-        "//fcp/protos:population_eligibility_spec_proto_py_pb2",
+        "//fcp/protos:population_eligibility_spec_py_pb2",
     ],
 )
 
@@ -275,7 +275,7 @@ py_library(
         ":plan_utils",
         ":task_assignments",
         "//fcp/protos:plan_py_pb2",
-        "//fcp/protos:population_eligibility_spec_proto_py_pb2",
+        "//fcp/protos:population_eligibility_spec_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
     ],
 )
@@ -292,7 +292,7 @@ py_test(
         ":server",
         ":test_utils",
         "//fcp/protos:plan_py_pb2",
-        "//fcp/protos:population_eligibility_spec_proto_py_pb2",
+        "//fcp/protos:population_eligibility_spec_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
         "//fcp/tensorflow:external_dataset_py",
         "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
@@ -306,7 +306,7 @@ py_library(
     deps = [
         ":aggregations",
         ":http_actions",
-        "//fcp/protos:population_eligibility_spec_proto_py_pb2",
+        "//fcp/protos:population_eligibility_spec_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
         "@com_google_googleapis//google/rpc:code_py_proto",
         "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
@@ -322,7 +322,7 @@ py_test(
         ":aggregations",
         ":http_actions",
         ":task_assignments",
-        "//fcp/protos:population_eligibility_spec_proto_py_pb2",
+        "//fcp/protos:population_eligibility_spec_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
         "@com_google_googleapis//google/rpc:code_py_proto",
     ],
