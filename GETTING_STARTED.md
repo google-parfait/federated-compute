@@ -54,6 +54,9 @@ Note: To exit the virtual environment, run `deactivate`.
 git clone https://github.com/google/federated-compute.git
 cd federated-compute
 pip install -r requirements.txt
+# Important: this ensures that the TFF dependency is fully initialized before
+# we try to use via the bazel-based build.
+python3 -c "import tensorflow_federated"
 ```
 
 ## Build and run the federated program test!
@@ -77,5 +80,5 @@ Use `--config=clang` to build with clang and libc++. On Debian, this requires
 installing several additional packages:
 
 ```
-sudo apt install -y clang lld libc++-dev libc++abi-dev`
+sudo apt install -y clang lld libc++-dev libc++abi-dev
 ```
