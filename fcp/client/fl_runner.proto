@@ -39,12 +39,19 @@ message FLRunnerResult {
   // round.
   enum ContributionResult {
     UNSPECIFIED = 0;
+    // The client successfully contributed to all of the tasks it was offered by
+    // the server (which could be one or more tasks).
     SUCCESS = 1;
-    // Any outcome that is not a success.
+    // The client failed to successfully contribute to any task.
     FAIL = 2;
+    // The client successfully contributed to some but not all of the tasks it
+    // was offered.
+    PARTIAL = 3;
   }
 
   ContributionResult contribution_result = 5;
+  // The names of the tasks to which the client successfully contributed.
+  repeated string contributed_task_names = 6;
   reserved 2, 3;
 }
 

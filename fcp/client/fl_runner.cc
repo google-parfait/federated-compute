@@ -1292,9 +1292,8 @@ struct RunPlanResults {
 RunPlanResults RunComputation(
     const absl::StatusOr<CheckinResult>& checkin_result,
     const SelectorContext& federated_selector_context,
-    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger,
-    EventPublisher* event_publisher, Files* files, LogManager* log_manager,
-    OpStatsLogger* opstats_logger, const Flags* flags,
+    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger, Files* files,
+    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
     FederatedSelectManager* fedselect_manager,
     engine::ExampleIteratorFactory* opstats_example_iterator_factory,
@@ -1647,33 +1646,48 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return fl_runner_result;
   }
 
+  int32_t expected_num_tasks = 0;
+  std::vector<std::string> successful_task_names;
+
+  // Run single task assignment.
+
+  // We increment expected_num_tasks because we expect the server to assign a
+  // task.
+  expected_num_tasks++;
+
   auto checkin_result =
       IssueCheckin(phase_logger, log_manager, files, federated_protocol,
                    std::move(eligibility_eval_result->task_eligibility_info),
                    reference_time, population_name, fl_runner_result, flags);
 
-  if (!checkin_result.ok()) {
-    return fl_runner_result;
+  if (checkin_result.ok()) {
+    auto run_plan_results = RunComputation(
+        checkin_result, federated_selector_context, env_deps, phase_logger,
+        files, log_manager, opstats_logger, flags, federated_protocol,
+        fedselect_manager, &opstats_example_iterator_factory, fl_runner_result,
+        should_abort, timing_config, reference_time);
+
+    absl::Status report_result =
+        ReportPlanResult(federated_protocol, phase_logger,
+                         std::move(run_plan_results.computation_results),
+                         run_plan_results.run_plan_start_time, reference_time);
+    if (run_plan_results.outcome == engine::PlanOutcome::kSuccess &&
+        report_result.ok()) {
+      // Only if training succeeded *and* reporting succeeded do we consider
+      // the device to have contributed successfully.
+      successful_task_names.push_back(checkin_result->task_name);
+    }
   }
 
-  auto run_plan_results = RunComputation(
-      checkin_result, federated_selector_context, env_deps, phase_logger,
-      event_publisher, files, log_manager, opstats_logger, flags,
-      federated_protocol, fedselect_manager, &opstats_example_iterator_factory,
-      fl_runner_result, should_abort, timing_config, reference_time);
-
-  absl::Status report_result =
-      ReportPlanResult(federated_protocol, phase_logger,
-                       std::move(run_plan_results.computation_results),
-                       run_plan_results.run_plan_start_time, reference_time);
-
-  if (run_plan_results.outcome == engine::PlanOutcome::kSuccess &&
-      report_result.ok()) {
-    // Only if training succeeded *and* reporting succeeded do we consider
-    // the device to have contributed successfully.
-    fl_runner_result.set_contribution_result(FLRunnerResult::SUCCESS);
+  if (!successful_task_names.empty()) {
+    if (successful_task_names.size() == expected_num_tasks) {
+      fl_runner_result.set_contribution_result(FLRunnerResult::SUCCESS);
+    } else {
+      fl_runner_result.set_contribution_result(FLRunnerResult::PARTIAL);
+    }
   }
-
+  fl_runner_result.mutable_contributed_task_names()->Add(
+      successful_task_names.begin(), successful_task_names.end());
   // Update the FLRunnerResult fields one more time to account for the "Report"
   // protocol interaction.
   UpdateRetryWindowAndNetworkStats(*federated_protocol, fedselect_manager,
