@@ -1443,38 +1443,44 @@ def _build_client_graph_with_tensorflow_spec(
   )
 
 
-def _build_client_phase_with_example_query_spec(
-    client_work_comp: tff.Computation,
+def build_client_phase_with_example_query_spec(
     example_query_spec: plan_pb2.ExampleQuerySpec,
+    vector_names_expected_by_aggregator: set[str],
 ) -> plan_pb2.ClientPhase:
   """Builds the ClientPhase with `ExampleQuerySpec` populated.
 
   Args:
-    client_work_comp: A `tff.Computation` that represents the TensorFlow logic
-      run on-device.
     example_query_spec: Field containing output vector information for client
       example query. The output vector names listed in the spec are expected to
       be consistent with the output names we would produce in the
       `MapReduceForm` client work computation, if we were to build a TF-based
       plan from that `MapReduceForm`.
+    vector_names_expected_by_aggregator: The set of vector names used as inputs
+      by the aggregator and that are thus expected to be present in the
+      ExampleQuery key sets.
+
+  Raises:
+    ValueError: If vector_names_expected_by_aggregator contains a name that is
+      not present in the ExampleQuery key sets or if there are duplicate names
+      found across the ExampleQuery key sets. Note that it is ok if the
+      ExampleQuery key sets contain names that aren't present in
+      vector_names_expected_by_aggregator.
 
   Returns:
-    A client phase part of the federated protocol.
+    A client phase proto message.
   """
-  expected_vector_names = set(
-      variable_helpers.variable_names_from_type(
-          client_work_comp.type_signature.result[0], artifact_constants.UPDATE
-      )
-  )
   used_names = set()
   io_router = plan_pb2.FederatedExampleQueryIORouter()
   for example_query in example_query_spec.example_queries:
     vector_names = set(example_query.output_vector_specs.keys())
-    if not all([name in expected_vector_names for name in vector_names]):
+    if not all(
+        [name in vector_names_expected_by_aggregator for name in vector_names]
+    ):
       raise ValueError(
-          'Found unexpected vector names in supplied `example_query_spec`. '
-          f'Expected names: {expected_vector_names}. '
-          f'Found unexpected names: {vector_names-expected_vector_names}.'
+          'Found unexpected vector names in supplied `example_query_spec`.'
+          f' Expected names: {vector_names_expected_by_aggregator}. Found'
+          ' unexpected names:'
+          f' {vector_names-vector_names_expected_by_aggregator}.'
       )
 
     if any([name in used_names for name in vector_names]):
@@ -1492,11 +1498,12 @@ def _build_client_phase_with_example_query_spec(
           )
       )
 
-  if used_names != expected_vector_names:
+  if used_names != vector_names_expected_by_aggregator:
     raise ValueError(
         'Not all expected vector names were in supplied `example_query_spec`.'
-        f' Expected names: {expected_vector_names}. Names not present in'
-        f' `example_query_spec`: {expected_vector_names-vector_names}'
+        f' Expected names: {vector_names_expected_by_aggregator}. Names not'
+        ' present in `example_query_spec`:'
+        f' {vector_names_expected_by_aggregator-vector_names}'
     )
   return plan_pb2.ClientPhase(
       example_query_spec=example_query_spec, federated_example_query=io_router
@@ -1646,8 +1653,13 @@ def build_plan(
           experimental_checkpoint_write=experimental_client_checkpoint_write,
       )
     elif client_plan_type == ClientPlanType.EXAMPLE_QUERY:
-      client_phase = _build_client_phase_with_example_query_spec(
-          mrf.work, example_query_spec
+      vector_names_expected_by_aggregator = set(
+          variable_helpers.variable_names_from_type(
+              mrf.work.type_signature.result[0], artifact_constants.UPDATE
+          )
+      )
+      client_phase = build_client_phase_with_example_query_spec(
+          example_query_spec, vector_names_expected_by_aggregator
       )
     else:
       raise ValueError(
