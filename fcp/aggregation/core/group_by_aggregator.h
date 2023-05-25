@@ -17,6 +17,7 @@
 #ifndef FCP_AGGREGATION_CORE_GROUP_BY_AGGREGATOR_H_
 #define FCP_AGGREGATION_CORE_GROUP_BY_AGGREGATOR_H_
 
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -76,10 +77,13 @@ class GroupByAggregator : public TensorAggregator {
   // The number of tensors in each InputTensorList provided to Accumulate must
   // match the number of TensorSpecs in input_key_specs plus the number of
   // Intrinsics in this vector.
-  // This class takes ownership of the intrinsics vector.
-  explicit GroupByAggregator(const std::vector<TensorSpec>& input_key_specs,
-                             const std::vector<TensorSpec>* output_key_specs,
-                             std::vector<Intrinsic>&& intrinsics);
+  // This class takes ownership of the intrinsics vector and the aggregators
+  // vector.
+  explicit GroupByAggregator(
+      const std::vector<TensorSpec>& input_key_specs,
+      const std::vector<TensorSpec>* output_key_specs,
+      std::vector<Intrinsic> intrinsics,
+      std::vector<std::unique_ptr<TensorAggregator>> aggregators);
 
   // Merge this GroupByAggregator with another GroupByAggregator that operates
   // on compatible types using compatible inner intrinsics.
@@ -149,6 +153,7 @@ class GroupByAggregator : public TensorAggregator {
   size_t num_tensors_per_input_;
   std::optional<CompositeKeyCombiner> key_combiner_ = std::nullopt;
   std::vector<Intrinsic> intrinsics_;
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators_;
   const std::vector<TensorSpec>* output_key_specs_;
 };
 

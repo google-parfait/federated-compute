@@ -97,18 +97,27 @@ TensorSpec CreateTensorSpec(std::string name, DataType dtype) {
   return TensorSpec(name, dtype, {-1});
 }
 
-template <typename T>
-Intrinsic CreateInnerIntrinsic(DataType dtype) {
-  return Intrinsic({CreateTensorSpec("value", dtype)},
+Intrinsic CreateDefaultInnerIntrinsic(DataType dtype) {
+  return Intrinsic{"grouping_federated_sum",
                    {CreateTensorSpec("value", dtype)},
-                   std::make_unique<SumGroupingAggregator<T>>(dtype));
+                   {CreateTensorSpec("value", dtype)},
+                   {},
+                   {}};
+}
+
+template <typename T>
+std::unique_ptr<TensorAggregator> CreateDefaultInnerAggregator(DataType dtype) {
+  return std::make_unique<SumGroupingAggregator<T>>(dtype);
 }
 
 TEST(GroupByAggregatorTest, EmptyReport) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   auto result = std::move(aggregator).Report();
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result->size(), Eq(0));
@@ -116,9 +125,12 @@ TEST(GroupByAggregatorTest, EmptyReport) {
 
 TEST(GroupByAggregatorTest, ScalarAggregation_Succeeds) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor key =
       Tensor::Create(DT_STRING, {}, CreateTestData<string_view>({"key_string"}))
           .value();
@@ -141,9 +153,12 @@ TEST(GroupByAggregatorTest, ScalarAggregation_Succeeds) {
 TEST(GroupByAggregatorTest, DenseAggregation_Succeeds) {
   const TensorShape shape = {4};
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor keys =
       Tensor::Create(
           DT_STRING, shape,
@@ -176,9 +191,12 @@ TEST(GroupByAggregatorTest, DenseAggregation_Succeeds) {
 TEST(GroupByAggregatorTest, DifferentKeysPerAccumulate_Succeeds) {
   const TensorShape shape = {4};
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor keys1 =
       Tensor::Create(
           DT_STRING, shape,
@@ -220,9 +238,12 @@ TEST(GroupByAggregatorTest, DifferentKeysPerAccumulate_Succeeds) {
 
 TEST(GroupByAggregatorTest, DifferentShapesPerAccumulate_Succeeds) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
 
   Tensor keys1 = Tensor::Create(DT_STRING, {2},
                                 CreateTestData<string_view>({"zero", "one"}))
@@ -264,10 +285,15 @@ TEST(GroupByAggregatorTest, DifferentShapesPerAccumulate_Succeeds) {
 TEST(GroupByAggregatorTest, Accumulate_MultipleValueTensors_Succeeds) {
   const TensorShape shape = {4};
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
+
   Tensor keys1 =
       Tensor::Create(
           DT_STRING, shape,
@@ -306,8 +332,10 @@ TEST(GroupByAggregatorTest, Accumulate_MultipleValueTensors_Succeeds) {
 TEST(GroupByAggregatorTest, Accumulate_NoValueTensors_Succeeds) {
   const TensorShape shape = {4};
   std::vector<Intrinsic> intrinsics;
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor keys1 =
       Tensor::Create(
           DT_STRING, shape,
@@ -334,10 +362,13 @@ TEST(GroupByAggregatorTest, Accumulate_NoValueTensors_Succeeds) {
 TEST(GroupByAggregatorTest, Accumulate_MultipleKeyTensors_Succeeds) {
   const TensorShape shape = {4};
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key1", DT_STRING),
                                        CreateTensorSpec("key2", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor sizeKeys1 =
       Tensor::Create(
           DT_STRING, shape,
@@ -398,13 +429,15 @@ TEST(GroupByAggregatorTest,
      Accumulate_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
   const TensorShape shape = {4};
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> input_key_specs = {
       CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_STRING)};
   std::vector<TensorSpec> output_key_specs = {
       CreateTensorSpec("", DT_STRING), CreateTensorSpec("animals", DT_STRING)};
   GroupByAggregator aggregator(input_key_specs, &output_key_specs,
-                               std::move(intrinsics));
+                               std::move(intrinsics), std::move(aggregators));
   Tensor sizeKeys1 =
       Tensor::Create(
           DT_STRING, shape,
@@ -446,9 +479,12 @@ TEST(GroupByAggregatorTest,
 
 TEST(GroupByAggregatorTest, Accumulate_NoKeyTensors) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
 
   Tensor t1 =
       Tensor::Create(DT_INT32, {4}, CreateTestData({1, 3, 15, 27})).value();
@@ -471,16 +507,22 @@ TEST(GroupByAggregatorTest, Accumulate_NoKeyTensors) {
 
 TEST(GroupByAggregatorTest, Merge_Succeeds) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Tensor key =
       Tensor::Create(DT_STRING, {}, CreateTestData<string_view>({"foo"}))
           .value();
@@ -509,11 +551,15 @@ TEST(GroupByAggregatorTest, Merge_Succeeds) {
 TEST(GroupByAggregatorTest, Merge_MultipleValueTensors_Succeeds) {
   const TensorShape shape = {4};
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
   Tensor keys1 =
       Tensor::Create(
           DT_STRING, shape,
@@ -541,11 +587,15 @@ TEST(GroupByAggregatorTest, Merge_MultipleValueTensors_Succeeds) {
 
   // Create a second aggregator and accumulate an input with overlapping keys.
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Tensor keys3 =
       Tensor::Create(
           DT_STRING, shape,
@@ -574,9 +624,11 @@ TEST(GroupByAggregatorTest, Merge_MultipleValueTensors_Succeeds) {
 TEST(GroupByAggregatorTest, Merge_NoValueTensors_Succeeds) {
   const TensorShape shape = {4};
   std::vector<Intrinsic> intrinsics1;
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
   Tensor keys1 =
       Tensor::Create(
           DT_STRING, shape,
@@ -594,9 +646,11 @@ TEST(GroupByAggregatorTest, Merge_NoValueTensors_Succeeds) {
 
   // Create a second aggregator and accumulate an input with overlapping keys.
   std::vector<Intrinsic> intrinsics2;
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Tensor keys3 =
       Tensor::Create(
           DT_STRING, shape,
@@ -619,11 +673,14 @@ TEST(GroupByAggregatorTest, Merge_NoValueTensors_Succeeds) {
 TEST(GroupByAggregatorTest, Merge_MultipleKeyTensors_Succeeds) {
   const TensorShape shape = {4};
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key1", DT_STRING),
                                          CreateTensorSpec("key2", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
   Tensor sizeKeys1 =
       Tensor::Create(
           DT_STRING, shape,
@@ -653,11 +710,14 @@ TEST(GroupByAggregatorTest, Merge_MultipleKeyTensors_Succeeds) {
 
   // Create a second GroupByAggregator.
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key1", DT_STRING),
                                          CreateTensorSpec("key2", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Tensor sizeKeys3 =
       Tensor::Create(
           DT_STRING, shape,
@@ -695,13 +755,16 @@ TEST(GroupByAggregatorTest,
      Merge_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
   const TensorShape shape = {4};
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> input_key_specs_1 = {
       CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_STRING)};
   std::vector<TensorSpec> output_key_specs_1 = {
       CreateTensorSpec("", DT_STRING), CreateTensorSpec("animals", DT_STRING)};
   GroupByAggregator aggregator1(input_key_specs_1, &output_key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
   Tensor sizeKeys1 =
       Tensor::Create(
           DT_STRING, shape,
@@ -731,13 +794,16 @@ TEST(GroupByAggregatorTest,
 
   // Create a second GroupByAggregator.
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> input_key_specs_2 = {
       CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_STRING)};
   std::vector<TensorSpec> output_key_specs_2 = {
       CreateTensorSpec("", DT_STRING), CreateTensorSpec("animals", DT_STRING)};
   GroupByAggregator aggregator2(input_key_specs_2, &output_key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Tensor sizeKeys3 =
       Tensor::Create(
           DT_STRING, shape,
@@ -771,10 +837,13 @@ TEST(GroupByAggregatorTest,
 
 TEST(GroupByAggregatorTest, Merge_NoKeyTensors) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   Tensor t1 =
       Tensor::Create(DT_INT32, {4}, CreateTestData({1, 3, 15, 27})).value();
@@ -783,10 +852,13 @@ TEST(GroupByAggregatorTest, Merge_NoKeyTensors) {
   EXPECT_THAT(aggregator1.Accumulate({&t2}), IsOk());
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Tensor t3 =
       Tensor::Create(DT_INT32, {5}, CreateTestData({3, 11, 7, 20, 5})).value();
   EXPECT_THAT(aggregator2.Accumulate({&t3}), IsOk());
@@ -805,16 +877,22 @@ TEST(GroupByAggregatorTest, Merge_NoKeyTensors) {
 
 TEST(GroupByAggregatorTest, Merge_BothEmpty_Succeeds) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
 
   // Merge the two empty aggregators together.
   EXPECT_THAT(aggregator1.MergeWith(std::move(aggregator2)), IsOk());
@@ -828,16 +906,22 @@ TEST(GroupByAggregatorTest, Merge_BothEmpty_Succeeds) {
 
 TEST(GroupByAggregatorTest, Merge_ThisOutputEmpty_Succeeds) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
 
   Tensor keys1 = Tensor::Create(DT_STRING, {2},
                                 CreateTestData<string_view>({"zero", "one"}))
@@ -873,16 +957,22 @@ TEST(GroupByAggregatorTest, Merge_ThisOutputEmpty_Succeeds) {
 
 TEST(GroupByAggregatorTest, Merge_OtherOutputEmpty_Succeeds) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
 
   Tensor keys1 = Tensor::Create(DT_STRING, {2},
                                 CreateTestData<string_view>({"zero", "one"}))
@@ -922,9 +1012,12 @@ TEST(GroupByAggregatorTest, Merge_OtherOutputEmpty_Succeeds) {
 // operation had never been called.
 TEST(GroupByAggregatorTest, Accumulate_KeyTensorHasIncompatibleDataType) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor key =
       Tensor::Create(DT_FLOAT, {}, CreateTestData<float>({1.2})).value();
   Tensor t = Tensor::Create(DT_INT32, {}, CreateTestData<int32_t>({0})).value();
@@ -937,9 +1030,12 @@ TEST(GroupByAggregatorTest, Accumulate_KeyTensorHasIncompatibleDataType) {
 
 TEST(GroupByAggregatorTest, Accumulate_ValueTensorHasIncompatibleDataType) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor key =
       Tensor::Create(DT_STRING, {}, CreateTestData<string_view>({"key_string"}))
           .value();
@@ -953,10 +1049,13 @@ TEST(GroupByAggregatorTest, Accumulate_ValueTensorHasIncompatibleDataType) {
 
 TEST(GroupByAggregatorTest, Accumulate_FewerTensorsThanExpected) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key1", DT_STRING),
                                        CreateTensorSpec("key2", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor key =
       Tensor::Create(DT_STRING, {}, CreateTestData<string_view>({"key_string"}))
           .value();
@@ -970,9 +1069,12 @@ TEST(GroupByAggregatorTest, Accumulate_FewerTensorsThanExpected) {
 
 TEST(GroupByAggregatorTest, Accumulate_MoreTensorsThanExpected) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor key1 = Tensor::Create(DT_STRING, {},
                                CreateTestData<string_view>({"key_string_1"}))
                     .value();
@@ -989,9 +1091,12 @@ TEST(GroupByAggregatorTest, Accumulate_MoreTensorsThanExpected) {
 
 TEST(GroupByAggregatorTest, Accumulate_KeyTensorSmallerThanValueTensor) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor key = Tensor::Create(DT_STRING, {},
                               CreateTestData<string_view>({"key_string_1"}))
                    .value();
@@ -1005,9 +1110,12 @@ TEST(GroupByAggregatorTest, Accumulate_KeyTensorSmallerThanValueTensor) {
 
 TEST(GroupByAggregatorTest, Accumulate_KeyTensorLargerThanValueTensor) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor key =
       Tensor::Create(DT_STRING, {3},
                      CreateTestData<string_view>(
@@ -1023,9 +1131,12 @@ TEST(GroupByAggregatorTest, Accumulate_KeyTensorLargerThanValueTensor) {
 
 TEST(GroupByAggregatorTest, Accumulate_MultidimensionalTensorsNotSupported) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
-  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics));
+  GroupByAggregator aggregator(key_specs, &key_specs, std::move(intrinsics),
+                               std::move(aggregators));
   Tensor key = Tensor::Create(DT_STRING, {2, 2},
                               CreateTestData<string_view>({"a", "b", "c", "d"}))
                    .value();
@@ -1040,16 +1151,22 @@ TEST(GroupByAggregatorTest, Accumulate_MultidimensionalTensorsNotSupported) {
 
 TEST(GroupByAggregatorTest, Merge_IncompatibleKeyType) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_FLOAT)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Status s = aggregator1.MergeWith(std::move(aggregator2));
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(s.message(),
@@ -1059,16 +1176,21 @@ TEST(GroupByAggregatorTest, Merge_IncompatibleKeyType) {
 
 TEST(GroupByAggregatorTest, Merge_IncompatibleOutputKeySpec) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> input_key_specs_1 = {
       CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_STRING)};
   std::vector<TensorSpec> output_key_specs_1 = {
       CreateTensorSpec("", DT_STRING), CreateTensorSpec("key2", DT_STRING)};
   GroupByAggregator aggregator1(input_key_specs_1, &output_key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> input_key_specs_2 = {
       CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_STRING)};
   // Key1 is included in the output of aggregator2 but not included in the
@@ -1076,7 +1198,8 @@ TEST(GroupByAggregatorTest, Merge_IncompatibleOutputKeySpec) {
   std::vector<TensorSpec> output_key_specs_2 = {
       CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_STRING)};
   GroupByAggregator aggregator2(input_key_specs_2, &output_key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Status s = aggregator1.MergeWith(std::move(aggregator2));
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(s.message(),
@@ -1087,18 +1210,25 @@ TEST(GroupByAggregatorTest, Merge_IncompatibleOutputKeySpec) {
 TEST(GroupByAggregatorTest,
      Merge_IncompatibleKeyType_InputTensorListTypesMatch) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING),
                                          CreateTensorSpec("key", DT_INT32)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Status s = aggregator1.MergeWith(std::move(aggregator2));
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(s.message(),
@@ -1108,16 +1238,22 @@ TEST(GroupByAggregatorTest,
 
 TEST(GroupByAggregatorTest, Merge_IncompatibleValueType) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<float>(DT_FLOAT));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_FLOAT));
+  aggregators2.push_back(CreateDefaultInnerAggregator<float>(DT_FLOAT));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Status s = aggregator1.MergeWith(std::move(aggregator2));
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(s.message(),
@@ -1127,17 +1263,23 @@ TEST(GroupByAggregatorTest, Merge_IncompatibleValueType) {
 
 TEST(GroupByAggregatorTest, Merge_DifferentNumKeys) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING),
                                          CreateTensorSpec("key2", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Status s = aggregator1.MergeWith(std::move(aggregator2));
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(s.message(),
@@ -1147,16 +1289,22 @@ TEST(GroupByAggregatorTest, Merge_DifferentNumKeys) {
 
 TEST(GroupByAggregatorTest, Merge_NonzeroVsZeroNumKeys) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Status s = aggregator1.MergeWith(std::move(aggregator2));
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(s.message(),
@@ -1166,17 +1314,24 @@ TEST(GroupByAggregatorTest, Merge_NonzeroVsZeroNumKeys) {
 
 TEST(GroupByAggregatorTest, Merge_DifferentNumValues) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
   Status s = aggregator1.MergeWith(std::move(aggregator2));
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(s.message(),
@@ -1186,11 +1341,14 @@ TEST(GroupByAggregatorTest, Merge_DifferentNumValues) {
 
 TEST(GroupByAggregatorTest, Merge_DifferentTensorAggregatorImpl) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
 
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   SumGroupingAggregator<int32_t> sum_aggregator(DT_INT32);
   Status s = aggregator1.MergeWith(std::move(sum_aggregator));
@@ -1202,10 +1360,13 @@ TEST(GroupByAggregatorTest, Merge_DifferentTensorAggregatorImpl) {
 
 TEST(GroupByAggregatorTest, FailsAfterBeingConsumed) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   Tensor key =
       Tensor::Create(DT_STRING, {}, CreateTestData<string_view>({"foo"}))
@@ -1224,10 +1385,13 @@ TEST(GroupByAggregatorTest, FailsAfterBeingConsumed) {
               IsCode(FAILED_PRECONDITION));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
 
   EXPECT_THAT(aggregator1.MergeWith(std::move(aggregator2)),  // NOLINT
               IsCode(FAILED_PRECONDITION));
@@ -1235,20 +1399,26 @@ TEST(GroupByAggregatorTest, FailsAfterBeingConsumed) {
   // Passing this aggregator as an argument to another MergeWith must fail
   // too.
   std::vector<Intrinsic> intrinsics3;
-  intrinsics3.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators3;
+  intrinsics3.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators3.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_3 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator3(key_specs_3, &key_specs_3,
-                                std::move(intrinsics3));
+                                std::move(intrinsics3),
+                                std::move(aggregators3));
   EXPECT_THAT(aggregator3.MergeWith(std::move(aggregator1)),  // NOLINT
               IsCode(FAILED_PRECONDITION));
 }
 
 TEST(GroupByAggregatorTest, FailsAfterBeingConsumed_WhenEmpty) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
 
   EXPECT_THAT(std::move(aggregator1).Report(), IsOk());
 
@@ -1266,10 +1436,13 @@ TEST(GroupByAggregatorTest, FailsAfterBeingConsumed_WhenEmpty) {
               IsCode(FAILED_PRECONDITION));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
 
   EXPECT_THAT(aggregator1.MergeWith(std::move(aggregator2)),  // NOLINT
               IsCode(FAILED_PRECONDITION));
@@ -1277,20 +1450,26 @@ TEST(GroupByAggregatorTest, FailsAfterBeingConsumed_WhenEmpty) {
   // Passing this aggregator as an argument to another MergeWith must fail
   // too.
   std::vector<Intrinsic> intrinsics3;
-  intrinsics3.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators3;
+  intrinsics3.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators3.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_3 = {CreateTensorSpec("key", DT_STRING)};
   GroupByAggregator aggregator3(key_specs_3, &key_specs_3,
-                                std::move(intrinsics3));
+                                std::move(intrinsics3),
+                                std::move(aggregators3));
   EXPECT_THAT(aggregator3.MergeWith(std::move(aggregator1)),  // NOLINT
               IsCode(FAILED_PRECONDITION));
 }
 
 TEST(GroupByAggregatorTest, FailsAfterBeingConsumed_WhenNoKeys) {
   std::vector<Intrinsic> intrinsics1;
-  intrinsics1.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators1;
+  intrinsics1.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators1.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_1 = {};
   GroupByAggregator aggregator1(key_specs_1, &key_specs_1,
-                                std::move(intrinsics1));
+                                std::move(intrinsics1),
+                                std::move(aggregators1));
   Tensor t = Tensor::Create(DT_INT32, {}, CreateTestData({1})).value();
 
   EXPECT_THAT(aggregator1.Accumulate({&t}), IsOk());
@@ -1305,10 +1484,13 @@ TEST(GroupByAggregatorTest, FailsAfterBeingConsumed_WhenNoKeys) {
               IsCode(FAILED_PRECONDITION));
 
   std::vector<Intrinsic> intrinsics2;
-  intrinsics2.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators2;
+  intrinsics2.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators2.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_2 = {};
   GroupByAggregator aggregator2(key_specs_2, &key_specs_2,
-                                std::move(intrinsics2));
+                                std::move(intrinsics2),
+                                std::move(aggregators2));
 
   EXPECT_THAT(aggregator1.MergeWith(std::move(aggregator2)),  // NOLINT
               IsCode(FAILED_PRECONDITION));
@@ -1316,93 +1498,133 @@ TEST(GroupByAggregatorTest, FailsAfterBeingConsumed_WhenNoKeys) {
   // Passing this aggregator as an argument to another MergeWith must fail
   // too.
   std::vector<Intrinsic> intrinsics3;
-  intrinsics3.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators3;
+  intrinsics3.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators3.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> key_specs_3 = {};
   GroupByAggregator aggregator3(key_specs_3, &key_specs_3,
-                                std::move(intrinsics3));
+                                std::move(intrinsics3),
+                                std::move(aggregators3));
   EXPECT_THAT(aggregator3.MergeWith(std::move(aggregator1)),  // NOLINT
               IsCode(FAILED_PRECONDITION));
 }
 
 TEST(GroupByAggregatorDeathTest, NoInputTensors) {
   std::vector<Intrinsic> intrinsics;
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
   std::vector<TensorSpec> key_specs = {};
   EXPECT_DEATH(
-      new GroupByAggregator(key_specs, &key_specs, std::move(intrinsics)),
+      new GroupByAggregator(key_specs, &key_specs, std::move(intrinsics),
+                            std::move(aggregators)),
       "Must operate on a nonzero number of tensors.");
 }
 
 TEST(GroupByAggregatorDeathTest, InputAndOutputKeySizeMismatchCheckFailure) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> input_key_specs = {
       CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_FLOAT)};
   std::vector<TensorSpec> output_key_specs = {
       CreateTensorSpec("animals", DT_STRING)};
-  EXPECT_DEATH(new GroupByAggregator(input_key_specs, &output_key_specs,
-                                     std::move(intrinsics)),
-               "Size of input_key_specs must match size of output_key_specs.");
+  EXPECT_DEATH(
+      new GroupByAggregator(input_key_specs, &output_key_specs,
+                            std::move(intrinsics), std::move(aggregators)),
+      "Size of input_key_specs must match size of output_key_specs.");
 }
 
 TEST(GroupByAggregatorDeathTest, InputAndOutputDtypeMismatchCheckFailure) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> input_key_specs = {
       CreateTensorSpec("key1", DT_STRING), CreateTensorSpec("key2", DT_FLOAT)};
   std::vector<TensorSpec> output_key_specs = {
       CreateTensorSpec("", DT_STRING), CreateTensorSpec("animals", DT_STRING)};
   EXPECT_DEATH(
       new GroupByAggregator(input_key_specs, &output_key_specs,
-                            std::move(intrinsics)),
+                            std::move(intrinsics), std::move(aggregators)),
       "Input and output tensor specifications must have matching data types");
 }
 
 TEST(GroupByAggregatorDeathTest, InputShapeCheckFailure) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> input_key_specs = {TensorSpec("key", DT_STRING, {8})};
   std::vector<TensorSpec> output_key_specs = {
       TensorSpec("key", DT_STRING, {-1})};
   EXPECT_DEATH(
       new GroupByAggregator(input_key_specs, &output_key_specs,
-                            std::move(intrinsics)),
+                            std::move(intrinsics), std::move(aggregators)),
       "All input and output tensors must have one dimension of unknown size.");
 }
 
 TEST(GroupByAggregatorDeathTest, OutputShapeCheckFailure) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(CreateInnerIntrinsic<int32_t>(DT_INT32));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  aggregators.push_back(CreateDefaultInnerAggregator<int32_t>(DT_INT32));
   std::vector<TensorSpec> input_key_specs = {
       TensorSpec("key", DT_STRING, {-1})};
   std::vector<TensorSpec> output_key_specs = {
       TensorSpec("key", DT_STRING, {8})};
   EXPECT_DEATH(
       new GroupByAggregator(input_key_specs, &output_key_specs,
-                            std::move(intrinsics)),
+                            std::move(intrinsics), std::move(aggregators)),
       "All input and output tensors must have one dimension of unknown size.");
 }
 
 TEST(GroupByAggregatorDeathTest, TypesAndAggregatorsTypeMismatch) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(
-      Intrinsic({CreateTensorSpec("value", DT_INT32)},
-                {CreateTensorSpec("value", DT_INT32)},
-                std::make_unique<SumGroupingAggregator<float>>(DT_FLOAT)));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(Intrinsic{"federated_sum",
+                                 {CreateTensorSpec("value", DT_INT32)},
+                                 {CreateTensorSpec("value", DT_INT32)},
+                                 {},
+                                 {}});
+  aggregators.push_back(
+      std::make_unique<SumGroupingAggregator<float>>(DT_FLOAT));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
   EXPECT_DEATH(
-      new GroupByAggregator(key_specs, &key_specs, std::move(intrinsics)),
+      new GroupByAggregator(key_specs, &key_specs, std::move(intrinsics),
+                            std::move(aggregators)),
       "Expected OneDimGroupingAggregator of type");
+}
+
+TEST(GroupByAggregatorDeathTest, TypesAndAggregatorsSizeMismatch) {
+  std::vector<Intrinsic> intrinsics;
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(Intrinsic{"federated_sum",
+                                 {CreateTensorSpec("value", DT_INT32)},
+                                 {CreateTensorSpec("value", DT_INT32)},
+                                 {},
+                                 {}});
+  std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
+  EXPECT_DEATH(
+      new GroupByAggregator(key_specs, &key_specs, std::move(intrinsics),
+                            std::move(aggregators)),
+      "Intrinsics and aggregators vectors must be the same size");
 }
 
 TEST(GroupByAggregatorDeathTest, SubIntrinsicNotGroupingAggregator) {
   std::vector<Intrinsic> intrinsics;
-  intrinsics.push_back(Intrinsic(
-      {CreateTensorSpec("value", DT_INT32)},
-      {CreateTensorSpec("value", DT_INT32)},
-      std::make_unique<SumAggregator<int32_t>>(DT_INT32, TensorShape{})));
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  intrinsics.push_back(Intrinsic{"federated_sum",
+                                 {CreateTensorSpec("value", DT_INT32)},
+                                 {CreateTensorSpec("value", DT_INT32)},
+                                 {},
+                                 {}});
+
+  aggregators.push_back(
+      std::make_unique<SumAggregator<int32_t>>(DT_INT32, TensorShape{}));
   std::vector<TensorSpec> key_specs = {CreateTensorSpec("key", DT_STRING)};
   EXPECT_DEATH(
-      new GroupByAggregator(key_specs, &key_specs, std::move(intrinsics)),
+      new GroupByAggregator(key_specs, &key_specs, std::move(intrinsics),
+                            std::move(aggregators)),
       "Expected OneDimGroupingAggregator of type");
 }
 

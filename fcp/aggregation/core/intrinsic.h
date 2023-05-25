@@ -17,41 +17,24 @@
 #ifndef FCP_AGGREGATION_CORE_INTRINSIC_H_
 #define FCP_AGGREGATION_CORE_INTRINSIC_H_
 
-#include <memory>
-#include <utility>
+#include <string>
 #include <vector>
 
-#include "fcp/aggregation/core/tensor_aggregator.h"
+#include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_spec.h"
 
 namespace fcp {
 namespace aggregation {
 
-// A tuple representing an aggregation intrinsic.
-class Intrinsic final {
- public:
-  Intrinsic(std::vector<TensorSpec> inputs, std::vector<TensorSpec> outputs,
-            std::unique_ptr<TensorAggregator> tensor_aggregator)
-      : inputs_(std::move(inputs)),
-        outputs_(std::move(outputs)),
-        tensor_aggregator_(std::move(tensor_aggregator)) {}
-
-  Intrinsic(Intrinsic&& other) = default;
-  Intrinsic& operator=(Intrinsic&& other) = default;
-
-  const std::vector<TensorSpec>& inputs() const { return inputs_; }
-  const std::vector<TensorSpec>& outputs() const { return outputs_; }
-  const TensorAggregator& const_aggregator() const {
-    return *tensor_aggregator_;
-  }
-  TensorAggregator& aggregator() { return *tensor_aggregator_; }
-
- private:
-  const std::vector<TensorSpec> inputs_;
-  const std::vector<TensorSpec> outputs_;
-  std::unique_ptr<TensorAggregator> tensor_aggregator_;
+// A tuple representing an aggregation intrinsic, meant to be immutable once
+// initialized.
+struct Intrinsic {
+  std::string uri;
+  std::vector<TensorSpec> inputs;
+  std::vector<TensorSpec> outputs;
+  std::vector<Tensor> parameters;
+  std::vector<Intrinsic> nested_intrinsics;
 };
-
 }  // namespace aggregation
 }  // namespace fcp
 

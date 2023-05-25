@@ -57,23 +57,27 @@ Status CheckValidOneDimGroupingAggregator(const TensorAggregator& aggregator) {
 GroupByAggregator::GroupByAggregator(
     const std::vector<TensorSpec>& input_key_specs,
     const std::vector<TensorSpec>* output_key_specs,
-    std::vector<Intrinsic>&& intrinsics)
+    std::vector<Intrinsic> intrinsics,
+    std::vector<std::unique_ptr<TensorAggregator>> aggregators)
     : num_inputs_(0),
       num_keys_per_input_(input_key_specs.size()),
       intrinsics_(std::move(intrinsics)),
+      aggregators_(std::move(aggregators)),
       output_key_specs_(output_key_specs) {
   // All intrinsics held by a GroupByAggregator must hold some subclass
   // of OneDimGroupingAggregator templated by a type matching the output data
   // type specified in the intrinsic.
   int num_value_inputs = 0;
-  for (const Intrinsic& intrinsic : intrinsics_) {
+  FCP_CHECK(intrinsics_.size() == aggregators_.size())
+      << "Intrinsics and aggregators vectors must be the same size.";
+  for (int i = 0; i < intrinsics_.size(); ++i) {
     Status intrinsic_status;
-    DTYPE_CASES(intrinsic.outputs()[0].dtype(), T,
-                intrinsic_status = CheckValidOneDimGroupingAggregator<T>(
-                    intrinsic.const_aggregator()));
+    DTYPE_CASES(intrinsics_[i].outputs[0].dtype(), T,
+                intrinsic_status =
+                    CheckValidOneDimGroupingAggregator<T>(*aggregators_[i]));
     FCP_CHECK(intrinsic_status.ok())
         << "GroupByAggregator: " << intrinsic_status.message();
-    num_value_inputs += intrinsic.inputs().size();
+    num_value_inputs += intrinsics_[i].inputs.size();
   }
   num_tensors_per_input_ = num_keys_per_input_ + num_value_inputs;
   FCP_CHECK(num_tensors_per_input_ > 0)
@@ -193,7 +197,7 @@ Status GroupByAggregator::AggregateTensorsInternal(InputTensorList tensors) {
   // invalid input tensor.
   size_t input_index = num_keys_per_input_;
   for (Intrinsic& intrinsic : intrinsics_) {
-    for (const TensorSpec& tensor_spec : intrinsic.inputs()) {
+    for (const TensorSpec& tensor_spec : intrinsic.inputs) {
       const Tensor* tensor = tensors[input_index];
       // Ensure the types of the value input tensors match the expected types.
       if (tensor->dtype() != tensor_spec.dtype()) {
@@ -218,14 +222,14 @@ Status GroupByAggregator::AggregateTensorsInternal(InputTensorList tensors) {
   FCP_ASSIGN_OR_RETURN(Tensor ordinals, CreateOrdinalsByGroupingKeys(tensors));
 
   input_index = num_keys_per_input_;
-  for (Intrinsic& intrinsic : intrinsics_) {
-    InputTensorList intrinsic_inputs(intrinsic.inputs().size() + 1);
+  for (int i = 0; i < intrinsics_.size(); ++i) {
+    InputTensorList intrinsic_inputs(intrinsics_[i].inputs.size() + 1);
     intrinsic_inputs[0] = &ordinals;
-    for (int i = 0; i < intrinsic.inputs().size(); ++i) {
-      intrinsic_inputs[i + 1] = tensors[input_index++];
+    for (int j = 0; j < intrinsics_[i].inputs.size(); ++j) {
+      intrinsic_inputs[j + 1] = tensors[input_index++];
     }
     Status accumulate_status =
-        intrinsic.aggregator().Accumulate(std::move(intrinsic_inputs));
+        aggregators_[i]->Accumulate(std::move(intrinsic_inputs));
     // If the accumulate operation fails on a sub-intrinsic, the key_combiner_
     // and any previous sub-intrinsics have already been modified. Thus, exit
     // the program with a CHECK failure rather than a failed status which might
@@ -244,9 +248,10 @@ OutputTensorList GroupByAggregator::TakeOutputsInternal() && {
     outputs = key_combiner_->GetOutputKeys();
   }
   outputs.reserve(outputs.size() + intrinsics_.size());
-  for (auto& intrinsic : intrinsics_) {
+  for (int i = 0; i < intrinsics_.size(); ++i) {
+    auto tensor_aggregator = std::move(aggregators_[i]);
     StatusOr<OutputTensorList> value_output =
-        std::move(intrinsic.aggregator()).Report();
+        std::move(*tensor_aggregator).Report();
     FCP_CHECK(value_output.ok()) << value_output.status().message();
     for (Tensor& output_tensor : value_output.value()) {
       outputs.push_back(std::move(output_tensor));
@@ -298,13 +303,13 @@ Status GroupByAggregator::IsCompatible(const GroupByAggregator& other) const {
               "GroupByAggregator to use the same number of inner intrinsics";
   }
   for (int i = 0; i < other.intrinsics_.size(); ++i) {
-    if (other.intrinsics_[i].inputs() != intrinsics_[i].inputs()) {
+    if (other.intrinsics_[i].inputs != intrinsics_[i].inputs) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "GroupByAggregator::MergeWith: Expected other "
                 "GroupByAggregator to use inner intrinsics with the same "
                 "inputs.";
     }
-    if (other.intrinsics_[i].outputs() != intrinsics_[i].outputs()) {
+    if (other.intrinsics_[i].outputs != intrinsics_[i].outputs) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "GroupByAggregator::MergeWith: Expected other "
                 "GroupByAggregator to use inner intrinsics with the same "
