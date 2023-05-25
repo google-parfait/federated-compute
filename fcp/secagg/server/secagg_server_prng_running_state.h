@@ -81,7 +81,7 @@ class SecAggServerPrngRunningState final : public SecAggServerState {
   std::optional<Status> completion_status_ ABSL_GUARDED_BY(mutex_);
 
   absl::Time prng_started_time_;
-  CancellationToken cancellation_token_;
+  AsyncToken async_token_;
 
   std::function<void()> prng_done_callback_ ABSL_GUARDED_BY(mutex_);
 

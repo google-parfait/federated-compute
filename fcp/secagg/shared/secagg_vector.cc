@@ -355,7 +355,25 @@ void SecAggUnpackedVector::Add(const SecAggVector& other) {
   }
 }
 
+void SecAggUnpackedVector::Add(const SecAggUnpackedVector& other) {
+  FCP_CHECK(num_elements() == other.num_elements());
+  FCP_CHECK(modulus() == other.modulus());
+  auto it = other.begin();
+  for (auto& v : *this) {
+    v = AddModOpt(v, *it++, modulus());
+  }
+}
+
 void SecAggUnpackedVectorMap::Add(const SecAggVectorMap& other) {
+  FCP_CHECK(size() == other.size());
+  for (auto& [name, vector] : *this) {
+    auto it = other.find(name);
+    FCP_CHECK(it != other.end());
+    vector.Add(it->second);
+  }
+}
+
+void SecAggUnpackedVectorMap::Add(const SecAggUnpackedVectorMap& other) {
   FCP_CHECK(size() == other.size());
   for (auto& [name, vector] : *this) {
     auto it = other.find(name);

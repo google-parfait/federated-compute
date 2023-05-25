@@ -19,7 +19,7 @@
 
 #include <functional>
 #include <memory>
-#include <string>
+#include <vector>
 
 #include "fcp/secagg/server/secagg_scheduler.h"
 #include "fcp/secagg/server/secagg_server_state.h"
@@ -72,7 +72,7 @@ class SecAggServerR2MaskedInputCollState : public SecAggServerState {
   std::vector<uint32_t> clients_aborted_at_round_2_;
 
  private:
-  std::shared_ptr<Accumulator<SecAggUnpackedVectorMap>> accumulator_;
+  AsyncToken async_token_;
   void HandleAbort() override;
 
   void HandleAbortClient(uint32_t client_id,

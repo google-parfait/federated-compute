@@ -37,6 +37,10 @@ class AesSecAggServerProtocolImpl
     : public SecAggServerProtocolImpl,
       public std::enable_shared_from_this<AesSecAggServerProtocolImpl> {
  public:
+  typedef struct {
+  } Empty;
+  using MaskedInputAccumulator = Accumulator<Empty>;
+
   AesSecAggServerProtocolImpl(
       std::unique_ptr<SecretSharingGraph> graph,
       int minimum_number_of_clients_to_proceed,
@@ -78,8 +82,7 @@ class AesSecAggServerProtocolImpl
   // the current queue.
   std::vector<std::unique_ptr<SecAggVectorMap>> TakeMaskedInputQueue();
 
-  std::shared_ptr<Accumulator<SecAggUnpackedVectorMap>>
-  SetupMaskedInputCollection() override;
+  AsyncToken SetupMaskedInputCollection() override;
 
   void FinalizeMaskedInputCollection() override;
 
@@ -87,18 +90,20 @@ class AesSecAggServerProtocolImpl
       std::unique_ptr<MaskedInputCollectionResponse> masked_input_response)
       override;
 
-  CancellationToken StartPrng(
-      const PrngWorkItems& work_items,
-      std::function<void(Status)> done_callback) override;
+  AsyncToken StartPrng(const PrngWorkItems& work_items,
+                       std::function<void(Status)> done_callback) override;
 
  private:
   std::unique_ptr<SecAggUnpackedVectorMap> masked_input_;
   // Protects masked_input_queue_.
   absl::Mutex mutex_;
+
+  // Parallel masked input collection fields
   std::vector<std::unique_ptr<SecAggVectorMap>> masked_input_queue_
       ABSL_GUARDED_BY(mutex_);
-  std::shared_ptr<Accumulator<SecAggUnpackedVectorMap>>
-      masked_input_accumulator_;
+
+  absl::Mutex async_r2_mutex_;
+  std::shared_ptr<MaskedInputAccumulator> masked_input_accumulator_;
   ServerVariant server_variant_;
   std::vector<InputVectorSpecification> input_vector_specs_;
 };

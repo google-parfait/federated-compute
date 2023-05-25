@@ -279,8 +279,7 @@ class SecAggServerProtocolImpl {
 
   // Sets up the sum of encrypted vectors received by the clients in R1.  This
   // must be called before any other R2 methods are called.
-  virtual std::shared_ptr<Accumulator<SecAggUnpackedVectorMap>>
-  SetupMaskedInputCollection() = 0;
+  virtual AsyncToken SetupMaskedInputCollection() = 0;
 
   // Finalizes the async aggregation of R2 messages before moving to R3.
   virtual void FinalizeMaskedInputCollection() = 0;
@@ -331,9 +330,8 @@ class SecAggServerProtocolImpl {
   // executing PRNG work items.
   // The returned cancellation token can be used to abort the asynchronous
   // execution.
-  virtual CancellationToken StartPrng(
-      const PrngWorkItems& work_items,
-      std::function<void(Status)> done_callback) = 0;
+  virtual AsyncToken StartPrng(const PrngWorkItems& work_items,
+                               std::function<void(Status)> done_callback) = 0;
 
  private:
   std::unique_ptr<SecretSharingGraph> secret_sharing_graph_;

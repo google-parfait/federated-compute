@@ -449,16 +449,16 @@ TEST(SecAggUnpackedVectorTest, VerifyMoveAssignment) {
   EXPECT_THAT(vector2[0], Eq(1));
 }
 
-TEST(SecAggUnpackedVectorTest, AddSecAggVectorMap) {
-  auto unpacked_map = std::make_unique<SecAggUnpackedVectorMap>();
-  unpacked_map->emplace("foobar", SecAggUnpackedVector({0, 10, 20, 30}, 32));
+TEST(SecAggUnpackedVectorTest, AddSecAggVectorMapInPlace) {
+  SecAggUnpackedVectorMap unpacked_map;
+  unpacked_map.emplace("foobar", SecAggUnpackedVector({0, 10, 20, 30}, 32));
 
-  auto packed_map = std::make_unique<SecAggVectorMap>();
-  packed_map->emplace("foobar", SecAggVector({5, 5, 5, 5}, 32));
+  SecAggVectorMap packed_map;
+  packed_map.emplace("foobar", SecAggVector({5, 5, 5, 5}, 32));
 
-  unpacked_map->Add(*packed_map);
-  EXPECT_THAT(unpacked_map->size(), Eq(1));
-  EXPECT_THAT(unpacked_map->at("foobar"), ElementsAreArray({5, 15, 25, 3}));
+  unpacked_map.Add(packed_map);
+  EXPECT_THAT(unpacked_map.size(), Eq(1));
+  EXPECT_THAT(unpacked_map.at("foobar"), ElementsAreArray({5, 15, 25, 3}));
 }
 
 TEST(SecAggUnpackedVectorTest, AddUnpackedSecAggVectorMaps) {
@@ -470,6 +470,16 @@ TEST(SecAggUnpackedVectorTest, AddUnpackedSecAggVectorMaps) {
       SecAggUnpackedVectorMap::AddMaps(unpacked_map_1, unpacked_map_2);
   EXPECT_THAT(result->size(), Eq(1));
   EXPECT_THAT(result->at("foobar"), ElementsAreArray({5, 15, 25, 3}));
+}
+
+TEST(SecAggUnpackedVectorTest, AddUnpackedSecAggVectorMapInPlace) {
+  SecAggUnpackedVectorMap unpacked_map_1, unpacked_map_2;
+  unpacked_map_1.emplace("foobar", SecAggUnpackedVector({0, 10, 20, 30}, 32));
+  unpacked_map_2.emplace("foobar", SecAggUnpackedVector({5, 5, 5, 5}, 32));
+
+  unpacked_map_1.Add(unpacked_map_2);
+  EXPECT_THAT(unpacked_map_1.size(), Eq(1));
+  EXPECT_THAT(unpacked_map_1.at("foobar"), ElementsAreArray({5, 15, 25, 3}));
 }
 
 }  // namespace

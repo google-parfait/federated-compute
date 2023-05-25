@@ -57,8 +57,8 @@ Status SecAggServerPrngRunningState::HandleMessage(
 }
 
 void SecAggServerPrngRunningState::HandleAbort() {
-  if (cancellation_token_) {
-    cancellation_token_->Cancel();
+  if (async_token_) {
+    async_token_->Cancel();
   }
 }
 
@@ -93,7 +93,7 @@ void SecAggServerPrngRunningState::EnterState() {
   // Scheduling workitems to run.
   prng_started_time_ = absl::Now();
 
-  cancellation_token_ = impl()->StartPrng(
+  async_token_ = impl()->StartPrng(
       work_items, [this](Status status) { this->PrngRunnerFinished(status); });
 }
 

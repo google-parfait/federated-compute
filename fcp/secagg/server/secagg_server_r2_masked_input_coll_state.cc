@@ -38,7 +38,7 @@ SecAggServerR2MaskedInputCollState::SecAggServerR2MaskedInputCollState(
                         number_of_clients_terminated_without_unmasking,
                         SecAggServerStateKind::R2_MASKED_INPUT_COLLECTION,
                         std::move(impl)) {
-  accumulator_ = this->impl()->SetupMaskedInputCollection();
+  async_token_ = this->impl()->SetupMaskedInputCollection();
 }
 
 SecAggServerR2MaskedInputCollState::~SecAggServerR2MaskedInputCollState() {}
@@ -129,8 +129,8 @@ void SecAggServerR2MaskedInputCollState::HandleAbortClient(
 }
 
 void SecAggServerR2MaskedInputCollState::HandleAbort() {
-  if (accumulator_) {
-    accumulator_->Cancel();
+  if (async_token_) {
+    async_token_->Cancel();
   }
 }
 
@@ -192,19 +192,19 @@ SecAggServerR2MaskedInputCollState::ProceedToNextRound() {
 
 bool SecAggServerR2MaskedInputCollState::SetAsyncCallback(
     std::function<void()> async_callback) {
-  if (accumulator_) {
-    return accumulator_->SetAsyncObserver(async_callback);
+  if (async_token_) {
+    return async_token_->SetAsyncObserver(async_callback);
   }
   return false;
 }
 
 bool SecAggServerR2MaskedInputCollState::ReadyForNextRound() const {
-  // Accumulator is not set (this is a synchronous session) or it does not have
-  // unobserved work.
-  bool accumulator_is_idle = (!accumulator_ || accumulator_->IsIdle());
-  return accumulator_is_idle && ((number_of_clients_ready_for_next_round_ >=
-                                  minimum_number_of_clients_to_proceed()) ||
-                                 (needs_to_abort_));
+  // Async accumulator is not set (this is a synchronous session) or it does not
+  // have unobserved work.
+  bool is_idle = (!async_token_ || async_token_->IsIdle());
+  return is_idle && ((number_of_clients_ready_for_next_round_ >=
+                      minimum_number_of_clients_to_proceed()) ||
+                     (needs_to_abort_));
 }
 
 }  // namespace secagg

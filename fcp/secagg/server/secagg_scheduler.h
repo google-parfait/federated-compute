@@ -21,7 +21,6 @@
 #include <functional>
 #include <memory>
 #include <utility>
-#include <vector>
 
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
@@ -45,22 +44,30 @@ class CallbackWaiter : public Clock::Waiter {
   std::function<void()> callback_;
 };
 
-// Provides Cancellation mechanism for SevAggScheduler.
-class CancellationImpl {
+// Provides async worker abstraction for SecAggScheduler.
+class AsyncWorker {
  public:
-  virtual ~CancellationImpl() = default;
+  virtual ~AsyncWorker() = default;
 
-  // Calling Cancel results in skipping the remaining, still pending
-  // ParallelGenerateSequentialReduce. The call blocks waiting for any
-  // currently active ongoing tasks to complete. Calling Cancel for the second
-  // time has no additional effect.
+  // Returns true if there is no any pending async work, even if the results
+  // have not been observed by a callback.
+  virtual bool IsIdle() = 0;
+
+  // Returns false if no async work has happened since last time this function
+  // was called, or the first time it is called. Otherwise it returns true and
+  // schedules a callback to be called once the scheduler is idle.
+  virtual bool SetAsyncObserver(std::function<void()> async_callback) = 0;
+
+  // Calling Cancel results in skipping the remaining, still pending, async
+  // work. The call blocks waiting for any currently active ongoing tasks to
+  // complete. Calling Cancel for the second time has no additional effect.
   virtual void Cancel() = 0;
 };
 
-using CancellationToken = std::shared_ptr<CancellationImpl>;
+using AsyncToken = std::shared_ptr<AsyncWorker>;
 
 template <typename T>
-class Accumulator : public CancellationImpl,
+class Accumulator : public AsyncWorker,
                     public std::enable_shared_from_this<Accumulator<T>> {
  public:
   Accumulator(
@@ -109,7 +116,7 @@ class Accumulator : public CancellationImpl,
                 *accumulator->accumulated_value_, *partial);
             FCP_CHECK(new_value);
             accumulator->accumulated_value_ = std::move(new_value);
-            // At this point the sequantial task has been run, and we (i)
+            // At this point the sequential task has been run, and we (i)
             // decrement both active and remaining counts and possibly reset the
             // unobserved work flag, (ii) get the callback, which might be
             // empty, and (iii) call it if that is not the case.
@@ -151,17 +158,19 @@ class Accumulator : public CancellationImpl,
     });
   }
 
+  // AsyncWorker implementation.
   // Returns true if the accumulator doesn't have any remaining tasks,
   // even if their results have not been observed by a callback.
-  bool IsIdle() {
+  bool IsIdle() override {
     absl::MutexLock lock(&mutex_);
     return remaining_sequential_tasks_count_ == 0;
   }
 
+  // AsyncWorker implementation.
   // Returns false if no async work has happened since last time this function
   // was called, or the first time it is called. Otherwise it returns true and
   // schedules a callback to be called once the scheduler is idle.
-  bool SetAsyncObserver(std::function<void()> async_callback) {
+  bool SetAsyncObserver(std::function<void()> async_callback) override {
     bool idle;
     {
       absl::MutexLock lock(&mutex_);
@@ -212,7 +221,7 @@ class Accumulator : public CancellationImpl,
     return std::move(accumulated_value_);
   }
 
-  // CancellationImpl implementation
+  // AsyncWorker implementation
   void Cancel() override {
     mutex_.Lock();
     is_cancelled_ = true;

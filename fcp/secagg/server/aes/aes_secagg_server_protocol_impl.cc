@@ -36,17 +36,21 @@
 
 namespace {
 
-std::unique_ptr<fcp::secagg::SecAggUnpackedVectorMap> AddReduce(
-    std::vector<std::unique_ptr<fcp::secagg::SecAggVectorMap>> vector_of_maps) {
+void AddReduce(
+    std::vector<std::unique_ptr<fcp::secagg::SecAggVectorMap>> vector_of_maps,
+    fcp::secagg::SecAggUnpackedVectorMap& sum_of_maps, absl::Mutex* mu) {
   FCP_CHECK(!vector_of_maps.empty());
   // Initialize result
-  auto result = std::make_unique<fcp::secagg::SecAggUnpackedVectorMap>(
-      *vector_of_maps[0]);
-  // Reduce vector of maps
+  fcp::secagg::SecAggUnpackedVectorMap partial_sum(*vector_of_maps[0]);
+  // Add all input vectors together
   for (int i = 1; i < vector_of_maps.size(); ++i) {
-    result->Add(*vector_of_maps[i]);
+    partial_sum.Add(*vector_of_maps[i]);
   }
-  return result;
+  // Finally add to the sum of all inputs
+  {
+    absl::MutexLock lock(mu);
+    sum_of_maps.Add(partial_sum);
+  }
 }
 
 // Initializes a SecAggUnpackedVectorMap object according to a provided input
@@ -72,16 +76,13 @@ namespace secagg {
 // The number of keys included in a single PRNG job.
 static constexpr int kPrngBatchSize = 32;
 
-std::shared_ptr<Accumulator<SecAggUnpackedVectorMap>>
-AesSecAggServerProtocolImpl::SetupMaskedInputCollection() {
-  if (!experiments()->IsEnabled(kSecAggAsyncRound2Experiment)) {
-    // Prepare the sum of masked input vectors with all zeroes.
-    masked_input_ = InitializeVectorMap(input_vector_specs());
-  } else {
-    auto initial_value = InitializeVectorMap(input_vector_specs());
-    masked_input_accumulator_ =
-        scheduler()->CreateAccumulator<SecAggUnpackedVectorMap>(
-            std::move(initial_value), SecAggUnpackedVectorMap::AddMaps);
+AsyncToken AesSecAggServerProtocolImpl::SetupMaskedInputCollection() {
+  masked_input_ = InitializeVectorMap(input_vector_specs());
+  if (experiments()->IsEnabled(kSecAggAsyncRound2Experiment)) {
+    masked_input_accumulator_ = scheduler()->CreateAccumulator<Empty>(
+        std::make_unique<Empty>(), [](const Empty& a, const Empty& b) {
+          return std::make_unique<Empty>();
+        });
   }
   return masked_input_accumulator_;
 }
@@ -145,7 +146,8 @@ Status AesSecAggServerProtocolImpl::HandleMaskedInputCollectionResponse(
       masked_input_accumulator_->Schedule([&] {
         auto queue = TakeMaskedInputQueue();
         Trace<Round2MessageQueueTaken>(queue.size());
-        return AddReduce(std::move(queue));
+        AddReduce(std::move(queue), *masked_input_, &async_r2_mutex_);
+        return std::make_unique<Empty>();
       });
     }
   } else {
@@ -160,11 +162,13 @@ Status AesSecAggServerProtocolImpl::HandleMaskedInputCollectionResponse(
 void AesSecAggServerProtocolImpl::FinalizeMaskedInputCollection() {
   if (experiments()->IsEnabled(kSecAggAsyncRound2Experiment)) {
     FCP_CHECK(masked_input_accumulator_->IsIdle());
-    masked_input_ = masked_input_accumulator_->GetResultAndCancel();
+    // The result isn't needed because the inputs are already added to the
+    // masked_input_.
+    masked_input_accumulator_->GetResultAndCancel();
   }
 }
 
-CancellationToken AesSecAggServerProtocolImpl::StartPrng(
+AsyncToken AesSecAggServerProtocolImpl::StartPrng(
     const PrngWorkItems& work_items,
     std::function<void(Status)> done_callback) {
   FCP_CHECK(done_callback);

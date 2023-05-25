@@ -270,6 +270,12 @@ class SecAggUnpackedVector : public std::vector<uint64_t> {
   // applied to each sum.
   void Add(const SecAggVector& other);
 
+  // Combines this vector with another (unpacked) vector by adding elements of
+  // this vector to corresponding elements of the other vector.
+  // It is assumed that both vectors have the same modulus. The modulus is
+  // applied to each sum.
+  void Add(const SecAggUnpackedVector& other);
+
  private:
   uint64_t modulus_;
 };
@@ -298,6 +304,11 @@ class SecAggUnpackedVectorMap
   // map to corresponding vectors in the other map.
   // It is assumed that names of vectors match in both maps.
   void Add(const SecAggVectorMap& other);
+
+  // Combines this map with another (unpacked) map by adding all vectors in this
+  // map to corresponding vectors in the other map.
+  // It is assumed that names of vectors match in both maps.
+  void Add(const SecAggUnpackedVectorMap& other);
 
   // Analogous to the above, as a static method. Also assumes that names of
   // vectors match in both maps.
