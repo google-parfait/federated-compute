@@ -74,6 +74,7 @@ AGGREGATOR_HDRS = [
     "agg_vector_aggregator.h",
     "one_dim_grouping_aggregator.h",
     "aggregator.h",
+    "intrinsic.h",
     "tensor_aggregator.h",
     "tensor_aggregator_factory.h",
     "tensor_aggregator_registry.h",
@@ -99,7 +100,6 @@ GROUP_BY_AGGREGATOR_SRCS = [
 
 GROUP_BY_AGGREGATOR_HDRS = [
     "one_dim_grouping_aggregator.h",
-    "intrinsic.h",
     "group_by_aggregator.h",
     "composite_key_combiner.h",
 ]
@@ -202,6 +202,19 @@ cc_library(
     deps = [":tensor"],
 )
 
+cc_library(
+    name = "config_converter",
+    srcs = ["config_converter.cc"],
+    hdrs = ["config_converter.h"],
+    deps = [
+        ":aggregator",
+        ":tensor",
+        "//fcp/aggregation/protocol:configuration_cc_proto",
+        "//fcp/aggregation/tensorflow:converters",
+        "//fcp/base",
+    ],
+)
+
 cc_test(
     name = "federated_sum_test",
     srcs = ["federated_sum_test.cc"],
@@ -289,6 +302,21 @@ cc_test(
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/base",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "config_converter_test",
+    srcs = ["config_converter_test.cc"],
+    deps = [
+        ":config_converter",
+        ":tensor",
+        ":tensor_cc_proto",
+        "//fcp/aggregation/protocol:configuration_cc_proto",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],

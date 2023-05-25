@@ -47,6 +47,10 @@ TensorShape ConvertShape(const ::tensorflow::TensorShape& shape);
 StatusOr<TensorSpec> ConvertTensorSpec(
     const ::tensorflow::TensorSpecProto& spec);
 
+// Converts Tensorflow TensorProto to Aggregation Tensor.
+StatusOr<Tensor> ConvertTensorProto(
+    const ::tensorflow::TensorProto& tensor_proto);
+
 // Converts Tensorflow Tensor to Aggregation Tensor.
 // Returns an error status if supplied Tensor data type or shape isn't
 // supported by the Aggregation Core.

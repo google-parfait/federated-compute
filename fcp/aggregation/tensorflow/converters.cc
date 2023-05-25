@@ -126,6 +126,16 @@ std::unique_ptr<TensorData> ConvertTensorData<string_view>(
   return std::make_unique<StringTensorDataAdapter>(std::move(tensor));
 }
 
+StatusOr<Tensor> ConvertTensorProto(
+    const ::tensorflow::TensorProto& tensor_proto) {
+  tf::Tensor tf_tensor;
+  if (!tf_tensor.FromProto(tensor_proto)) {
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "Failed to parse TensorProto into tf::Tensor: ";
+  }
+  return ConvertTensor(std::make_unique<tf::Tensor>(std::move(tf_tensor)));
+}
+
 StatusOr<Tensor> ConvertTensor(std::unique_ptr<tf::Tensor> tensor) {
   FCP_ASSIGN_OR_RETURN(DataType dtype, ConvertDataType(tensor->dtype()));
   TensorShape shape = ConvertShape(tensor->shape());

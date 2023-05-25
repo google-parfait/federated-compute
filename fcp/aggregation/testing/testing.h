@@ -17,16 +17,21 @@
 #ifndef FCP_AGGREGATION_TESTING_TESTING_H_
 #define FCP_AGGREGATION_TESTING_TESTING_H_
 
+#include <algorithm>
 #include <initializer_list>
+#include <optional>
 #include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/base/monitoring.h"
 #include "tensorflow/cc/framework/ops.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.pb.h"
@@ -71,6 +76,9 @@ std::vector<T> TensorValuesToVector(const Tensor& arg) {
   return vec;
 }
 
+// Writes description of a tensor shape to the ostream.
+std::ostream& operator<<(std::ostream& os, const TensorShape& shape);
+
 // Writes description of a tensor to the ostream.
 template <typename T>
 void DescribeTensor(::std::ostream* os, DataType dtype, TensorShape shape,
@@ -79,18 +87,11 @@ void DescribeTensor(::std::ostream* os, DataType dtype, TensorShape shape,
   constexpr int kMaxValues = 100;
   // TODO(team): Print dtype name instead of number.
   *os << "{dtype: " << dtype;
-  *os << ", shape: {";
-  bool insert_comma = false;
-  for (auto dim_size : shape.dim_sizes()) {
-    if (insert_comma) {
-      *os << ", ";
-    }
-    *os << dim_size;
-    insert_comma = true;
-  }
-  *os << "}, values: {";
+  *os << ", shape: ";
+  *os << shape;
+  *os << ", values: {";
   int num_values = 0;
-  insert_comma = false;
+  bool insert_comma = false;
   for (auto v : values) {
     if (++num_values > kMaxValues) {
       *os << "...";
@@ -163,6 +164,48 @@ TensorMatcher<T> IsTensor(TensorShape expected_shape,
   return TensorMatcher<T>(internal::TypeTraits<T>::kDataType, expected_shape,
                           expected_values);
 }
+
+// Writes description of an intrinsic to the ostream.
+std::ostream& operator<<(std::ostream& os, const Intrinsic& intrinsic);
+
+// IntrinsicMatcher implementation.
+class IntrinsicMatcherImpl
+    : public ::testing::MatcherInterface<const Intrinsic&> {
+ public:
+  explicit IntrinsicMatcherImpl(Intrinsic&& expected_intrinsic)
+      : expected_intrinsic_(std::move(expected_intrinsic)) {
+    for (int i = 0; i < expected_intrinsic_.nested_intrinsics.size(); ++i) {
+      nested_intrinsic_matchers_.emplace_back(
+          std::move(expected_intrinsic_.nested_intrinsics[i]));
+    }
+  }
+
+  void DescribeTo(std::ostream* os) const override;
+
+  bool MatchAndExplain(const Intrinsic& arg,
+                       ::testing::MatchResultListener* listener) const override;
+
+ private:
+  Intrinsic expected_intrinsic_;
+  std::vector<IntrinsicMatcherImpl> nested_intrinsic_matchers_;
+};
+
+// IntrinsicMatcher can be used to compare a tensor against an expected
+// value type, shape, and the list of values.
+class IntrinsicMatcher {
+ public:
+  explicit IntrinsicMatcher(Intrinsic expected_intrinsic)
+      : matcher_(::testing::Matcher<const Intrinsic&>(
+            new IntrinsicMatcherImpl(std::move(expected_intrinsic)))) {}
+  operator ::testing::Matcher<const Intrinsic&>() {  // NOLINT
+    return matcher_;
+  }
+
+ private:
+  ::testing::Matcher<const Intrinsic&> matcher_;
+};
+
+::testing::Matcher<const Intrinsic&> EqIntrinsic(Intrinsic expected_intrinsic);
 
 }  // namespace fcp::aggregation
 

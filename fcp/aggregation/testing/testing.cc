@@ -21,6 +21,7 @@
 #include <string>
 #include <utility>
 
+#include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/base/platform.h"
 #include "fcp/tensorflow/status.h"
 #include "fcp/testing/testing.h"
@@ -42,6 +43,71 @@ std::ostream& operator<<(std::ostream& os, const Tensor& tensor) {
   DTYPE_CASES(tensor.dtype(), T,
               DescribeTensor<T>(&os, tensor.dtype(), tensor.shape(),
                                 TensorValuesToVector<T>(tensor)));
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const TensorShape& shape) {
+  os << "{";
+  bool insert_comma = false;
+  for (auto dim_size : shape.dim_sizes()) {
+    if (insert_comma) {
+      os << ", ";
+    }
+    os << dim_size;
+    insert_comma = true;
+  }
+  os << "}";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const TensorSpec& spec) {
+  os << "{ name: " << spec.name();
+  os << ", shape: " << spec.shape();
+  // TODO(team): Print dtype name instead of number.
+  os << ", dtype: " << spec.dtype();
+  os << " }";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const Intrinsic& intrinsic) {
+  os << "{uri: " << intrinsic.uri;
+  os << ", inputs: {";
+  bool insert_comma = false;
+  for (const TensorSpec& input : intrinsic.inputs) {
+    if (insert_comma) {
+      os << ", ";
+    }
+    os << input;
+    insert_comma = true;
+  }
+  insert_comma = false;
+  os << "}, outputs: {";
+  for (const TensorSpec& output : intrinsic.outputs) {
+    if (insert_comma) {
+      os << ", ";
+    }
+    os << output;
+    insert_comma = true;
+  }
+  insert_comma = false;
+  os << "}, parameters: {";
+  for (const Tensor& parameter : intrinsic.parameters) {
+    if (insert_comma) {
+      os << ", ";
+    }
+    os << parameter;
+    insert_comma = true;
+  }
+  os << "}, nested_intrinsics: {";
+  insert_comma = false;
+  for (const Intrinsic& nested : intrinsic.nested_intrinsics) {
+    if (insert_comma) {
+      os << ", ";
+    }
+    os << nested;
+    insert_comma = true;
+  }
+  os << "}}";
   return os;
 }
 
@@ -91,5 +157,83 @@ SummarizeCheckpoint(const absl::Cord& checkpoint) {
     tensors[name] = tensor->SummarizeValue(/*max_entries=*/10);
   }
   return tensors;
+}
+
+void IntrinsicMatcherImpl::DescribeTo(std::ostream* os) const {
+  *os << "{uri: " << expected_intrinsic_.uri;
+  *os << ", inputs: {";
+  bool insert_comma = false;
+  for (const TensorSpec& input : expected_intrinsic_.inputs) {
+    if (insert_comma) {
+      *os << ", ";
+    }
+    *os << input;
+    insert_comma = true;
+  }
+  insert_comma = false;
+  *os << "}, outputs: {";
+  for (const TensorSpec& output : expected_intrinsic_.outputs) {
+    if (insert_comma) {
+      *os << ", ";
+    }
+    *os << output;
+    insert_comma = true;
+  }
+  insert_comma = false;
+  *os << "}, parameters: {";
+  for (const Tensor& parameter : expected_intrinsic_.parameters) {
+    if (insert_comma) {
+      *os << ", ";
+    }
+    DTYPE_CASES(parameter.dtype(), T,
+                DescribeTensor<T>(os, parameter.dtype(), parameter.shape(),
+                                  TensorValuesToVector<T>(parameter)));
+    insert_comma = true;
+  }
+  insert_comma = false;
+  *os << "}, nested_intrinsics: {";
+  for (const IntrinsicMatcherImpl& nested : nested_intrinsic_matchers_) {
+    if (insert_comma) {
+      *os << ", ";
+    }
+    nested.DescribeTo(os);
+    insert_comma = true;
+  }
+  *os << "}}";
+}
+
+bool IntrinsicMatcherImpl::MatchAndExplain(
+    const Intrinsic& arg, ::testing::MatchResultListener* listener) const {
+  if (expected_intrinsic_.nested_intrinsics.size() !=
+      arg.nested_intrinsics.size()) {
+    return false;
+  }
+  for (int i = 0; i < nested_intrinsic_matchers_.size(); ++i) {
+    if (!nested_intrinsic_matchers_[i].MatchAndExplain(arg.nested_intrinsics[i],
+                                                       listener))
+      return false;
+  }
+
+  if (expected_intrinsic_.parameters.size() != arg.parameters.size()) {
+    return false;
+  }
+  for (int i = 0; i < expected_intrinsic_.parameters.size(); ++i) {
+    const Tensor& tensor = expected_intrinsic_.parameters[i];
+    bool tensor_match = false;
+    DTYPE_CASES(
+        tensor.dtype(), T,
+        tensor_match = TensorMatcherImpl<T>(tensor.dtype(), tensor.shape(),
+                                            TensorValuesToVector<T>(tensor))
+                           .MatchAndExplain(arg.parameters[i], listener));
+    if (!tensor_match) return false;
+  }
+
+  return arg.uri == expected_intrinsic_.uri &&
+         arg.inputs == expected_intrinsic_.inputs &&
+         arg.outputs == expected_intrinsic_.outputs;
+}
+
+::testing::Matcher<const Intrinsic&> EqIntrinsic(Intrinsic expected_intrinsic) {
+  return IntrinsicMatcher(std::move(expected_intrinsic));
 }
 }  // namespace fcp::aggregation

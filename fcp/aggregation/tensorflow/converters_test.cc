@@ -115,6 +115,8 @@ TEST(ConvertersTest, ConvertTensor_Numeric) {
   ASSERT_TRUE(tensor->FromProto(tensor_proto));
   EXPECT_THAT(*ConvertTensor(std::move(tensor)),
               IsTensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
+  EXPECT_THAT(*ConvertTensorProto(tensor_proto),
+              IsTensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
 }
 
 TEST(ConvertersTest, ConvertTensor_String) {
@@ -129,6 +131,8 @@ TEST(ConvertersTest, ConvertTensor_String) {
   ASSERT_TRUE(tensor->FromProto(tensor_proto));
   EXPECT_THAT(*ConvertTensor(std::move(tensor)),
               IsTensor<string_view>({3}, {"abcd", "foobar", "zzzzzzzzzzzzzz"}));
+  EXPECT_THAT(*ConvertTensorProto(tensor_proto),
+              IsTensor<string_view>({3}, {"abcd", "foobar", "zzzzzzzzzzzzzz"}));
 }
 
 TEST(ConvertersTest, ConvertTensor_ScalarString) {
@@ -140,6 +144,8 @@ TEST(ConvertersTest, ConvertTensor_ScalarString) {
   auto tensor = std::make_unique<tf::Tensor>();
   ASSERT_TRUE(tensor->FromProto(tensor_proto));
   EXPECT_THAT(*ConvertTensor(std::move(tensor)),
+              IsTensor<string_view>({}, {"0123456789"}));
+  EXPECT_THAT(*ConvertTensorProto(tensor_proto),
               IsTensor<string_view>({}, {"0123456789"}));
 }
 
