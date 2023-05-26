@@ -85,7 +85,10 @@ message AbortMessage {
   // Can contain optional logging/diagnostic info.
   string diagnostic_info = 1;
   // If true, the client will halt early but mark the protocol as a success,
-  // rather than as aborted.
+  // rather than as aborted because its data was already incorporated into the
+  // aggregation. This means that this field must only be set after the server
+  // has received a MaskedInputCollectionResponse from the client and the server
+  // has sent the client an UnmaskingRequest.
   bool early_success = 2;
 }
 
