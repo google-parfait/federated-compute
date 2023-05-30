@@ -16,8 +16,12 @@
 
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 
+#include <memory>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
@@ -28,7 +32,7 @@ namespace {
 
 class MockFactory : public TensorAggregatorFactory {
   MOCK_METHOD(StatusOr<std::unique_ptr<TensorAggregator>>, Create,
-              (DataType dtype, TensorShape shape), (const override));
+              (const Intrinsic&), (const override));
 };
 
 REGISTER_AGGREGATOR_FACTORY("foobar", MockFactory);

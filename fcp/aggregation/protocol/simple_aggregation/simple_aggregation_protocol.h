@@ -29,6 +29,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
+#include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
@@ -82,27 +83,18 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
       delete;
 
  private:
-  // The structure representing a single aggregation intrinsic.
-  // TODO(team): Implement mapping of multiple inputs and outputs to
-  // individual TensorAggregator instances.
-  struct Intrinsic {
-    TensorSpec input;
-    TensorSpec output;
-    std::unique_ptr<TensorAggregator> aggregator
-        ABSL_PT_GUARDED_BY(&SimpleAggregationProtocol::aggregation_mu_);
-  };
-
   // Private constructor.
   SimpleAggregationProtocol(
       std::vector<Intrinsic> intrinsics,
+      std::vector<std::unique_ptr<TensorAggregator>> aggregators,
       AggregationProtocol::Callback* callback,
       const CheckpointParserFactory* checkpoint_parser_factory,
       const CheckpointBuilderFactory* checkpoint_builder_factory,
       ResourceResolver* resource_resolver);
 
-  // Creates an aggregation intrinsic based on the intrinsic configuration.
-  static absl::StatusOr<Intrinsic> CreateIntrinsic(
-      const Configuration::ServerAggregationConfig& aggregation_config);
+  // Creates an aggregator based on the intrinsic configuration.
+  static absl::StatusOr<std::unique_ptr<TensorAggregator>> CreateAggregator(
+      const Intrinsic& intrinsic);
 
   // Describes the overall protocol state.
   enum ProtocolState {
@@ -201,11 +193,12 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   uint64_t num_clients_aborted_ ABSL_GUARDED_BY(state_mu_) = 0;
   uint64_t num_clients_discarded_ ABSL_GUARDED_BY(state_mu_) = 0;
 
-  // Intrinsics are immutable and shouldn't be guarded by the either of mutexes.
-  // Please note that the access to the aggregators that intrinsics point to
-  // still needs to be strictly sequential. That is guarded separatedly by
-  // `aggregators_mu_`.
+  // The intrinsics vector need not be guarded by the mutex, as accessing
+  // immutable state can happen concurrently.
   std::vector<Intrinsic> const intrinsics_;
+  // TensorAggregators are not thread safe and must be protected by a mutex.
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators_
+      ABSL_GUARDED_BY(aggregation_mu_);
 
   AggregationProtocol::Callback* const callback_;
   const CheckpointParserFactory* const checkpoint_parser_factory_;

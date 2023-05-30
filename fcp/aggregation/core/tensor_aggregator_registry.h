@@ -17,6 +17,7 @@
 #ifndef FCP_AGGREGATION_CORE_TENSOR_AGGREGATOR_REGISTRY_H_
 #define FCP_AGGREGATION_CORE_TENSOR_AGGREGATOR_REGISTRY_H_
 
+#include <memory>
 #include <string>
 
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
@@ -31,6 +32,11 @@ void RegisterAggregatorFactory(const std::string& intrinsic_uri,
 // Looks up a factory instance for the given intrinsic type.
 StatusOr<const TensorAggregatorFactory*> GetAggregatorFactory(
     const std::string& intrinsic_uri);
+
+// Creates a TensorAggregator via the factory registered for the given
+// intrinsic.
+StatusOr<std::unique_ptr<TensorAggregator>> CreateTensorAggregator(
+    const Intrinsic& intrinsic);
 
 namespace internal {
 

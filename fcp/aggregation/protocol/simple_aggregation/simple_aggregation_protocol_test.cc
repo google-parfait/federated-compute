@@ -868,11 +868,13 @@ class FunctionAggregatorFactory final : public TensorAggregatorFactory {
 
  private:
   absl::StatusOr<std::unique_ptr<TensorAggregator>> Create(
-      DataType dtype, TensorShape shape) const override {
-    if (dtype != DT_INT32) {
+      const Intrinsic& intrinsic) const override {
+    if (intrinsic.inputs[0].dtype() != DT_INT32) {
       return absl::InvalidArgumentError("Unsupported dtype: expected DT_INT32");
     }
-    return std::make_unique<FunctionAggregator>(dtype, shape, agg_function_);
+    return std::make_unique<FunctionAggregator>(intrinsic.inputs[0].dtype(),
+                                                intrinsic.inputs[0].shape(),
+                                                agg_function_);
   }
 
   const FunctionAggregator::Func agg_function_;

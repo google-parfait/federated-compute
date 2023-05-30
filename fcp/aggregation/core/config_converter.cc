@@ -26,7 +26,7 @@
 namespace fcp {
 namespace aggregation {
 
-inline Status ServerAggregationConfigArgumentError(
+Status ServerAggregationConfigArgumentError(
     const Configuration::ServerAggregationConfig& aggregation_config,
     string_view error_message) {
   return FCP_STATUS(INVALID_ARGUMENT)

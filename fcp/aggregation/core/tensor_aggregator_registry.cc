@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <string>
 
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
@@ -109,6 +110,11 @@ void RegisterAggregatorFactory(const std::string& intrinsic_uri,
 StatusOr<const TensorAggregatorFactory*> GetAggregatorFactory(
     const std::string& intrinsic_uri) {
   return internal::GetRegistry()->GetAggregatorFactory(intrinsic_uri);
+}
+
+StatusOr<std::unique_ptr<TensorAggregator>> CreateTensorAggregator(
+    const Intrinsic& intrinsic) {
+  return (*GetAggregatorFactory(intrinsic.uri))->Create(intrinsic);
 }
 
 }  // namespace aggregation

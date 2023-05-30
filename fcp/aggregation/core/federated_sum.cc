@@ -20,13 +20,18 @@
 
 #include "fcp/aggregation/core/agg_vector_aggregator.h"
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
 namespace aggregation {
+
+constexpr char kFederatedSumUri[] = "federated_sum";
 
 // Implementation of a generic sum aggregator.
 template <typename T>
@@ -67,21 +72,55 @@ class FederatedSumFactory final : public TensorAggregatorFactory {
   FederatedSumFactory& operator=(const FederatedSumFactory&) = delete;
 
   StatusOr<std::unique_ptr<TensorAggregator>> Create(
-      DataType dtype, TensorShape shape) const override {
+      const Intrinsic& intrinsic) const override {
+    // Check that the configuration is valid for federated_sum.
+    if (kFederatedSumUri != intrinsic.uri) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "FederatedSumFactory: Expected intrinsic URI "
+             << kFederatedSumUri << " but got uri " << intrinsic.uri;
+    }
+    if (intrinsic.inputs.size() != 1) {
+      return FCP_STATUS(INVALID_ARGUMENT) << "FederatedSumFactory: Exactly one "
+                                             "input is expected.";
+    }
+    if (intrinsic.outputs.size() != 1) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "FederatedSumFactory: Exactly one output tensor is expected.";
+    }
+    if (!intrinsic.nested_intrinsics.empty()) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "FederatedSumFactory: Expected no nested intrinsics.";
+    }
+    if (!intrinsic.parameters.empty()) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "FederatedSumFactory: Expected no parameters.";
+    }
+
+    const TensorSpec& input_spec = intrinsic.inputs[0];
+    const TensorSpec& output_spec = intrinsic.outputs[0];
+
+    if (input_spec.dtype() != output_spec.dtype() ||
+        input_spec.shape() != output_spec.shape()) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "FederatedSumFactory: Input and output tensors have mismatched "
+                "specs.";
+    }
     StatusOr<std::unique_ptr<TensorAggregator>> aggregator;
-    DTYPE_CASES(dtype, T,
-                aggregator = CreateFederatedSum<T>(dtype, std::move(shape)));
-    return aggregator;
+    DTYPE_CASES(input_spec.dtype(), T,
+                aggregator = CreateFederatedSum<T>(
+                    input_spec.dtype(), std::move(input_spec.shape())));
+    FCP_RETURN_IF_ERROR(aggregator);
+    return std::move(aggregator.value());
   }
 };
 
 // TODO(team): Revise the registration mechanism below.
 #ifdef FCP_BAREMETAL
 extern "C" void RegisterFederatedSum() {
-  RegisterAggregatorFactory("federated_sum", new FederatedSumFactory());
+  RegisterAggregatorFactory(kFederatedSumUri, new FederatedSumFactory());
 }
 #else
-REGISTER_AGGREGATOR_FACTORY("federated_sum", FederatedSumFactory);
+REGISTER_AGGREGATOR_FACTORY(kFederatedSumUri, FederatedSumFactory);
 #endif
 
 }  // namespace aggregation

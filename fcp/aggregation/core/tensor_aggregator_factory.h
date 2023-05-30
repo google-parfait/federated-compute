@@ -19,9 +19,8 @@
 
 #include <memory>
 
-#include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
-#include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
@@ -34,11 +33,9 @@ class TensorAggregatorFactory {
   virtual ~TensorAggregatorFactory() = default;
 
   // Creates an instance of a specific aggregator for the specified type of the
-  // aggregation instrinsic and the tensor specifications.
-  // TODO(team): Generalize this to allow multiple inputs and outputs,
-  // and an arbitrary number of arguments.
+  // aggregation intrinsic and the tensor specifications.
   virtual StatusOr<std::unique_ptr<TensorAggregator>> Create(
-      DataType dtype, TensorShape shape) const = 0;
+      const Intrinsic& intrinsic) const = 0;
 };
 
 }  // namespace aggregation

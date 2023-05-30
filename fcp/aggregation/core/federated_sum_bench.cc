@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-#include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
@@ -36,9 +36,13 @@ namespace {
 constexpr static int64_t kLength = 1000000;
 
 static void BM_FederatedSumAccumulate(benchmark::State& state) {
-  auto aggregator = (*GetAggregatorFactory("federated_sum"))
-                        ->Create(DT_INT64, {kLength})
-                        .value();
+  std::unique_ptr<TensorAggregator> aggregator =
+      CreateTensorAggregator(Intrinsic{"federated_sum",
+                                       {TensorSpec{"foo", DT_INT64, {kLength}}},
+                                       {TensorSpec{"foo", DT_INT64, {kLength}}},
+                                       {},
+                                       {}})
+          .value();
   auto test_data = std::make_unique<MutableVectorData<int64_t>>(kLength);
   std::vector<int64_t>& input = *test_data;
   for (int64_t i = 0; i < kLength; ++i) {
