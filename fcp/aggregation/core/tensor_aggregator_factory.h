@@ -34,6 +34,9 @@ class TensorAggregatorFactory {
 
   // Creates an instance of a specific aggregator for the specified type of the
   // aggregation intrinsic and the tensor specifications.
+  // The lifetime of the provided Intrinsic must outlast that of the returned
+  // TensorAggregator as it is valid for the TensorAggregator implementation to
+  // hold pointers referring to the Intrinsic.
   virtual StatusOr<std::unique_ptr<TensorAggregator>> Create(
       const Intrinsic& intrinsic) const = 0;
 };

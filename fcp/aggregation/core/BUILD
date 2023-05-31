@@ -93,21 +93,18 @@ cc_library(
     ],
 )
 
-GROUP_BY_AGGREGATOR_SRCS = [
-    "group_by_aggregator.cc",
-    "composite_key_combiner.cc",
-]
-
-GROUP_BY_AGGREGATOR_HDRS = [
-    "one_dim_grouping_aggregator.h",
-    "group_by_aggregator.h",
-    "composite_key_combiner.h",
-]
-
 cc_library(
-    name = "group_by_aggregator",
-    srcs = GROUP_BY_AGGREGATOR_SRCS,
-    hdrs = GROUP_BY_AGGREGATOR_HDRS,
+    name = "fedsql_group_by",
+    srcs = [
+        "composite_key_combiner.cc",
+        "group_by_aggregator.cc",
+        "grouping_federated_sum.cc",
+    ],
+    hdrs = [
+        "composite_key_combiner.h",
+        "group_by_aggregator.h",
+        "one_dim_grouping_aggregator.h",
+    ],
     copts = FCP_COPTS,
     deps = [
         ":aggregator",
@@ -116,6 +113,7 @@ cc_library(
         ":vector_string_data",
         "//fcp/base",
     ],
+    alwayslink = 1,
 )
 
 cc_test(
@@ -245,7 +243,7 @@ cc_test(
     srcs = ["composite_key_combiner_test.cc"],
     deps = [
         ":aggregator",
-        ":group_by_aggregator",
+        ":fedsql_group_by",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",
@@ -281,7 +279,7 @@ cc_test(
     name = "one_dim_grouping_aggregator_test",
     srcs = ["one_dim_grouping_aggregator_test.cc"],
     deps = [
-        ":group_by_aggregator",
+        ":fedsql_group_by",
         ":tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
@@ -296,12 +294,27 @@ cc_test(
     srcs = ["group_by_aggregator_test.cc"],
     deps = [
         ":aggregator",
-        ":group_by_aggregator",
+        ":fedsql_group_by",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/base",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "grouping_federated_sum_test",
+    srcs = ["grouping_federated_sum_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        ":fedsql_group_by",
+        ":tensor",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],
