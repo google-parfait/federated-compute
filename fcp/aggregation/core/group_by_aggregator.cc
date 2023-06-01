@@ -143,6 +143,11 @@ Status GroupByAggregator::MergeWith(TensorAggregator&& other) {
   return FCP_STATUS(OK);
 }
 
+bool GroupByAggregator::CanReport() const {
+  // GroupByAggregator cannot report unless it has received at least one input.
+  return CheckValid().ok() && GetNumInputs() > 0;
+}
+
 Status GroupByAggregator::AggregateTensors(InputTensorList tensors) {
   FCP_RETURN_IF_ERROR(AggregateTensorsInternal(std::move(tensors)));
   num_inputs_++;
@@ -244,6 +249,8 @@ Status GroupByAggregator::AggregateTensorsInternal(InputTensorList tensors) {
 OutputTensorList GroupByAggregator::TakeOutputsInternal() {
   output_consumed_ = true;
   OutputTensorList outputs;
+  // Output an empty OutputTensorList if there have been no inputs yet, as it is
+  // not valid to create empty tensors for each output tensor.
   if (num_inputs_ == 0) return outputs;
   if (key_combiner_.has_value()) {
     outputs = key_combiner_->GetOutputKeys();

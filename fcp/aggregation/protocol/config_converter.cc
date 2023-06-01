@@ -22,6 +22,7 @@
 #include "fcp/aggregation/core/fedsql_constants.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/tensorflow/converters.h"
@@ -58,6 +59,11 @@ void TransformFedSqlSpecs(Intrinsic& intrinsic) {
     }
   }
 }
+
+// Parses a ServerAggregationConfig proto into an Intrinsic struct to
+// represent the aggregation intrinsic independently from the proto.
+StatusOr<Intrinsic> ParseFromConfig(
+    const Configuration::ServerAggregationConfig& aggregation_config);
 
 StatusOr<std::vector<Intrinsic>> ParseFromConfig(
     string_view parent_uri,
@@ -107,16 +113,6 @@ StatusOr<std::vector<Intrinsic>> ParseFromConfig(
   return intrinsics;
 }
 
-}  // namespace
-
-Status ServerAggregationConfigArgumentError(
-    const Configuration::ServerAggregationConfig& aggregation_config,
-    string_view error_message) {
-  return FCP_STATUS(INVALID_ARGUMENT)
-         << "ServerAggregationConfig: " << error_message << ":\n"
-         << aggregation_config.DebugString();
-}
-
 StatusOr<Intrinsic> ParseFromConfig(
     const Configuration::ServerAggregationConfig& aggregation_config) {
   // Convert the tensor specifications.
@@ -157,6 +153,16 @@ StatusOr<Intrinsic> ParseFromConfig(
   return Intrinsic{
       aggregation_config.intrinsic_uri(), std::move(input_tensor_specs),
       std::move(output_tensor_specs), std::move(params), std::move(intrinsics)};
+}
+
+}  // namespace
+
+Status ServerAggregationConfigArgumentError(
+    const Configuration::ServerAggregationConfig& aggregation_config,
+    string_view error_message) {
+  return FCP_STATUS(INVALID_ARGUMENT)
+         << "ServerAggregationConfig: " << error_message << ":\n"
+         << aggregation_config.DebugString();
 }
 
 StatusOr<std::vector<Intrinsic>> ParseFromConfig(const Configuration& config) {

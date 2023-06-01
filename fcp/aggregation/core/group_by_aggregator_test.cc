@@ -88,9 +88,12 @@ TEST(GroupByAggregatorTest, EmptyReport) {
   // Intrinsic lifetime must outlast that of the TensorAggregator.
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  // CanReport should return false because calling Report will not be able to
+  // output the correct number of tensors for the intrinsic as empty tensors
+  // cannot be created.
+  EXPECT_FALSE(group_by_aggregator->CanReport());
   auto result = std::move(*group_by_aggregator).Report();
-  EXPECT_THAT(result, IsOk());
-  EXPECT_THAT(result->size(), Eq(0));
+  EXPECT_THAT(result, IsCode(FAILED_PRECONDITION));
 }
 
 TEST(GroupByAggregatorTest, ScalarAggregation_Succeeds) {
@@ -773,21 +776,6 @@ TEST(GroupByAggregatorTest, Merge_NoKeyTensors) {
   EXPECT_THAT(result.value()[0], IsTensor<int32_t>({1}, {108}));
 }
 
-TEST(GroupByAggregatorTest, Merge_BothEmpty_Succeeds) {
-  Intrinsic intrinsic = CreateDefaultIntrinsic();
-  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
-  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
-
-  // Merge the two empty aggregators together.
-  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
-  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
-  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(0));
-
-  auto result = std::move(*aggregator1).Report();
-  EXPECT_THAT(result, IsOk());
-  EXPECT_THAT(result->size(), Eq(0));
-}
-
 TEST(GroupByAggregatorTest, Merge_ThisOutputEmpty_Succeeds) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto aggregator1 = CreateTensorAggregator(intrinsic).value();
@@ -1157,37 +1145,6 @@ TEST(GroupByAggregatorTest, FailsAfterBeingConsumed) {
 
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)),
               // NOLINT
-              IsCode(FAILED_PRECONDITION));
-
-  // Passing this aggregator as an argument to another MergeWith must fail
-  // too.
-  auto aggregator3 = CreateTensorAggregator(intrinsic).value();
-  EXPECT_THAT(aggregator3->MergeWith(std::move(*aggregator1)),  // NOLINT
-              IsCode(FAILED_PRECONDITION));
-}
-
-TEST(GroupByAggregatorTest, FailsAfterBeingConsumed_WhenEmpty) {
-  Intrinsic intrinsic = CreateDefaultIntrinsic();
-  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
-
-  EXPECT_THAT(std::move(*aggregator1).Report(), IsOk());
-
-  // Now the aggregator instance has been consumed and should fail any
-  // further operations.
-  EXPECT_THAT(aggregator1->CanReport(), IsFalse());  // NOLINT
-  EXPECT_THAT(std::move(*aggregator1).Report(),
-              IsCode(FAILED_PRECONDITION));  // NOLINT
-
-  Tensor key =
-      Tensor::Create(DT_STRING, {}, CreateTestData<string_view>({"foo"}))
-          .value();
-  Tensor t = Tensor::Create(DT_INT32, {}, CreateTestData({1})).value();
-  EXPECT_THAT(aggregator1->Accumulate({&key, &t}),  // NOLINT
-              IsCode(FAILED_PRECONDITION));
-
-  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
-
-  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)),  // NOLINT
               IsCode(FAILED_PRECONDITION));
 
   // Passing this aggregator as an argument to another MergeWith must fail

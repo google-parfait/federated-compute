@@ -60,6 +60,21 @@ TensorShapeProto TensorShape::ToProto() const {
   return shape_proto;
 }
 
+bool TensorShape::MatchesKnownDimensions(const TensorShape& other) const {
+  if (this->dim_sizes().size() != other.dim_sizes().size()) {
+    return false;
+  }
+  for (size_t i = 0; i < this->dim_sizes().size(); ++i) {
+    if (this->dim_sizes()[i] == -1) {
+      continue;
+    }
+    if (this->dim_sizes()[i] != other.dim_sizes()[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 #endif  // FCP_NANOLIBC
 
 }  // namespace aggregation

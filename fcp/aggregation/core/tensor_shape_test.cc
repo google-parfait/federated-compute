@@ -73,6 +73,16 @@ TEST(TensorShapeTest, EqualityOperators) {
   EXPECT_NE(shape, TensorShape({3, 4}));
 }
 
+TEST(TensorShapeTest, MatchKnownDimensions) {
+  TensorShape shape({3, -1, 5, -1});
+  EXPECT_TRUE(shape.MatchesKnownDimensions(TensorShape({3, 7, 5, 9})));
+  EXPECT_TRUE(shape.MatchesKnownDimensions(TensorShape({3, -1, 5, 9})));
+  EXPECT_TRUE(shape.MatchesKnownDimensions(TensorShape({3, -1, 5, -1})));
+  EXPECT_FALSE(shape.MatchesKnownDimensions(TensorShape({})));
+  EXPECT_FALSE(shape.MatchesKnownDimensions(TensorShape({3, 7})));
+  EXPECT_FALSE(shape.MatchesKnownDimensions(TensorShape({3, 7, -1, 9})));
+}
+
 TEST(TensorShapeDeathTest, CreateFromInitializerList_InvalidDimensionTooSmall) {
   EXPECT_DEATH(new TensorShape({2, -3, 5}),
                "TensorShape: Dimension size less than -1");

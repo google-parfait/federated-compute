@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <utility>
 
@@ -28,7 +29,9 @@
 #include "absl/strings/cord.h"
 #include "absl/synchronization/notification.h"
 #include "fcp/aggregation/core/agg_vector_aggregator.h"
+#include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
@@ -650,7 +653,9 @@ TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
 TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
   // Two intrinsics:
   // 1) federated_sum "foo" that takes int32 {2,3} tensors.
-  // 2) federated_sum "bar" that takes scalar float tensors.
+  // 2) fedsql_group_by with two grouping keys key1 and key2, only the first one
+  //    of which should be output, and two inner GoogleSQL:sum intrinsics bar
+  //    and baz operating on float tensors.
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs {
       intrinsic_uri: "federated_sum"
@@ -673,19 +678,62 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
         }
       }
     }
-    aggregation_configs {
-      intrinsic_uri: "federated_sum"
+
+    aggregation_configs: {
+      intrinsic_uri: "fedsql_group_by"
       intrinsic_args {
         input_tensor {
-          name: "bar"
+          name: "key1"
+          dtype: DT_STRING
+          shape { dim { size: -1 } }
+        }
+      }
+      intrinsic_args {
+        input_tensor {
+          name: "key2"
+          dtype: DT_STRING
+          shape { dim { size: -1 } }
+        }
+      }
+      output_tensors {
+        name: "key1_out"
+        dtype: DT_STRING
+        shape { dim { size: -1 } }
+      }
+      output_tensors {
+        name: ""
+        dtype: DT_STRING
+        shape { dim { size: -1 } }
+      }
+      inner_aggregations {
+        intrinsic_uri: "GoogleSQL:sum"
+        intrinsic_args {
+          input_tensor {
+            name: "bar"
+            dtype: DT_FLOAT
+            shape {}
+          }
+        }
+        output_tensors {
+          name: "bar_out"
           dtype: DT_FLOAT
           shape {}
         }
       }
-      output_tensors {
-        name: "bar_out"
-        dtype: DT_FLOAT
-        shape {}
+      inner_aggregations {
+        intrinsic_uri: "GoogleSQL:sum"
+        intrinsic_args {
+          input_tensor {
+            name: "baz"
+            dtype: DT_FLOAT
+            shape {}
+          }
+        }
+        output_tensors {
+          name: "baz_out"
+          dtype: DT_FLOAT
+          shape {}
+        }
       }
     }
   )pb");
@@ -693,14 +741,25 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
   EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(2), IsOk());
 
-  // Expect two inputs.
+  // Expect five inputs.
   auto parser1 = std::make_unique<MockCheckpointParser>();
   EXPECT_CALL(*parser1, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
     return Tensor::Create(DT_INT32, {2, 3},
                           CreateTestData({4, 3, 11, 7, 1, 6}));
   }));
+  EXPECT_CALL(*parser1, GetTensor(StrEq("key1"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_STRING, {2},
+                          CreateTestData<string_view>({"large", "small"}));
+  }));
+  EXPECT_CALL(*parser1, GetTensor(StrEq("key2"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_STRING, {2},
+                          CreateTestData<string_view>({"cat", "dog"}));
+  }));
   EXPECT_CALL(*parser1, GetTensor(StrEq("bar"))).WillOnce(Invoke([] {
-    return Tensor::Create(DT_FLOAT, {}, CreateTestData({1.f}));
+    return Tensor::Create(DT_FLOAT, {2}, CreateTestData({1.f, 2.f}));
+  }));
+  EXPECT_CALL(*parser1, GetTensor(StrEq("baz"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {2}, CreateTestData({3.f, 4.f}));
   }));
 
   auto parser2 = std::make_unique<MockCheckpointParser>();
@@ -708,8 +767,19 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
     return Tensor::Create(DT_INT32, {2, 3},
                           CreateTestData({1, 8, 2, 10, 13, 2}));
   }));
+  EXPECT_CALL(*parser2, GetTensor(StrEq("key1"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_STRING, {2},
+                          CreateTestData<string_view>({"small", "small"}));
+  }));
+  EXPECT_CALL(*parser2, GetTensor(StrEq("key2"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_STRING, {2},
+                          CreateTestData<string_view>({"dog", "cat"}));
+  }));
   EXPECT_CALL(*parser2, GetTensor(StrEq("bar"))).WillOnce(Invoke([] {
-    return Tensor::Create(DT_FLOAT, {}, CreateTestData({2.f}));
+    return Tensor::Create(DT_FLOAT, {2}, CreateTestData({1.f, 2.f}));
+  }));
+  EXPECT_CALL(*parser2, GetTensor(StrEq("baz"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {2}, CreateTestData({3.f, 5.f}));
   }));
 
   EXPECT_CALL(checkpoint_parser_factory_, Create(_))
@@ -736,11 +806,19 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
   // Verify that the checkpoint builder is created.
   auto& checkpoint_builder = ExpectCheckpointBuilder();
 
-  // Verify that foo_out and bar_out tensors are added to the result checkpoint
+  // Verify that expected output tensors are added to the result checkpoint.
   EXPECT_CALL(checkpoint_builder,
               Add(StrEq("foo_out"), IsTensor({2, 3}, {5, 11, 13, 17, 14, 8})))
       .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {3.f})))
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("key1_out"),
+                  IsTensor<string_view>({3}, {"large", "small", "small"})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("bar_out"), IsTensor({3}, {1.f, 3.f, 2.f})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("baz_out"), IsTensor({3}, {3.f, 7.f, 5.f})))
       .WillOnce(Return(absl::OkStatus()));
 
   // Verify that the OnComplete callback method is called.
@@ -751,6 +829,102 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
           "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+}
+
+TEST_F(SimpleAggregationProtocolTest,
+       Complete_NoInputsReceived_InvalidForFedSqlGroupBy) {
+  // Two intrinsics:
+  // 1) federated_sum "foo" that takes int32 {2,3} tensors.
+  // 2) fedsql_group_by with two grouping keys key1 and key2, only the first one
+  //    of which should be output, and two inner GoogleSQL:sum intrinsics bar
+  //    and baz operating on float tensors.
+  Configuration config_message = PARSE_TEXT_PROTO(R"pb(
+    aggregation_configs {
+      intrinsic_uri: "federated_sum"
+      intrinsic_args {
+        input_tensor {
+          name: "foo"
+          dtype: DT_INT32
+          shape {
+            dim { size: 2 }
+            dim { size: 3 }
+          }
+        }
+      }
+      output_tensors {
+        name: "foo_out"
+        dtype: DT_INT32
+        shape {
+          dim { size: 2 }
+          dim { size: 3 }
+        }
+      }
+    }
+
+    aggregation_configs: {
+      intrinsic_uri: "fedsql_group_by"
+      intrinsic_args {
+        input_tensor {
+          name: "key1"
+          dtype: DT_STRING
+          shape { dim { size: -1 } }
+        }
+      }
+      intrinsic_args {
+        input_tensor {
+          name: "key2"
+          dtype: DT_STRING
+          shape { dim { size: -1 } }
+        }
+      }
+      output_tensors {
+        name: "key1_out"
+        dtype: DT_STRING
+        shape { dim { size: -1 } }
+      }
+      output_tensors {
+        name: ""
+        dtype: DT_STRING
+        shape { dim { size: -1 } }
+      }
+      inner_aggregations {
+        intrinsic_uri: "GoogleSQL:sum"
+        intrinsic_args {
+          input_tensor {
+            name: "bar"
+            dtype: DT_FLOAT
+            shape {}
+          }
+        }
+        output_tensors {
+          name: "bar_out"
+          dtype: DT_FLOAT
+          shape {}
+        }
+      }
+      inner_aggregations {
+        intrinsic_uri: "GoogleSQL:sum"
+        intrinsic_args {
+          input_tensor {
+            name: "baz"
+            dtype: DT_FLOAT
+            shape {}
+          }
+        }
+        output_tensors {
+          name: "baz_out"
+          dtype: DT_FLOAT
+          shape {}
+        }
+      }
+    }
+  )pb");
+  auto protocol = CreateProtocol(config_message);
+  EXPECT_CALL(callback_, OnAcceptClients);
+  EXPECT_THAT(protocol->Start(2), IsOk());
+  // OnComplete cannot be called for fedsql_group_by intrinsics until at least
+  // one input has been aggregated.
+  EXPECT_THAT(protocol->Complete(), IsCode(FAILED_PRECONDITION));
 }
 
 TEST_F(SimpleAggregationProtocolTest, Complete_ProtocolNotStarted) {

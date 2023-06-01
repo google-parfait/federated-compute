@@ -18,18 +18,22 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
+#include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
@@ -53,7 +57,6 @@ absl::Status SimpleAggregationProtocol::ValidateConfig(
     const Configuration& configuration) {
   for (const Configuration::ServerAggregationConfig& aggregation_config :
        configuration.aggregation_configs()) {
-    // TODO(team): Add support for other intrinsics after MVP launch.
     if (!GetAggregatorFactory(aggregation_config.intrinsic_uri()).ok()) {
       return ServerAggregationConfigArgumentError(
           aggregation_config,
@@ -76,22 +79,12 @@ SimpleAggregationProtocol::Create(
   FCP_CHECK(resource_resolver != nullptr);
   FCP_RETURN_IF_ERROR(ValidateConfig(configuration));
 
-  std::vector<Intrinsic> intrinsics;
+  FCP_ASSIGN_OR_RETURN(std::vector<Intrinsic> intrinsics,
+                       ParseFromConfig(configuration));
   std::vector<std::unique_ptr<TensorAggregator>> aggregators;
-  for (const Configuration::ServerAggregationConfig& aggregation_config :
-       configuration.aggregation_configs()) {
-    FCP_ASSIGN_OR_RETURN(Intrinsic intrinsic,
-                         ParseFromConfig(aggregation_config));
-    // TODO(team): Support multiple input tensors.
-    if (intrinsic.inputs.size() != 1 || intrinsic.outputs.size() != 1) {
-      return ServerAggregationConfigArgumentError(
-          aggregation_config,
-          "Aggregation config produced an intrinsic with more than one input "
-          "and output tensor.");
-    }
+  for (const Intrinsic& intrinsic : intrinsics) {
     FCP_ASSIGN_OR_RETURN(std::unique_ptr<TensorAggregator> aggregator,
                          CreateAggregator(intrinsic));
-    intrinsics.emplace_back(std::move(intrinsic));
     aggregators.emplace_back(std::move(aggregator));
   }
 
@@ -219,22 +212,90 @@ void SimpleAggregationProtocol::SetClientState(int64_t client_id,
   }
 }
 
+namespace {
+
+size_t CountInputs(const Intrinsic& intrinsic) {
+  size_t count = intrinsic.inputs.size();
+  for (const Intrinsic& nested_intrinsic : intrinsic.nested_intrinsics) {
+    count += CountInputs(nested_intrinsic);
+  }
+  return count;
+}
+
+absl::Status AddInputsToMap(
+    const Intrinsic& intrinsic, const CheckpointParser& parser,
+    absl::flat_hash_map<std::string, Tensor>& tensor_map) {
+  for (const TensorSpec& input_spec : intrinsic.inputs) {
+    FCP_ASSIGN_OR_RETURN(Tensor tensor, parser.GetTensor(input_spec.name()));
+    if (tensor.dtype() != input_spec.dtype() ||
+        !input_spec.shape().MatchesKnownDimensions(tensor.shape())) {
+      // TODO(team): Detailed diagnostics including the expected vs
+      // actual data types and shapes.
+      return absl::InvalidArgumentError("Input tensor spec mismatch.");
+    }
+    tensor_map.emplace(input_spec.name(), std::move(tensor));
+  }
+  for (const Intrinsic& nested_intrinsic : intrinsic.nested_intrinsics) {
+    FCP_RETURN_IF_ERROR(AddInputsToMap(nested_intrinsic, parser, tensor_map));
+  }
+  return absl::OkStatus();
+}
+
+absl::StatusOr<size_t> PopulateInputs(
+    const Intrinsic& intrinsic,
+    const absl::flat_hash_map<std::string, Tensor>& tensor_map, size_t index,
+    InputTensorList& inputs) {
+  size_t num_inputs = intrinsic.inputs.size();
+  for (const TensorSpec& input_spec : intrinsic.inputs) {
+    const auto& it = tensor_map.find(input_spec.name());
+    FCP_CHECK(it != tensor_map.end());
+    inputs[index++] = &it->second;
+  }
+  for (const Intrinsic& nested_intrinsic : intrinsic.nested_intrinsics) {
+    FCP_ASSIGN_OR_RETURN(
+        size_t nested_num_inputs,
+        PopulateInputs(nested_intrinsic, tensor_map, index, inputs));
+    index += nested_num_inputs;
+    num_inputs += nested_num_inputs;
+  }
+  return num_inputs;
+}
+
+absl::StatusOr<int> AddOutputsToCheckpoint(
+    const Intrinsic& intrinsic, const OutputTensorList& outputs,
+    int output_index, CheckpointBuilder& checkpoint_builder) {
+  int num_outputs = 0;
+  for (const TensorSpec& output_spec : intrinsic.outputs) {
+    if (output_spec.name().empty()) {
+      // TensorSpecs with empty names are not included in the output.
+      continue;
+    }
+    num_outputs++;
+    const Tensor& tensor = outputs[output_index++];
+    FCP_CHECK(tensor.dtype() == output_spec.dtype());
+    FCP_CHECK(output_spec.shape().MatchesKnownDimensions(tensor.shape()));
+    FCP_RETURN_IF_ERROR(checkpoint_builder.Add(output_spec.name(), tensor));
+  }
+  for (const Intrinsic& nested_intrinsic : intrinsic.nested_intrinsics) {
+    FCP_ASSIGN_OR_RETURN(
+        int nested_num_outputs,
+        AddOutputsToCheckpoint(nested_intrinsic, outputs, output_index,
+                               checkpoint_builder));
+    output_index += nested_num_outputs;
+    num_outputs += nested_num_outputs;
+  }
+  return num_outputs;
+}
+
+}  // namespace
+
 absl::StatusOr<SimpleAggregationProtocol::TensorMap>
 SimpleAggregationProtocol::ParseCheckpoint(absl::Cord report) const {
   FCP_ASSIGN_OR_RETURN(std::unique_ptr<CheckpointParser> parser,
                        checkpoint_parser_factory_->Create(report));
   TensorMap tensor_map;
   for (const auto& intrinsic : intrinsics_) {
-    // TODO(team): Support multiple input tensors.
-    FCP_ASSIGN_OR_RETURN(Tensor tensor,
-                         parser->GetTensor(intrinsic.inputs[0].name()));
-    if (tensor.dtype() != intrinsic.inputs[0].dtype() ||
-        tensor.shape() != intrinsic.inputs[0].shape()) {
-      // TODO(team): Detailed diagnostics including the expected vs
-      // actual data types and shapes.
-      return absl::InvalidArgumentError("Input tensor spec mismatch.");
-    }
-    tensor_map.emplace(intrinsic.inputs[0].name(), std::move(tensor));
+    FCP_RETURN_IF_ERROR(AddInputsToMap(intrinsic, *parser, tensor_map));
   }
 
   return tensor_map;
@@ -245,12 +306,12 @@ absl::Status SimpleAggregationProtocol::AggregateClientInput(
   absl::MutexLock lock(&aggregation_mu_);
   if (!aggregation_finished_) {
     for (int i = 0; i < intrinsics_.size(); ++i) {
-      // TODO(team): Support multiple input tensors.
-      const auto& it = tensor_map.find(intrinsics_[i].inputs[0].name());
-      FCP_CHECK(it != tensor_map.end());
+      const Intrinsic& intrinsic = intrinsics_[i];
+      InputTensorList inputs(CountInputs(intrinsic));
+      FCP_RETURN_IF_ERROR(PopulateInputs(intrinsic, tensor_map, 0, inputs));
       FCP_CHECK(aggregators_[i] != nullptr)
           << "CreateReport() has already been called.";
-      FCP_RETURN_IF_ERROR(aggregators_[i]->Accumulate(it->second));
+      FCP_RETURN_IF_ERROR(aggregators_[i]->Accumulate(std::move(inputs)));
     }
   }
   return absl::OkStatus();
@@ -274,13 +335,15 @@ absl::StatusOr<absl::Cord> SimpleAggregationProtocol::CreateReport() {
     auto tensor_aggregator = std::move(aggregators_[i]);
     FCP_ASSIGN_OR_RETURN(OutputTensorList output_tensors,
                          std::move(*tensor_aggregator).Report());
-    // TODO(team): Support multiple output tensors per intrinsic.
-    FCP_CHECK(output_tensors.size() == 1);
-    const Tensor& tensor = output_tensors[0];
-    FCP_CHECK(tensor.dtype() == intrinsics_[i].outputs[0].dtype());
-    FCP_CHECK(tensor.shape() == intrinsics_[i].outputs[0].shape());
-    FCP_RETURN_IF_ERROR(
-        checkpoint_builder->Add(intrinsics_[i].outputs[0].name(), tensor));
+    const Intrinsic& intrinsic = intrinsics_[i];
+    FCP_ASSIGN_OR_RETURN(int num_outputs,
+                         AddOutputsToCheckpoint(intrinsic, output_tensors, 0,
+                                                *checkpoint_builder));
+    FCP_CHECK(num_outputs == output_tensors.size())
+        << "Number of tensors produced by TensorAggregator "
+        << output_tensors.size()
+        << " does not match number of output tensors with nonempty names "
+        << num_outputs << ".";
   }
   aggregation_finished_ = true;
   return checkpoint_builder->Build();

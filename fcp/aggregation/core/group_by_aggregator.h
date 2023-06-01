@@ -100,6 +100,12 @@ class GroupByAggregator : public TensorAggregator {
   // GroupByAggregator.
   int GetNumInputs() const override { return num_inputs_; }
 
+  // Override CanReport to ensure that outputs of Report will contain all
+  // expected output tensors. It is not valid to create empty tensors, so in
+  // order to produce a report containing the expected number of output tensors,
+  // at least one input must have been aggregated.
+  bool CanReport() const override;
+
  protected:
   // Perform aggregation of the tensors in a single InputTensorList into the
   // state of this GroupByAggregator and increment the count of aggregated

@@ -33,6 +33,7 @@ cc_library(
     deps = [
         "//fcp/aggregation/core:aggregator",
         "//fcp/aggregation/core:federated_sum",
+        "//fcp/aggregation/core:fedsql_group_by",
         "//fcp/aggregation/core:tensor",
         "//fcp/aggregation/protocol:aggregation_protocol",
         "//fcp/aggregation/protocol:cc_proto",
@@ -62,6 +63,7 @@ cc_test(
         ":simple_aggregation",
         "//fcp/aggregation/core:aggregator",
         "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/core:tensor_cc_proto",
         "//fcp/aggregation/protocol:cc_proto",
         "//fcp/aggregation/protocol:checkpoint_builder",
         "//fcp/aggregation/protocol:checkpoint_parser",

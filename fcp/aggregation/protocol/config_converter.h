@@ -30,13 +30,6 @@ Status ServerAggregationConfigArgumentError(
     const Configuration::ServerAggregationConfig& aggregation_config,
     string_view error_message);
 
-// Parses a ServerAggregationConfig proto into an Intrinsic struct to
-// represent the aggregation intrinsic independently from the proto.
-// TODO(team): Remove this function from the public API once aggregation
-// protocols are updated to use the version that takes in a Configuration.
-StatusOr<Intrinsic> ParseFromConfig(
-    const Configuration::ServerAggregationConfig& aggregation_config);
-
 // Parses a Configuration proto into a vector of Intrinsic structs to
 // represent the aggregation intrinsic independently from the proto.
 StatusOr<std::vector<Intrinsic>> ParseFromConfig(const Configuration& config);

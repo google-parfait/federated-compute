@@ -67,6 +67,11 @@ class TensorShape final {
   // status.
   StatusOr<size_t> NumElements() const;
 
+  // Returns true if the dimensions of known size in this TensorShape match the
+  // sizes of corresponding dimensions in `other`. `other` is only permitted to
+  // have dimensions of unknown size at the same dimensions as `this`.
+  bool MatchesKnownDimensions(const TensorShape& other) const;
+
   friend bool operator==(const TensorShape& a, const TensorShape& b) {
     return a.dim_sizes_ == b.dim_sizes_;
   }
