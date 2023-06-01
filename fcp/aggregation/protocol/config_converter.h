@@ -13,8 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FCP_AGGREGATION_CORE_CONFIG_CONVERTER_H_
-#define FCP_AGGREGATION_CORE_CONFIG_CONVERTER_H_
+#ifndef FCP_AGGREGATION_PROTOCOL_CONFIG_CONVERTER_H_
+#define FCP_AGGREGATION_PROTOCOL_CONFIG_CONVERTER_H_
+
+#include <vector>
 
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
@@ -28,12 +30,18 @@ Status ServerAggregationConfigArgumentError(
     const Configuration::ServerAggregationConfig& aggregation_config,
     string_view error_message);
 
-// Parses a ServerAggregationConfig proto into an Intrinsic struct to represent
-// the aggregation intrinsic independently from the proto.
+// Parses a ServerAggregationConfig proto into an Intrinsic struct to
+// represent the aggregation intrinsic independently from the proto.
+// TODO(team): Remove this function from the public API once aggregation
+// protocols are updated to use the version that takes in a Configuration.
 StatusOr<Intrinsic> ParseFromConfig(
     const Configuration::ServerAggregationConfig& aggregation_config);
+
+// Parses a Configuration proto into a vector of Intrinsic structs to
+// represent the aggregation intrinsic independently from the proto.
+StatusOr<std::vector<Intrinsic>> ParseFromConfig(const Configuration& config);
 
 }  // namespace aggregation
 }  // namespace fcp
 
-#endif  // FCP_AGGREGATION_CORE_CONFIG_CONVERTER_H_
+#endif  // FCP_AGGREGATION_PROTOCOL_CONFIG_CONVERTER_H_

@@ -36,6 +36,11 @@ namespace fcp::aggregation::tensorflow {
 // the Aggregation Core.
 StatusOr<DataType> ConvertDataType(::tensorflow::DataType dtype);
 
+// Converts a PartialTensorShape, which may have unknown dimensions, to
+// Aggregation TensorShape.
+// Note that the Tensorflow partial shape is expected to be valid.
+TensorShape ConvertPartialShape(const ::tensorflow::PartialTensorShape& shape);
+
 // Converts Tensorflow TensorShape to Aggregation TensorShape.
 // Note that the Tensorflow shape is expected to be valid (it seems impossible
 // to create an invalid shape).

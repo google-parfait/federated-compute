@@ -60,15 +60,27 @@ TensorShape ConvertShape(const tf::TensorShape& shape) {
   return TensorShape(dim_sizes.begin(), dim_sizes.end());
 }
 
+TensorShape ConvertPartialShape(const tf::PartialTensorShape& shape) {
+  std::vector<size_t> dim_sizes;
+  for (auto dim_size : shape.dim_sizes()) {
+    // Unknown dimension is supported for PartialTensorShape.
+    FCP_CHECK(dim_size >= -1);
+    dim_sizes.push_back(dim_size);
+  }
+  return TensorShape(dim_sizes.begin(), dim_sizes.end());
+}
+
 StatusOr<TensorSpec> ConvertTensorSpec(
     const ::tensorflow::TensorSpecProto& spec) {
   FCP_ASSIGN_OR_RETURN(DataType dtype, ConvertDataType(spec.dtype()));
-  tf::TensorShape tf_shape;
-  if (!tf::TensorShape::BuildTensorShape(spec.shape(), &tf_shape).ok()) {
+  tf::PartialTensorShape tf_shape;
+  if (!tf::PartialTensorShape::BuildPartialTensorShape(spec.shape(), &tf_shape)
+           .ok()) {
     return FCP_STATUS(INVALID_ARGUMENT)
-           << "Unsupported tf::TensorShape: " << spec.shape().DebugString();
+           << "Unsupported tf::PartialTensorShape: "
+           << spec.shape().DebugString();
   }
-  return TensorSpec(spec.name(), dtype, ConvertShape(tf_shape));
+  return TensorSpec(spec.name(), dtype, ConvertPartialShape(tf_shape));
 }
 
 // A primitive TensorData implementation that wraps the original

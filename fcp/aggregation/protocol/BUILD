@@ -116,3 +116,33 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
     ],
 )
+
+cc_library(
+    name = "config_converter",
+    srcs = ["config_converter.cc"],
+    hdrs = ["config_converter.h"],
+    deps = [
+        ":configuration_cc_proto",
+        "//fcp/aggregation/core:aggregator",
+        "//fcp/aggregation/core:fedsql_constants",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/tensorflow:converters",
+        "//fcp/base",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "config_converter_test",
+    srcs = ["config_converter_test.cc"],
+    deps = [
+        ":config_converter",
+        ":configuration_cc_proto",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/core:tensor_cc_proto",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

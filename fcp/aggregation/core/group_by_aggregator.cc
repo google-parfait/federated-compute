@@ -25,6 +25,7 @@
 
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/composite_key_combiner.h"
+#include "fcp/aggregation/core/fedsql_constants.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/one_dim_grouping_aggregator.h"
@@ -38,8 +39,6 @@
 
 namespace fcp {
 namespace aggregation {
-
-constexpr char kGroupByUri[] = "fedsql_group_by";
 
 namespace {
 
@@ -364,12 +363,12 @@ StatusOr<std::unique_ptr<TensorAggregator>> GroupByFactory::Create(
 
   std::vector<std::unique_ptr<TensorAggregator>> nested_aggregators;
   int num_value_inputs = 0;
-  constexpr char nested_prefix[] = "GoogleSQL:";
   for (const Intrinsic& nested : intrinsic.nested_intrinsics) {
     // Disable lint checks recommending use of absl::StrContains() here, because
     // we don't want to take a dependency on absl libraries in the aggregation
     // core implementations.
-    if (nested.uri.find(nested_prefix) == std::string::npos) {  // NOLINT
+    if (nested.uri.find(kFedSqlPrefix)  // NOLINT
+        == std::string::npos) {         // NOLINT
       return FCP_STATUS(INVALID_ARGUMENT)
              << "GroupByFactory: Nested intrinsic URIs must start with "
                 "'GoogleSQL:'.";
@@ -393,7 +392,7 @@ StatusOr<std::unique_ptr<TensorAggregator>> GroupByFactory::Create(
 }
 
 // TODO(team): Revise the registration mechanism below.
-REGISTER_AGGREGATOR_FACTORY(kGroupByUri, GroupByFactory);
+REGISTER_AGGREGATOR_FACTORY(std::string(kGroupByUri), GroupByFactory);
 
 }  // namespace aggregation
 }  // namespace fcp

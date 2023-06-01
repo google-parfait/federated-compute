@@ -46,6 +46,19 @@ tf::TensorShape CreateTfShape(std::initializer_list<int64_t> dim_sizes) {
   return shape;
 }
 
+tf::PartialTensorShape CreatePartialTfShape(
+    std::initializer_list<int64_t> dim_sizes) {
+  tf::PartialTensorShape shape;
+  tf::TensorShapeProto shape_proto;
+  for (auto dim_size : dim_sizes) {
+    shape_proto.add_dim()->set_size(dim_size);
+  }
+  EXPECT_TRUE(
+      tf::PartialTensorShape::BuildPartialTensorShape(shape_proto, &shape)
+          .ok());
+  return shape;
+}
+
 tf::TensorSpecProto CreateTfTensorSpec(
     const std::string& name, tf::DataType dtype,
     std::initializer_list<int64_t> dim_sizes) {
@@ -76,6 +89,16 @@ TEST(ConvertersTest, ConvertShape_Success) {
   EXPECT_EQ(ConvertShape(CreateTfShape({2, 3})), TensorShape({2, 3}));
 }
 
+TEST(ConvertersTest, ConvertPartialShape_Success) {
+  EXPECT_EQ(ConvertPartialShape(CreatePartialTfShape({})), TensorShape({}));
+  EXPECT_EQ(ConvertPartialShape(CreatePartialTfShape({-1})), TensorShape({-1}));
+  EXPECT_EQ(ConvertPartialShape(CreatePartialTfShape({2, -1})),
+            TensorShape({2, -1}));
+  // All negative dimensions are interpreted by tensorflow the same way as -1.
+  EXPECT_EQ(ConvertPartialShape(CreatePartialTfShape({2, -3})),
+            TensorShape({2, -1}));
+}
+
 TEST(ConvertersTest, ConvertTensorSpec_Success) {
   auto tensor_spec =
       ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_FLOAT, {1, 2, 3}));
@@ -85,15 +108,18 @@ TEST(ConvertersTest, ConvertTensorSpec_Success) {
   EXPECT_EQ(tensor_spec->shape(), TensorShape({1, 2, 3}));
 }
 
+TEST(ConvertersTest, ConvertTensorSpec_UnknownDimension_Success) {
+  auto tensor_spec =
+      ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_FLOAT, {1, -1}));
+  ASSERT_THAT(tensor_spec, IsOk());
+  EXPECT_EQ(tensor_spec->name(), "foo");
+  EXPECT_EQ(tensor_spec->dtype(), DT_FLOAT);
+  EXPECT_EQ(tensor_spec->shape(), TensorShape({1, -1}));
+}
+
 TEST(ConvertersTest, ConvertTensorSpec_UnsupportedDataType) {
   EXPECT_THAT(
       ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_VARIANT, {1, 2, 3})),
-      IsCode(INVALID_ARGUMENT));
-}
-
-TEST(ConvertersTest, ConvertTensorSpec_UnsupportedShape) {
-  EXPECT_THAT(
-      ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_FLOAT, {1, -1})),
       IsCode(INVALID_ARGUMENT));
 }
 

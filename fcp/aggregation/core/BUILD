@@ -108,6 +108,7 @@ cc_library(
     copts = FCP_COPTS,
     deps = [
         ":aggregator",
+        ":fedsql_constants",
         ":tensor",
         ":tensor_cc_proto",
         ":vector_string_data",
@@ -201,16 +202,8 @@ cc_library(
 )
 
 cc_library(
-    name = "config_converter",
-    srcs = ["config_converter.cc"],
-    hdrs = ["config_converter.h"],
-    deps = [
-        ":aggregator",
-        ":tensor",
-        "//fcp/aggregation/protocol:configuration_cc_proto",
-        "//fcp/aggregation/tensorflow:converters",
-        "//fcp/base",
-    ],
+    name = "fedsql_constants",
+    hdrs = ["fedsql_constants.h"],
 )
 
 cc_test(
@@ -313,21 +306,6 @@ cc_test(
         ":aggregator",
         ":fedsql_group_by",
         ":tensor",
-        "//fcp/aggregation/testing",
-        "//fcp/aggregation/testing:test_data",
-        "//fcp/testing",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_test(
-    name = "config_converter_test",
-    srcs = ["config_converter_test.cc"],
-    deps = [
-        ":config_converter",
-        ":tensor",
-        ":tensor_cc_proto",
-        "//fcp/aggregation/protocol:configuration_cc_proto",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/testing",
