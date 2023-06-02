@@ -48,6 +48,7 @@
 #include "fcp/client/engine/simple_plan_engine.h"
 #endif
 
+#include "fcp/client/eligibility_decider.h"
 #include "fcp/client/engine/tflite_plan_engine.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
@@ -794,6 +795,40 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
   return filename;
 }
 
+absl::StatusOr<std::optional<TaskEligibilityInfo>>
+MaybeComputeNativeEligibility(
+    const FederatedProtocol::EligibilityEvalTask& eligibility_eval_task,
+    const Flags* flags, LogManager* log_manager) {
+  if (!flags->enable_native_eets() ||
+      !eligibility_eval_task.population_eligibility_spec.has_value()) {
+    return std::nullopt;
+  }
+  FCP_ASSIGN_OR_RETURN(
+      TaskEligibilityInfo task_eligibility_info,
+      ComputeEligibility(
+          eligibility_eval_task.population_eligibility_spec.value(),
+          log_manager));
+
+  // TODO(team): Add appropriate phase logging here.
+  // - If not ok, phaselog EligibilityEvalCheckinCompleted and IOError and halt.
+  // - If ok and empty, do not phaselog anything because we'll take the legacy
+  // EET plan path. If empty, we bailed very early so this should not affect
+  // timing too much for the legacy path.
+  // - If ok and not empty, phaselog EligibilityEvalCheckinCompleted,
+  //  EligibilityEvalComputationStarted, and  EligibilityEvalComputationOutcome
+  //  as is correct.
+
+  if (task_eligibility_info.task_weights_size() == 0) {
+    // Eligibility could not be decided.
+    return std::nullopt;
+  }
+
+  // Eligibility successfully computed via native eligibility!
+  log_manager->LogDiag(
+      ProdDiagCode::ELIGIBILITY_EVAL_NATIVE_COMPUTATION_SUCCESS);
+  return task_eligibility_info;
+}
+
 absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     const FederatedProtocol::EligibilityEvalTask& eligibility_eval_task,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
@@ -804,6 +839,17 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     const absl::Time reference_time, const absl::Time time_before_checkin,
     const absl::Time time_before_plan_download,
     const NetworkStats& network_stats) {
+  // If MaybeComputeNativeEligibility returns a non-ok status, bubble that up
+  // If it returns an empty optional, recompute eligibility with legacy EET
+  // plan, because this EET could not be computed via the native implementation.
+  // If it returns an ok task_eligibility_info, return that.
+  FCP_ASSIGN_OR_RETURN(
+      std::optional<TaskEligibilityInfo> native_task_eligibility_info,
+      MaybeComputeNativeEligibility(eligibility_eval_task, flags, log_manager));
+  if (native_task_eligibility_info.has_value()) {
+    return native_task_eligibility_info;
+  }
+
   ClientOnlyPlan plan;
   if (!ParseFromStringOrCord(plan, eligibility_eval_task.payloads.plan)) {
     auto message = "Failed to parse received eligibility eval plan";

@@ -209,6 +209,9 @@ class Flags {
   virtual bool http_protocol_supports_multiple_task_assignments() const {
     return false;
   }
+
+  // If true, enables support for native computation of Eligibility Eval Tasks.
+  virtual bool enable_native_eets() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

@@ -331,5 +331,17 @@ enum ProdDiagCode {
    * exists during Put(). */
   RESOURCE_CACHE_PUT_FAILED_TO_CHECK_IF_FILE_EXISTS = 1982;
 
+  /**
+   * Codes for logs related to eligibility eval.
+   * ========================================
+   */
+
+  /** Logged when the native eligibility eval stack successfully completed an
+   * eligibility computation. */
+  ELIGIBILITY_EVAL_NATIVE_COMPUTATION_SUCCESS = 2199;
+  /** Logged when an unexpected policy kind is encounted by the native
+   * eligibility eval stack. */
+  ELIGIBILITY_EVAL_UNEXPECTED_POLICY_KIND = 2198;
+
   reserved 25;
 }

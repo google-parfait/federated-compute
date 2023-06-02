@@ -595,6 +595,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, support_constant_tf_inputs, (), (const, override));
   MOCK_METHOD(bool, http_protocol_supports_multiple_task_assignments, (),
               (const, override));
+  MOCK_METHOD(bool, enable_native_eets, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

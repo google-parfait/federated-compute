@@ -337,6 +337,7 @@ cc_library(
     defines = TF_OPTIONAL_DEFINES + GRPC_OPTIONAL_DEFINES,
     visibility = ["//visibility:public"],
     deps = [
+        ":eligibility_decider",
         ":federated_protocol",
         ":federated_protocol_util",
         ":federated_select",
@@ -409,6 +410,33 @@ cc_library(
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
     ] + TF_OPTIONAL_DEPS,
+)
+
+cc_library(
+    name = "eligibility_decider",
+    srcs = ["eligibility_decider.cc"],
+    hdrs = ["eligibility_decider.h"],
+    deps = [
+        ":interfaces",
+        "//fcp/protos:federated_api_cc_proto",
+        "//fcp/protos:population_eligibility_spec_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "eligbility_decider_test",
+    srcs = ["eligibility_decider_test.cc"],
+    deps = [
+        ":eligibility_decider",
+        ":test_helpers",
+        "//fcp/protos:population_eligibility_spec_cc_proto",
+        "//fcp/testing",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
 )
 
 cc_library(
