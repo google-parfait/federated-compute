@@ -175,4 +175,11 @@ enum HistogramCounters {
 
   /** How long reporting results to the server takes. */
   TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY = 200005;
+
+  /** The end time of multiple task assignments, relative to the start of the
+   * training session. */
+  TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_END_TIME = 200006;
+
+  /** How long multiple task assignments takes. */
+  TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY = 200007;
 }

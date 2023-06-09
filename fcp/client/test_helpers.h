@@ -157,6 +157,46 @@ class MockEventPublisher : public EventPublisher {
               (const ExampleStats& example_stats,
                absl::Duration phase_duration),
               (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsStarted, (), (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsIOError,
+              (absl::string_view error_message,
+               const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsPayloadIOError,
+              (absl::string_view error_message), (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsInvalidPayload,
+              (absl::string_view error_message), (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsClientInterrupted,
+              (absl::string_view error_message,
+               const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsServerAborted,
+              (absl::string_view error_message,
+               const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsTurnedAway,
+              (const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsPlanUriReceived,
+              (const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsPlanUriPartialReceived,
+              (const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsPartialCompleted,
+              (const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
+  MOCK_METHOD(void, PublishMultipleTaskAssignmentsCompleted,
+              (const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
   MOCK_METHOD(void, PublishCheckinIoError,
               (absl::string_view error_message,
                const NetworkStats& network_stats,
@@ -687,6 +727,49 @@ class MockPhaseLogger : public PhaseLogger {
   MOCK_METHOD(void, LogEligibilityEvalComputationCompleted,
               (const ExampleStats& example_stats,
                absl::Time run_plan_start_time, absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsStarted, (), (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsIOError,
+              (absl::Status error_status, const NetworkStats& network_stats,
+               absl::Time time_before_multiple_task_assignments,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsPayloadIOError,
+              (absl::Status error_status), (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsInvalidPayload,
+              (absl::string_view error_message), (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsClientInterrupted,
+              (absl::Status error_status, const NetworkStats& network_stats,
+               absl::Time time_before_multiple_task_assignments,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsServerAborted,
+              (absl::Status error_status, const NetworkStats& network_stats,
+               absl::Time time_before_multiple_task_assignments,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsTurnedAway,
+              (const NetworkStats& network_stats,
+               absl::Time time_before_multiple_task_assignments,
+               absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsPlanUriReceived,
+              (const NetworkStats& network_stats,
+               absl::Time time_before_multiple_task_assignments),
+              (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsPlanUriPartialReceived,
+              (const NetworkStats& network_stats,
+               absl::Time time_before_multiple_task_assignments),
+              (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsPartialCompleted,
+              (const NetworkStats& network_stats,
+               absl::Time time_before_multiple_task_assignments,
+               absl::Time time_before_plan_download, absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogMultipleTaskAssignmentsCompleted,
+              (const NetworkStats& network_stats,
+               absl::Time time_before_multiple_task_assignments,
+               absl::Time time_before_plan_download, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, LogCheckinStarted, (), (override));
   MOCK_METHOD(void, LogCheckinIOError,

@@ -100,6 +100,67 @@ class PhaseLogger {
       const ExampleStats& example_stats, absl::Time run_plan_start_time,
       absl::Time reference_time) = 0;
 
+  // Multiple task assignments phase.
+  // Called when a PerformMultipleTaskAssignments starts.
+  virtual void LogMultipleTaskAssignmentsStarted() = 0;
+  // Called when an IO error occurred during multiple task assignments.
+  virtual void LogMultipleTaskAssignmentsIOError(
+      absl::Status error_status, const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time reference_time) = 0;
+  // Called when an IO error occurred during the payload retrieval phase of
+  // multiple task assignments. This is not a terminating event, it could be
+  // called multiple times during one call of PerformMultipleTaskAssignments,
+  // and the client may continue running other tasks for which it did manage to
+  // retrieve the payloads after this event is logged.
+  virtual void LogMultipleTaskAssignmentsPayloadIOError(
+      absl::Status error_status) = 0;
+  // Called when an invalid payload is received from the multiple task
+  // assignments result.
+  // This is not a terminating event, it could be called multiple times during
+  // one call of PerformMultipleTaskAssignments, and the client may continue
+  // running other tasks for which it did manage to retrieve the payloads after
+  // this event is logged.
+  virtual void LogMultipleTaskAssignmentsInvalidPayload(
+      absl::string_view error_message) = 0;
+  // Called when multiple task assignments is interrupted by the client.
+  virtual void LogMultipleTaskAssignmentsClientInterrupted(
+      absl::Status error_status, const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time reference_time) = 0;
+  // Called when multiple task assignments is aborted by the server.
+  virtual void LogMultipleTaskAssignmentsServerAborted(
+      absl::Status error_status, const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time reference_time) = 0;
+  // Called when the client issues multiple task assignments, but the server
+  // assigned zero task to the client.
+  virtual void LogMultipleTaskAssignmentsTurnedAway(
+      const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time reference_time) = 0;
+  // Called when the plan uris for all the requested tasks are received during
+  // multiple task assignments.
+  virtual void LogMultipleTaskAssignmentsPlanUriReceived(
+      const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments) = 0;
+  // Called when the plan uris for some of the requested tasks are received
+  // during multiple task assignments.
+  virtual void LogMultipleTaskAssignmentsPlanUriPartialReceived(
+      const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments) = 0;
+  // Called when check-in is completed, but one or more invalid payload or IO
+  // errors have occurred.
+  virtual void LogMultipleTaskAssignmentsPartialCompleted(
+      const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time time_before_plan_download, absl::Time reference_time) = 0;
+  // Called when multiple task assignments is completed successfully.
+  virtual void LogMultipleTaskAssignmentsCompleted(
+      const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time time_before_plan_download, absl::Time reference_time) = 0;
+
   // Check-in phase.
   // Called when a regular check-in starts.
   virtual void LogCheckinStarted() = 0;

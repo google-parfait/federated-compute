@@ -232,6 +232,68 @@ class FakeEventPublisher : public EventPublisher {
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
 
+  void PublishMultipleTaskAssignmentsStarted() override {
+    FCP_CLIENT_LOG_FUNCTION_NAME;
+  }
+
+  void PublishMultipleTaskAssignmentsIOError(
+      absl::string_view error_message, const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
+  }
+
+  void PublishMultipleTaskAssignmentsPayloadIOError(
+      absl::string_view error_message) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
+  }
+
+  void PublishMultipleTaskAssignmentsInvalidPayload(
+      absl::string_view error_message) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
+  }
+
+  void PublishMultipleTaskAssignmentsClientInterrupted(
+      absl::string_view error_message, const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
+  }
+
+  void PublishMultipleTaskAssignmentsServerAborted(
+      absl::string_view error_message, const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
+  }
+
+  void PublishMultipleTaskAssignmentsTurnedAway(
+      const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME;
+  }
+
+  void PublishMultipleTaskAssignmentsPlanUriReceived(
+      const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME;
+  }
+
+  void PublishMultipleTaskAssignmentsPlanUriPartialReceived(
+      const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME;
+  }
+
+  void PublishMultipleTaskAssignmentsPartialCompleted(
+      const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME;
+  }
+
+  void PublishMultipleTaskAssignmentsCompleted(
+      const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME;
+  }
+
   void PublishCheckinIoError(absl::string_view error_message,
                              const NetworkStats& network_stats,
                              absl::Duration phase_duration) override {

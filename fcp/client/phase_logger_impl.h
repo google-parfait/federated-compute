@@ -92,6 +92,43 @@ class PhaseLoggerImpl : public PhaseLogger {
       const ExampleStats& example_stats, absl::Time run_plan_start_time,
       absl::Time reference_time) override;
 
+  // Multiple task assignments phase.
+  void LogMultipleTaskAssignmentsStarted() override;
+  void LogMultipleTaskAssignmentsIOError(
+      absl::Status error_status, const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time reference_time) override;
+  void LogMultipleTaskAssignmentsPayloadIOError(
+      absl::Status error_status) override;
+  void LogMultipleTaskAssignmentsInvalidPayload(
+      absl::string_view error_message) override;
+  void LogMultipleTaskAssignmentsClientInterrupted(
+      absl::Status error_status, const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time reference_time) override;
+  void LogMultipleTaskAssignmentsServerAborted(
+      absl::Status error_status, const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time reference_time) override;
+  void LogMultipleTaskAssignmentsTurnedAway(
+      const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time reference_time) override;
+  void LogMultipleTaskAssignmentsPlanUriReceived(
+      const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments) override;
+  void LogMultipleTaskAssignmentsPlanUriPartialReceived(
+      const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments) override;
+  void LogMultipleTaskAssignmentsPartialCompleted(
+      const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time time_before_plan_download, absl::Time reference_time) override;
+  void LogMultipleTaskAssignmentsCompleted(
+      const NetworkStats& network_stats,
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time time_before_plan_download, absl::Time reference_time) override;
+
   // Check-in phase.
   void LogCheckinStarted() override;
   void LogCheckinIOError(absl::Status error_status,
@@ -192,6 +229,9 @@ class PhaseLoggerImpl : public PhaseLogger {
   void LogEligibilityEvalCheckinLatency(absl::Time time_before_checkin);
   void LogEligibilityEvalComputationLatency(absl::Time run_plan_start_time,
                                             absl::Time reference_time);
+  void LogMultipleTaskAssignmentsLatency(
+      absl::Time time_before_multiple_task_assignments,
+      absl::Time reference_time);
   void LogCheckinLatency(absl::Time time_before_checkin,
                          absl::Time reference_time);
   void LogComputationLatency(absl::Time run_plan_start_time,

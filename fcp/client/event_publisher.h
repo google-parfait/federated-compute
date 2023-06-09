@@ -158,6 +158,69 @@ class EventPublisher {
   // Publish an eligibility eval task finished.
   virtual void PublishEligibilityEvalComputationCompleted(
       const ExampleStats& example_stats, absl::Duration phase_duration) = 0;
+
+  // Publish that the client is about to start multiple task assignments.
+  virtual void PublishMultipleTaskAssignmentsStarted() = 0;
+
+  // Publish an IO error occurred during multiple task assignments.
+  virtual void PublishMultipleTaskAssignmentsIOError(
+      absl::string_view error_message, const NetworkStats& network_stats,
+      absl::Duration phase_duration) = 0;
+
+  // Publish an IO error occurred during the payload retrieval phase of multiple
+  // task assignments.
+  virtual void PublishMultipleTaskAssignmentsPayloadIOError(
+      absl::string_view error_message) = 0;
+
+  // Publish an invalid payload was downloaded from the multiple task
+  // assignments.
+  virtual void PublishMultipleTaskAssignmentsInvalidPayload(
+      absl::string_view error_message) = 0;
+
+  // Publish that the client interrupted the multiple task assignments.
+  virtual void PublishMultipleTaskAssignmentsClientInterrupted(
+      absl::string_view error_message, const NetworkStats& network_stats,
+      absl::Duration phase_duration) = 0;
+
+  // Publish that the server aborted the multiple task assignments.
+  virtual void PublishMultipleTaskAssignmentsServerAborted(
+      absl::string_view error_message, const NetworkStats& network_stats,
+      absl::Duration phase_duration) = 0;
+
+  // Publish that the server assigned the client zero task during multiple task
+  // assignments.
+  virtual void PublishMultipleTaskAssignmentsTurnedAway(
+      const NetworkStats& network_stats, absl::Duration phase_duration) = 0;
+
+  // Publishes that the device has finished multiple task assignments with the
+  // server and received URIs for all of the requested tasks to download the
+  // plan and checkpoint with, but hasn't yet downloaded those, along with
+  // information how much data was transferred up to this point and how long
+  // that took.
+  virtual void PublishMultipleTaskAssignmentsPlanUriReceived(
+      const NetworkStats& network_stats, absl::Duration phase_duration) = 0;
+
+  // Publishes that the device has finished multiple task assignments with the
+  // server and received URIs for some of the requested tasks to download the
+  // plan and checkpoint with, but hasn't yet downloaded those, along with
+  // information how much data was transferred up to this point and how long
+  // that took.
+  virtual void PublishMultipleTaskAssignmentsPlanUriPartialReceived(
+      const NetworkStats& network_stats, absl::Duration phase_duration) = 0;
+
+  // Publishes that the device has finished multiple task assignments with the
+  // server, along with information how much data was transferred and how long
+  // that took.  There was at least one failure happened when downloading plans
+  // and checkpoints for the tasks.
+  virtual void PublishMultipleTaskAssignmentsPartialCompleted(
+      const NetworkStats& network_stats, absl::Duration phase_duration) = 0;
+
+  // Publishes that the device has finished multiple task assignments with the
+  // server, along with information how much data was transferred and how long
+  // that took.
+  virtual void PublishMultipleTaskAssignmentsCompleted(
+      const NetworkStats& network_stats, absl::Duration phase_duration) = 0;
+
   // Publish an IO error occurred during regular check-in.
   virtual void PublishCheckinIoError(absl::string_view error_message,
                                      const NetworkStats& network_stats,

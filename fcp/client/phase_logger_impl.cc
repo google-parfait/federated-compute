@@ -29,6 +29,8 @@ constexpr absl::string_view kEligibilityCheckinErrorPrefix =
     "Error during eligibility check-in: ";
 constexpr absl::string_view kEligibilityComputationErrorPrefix =
     "Error during eligibility eval computation: ";
+constexpr absl::string_view kMultipleTaskAssignmentsPrefix =
+    "Error during multiple task assignments: ";
 constexpr absl::string_view kCheckinErrorPrefix = "Error during check-in: ";
 constexpr absl::string_view kComputationErrorPrefix =
     "Error during computation: ";
@@ -265,6 +267,125 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationCompleted(
       HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT,
       example_stats.example_count);
   LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsStarted() {
+  // Log that we are about to check in with the server.
+  event_publisher_->PublishMultipleTaskAssignmentsStarted();
+  // TODO(team): Update opstats for multiple task assignments events.
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsIOError(
+    absl::Status error_status, const NetworkStats& network_stats,
+    absl::Time time_before_multiple_task_assignments,
+    absl::Time reference_time) {
+  std::string error_message =
+      GetErrorMessage(error_status, kMultipleTaskAssignmentsPrefix,
+                      /* keep_error_message= */ true);
+  event_publisher_->PublishMultipleTaskAssignmentsIOError(
+      error_message, network_stats,
+      absl::Now() - time_before_multiple_task_assignments);
+  // TODO(team): Update opstats for multiple task assignments events.
+  LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
+                                    reference_time);
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsPayloadIOError(
+    absl::Status error_status) {
+  std::string error_message =
+      GetErrorMessage(error_status, kMultipleTaskAssignmentsPrefix,
+                      /* keep_error_message= */ true);
+  event_publisher_->PublishMultipleTaskAssignmentsPayloadIOError(error_message);
+  // TODO(team): Update opstats for multiple task assignments events.
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsInvalidPayload(
+    absl::string_view error_message) {
+  log_manager_->LogDiag(
+      ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN);
+  event_publisher_->PublishMultipleTaskAssignmentsInvalidPayload(error_message);
+  // TODO(team): Update opstats for multiple task assignments events.
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsClientInterrupted(
+    absl::Status error_status, const NetworkStats& network_stats,
+    absl::Time time_before_multiple_task_assignments,
+    absl::Time reference_time) {
+  std::string error_message =
+      GetErrorMessage(error_status, kMultipleTaskAssignmentsPrefix,
+                      /* keep_error_message= */ true);
+  event_publisher_->PublishMultipleTaskAssignmentsClientInterrupted(
+      error_message, network_stats,
+      absl::Now() - time_before_multiple_task_assignments);
+  // TODO(team): Update opstats for multiple task assignments events.
+  LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
+                                    reference_time);
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsServerAborted(
+    absl::Status error_status, const NetworkStats& network_stats,
+    absl::Time time_before_multiple_task_assignments,
+    absl::Time reference_time) {
+  std::string error_message =
+      GetErrorMessage(error_status, kMultipleTaskAssignmentsPrefix,
+                      /* keep_error_message= */ true);
+  event_publisher_->PublishMultipleTaskAssignmentsServerAborted(
+      error_message, network_stats,
+      absl::Now() - time_before_multiple_task_assignments);
+  // TODO(team): Update opstats for multiple task assignments events.
+  LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
+                                    reference_time);
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsTurnedAway(
+    const NetworkStats& network_stats,
+    absl::Time time_before_multiple_task_assignments,
+    absl::Time reference_time) {
+  event_publisher_->PublishMultipleTaskAssignmentsTurnedAway(
+      network_stats, absl::Now() - time_before_multiple_task_assignments);
+  // TODO(team): Update opstats for multiple task assignments events.
+  LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
+                                    reference_time);
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsPlanUriReceived(
+    const NetworkStats& network_stats,
+    absl::Time time_before_multiple_task_assignments) {
+  event_publisher_->PublishMultipleTaskAssignmentsPlanUriReceived(
+      network_stats, absl::Now() - time_before_multiple_task_assignments);
+  // TODO(team): Update opstats for multiple task assignments events.
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsPlanUriPartialReceived(
+    const NetworkStats& network_stats,
+    absl::Time time_before_multiple_task_assignments) {
+  event_publisher_->PublishMultipleTaskAssignmentsPlanUriPartialReceived(
+      network_stats, absl::Now() - time_before_multiple_task_assignments);
+  // TODO(team): Update opstats for multiple task assignments events.
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsPartialCompleted(
+    const NetworkStats& network_stats,
+    absl::Time time_before_multiple_task_assignments,
+    absl::Time time_before_plan_download, absl::Time reference_time) {
+  absl::Duration duration = absl::Now() - time_before_plan_download;
+  event_publisher_->PublishMultipleTaskAssignmentsPartialCompleted(
+      network_stats, duration);
+  // TODO(team): Update opstats for multiple task assignments events.
+  LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
+                                    reference_time);
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsCompleted(
+    const NetworkStats& network_stats,
+    absl::Time time_before_multiple_task_assignments,
+    absl::Time time_before_plan_download, absl::Time reference_time) {
+  absl::Duration duration = absl::Now() - time_before_plan_download;
+  event_publisher_->PublishMultipleTaskAssignmentsCompleted(network_stats,
+                                                            duration);
+  // TODO(team): Update opstats for multiple task assignments events.
+  LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
+                                    reference_time);
 }
 
 void PhaseLoggerImpl::LogCheckinStarted() {
@@ -603,6 +724,16 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationLatency(
   LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_LATENCY,
                run_plan_start_time);
   LogTimeSince(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, reference_time);
+}
+
+void PhaseLoggerImpl::LogMultipleTaskAssignmentsLatency(
+    absl::Time time_before_multiple_task_assignments,
+    absl::Time reference_time) {
+  LogTimeSince(HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY,
+               time_before_multiple_task_assignments);
+  LogTimeSince(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_END_TIME,
+      reference_time);
 }
 
 void PhaseLoggerImpl::LogCheckinLatency(absl::Time time_before_checkin,

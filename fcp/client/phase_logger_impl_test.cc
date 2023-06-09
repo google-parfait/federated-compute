@@ -911,6 +911,135 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadCompleted) {
                                            absl::Now() - absl::Minutes(8));
 }
 
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsStarted) {
+  EXPECT_CALL(mock_event_publisher_, PublishMultipleTaskAssignmentsStarted());
+  phase_logger_->LogMultipleTaskAssignmentsStarted();
+}
+
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsIOError) {
+  std::string error_message = "Something's gone wrong.";
+  std::string expected_error_message =
+      absl::StrCat("Error during multiple task assignments: code: 13, error: ",
+                   error_message);
+  EXPECT_CALL(mock_event_publisher_,
+              PublishMultipleTaskAssignmentsIOError(expected_error_message,
+                                                    network_stats_, _));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_END_TIME, Ge(0));
+  phase_logger_->LogMultipleTaskAssignmentsIOError(
+      absl::InternalError(error_message), network_stats_, absl::Now(),
+      absl::Now() - absl::Minutes(1));
+}
+
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsPayloadIOError) {
+  std::string error_message = "Failed to retrieve plan.";
+  std::string expected_error_message =
+      absl::StrCat("Error during multiple task assignments: code: 13, error: ",
+                   error_message);
+  EXPECT_CALL(
+      mock_event_publisher_,
+      PublishMultipleTaskAssignmentsPayloadIOError(expected_error_message));
+  phase_logger_->LogMultipleTaskAssignmentsPayloadIOError(
+      absl::InternalError(error_message));
+}
+
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsInvalidPayload) {
+  std::string error_message = "Unable to parse initial checkpoint.";
+  EXPECT_CALL(mock_event_publisher_,
+              PublishMultipleTaskAssignmentsInvalidPayload(error_message));
+  EXPECT_CALL(
+      mock_log_manager_,
+      LogDiag(ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN));
+  phase_logger_->LogMultipleTaskAssignmentsInvalidPayload(error_message);
+}
+
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsClientInterrupted) {
+  std::string error_message = "The client is no longer idle";
+  std::string expected_error_message =
+      absl::StrCat("Error during multiple task assignments: code: 1, error: ",
+                   error_message);
+  EXPECT_CALL(mock_event_publisher_,
+              PublishMultipleTaskAssignmentsClientInterrupted(
+                  expected_error_message, network_stats_, _));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_END_TIME, Ge(0));
+  phase_logger_->LogMultipleTaskAssignmentsClientInterrupted(
+      absl::CancelledError(error_message), network_stats_, absl::Now(),
+      absl::Now() - absl::Minutes(1));
+}
+
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsServerAborted) {
+  std::string error_message = "The request is aborted by the server";
+  std::string expected_error_message =
+      absl::StrCat("Error during multiple task assignments: code: 10, error: ",
+                   error_message);
+  EXPECT_CALL(mock_event_publisher_,
+              PublishMultipleTaskAssignmentsServerAborted(
+                  expected_error_message, network_stats_, _));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_END_TIME, Ge(0));
+  phase_logger_->LogMultipleTaskAssignmentsServerAborted(
+      absl::AbortedError(error_message), network_stats_, absl::Now(),
+      absl::Now() - absl::Minutes(1));
+}
+
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsTurnedAway) {
+  EXPECT_CALL(mock_event_publisher_,
+              PublishMultipleTaskAssignmentsTurnedAway(network_stats_, _));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_END_TIME, Ge(0));
+  phase_logger_->LogMultipleTaskAssignmentsTurnedAway(
+      network_stats_, absl::Now(), absl::Now() - absl::Minutes(1));
+}
+
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsPlanUriReceived) {
+  EXPECT_CALL(mock_event_publisher_,
+              PublishMultipleTaskAssignmentsPlanUriReceived(network_stats_, _));
+  phase_logger_->LogMultipleTaskAssignmentsPlanUriReceived(
+      network_stats_, absl::Now() - absl::Minutes(2));
+}
+
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsPlanUriPartialReceived) {
+  EXPECT_CALL(
+      mock_event_publisher_,
+      PublishMultipleTaskAssignmentsPlanUriPartialReceived(network_stats_, _));
+  phase_logger_->LogMultipleTaskAssignmentsPlanUriPartialReceived(
+      network_stats_, absl::Now() - absl::Minutes(2));
+}
+
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsPartialCompleted) {
+  EXPECT_CALL(
+      mock_event_publisher_,
+      PublishMultipleTaskAssignmentsPartialCompleted(network_stats_, _));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_END_TIME, Ge(0));
+  phase_logger_->LogMultipleTaskAssignmentsPartialCompleted(
+      network_stats_, absl::Now() - absl::Minutes(2),
+      absl::Now() - absl::Minutes(1), absl::Now() - absl::Minutes(4));
+}
+
+TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsCompleted) {
+  EXPECT_CALL(mock_event_publisher_,
+              PublishMultipleTaskAssignmentsCompleted(network_stats_, _));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
+  VerifyCounterLogged(
+      HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_END_TIME, Ge(0));
+  phase_logger_->LogMultipleTaskAssignmentsCompleted(
+      network_stats_, absl::Now() - absl::Minutes(2),
+      absl::Now() - absl::Minutes(1), absl::Now() - absl::Minutes(4));
+}
+
 }  // namespace
 }  // namespace client
 }  // namespace fcp
