@@ -83,7 +83,7 @@ absl::StatusOr<std::unique_ptr<TfLiteWrapper>> TfLiteWrapper::Create(
   interpreter->SetNumThreads(num_threads);
   if (interpreter->ModifyGraphWithDelegate(delegate.get()) != kTfLiteOk) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Failed to modify graph with TrainingFlexDelegate: ",
+        absl::StrCat("Failed to modify graph with FlexDelegate: ",
                      error_reporter->GetFirstErrorMessage()));
   }
   if (interpreter->AllocateTensors() != kTfLiteOk) {
