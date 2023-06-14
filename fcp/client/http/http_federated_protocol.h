@@ -92,7 +92,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
 
   absl::StatusOr<MultipleTaskAssignments> PerformMultipleTaskAssignments(
       const std::vector<std::string>& task_names,
-      const std::function<void()>& payload_uris_received_callback) override;
+      const std::function<void(size_t)>& payload_uris_received_callback)
+      override;
 
   absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
@@ -183,7 +184,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
   HandleMultipleTaskAssignmentsInnerResponse(
       absl::StatusOr<InMemoryHttpResponse> http_response,
-      const std::function<void()>& payload_uris_received_callback);
+      const std::function<void(size_t)>& payload_uris_received_callback);
 
   // Helper function for reporting result via simple aggregation.
   absl::Status ReportViaSimpleAggregation(ComputationResults results,

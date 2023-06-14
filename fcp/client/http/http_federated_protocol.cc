@@ -792,7 +792,7 @@ HttpFederatedProtocol::CreatePerTaskInfoFromTaskAssignment(
 absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
 HttpFederatedProtocol::PerformMultipleTaskAssignments(
     const std::vector<std::string>& task_names,
-    const std::function<void()>& payload_uris_received_callback) {
+    const std::function<void(size_t)>& payload_uris_received_callback) {
   // PerformMultipleTaskAssignments(...) must follow an earlier call to
   // EligibilityEvalCheckin() that resulted in a EligibilityEvalTask with
   // PopulationEligibilitySpec.
@@ -870,7 +870,7 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
 absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
 HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
     absl::StatusOr<InMemoryHttpResponse> http_response,
-    const std::function<void()>& payload_uris_received_callback) {
+    const std::function<void(size_t)>& payload_uris_received_callback) {
   if (!http_response.ok()) {
     // If the protocol request failed then forward the error, but add a prefix
     // to the error message to ensure we can easily distinguish an HTTP error
@@ -912,11 +912,11 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
     task_info_map_[task_assignment.aggregation_id()] = std::move(*task_info);
   }
 
+  payload_uris_received_callback(pending_fetch_task_assignments.size());
+
   if (pending_fetch_task_assignments.empty()) {
     return result;
   }
-
-  payload_uris_received_callback();
 
   FCP_ASSIGN_OR_RETURN(auto plan_and_checkpoint_payloads,
                        FetchTaskResources(resources_to_fetch));

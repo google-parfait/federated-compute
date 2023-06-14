@@ -450,19 +450,23 @@ class MockFederatedProtocol : public FederatedProtocol {
 
   absl::StatusOr<MultipleTaskAssignments> PerformMultipleTaskAssignments(
       const std::vector<std::string>& task_names,
-      const std::function<void()>& payload_uris_received_callback) final {
+      const std::function<void(size_t)>& payload_uris_received_callback) final {
     absl::StatusOr<MultipleTaskAssignments> result =
         MockPerformMultipleTaskAssignments(task_names,
                                            payload_uris_received_callback);
-    retry_window_ = GetPostCheckinRetryWindow();
-    network_stats_ = kPostCheckinPlanUriReceivedNetworkStats;
+    if (result.ok() && !result->task_assignments.empty()) {
+      // TODO(team): Update network stats.
+      payload_uris_received_callback(result->task_assignments.size());
+    }
+    // TODO(team): update network stats and retry window.
     return result;
   };
 
-  MOCK_METHOD(absl::StatusOr<MultipleTaskAssignments>,
-              MockPerformMultipleTaskAssignments,
-              (const std::vector<std::string>& task_names,
-               const std::function<void()>& payload_uris_received_callback));
+  MOCK_METHOD(
+      absl::StatusOr<MultipleTaskAssignments>,
+      MockPerformMultipleTaskAssignments,
+      (const std::vector<std::string>& task_names,
+       const std::function<void(size_t)>& payload_uris_received_callback));
 
   absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,

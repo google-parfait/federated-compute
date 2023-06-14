@@ -708,7 +708,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
             HttpRequest::Method::kPost, _, request.SerializeAsString())))
         .WillOnce(Return(
             FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
-    EXPECT_CALL(mock_multiple_tasks_received_callback_, Call());
+    EXPECT_CALL(mock_multiple_tasks_received_callback_, Call(2));
     EXPECT_CALL(mock_http_client_,
                 PerformSingleRequest(SimpleHttpRequestMatcher(
                     checkpoint_uri, HttpRequest::Method::kGet, _, "")))
@@ -874,7 +874,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   NiceMock<MockFunction<void(
       const ::fcp::client::FederatedProtocol::TaskAssignment&)>>
       mock_task_received_callback_;
-  NiceMock<MockFunction<void()>> mock_multiple_tasks_received_callback_;
+  NiceMock<MockFunction<void(size_t)>> mock_multiple_tasks_received_callback_;
 
   // The class under test.
   std::unique_ptr<HttpFederatedProtocol> federated_protocol_;
@@ -2552,7 +2552,7 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
                   HttpRequest::Method::kPost, _, request.SerializeAsString())))
       .WillOnce(Return(
           FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
-  EXPECT_CALL(mock_multiple_tasks_received_callback_, Call());
+  EXPECT_CALL(mock_multiple_tasks_received_callback_, Call(2));
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   checkpoint_uri, HttpRequest::Method::kGet, _, "")))
@@ -2642,7 +2642,7 @@ TEST_F(HttpFederatedProtocolTest,
                   HttpRequest::Method::kPost, _, request.SerializeAsString())))
       .WillOnce(Return(
           FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
-  EXPECT_CALL(mock_multiple_tasks_received_callback_, Call());
+  EXPECT_CALL(mock_multiple_tasks_received_callback_, Call(2));
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   checkpoint_uri, HttpRequest::Method::kGet, _, "")))

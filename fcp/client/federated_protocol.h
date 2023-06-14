@@ -244,6 +244,11 @@ class FederatedProtocol {
   // `PopulationEligibilitySpec` contained at least one task with
   // TASK_ASSIGNMENT_MODE_MULTIPLE, for which the device is eligible.
   //
+  // The input parameter for payload_uris_received_callback is the number of
+  // TaskAssignment the client received from the server.  The callback uses this
+  // number to check whether the uris (plan and checkpoint) for every requested
+  // tasks are received, or only uris for a subset of the requested tasks are
+  // received.
   //
   // Returns:
   // - On success, a `MultipleTaskAssignments`.
@@ -260,7 +265,7 @@ class FederatedProtocol {
   virtual absl::StatusOr<MultipleTaskAssignments>
   PerformMultipleTaskAssignments(
       const std::vector<std::string>& task_names,
-      const std::function<void()>& payload_uris_received_callback) = 0;
+      const std::function<void(size_t)>& payload_uris_received_callback) = 0;
 
   // Reports the result of a federated computation to the server. Must only be
   // called once and after a successful call to Checkin().
