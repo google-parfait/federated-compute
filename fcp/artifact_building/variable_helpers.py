@@ -323,7 +323,7 @@ def get_grouped_input_tensor_specs_for_aggregations(
     """Gets the list of selection indices for a building_blocks.Selection."""
 
     path = []
-    while selection.is_selection():
+    while isinstance(selection, tff.framework.Selection):
       path.append(selection.index)  # pytype: disable=attribute-error
       selection = selection.source  # pytype: disable=attribute-error
     # In ASTs like x[0][1], we'll see the last (outermost) selection first.
@@ -339,7 +339,7 @@ def get_grouped_input_tensor_specs_for_aggregations(
     # nested) struct of `building_block.Selection`s. Start by creating a
     # flattened list of the `building_block.Selection`s.
     inner_values = []
-    if value.is_struct():
+    if isinstance(value, tff.framework.Struct):
       inner_values = tff.structure.flatten(value)
     else:
       inner_values = [value]
