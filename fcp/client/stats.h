@@ -47,6 +47,16 @@ struct NetworkStats {
             .bytes_uploaded = bytes_uploaded + other.bytes_uploaded,
             .network_duration = network_duration + other.network_duration};
   }
+
+  NetworkStats& operator+=(const NetworkStats& other) {
+    *this = *this + other;
+    return *this;
+  }
+
+  NetworkStats& operator-=(const NetworkStats& other) {
+    *this = *this - other;
+    return *this;
+  }
 };
 
 inline bool operator==(const NetworkStats& s1, const NetworkStats& s2) {

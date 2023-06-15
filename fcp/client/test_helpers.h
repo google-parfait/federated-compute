@@ -319,35 +319,45 @@ class MockEventPublisher : public EventPublisher {
 // each stage, making it easier to write accurate assertions in unit tests.
 class MockFederatedProtocol : public FederatedProtocol {
  public:
+  constexpr static NetworkStats kEligibilityCheckinPlanUriReceivedNetworkStats =
+      {.bytes_downloaded = 20,
+       .bytes_uploaded = 20,
+       .network_duration = absl::Milliseconds(25)};
   constexpr static NetworkStats
-      kPostEligibilityCheckinPlanUriReceivedNetworkStats = {
+      kEligibilityCheckinArtifactRetrievalNetworkStats = {
           .bytes_downloaded = 280,
           .bytes_uploaded = 380,
           .network_duration = absl::Milliseconds(25)};
-  constexpr static NetworkStats kPostEligibilityCheckinNetworkStats = {
-      .bytes_downloaded = 300,
-      .bytes_uploaded = 400,
+  constexpr static NetworkStats kReportEligibilityEvalErrorNetworkStats = {
+      .bytes_downloaded = 120,
+      .bytes_uploaded = 120,
       .network_duration = absl::Milliseconds(50)};
-  constexpr static NetworkStats kPostReportEligibilityEvalErrorNetworkStats = {
+  constexpr static NetworkStats
+      kMultipleTaskAssignmentsPlanUriReceivedNetworkStats = {
+          .bytes_downloaded = 500,
+          .bytes_uploaded = 1000,
+          .network_duration = absl::Milliseconds(100)};
+  constexpr static NetworkStats
+      kMultipleTaskAssignmentsArtifactRetrievalNetworkStats = {
+          .bytes_downloaded = 1500,
+          .bytes_uploaded = 2000,
+          .network_duration = absl::Milliseconds(200)};
+  constexpr static NetworkStats kCheckinPlanUriReceivedNetworkStats = {
       .bytes_downloaded = 400,
-      .bytes_uploaded = 500,
-      .network_duration = absl::Milliseconds(150)};
-  constexpr static NetworkStats kPostCheckinPlanUriReceivedNetworkStats = {
-      .bytes_downloaded = 2970,
-      .bytes_uploaded = 3970,
-      .network_duration = absl::Milliseconds(225)};
-  constexpr static NetworkStats kPostCheckinNetworkStats = {
-      .bytes_downloaded = 3000,
-      .bytes_uploaded = 4000,
-      .network_duration = absl::Milliseconds(250)};
-  constexpr static NetworkStats kPostReportCompletedNetworkStats = {
-      .bytes_downloaded = 30000,
-      .bytes_uploaded = 40000,
+      .bytes_uploaded = 600,
+      .network_duration = absl::Milliseconds(70)};
+  constexpr static NetworkStats kCheckinArtifactRetrievalNetworkStats = {
+      .bytes_downloaded = 800,
+      .bytes_uploaded = 1000,
+      .network_duration = absl::Milliseconds(100)};
+  constexpr static NetworkStats kReportCompletedNetworkStats = {
+      .bytes_downloaded = 10000,
+      .bytes_uploaded = 20000,
       .network_duration = absl::Milliseconds(350)};
-  constexpr static NetworkStats kPostReportNotCompletedNetworkStats = {
-      .bytes_downloaded = 29999,
-      .bytes_uploaded = 39999,
-      .network_duration = absl::Milliseconds(450)};
+  constexpr static NetworkStats kReportNotCompletedNetworkStats = {
+      .bytes_downloaded = 500,
+      .bytes_uploaded = 1200,
+      .network_duration = absl::Milliseconds(150)};
 
   static google::internal::federatedml::v2::RetryWindow
   GetInitialRetryWindow() {
@@ -404,14 +414,14 @@ class MockFederatedProtocol : public FederatedProtocol {
           payload_uris_received_callback) final {
     absl::StatusOr<EligibilityEvalCheckinResult> result =
         MockEligibilityEvalCheckin();
+    network_stats_ += kEligibilityCheckinPlanUriReceivedNetworkStats;
     if (result.ok() &&
         std::holds_alternative<FederatedProtocol::EligibilityEvalTask>(
             *result)) {
-      network_stats_ = kPostEligibilityCheckinPlanUriReceivedNetworkStats;
       payload_uris_received_callback(
           std::get<FederatedProtocol::EligibilityEvalTask>(*result));
+      network_stats_ += kEligibilityCheckinArtifactRetrievalNetworkStats;
     }
-    network_stats_ = kPostEligibilityCheckinNetworkStats;
     retry_window_ = GetPostEligibilityCheckinRetryWindow();
     return result;
   };
@@ -419,7 +429,7 @@ class MockFederatedProtocol : public FederatedProtocol {
               MockEligibilityEvalCheckin, ());
 
   void ReportEligibilityEvalError(absl::Status error_status) final {
-    network_stats_ = kPostReportEligibilityEvalErrorNetworkStats;
+    network_stats_ += kReportEligibilityEvalErrorNetworkStats;
     retry_window_ = GetPostEligibilityCheckinRetryWindow();
     MockReportEligibilityEvalError(error_status);
   }
@@ -433,14 +443,14 @@ class MockFederatedProtocol : public FederatedProtocol {
       std::function<void(const FederatedProtocol::TaskAssignment&)>
           payload_uris_received_callback) final {
     absl::StatusOr<CheckinResult> result = MockCheckin(task_eligibility_info);
+    network_stats_ += kCheckinPlanUriReceivedNetworkStats;
     if (result.ok() &&
         std::holds_alternative<FederatedProtocol::TaskAssignment>(*result)) {
-      network_stats_ = kPostCheckinPlanUriReceivedNetworkStats;
       payload_uris_received_callback(
           std::get<FederatedProtocol::TaskAssignment>(*result));
+      network_stats_ += kCheckinArtifactRetrievalNetworkStats;
     }
     retry_window_ = GetPostCheckinRetryWindow();
-    network_stats_ = kPostCheckinNetworkStats;
     return result;
   };
   MOCK_METHOD(absl::StatusOr<CheckinResult>, MockCheckin,
@@ -454,11 +464,13 @@ class MockFederatedProtocol : public FederatedProtocol {
     absl::StatusOr<MultipleTaskAssignments> result =
         MockPerformMultipleTaskAssignments(task_names,
                                            payload_uris_received_callback);
-    if (result.ok() && !result->task_assignments.empty()) {
-      // TODO(team): Update network stats.
+    network_stats_ += kMultipleTaskAssignmentsPlanUriReceivedNetworkStats;
+    if (result.ok()) {
       payload_uris_received_callback(result->task_assignments.size());
+      if (!result->task_assignments.empty()) {
+        network_stats_ += kMultipleTaskAssignmentsArtifactRetrievalNetworkStats;
+      }
     }
-    // TODO(team): update network stats and retry window.
     return result;
   };
 
@@ -471,7 +483,7 @@ class MockFederatedProtocol : public FederatedProtocol {
   absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) final {
-    network_stats_ = kPostReportCompletedNetworkStats;
+    network_stats_ += kReportCompletedNetworkStats;
     retry_window_ = GetPostReportCompletedRetryWindow();
     return MockReportCompleted(std::move(results), plan_duration,
                                aggregation_session_id);
@@ -483,7 +495,7 @@ class MockFederatedProtocol : public FederatedProtocol {
   absl::Status ReportNotCompleted(
       engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) final {
-    network_stats_ = kPostReportNotCompletedNetworkStats;
+    network_stats_ += kReportNotCompletedNetworkStats;
     retry_window_ = GetPostReportNotCompletedRetryWindow();
     return MockReportNotCompleted(phase_outcome, plan_duration,
                                   aggregation_session_id);
