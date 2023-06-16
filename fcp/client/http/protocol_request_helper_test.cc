@@ -194,7 +194,7 @@ TEST(ProtocolRequestCreatorTest, CreateCancelOperationRequest) {
   ASSERT_OK(request);
   EXPECT_EQ((*request)->uri(),
             "https://initial.uri/v1/my_operation:cancel?%24alt=proto");
-  EXPECT_EQ((*request)->method(), HttpRequest::Method::kGet);
+  EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
   EXPECT_THAT((*request)->extra_headers(),
               UnorderedElementsAre(Header{"x-goog-api-key", "API_KEY"}));
   EXPECT_FALSE((*request)->HasBody());

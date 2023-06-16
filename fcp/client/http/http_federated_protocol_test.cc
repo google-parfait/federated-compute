@@ -1841,7 +1841,7 @@ TEST_F(HttpFederatedProtocolTest,
           // Note that the '#' character is encoded as "%23".
           "https://taskassignment.uri/v1/operations/"
           "foo%23bar:cancel?%24alt=proto",
-          HttpRequest::Method::kGet, _,
+          HttpRequest::Method::kPost, _,
           GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
       .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "")));
 
@@ -1920,7 +1920,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterruptedCancellationTimeout) {
           // Note that the '#' character is encoded as "%23".
           "https://taskassignment.uri/v1/operations/"
           "foo%23bar:cancel?%24alt=proto",
-          HttpRequest::Method::kGet, _,
+          HttpRequest::Method::kPost, _,
           GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
       .WillOnce([](MockableHttpClient::SimpleHttpRequest ignored) {
         // Sleep for 2 seconds before returning the response.

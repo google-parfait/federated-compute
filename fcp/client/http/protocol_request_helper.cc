@@ -214,7 +214,7 @@ ProtocolRequestCreator::CreateCancelOperationRequest(
     absl::string_view operation_name) const {
   FCP_ASSIGN_OR_RETURN(std::string uri_path_suffix,
                        CreateCancelOperationUriSuffix(operation_name));
-  return CreateHttpRequest(uri_path_suffix, {}, HttpRequest::Method::kGet, "",
+  return CreateHttpRequest(uri_path_suffix, {}, HttpRequest::Method::kPost, "",
                            /*is_protobuf_encoded=*/true,
                            /*use_compression=*/false);
 }
