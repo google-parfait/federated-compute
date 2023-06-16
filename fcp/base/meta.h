@@ -92,7 +92,6 @@ namespace fcp {
  */
 struct Unit {
   constexpr bool operator==(Unit other) const { return true; }
-  constexpr bool operator!=(Unit other) const { return !(*this == other); }
   constexpr bool True() const { return true; }
 
   /** Ignores all arguments (of any type), returning Unit */
