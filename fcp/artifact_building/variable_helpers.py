@@ -120,11 +120,6 @@ def create_vars_for_tff_type(
   if isinstance(tff_type, tff.TensorType):
     return [_create_var_for_tff_tensor(tff_type, name, **kwargs)]
   elif isinstance(tff_type, tff.FederatedType):
-    if tff_type.placement != tff.SERVER:
-      raise TypeError(
-          'Can only create vars for unplaced types or types placed '
-          'on the SERVER.'
-      )
     return create_vars_for_tff_type(tff_type.member, name, **kwargs)
   else:  # tff.StructType
     result = []

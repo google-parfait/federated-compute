@@ -43,6 +43,8 @@ SECURE_SUM_BITWIDTH_URI = 'federated_secure_sum_bitwidth'
 SECURE_SUM_URI = 'federated_secure_sum'
 SECURE_MODULAR_SUM_URI = 'federated_secure_modular_sum'
 
+UNKNOWN_TF_DATATYPE = 0
+
 
 class SecureAggregationTensorShapeError(Exception):
   """Error raised when secagg tensors do not have fully defined shape."""
@@ -376,6 +378,62 @@ def _is_nonempty_tff_value(type_signature: tff.Type) -> bool:
   return True
 
 
+def _generate_server_aggregation_configs_for_intrinsic_call(
+    intrinsic_uri: str,
+    input_tensor_specs: list[list[tf.TensorSpec]],
+    output_tensor_specs: list[tf.TensorSpec],
+) -> list[plan_pb2.ServerAggregationConfig]:
+  """Generates the `ServerAggregationConfig`s for an intrinsic call.
+
+  Args:
+    intrinsic_uri: The intrinsic uri for this intrinsic call.
+    input_tensor_specs: A list where the ith entry represents the input
+      `TensorSpec`s for the ith argument of the intrinsic call.
+    output_tensor_specs: A list where the ith entry represents the output
+      `TensorSpec` for the ith output of the intrinsic call.
+
+  Returns:
+    A list of `ServerAggregationConfig`s that will be used to execute the
+    original intrinsic call.
+  """
+  aggregations = []
+  max_input_struct_length = max([len(x) for x in input_tensor_specs])
+  max_struct_length = max(max_input_struct_length, len(output_tensor_specs))
+  for i in range(max_struct_length):
+    intrinsic_args = []
+    for j, _ in enumerate(input_tensor_specs):
+      # Scale up any "smaller" structure args by reusing their last element.
+      tensor_spec = input_tensor_specs[j][
+          min(i, len(input_tensor_specs[j]) - 1)
+      ]
+      if tensor_spec.name.startswith('update'):
+        intrinsic_args.append(
+            plan_pb2.ServerAggregationConfig.IntrinsicArg(
+                input_tensor=tensor_spec.experimental_as_proto()
+            )
+        )
+      else:
+        intrinsic_args.append(
+            plan_pb2.ServerAggregationConfig.IntrinsicArg(
+                state_tensor=tensor_spec.experimental_as_proto()
+            )
+        )
+    aggregations.append(
+        plan_pb2.ServerAggregationConfig(
+            intrinsic_uri=intrinsic_uri,
+            intrinsic_args=intrinsic_args,
+            # Scale up the output structure by reusing the last element if
+            # needed.
+            output_tensors=[
+                output_tensor_specs[
+                    min(i, len(output_tensor_specs) - 1)
+                ].experimental_as_proto()
+            ],
+        )
+    )
+  return aggregations
+
+
 def _build_server_graphs_from_distribute_aggregate_form(
     daf: tff.backends.mapreduce.DistributeAggregateForm,
     grappler_config: tf.compat.v1.ConfigProto,
@@ -383,6 +441,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
     Optional[tf.compat.v1.GraphDef],
     tf.compat.v1.GraphDef,
     plan_pb2.ServerPhaseV2,
+    set[tf.TensorSpec],
 ]:
   """Generates the server plan components based on DistributeAggregateForm.
 
@@ -399,8 +458,12 @@ def _build_server_graphs_from_distribute_aggregate_form(
       generated graphs.
 
   Returns:
-    A tuple containing the server_prepare GraphDef (if needed), the
-    server_result GraphDef, and the ServerPhaseV2 message.
+    A `tuple` containing the following (in order):
+      - The server_prepare GraphDef (if needed),
+      - The server_result GraphDef,
+      - The ServerPhaseV2 message,
+      - A set of the secagg tensor `TensorSpec`s expected to be delivered by the
+        client.
   """
   uses_broadcast = _is_nonempty_tff_value(
       daf.server_prepare.type_signature.result[0]
@@ -540,44 +603,34 @@ def _build_server_graphs_from_distribute_aggregate_form(
   # will need to be "scaled up" via repetition to match the args with the
   # "largest" structure.
   aggregations = []
+  secagg_client_output_tensor_specs = []
   for intrinsic_index, (input_tensor_specs, output_tensor_specs) in enumerate(
       zip(grouped_input_tensor_specs, grouped_output_tensor_specs)
   ):
     # Generate the aggregation messages for this intrinsic call.
-    max_input_struct_length = max([len(x) for x in input_tensor_specs])
-    max_struct_length = max(max_input_struct_length, len(output_tensor_specs))
-    for i in range(max_struct_length):
-      intrinsic_args = []
-      for j, _ in enumerate(input_tensor_specs):
-        # Scale up any "smaller" structure args by reusing their last element.
-        tensor_spec = input_tensor_specs[j][
-            min(i, len(input_tensor_specs[j]) - 1)
-        ]
-        if tensor_spec.name.startswith('update'):
-          intrinsic_args.append(
-              plan_pb2.ServerAggregationConfig.IntrinsicArg(
-                  input_tensor=tensor_spec.experimental_as_proto()
-              )
-          )
-        else:
-          intrinsic_args.append(
-              plan_pb2.ServerAggregationConfig.IntrinsicArg(
-                  state_tensor=tensor_spec.experimental_as_proto()
-              )
-          )
-      aggregations.append(
-          plan_pb2.ServerAggregationConfig(
-              intrinsic_uri=intrinsic_uris[intrinsic_index],
-              intrinsic_args=intrinsic_args,
-              # Scale up the output structure by reusing the last element if
-              # needed.
-              output_tensors=[
-                  output_tensor_specs[
-                      min(i, len(output_tensor_specs) - 1)
-                  ].experimental_as_proto()
-              ],
-          )
-      )
+    aggregations.extend(
+        _generate_server_aggregation_configs_for_intrinsic_call(
+            intrinsic_uris[intrinsic_index],
+            input_tensor_specs,
+            output_tensor_specs,
+        )
+    )
+
+    # Generate the list of secagg tensor names that should be produced by the
+    # client for this intrinsic call.
+    if intrinsic_uris[intrinsic_index] in set(
+        [SECURE_SUM_URI, SECURE_MODULAR_SUM_URI, SECURE_SUM_BITWIDTH_URI]
+    ):
+      for input_tensor_spec_sublist in input_tensor_specs:
+        for input_tensor_spec in input_tensor_spec_sublist:
+          if input_tensor_spec.name.startswith(artifact_constants.UPDATE):
+            secagg_client_output_tensor_specs.append(
+                tf.TensorSpec(
+                    name=input_tensor_spec.name + ':0',
+                    dtype=input_tensor_spec.dtype,
+                    shape=input_tensor_spec.shape,
+                )
+            )
 
   assert isinstance(
       daf.server_result.type_signature.result[0], tff.FederatedType
@@ -745,6 +798,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
       server_prepare_graph.as_graph_def() if run_prepare_logic else None,
       server_result_graph.as_graph_def(),
       server_phase_v2,
+      set(secagg_client_output_tensor_specs),
   )
 
 
@@ -1201,8 +1255,220 @@ def _redirect_save_saver_to_restore_saver_placeholder(
   return graph_def
 
 
+def _add_client_work(
+    client_phase: plan_pb2.ClientPhase,
+    client_work_comp: tff.framework.ConcreteComputation,
+    dataspec,
+    broadcast_tensor_specs: list[tf.TensorSpec],
+) -> graph_helpers.MaybeSplitOutputs:
+  """Adds logic to the client graph to execute the client work computation.
+
+  Also populates the `ClientPhase` with the input tensor information that will
+  ultimately be needed for running the TF session. Information about the
+  client checkpoint input file (if needed) is added to the `ClientPhase`
+  `TensorflowSpec` `input_tensor_specs` and the `FederatedComputeIORouter`. Any
+  required configuration information for the input dataset is also added to the
+  `ClientPhase` `TensorflowSpec`.
+
+  Args:
+    client_phase: The `plan_pb2.ClientPhase` message to populate.
+    client_work_comp: A `tff.framework.ConcreteComputation` that represents the
+      TensorFlow logic to run on-device.
+    dataspec: Either an instance of `data_spec.DataSpec` or a nested structure
+      of these that matches the structure of the first element of the input to
+      `client_work_comp`.
+    broadcast_tensor_specs: A list of `tf.TensorSpec` containing the name and
+      dtype of the variables arriving via the broadcast checkpoint that need to
+      be loaded.
+
+  Returns:
+    The TensorFlow outputs that result from running the `client_work_comp`.
+  """
+  broadcast_vals = []
+  # Restore the broadcast values, if necessary.
+  if broadcast_tensor_specs:
+    input_filepath_placeholder = tf.compat.v1.placeholder(
+        name=artifact_constants.INPUT_FILEPATH, shape=(), dtype=tf.string
+    )
+    broadcast_vals = checkpoint_utils.restore_tensors_from_savepoint(
+        broadcast_tensor_specs, input_filepath_placeholder
+    )
+    client_phase.tensorflow_spec.input_tensor_specs.append(
+        proto_helpers.make_tensor_spec_from_tensor(
+            input_filepath_placeholder
+        ).experimental_as_proto()
+    )
+    client_phase.federated_compute.input_filepath_tensor_name = (
+        input_filepath_placeholder.name
+    )
+
+  # Add the custom Dataset ops to the graph.
+  token_placeholder, data_values, example_selector_placeholders = (
+      graph_helpers.embed_data_logic(
+          client_work_comp.type_signature.parameter[0], dataspec
+      )
+  )
+  if token_placeholder is not None:
+    client_phase.tensorflow_spec.dataset_token_tensor_name = (
+        token_placeholder.name
+    )
+  if example_selector_placeholders:
+    for placeholder in example_selector_placeholders:
+      # Generating the default TensorProto will create a TensorProto with an
+      # DT_INVALID DType. This identifies that there is a placeholder that is
+      # needed. In order to have the Plan proto be completely runnable, the
+      # value will need to be filled in with a real TensorProto that matches
+      # the shape/type of the expected input.
+      client_phase.tensorflow_spec.constant_inputs[placeholder.name].dtype = (
+          UNKNOWN_TF_DATATYPE
+      )
+
+  # Perform the client_work step.
+  client_output_values = graph_helpers.import_tensorflow(
+      'work',
+      client_work_comp,
+      (data_values, broadcast_vals),
+      session_token_tensor=token_placeholder,
+  )
+
+  return client_output_values
+
+
+def _save_client_output_tensors(
+    client_phase: plan_pb2.ClientPhase,
+    simpleagg_tensors: list[tf.Tensor],
+    simpleagg_serialization_names: list[str],
+    secagg_tensors: list[tf.Tensor],
+    secagg_tensor_specs: list[tf.TensorSpec],
+    experimental_checkpoint_write: checkpoint_type.CheckpointFormatType,
+):
+  """Adds logic to the client graph to produce the output ckpt and/or tensors.
+
+  Also populates the `ClientPhase` with the configuration information that will
+  ultimately be needed for running the TF session. The `output_tensor_specs` and
+  `target_node_names` for the `ClientPhase` `TensorflowSpec` message are set,
+  and information about the output filepath (if needed) is added to the
+  `TensorflowSpec` message `input_tensor_specs` and `FederatedComputeIORouter`.
+  `AggregationConfig` messages are also added to the `FederatedComputeIORouter`
+  for the tensors that will be aggregated via secagg.
+
+  Args:
+    client_phase: The `plan_pb2.ClientPhase` message to populate.
+    simpleagg_tensors: The client output tensors that will be aggregated with
+      simpleagg.
+    simpleagg_serialization_names: The tensor names to use when saving the
+      `simpleagg_tensors` to the client output checkpoint. The ith tensor in
+      `simpleagg_tensors` should be saved with the ith name in
+      `simpleagg_serialization_names`.
+    secagg_tensors: The client output tensors that will be aggregated with
+      secagg.
+    secagg_tensor_specs: The TensorSpecs to use when generating the secagg
+      tensor outputs. The ith TensorSpec in `secagg_tensor_specs` should be used
+      for the ith tensor in `secagg_tensors`.
+    experimental_checkpoint_write: Determines the format of the final client
+      update checkpoint. The value affects required operations and might have
+      performance implications.
+
+  Raises:
+    SecureAggregationTensorShapeError: If SecAgg tensors do not have all
+      dimensions of their shape fully defined.
+    ValueError: If any of the arguments are found to be in an unexpected form.
+  """
+  assert len(simpleagg_tensors) == len(simpleagg_serialization_names)
+  assert len(secagg_tensors) == len(secagg_tensor_specs)
+
+  # Save the simpleagg tensors to a checkpoint, if needed.
+  if simpleagg_tensors:
+    output_filepath_placeholder = tf.compat.v1.placeholder(
+        name=artifact_constants.OUTPUT_FILEPATH, dtype=tf.string, shape=()
+    )
+    client_phase.tensorflow_spec.input_tensor_specs.append(
+        proto_helpers.make_tensor_spec_from_tensor(
+            output_filepath_placeholder
+        ).experimental_as_proto()
+    )
+    client_phase.federated_compute.output_filepath_tensor_name = (
+        output_filepath_placeholder.name
+    )
+
+    # Use the requested checkpoint format when saving tensors to the client
+    # output checkpoint file. See the `CheckpointFormatType` enum definition
+    # for a description of each format.
+    if experimental_checkpoint_write in [
+        checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_WRITE,
+        checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_READ,
+    ]:
+      delete_op = delete_file.delete_file(output_filepath_placeholder)
+      with tf.control_dependencies([delete_op]):
+        append_ops = []
+        for tensor_name, tensor in zip(
+            simpleagg_serialization_names, simpleagg_tensors
+        ):
+          append_ops.append(
+              tensor_utils.save(
+                  filename=output_filepath_placeholder,
+                  tensor_names=[tensor_name],
+                  tensors=[tensor],
+                  save_op=append_slices.append_slices,
+              )
+          )
+      if (
+          experimental_checkpoint_write
+          == checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_WRITE
+      ):
+        with tf.control_dependencies(append_ops):
+          save_op = append_slices.merge_appended_slices(
+              filename=output_filepath_placeholder
+          )
+      else:
+        # APPEND_SLICES_MERGE_READ
+        save_op = tf.group(*append_ops)
+
+    elif (
+        experimental_checkpoint_write
+        == checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES
+    ):
+      save_op = tensor_utils.save(
+          filename=output_filepath_placeholder,
+          tensor_names=simpleagg_serialization_names,
+          tensors=simpleagg_tensors,
+          name=artifact_constants.SAVE_CLIENT_UPDATE_TENSORS,
+      )
+    else:
+      raise NotImplementedError(
+          f'Unsupported CheckpointFormatType {experimental_checkpoint_write}.'
+      )
+    client_phase.tensorflow_spec.target_node_names.append(save_op.name)
+
+  # Output the secagg tensors with the desired names and include aggregation
+  # config info in the plan.
+  if secagg_tensor_specs:
+    # Verify that SecAgg Tensors have all dimensions fully defined.
+    for tensor_spec in secagg_tensor_specs:
+      if not tf.TensorShape(tensor_spec.shape).is_fully_defined():
+        raise SecureAggregationTensorShapeError(
+            '`TensorflowSpec.output_tensor_specs` has unknown dimension.'
+        )
+    secagg_tensors = [
+        tf.identity(tensor, name=tensor_utils.bare_name(spec.name))
+        for tensor, spec in zip(secagg_tensors, secagg_tensor_specs)
+    ]
+
+    for secagg_tensor_spec in secagg_tensor_specs:
+      client_phase.tensorflow_spec.output_tensor_specs.append(
+          secagg_tensor_spec.experimental_as_proto()
+      )
+      client_phase.federated_compute.aggregations[
+          secagg_tensor_spec.name
+      ].CopyFrom(
+          plan_pb2.AggregationConfig(
+              secure_aggregation=plan_pb2.SecureAggregationConfig()
+          )
+      )
+
+
 def _build_client_graph_with_tensorflow_spec(
-    client_work_comp: tff.Computation,
+    client_work_comp: tff.framework.ConcreteComputation,
     dataspec,
     broadcasted_tensor_specs: Iterable[tf.TensorSpec],
     is_broadcast_empty: bool,
@@ -1214,8 +1480,8 @@ def _build_client_graph_with_tensorflow_spec(
   This function builds a client phase with tensorflow specs proto.
 
   Args:
-    client_work_comp: A `tff.Computation` that represents the TensorFlow logic
-      run on-device.
+    client_work_comp: A `tff.framework.ConcreteComputation` that represents the
+      TensorFlow logic run on-device.
     dataspec: Either an instance of `data_spec.DataSpec` or a nested structure
       of these that matches the structure of the first element of the input to
       `client_work_comp`.
@@ -1234,8 +1500,6 @@ def _build_client_graph_with_tensorflow_spec(
       message.
 
   Raises:
-    SecureAggregationTensorShapeError: If SecAgg tensors do not have all
-      dimensions of their shape fully defined.
     ValueError: If any of the arguments are found to be in an unexpected form.
   """
   if (
@@ -1260,67 +1524,33 @@ def _build_client_graph_with_tensorflow_spec(
         )
     )
 
-  (
-      simpleagg_update_type,
-      secure_sum_bitwidth_update_type,
-      secure_sum_update_type,
-      secure_modular_sum_update_type,
-  ) = client_work_comp.type_signature.result
+  client_phase = plan_pb2.ClientPhase()
 
-  # A list of tensors that will be passed into TensorFlow, corresponding to
-  # `plan_pb2.ClientPhase.tensorflow_spec.input_tensor_specs`. Note that the
-  # dataset token is excluded from this list. In general, this list should
-  # include the filepath placeholder tensors for the input checkpoint file and
-  # output checkpoint file.
-  input_tensors = []
-
-  # A list of tensor specs that should be fetched from TensorFlow, corresponding
-  # to `plan_pb2.ClientPhase.tensorflow_spec.output_tensor_specs`. In general,
-  # this list should include the tensors that are not in the output checkpoint
-  # file, such as secure aggregation tensors.
-  output_tensor_specs = []
-
-  # A list of node names in the client graph that should be executed but no
-  # output returned, corresponding to
-  # `plan_pb2.ClientPhase.tensorflow_spec.target_node_names`. In general, this
-  # list should include the op that creates the output checkpoint file.
-  target_nodes = []
   with tf.Graph().as_default() as client_graph:
-    input_filepath_placeholder = None
-    if not is_broadcast_empty:
-      input_filepath_placeholder = tf.compat.v1.placeholder(
-          name='input_filepath', shape=(), dtype=tf.string
-      )
-      weights_from_server = checkpoint_utils.restore_tensors_from_savepoint(
-          broadcasted_tensor_specs, input_filepath_placeholder
-      )
-      input_tensors.append(input_filepath_placeholder)
-    else:
-      weights_from_server = []
+    (
+        simpleagg_update_type,
+        secure_sum_bitwidth_update_type,
+        secure_sum_update_type,
+        secure_modular_sum_update_type,
+    ) = client_work_comp.type_signature.result
 
-    # Add the custom Dataset ops to the graph.
-    token_placeholder, data_values, example_selector_placeholders = (
-        graph_helpers.embed_data_logic(
-            client_work_comp.type_signature.parameter[0], dataspec
-        )
-    )
-
-    # Embed the graph coming from TFF into the client work graph.
-    combined_update_tensors = graph_helpers.import_tensorflow(
-        'work',
+    combined_update_tensors = _add_client_work(
+        client_phase,
         client_work_comp,
-        (data_values, weights_from_server),
-        split_outputs=False,
-        session_token_tensor=token_placeholder,
-    )  # pytype: disable=wrong-arg-types
+        dataspec,
+        [] if is_broadcast_empty else broadcasted_tensor_specs,
+    )
 
     num_simpleagg_tensors = len(tff.structure.flatten(simpleagg_update_type))
     simpleagg_tensors = combined_update_tensors[:num_simpleagg_tensors]
-    secagg_tensors = combined_update_tensors[num_simpleagg_tensors:]
+    simpleagg_serialization_names = variable_helpers.variable_names_from_type(
+        simpleagg_update_type, name=artifact_constants.UPDATE
+    )
 
     # For tensors aggregated by secagg, we make sure the tensor names are
     # aligned in both client and sever graph by getting the names from the same
     # method.
+    secagg_tensors = combined_update_tensors[num_simpleagg_tensors:]
     secagg_tensor_names = []
     secagg_tensor_types = []
     for uri, update_type in [
@@ -1332,115 +1562,134 @@ def _build_client_graph_with_tensorflow_spec(
           uri, update_type
       )
       secagg_tensor_types += tff.structure.flatten(update_type)
-
-    secagg_tensors = [
-        tf.identity(tensor, name=tensor_utils.bare_name(name))
-        for tensor, name in zip(secagg_tensors, secagg_tensor_names)
+    secagg_tensor_specs = [
+        tf.TensorSpec(name=name, shape=type_spec.shape, dtype=type_spec.dtype)
+        for name, type_spec in zip(secagg_tensor_names, secagg_tensor_types)
     ]
-    for t, type_spec in zip(secagg_tensors, secagg_tensor_types):
-      secagg_tensor_spec = proto_helpers.make_tensor_spec_from_tensor(
-          t, shape_hint=type_spec.shape
-      )
-      output_tensor_specs.append(secagg_tensor_spec.experimental_as_proto())
 
-    # Verify that SecAgg Tensors have all dimension fully defined.
-    for tensor_spec in output_tensor_specs:
-      if not tf.TensorShape(tensor_spec.shape).is_fully_defined():
-        raise SecureAggregationTensorShapeError(
-            '`TensorflowSpec.output_tensor_specs` has unknown dimension.'
+    _save_client_output_tensors(
+        client_phase,
+        simpleagg_tensors,
+        simpleagg_serialization_names,
+        secagg_tensors,
+        secagg_tensor_specs,
+        experimental_checkpoint_write,
+    )
+
+  return client_graph.as_graph_def(), client_phase
+
+
+def _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
+    client_work: tff.framework.ConcreteComputation,
+    dataspec,
+    grappler_config: Optional[tf.compat.v1.ConfigProto],
+    secagg_client_output_tensor_specs: set[tf.TensorSpec],
+    experimental_checkpoint_write: checkpoint_type.CheckpointFormatType = checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES,
+) -> tuple[tf.compat.v1.GraphDef, plan_pb2.ClientPhase]:
+  """Builds the client graph and ClientPhase from DistributeAggregateForm.
+
+  This method builds the `ClientPhase` for a client computation using TF on-
+  device. This means the `ClientPhase` will have a `TensorflowSpec` as opposed
+  to a different type of on-device computation (e.g., a SQL query).
+
+  Args:
+    client_work: A `tff.framework.ConcreteComputation` that represents the
+      client portion of the DistributeAggregateForm.
+    dataspec: Either an instance of `data_spec.DataSpec` or a nested structure
+      of these that matches the structure of the first element of the input to
+      `daf.client_work`.
+    grappler_config: The config specifying Grappler optimizations for TFF-
+      generated graphs.
+    secagg_client_output_tensor_specs: A set containining the `TensorSpec`s of
+      tensors produced by the client that will be aggregated using secagg.
+    experimental_checkpoint_write: Determines the format of the final client
+      update checkpoint. The value affects required operations and might have
+      performance implications.
+
+  Returns:
+    A `tuple` of the client TensorFlow GraphDef and the `plan_pb2.ClientPhase`
+      protocol message.
+
+  Raises:
+    ValueError: If any of the arguments are found to be in an unexpected form.
+  """
+  if (
+      not isinstance(client_work.type_signature.parameter, tff.StructType)
+      or len(client_work.type_signature.parameter) < 1
+  ):
+    raise ValueError(
+        'client_work.type_signature.parameter should be a '
+        '`tff.StructType` with length >= 1, but found: {p}.'.format(
+            p=client_work.type_signature.parameter
         )
+    )
 
-    output_filepath_placeholder = None
-    if simpleagg_tensors:
-      output_filepath_placeholder = tf.compat.v1.placeholder(
-          dtype=tf.string, shape=(), name='output_filepath'
-      )
-      simpleagg_variable_names = variable_helpers.variable_names_from_type(
-          simpleagg_update_type, name=artifact_constants.UPDATE
-      )
-      if experimental_checkpoint_write in [
-          checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_WRITE,
-          checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_READ,
-      ]:
-        delete_op = delete_file.delete_file(output_filepath_placeholder)
-        with tf.control_dependencies([delete_op]):
-          append_ops = []
-          for tensor_name, tensor in zip(
-              simpleagg_variable_names, simpleagg_tensors
-          ):
-            append_ops.append(
-                tensor_utils.save(
-                    filename=output_filepath_placeholder,
-                    tensor_names=[tensor_name],
-                    tensors=[tensor],
-                    save_op=append_slices.append_slices,
-                )
-            )
-        if (
-            experimental_checkpoint_write
-            == checkpoint_type.CheckpointFormatType.APPEND_SLICES_MERGE_WRITE
-        ):
-          with tf.control_dependencies(append_ops):
-            save_op = append_slices.merge_appended_slices(
-                filename=output_filepath_placeholder
-            )
-        else:
-          # APPEND_SLICES_MERGE_READ
-          save_op = tf.group(*append_ops)
-
-      elif (
-          experimental_checkpoint_write
-          == checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES
-      ):
-        save_op = tensor_utils.save(
-            filename=output_filepath_placeholder,
-            tensor_names=simpleagg_variable_names,
-            tensors=simpleagg_tensors,
-            name='save_client_update_tensors',
+  if not isinstance(client_work.type_signature.result, tff.StructType):
+    raise ValueError(
+        'client_work.type_signature.result should be a '
+        '`tff.StructType`, but found: {r}.'.format(
+            r=client_work.type_signature.result
         )
+    )
+
+  client_phase = plan_pb2.ClientPhase()
+  with tf.Graph().as_default() as client_graph:
+    # Import the client work computation into the TF graph, including any
+    # pre-work for restoring broadcast values.
+    broadcast_tensor_specs = []
+    if _is_nonempty_tff_value(client_work.type_signature.parameter[1]):
+      broadcast_type = client_work.type_signature.parameter[1]
+      broadcast_vars = variable_helpers.create_vars_for_tff_type(
+          broadcast_type, 'client'
+      )
+      broadcast_tensor_specs = tf.nest.map_structure(
+          variable_helpers.tensorspec_from_var, broadcast_vars
+      )
+    client_work_comp = tff.framework.ConcreteComputation.from_building_block(
+        tff.backends.mapreduce.consolidate_and_extract_local_processing(
+            client_work.to_building_block(), grappler_config
+        )
+    )
+    client_output_values = _add_client_work(
+        client_phase, client_work_comp, dataspec, broadcast_tensor_specs
+    )
+
+    # Add logic for storing the results of running the client work computation.
+    simpleagg_tensors = []
+    simpleagg_serialization_names = []
+    secagg_tensors = []
+    secagg_tensor_specs = []
+    # Regardless of whether the tensors are delivered via the output checkpoint
+    # or the sidechannel, their names must match what the server_result TF
+    # graph is expecting.
+    client_output_names = variable_helpers.variable_names_from_type(
+        client_work.type_signature.result, artifact_constants.UPDATE
+    )
+    assert len(client_output_values) == len(client_output_names)
+    secagg_client_output_tensor_specs_dict = {}
+    for output_tensor_spec in secagg_client_output_tensor_specs:
+      secagg_client_output_tensor_specs_dict[
+          tensor_utils.bare_name(output_tensor_spec.name)
+      ] = output_tensor_spec
+    for tensor, name in zip(client_output_values, client_output_names):
+      if name in secagg_client_output_tensor_specs_dict:
+        # This tensor should be aggregated with secagg.
+        secagg_tensors.append(tensor)
+        secagg_tensor_specs.append(secagg_client_output_tensor_specs_dict[name])
       else:
-        raise NotImplementedError(
-            f'Unsupported CheckpointFormatType {experimental_checkpoint_write}.'
-        )
-      input_tensors.append(output_filepath_placeholder)
-      target_nodes.append(save_op.name)
-
-  tensorflow_spec = plan_pb2.TensorflowSpec()
-  if token_placeholder is not None:
-    tensorflow_spec.dataset_token_tensor_name = token_placeholder.name
-  if input_tensors:
-    tensorflow_spec.input_tensor_specs.extend(
-        tf.TensorSpec.from_tensor(t, name=t.name).experimental_as_proto()
-        for t in input_tensors
-    )
-  if output_tensor_specs:
-    tensorflow_spec.output_tensor_specs.extend(output_tensor_specs)
-  if target_nodes:
-    tensorflow_spec.target_node_names.extend(target_nodes)
-  if example_selector_placeholders:
-    for placeholder in example_selector_placeholders:
-      # Generating the default TensorProto will create a TensorProto with an
-      # DT_INVALID DType. This identifies that there is a placeholder that is
-      # needed. In order to have the Plan proto be completely runnable, the
-      # value will need to be filled in with a real TensorProto that matches
-      # the shape/type of the expected input.
-      tensorflow_spec.constant_inputs[placeholder.name].dtype = 0
-
-  io_router = plan_pb2.FederatedComputeIORouter()
-  if input_filepath_placeholder is not None:
-    io_router.input_filepath_tensor_name = input_filepath_placeholder.name
-  if output_filepath_placeholder is not None:
-    io_router.output_filepath_tensor_name = output_filepath_placeholder.name
-  for secagg_tensor in secagg_tensors:
-    io_router.aggregations[secagg_tensor.name].CopyFrom(
-        plan_pb2.AggregationConfig(
-            secure_aggregation=plan_pb2.SecureAggregationConfig()
-        )
+        # This tensor should be aggregated with simpleagg.
+        simpleagg_tensors.append(tensor)
+        simpleagg_serialization_names.append(name)
+    _save_client_output_tensors(
+        client_phase,
+        simpleagg_tensors,
+        simpleagg_serialization_names,
+        secagg_tensors,
+        secagg_tensor_specs,
+        experimental_checkpoint_write,
     )
 
-  return client_graph.as_graph_def(), plan_pb2.ClientPhase(
-      tensorflow_spec=tensorflow_spec, federated_compute=io_router
-  )
+  return client_graph.as_graph_def(), client_phase
 
 
 def build_client_phase_with_example_query_spec(
@@ -1520,6 +1769,7 @@ def build_plan(
         Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
     ] = None,
     experimental_client_checkpoint_write: checkpoint_type.CheckpointFormatType = checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES,
+    generate_client_phase_from_daf: bool = False,
     generate_server_phase_v2: bool = False,
     write_metrics_to_checkpoint: bool = True,
 ) -> plan_pb2.Plan:
@@ -1574,6 +1824,9 @@ def build_plan(
     experimental_client_checkpoint_write: Determines the style of writing of the
       client checkpoint (client->server communication). The value affects the
       operation used and might have impact on overall task performance.
+    generate_client_phase_from_daf: If true, will derive the ClientPhase message
+      from `daf` instead of `mrf`. If true, generate_server_phase_v2 should also
+      be true.
     generate_server_phase_v2: Iff `True`, will produce a ServerPhaseV2 message
       in the plan in addition to a ServerPhase message.
     write_metrics_to_checkpoint: If False, revert to legacy behavior where
@@ -1644,14 +1897,41 @@ def build_plan(
         experimental_client_update_format=experimental_client_checkpoint_write,
     )
 
-    if client_plan_type == ClientPlanType.TENSORFLOW:
-      client_graph_def, client_phase = _build_client_graph_with_tensorflow_spec(
-          mrf.work,
-          dataspec,
-          broadcasted_tensor_specs,
-          is_broadcast_empty,
-          experimental_checkpoint_write=experimental_client_checkpoint_write,
+    if generate_server_phase_v2:
+      assert daf
+      assert grappler_config
+      (
+          server_graph_def_prepare,
+          server_graph_def_result,
+          server_phase_v2,
+          secagg_client_output_tensor_specs,
+      ) = _build_server_graphs_from_distribute_aggregate_form(
+          daf, grappler_config
       )
+
+    if client_plan_type == ClientPlanType.TENSORFLOW:
+      if generate_client_phase_from_daf:
+        assert generate_server_phase_v2
+        assert daf
+        client_graph_def, client_phase = (
+            _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
+                daf.client_work,
+                dataspec,
+                grappler_config,
+                secagg_client_output_tensor_specs,
+                experimental_client_checkpoint_write,
+            )
+        )
+      else:
+        client_graph_def, client_phase = (
+            _build_client_graph_with_tensorflow_spec(
+                mrf.work,
+                dataspec,
+                broadcasted_tensor_specs,
+                is_broadcast_empty,
+                experimental_checkpoint_write=experimental_client_checkpoint_write,
+            )
+        )
     elif client_plan_type == ClientPlanType.EXAMPLE_QUERY:
       vector_names_expected_by_aggregator = set(
           variable_helpers.variable_names_from_type(
@@ -1671,13 +1951,6 @@ def build_plan(
     )
 
     if generate_server_phase_v2:
-      assert daf
-      assert grappler_config
-      (server_graph_def_prepare, server_graph_def_result, server_phase_v2) = (
-          _build_server_graphs_from_distribute_aggregate_form(
-              daf, grappler_config
-          )
-      )
       combined_phases.server_phase_v2.CopyFrom(server_phase_v2)
 
     plan = plan_pb2.Plan(

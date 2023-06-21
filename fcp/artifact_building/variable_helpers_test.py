@@ -95,27 +95,6 @@ class VariableHelpersTest(absltest.TestCase):
           ['v/num_examples_secagg:0', 'v/num_examples_simpleagg:0'],
       )
 
-  def test_create_vars_fails_for_client_placed_type(self):
-    tff_type = tff.FederatedType(tff.TensorType(tf.int32), tff.CLIENTS)
-    with self.assertRaisesRegex(TypeError, 'Can only create vars'):
-      with tf.Graph().as_default():
-        _ = variable_helpers.create_vars_for_tff_type(tff_type)
-
-  def test_create_vars_fails_for_struct_with_client_placed_type(self):
-    tff_type = tff.StructType([
-        (
-            'num_examples_secagg',
-            tff.FederatedType(tff.TensorType(tf.int32), tff.SERVER),
-        ),
-        (
-            'num_examples_simpleagg',
-            tff.FederatedType(tff.TensorType(tf.int32), tff.CLIENTS),
-        ),
-    ])
-    with self.assertRaisesRegex(TypeError, 'Can only create vars'):
-      with tf.Graph().as_default():
-        _ = variable_helpers.create_vars_for_tff_type(tff_type)
-
   def test_variable_names_from_type_with_tensor_type_and_no_name(self):
     names = variable_helpers.variable_names_from_type(
         tff.TensorType(dtype=tf.int32)

@@ -21,6 +21,15 @@ SERVER_METRICS_VAR_PREFIX = 'metrics'
 # The name given to variables part of the client 'update' name space.
 UPDATE = 'update'
 
+# The names given to the tensors in the client graph that hold the input
+# checkpoint filename and output checkpoint filename.
+INPUT_FILEPATH = 'input_filepath'
+OUTPUT_FILEPATH = 'output_filepath'
+
+# The name of the TF op that saves the client output tensors to the client
+# output checkpoint.
+SAVE_CLIENT_UPDATE_TENSORS = 'save_client_update_tensors'
+
 # Indices into DistributeAggregateForm.client_to_server_aggregation parameter.
 INTERMEDIATE_STATE_INDEX = 0
 CLIENT_CHECKPOINT_INDEX = 1
