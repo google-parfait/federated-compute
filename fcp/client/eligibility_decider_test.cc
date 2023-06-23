@@ -17,11 +17,15 @@
 #include "fcp/client/eligibility_decider.h"
 
 #include <optional>
+#include <string>
+#include <utility>
 
 #include "google/protobuf/duration.pb.h"
+#include "google/protobuf/timestamp.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/statusor.h"
+#include "fcp/base/simulated_clock.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/testing/testing.h"
@@ -45,15 +49,30 @@ PopulationEligibilitySpec GenNoPoliciesSpec(int num_tasks) {
   return spec;
 }
 
+opstats::OperationalStats::Event CreateOpstatsEvent(
+    opstats::OperationalStats::Event::EventKind event_kind,
+    int64_t event_time_seconds) {
+  opstats::OperationalStats::Event event;
+  event.set_event_type(event_kind);
+  google::protobuf::Timestamp t;
+  t.set_seconds(event_time_seconds);
+  *event.mutable_timestamp() = t;
+  return event;
+}
+
 class EligibilityDeciderTest : public testing::Test {
  protected:
   NiceMock<MockLogManager> mock_log_manager_;
+  SimulatedClock clock_;
 };
+
+opstats::OpStatsSequence GenOpstatsSequence() { return {}; }
 
 TEST_F(EligibilityDeciderTest, NoPoliciesEligibleForAllTasks) {
   int num_tasks = 4;
   absl::StatusOr<TaskEligibilityInfo> eligibility_result =
-      ComputeEligibility(GenNoPoliciesSpec(num_tasks), &mock_log_manager_);
+      ComputeEligibility(GenNoPoliciesSpec(num_tasks), mock_log_manager_,
+                         GenOpstatsSequence(), clock_);
 
   ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), num_tasks);
@@ -63,7 +82,7 @@ TEST_F(EligibilityDeciderTest, NoPoliciesEligibleForAllTasks) {
   }
 }
 
-TEST_F(EligibilityDeciderTest, SworPolicyReturnsNullOpt) {
+TEST_F(EligibilityDeciderTest, SworPolicyIsEligible) {
   PopulationEligibilitySpec spec;
 
   EligibilityPolicyEvalSpec* swor_spec =
@@ -79,12 +98,116 @@ TEST_F(EligibilityDeciderTest, SworPolicyReturnsNullOpt) {
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   task_info->mutable_eligibility_policy_indices()->Add(0);
 
-  // Result should be ok, but because sampling without replacement is
-  // unimplemented, we get an empty TaskEligibilityInfo.
+  opstats::OpStatsSequence opstats_sequence;
+  // Trustworthy since epoch time
+  opstats_sequence.mutable_earliest_trustworthy_time()->set_seconds(0);
+
+  // Set the clock to epoch + 5 seconds. When we evaluate the swor policy, we'll
+  // look back 5 seconds into the past and see that there are no previous
+  // opstats entries for this task.
+  clock_.AdvanceTime(absl::Seconds(5));
+
   absl::StatusOr<TaskEligibilityInfo> eligibility_result =
-      ComputeEligibility(spec, &mock_log_manager_);
+      ComputeEligibility(spec, mock_log_manager_, opstats_sequence, clock_);
   ASSERT_OK(eligibility_result);
-  ASSERT_EQ(eligibility_result->task_weights_size(), 0);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 1);
+  // Eligible according to swor.
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
+}
+
+TEST_F(EligibilityDeciderTest, SworPolicyIsNotEligible) {
+  PopulationEligibilitySpec spec;
+
+  EligibilityPolicyEvalSpec* swor_spec =
+      spec.mutable_eligibility_policies()->Add();
+  swor_spec->set_name("swor_policy_5_seconds");
+  swor_spec->set_min_version(1);
+  swor_spec->mutable_swor_policy()->mutable_min_period()->set_seconds(5);
+
+  std::string task_name = "single_task_1";
+  PopulationEligibilitySpec::TaskInfo* task_info =
+      spec.mutable_task_info()->Add();
+  task_info->set_task_name(absl::StrCat(task_name));
+  task_info->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  task_info->mutable_eligibility_policy_indices()->Add(0);
+
+  opstats::OperationalStats stats;
+  stats.set_task_name(task_name);
+  int64_t upload_started_time_sec = 4;
+  stats.mutable_events()->Add(CreateOpstatsEvent(
+      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED,
+      upload_started_time_sec));
+  opstats::OpStatsSequence opstats_sequence;
+  *opstats_sequence.add_opstats() = std::move(stats);
+  // Trustworthy since epoch time
+  opstats_sequence.mutable_earliest_trustworthy_time()->set_seconds(0);
+
+  // Set the clock to epoch + 5 seconds. When we evaluate the swor policy, we'll
+  // look back 5 seconds into the past and see our upload started at epoch + 4
+  // seconds, and thus be ineligible.
+  clock_.AdvanceTime(absl::Seconds(5));
+
+  absl::StatusOr<TaskEligibilityInfo> eligibility_result =
+      ComputeEligibility(spec, mock_log_manager_, opstats_sequence, clock_);
+  ASSERT_OK(eligibility_result);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 1);
+  // Ineligible according to swor.
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0);
+}
+
+// Tests that a task is marked ineligible if any of its policies consider it
+// ineligible, even if all other policies consider it eligible.
+TEST_F(EligibilityDeciderTest, IsNotEligibleIfIneligibleForAtLeastOnePolicy) {
+  // In the real world, we would never have two swor policies on one task,
+  // because the upper bound is the only one that matters. However it is the
+  // only policy we have implemented at the moment.
+  PopulationEligibilitySpec spec;
+
+  EligibilityPolicyEvalSpec* swor_spec =
+      spec.mutable_eligibility_policies()->Add();
+  swor_spec->set_name("swor_policy_5_seconds");
+  swor_spec->set_min_version(1);
+  swor_spec->mutable_swor_policy()->mutable_min_period()->set_seconds(5);
+
+  EligibilityPolicyEvalSpec* swor_spec2 =
+      spec.mutable_eligibility_policies()->Add();
+  swor_spec2->set_name("swor_policy_1_second");
+  swor_spec2->set_min_version(1);
+  swor_spec2->mutable_swor_policy()->mutable_min_period()->set_seconds(1);
+
+  std::string task_name = "single_task_1";
+  PopulationEligibilitySpec::TaskInfo* task_info =
+      spec.mutable_task_info()->Add();
+  task_info->set_task_name(absl::StrCat(task_name));
+  task_info->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  task_info->mutable_eligibility_policy_indices()->Add(0);
+  task_info->mutable_eligibility_policy_indices()->Add(1);
+
+  opstats::OperationalStats stats;
+  stats.set_task_name(task_name);
+  int64_t upload_started_time_sec = 1;
+  stats.mutable_events()->Add(CreateOpstatsEvent(
+      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED,
+      upload_started_time_sec));
+  opstats::OpStatsSequence opstats_sequence;
+  *opstats_sequence.add_opstats() = std::move(stats);
+  // Trustworthy since epoch time
+  opstats_sequence.mutable_earliest_trustworthy_time()->set_seconds(0);
+
+  // Set the clock to epoch + 5 seconds. When we evaluate the swor policy, we'll
+  // look back 5 seconds into the past and see our upload started at epoch + 1
+  // seconds and thus be ineligible for 5 second swor, even though we are
+  // eligible with one second swor.
+  clock_.AdvanceTime(absl::Seconds(5));
+
+  absl::StatusOr<TaskEligibilityInfo> eligibility_result =
+      ComputeEligibility(spec, mock_log_manager_, opstats_sequence, clock_);
+  ASSERT_OK(eligibility_result);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 1);
+  // Ineligible according to swor.
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0);
 }
 
 TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyReturnsNullOpt) {
@@ -106,7 +229,7 @@ TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyReturnsNullOpt) {
   // Result should be ok, but because data availability is  unimplemented, we
   // get an empty TaskEligibilityInfo.
   absl::StatusOr<TaskEligibilityInfo> eligibility_result =
-      ComputeEligibility(spec, &mock_log_manager_);
+      ComputeEligibility(spec, mock_log_manager_, GenOpstatsSequence(), clock_);
   ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 0);
 }
@@ -131,7 +254,7 @@ TEST_F(EligibilityDeciderTest, TfCustomPolicyReturnsNullOpt) {
   // Result should be ok, but because TF custom policies are unimplemented, we
   // get an empty TaskEligibilityInfo.
   absl::StatusOr<TaskEligibilityInfo> eligibility_result =
-      ComputeEligibility(spec, &mock_log_manager_);
+      ComputeEligibility(spec, mock_log_manager_, GenOpstatsSequence(), clock_);
   ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 0);
 }

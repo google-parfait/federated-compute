@@ -418,10 +418,17 @@ cc_library(
     hdrs = ["eligibility_decider.h"],
     deps = [
         ":interfaces",
+        "//fcp/base:clock",
+        "//fcp/base:time_util",
+        "//fcp/client/opstats:opstats_utils",
         "//fcp/protos:federated_api_cc_proto",
+        "//fcp/protos:opstats_cc_proto",
         "//fcp/protos:population_eligibility_spec_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -431,6 +438,7 @@ cc_test(
     deps = [
         ":eligibility_decider",
         ":test_helpers",
+        "//fcp/base:simulated_clock",
         "//fcp/protos:population_eligibility_spec_cc_proto",
         "//fcp/testing",
         "@com_google_absl//absl/status:statusor",

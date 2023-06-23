@@ -41,6 +41,7 @@
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/example_query_plan_engine.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+#include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/opstats/opstats_utils.h"
 #include "fcp/client/parsing_utils.h"
 
@@ -798,16 +799,21 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
 absl::StatusOr<std::optional<TaskEligibilityInfo>>
 MaybeComputeNativeEligibility(
     const FederatedProtocol::EligibilityEvalTask& eligibility_eval_task,
-    const Flags* flags, LogManager* log_manager) {
+    const Flags* flags, LogManager& log_manager, OpStatsLogger* opstats_logger,
+    Clock& clock) {
   if (!flags->enable_native_eets() ||
       !eligibility_eval_task.population_eligibility_spec.has_value()) {
     return std::nullopt;
   }
+
+  FCP_ASSIGN_OR_RETURN(opstats::OpStatsSequence opstats_sequence,
+                       opstats_logger->GetOpStatsDb()->Read());
+
   FCP_ASSIGN_OR_RETURN(
       TaskEligibilityInfo task_eligibility_info,
       ComputeEligibility(
           eligibility_eval_task.population_eligibility_spec.value(),
-          log_manager));
+          log_manager, opstats_sequence, clock));
 
   // TODO(team): Add appropriate phase logging here.
   // - If not ok, phaselog EligibilityEvalCheckinCompleted and IOError and halt.
@@ -824,7 +830,7 @@ MaybeComputeNativeEligibility(
   }
 
   // Eligibility successfully computed via native eligibility!
-  log_manager->LogDiag(
+  log_manager.LogDiag(
       ProdDiagCode::ELIGIBILITY_EVAL_NATIVE_COMPUTATION_SUCCESS);
   return task_eligibility_info;
 }
@@ -838,14 +844,15 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, const absl::Time time_before_checkin,
     const absl::Time time_before_plan_download,
-    const NetworkStats& network_stats) {
+    const NetworkStats& network_stats, Clock& clock) {
   // If MaybeComputeNativeEligibility returns a non-ok status, bubble that up
   // If it returns an empty optional, recompute eligibility with legacy EET
   // plan, because this EET could not be computed via the native implementation.
   // If it returns an ok task_eligibility_info, return that.
   FCP_ASSIGN_OR_RETURN(
       std::optional<TaskEligibilityInfo> native_task_eligibility_info,
-      MaybeComputeNativeEligibility(eligibility_eval_task, flags, log_manager));
+      MaybeComputeNativeEligibility(eligibility_eval_task, flags, *log_manager,
+                                    opstats_logger, clock));
   if (native_task_eligibility_info.has_value()) {
     return native_task_eligibility_info;
   }
@@ -960,7 +967,8 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time reference_time, FLRunnerResult& fl_runner_result) {
+    const absl::Time reference_time, FLRunnerResult& fl_runner_result,
+    Clock& clock) {
   const absl::Time time_before_checkin = absl::Now();
   const NetworkStats network_stats_before_checkin =
       GetCumulativeNetworkStats(federated_protocol,
@@ -1103,7 +1111,8 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
           /*time_before_plan_download=*/time_before_plan_download,
           GetNetworkStatsSince(federated_protocol,
                                /*fedselect_manager=*/nullptr,
-                               network_stats_before_plan_download));
+                               network_stats_before_plan_download),
+          clock);
   if (!task_eligibility_info.ok()) {
     // Note that none of the PhaseLogger methods will reflect the very little
     // amount of network usage the will be incurred by this protocol request.
@@ -1607,11 +1616,11 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     federated_select_manager =
         std::make_unique<DisabledFederatedSelectManager>(log_manager);
   }
-  return RunFederatedComputation(env_deps, phase_logger, event_publisher, files,
-                                 log_manager, opstats_logger.get(), flags,
-                                 federated_protocol.get(),
-                                 federated_select_manager.get(), timing_config,
-                                 reference_time, session_name, population_name);
+  return RunFederatedComputation(
+      env_deps, phase_logger, event_publisher, files, log_manager,
+      opstats_logger.get(), flags, federated_protocol.get(),
+      federated_select_manager.get(), timing_config, reference_time,
+      session_name, population_name, *clock);
 }
 
 absl::StatusOr<FLRunnerResult> RunFederatedComputation(
@@ -1622,7 +1631,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     FederatedSelectManager* fedselect_manager,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, const std::string& session_name,
-    const std::string& population_name) {
+    const std::string& population_name, Clock& clock) {
   SelectorContext federated_selector_context;
   federated_selector_context.mutable_computation_properties()->set_session_name(
       session_name);
@@ -1687,7 +1696,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       IssueEligibilityEvalCheckinAndRunPlan(
           eligibility_example_iterator_factories, should_abort, phase_logger,
           files, log_manager, opstats_logger, flags, federated_protocol,
-          timing_config, reference_time, fl_runner_result);
+          timing_config, reference_time, fl_runner_result, clock);
   if (!eligibility_eval_result.ok()) {
     return fl_runner_result;
   }

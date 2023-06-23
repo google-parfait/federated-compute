@@ -30,7 +30,7 @@ namespace client {
 namespace opstats {
 
 std::optional<google::protobuf::Timestamp> GetLastSuccessfulContributionTime(
-    OpStatsSequence& data, const std::string& task_name) {
+    const OpStatsSequence& data, const std::string& task_name) {
   std::optional<OperationalStats> last_successful_entry =
       GetLastSuccessfulContribution(data, task_name);
   if (!last_successful_entry.has_value()) {
@@ -54,7 +54,7 @@ std::optional<google::protobuf::Timestamp> GetLastSuccessfulContributionTime(
 }
 
 std::optional<OperationalStats> GetLastSuccessfulContribution(
-    OpStatsSequence& data, const std::string& task_name) {
+    const OpStatsSequence& data, const std::string& task_name) {
   for (auto it = data.opstats().rbegin(); it != data.opstats().rend(); ++it) {
     const OperationalStats& opstats_entry = *it;
     bool upload_started = false;

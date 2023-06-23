@@ -19,6 +19,7 @@
 #include <string>
 
 #include "absl/status/statusor.h"
+#include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
@@ -94,7 +95,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     FederatedSelectManager* fedselect_manager,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, const std::string& session_name,
-    const std::string& population_name);
+    const std::string& population_name, Clock& clock);
 
 // This is exposed for use in compatibility tests only. Prod code should call
 // RunFederatedComputation.

@@ -18,8 +18,10 @@
 #define FCP_CLIENT_ELIGIBILITY_DECIDER_H_
 
 #include "absl/status/statusor.h"
+#include "fcp/base/clock.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
+#include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 
 namespace fcp::client {
@@ -33,6 +35,10 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 // Arguments:
 // - eligibility_spec: The PopulationEligibilitySpec describing the tasks
 // available in the population.
+// - log_manager: A LogManager to log to.
+// - opstats_sequence: A snapshot of the opstats proto db at the time
+// eligibility is being decided.
+// - clock: A clock for getting the time.
 //
 // Returns:
 // - On success, returns a filled out TaskEligibilityInfo for the tasks in the
@@ -42,7 +48,8 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 // It is up to the caller to decide what to do.
 // - On failure, returns an error status for unrecoverable errors (IO, etc).
 absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
-    const PopulationEligibilitySpec& eligibility_spec, LogManager* log_manager);
+    const PopulationEligibilitySpec& eligibility_spec, LogManager& log_manager,
+    const opstats::OpStatsSequence& opstats_sequence, Clock& clock);
 
 }  // namespace fcp::client
 
