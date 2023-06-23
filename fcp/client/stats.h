@@ -68,6 +68,10 @@ inline bool operator==(const NetworkStats& s1, const NetworkStats& s2) {
 }
 
 struct ExampleStats {
+  // For TensorlowSpec-based plans, this refers to the overall number of
+  // elements returned by all ExampleIterator::Next() calls. For
+  // ExampleQuerySpec-based plans, this refers to the total number of row counts
+  // calculated at example store layer and passed via ExampleQueryResults.
   int example_count = 0;
   int64_t example_size_bytes = 0;
 };

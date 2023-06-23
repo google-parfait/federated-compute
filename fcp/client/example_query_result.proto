@@ -70,4 +70,16 @@ message ExampleQueryResult {
 
   // Vector data fetched from the example store.
   VectorData vector_data = 1;
+
+  message ExampleQueryStats {
+    // The number of 'examples' that should be considered to have been processed
+    // in order to produce this single query result, for logging purposes. This
+    // is the number that might end up being passed to PhaseLogger as the
+    // ExampleStats::example_count field, for example. This field isn't used for
+    // any other purpose, and hence may also be omitted.
+    int32 example_count_for_logs = 1;
+  }
+
+  // Statistic data for an example query
+  ExampleQueryStats stats = 2;
 }

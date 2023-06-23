@@ -190,8 +190,9 @@ ExampleQueryPlanEngine::ExampleQueryPlanEngine(
 PlanResult ExampleQueryPlanEngine::RunPlan(
     const ExampleQuerySpec& example_query_spec,
     const std::string& output_checkpoint_filename) {
-  // TODO(team): Add the same logging as in simple_plan_engine.
   std::vector<ExampleQueryResult> example_query_results;
+  std::atomic<int> total_example_count = 0;
+  std::atomic<int64_t> total_example_size_bytes = 0;
 
   for (const auto& example_query : example_query_spec.example_queries()) {
     ExampleSelector selector = example_query.example_selector();
@@ -209,12 +210,11 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
                         example_iterator.status());
     }
 
-    std::atomic<int> total_example_count = 0;
-    std::atomic<int64_t> total_example_size_bytes = 0;
     ExampleIteratorStatus example_iterator_status;
 
+    std::atomic<int> unused_example_count = 0;
     auto dataset_iterator = std::make_unique<DatasetIterator>(
-        std::move(*example_iterator), opstats_logger_, &total_example_count,
+        std::move(*example_iterator), opstats_logger_, &unused_example_count,
         &total_example_size_bytes, &example_iterator_status,
         selector.collection_uri(),
         /*collect_stats=*/example_iterator_factory->ShouldCollectStats());
@@ -232,6 +232,8 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
           PlanOutcome::kExampleIteratorError,
           absl::DataLossError("Unexpected example query result format"));
     }
+    total_example_count +=
+        example_query_result.stats().example_count_for_logs();
     example_query_results.push_back(std::move(example_query_result));
   }
   absl::Status status = WriteCheckpoint(
@@ -239,7 +241,19 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
   if (!status.ok()) {
     return PlanResult(PlanOutcome::kExampleIteratorError, status);
   }
-  return PlanResult(PlanOutcome::kSuccess, absl::OkStatus());
+
+  PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
+  // Note that for the example_size_bytes stat, we use the number reported
+  // by the DatasetIterator, since it'll give us the most accurate
+  // representation of the amount of data that was actually passed over the
+  // ExampleIterator layer. However, the DatasetIterator will only observe a
+  // single 'example' for each query it issues, even though that single
+  // ExampleQueryResult will likely contain multiple items of data spread across
+  // a number of vectors. Instead, we pass the example counts calculated by
+  // example store layer directly.
+  plan_result.example_stats = {.example_count = total_example_count,
+                               .example_size_bytes = total_example_size_bytes};
+  return plan_result;
 }
 
 }  // namespace engine
