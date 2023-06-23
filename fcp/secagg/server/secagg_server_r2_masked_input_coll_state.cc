@@ -144,7 +144,7 @@ SecAggServerR2MaskedInputCollState::ProceedToNextRound() {
     ServerToClientWrapperMessage message;
     message.mutable_abort()->set_diagnostic_info(error_string);
     message.mutable_abort()->set_early_success(false);
-    SendBroadcast(message);
+    BroadcastMessage(message);
     HandleAbort();
 
     return AbortState(error_string,

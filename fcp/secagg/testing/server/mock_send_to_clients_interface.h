@@ -28,8 +28,6 @@ namespace secagg {
 
 class MockSendToClientsInterface : public SendToClientsInterface {
  public:
-  MOCK_METHOD(void, SendBroadcast,
-              (const ServerToClientWrapperMessage& message), (override));
   MOCK_METHOD(void, Send,
               (uint32_t recipient_id,
                const ServerToClientWrapperMessage& message),

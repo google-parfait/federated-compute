@@ -417,7 +417,11 @@ TEST(SecaggServerPrngRunningStateTest,
 
   EXPECT_CALL(*metrics,
               ProtocolOutcomes(Eq(SecAggServerOutcome::UNHANDLED_ERROR)));
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(abort_message)));
+  EXPECT_CALL(*sender, Send(_, _))
+      .Times(0);  // Except those specified in the following loop
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(abort_message))).Times(1);
+  }
   auto next_state =
       state.Abort("test abort reason", SecAggServerOutcome::UNHANDLED_ERROR);
 

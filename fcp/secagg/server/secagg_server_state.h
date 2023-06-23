@@ -264,7 +264,7 @@ class SecAggServerState {
                        bool expected);
 
   // Broadcasts the message and records metrics.
-  void SendBroadcast(const ServerToClientWrapperMessage& message);
+  void BroadcastMessage(const ServerToClientWrapperMessage& message);
 
   // Sends the message to the given client and records metrics.
   void Send(uint32_t recipient_id, const ServerToClientWrapperMessage& message);

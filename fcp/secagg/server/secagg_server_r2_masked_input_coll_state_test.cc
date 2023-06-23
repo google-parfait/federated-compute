@@ -210,7 +210,10 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
 
   EXPECT_CALL(*metrics,
               ProtocolOutcomes(Eq(SecAggServerOutcome::EXTERNAL_REQUEST)));
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(abort_message)));
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(abort_message))).Times(1);
+  }
   auto next_state =
       state.Abort("test abort reason", SecAggServerOutcome::EXTERNAL_REQUEST);
 
@@ -282,7 +285,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
   server_message.mutable_unmasking_request()
       ->mutable_dead_3_client_ids()
       ->Clear();  // Just to set it to an empty vector
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 4; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(server_message))).Times(1);
   }
@@ -376,7 +379,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
   abort_message.mutable_abort()->set_diagnostic_info(
       "Client did not send MaskedInputCollectionResponse before round "
       "transition.");
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 3; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(server_message))).Times(1);
   }
@@ -420,7 +423,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
       "Masked input does not match input vector specification - vector is "
       "wrong size.");
 
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 1; i < 4; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(server_message))).Times(1);
   }
@@ -556,7 +559,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
   server_message.mutable_unmasking_request()
       ->mutable_dead_3_client_ids()
       ->Clear();  // Just to set it to an empty vector
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 4; ++i) {
     if (i != 2) {
       EXPECT_CALL(*sender, Send(i, EqualsProto(server_message))).Times(1);
@@ -613,8 +616,11 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
   server_message.mutable_abort()->set_early_success(false);
   server_message.mutable_abort()->set_diagnostic_info(
       "Too many clients aborted.");
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(server_message))).Times(1);
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(server_message)))
+        .Times(static_cast<int>(i >= 2));
+  }
 
   auto next_state = state.ProceedToNextRound();
   ASSERT_THAT(next_state, IsOk());
@@ -713,7 +719,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest, MetricsRecordsMessageSizes) {
   server_message.mutable_unmasking_request()
       ->mutable_dead_3_client_ids()
       ->Clear();  // Just to set it to an empty vector
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(server_message))).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 4; ++i) {
     if (i != 2) {
       EXPECT_CALL(*sender, Send(i, EqualsProto(server_message))).Times(1);
@@ -896,7 +902,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest, MetricsAreRecorded) {
   abort_message.mutable_abort()->set_diagnostic_info(
       "Client did not send MaskedInputCollectionResponse before round "
       "transition.");
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(server_message))).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 3; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(server_message))).Times(1);
   }

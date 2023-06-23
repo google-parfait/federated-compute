@@ -122,7 +122,7 @@ SecAggServerR0AdvertiseKeysState::ProceedToNextRound() {
     ServerToClientWrapperMessage abort_message;
     abort_message.mutable_abort()->set_diagnostic_info(error_string);
     abort_message.mutable_abort()->set_early_success(false);
-    SendBroadcast(abort_message);
+    BroadcastMessage(abort_message);
 
     return AbortState(error_string,
                       SecAggServerOutcome::NOT_ENOUGH_CLIENTS_REMAINING);

@@ -149,7 +149,10 @@ TEST(SecaggServerR1ShareKeysStateTest,
 
   EXPECT_CALL(*metrics,
               ProtocolOutcomes(Eq(SecAggServerOutcome::EXTERNAL_REQUEST)));
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(abort_message)));
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(abort_message))).Times(1);
+  }
+
   auto next_state =
       state.Abort("test abort reason", SecAggServerOutcome::EXTERNAL_REQUEST);
 
@@ -223,7 +226,6 @@ TEST(SecaggServerR1ShareKeysStateTest,
     }
     EXPECT_CALL(*sender, Send(Eq(i), EqualsProto(server_messages[i]))).Times(1);
   }
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
 
   auto next_state = state.ProceedToNextRound();
   ASSERT_THAT(next_state, IsOk());
@@ -302,7 +304,6 @@ TEST(SecaggServerR1ShareKeysStateTest,
     EXPECT_CALL(*sender, Send(Eq(i), EqualsProto(server_messages[i]))).Times(1);
   }
   EXPECT_CALL(*sender, Send(Eq(3), _)).Times(0);
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
 
   auto next_state = state.ProceedToNextRound();
   ASSERT_THAT(next_state, IsOk());
@@ -389,7 +390,6 @@ TEST(SecaggServerR1ShareKeysStateTest,
     }
     EXPECT_CALL(*sender, Send(Eq(i), EqualsProto(server_messages[i]))).Times(1);
   }
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
 
   auto next_state = state.ProceedToNextRound();
   ASSERT_THAT(next_state, IsOk());
@@ -438,7 +438,6 @@ TEST(SecaggServerR1ShareKeysStateTest,
     }
     EXPECT_CALL(*sender, Send(Eq(i), EqualsProto(server_messages[i]))).Times(1);
   }
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
 
   ClientToServerWrapperMessage bad_message;
   bad_message.mutable_share_keys_response()->add_encrypted_key_shares("");
@@ -530,8 +529,11 @@ TEST(SecaggServerR1ShareKeysStateTest, StateAbortsIfTooManyClientsAbort) {
   server_message.mutable_abort()->set_early_success(false);
   server_message.mutable_abort()->set_diagnostic_info(
       "Too many clients aborted.");
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(server_message))).Times(1);
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(server_message)))
+        .Times(static_cast<int>(i >= 2));
+  }
 
   auto next_state = state.ProceedToNextRound();
   ASSERT_THAT(next_state, IsOk());
@@ -616,7 +618,6 @@ TEST(SecaggServerR1ShareKeysStateTest, MetricsRecordsMessageSizes) {
     }
     EXPECT_CALL(*sender, Send(Eq(i), EqualsProto(server_messages[i])));
   }
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
   EXPECT_CALL(*metrics, BroadcastMessageSizes(_, _)).Times(0);
   EXPECT_CALL(*metrics, IndividualMessageSizes(
                             Eq(ServerToClientWrapperMessage::
@@ -813,7 +814,6 @@ TEST(SecaggServerR1ShareKeysStateTest, MetricsAreRecorded) {
     }
     EXPECT_CALL(*sender, Send(Eq(i), EqualsProto(server_messages[i]))).Times(1);
   }
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
   EXPECT_CALL(*metrics, RoundTimes(Eq(SecAggServerStateKind::R1_SHARE_KEYS),
                                    Eq(true), Ge(0)));
   EXPECT_CALL(*metrics, RoundSurvivingClients(

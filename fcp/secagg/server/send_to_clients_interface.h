@@ -27,10 +27,6 @@ namespace secagg {
 
 class SendToClientsInterface {
  public:
-  // Sends the message to all of the active clients involved in the current
-  // protocol session.
-  virtual void SendBroadcast(const ServerToClientWrapperMessage& message) = 0;
-
   // Sends a message to a single client.
   virtual void Send(uint32_t recipient_id,
                     const ServerToClientWrapperMessage& message) = 0;

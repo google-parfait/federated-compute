@@ -196,7 +196,10 @@ TEST(SecaggServerTest, AbortCausesStateTransitionAndMessageToBeSent) {
       diagnostic_info: "Abort upon external request."
     })pb");
 
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(abort_message)));
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
+  for (int i = 0; i < 1000; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(abort_message))).Times(1);
+  }
   Status result = server->Abort();
 
   EXPECT_THAT(result.code(), Eq(OK));
@@ -226,7 +229,10 @@ TEST(SecaggServerTest, AbortWithReasonCausesStateTransitionAndMessageToBeSent) {
       diagnostic_info: "Abort upon external request for reason <Test reason.>."
     })pb");
 
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(abort_message)));
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
+  for (int i = 0; i < 1000; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(abort_message))).Times(1);
+  }
   Status result =
       server->Abort("Test reason.", SecAggServerOutcome::EXTERNAL_REQUEST);
 

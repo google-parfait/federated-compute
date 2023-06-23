@@ -189,7 +189,7 @@ std::unique_ptr<SecAggServerState> SecAggServerState::Abort(
   ServerToClientWrapperMessage message;
   message.mutable_abort()->set_early_success(false);
   message.mutable_abort()->set_diagnostic_info(reason);
-  SendBroadcast(message);
+  BroadcastMessage(message);
 
   return AbortState(reason, outcome);
 }
@@ -288,7 +288,7 @@ void SecAggServerState::MessageReceived(
                                elapsed_millis);
 }
 
-void SecAggServerState::SendBroadcast(
+void SecAggServerState::BroadcastMessage(
     const ServerToClientWrapperMessage& message) {
   FCP_CHECK(message.message_content_case() !=
             ServerToClientWrapperMessage::MESSAGE_CONTENT_NOT_SET);
@@ -296,7 +296,11 @@ void SecAggServerState::SendBroadcast(
     metrics()->BroadcastMessageSizes(message.message_content_case(),
                                      message.ByteSizeLong());
   }
-  sender()->SendBroadcast(message);
+  for (int i = 0; i < total_number_of_clients(); ++i) {
+    if (!IsClientDead(i)) {
+      sender()->Send(i, message);
+    }
+  }
   Trace<BroadcastMessageSent>(GetServerToClientMessageType(message),
                               message.ByteSizeLong());
 }

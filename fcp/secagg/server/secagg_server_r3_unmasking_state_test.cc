@@ -168,7 +168,10 @@ TEST(SecaggServerR3UnmaskingStateTest,
 
   EXPECT_CALL(*metrics,
               ProtocolOutcomes(Eq(SecAggServerOutcome::EXTERNAL_REQUEST)));
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(abort_message)));
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(abort_message))).Times(1);
+  }
   auto next_state =
       state.Abort("test abort reason", SecAggServerOutcome::EXTERNAL_REQUEST);
 
@@ -207,7 +210,6 @@ TEST(SecaggServerR3UnmaskingStateTest,
   }
 
   // No clients should actually get a message in this round.
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
 
   // i is the number of messages received so far
@@ -274,9 +276,9 @@ TEST(SecaggServerR3UnmaskingStateTest,
   abort_message.mutable_abort()->set_diagnostic_info(
       "Client did not send unmasking response but protocol completed "
       "successfully.");
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   EXPECT_CALL(*sender, Send(3, EqualsProto(abort_message))).Times(1);
   EXPECT_CALL(*sender, Send(Ne(3), _)).Times(0);
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
   EXPECT_CALL(*metrics,
               ClientsDropped(
                   Eq(ClientStatus::DEAD_AFTER_MASKED_INPUT_RESPONSE_RECEIVED),
@@ -349,7 +351,6 @@ TEST(SecaggServerR3UnmaskingStateTest, StateProceedsCorrectlyWithOneFailure) {
   abort_message.mutable_abort()->set_early_success(false);
   EXPECT_CALL(*sender, Send(0, EqualsProto(abort_message))).Times(1);
   EXPECT_CALL(*sender, Send(Ne(0), _)).Times(0);
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
 
   EXPECT_THAT(state.HandleMessage(0, unmasking_responses[0]), IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
@@ -419,7 +420,6 @@ TEST(SecaggServerR3UnmaskingStateTest,
   }
 
   // No clients should actually get a message in this round.
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
 
   // i is the number of messages received so far
@@ -486,7 +486,6 @@ TEST(SecaggServerR3UnmaskingStateTest,
   }
 
   // No clients should actually get a message in this round.
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
 
   // i is the number of messages received so far
@@ -548,7 +547,6 @@ TEST(SecaggServerR3UnmaskingStateTest,
   }
 
   // No clients should actually get a message in this round.
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
 
   ClientToServerWrapperMessage abort_message;
@@ -618,15 +616,15 @@ TEST(SecaggServerR3UnmaskingStateTest, StateAbortsIfTooManyClientsAbort) {
     }
   }
 
-  // No individual clients should get a message, but the server should broadcast
-  // an abort message
   ServerToClientWrapperMessage server_abort_message;
   server_abort_message.mutable_abort()->set_diagnostic_info(
       "Too many clients aborted.");
   server_abort_message.mutable_abort()->set_early_success(false);
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(server_abort_message)))
-      .Times(1);
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(server_abort_message)))
+        .Times(static_cast<int>(i >= 2));
+  }
 
   ClientToServerWrapperMessage client_abort_message;
   client_abort_message.mutable_abort();
@@ -686,7 +684,6 @@ TEST(SecaggServerR3UnmaskingStateTest, MetricsRecordsMessageSizes) {
   }
 
   // No clients should actually get a message in this round.
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
   EXPECT_CALL(
       *metrics,
@@ -877,7 +874,6 @@ TEST(SecaggServerR3UnmaskingStateTest, MetricsAreRecorded) {
   abort_message.mutable_abort()->set_early_success(true);
   EXPECT_CALL(*sender, Send(3, EqualsProto(abort_message))).Times(1);
   EXPECT_CALL(*sender, Send(Ne(3), _)).Times(0);
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
 
   EXPECT_CALL(*metrics, RoundTimes(Eq(SecAggServerStateKind::R3_UNMASKING),
                                    Eq(true), Ge(0)));

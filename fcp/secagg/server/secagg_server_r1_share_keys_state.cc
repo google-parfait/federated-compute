@@ -120,7 +120,7 @@ SecAggServerR1ShareKeysState::ProceedToNextRound() {
     ServerToClientWrapperMessage message;
     message.mutable_abort()->set_diagnostic_info(error_string);
     message.mutable_abort()->set_early_success(false);
-    SendBroadcast(message);
+    BroadcastMessage(message);
 
     return AbortState(error_string,
                       SecAggServerOutcome::NOT_ENOUGH_CLIENTS_REMAINING);

@@ -117,7 +117,10 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
 
   EXPECT_CALL(*metrics,
               ProtocolOutcomes(Eq(SecAggServerOutcome::EXTERNAL_REQUEST)));
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(abort_message)));
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(abort_message))).Times(1);
+  }
   auto next_state =
       state.Abort("test abort reason", SecAggServerOutcome::EXTERNAL_REQUEST);
 
@@ -162,7 +165,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
   expected_server_message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(expected_server_message.share_keys_request()).data);
 
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 4; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(expected_server_message)))
         .Times(1);
@@ -256,7 +259,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
   expected_server_message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(expected_server_message.share_keys_request()).data);
 
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 3; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(expected_server_message)))
         .Times(1);
@@ -342,7 +345,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
   expected_server_message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(expected_server_message.share_keys_request()).data);
 
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 3; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(expected_server_message)))
         .Times(1);
@@ -418,8 +421,11 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
   server_message.mutable_abort()->set_early_success(false);
   server_message.mutable_abort()->set_diagnostic_info(
       "Too many clients aborted.");
-  EXPECT_CALL(*sender, SendBroadcast(EqualsProto(server_message))).Times(1);
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_CALL(*sender, Send(i, EqualsProto(server_message)))
+        .Times(static_cast<int>(i >= 2));
+  }
 
   auto next_state = state.ProceedToNextRound();
   ASSERT_THAT(next_state, IsOk());
@@ -465,7 +471,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
   expected_server_message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(expected_server_message.share_keys_request()).data);
 
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 4; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(expected_server_message)))
         .Times(1);
@@ -563,7 +569,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest, MetricsRecordsMessageSizes) {
   expected_server_message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(expected_server_message.share_keys_request()).data);
 
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 3; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(expected_server_message)))
         .Times(1);
@@ -744,7 +750,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest, MetricsAreRecorded) {
   expected_server_message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(expected_server_message.share_keys_request()).data);
 
-  EXPECT_CALL(*sender, SendBroadcast(_)).Times(0);
+  EXPECT_CALL(*sender, Send(_, _)).Times(0);
   for (int i = 0; i < 4; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(expected_server_message)))
         .Times(1);
