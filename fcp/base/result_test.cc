@@ -33,16 +33,6 @@ namespace fcp {
 using ::testing::Eq;
 using ::testing::VariantWith;
 
-template <typename T>
-constexpr bool HasValue(Result<T> r, T v) {
-  return !r.is_error() && r.GetValueOrDie() == v;
-}
-
-template <typename T>
-constexpr bool IsError(Result<T> r) {
-  return r.is_error();
-}
-
 TEST(ResultTest, Constructor) {
   ASSERT_THAT(Result<int>(TraceTestError()), IsError());
   ASSERT_THAT(Result(123), HasValue(123));

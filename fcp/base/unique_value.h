@@ -76,10 +76,6 @@ class UniqueValue {
     return *value_;
   }
 
-  T const* operator->() const {
-    return &*value_;
-  }
-
   T* operator->() {
     return &*value_;
   }
