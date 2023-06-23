@@ -1,0 +1,83 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fcp.confidentialcompute;
+
+option java_multiple_files = true;
+
+// A policy imposing limits on what can access a data blob and how many times,
+// as well as limits on all derived artifacts. The DataAccessPolicy defines a
+// graph, where each node is a data blob and each edge ("transform") specifies
+// a permitted usage of that blob.
+//
+// The blobs are identified by a numeric id; the initial blob has id 0, and
+// derived blobs receive arbitrary positive values.
+//
+// For example:
+//                        [ 0 ]
+//            3 times by /     \ 1 time by
+//                app A /       \ app B
+//                   [ 1 ]      [ 2 ]
+//                                | 2 times by
+//                                | app C
+//                              [ 3 ]
+message DataAccessPolicy {
+  // A list of all transforms that are allowed on this data and its derivatives.
+  repeated Transform transforms = 1;
+
+  // Access budget that are shared between multiple transforms (if any).
+  repeated AccessBudget shared_access_budget = 2;
+
+  message Transform {
+    // The numeric id of the source blob in the graph.
+    uint32 src = 1;
+
+    // The numeric id of the destination (derived) blob in the graph. For
+    // simplicity, ids are omitted for terminal blobs that are not the source of
+    // any other transforms. For example, a transform that produces a
+    // differentially private aggregate result might not have a `dest` set.
+    optional uint32 dest = 2;
+
+    // A matcher for the properties of the application being authorized.
+    ApplicationMatcher application = 3;
+
+    // Limits on the application's access to the data.
+    AccessBudget access_budget = 4;
+
+    // The indexes of shared AccessBudgets this transform is also subject to.
+    // *All* budgets must allow the usage for access to be granted.
+    repeated uint32 shared_access_budget_indexes = 5;
+  }
+}
+
+// Describes the properties of the authorized application. Fields that are
+// omitted are considered to match all applications.
+message ApplicationMatcher {
+  // An unvalidated tag associated with the application, used to disambiguate
+  // otherwise identical applications.
+  optional string tag = 1;
+}
+
+// Defines limits on the accesses to a blob. This currently only supports
+// limiting the number of times access occurs, but it may be extended in the
+// future to support DP-based budgets.
+message AccessBudget {
+  // If kind is unset, the access is unlimited.
+  oneof kind {
+    // The blob can be accessed a limited number of times.
+    uint32 times = 1;
+  }
+}
