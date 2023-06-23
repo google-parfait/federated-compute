@@ -1,0 +1,173 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fcp.confidentialcompute;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+
+// The Ledger is responsible for ensuring that access to encrypted blobs of data
+// conforms to a data access policy, including usage limits. This service also
+// ensures crypto erasure of the blobs by rotating the keypairs used to encrypt
+// them.
+//
+// This service defines the API for Ledger's Oak enclave app. The service
+// definition is compatible with the Oak microRPC libraries:
+// https://github.com/project-oak/oak/tree/main/micro_rpc.
+//
+// To use this service:
+//   1. Create one or more key pairs (CreateKey).
+//   2. Encrypt a blob using the public key and associate it with a data access
+//      policy (no interaction with the Ledger).
+//   3. Request that the Ledger service unwrap the blob's encryption key so that
+//      it can be read (AuthorizeAccess).
+service Ledger {
+  // Creates a new public/private keypair for encrypting the symmetric keys used
+  // to encrypt blobs.
+  //
+  // The resulting keypair can be used to encrypt many blobs; access to those
+  // blobs will be independently authorized. Access to the blobs will be
+  // disallowed once the keypair expires or is deleted.
+  // method_id: 1
+  rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse) {}
+
+  // Deletes a public/private keypair. Once deleted, any blobs encrypted with
+  // the keypair will no longer be accessible.
+  //
+  // Use RevokeAccess instead to disallow access to a specific blob.
+  // method_id: 2
+  rpc DeleteKey(DeleteKeyRequest) returns (DeleteKeyResponse) {}
+
+  // Authorizes the caller to read an encrypted blob. If the enclave requesting
+  // access is authorized by the blob's policy and the remaining access budget,
+  // the Ledger will decrypt and return the blob's symmetric key (re-encrypted
+  // so that only the enclave can read it).
+  // TODO(team): Link to documentation about the blob encryption.
+  // method_id: 3
+  rpc AuthorizeAccess(AuthorizeAccessRequest)
+      returns (AuthorizeAccessResponse) {}
+
+  // Prevents all future access to an encrypted blob; all subsequent
+  // AuthorizeAccess requests for the blob will fail.
+  // method_id: 4
+  rpc RevokeAccess(RevokeAccessRequest) returns (RevokeAccessResponse) {}
+}
+
+message CreateKeyRequest {
+  // The current time, which must be monotonically increasing.
+  google.protobuf.Timestamp now = 1;
+
+  // The TTL of the created key.
+  google.protobuf.Duration ttl = 2;
+}
+
+message CreateKeyResponse {
+  // The serialized bytes of the public key.
+  bytes public_key = 1;
+
+  // A serialized PublicKeyDetails message providing additional information
+  // about the public key. This field is signed along with the public key in the
+  // attestation.
+  bytes public_key_details = 2;
+
+  // The attestation for the application supplying the public key and details.
+  bytes attestation = 3;
+}
+
+message PublicKeyDetails {
+  // A unique identifier for the public key. This should be included in the
+  // header of any blobs encrypted using this key.
+  fixed32 public_key_id = 1;
+
+  // The time when the key was issued. Clients should not use the key if this
+  // time is in the future since it could indicate that the server is using
+  // the incorrect time.
+  google.protobuf.Timestamp issued = 2;
+
+  // The Ledger will not allow decryption using this key after this time.
+  // Clients should not encrypt data using an expired key.
+  google.protobuf.Timestamp expiration = 3;
+}
+
+message DeleteKeyRequest {
+  // The id of the public key to delete.
+  fixed32 public_key_id = 1;
+}
+
+message DeleteKeyResponse {}
+
+message AuthorizeAccessRequest {
+  // The current time, which must be monotonically increasing.
+  google.protobuf.Timestamp now = 1;
+
+  // The serialized fcp.confidentialcompute.AccessPolicy the blob is subject to.
+  // This must match the hash in the BlobHeader.
+  bytes access_policy = 2;
+
+  // The serialized fcp.confidentialcompute.BlobHeader of the blob being
+  // accessed.
+  bytes blob_header = 3;
+
+  // Encapsulated HPKE secret key used (along with one of the Ledger's private
+  // keys) to decrypt `encrypted_symmetric_key`. The encapsulated key will have
+  // been produced as part of encrypting the blob's symmetric key using HPKE.
+  bytes encapsulated_key = 4;
+
+  // The blob's encrypted symmetric key, used to encrypt the blob data using
+  // AEAD. This symmetric key should have been encrypted using the Ledger-owned
+  // public key indicated in the blob header.
+  bytes encrypted_symmetric_key = 5;
+
+  // The public key to use to encrypt the response.
+  bytes recipient_public_key = 6;
+
+  // The attestation for the application supplying the public key.
+  bytes recipient_attestation = 7;
+
+  // Optional tag to disambiguate between otherwise identical accesses in the
+  // policy. This field is an orchestration-level hint, not something attested
+  // by the sealed application.
+  string recipient_tag = 8;
+}
+
+message AuthorizeAccessResponse {
+  // Encapsulated HPKE secret key for decrypting `encrypted_symmetric_key`.
+  bytes encapsulated_key = 1;
+
+  // The symmetric key for reading the data, encrypted with HPKE using
+  // `AuthorizeAccessRequest.recipient_public_key`. The associated data for the
+  // hybrid encryption is `reencryption_public_key`.
+  bytes encrypted_symmetric_key = 2;
+
+  // If the application will be re-encrypting its output, the public key to use.
+  // Reusing the same public key as the input ensures that derived objects have
+  // the same expiration time as the original data. This key can be ignored if
+  // the application doesn't encrypt its outputs (e.g., because it produces
+  // anonymized aggregate results).
+  bytes reencryption_public_key = 3;
+}
+
+message RevokeAccessRequest {
+  // The id of the public key used to encrypt the blob.
+  fixed32 public_key_id = 1;
+
+  // The id of the blob, matching the id in its header.
+  bytes blob_id = 2;
+}
+
+message RevokeAccessResponse {}

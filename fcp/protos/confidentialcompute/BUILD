@@ -35,3 +35,17 @@ cc_proto_library(
     name = "blob_header_cc_proto",
     deps = [":blob_header_proto"],
 )
+
+proto_library(
+    name = "ledger_proto",
+    srcs = ["ledger.proto"],
+    deps = [
+        "@com_google_protobuf//:duration_proto",
+        "@com_google_protobuf//:timestamp_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "ledger_cc_proto",
+    deps = [":ledger_proto"],
+)
