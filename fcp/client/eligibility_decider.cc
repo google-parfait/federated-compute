@@ -24,14 +24,20 @@
 #include "google/protobuf/duration.pb.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "fcp/base/time_util.h"
 #include "fcp/client/opstats/opstats_utils.h"
+#include "fcp/client/simple_task_environment.h"
+#include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 
 namespace fcp::client {
 
+using ::google::internal::federated::plan::DataAvailabilityPolicy;
 using ::google::internal::federated::plan::EligibilityPolicyEvalSpec;
+using ::google::internal::federated::plan::ExampleSelector;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federated::plan::SamplingWithoutReplacementPolicy;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
@@ -39,8 +45,7 @@ using ::google::internal::federatedml::v2::TaskWeight;
 
 namespace {
 
-// TODO(team): Implement data availability.
-const int32_t kDataAvailabilityImplementationVersion = -1;
+const int32_t kDataAvailabilityImplementationVersion = 1;
 const int32_t kSworImplementationVersion = 1;
 // TODO(team): Implement TF custom policies.
 const int32_t kTfCustomPolicyImplementationVersion = -1;
@@ -101,12 +106,71 @@ absl::flat_hash_set<std::string> ComputePerTaskSworEligibility(
   return eligibility_results;
 }
 
+engine::ExampleIteratorFactory* FindExampleIteratorFactory(
+    const ExampleSelector& selector,
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories) {
+  for (engine::ExampleIteratorFactory* factory : example_iterator_factories) {
+    // All ExampleIteratorFactories should be valid and never null.
+    if (factory->CanHandle(selector)) {
+      return factory;
+    }
+  }
+  return nullptr;
+}
+
+// Returns true if the client has enough data to satisfy the policy, otherwise
+// returns false. Returns an error status for exceptional cases.
+absl::StatusOr<bool> ComputeDataAvailabilityEligibility(
+    const DataAvailabilityPolicy& data_availability_policy,
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories) {
+  ExampleSelector selector = data_availability_policy.selector();
+  engine::ExampleIteratorFactory* iterator_factory =
+      FindExampleIteratorFactory(selector, example_iterator_factories);
+
+  if (iterator_factory == nullptr) {
+    // The client does not host an iterator factory that can handle the given
+    // selector.
+    return absl::InvalidArgumentError(
+        absl::StrCat("No iterator factory that can handle selector with uri ",
+                     selector.collection_uri()));
+  }
+
+  FCP_ASSIGN_OR_RETURN(std::unique_ptr<ExampleIterator> iterator,
+                       iterator_factory->CreateExampleIterator(selector));
+  int32_t min_example_count = data_availability_policy.min_example_count();
+  int examples_returned = 0;
+  while (examples_returned < min_example_count) {
+    absl::StatusOr<std::string> example = iterator->Next();
+    // Next() returns the example bytestring on success, and:
+    //  - CANCELLED if the call got interrupted.
+    //  - INVALID_ARGUMENT if some other error occurred, e.g. I/O.
+    //  - OUT_OF_RANGE if the end of the iterator was reached.
+    //
+    // Only on success and OUT_OF_RANGE should we continue execution.
+    if (example.ok()) {
+      examples_returned++;
+      continue;
+    }
+    if (absl::IsOutOfRange(example.status())) {
+      // No more examples, and the client did not return a sufficient amount to
+      // satisfy the policy.
+      return false;
+    }
+    // By here, the example is not ok, and the status is unexpected.
+    return example.status();
+  }
+
+  // Enough examples returned!
+  return true;
+}
+
 }  // namespace
 
 absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
     const PopulationEligibilitySpec& population_eligibility_spec,
     LogManager& log_manager, const opstats::OpStatsSequence& opstats_sequence,
-    Clock& clock) {
+    Clock& clock,
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories) {
   // Initialize the TaskEligibilityInfo to return. If eligibility cannot be
   // decided, i.e. due to insufficient implementations, we'll return this
   // unfilled.
@@ -221,9 +285,21 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
             policy_spec.swor_policy(), policy_task_names, opstats_sequence,
             clock);
         break;
+      case EligibilityPolicyEvalSpec::PolicyTypeCase::kDataAvailabilityPolicy:
+        // Need to wrap initialization of local variables in a case statement.
+        {
+          FCP_ASSIGN_OR_RETURN(bool data_is_available,
+                               ComputeDataAvailabilityEligibility(
+                                   policy_spec.data_availability_policy(),
+                                   example_iterator_factories));
+          if (data_is_available) {
+            eligible_policy_task_names = policy_task_names;
+          }
+        }
+        break;
       default:
-        // Should never happen, because we pre-filtered above based on policy
-        // kind.
+        // Should never happen, because we pre-filtered above based on
+        // policy kind.
         return absl::InternalError(
             absl::StrCat("Unexpected policy kind during eval: ",
                          policy_spec.policy_type_case()));

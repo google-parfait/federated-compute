@@ -16,9 +16,11 @@
 
 #include "fcp/client/eligibility_decider.h"
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "google/protobuf/duration.pb.h"
 #include "google/protobuf/timestamp.pb.h"
@@ -36,6 +38,7 @@ namespace client {
 using ::google::internal::federated::plan::EligibilityPolicyEvalSpec;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::testing::NiceMock;
+using ::testing::Return;
 
 PopulationEligibilitySpec GenNoPoliciesSpec(int num_tasks) {
   PopulationEligibilitySpec spec;
@@ -60,19 +63,33 @@ opstats::OperationalStats::Event CreateOpstatsEvent(
   return event;
 }
 
+std::unique_ptr<engine::ExampleIteratorFactory> SetUpExampleIteratorFactory(
+    int num_examples) {
+  return std::make_unique<engine::FunctionalExampleIteratorFactory>(
+      [num_examples](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        std::vector<const char*> examples;
+        for (int i = 0; i < num_examples; i++) {
+          examples.push_back("(｡◕‿◕｡)");
+        }
+        return std::make_unique<SimpleExampleIterator>(examples);
+      });
+}
+
 class EligibilityDeciderTest : public testing::Test {
  protected:
   NiceMock<MockLogManager> mock_log_manager_;
   SimulatedClock clock_;
+  std::vector<engine::ExampleIteratorFactory*> example_iterator_factories_;
 };
 
 opstats::OpStatsSequence GenOpstatsSequence() { return {}; }
 
 TEST_F(EligibilityDeciderTest, NoPoliciesEligibleForAllTasks) {
   int num_tasks = 4;
-  absl::StatusOr<TaskEligibilityInfo> eligibility_result =
-      ComputeEligibility(GenNoPoliciesSpec(num_tasks), mock_log_manager_,
-                         GenOpstatsSequence(), clock_);
+  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
+      GenNoPoliciesSpec(num_tasks), mock_log_manager_, GenOpstatsSequence(),
+      clock_, {SetUpExampleIteratorFactory(0).get()});
 
   ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), num_tasks);
@@ -108,7 +125,8 @@ TEST_F(EligibilityDeciderTest, SworPolicyIsEligible) {
   clock_.AdvanceTime(absl::Seconds(5));
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result =
-      ComputeEligibility(spec, mock_log_manager_, opstats_sequence, clock_);
+      ComputeEligibility(spec, mock_log_manager_, opstats_sequence, clock_,
+                         {SetUpExampleIteratorFactory(0).get()});
   ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   // Eligible according to swor.
@@ -149,7 +167,8 @@ TEST_F(EligibilityDeciderTest, SworPolicyIsNotEligible) {
   clock_.AdvanceTime(absl::Seconds(5));
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result =
-      ComputeEligibility(spec, mock_log_manager_, opstats_sequence, clock_);
+      ComputeEligibility(spec, mock_log_manager_, opstats_sequence, clock_,
+                         {SetUpExampleIteratorFactory(0).get()});
   ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   // Ineligible according to swor.
@@ -203,14 +222,15 @@ TEST_F(EligibilityDeciderTest, IsNotEligibleIfIneligibleForAtLeastOnePolicy) {
   clock_.AdvanceTime(absl::Seconds(5));
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result =
-      ComputeEligibility(spec, mock_log_manager_, opstats_sequence, clock_);
+      ComputeEligibility(spec, mock_log_manager_, opstats_sequence, clock_,
+                         {SetUpExampleIteratorFactory(0).get()});
   ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   // Ineligible according to swor.
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0);
 }
 
-TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyReturnsNullOpt) {
+TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyIsEligible) {
   PopulationEligibilitySpec spec;
 
   EligibilityPolicyEvalSpec* da_spec =
@@ -218,6 +238,9 @@ TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyReturnsNullOpt) {
   da_spec->set_name("da_policy_3_examples");
   da_spec->set_min_version(1);
   da_spec->mutable_data_availability_policy()->set_min_example_count(3);
+  *da_spec->mutable_data_availability_policy()
+       ->mutable_selector()
+       ->mutable_collection_uri() = "app:/padam_padam";
 
   PopulationEligibilitySpec::TaskInfo* task_info =
       spec.mutable_task_info()->Add();
@@ -226,12 +249,74 @@ TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyReturnsNullOpt) {
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   task_info->mutable_eligibility_policy_indices()->Add(0);
 
-  // Result should be ok, but because data availability is  unimplemented, we
-  // get an empty TaskEligibilityInfo.
   absl::StatusOr<TaskEligibilityInfo> eligibility_result =
-      ComputeEligibility(spec, mock_log_manager_, GenOpstatsSequence(), clock_);
+      ComputeEligibility(spec, mock_log_manager_, GenOpstatsSequence(), clock_,
+                         {SetUpExampleIteratorFactory(5).get()});
   ASSERT_OK(eligibility_result);
-  ASSERT_EQ(eligibility_result->task_weights_size(), 0);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 1);
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
+}
+
+TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyIsNotEligible) {
+  PopulationEligibilitySpec spec;
+
+  EligibilityPolicyEvalSpec* da_spec =
+      spec.mutable_eligibility_policies()->Add();
+  da_spec->set_name("da_policy_3_examples");
+  da_spec->set_min_version(1);
+  da_spec->mutable_data_availability_policy()->set_min_example_count(3);
+  *da_spec->mutable_data_availability_policy()
+       ->mutable_selector()
+       ->mutable_collection_uri() = "app:/padam_padam";
+
+  PopulationEligibilitySpec::TaskInfo* task_info =
+      spec.mutable_task_info()->Add();
+  task_info->set_task_name(absl::StrCat("single_task_1"));
+  task_info->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  task_info->mutable_eligibility_policy_indices()->Add(0);
+
+  absl::StatusOr<TaskEligibilityInfo> eligibility_result =
+      ComputeEligibility(spec, mock_log_manager_, GenOpstatsSequence(), clock_,
+                         {SetUpExampleIteratorFactory(2).get()});
+  ASSERT_OK(eligibility_result);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 1);
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
+}
+
+TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyComputationError) {
+  PopulationEligibilitySpec spec;
+
+  EligibilityPolicyEvalSpec* da_spec =
+      spec.mutable_eligibility_policies()->Add();
+  da_spec->set_name("da_policy_3_examples");
+  da_spec->set_min_version(1);
+  da_spec->mutable_data_availability_policy()->set_min_example_count(3);
+  *da_spec->mutable_data_availability_policy()
+       ->mutable_selector()
+       ->mutable_collection_uri() = "app:/padam_padam";
+
+  PopulationEligibilitySpec::TaskInfo* task_info =
+      spec.mutable_task_info()->Add();
+  task_info->set_task_name(absl::StrCat("single_task_1"));
+  task_info->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  task_info->mutable_eligibility_policy_indices()->Add(0);
+
+  auto mock_iterator = std::make_unique<MockExampleIterator>();
+  EXPECT_CALL(*mock_iterator, Next())
+      .WillRepeatedly(Return(absl::InternalError("Oh no :(((")));
+
+  auto example_iterator_factory =
+      std::make_unique<engine::FunctionalExampleIteratorFactory>(
+          [&mock_iterator](
+              const google::internal::federated::plan::ExampleSelector&
+                  selector) { return std::move(mock_iterator); });
+
+  absl::StatusOr<TaskEligibilityInfo> eligibility_result =
+      ComputeEligibility(spec, mock_log_manager_, GenOpstatsSequence(), clock_,
+                         {example_iterator_factory.get()});
+  EXPECT_THAT(eligibility_result.status(), IsCode(absl::StatusCode::kInternal));
 }
 
 TEST_F(EligibilityDeciderTest, TfCustomPolicyReturnsNullOpt) {
@@ -254,7 +339,8 @@ TEST_F(EligibilityDeciderTest, TfCustomPolicyReturnsNullOpt) {
   // Result should be ok, but because TF custom policies are unimplemented, we
   // get an empty TaskEligibilityInfo.
   absl::StatusOr<TaskEligibilityInfo> eligibility_result =
-      ComputeEligibility(spec, mock_log_manager_, GenOpstatsSequence(), clock_);
+      ComputeEligibility(spec, mock_log_manager_, GenOpstatsSequence(), clock_,
+                         {SetUpExampleIteratorFactory(0).get()});
   ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 0);
 }

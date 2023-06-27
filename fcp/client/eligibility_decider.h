@@ -17,8 +17,11 @@
 #ifndef FCP_CLIENT_ELIGIBILITY_DECIDER_H_
 #define FCP_CLIENT_ELIGIBILITY_DECIDER_H_
 
+#include <vector>
+
 #include "absl/status/statusor.h"
 #include "fcp/base/clock.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
@@ -49,7 +52,8 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 // - On failure, returns an error status for unrecoverable errors (IO, etc).
 absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
     const PopulationEligibilitySpec& eligibility_spec, LogManager& log_manager,
-    const opstats::OpStatsSequence& opstats_sequence, Clock& clock);
+    const opstats::OpStatsSequence& opstats_sequence, Clock& clock,
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories);
 
 }  // namespace fcp::client
 

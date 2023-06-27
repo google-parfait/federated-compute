@@ -800,7 +800,8 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>>
 MaybeComputeNativeEligibility(
     const FederatedProtocol::EligibilityEvalTask& eligibility_eval_task,
     const Flags* flags, LogManager& log_manager, OpStatsLogger* opstats_logger,
-    Clock& clock) {
+    Clock& clock,
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories) {
   if (!flags->enable_native_eets() ||
       !eligibility_eval_task.population_eligibility_spec.has_value()) {
     return std::nullopt;
@@ -813,7 +814,7 @@ MaybeComputeNativeEligibility(
       TaskEligibilityInfo task_eligibility_info,
       ComputeEligibility(
           eligibility_eval_task.population_eligibility_spec.value(),
-          log_manager, opstats_sequence, clock));
+          log_manager, opstats_sequence, clock, example_iterator_factories));
 
   // TODO(team): Add appropriate phase logging here.
   // - If not ok, phaselog EligibilityEvalCheckinCompleted and IOError and halt.
@@ -852,7 +853,8 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
   FCP_ASSIGN_OR_RETURN(
       std::optional<TaskEligibilityInfo> native_task_eligibility_info,
       MaybeComputeNativeEligibility(eligibility_eval_task, flags, *log_manager,
-                                    opstats_logger, clock));
+                                    opstats_logger, clock,
+                                    example_iterator_factories));
   if (native_task_eligibility_info.has_value()) {
     return native_task_eligibility_info;
   }
