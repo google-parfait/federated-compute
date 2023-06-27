@@ -39,7 +39,7 @@ message DataAccessPolicy {
   repeated Transform transforms = 1;
 
   // Access budget that are shared between multiple transforms (if any).
-  repeated AccessBudget shared_access_budget = 2;
+  repeated AccessBudget shared_access_budgets = 2;
 
   message Transform {
     // The numeric id of the source blob in the graph.
