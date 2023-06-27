@@ -723,7 +723,8 @@ void LogFailureUploadStatus(PhaseLogger& phase_logger, absl::Status result,
 absl::Status ReportPlanResult(
     FederatedProtocol* federated_protocol, PhaseLogger& phase_logger,
     absl::StatusOr<ComputationResults> computation_results,
-    absl::Time run_plan_start_time, absl::Time reference_time) {
+    absl::Time run_plan_start_time, absl::Time reference_time,
+    std::optional<std::string> aggregation_session_id) {
   const absl::Time before_report_time = absl::Now();
 
   // Note that the FederatedSelectManager shouldn't be active anymore during the
@@ -740,7 +741,8 @@ absl::Status ReportPlanResult(
     FCP_RETURN_IF_ERROR(phase_logger.LogResultUploadStarted());
     result = federated_protocol->ReportCompleted(
         std::move(*computation_results),
-        /*plan_duration=*/absl::Now() - run_plan_start_time, std::nullopt);
+        /*plan_duration=*/absl::Now() - run_plan_start_time,
+        aggregation_session_id);
     LogResultUploadStatus(
         phase_logger, result,
         GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
@@ -750,7 +752,8 @@ absl::Status ReportPlanResult(
     FCP_RETURN_IF_ERROR(phase_logger.LogFailureUploadStarted());
     result = federated_protocol->ReportNotCompleted(
         engine::PhaseOutcome::ERROR,
-        /*plan_duration=*/absl::Now() - run_plan_start_time, std::nullopt);
+        /*plan_duration=*/absl::Now() - run_plan_start_time,
+        aggregation_session_id);
     LogFailureUploadStatus(
         phase_logger, result,
         GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
@@ -933,10 +936,10 @@ EligibilityEvalResult CreateEligibilityEvalResult(
         task_eligibility_info.value().version());
     for (const auto& task_weight :
          task_eligibility_info.value().task_weights()) {
-      if (task_names_for_multiple_task_assignments.contains(
-              task_weight.task_name())) {
-        result.task_names_for_multiple_task_assignments.push_back(
-            task_weight.task_name());
+      const std::string& task_name = task_weight.task_name();
+      if (task_names_for_multiple_task_assignments.contains(task_name) &&
+          task_weight.weight() > 0) {
+        result.task_names_for_multiple_task_assignments.push_back(task_name);
       } else {
         *single_task_assignment_eligibility_info.mutable_task_weights()->Add() =
             task_weight;
@@ -1141,7 +1144,71 @@ struct CheckinResult {
   std::string checkpoint_input_filename;
   std::string computation_id;
   std::string federated_select_uri_template;
+  std::string aggregation_session_id;
 };
+
+absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
+    const FederatedProtocol::TaskAssignment& task_assignment,
+    absl::string_view task_name, Files* files,
+    const std::function<void(absl::string_view)>& log_invalid_payload_error,
+    const std::function<void(const absl::Status&)>& log_io_error,
+    const Flags* flags) {
+  ClientOnlyPlan plan;
+  auto plan_bytes = task_assignment.payloads.plan;
+  if (!ParseFromStringOrCord(plan, plan_bytes)) {
+    auto message = "Failed to parse received plan";
+    log_invalid_payload_error(message);
+    FCP_LOG(ERROR) << message;
+    return absl::InvalidArgumentError(message);
+  }
+
+  std::string computation_id;
+  if (flags->enable_computation_id()) {
+    computation_id = ComputeSHA256FromStringOrCord(plan_bytes);
+  }
+
+  int32_t minimum_clients_in_server_visible_aggregate = 0;
+  if (task_assignment.sec_agg_info.has_value()) {
+    auto minimum_number_of_participants =
+        plan.phase().minimum_number_of_participants();
+    if (task_assignment.sec_agg_info->expected_number_of_clients <
+        minimum_number_of_participants) {
+      return absl::InternalError(
+          "expectedNumberOfClients was less than Plan's "
+          "minimumNumberOfParticipants.");
+    }
+    minimum_clients_in_server_visible_aggregate =
+        task_assignment.sec_agg_info
+            ->minimum_clients_in_server_visible_aggregate;
+  }
+
+  absl::StatusOr<std::string> checkpoint_input_filename = "";
+  // Example query plan does not have an input checkpoint.
+  if (!plan.phase().has_example_query_spec()) {
+    checkpoint_input_filename =
+        CreateInputCheckpointFile(files, task_assignment.payloads.checkpoint);
+    if (!checkpoint_input_filename.ok()) {
+      auto status = checkpoint_input_filename.status();
+      auto message = absl::StrCat(
+          "Failed to create checkpoint input file: code: ", status.code(),
+          ", message: ", status.message());
+      log_io_error(status);
+      FCP_LOG(ERROR) << message;
+      return status;
+    }
+  }
+  return CheckinResult{
+      .task_name = std::string(task_name),
+      .plan = std::move(plan),
+      .minimum_clients_in_server_visible_aggregate =
+          minimum_clients_in_server_visible_aggregate,
+      .checkpoint_input_filename = std::move(*checkpoint_input_filename),
+      .computation_id = std::move(computation_id),
+      .federated_select_uri_template =
+          task_assignment.federated_select_uri_template,
+      .aggregation_session_id = task_assignment.aggregation_session_id};
+}
+
 absl::StatusOr<CheckinResult> IssueCheckin(
     PhaseLogger& phase_logger, LogManager* log_manager, Files* files,
     FederatedProtocol* federated_protocol,
@@ -1269,75 +1336,221 @@ absl::StatusOr<CheckinResult> IssueCheckin(
 
   auto task_assignment =
       absl::get<FederatedProtocol::TaskAssignment>(*checkin_result);
-
-  ClientOnlyPlan plan;
-  auto plan_bytes = task_assignment.payloads.plan;
-  if (!ParseFromStringOrCord(plan, plan_bytes)) {
-    auto message = "Failed to parse received plan";
-    phase_logger.LogCheckinInvalidPayload(
-        message,
-        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+  std::function<void(const absl::Status&)> log_io_error =
+      [&phase_logger, &federated_protocol, &network_stats_before_plan_download,
+       &time_before_plan_download,
+       &reference_time](const absl::Status& status) {
+        phase_logger.LogCheckinIOError(
+            status,
+            GetNetworkStatsSince(federated_protocol,
+                                 /*fedselect_manager=*/nullptr,
+                                 network_stats_before_plan_download),
+            time_before_plan_download, reference_time);
+      };
+  std::function<void(absl::string_view)> log_invalid_payload_error =
+      [&phase_logger, &federated_protocol, &network_stats_before_plan_download,
+       &time_before_plan_download, &reference_time](absl::string_view message) {
+        phase_logger.LogCheckinInvalidPayload(
+            message,
+            GetNetworkStatsSince(federated_protocol,
+                                 /*fedselect_manager=*/nullptr,
+                                 network_stats_before_plan_download),
+            time_before_plan_download, reference_time);
+      };
+  absl::StatusOr<CheckinResult> result = CreateCheckinResultFromTaskAssignment(
+      task_assignment, task_name, files, log_invalid_payload_error,
+      log_io_error, flags);
+  if (result.ok()) {
+    phase_logger.LogCheckinCompleted(
+        task_name,
+        GetNetworkStatsSince(federated_protocol,
+                             /*fedselect_manager=*/nullptr,
                              network_stats_before_plan_download),
-        time_before_plan_download, reference_time);
-    FCP_LOG(ERROR) << message;
-    return absl::InternalError("");
+        /*time_before_checkin=*/time_before_checkin,
+        /*time_before_plan_download=*/time_before_plan_download,
+        reference_time);
   }
+  return result;
+}
 
-  std::string computation_id;
-  if (flags->enable_computation_id()) {
-    computation_id = ComputeSHA256FromStringOrCord(plan_bytes);
-  }
+// Issues a multiple task assignment request and tries to fetch payloads for all
+// assigned tasks. Returns a vector of CheckinResult for the assigned tasks for
+// which payloads were successfully fetched, or an empty vector if no tasks were
+// assigned at all or if the request failed.
+std::vector<CheckinResult> IssueMultipleTaskAssignments(
+    const std::vector<std::string>& task_names, PhaseLogger& phase_logger,
+    LogManager* log_manager, Files* files,
+    FederatedProtocol* federated_protocol, FLRunnerResult& fl_runner_result,
+    const std::string& population_name, absl::Time reference_time,
+    const Flags* flags) {
+  absl::Time time_before_multiple_task_assignments = absl::Now();
+  // We must return only stats that cover the check in phase for the log
+  // events below.
+  const NetworkStats network_stats_before_multiple_task_assignments =
+      GetCumulativeNetworkStats(federated_protocol,
+                                /*fedselect_manager=*/nullptr);
 
-  int32_t minimum_clients_in_server_visible_aggregate = 0;
-  if (task_assignment.sec_agg_info.has_value()) {
-    auto minimum_number_of_participants =
-        plan.phase().minimum_number_of_participants();
-    if (task_assignment.sec_agg_info->expected_number_of_clients <
-        minimum_number_of_participants) {
-      return absl::InternalError(
-          "expectedNumberOfClients was less than Plan's "
-          "minimumNumberOfParticipants.");
-    }
-    minimum_clients_in_server_visible_aggregate =
-        task_assignment.sec_agg_info
-            ->minimum_clients_in_server_visible_aggregate;
-  }
+  // These fields will, after a successful checkin that resulted in a task being
+  // assigned, contain the time at which the task plan/checkpoint URIs were
+  // received (but not yet downloaded), as well as the cumulative network stats
+  // at that point, allowing us to separately calculate how long it took to then
+  // download the actual payloads.
+  absl::Time time_before_multiple_plans_download =
+      time_before_multiple_task_assignments;
+  NetworkStats network_stats_before_multiple_plans_download =
+      network_stats_before_multiple_task_assignments;
 
-  absl::StatusOr<std::string> checkpoint_input_filename = "";
-  // Example query plan does not have an input checkpoint.
-  if (!plan.phase().has_example_query_spec()) {
-    checkpoint_input_filename =
-        CreateInputCheckpointFile(files, task_assignment.payloads.checkpoint);
-    if (!checkpoint_input_filename.ok()) {
-      auto status = checkpoint_input_filename.status();
-      auto message = absl::StrCat(
-          "Failed to create checkpoint input file: code: ", status.code(),
-          ", message: ", status.message());
-      phase_logger.LogCheckinIOError(
+  // Clear the model identifier before check-in, to ensure that any prior
+  // eligibility eval task name isn't used any longer.
+  phase_logger.SetModelIdentifier("");
+  phase_logger.LogMultipleTaskAssignmentsStarted();
+
+  // Issue the multiple task assignments request (providing a callback that will
+  // be called when an EET is assigned to the task but before its
+  // plan/checkpoint URIs have actually been downloaded).
+  bool multiple_tasks_uris_received_callback_called = false;
+  size_t task_cnt = task_names.size();
+  std::function<void(size_t)> multiple_tasks_uris_received_callback =
+      [&time_before_multiple_plans_download,
+       &network_stats_before_multiple_plans_download,
+       &time_before_multiple_task_assignments,
+       &network_stats_before_multiple_task_assignments, &federated_protocol,
+       &phase_logger, &multiple_tasks_uris_received_callback_called,
+       task_cnt](int32_t pending_retrieval_task_assignment_cnt) {
+        NetworkStats plan_uri_received_network_stats = GetNetworkStatsSince(
+            federated_protocol,
+            /*fedselect_manager=*/nullptr,
+            network_stats_before_multiple_task_assignments);
+        if (pending_retrieval_task_assignment_cnt < task_cnt) {
+          phase_logger.LogMultipleTaskAssignmentsPlanUriPartialReceived(
+              plan_uri_received_network_stats,
+              time_before_multiple_task_assignments);
+        } else {
+          phase_logger.LogMultipleTaskAssignmentsPlanUriReceived(
+              plan_uri_received_network_stats,
+              time_before_multiple_task_assignments);
+        }
+
+        // And we must take a snapshot of the current time & network stats,
+        // so we can distinguish between the duration/network stats incurred
+        // for the checkin request vs. the actual downloading of the
+        // plan/checkpoint resources.
+        time_before_multiple_plans_download = absl::Now();
+        network_stats_before_multiple_plans_download =
+            GetCumulativeNetworkStats(federated_protocol,
+                                      /*fedselect_manager=*/nullptr);
+        multiple_tasks_uris_received_callback_called = true;
+      };
+  absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
+      multiple_task_assignments =
+          federated_protocol->PerformMultipleTaskAssignments(
+              task_names, multiple_tasks_uris_received_callback);
+  UpdateRetryWindowAndNetworkStats(*federated_protocol,
+                                   /*fedselect_manager=*/nullptr, phase_logger,
+                                   fl_runner_result);
+
+  std::vector<CheckinResult> checkin_results;
+  // If the overall result is not OK, it means that the task assignment request
+  // failed completely without receiving any assignments and there's nothing
+  // else for us to do.
+  if (!multiple_task_assignments.ok()) {
+    auto status = multiple_task_assignments.status();
+    auto message = absl::StrCat(
+        "Error during multiple task assignments: code: ", status.code(),
+        ", message: ", status.message());
+    if (status.code() == absl::StatusCode::kAborted) {
+      phase_logger.LogMultipleTaskAssignmentsServerAborted(
           status,
           GetNetworkStatsSince(federated_protocol,
                                /*fedselect_manager=*/nullptr,
-                               network_stats_before_plan_download),
-          time_before_plan_download, reference_time);
-      FCP_LOG(ERROR) << message;
-      return status;
+                               network_stats_before_multiple_plans_download),
+          time_before_multiple_plans_download, reference_time);
+    } else if (status.code() == absl::StatusCode::kCancelled) {
+      phase_logger.LogMultipleTaskAssignmentsClientInterrupted(
+          status,
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_multiple_plans_download),
+          time_before_multiple_plans_download, reference_time);
+    } else if (!status.ok()) {
+      phase_logger.LogMultipleTaskAssignmentsIOError(
+          status,
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_multiple_plans_download),
+          time_before_multiple_plans_download, reference_time);
+    }
+    FCP_LOG(INFO) << message;
+    return checkin_results;
+  }
+
+  if (multiple_task_assignments->task_assignments.empty()) {
+    phase_logger.LogMultipleTaskAssignmentsTurnedAway(
+        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                             network_stats_before_multiple_task_assignments),
+        time_before_multiple_task_assignments, reference_time);
+    FCP_LOG(INFO)
+        << "Device issued multiple task assignments request, but zero task "
+           "were assigned by server.";
+    return checkin_results;
+  }
+
+  // Make sure that if we received at least one TaskAssignment, then the
+  // callback should have already been called by this point by the protocol.
+  FCP_CHECK(multiple_tasks_uris_received_callback_called);
+
+  std::function<void(absl::string_view)> log_invalid_payload_error =
+      [&phase_logger](absl::string_view message) {
+        // TODO(team): Attach task name to invalid payload errors.
+        phase_logger.LogMultipleTaskAssignmentsInvalidPayload(message);
+      };
+  std::function<void(const absl::Status&)> log_io_error =
+      [&phase_logger](const absl::Status& status) {
+        // TODO(team): Attach task name to payload IO errors.
+        phase_logger.LogMultipleTaskAssignmentsPayloadIOError(status);
+      };
+  for (const auto& task_assignment :
+       multiple_task_assignments->task_assignments) {
+    if (!task_assignment.ok()) {
+      // If the task assignment is not OK, it indicates that a task assignment
+      // was received but that fetching the task's payloads failed.
+      // TODO(team): Attach task name to payload IO errors.
+      phase_logger.LogMultipleTaskAssignmentsPayloadIOError(
+          task_assignment.status());
+      continue;
+    }
+    std::string task_name = ExtractTaskNameFromAggregationSessionId(
+        task_assignment->aggregation_session_id, population_name, *log_manager);
+    auto result = CreateCheckinResultFromTaskAssignment(
+        *task_assignment, task_name, files, log_invalid_payload_error,
+        log_io_error, flags);
+    if (result.ok()) {
+      checkin_results.push_back(*std::move(result));
     }
   }
-  phase_logger.LogCheckinCompleted(
-      task_name,
-      GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
-                           network_stats_before_plan_download),
-      /*time_before_checkin=*/time_before_checkin,
-      /*time_before_plan_download=*/time_before_plan_download, reference_time);
-  return CheckinResult{
-      .task_name = std::move(task_name),
-      .plan = std::move(plan),
-      .minimum_clients_in_server_visible_aggregate =
-          minimum_clients_in_server_visible_aggregate,
-      .checkpoint_input_filename = std::move(*checkpoint_input_filename),
-      .computation_id = std::move(computation_id),
-      .federated_select_uri_template =
-          task_assignment.federated_select_uri_template};
+
+  // If all the artifacts for the assigned tasks are retrieved successfully, we
+  // consider multiple task assignments completed even the number of assigned
+  // tasks is smaller than the number of tasks we originally requested.
+  if (checkin_results.size() ==
+      multiple_task_assignments->task_assignments.size()) {
+    phase_logger.LogMultipleTaskAssignmentsCompleted(
+        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                             network_stats_before_multiple_plans_download),
+        /*time_before_multiple_task_assignments=*/
+        time_before_multiple_task_assignments,
+        /*time_before_plan_download=*/time_before_multiple_plans_download,
+        reference_time);
+  } else {
+    phase_logger.LogMultipleTaskAssignmentsPartialCompleted(
+        GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
+                             network_stats_before_multiple_plans_download),
+        /*time_before_multiple_task_assignments=*/
+        time_before_multiple_task_assignments,
+        /*time_before_plan_download=*/time_before_multiple_plans_download,
+        reference_time);
+  }
+  return checkin_results;
 }
 
 struct RunPlanResults {
@@ -1496,6 +1709,42 @@ RunPlanResults RunComputation(
   return RunPlanResults{.outcome = outcome,
                         .computation_results = std::move(computation_results),
                         .run_plan_start_time = run_plan_start_time};
+}
+
+std::vector<std::string> HandleMultipleTaskAssignments(
+    const std::vector<CheckinResult>& multiple_task_assignments,
+    const SelectorContext& federated_selector_context,
+    SimpleTaskEnvironment* env_deps, PhaseLogger& phase_logger, Files* files,
+    LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
+    FederatedProtocol* federated_protocol,
+    FederatedSelectManager* fedselect_manager,
+    engine::ExampleIteratorFactory* opstats_example_iterator_factory,
+    FLRunnerResult& fl_runner_result, const std::function<bool()>& should_abort,
+    const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
+    const absl::Time reference_time) {
+  std::vector<std::string> successful_task_names;
+  // We will try to run and report each task's results, even if one of those
+  // steps fails for one of the tasks
+  for (const auto& task_assignment : multiple_task_assignments) {
+    phase_logger.SetModelIdentifier(task_assignment.task_name);
+    RunPlanResults run_plan_results = RunComputation(
+        task_assignment, federated_selector_context, env_deps, phase_logger,
+        files, log_manager, opstats_logger, flags, federated_protocol,
+        fedselect_manager, opstats_example_iterator_factory, fl_runner_result,
+        should_abort, timing_config, reference_time);
+    absl::Status report_result =
+        ReportPlanResult(federated_protocol, phase_logger,
+                         std::move(run_plan_results.computation_results),
+                         run_plan_results.run_plan_start_time, reference_time,
+                         task_assignment.aggregation_session_id);
+    if (run_plan_results.outcome == engine::PlanOutcome::kSuccess &&
+        report_result.ok()) {
+      // Only if training succeeded *and* reporting succeeded do we consider
+      // the device to have contributed successfully.
+      successful_task_names.push_back(task_assignment.task_name);
+    }
+  }
+  return successful_task_names;
 }
 
 }  // namespace
@@ -1703,8 +1952,28 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return fl_runner_result;
   }
 
-  int32_t expected_num_tasks = 0;
+  size_t expected_num_tasks = 0;
   std::vector<std::string> successful_task_names;
+
+  // Run multiple task assignments first if enabled.
+  if (flags->use_http_federated_compute_protocol() &&
+      flags->http_protocol_supports_multiple_task_assignments() &&
+      !eligibility_eval_result->task_names_for_multiple_task_assignments
+           .empty()) {
+    expected_num_tasks = eligibility_eval_result
+                             ->task_names_for_multiple_task_assignments.size();
+    std::vector<CheckinResult> multiple_task_assignments =
+        IssueMultipleTaskAssignments(
+            eligibility_eval_result->task_names_for_multiple_task_assignments,
+            phase_logger, log_manager, files, federated_protocol,
+            fl_runner_result, population_name, reference_time, flags);
+    successful_task_names = HandleMultipleTaskAssignments(
+        multiple_task_assignments, federated_selector_context, env_deps,
+        phase_logger, files, log_manager, opstats_logger, flags,
+        federated_protocol, fedselect_manager,
+        &opstats_example_iterator_factory, fl_runner_result, should_abort,
+        timing_config, reference_time);
+  }
 
   // Run single task assignment.
 
@@ -1724,10 +1993,10 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         fedselect_manager, &opstats_example_iterator_factory, fl_runner_result,
         should_abort, timing_config, reference_time);
 
-    absl::Status report_result =
-        ReportPlanResult(federated_protocol, phase_logger,
-                         std::move(run_plan_results.computation_results),
-                         run_plan_results.run_plan_start_time, reference_time);
+    absl::Status report_result = ReportPlanResult(
+        federated_protocol, phase_logger,
+        std::move(run_plan_results.computation_results),
+        run_plan_results.run_plan_start_time, reference_time, std::nullopt);
     if (run_plan_results.outcome == engine::PlanOutcome::kSuccess &&
         report_result.ok()) {
       // Only if training succeeded *and* reporting succeeded do we consider

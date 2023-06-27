@@ -465,11 +465,9 @@ class MockFederatedProtocol : public FederatedProtocol {
         MockPerformMultipleTaskAssignments(task_names,
                                            payload_uris_received_callback);
     network_stats_ += kMultipleTaskAssignmentsPlanUriReceivedNetworkStats;
-    if (result.ok()) {
+    if (result.ok() && !result->task_assignments.empty()) {
       payload_uris_received_callback(result->task_assignments.size());
-      if (!result->task_assignments.empty()) {
-        network_stats_ += kMultipleTaskAssignmentsArtifactRetrievalNetworkStats;
-      }
+      network_stats_ += kMultipleTaskAssignmentsArtifactRetrievalNetworkStats;
     }
     return result;
   };
