@@ -39,7 +39,7 @@ class VariableHelpersTest(absltest.TestCase):
       vl = variable_helpers.create_vars_for_tff_type(
           tff.to_type(
               [('a', tf.int32), ('b', [('c', tf.bool), ('d', tf.float32)])]
-          ),
+          ),  # pytype: disable=wrong-arg-types
           'x',
       )
     self.assertLen(vl, 3)
@@ -118,7 +118,7 @@ class VariableHelpersTest(absltest.TestCase):
     names = variable_helpers.variable_names_from_type(
         tff.to_type(
             [('a', tf.int32), ('b', [('c', tf.bool), ('d', tf.float32)])]
-        )
+        )  # pytype: disable=wrong-arg-types
     )
     self.assertEqual(names, ['v/a', 'v/b/c', 'v/b/d'])
 
@@ -126,14 +126,14 @@ class VariableHelpersTest(absltest.TestCase):
     names = variable_helpers.variable_names_from_type(
         tff.to_type(
             [('a', tf.int32), ('b', [('c', tf.bool), ('d', tf.float32)])]
-        ),
+        ),  # pytype: disable=wrong-arg-types
         'test_name',
     )
     self.assertEqual(names, ['test_name/a', 'test_name/b/c', 'test_name/b/d'])
 
   def test_variable_names_from_type_with_named_tuple_type_no_name_field(self):
     names = variable_helpers.variable_names_from_type(
-        tff.to_type([(tf.int32), ('b', [(tf.bool), ('d', tf.float32)])]),
+        tff.to_type([(tf.int32), ('b', [(tf.bool), ('d', tf.float32)])]),  # pytype: disable=wrong-arg-types
         'test_name',
     )
     self.assertEqual(names, ['test_name/0', 'test_name/b/0', 'test_name/b/d'])

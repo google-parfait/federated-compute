@@ -74,7 +74,7 @@ def generate_example_selector_placeholders(
     return [tf.compat.v1.placeholder(tf.string, shape=[], name=name_prefix)]
   else:
     type_spec.check_struct()
-    type_spec_elements = tff.structure.to_elements(type_spec)
+    type_spec_elements = tff.structure.to_elements(type_spec)  # pytype: disable=wrong-arg-types
     placeholders = []
     for element_index, (_, element_type) in enumerate(type_spec_elements):
       placeholders.extend(
@@ -613,7 +613,7 @@ def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
     return [data_comp]
   else:  # type_spec is a struct.
     type_spec.check_struct()
-    type_spec_elements = tff.structure.to_elements(type_spec)
+    type_spec_elements = tff.structure.to_elements(type_spec)  # pytype: disable=wrong-arg-types
     elements = []
     for _, element_type in type_spec_elements:
       elements.extend(make_data_sources_without_dataspec(element_type))

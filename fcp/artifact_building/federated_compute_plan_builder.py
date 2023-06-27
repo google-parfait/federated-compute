@@ -367,13 +367,13 @@ def _merge_secagg_vars(
 def _is_nonempty_tff_value(type_signature: tff.Type) -> bool:
   """Determines whether this type signature represents an empty TFF value."""
   # Ignore the placement, if one exists.
-  if type_signature.is_federated():
+  if isinstance(type_signature, tff.FederatedType):
     type_signature = type_signature.member
   # Check for empty vals in TFF that are represented as either an empty struct
   # or empty tensor.
-  if type_signature.is_struct():
+  if isinstance(type_signature, tff.StructType):
     return type_signature
-  if type_signature.is_tensor():
+  if isinstance(type_signature, tff.TensorType):
     return type_signature.shape.num_elements()
   return True
 
@@ -466,10 +466,10 @@ def _build_server_graphs_from_distribute_aggregate_form(
         client.
   """
   uses_broadcast = _is_nonempty_tff_value(
-      daf.server_prepare.type_signature.result[0]
+      daf.server_prepare.type_signature.result[0]  # pytype: disable=unsupported-operands
   )
   uses_intermediate_state = _is_nonempty_tff_value(
-      daf.server_prepare.type_signature.result[1]
+      daf.server_prepare.type_signature.result[1]  # pytype: disable=unsupported-operands
   )
   # If the server state or intermediate state is non-empty, we can skip running
   # the server_prepare logic.
@@ -507,7 +507,8 @@ def _build_server_graphs_from_distribute_aggregate_form(
       # Restore the server state.
       server_state_type = daf.server_prepare.type_signature.parameter
       server_state_vars = variable_helpers.create_vars_for_tff_type(
-          server_state_type, name='server'
+          server_state_type,  # pytype: disable=wrong-arg-types
+          name='server',
       )
       server_state_tensor_specs = tf.nest.map_structure(
           variable_helpers.tensorspec_from_var, server_state_vars
@@ -537,7 +538,8 @@ def _build_server_graphs_from_distribute_aggregate_form(
       # state, if needed
       if uses_broadcast:
         save_tensor_names = variable_helpers.variable_names_from_type(
-            daf.server_prepare.type_signature.result[0], name='client'
+            daf.server_prepare.type_signature.result[0],  # pytype: disable=unsupported-operands
+            name='client',
         )
         prepared_values_save_op = tensor_utils.save(
             filename=server_prepare_output_filepath_placeholder,
@@ -551,7 +553,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
         intermediate_state_values_save_op = tensor_utils.save(
             filename=server_prepare_intermediate_state_output_filepath_placeholder,
             tensor_names=variable_helpers.variable_names_from_type(
-                daf.server_prepare.type_signature.result[1],
+                daf.server_prepare.type_signature.result[1],  # pytype: disable=unsupported-operands
                 'intermediate_state',
             ),
             tensors=intermediate_state_values,
@@ -633,13 +635,14 @@ def _build_server_graphs_from_distribute_aggregate_form(
             )
 
   assert isinstance(
-      daf.server_result.type_signature.result[0], tff.FederatedType
+      daf.server_result.type_signature.result[0],  # pytype: disable=unsupported-operands
+      tff.FederatedType,
   )
   uses_updated_server_state = _is_nonempty_tff_value(
-      daf.server_result.type_signature.result[0]
+      daf.server_result.type_signature.result[0]  # pytype: disable=unsupported-operands
   )
   uses_server_output = _is_nonempty_tff_value(
-      daf.server_result.type_signature.result[1]
+      daf.server_result.type_signature.result[1]  # pytype: disable=unsupported-operands
   )
   assert (
       uses_updated_server_state or uses_server_output
@@ -683,7 +686,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
     # Restore the intermediate server state.
     intermediate_state = []
     if uses_intermediate_state:
-      intermediate_state_type = daf.server_result.type_signature.parameter[0]
+      intermediate_state_type = daf.server_result.type_signature.parameter[0]  # pytype: disable=unsupported-operands
       intermediate_state_vars = variable_helpers.create_vars_for_tff_type(
           intermediate_state_type, 'intermediate_state'
       )
@@ -697,7 +700,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
 
     # Restore the aggregation results.
     aggregate_result_type = tff.StructType(
-        [daf.server_result.type_signature.parameter[1]]
+        [daf.server_result.type_signature.parameter[1]]  # pytype: disable=unsupported-operands
     )
     aggregate_result_vars = variable_helpers.create_vars_for_tff_type(
         aggregate_result_type, 'intermediate_update'
@@ -727,7 +730,8 @@ def _build_server_graphs_from_distribute_aggregate_form(
       server_state_save_op = tensor_utils.save(
           filename=server_result_server_state_output_filepath_placeholder,
           tensor_names=variable_helpers.variable_names_from_type(
-              daf.server_result.type_signature.result[0], 'server'
+              daf.server_result.type_signature.result[0],  # pytype: disable=unsupported-operands
+              'server',
           ),
           tensors=server_state_values,
           name='save_server_state_tensors',
@@ -737,7 +741,8 @@ def _build_server_graphs_from_distribute_aggregate_form(
     # Generate the output TensorSpecProtos for the server metrics if some exist.
     if uses_server_output:
       metric_names = variable_helpers.variable_names_from_type(
-          daf.server_result.type_signature.result[1], 'server'
+          daf.server_result.type_signature.result[1],  # pytype: disable=unsupported-operands
+          'server',
       )
       metric_tensors = [
           tf.identity(tensor, name)
@@ -859,12 +864,12 @@ def _build_server_graph(
       secure_sum_bitwidth_update_type,
       secure_sum_update_type,
       secure_modular_sum_update_type,
-  ) = mrf.work.type_signature.result
+  ) = mrf.work.type_signature.result  # pytype: disable=attribute-error
   with tf.Graph().as_default() as server_graph:
     # Creates all server-side variables and savepoints for both the coordinator
     # and the intermediate aggregators.
     # server_state_type will be a SERVER-placed federated type.
-    server_state_type, server_metrics_type = mrf.type_signature.result
+    server_state_type, server_metrics_type = mrf.type_signature.result  # pytype: disable=attribute-error
     assert server_state_type.is_federated(), server_state_type
     assert server_state_type.placement == tff.SERVER, server_state_type
     # server_metrics_type can be a tff.FederatedType or a structure containing
@@ -1305,7 +1310,8 @@ def _add_client_work(
   # Add the custom Dataset ops to the graph.
   token_placeholder, data_values, example_selector_placeholders = (
       graph_helpers.embed_data_logic(
-          client_work_comp.type_signature.parameter[0], dataspec
+          client_work_comp.type_signature.parameter[0],  # pytype: disable=unsupported-operands
+          dataspec,
       )
   )
   if token_placeholder is not None:
@@ -1887,7 +1893,7 @@ def build_plan(
         broadcasted_tensor_specs,
     ) = _build_server_graph(
         mrf,
-        broadcast_tff_type,
+        broadcast_tff_type,  # pytype: disable=wrong-arg-types
         is_broadcast_empty,
         flattened_bitwidths,
         flattened_max_inputs,
@@ -1935,7 +1941,8 @@ def build_plan(
     elif client_plan_type == ClientPlanType.EXAMPLE_QUERY:
       vector_names_expected_by_aggregator = set(
           variable_helpers.variable_names_from_type(
-              mrf.work.type_signature.result[0], artifact_constants.UPDATE
+              mrf.work.type_signature.result[0],  # pytype: disable=unsupported-operands
+              artifact_constants.UPDATE,
           )
       )
       client_phase = build_client_phase_with_example_query_spec(
@@ -1982,13 +1989,13 @@ def build_cross_round_aggregation_execution(
   """
   type_checks.check_type(mrf, tff.backends.mapreduce.MapReduceForm, name='mrf')
 
-  server_metrics_type = mrf.update.type_signature.result[1]
+  server_metrics_type = mrf.update.type_signature.result[1]  # pytype: disable=unsupported-operands
   (
       simpleagg_update_type,
       secure_sum_bitwidth_update_type,
       secure_sum_update_type,
       secure_modular_sum_update_type,
-  ) = mrf.work.type_signature.result
+  ) = mrf.work.type_signature.result  # pytype: disable=attribute-error
   # We don't ever work directly on `simpleagg_update_type` because client
   # updates are transformed by `accumulate` and `merge` before ever being passed
   # into cross-round aggregation.
@@ -2012,7 +2019,7 @@ def build_cross_round_aggregation_execution(
 
   with tf.Graph().as_default() as cross_round_aggregation_graph:
     server_state_vars = variable_helpers.create_vars_for_tff_type(
-        mrf.update.type_signature.parameter[0],
+        mrf.update.type_signature.parameter[0],  # pytype: disable=unsupported-operands
         artifact_constants.SERVER_STATE_VAR_PREFIX,
     )
 

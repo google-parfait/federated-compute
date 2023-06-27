@@ -425,7 +425,7 @@ def get_grouped_output_tensor_specs_for_aggregations(
   # (which is the same as the type of the aggregation result input arg in
   # DistributeAggregateForm.server_result).
   output_tensor_specs = get_flattened_tensor_specs(
-      tff.StructType([aggregation_comp.type_signature.result]),
+      tff.StructType([aggregation_comp.type_signature.result]),  # pytype: disable=attribute-error
       name='intermediate_update',
   )
   output_tensor_spec_index = 0

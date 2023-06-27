@@ -283,7 +283,9 @@ class FederatedContext(tff.program.FederatedContext):
       The state encoded as a checkpoint file.
     """
     var_names = variable_helpers.variable_names_from_type(
-        state_type, name=artifact_constants.SERVER_STATE_VAR_PREFIX)
+        state_type,  # pytype: disable=wrong-arg-types
+        name=artifact_constants.SERVER_STATE_VAR_PREFIX,
+    )
 
     # Write to a file in TensorFlow's RamFileSystem to avoid disk I/O.
     tmpfile = f'ram://{uuid.uuid4()}.ckpt'
@@ -300,15 +302,20 @@ class FederatedContext(tff.program.FederatedContext):
     """Creates the CheckpointTensorReference struct for a result type."""
     shared_checkpoint_future = tff.async_utils.SharedAwaitable(
         checkpoint_future)
-    tensor_specs = checkpoint_utils.tff_type_to_tensor_spec_list(result_type)
-    var_names = (
-        variable_helpers.variable_names_from_type(
-            result_type[0], name=artifact_constants.SERVER_STATE_VAR_PREFIX) +
-        variable_helpers.variable_names_from_type(
-            result_type[1], name=artifact_constants.SERVER_METRICS_VAR_PREFIX))
+    tensor_specs = checkpoint_utils.tff_type_to_tensor_spec_list(result_type)  # pytype: disable=wrong-arg-types
+    var_names = variable_helpers.variable_names_from_type(
+        result_type[0],  # pytype: disable=unsupported-operands
+        name=artifact_constants.SERVER_STATE_VAR_PREFIX,
+    ) + variable_helpers.variable_names_from_type(
+        result_type[1],  # pytype: disable=unsupported-operands
+        name=artifact_constants.SERVER_METRICS_VAR_PREFIX,
+    )
     tensor_refs = [
         checkpoint_tensor_reference.CheckpointTensorReference(
             var_name, spec.dtype, spec.shape, shared_checkpoint_future)
         for var_name, spec in zip(var_names, tensor_specs)
     ]
-    return checkpoint_utils.pack_tff_value(result_type, tensor_refs)
+    return checkpoint_utils.pack_tff_value(
+        result_type,  # pytype: disable=wrong-arg-types
+        tensor_refs,
+    )

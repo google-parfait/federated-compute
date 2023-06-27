@@ -64,7 +64,7 @@ class EmbedDataLogicTest(absltest.TestCase):
               collections.OrderedDict(
                   A=tff.SequenceType((tf.string)),
                   B=tff.SequenceType((tf.string)),
-              ),
+              ),  # pytype: disable=wrong-arg-types
               collections.OrderedDict(
                   A=data_spec.DataSpec(
                       plan_pb2.ExampleSelector(collection_uri='app://foo')
@@ -89,7 +89,7 @@ class EmbedDataLogicTest(absltest.TestCase):
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
                   A=collections.OrderedDict(B=tff.SequenceType((tf.string)))
-              ),
+              ),  # pytype: disable=wrong-arg-types
               collections.OrderedDict(
                   A=collections.OrderedDict(
                       B=data_spec.DataSpec(
@@ -124,7 +124,7 @@ class EmbedDataLogicTest(absltest.TestCase):
               collections.OrderedDict(
                   A=tff.SequenceType((tf.string)),
                   B=tff.SequenceType((tf.string)),
-              )
+              )  # pytype: disable=wrong-arg-types
           )
       )
 
@@ -143,7 +143,7 @@ class EmbedDataLogicTest(absltest.TestCase):
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
                   A=collections.OrderedDict(B=tff.SequenceType((tf.string)))
-              )
+              )  # pytype: disable=wrong-arg-types
           )
       )
 
@@ -288,7 +288,7 @@ class GraphHelperTest(absltest.TestCase):
   def test_create_tensor_map_with_non_sequence_binding_and_vars(self):
     with tf.Graph().as_default():
       vars_list = variable_helpers.create_vars_for_tff_type(
-          tff.to_type([('a', tf.int32), ('b', tf.int32)])
+          tff.to_type([('a', tf.int32), ('b', tf.int32)])  # pytype: disable=wrong-arg-types
       )
       init_op = tf.compat.v1.global_variables_initializer()
       assign_op = tf.group(

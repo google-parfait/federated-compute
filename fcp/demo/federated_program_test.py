@@ -73,9 +73,15 @@ async def program_logic(init: tff.Computation, comp: tff.Computation,
     cohort_config = data_iterator.select(number_of_clients)
     state, metrics = comp(state, cohort_config)
     await release_manager.release(
-        metrics, comp.type_signature.result[1], key=f'metrics/{i}')
+        metrics,
+        comp.type_signature.result[1],  # pytype: disable=unsupported-operands
+        key=f'metrics/{i}',
+    )
   await release_manager.release(
-      state, comp.type_signature.result[0], key='result')
+      state,
+      comp.type_signature.result[0],  # pytype: disable=unsupported-operands
+      key='result',
+  )
 
 
 async def run_client(population_name: str, server_url: str, num_rounds: int,

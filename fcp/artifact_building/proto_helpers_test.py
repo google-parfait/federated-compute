@@ -27,7 +27,8 @@ class MakeMetricTest(tf.test.TestCase):
   def test_make_metric(self):
     with tf.Graph().as_default():
       v = variable_helpers.create_vars_for_tff_type(
-          tff.to_type(collections.OrderedDict([("bar", tf.int32)])), name="foo"
+          tff.to_type(collections.OrderedDict([("bar", tf.int32)])),  # pytype: disable=wrong-arg-types
+          name="foo",
       )
       self.assertProtoEquals(
           "variable_name: 'Identity:0' stat_name: 'client/bar'",

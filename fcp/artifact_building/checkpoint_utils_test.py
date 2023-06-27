@@ -49,8 +49,8 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
     with tf.Graph().as_default():
       state_vars, _, _, savepoint = (
           checkpoint_utils.create_server_checkpoint_vars_and_savepoint(
-              server_state_type=tff.to_type([('foo1', tf.int32)]),
-              server_metrics_type=tff.to_type([('bar2', tf.int32)]),
+              server_state_type=tff.to_type([('foo1', tf.int32)]),  # pytype: disable=wrong-arg-types
+              server_metrics_type=tff.to_type([('bar2', tf.int32)]),  # pytype: disable=wrong-arg-types
               write_metrics_to_checkpoint=True,
           )
       )
@@ -69,8 +69,8 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
     with tf.Graph().as_default():
       _, _, metadata_vars, savepoint = (
           checkpoint_utils.create_server_checkpoint_vars_and_savepoint(
-              server_state_type=tff.to_type([('foo3', tf.int32)]),
-              server_metrics_type=tff.to_type([('bar1', tf.int32)]),
+              server_state_type=tff.to_type([('foo3', tf.int32)]),  # pytype: disable=wrong-arg-types
+              server_metrics_type=tff.to_type([('bar1', tf.int32)]),  # pytype: disable=wrong-arg-types
               additional_checkpoint_metadata_var_fn=(
                   additional_checkpoint_metadata_var_fn
               ),
@@ -88,8 +88,8 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
     with tf.Graph().as_default():
       _, metrics_vars, _, savepoint = (
           checkpoint_utils.create_server_checkpoint_vars_and_savepoint(
-              server_state_type=tff.to_type([('foo2', tf.int32)]),
-              server_metrics_type=tff.to_type([('bar3', tf.int32)]),
+              server_state_type=tff.to_type([('foo2', tf.int32)]),  # pytype: disable=wrong-arg-types
+              server_metrics_type=tff.to_type([('bar3', tf.int32)]),  # pytype: disable=wrong-arg-types
               write_metrics_to_checkpoint=True,
           )
       )
@@ -108,7 +108,7 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
   def test_tff_type_to_dtype_list_type_error(self):
     list_type = [tf.int32, tf.string]
     with self.assertRaisesRegex(TypeError, 'to be an instance of type'):
-      checkpoint_utils.tff_type_to_dtype_list(list_type)
+      checkpoint_utils.tff_type_to_dtype_list(list_type)  # pytype: disable=wrong-arg-types
 
   def test_tff_type_to_tensor_spec_list_as_expected(self):
     tff_type = tff.FederatedType(
@@ -129,7 +129,7 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
   def test_tff_type_to_tensor_spec_list_type_error(self):
     list_type = [tf.int32, tf.string]
     with self.assertRaisesRegex(TypeError, 'to be an instance of type'):
-      checkpoint_utils.tff_type_to_tensor_spec_list(list_type)
+      checkpoint_utils.tff_type_to_tensor_spec_list(list_type)  # pytype: disable=wrong-arg-types
 
   def test_pack_tff_value_with_tensors_as_expected(self):
     tff_type = tff.StructType([('foo', tf.int32), ('bar', tf.string)])
@@ -165,7 +165,10 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
         recursive=True,
     )
     self.assertEqual(
-        checkpoint_utils.pack_tff_value(tff_type, value_list),
+        checkpoint_utils.pack_tff_value(
+            tff_type,  # pytype: disable=wrong-arg-types
+            value_list,
+        ),
         expected_packed_structure,
     )
 

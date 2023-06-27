@@ -340,10 +340,10 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
 
     # Run (and therefore cache) count_clients_comp1 with data_source1.
     await self.release_manager.release(
-        self.count_clients_comp1(0,
-                                 self.data_source1.iterator().select(1)),
-        self.count_clients_comp1.type_signature.result,
-        key='result')
+        self.count_clients_comp1(0, self.data_source1.iterator().select(1)),
+        self.count_clients_comp1.type_signature.result,  # pytype: disable=attribute-error
+        key='result',
+    )
     self.build_plan.assert_called_once()
     self.assertEqual(self.build_plan.call_args.args[0],
                      self.count_clients_comp1.map_reduce_form)
@@ -361,46 +361,46 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
 
   async def test_reuse_with_repeat_computation(self):
     await self.release_manager.release(
-        self.count_clients_comp1(0,
-                                 self.data_source1.iterator().select(1)),
-        self.count_clients_comp1.type_signature.result,
-        key='result')
+        self.count_clients_comp1(0, self.data_source1.iterator().select(1)),
+        self.count_clients_comp1.type_signature.result,  # pytype: disable=attribute-error
+        key='result',
+    )
     self.build_plan.assert_not_called()
     self.run_computation.assert_called_once()
 
   async def test_reuse_with_changed_num_clients(self):
     await self.release_manager.release(
-        self.count_clients_comp1(0,
-                                 self.data_source1.iterator().select(10)),
-        self.count_clients_comp1.type_signature.result,
-        key='result')
+        self.count_clients_comp1(0, self.data_source1.iterator().select(10)),
+        self.count_clients_comp1.type_signature.result,  # pytype: disable=attribute-error
+        key='result',
+    )
     self.build_plan.assert_not_called()
     self.run_computation.assert_called_once()
 
   async def test_reuse_with_changed_initial_state(self):
     await self.release_manager.release(
-        self.count_clients_comp1(3,
-                                 self.data_source1.iterator().select(1)),
-        self.count_clients_comp1.type_signature.result,
-        key='result')
+        self.count_clients_comp1(3, self.data_source1.iterator().select(1)),
+        self.count_clients_comp1.type_signature.result,  # pytype: disable=attribute-error
+        key='result',
+    )
     self.build_plan.assert_not_called()
     self.run_computation.assert_called_once()
 
   async def test_reuse_with_equivalent_map_reduce_form(self):
     await self.release_manager.release(
-        self.count_clients_comp2(0,
-                                 self.data_source1.iterator().select(1)),
-        self.count_clients_comp2.type_signature.result,
-        key='result')
+        self.count_clients_comp2(0, self.data_source1.iterator().select(1)),
+        self.count_clients_comp2.type_signature.result,  # pytype: disable=attribute-error
+        key='result',
+    )
     self.build_plan.assert_not_called()
     self.run_computation.assert_called_once()
 
   async def test_rebuild_with_different_computation(self):
     await self.release_manager.release(
-        self.identity_comp(0,
-                           self.data_source1.iterator().select(1)),
-        self.identity_comp.type_signature.result,
-        key='result')
+        self.identity_comp(0, self.data_source1.iterator().select(1)),
+        self.identity_comp.type_signature.result,  # pytype: disable=attribute-error
+        key='result',
+    )
     self.build_plan.assert_called_once()
     self.assertEqual(self.build_plan.call_args.args[0],
                      self.identity_comp.map_reduce_form)
@@ -416,10 +416,10 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
 
   async def test_rebuild_with_different_data_source(self):
     await self.release_manager.release(
-        self.count_clients_comp1(0,
-                                 self.data_source2.iterator().select(1)),
-        self.count_clients_comp1.type_signature.result,
-        key='result')
+        self.count_clients_comp1(0, self.data_source2.iterator().select(1)),
+        self.count_clients_comp1.type_signature.result,  # pytype: disable=attribute-error
+        key='result',
+    )
     self.build_plan.assert_called_once()
     self.assertEqual(self.build_plan.call_args.args[0],
                      self.count_clients_comp1.map_reduce_form)
