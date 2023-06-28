@@ -101,7 +101,9 @@ def create_server_checkpoint_vars_and_savepoint(
     )
     if additional_checkpoint_metadata_var_fn:
       metadata_vars = additional_checkpoint_metadata_var_fn(
-          state_vars, metric_vars, write_metrics_to_checkpoint
+          state_vars,  # pytype: disable=wrong-arg-types
+          metric_vars,
+          write_metrics_to_checkpoint,
       )
 
     has_metrics = bool(tff.structure.flatten(server_metrics_type))
@@ -117,7 +119,9 @@ def create_server_checkpoint_vars_and_savepoint(
   else:
     if additional_checkpoint_metadata_var_fn:
       metadata_vars = additional_checkpoint_metadata_var_fn(
-          state_vars, None, write_metrics_to_checkpoint
+          state_vars,  # pytype: disable=wrong-arg-types
+          None,
+          write_metrics_to_checkpoint,
       )
 
   saver = create_deterministic_saver(
@@ -278,7 +282,7 @@ def tff_type_to_dtype_list(
       tff_type, (tff.TensorType, tff.FederatedType, tff.StructType)
   )
   if isinstance(tff_type, tff.TensorType):
-    return [tff_type.dtype]
+    return [tff_type.dtype]  # pytype: disable=bad-return-type
   elif isinstance(tff_type, tff.FederatedType):
     return tff_type_to_dtype_list(tff_type.member)
   else:  # tff.StructType
@@ -344,11 +348,11 @@ def pack_tff_value(
       type_spec: tff.Type,
   ) -> Union[tff.StructType, tff.TensorType]:
     """Removes `FederatedType` from a type tree, returning a new tree."""
-    if type_spec.is_tensor():
+    if isinstance(type_spec, tff.TensorType):
       return type_spec
-    elif type_spec.is_federated():
+    elif isinstance(type_spec, tff.FederatedType):
       return type_spec.member
-    elif type_spec.is_struct():
+    elif isinstance(type_spec, tff.StructType):
       return tff.StructType(
           (elem_name, remove_federated_types(elem_type))
           for elem_name, elem_type in tff.structure.iter_elements(type_spec)
