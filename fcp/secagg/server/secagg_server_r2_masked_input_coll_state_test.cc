@@ -725,7 +725,6 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest, MetricsRecordsMessageSizes) {
       EXPECT_CALL(*sender, Send(i, EqualsProto(server_message))).Times(1);
     }
   }
-  EXPECT_CALL(*metrics, BroadcastMessageSizes(_, _)).Times(0);
   EXPECT_CALL(*metrics, IndividualMessageSizes(
                             Eq(ServerToClientWrapperMessage::
                                    MessageContentCase::kUnmaskingRequest),

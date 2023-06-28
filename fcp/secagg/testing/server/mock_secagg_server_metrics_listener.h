@@ -33,10 +33,6 @@ class MockSecAggServerMetricsListener : public SecAggServerMetricsListener {
               (ServerToClientWrapperMessage::MessageContentCase message_type,
                uint64_t size),
               (override));
-  MOCK_METHOD(void, BroadcastMessageSizes,
-              (ServerToClientWrapperMessage::MessageContentCase message_type,
-               uint64_t size),
-              (override));
   MOCK_METHOD(void, MessageReceivedSizes,
               (ClientToServerWrapperMessage::MessageContentCase message_type,
                bool message_expected, uint64_t size),

@@ -292,12 +292,12 @@ void SecAggServerState::BroadcastMessage(
     const ServerToClientWrapperMessage& message) {
   FCP_CHECK(message.message_content_case() !=
             ServerToClientWrapperMessage::MESSAGE_CONTENT_NOT_SET);
-  if (metrics()) {
-    metrics()->BroadcastMessageSizes(message.message_content_case(),
-                                     message.ByteSizeLong());
-  }
   for (int i = 0; i < total_number_of_clients(); ++i) {
     if (!IsClientDead(i)) {
+      if (metrics()) {
+        metrics()->IndividualMessageSizes(message.message_content_case(),
+                                          message.ByteSizeLong());
+      }
       sender()->Send(i, message);
     }
   }

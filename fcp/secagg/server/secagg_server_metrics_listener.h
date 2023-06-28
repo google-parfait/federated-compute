@@ -38,11 +38,6 @@ class SecAggServerMetricsListener {
       ServerToClientWrapperMessage::MessageContentCase message_type,
       uint64_t size) = 0;
 
-  // Size (in bytes) of a message broadcast by the SecAgg server.
-  virtual void BroadcastMessageSizes(
-      ServerToClientWrapperMessage::MessageContentCase message_type,
-      uint64_t size) = 0;
-
   // Size (in bytes) of a message received by the SecAgg server from a user.
   virtual void MessageReceivedSizes(
       ClientToServerWrapperMessage::MessageContentCase message_type,

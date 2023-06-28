@@ -618,7 +618,6 @@ TEST(SecaggServerR1ShareKeysStateTest, MetricsRecordsMessageSizes) {
     }
     EXPECT_CALL(*sender, Send(Eq(i), EqualsProto(server_messages[i])));
   }
-  EXPECT_CALL(*metrics, BroadcastMessageSizes(_, _)).Times(0);
   EXPECT_CALL(*metrics, IndividualMessageSizes(
                             Eq(ServerToClientWrapperMessage::
                                    MessageContentCase::kMaskedInputRequest),
