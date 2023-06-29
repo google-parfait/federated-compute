@@ -437,6 +437,10 @@ def _generate_server_aggregation_configs_for_intrinsic_call(
 def _build_server_graphs_from_distribute_aggregate_form(
     daf: tff.backends.mapreduce.DistributeAggregateForm,
     grappler_config: tf.compat.v1.ConfigProto,
+    write_metrics_to_checkpoint: bool = False,
+    additional_checkpoint_metadata_var_fn: Optional[
+        Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
+    ] = None,
 ) -> tuple[
     Optional[tf.compat.v1.GraphDef],
     tf.compat.v1.GraphDef,
@@ -456,6 +460,14 @@ def _build_server_graphs_from_distribute_aggregate_form(
     daf: An instance of `tff.backends.mapreduce.DistributeAggregateForm`.
     grappler_config: The config specifying Grappler optimizations for TFF-
       generated graphs.
+    write_metrics_to_checkpoint: If False, revert to legacy behavior where
+      metrics values were handled by post-processing separate from the outputted
+      checkpoint. Regardless, they will additionally continue to be written to
+      recordio checkpoints as defined by the Plan proto.
+    additional_checkpoint_metadata_var_fn: An optional method that takes in a
+      server state type, a server metrics type, and a boolean determining
+      whether to revert to legacy metrics behavior to produce additional
+      metadata variables.
 
   Returns:
     A `tuple` containing the following (in order):
@@ -725,28 +737,32 @@ def _build_server_graphs_from_distribute_aggregate_form(
         split_outputs=True,
     )
 
-    # Create a checkpoint storing the updated server state, if needed.
-    if uses_updated_server_state:
-      server_state_save_op = tensor_utils.save(
-          filename=server_result_server_state_output_filepath_placeholder,
-          tensor_names=variable_helpers.variable_names_from_type(
-              daf.server_result.type_signature.result[0],  # pytype: disable=unsupported-operands
-              'server',
-          ),
-          tensors=server_state_values,
-          name='save_server_state_tensors',
-      )
-      server_result_target_nodes.append(server_state_save_op.name)
-
-    # Generate the output TensorSpecProtos for the server metrics if some exist.
+    # Generate the output TensorSpecProtos for the server metrics if some exist
+    # and also prepare the desired metrics names. To maintain the pattern
+    # established by MRF-based plans, we use the "metrics" prefix for metrics
+    # tensors included in the updated server state checkpoint. We use the
+    # "server" prefix for directly produced metrics (metrics that are accessed
+    # outside of the checkpoint).
+    metric_names_with_metric_prefix = []
+    metric_tensors = []
     if uses_server_output:
-      metric_names = variable_helpers.variable_names_from_type(
-          daf.server_result.type_signature.result[1],  # pytype: disable=unsupported-operands
-          'server',
+      metric_names_with_server_prefix = (
+          variable_helpers.variable_names_from_type(
+              daf.server_result.type_signature.result[1],  # pytype: disable=unsupported-operands
+              artifact_constants.SERVER_STATE_VAR_PREFIX,
+          )
+      )
+      metric_names_with_metric_prefix = (
+          variable_helpers.variable_names_from_type(
+              daf.server_result.type_signature.result[1],  # pytype: disable=unsupported-operands
+              artifact_constants.SERVER_METRICS_VAR_PREFIX,
+          )
       )
       metric_tensors = [
           tf.identity(tensor, name)
-          for tensor, name in zip(server_output_values, metric_names)
+          for tensor, name in zip(
+              server_output_values, metric_names_with_server_prefix
+          )
       ]
       for metric in metric_tensors:
         server_result_output_tensors.append(
@@ -754,6 +770,58 @@ def _build_server_graphs_from_distribute_aggregate_form(
                 metric
             ).experimental_as_proto()
         )
+
+    # Prepare the desired names when saving the updated server state.
+    state_names = variable_helpers.variable_names_from_type(
+        daf.server_result.type_signature.result[0],  # pytype: disable=unsupported-operands
+        artifact_constants.SERVER_STATE_VAR_PREFIX,
+    )
+
+    # Generate any extra metadata to include in the updated server state
+    # checkpoint.
+    metadata_vars = []
+    metadata_control_dependencies = []
+    if additional_checkpoint_metadata_var_fn:
+      metadata_vars = additional_checkpoint_metadata_var_fn(
+          state_names,
+          metric_names_with_metric_prefix,
+          write_metrics_to_checkpoint,
+      )
+    if metadata_vars:
+      metadata_vars_initializer = tf.compat.v1.variables_initializer(
+          metadata_vars,
+          'initialize_metadata_vars',
+      )
+      # Override the tff_type_signature portion of the checkpoint metadata to
+      # contain the server state type to match the behavior of the MRF pipeline.
+      with tf.control_dependencies([metadata_vars_initializer.name]):
+        # TODO(team): Revisit the meaning of the type signature variable.
+        checkpoint_type_signature_var = metadata_vars[0]
+        assign_tff_signature_op = checkpoint_type_signature_var.assign(
+            tff.types.serialize_type(
+                daf.type_signature.result[0]
+            ).SerializeToString()
+        )
+        metadata_control_dependencies.append(assign_tff_signature_op.name)
+
+    # Write the output checkpoint containing the updated server state values
+    # and potentially additional metadata and metrics values.
+    tensors = server_state_values
+    tensor_names = state_names
+    tensors.extend(metadata_vars)
+    tensor_names.extend([tensor_utils.bare_name(v) for v in metadata_vars])
+    if write_metrics_to_checkpoint:
+      tensors.extend(metric_tensors)
+      tensor_names.extend(metric_names_with_metric_prefix)
+    if tensors:
+      with tf.control_dependencies(metadata_control_dependencies):
+        server_state_save_op = tensor_utils.save(
+            filename=server_result_server_state_output_filepath_placeholder,
+            tensor_names=tensor_names,
+            tensors=tensors,
+            name='save_server_state_tensors',
+        )
+      server_result_target_nodes.append(server_state_save_op.name)
 
   # Create the TensorflowSpec and IORouter messages for the post-aggregation
   # (server_result) step.
@@ -1928,7 +1996,10 @@ def build_plan(
           server_phase_v2,
           secagg_client_output_tensor_specs,
       ) = _build_server_graphs_from_distribute_aggregate_form(
-          daf, grappler_config
+          daf,
+          grappler_config,
+          write_metrics_to_checkpoint,
+          additional_checkpoint_metadata_var_fn,
       )
 
     if client_plan_type == ClientPlanType.TENSORFLOW:
