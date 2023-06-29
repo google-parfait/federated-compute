@@ -118,8 +118,8 @@ class JavaHttpRequestHandle : public fcp::client::http::HttpRequestHandle {
   void OnResponseError(JNIEnv* env, jbyteArray status_proto)
       ABSL_LOCKS_EXCLUDED(lock_);
 
-  jboolean OnResponseBody(JNIEnv* env, jbyteArray buffer, jint bytes_available)
-      ABSL_LOCKS_EXCLUDED(lock_);
+  jboolean OnResponseBody(JNIEnv* env, jbyteArray buffer, jint buffer_offset,
+                          jint bytes_available) ABSL_LOCKS_EXCLUDED(lock_);
   void OnResponseBodyError(JNIEnv* env, jbyteArray status_proto)
       ABSL_LOCKS_EXCLUDED(lock_);
   void OnResponseCompleted() ABSL_LOCKS_EXCLUDED(lock_);

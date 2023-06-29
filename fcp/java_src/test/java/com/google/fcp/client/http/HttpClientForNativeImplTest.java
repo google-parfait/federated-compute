@@ -163,7 +163,7 @@ public final class HttpClientForNativeImplTest {
     }
 
     @Override
-    protected boolean onResponseBody(byte[] data, int bytesAvailable) {
+    protected boolean onResponseBody(byte[] data, int dataOffset, int bytesAvailable) {
       if (!onResponseBodyResult) {
         return false;
       }

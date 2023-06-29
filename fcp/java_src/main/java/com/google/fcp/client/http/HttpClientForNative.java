@@ -141,8 +141,8 @@ public abstract class HttpClientForNative implements Closeable {
      */
     // Note: can be overridden in unit tests, to intercept/mock out calls to the native layer.
     @GuardedBy("this")
-    protected boolean onResponseBody(byte[] data, int bytesAvailable) {
-      return HttpClientForNative.onResponseBody(nativeHandle, data, bytesAvailable);
+    protected boolean onResponseBody(byte[] data, int dataOffset, int bytesAvailable) {
+      return HttpClientForNative.onResponseBody(nativeHandle, data, dataOffset, bytesAvailable);
     }
 
     /**
@@ -225,7 +225,7 @@ public abstract class HttpClientForNative implements Closeable {
   private static native void onResponseError(long nativeRequestHandle, byte[] statusProto);
 
   private static native boolean onResponseBody(
-      long nativeRequestHandle, byte[] data, int bytesAvailable);
+      long nativeRequestHandle, byte[] data, int dataOffset, int bytesAvailable);
 
   private static native void onResponseBodyError(long nativeRequestHandle, byte[] statusProto);
 

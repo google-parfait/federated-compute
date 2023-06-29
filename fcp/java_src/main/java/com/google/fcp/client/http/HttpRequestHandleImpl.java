@@ -421,7 +421,7 @@ public class HttpRequestHandleImpl extends HttpRequestHandle {
       throws AbortRequestException {
     // If the request has already been closed, then we shouldn't issue any further callbacks.
     checkClosed();
-    checkCallToNativeResult(onResponseBody(buffer, bytesAvailable));
+    checkCallToNativeResult(onResponseBody(buffer, /* dataOffset= */ 0, bytesAvailable));
   }
 
   /** Calls the {@link #onResponseCompleted} callback, but only if the request isn't closed yet. */

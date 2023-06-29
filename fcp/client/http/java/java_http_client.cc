@@ -449,6 +449,7 @@ void JavaHttpRequestHandle::OnResponseError(JNIEnv* env,
 }
 
 jboolean JavaHttpRequestHandle::OnResponseBody(JNIEnv* env, jbyteArray buffer,
+                                               jint buffer_offset,
                                                jint bytes_available) {
   // Get a pointer to the input buffer's raw data. Note that this may make a
   // copy of the Java data, but depending on JVM implementation it may also
@@ -457,8 +458,8 @@ jboolean JavaHttpRequestHandle::OnResponseBody(JNIEnv* env, jbyteArray buffer,
   jbyte* raw_buffer = env->GetByteArrayElements(buffer, nullptr);
   FCP_CHECK(raw_buffer != nullptr);
   FCP_CHECK(!env->ExceptionCheck());
-  absl::string_view buffer_view(reinterpret_cast<char*>(raw_buffer),
-                                bytes_available);
+  absl::string_view buffer_view(
+      reinterpret_cast<char*>(raw_buffer) + buffer_offset, bytes_available);
   // Pass the response body data to the HttpRequestCallback.
   auto result = callback()->OnResponseBody(*request_, response(), buffer_view);
 
@@ -504,11 +505,11 @@ extern "C" JNIEXPORT void JNICALL JFUN(onResponseError)(
       ->OnResponseError(env, status_proto);
 }
 
-extern "C" JNIEXPORT jboolean JNICALL
-JFUN(onResponseBody)(JNIEnv* env, jclass, jlong request_handle_ptr,
-                     jbyteArray buffer, jint bytes_available) {
+extern "C" JNIEXPORT jboolean JNICALL JFUN(onResponseBody)(
+    JNIEnv* env, jclass, jlong request_handle_ptr, jbyteArray buffer,
+    jint buffer_offset, jint bytes_available) {
   return JavaHttpRequestHandle::FromJlong(request_handle_ptr)
-      ->OnResponseBody(env, buffer, bytes_available);
+      ->OnResponseBody(env, buffer, buffer_offset, bytes_available);
 }
 
 extern "C" JNIEXPORT void JNICALL JFUN(onResponseBodyError)(
