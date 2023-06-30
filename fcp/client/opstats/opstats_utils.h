@@ -21,8 +21,10 @@
 #include <string>
 
 #include "google/protobuf/timestamp.pb.h"
+#include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/opstats/opstats_db.h"
+#include "re2/re2.h"
 
 namespace fcp {
 namespace client {
@@ -32,13 +34,21 @@ namespace opstats {
 // runtime successfully contributed to a task with the given task name,
 // otherwise returns an empty optional.
 std::optional<OperationalStats> GetLastSuccessfulContribution(
-    const OpStatsSequence& data, const std::string& task_name);
+    const OpStatsSequence& data, absl::string_view task_name);
 
 // Returns an optional containing the timestamp of the last time the runtime
 // successfully contributed to a task with the given task name, otherwise
 // returns an empty optional.
 std::optional<google::protobuf::Timestamp> GetLastSuccessfulContributionTime(
-    const OpStatsSequence& data, const std::string& task_name);
+    const OpStatsSequence& data, absl::string_view task_name);
+
+// Returns an optional containing the timestamp of the last time the runtime
+// successfully contributed to a task with a task name matching the given
+// compiled_pattern, otherwise returns an empty optional. The compiled_pattern
+// must be error-free.
+std::optional<google::protobuf::Timestamp>
+GetLastSuccessfulContributionTimeForPattern(const OpStatsSequence& data,
+                                            const RE2& compiled_pattern);
 
 }  // namespace opstats
 }  // namespace client

@@ -61,6 +61,24 @@ TEST(OpStatsUtils,
 }
 
 TEST(OpStatsUtils,
+     GetLastSuccessfulContributionTimeForPatternReturnsUploadStartedTimestamp) {
+  OperationalStats stats;
+  stats.set_task_name("my_task.group_swor");
+
+  int64_t upload_started_time_sec = 1000;
+  stats.mutable_events()->Add(
+      CreateEvent(kUploadStartedEvent, upload_started_time_sec));
+
+  OpStatsSequence opstats_sequence;
+  *opstats_sequence.add_opstats() = std::move(stats);
+
+  RE2 pattern("(.*\\b)group_swor(\\b.*)");
+  auto last_time =
+      GetLastSuccessfulContributionTimeForPattern(opstats_sequence, pattern);
+  EXPECT_EQ(last_time->seconds(), upload_started_time_sec);
+}
+
+TEST(OpStatsUtils,
      GetLastSuccessfulContributionTimeReturnNotFoundForUnknownTask) {
   OperationalStats stats;
   stats.set_task_name(kTaskName);

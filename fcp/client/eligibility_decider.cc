@@ -25,6 +25,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "fcp/base/time_util.h"
@@ -32,6 +33,7 @@
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
+#include "re2/re2.h"
 
 namespace fcp::client {
 
@@ -49,6 +51,16 @@ const int32_t kDataAvailabilityImplementationVersion = 1;
 const int32_t kSworImplementationVersion = 1;
 // TODO(team): Implement TF custom policies.
 const int32_t kTfCustomPolicyImplementationVersion = -1;
+
+bool ExecutionOutsideSworPeriod(
+    absl::Time now, absl::Duration min_period,
+    google::protobuf::Timestamp last_successful_contribution_time) {
+  absl::Time last_successful_contribution_timestamp =
+      fcp::TimeUtil::ConvertProtoToAbslTime(last_successful_contribution_time);
+  absl::Duration period_between_last_successful_contribution =
+      now - last_successful_contribution_timestamp;
+  return min_period < period_between_last_successful_contribution;
+}
 
 // Computes sampling without replacement eligibility for the given set of tasks
 // based on the execution history in opstats.
@@ -72,6 +84,33 @@ absl::flat_hash_set<std::string> ComputePerTaskSworEligibility(
     return {};
   }
 
+  // For group swor policies, since the period is consistent across all tasks,
+  // and all tasks are in the same group, any previous successful contribution
+  // matching the group_regex will opt out all tasks.
+  if (!swor_policy.group_regex().empty()) {
+    RE2 compiled_pattern(swor_policy.group_regex());
+    if (!compiled_pattern.ok()) {
+      // Bug in the group pattern, opt out all tasks. This should never happen
+      // with the existing toolkit apis.
+      return {};
+    }
+    std::optional<google::protobuf::Timestamp>
+        last_successful_contribution_time =
+            opstats::GetLastSuccessfulContributionTimeForPattern(
+                opstats_sequence, compiled_pattern);
+
+    // If there's no contribution by a task in the group, or if there are no
+    // tasks in the group with an execution within the period, all tasks are
+    // eligible.
+    if (!last_successful_contribution_time.has_value() ||
+        ExecutionOutsideSworPeriod(now, min_period,
+                                   last_successful_contribution_time.value())) {
+      return task_names;
+    } else {
+      return {};
+    }
+  }
+
   absl::flat_hash_set<std::string> eligibility_results;
   for (const std::string& task_name : task_names) {
     // TODO(team) Instead of using GetLastSuccessfulContributionTime
@@ -89,14 +128,8 @@ absl::flat_hash_set<std::string> ComputePerTaskSworEligibility(
       continue;
     }
 
-    absl::Time last_successful_contribution_timestamp =
-        fcp::TimeUtil::ConvertProtoToAbslTime(
-            last_successful_contribution_time.value());
-    absl::Duration period_between_last_successful_contribution =
-        now - last_successful_contribution_timestamp;
-    bool execution_outside_period =
-        min_period < period_between_last_successful_contribution;
-    if (execution_outside_period) {
+    if (ExecutionOutsideSworPeriod(now, min_period,
+                                   last_successful_contribution_time.value())) {
       // Most recent execution was outside the period, so we are eligible
       eligibility_results.insert(task_name);
       continue;
