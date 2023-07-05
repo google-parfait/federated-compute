@@ -197,10 +197,6 @@ class Flags {
     return false;
   }
 
-  // If true, enables support for the `TensorflowSpec.constant_inputs` field. If
-  // false, then the field will be ignored.
-  virtual bool support_constant_tf_inputs() const { return false; }
-
   // If true, enables an Example Query plan engine to be invoked for
   // non-TensorFlow tasks.
   virtual bool enable_example_query_plan_engine() const { return false; }

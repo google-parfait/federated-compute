@@ -43,14 +43,12 @@ SimplePlanEngine::SimplePlanEngine(
     std::vector<ExampleIteratorFactory*> example_iterator_factories,
     std::function<bool()> should_abort, LogManager* log_manager,
     OpStatsLogger* opstats_logger,
-    const InterruptibleRunner::TimingConfig* timing_config,
-    const bool support_constant_tf_inputs)
+    const InterruptibleRunner::TimingConfig* timing_config)
     : example_iterator_factories_(example_iterator_factories),
       should_abort_(should_abort),
       log_manager_(log_manager),
       opstats_logger_(opstats_logger),
-      timing_config_(timing_config),
-      support_constant_tf_inputs_(support_constant_tf_inputs) {}
+      timing_config_(timing_config) {}
 
 PlanResult SimplePlanEngine::RunPlan(
     const TensorflowSpec& tensorflow_spec, const std::string& graph,
@@ -136,8 +134,7 @@ SimplePlanEngine::RunPlanInternal(
        tensorflow_spec.target_node_names()) {
     target_names.push_back(target_node_name);
   }
-  if (support_constant_tf_inputs_ &&
-      !tensorflow_spec.constant_inputs().empty()) {
+  if (!tensorflow_spec.constant_inputs().empty()) {
     // If the server-side constant inputs message is provided, copy over these
     // values to the set of input tensors.
     for (const auto& [name, tensor_proto] : tensorflow_spec.constant_inputs()) {

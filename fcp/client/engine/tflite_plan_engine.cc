@@ -98,35 +98,27 @@ PlanResult TfLitePlanEngine::RunPlan(
   // If the constant inputs are provided and the flag is enabled, add these to
   // the map of TFLite inputs.
   if (!tensorflow_spec.constant_inputs().empty()) {
-    if (!flags_.support_constant_tf_inputs()) {
-      return PlanResult(
-          PlanOutcome::kInvalidArgument,
-          absl::InternalError(
-              "Cannot run constant_inputs when experiment is disabled."));
-    } else {
-      for (const auto& [name, tensor_proto] :
-           tensorflow_spec.constant_inputs()) {
-        tensorflow::Tensor input_tensor;
-        if (!input_tensor.FromProto(tensor_proto)) {
-          FCP_LOG(ERROR) << "unable to convert constant_input to tensor: "
-                         << tensor_proto.DebugString();
-          return PlanResult(PlanOutcome::kInvalidArgument,
-                            absl::InternalError(
-                                "Unable to convert constant_input to tensor"));
-        }
-        // Convert Tensor to TFLite represenation and add this as a string to
-        // inputs.
-        if (input_tensor.dtype() == tensorflow::DT_STRING) {
-          tensorflow::tstring str_data =
-              input_tensor.scalar<tensorflow::tstring>()();
-          inputs->insert({name, std::string(str_data.data(), str_data.size())});
-        } else {
-          FCP_LOG(ERROR) << "Constant input tensor is not a string tensor. "
-                            "Currently only string tensors are supported.";
-          return PlanResult(
-              PlanOutcome::kInvalidArgument,
-              absl::InternalError("Only string tensors are supported"));
-        }
+    for (const auto& [name, tensor_proto] : tensorflow_spec.constant_inputs()) {
+      tensorflow::Tensor input_tensor;
+      if (!input_tensor.FromProto(tensor_proto)) {
+        FCP_LOG(ERROR) << "unable to convert constant_input to tensor: "
+                       << tensor_proto.DebugString();
+        return PlanResult(
+            PlanOutcome::kInvalidArgument,
+            absl::InternalError("Unable to convert constant_input to tensor"));
+      }
+      // Convert Tensor to TFLite representation and add this as a string to
+      // inputs.
+      if (input_tensor.dtype() == tensorflow::DT_STRING) {
+        tensorflow::tstring str_data =
+            input_tensor.scalar<tensorflow::tstring>()();
+        inputs->insert({name, std::string(str_data.data(), str_data.size())});
+      } else {
+        FCP_LOG(ERROR) << "Constant input tensor is not a string tensor. "
+                          "Currently only string tensors are supported.";
+        return PlanResult(
+            PlanOutcome::kInvalidArgument,
+            absl::InternalError("Only string tensors are supported"));
       }
     }
   }
