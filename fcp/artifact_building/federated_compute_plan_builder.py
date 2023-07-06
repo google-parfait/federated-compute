@@ -364,18 +364,27 @@ def _merge_secagg_vars(
   return ops
 
 
-def _is_nonempty_tff_value(type_signature: tff.Type) -> bool:
-  """Determines whether this type signature represents an empty TFF value."""
-  # Ignore the placement, if one exists.
-  if isinstance(type_signature, tff.FederatedType):
-    type_signature = type_signature.member
-  # Check for empty vals in TFF that are represented as either an empty struct
-  # or empty tensor.
-  if isinstance(type_signature, tff.StructType):
-    return type_signature
-  if isinstance(type_signature, tff.TensorType):
-    return type_signature.shape.num_elements()
-  return True
+def _is_empty_tff_value(type_signature: tff.Type) -> bool:
+  """Determines whether this type signature represents an empty TFF value.
+
+  Empty TFF values have a `tff.Type` that contains only `tff.StructType` (and
+  structure of `tff.StructType`s). TFF values that contain any non-
+  `tff.StructType`, e.g., `tff.TensorType`, are considered non-empty (even
+  `tff.TensorType` with shape None or 0 since it may just not be possible to
+  define the shape at compile time). For any `tff.FederatedType` instance, its
+  `placement` information is ignored, and only the non-federated part (i.e.,
+  its member `tff.Type`), will be checked.
+
+  Args:
+    type_signature: The TFF type signature to evaluate.
+
+  Returns:
+    Boolean indicating whether the TFF type signature is considered empty.
+  """
+  return tff.types.contains_only(
+      type_signature,
+      lambda t: isinstance(t, (tff.StructType, tff.FederatedType)),
+  )
 
 
 def _generate_server_aggregation_configs_for_intrinsic_call(
@@ -477,10 +486,10 @@ def _build_server_graphs_from_distribute_aggregate_form(
       - A set of the secagg tensor `TensorSpec`s expected to be delivered by the
         client.
   """
-  uses_broadcast = _is_nonempty_tff_value(
+  uses_broadcast = not _is_empty_tff_value(
       daf.server_prepare.type_signature.result[0]  # pytype: disable=unsupported-operands
   )
-  uses_intermediate_state = _is_nonempty_tff_value(
+  uses_intermediate_state = not _is_empty_tff_value(
       daf.server_prepare.type_signature.result[1]  # pytype: disable=unsupported-operands
   )
   # If the server state or intermediate state is non-empty, we can skip running
@@ -650,10 +659,10 @@ def _build_server_graphs_from_distribute_aggregate_form(
       daf.server_result.type_signature.result[0],  # pytype: disable=unsupported-operands
       tff.FederatedType,
   )
-  uses_updated_server_state = _is_nonempty_tff_value(
+  uses_updated_server_state = not _is_empty_tff_value(
       daf.server_result.type_signature.result[0]  # pytype: disable=unsupported-operands
   )
-  uses_server_output = _is_nonempty_tff_value(
+  uses_server_output = not _is_empty_tff_value(
       daf.server_result.type_signature.result[1]  # pytype: disable=unsupported-operands
   )
   assert (
@@ -746,15 +755,21 @@ def _build_server_graphs_from_distribute_aggregate_form(
     metric_names_with_metric_prefix = []
     metric_tensors = []
     if uses_server_output:
+      # To match the metric naming in the MRF pathway, turn the metric type into
+      # a struct if it isn't already.
+      metric_type = daf.server_result.type_signature.result[1]
+      assert isinstance(metric_type, tff.FederatedType)
+      if not isinstance(metric_type.member, tff.StructType):
+        metric_type = tff.StructType([metric_type])
       metric_names_with_server_prefix = (
           variable_helpers.variable_names_from_type(
-              daf.server_result.type_signature.result[1],  # pytype: disable=unsupported-operands
+              metric_type,  # pytype: disable=unsupported-operands
               artifact_constants.SERVER_STATE_VAR_PREFIX,
           )
       )
       metric_names_with_metric_prefix = (
           variable_helpers.variable_names_from_type(
-              daf.server_result.type_signature.result[1],  # pytype: disable=unsupported-operands
+              metric_type,  # pytype: disable=unsupported-operands
               artifact_constants.SERVER_METRICS_VAR_PREFIX,
           )
       )
@@ -1711,7 +1726,7 @@ def _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
     # Import the client work computation into the TF graph, including any
     # pre-work for restoring broadcast values.
     broadcast_tensor_specs = []
-    if _is_nonempty_tff_value(client_work.type_signature.parameter[1]):
+    if not _is_empty_tff_value(client_work.type_signature.parameter[1]):
       broadcast_type = client_work.type_signature.parameter[1]
       broadcast_vars = variable_helpers.create_vars_for_tff_type(
           broadcast_type, 'client'
