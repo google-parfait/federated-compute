@@ -1098,6 +1098,21 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
     // the "checkin" phase below without providing it a TaskEligibilityInfo
     // proto.
     result.task_eligibility_info = std::nullopt;
+    auto eligibility_eval_disabled =
+        std::get<FederatedProtocol::EligibilityEvalDisabled>(
+            *eligibility_checkin_result);
+    if (eligibility_eval_disabled.population_eligibility_spec.has_value()) {
+      for (const auto& task_info :
+           eligibility_eval_disabled.population_eligibility_spec.value()
+               .task_info()) {
+        if (task_info.task_assignment_mode() ==
+            PopulationEligibilitySpec::TaskInfo::
+                TASK_ASSIGNMENT_MODE_MULTIPLE) {
+          result.task_names_for_multiple_task_assignments.push_back(
+              task_info.task_name());
+        }
+      }
+    }
     return result;
   }
 

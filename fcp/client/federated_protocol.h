@@ -114,7 +114,12 @@ class FederatedProtocol {
   struct Rejection {};
   // Indicates that the server does not have an eligibility eval task configured
   // for the population.
-  struct EligibilityEvalDisabled {};
+  struct EligibilityEvalDisabled {
+    // TODO(team): Replace this with absl::Cord and move the parsing to
+    // fl_runner.
+    std::optional<google::internal::federated::plan::PopulationEligibilitySpec>
+        population_eligibility_spec;
+  };
   // EligibilityEvalCheckin() returns either
   // 1. an `EligibilityEvalTask` struct holding the payloads for an eligibility
   //    eval task, if the population is configured with such a task. In this

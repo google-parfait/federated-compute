@@ -330,6 +330,10 @@ CreatePlanAndCheckpointPayloads(
       plan_data_response->body, checkpoint_data_response->body};
 }
 
+bool IsResourceEmpty(const Resource& resource) {
+  return !resource.has_inline_resource() && !resource.has_uri();
+}
+
 }  // namespace
 
 HttpFederatedProtocol::HttpFederatedProtocol(
@@ -502,19 +506,33 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
       EligibilityEvalTask result{.execution_id = task.execution_id()};
       payload_uris_received_callback(result);
 
-      // Fetch the task resources, returning any errors that may be encountered
-      // in the process.
+      if (task.has_population_eligibility_spec() &&
+          flags_->http_protocol_supports_multiple_task_assignments()) {
+        FCP_ASSIGN_OR_RETURN(
+            PopulationEligibilitySpec population_eligibility_spec,
+            FetchPopulationEligibilitySpec(task.population_eligibility_spec()));
+        if (IsResourceEmpty(task.plan()) &&
+            IsResourceEmpty(task.init_checkpoint())) {
+          // If both plan and initial checkpoint are empty, it means the
+          // population has no eligibility eval task configured. We'll return a
+          // EligibilityEvalTask with only population_eligibility_spec.
+          object_state_ = ObjectState::kEligibilityEvalDisabled;
+          return EligibilityEvalDisabled{
+              .population_eligibility_spec =
+                  std::move(population_eligibility_spec)};
+        } else {
+          result.population_eligibility_spec =
+              std::move(population_eligibility_spec);
+        }
+      }
+
+      // Fetch the task resources, returning any errors that may be
+      // encountered in the process.
       FCP_ASSIGN_OR_RETURN(
           auto task_resources,
           FetchTaskResources(
               {{.plan = task.plan(), .checkpoint = task.init_checkpoint()}}));
       FCP_ASSIGN_OR_RETURN(result.payloads, task_resources[0]);
-      if (task.has_population_eligibility_spec() &&
-          flags_->http_protocol_supports_multiple_task_assignments()) {
-        FCP_ASSIGN_OR_RETURN(
-            result.population_eligibility_spec,
-            FetchPopulationEligibilitySpec(task.population_eligibility_spec()));
-      }
 
       object_state_ = ObjectState::kEligibilityEvalEnabled;
       return std::move(result);
