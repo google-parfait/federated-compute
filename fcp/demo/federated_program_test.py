@@ -26,9 +26,14 @@ import tensorflow_federated as tff
 from fcp import demo
 from fcp.client import client_runner_example_data_pb2
 from fcp.protos import plan_pb2
+from fcp.protos import population_eligibility_spec_pb2
 
 POPULATION_NAME = 'test/population'
 COLLECTION_URI = 'app:/example'
+
+_TaskAssignmentMode = (
+    population_eligibility_spec_pb2.PopulationEligibilitySpec.TaskInfo.TaskAssignmentMode
+)
 
 
 @tff.federated_computation()
@@ -61,27 +66,52 @@ def sum_counts(state, client_data):
   return state + aggregated_count, metrics
 
 
-async def program_logic(init: tff.Computation, comp: tff.Computation,
-                        data_source: tff.program.FederatedDataSource,
-                        total_rounds: int, number_of_clients: int,
-                        release_manager: tff.program.ReleaseManager) -> None:
+@tff.federated_computation(
+    tff.type_at_server(tf.int32),
+    tff.type_at_clients(tff.SequenceType(tf.string)),
+)
+def count_clients(state, client_data):
+  """Counts the number of clients."""
+  del client_data
+  num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
+  metrics = tff.federated_zip((tff.federated_value(0, tff.SERVER),))
+  return state + num_clients, metrics
+
+
+async def program_logic(
+    init_fns: list[tff.Computation],
+    comp_fns: list[tff.Computation],
+    data_source: tff.program.FederatedDataSource,
+    total_rounds: int,
+    number_of_clients: int,
+    release_manager: tff.program.ReleaseManager,
+) -> None:
   """Initializes and runs a computation, releasing metrics and final state."""
   tff.program.check_in_federated_context()
+  assert len(init_fns) == len(comp_fns)
   data_iterator = data_source.iterator()
-  state = init()
-  for i in range(total_rounds):
+  states = [init() for init in init_fns]
+  for rnd in range(total_rounds):
     cohort_config = data_iterator.select(number_of_clients)
-    state, metrics = comp(state, cohort_config)
+    round_awaitables = []
+    for i, (state, comp) in enumerate(zip(states, comp_fns)):
+      states[i], metrics = comp(state, cohort_config)
+      round_awaitables.append(
+          release_manager.release(
+              metrics,
+              comp.type_signature.result[1],  # pytype: disable=unsupported-operands
+              key=f'{i}/metrics/{rnd}',
+          )
+      )
+    await asyncio.gather(*round_awaitables)
+  for i, (state, comp) in enumerate(zip(states, comp_fns)):
+    # The last round should already complete, so there's no need to await the
+    # results in parallel.
     await release_manager.release(
-        metrics,
-        comp.type_signature.result[1],  # pytype: disable=unsupported-operands
-        key=f'metrics/{i}',
+        state,
+        comp.type_signature.result[0],  # pytype: disable=unsupported-operands
+        key=f'{i}/result',
     )
-  await release_manager.release(
-      state,
-      comp.type_signature.result[0],  # pytype: disable=unsupported-operands
-      key='result',
-  )
 
 
 async def run_client(population_name: str, server_url: str, num_rounds: int,
@@ -158,20 +188,89 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
           for counts in client_counts
       ]
       with tff.framework.get_context_stack().install(ctx):
-        program = program_logic(initialize, comp, data_source, num_rounds,
-                                len(client_counts), release_manager)
+        program = program_logic(
+            [initialize],
+            [comp],
+            data_source,
+            num_rounds,
+            len(client_counts),
+            release_manager,
+        )
         return_codes = (await asyncio.gather(program, *clients))[1:]
         # All clients should complete successfully.
         self.assertListEqual(return_codes, [0] * len(client_counts))
 
-    self.assertSequenceEqual(release_manager.values()['result'],
-                             (num_rounds * sum([sum(l) for l in client_counts]),
-                              tff.type_at_server(tf.int32)))
+    self.assertSequenceEqual(
+        release_manager.values()['0/result'],
+        (
+            num_rounds * sum([sum(l) for l in client_counts]),
+            tff.type_at_server(tf.int32),
+        ),
+    )
     for i in range(num_rounds):
       self.assertSequenceEqual(
-          release_manager.values()[f'metrics/{i}'],
-          ((len(client_counts),),
-           tff.type_at_server(tff.StructWithPythonType([tf.int32], tuple))))
+          release_manager.values()[f'0/metrics/{i}'],
+          (
+              (len(client_counts),),
+              tff.type_at_server(tff.StructWithPythonType([tf.int32], tuple)),
+          ),
+      )
+
+  async def test_multiple_assignment(self):
+    data_source = demo.FederatedDataSource(
+        POPULATION_NAME,
+        plan_pb2.ExampleSelector(collection_uri=COLLECTION_URI),
+        task_assignment_mode=_TaskAssignmentMode.TASK_ASSIGNMENT_MODE_MULTIPLE,
+    )
+    comp1 = demo.FederatedComputation(sum_counts, name='sum_counts')
+    comp2 = demo.FederatedComputation(count_clients, name='count_clients')
+    release_manager = tff.program.MemoryReleaseManager()
+    client_counts = [
+        [0, 3, 5, 1],
+        [2, 4],
+    ]
+
+    base_context = tff.backends.native.create_sync_local_cpp_execution_context()
+
+    with demo.FederatedContext(
+        POPULATION_NAME,
+        base_context=base_context,
+    ) as ctx:
+      clients = []
+      for counts in client_counts:
+        clients.append(
+            run_client(
+                POPULATION_NAME,
+                f'http://localhost:{ctx.server_port}',
+                1,
+                COLLECTION_URI,
+                create_examples(counts),
+            )
+        )
+      with tff.framework.get_context_stack().install(ctx):
+        num_rounds = 1
+        program = program_logic(
+            [initialize, initialize],
+            [comp1, comp2],
+            data_source,
+            num_rounds,
+            len(client_counts),
+            release_manager,
+        )
+        return_codes = (await asyncio.gather(program, *clients))[1:]
+        # All clients should complete successfully.
+        self.assertListEqual(return_codes, [0] * len(client_counts))
+
+    # With multiple assignment, clients should have contributed to both
+    # computations.
+    self.assertSequenceEqual(
+        release_manager.values()['0/result'],
+        (sum([sum(l) for l in client_counts]), tff.type_at_server(tf.int32)),
+    )
+    self.assertSequenceEqual(
+        release_manager.values()['1/result'],
+        (len(client_counts), tff.type_at_server(tf.int32)),
+    )
 
 
 if __name__ == '__main__':

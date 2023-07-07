@@ -226,6 +226,9 @@ class FlagsImpl : public Flags {
     return use_http_federated_compute_protocol_;
   }
   bool use_tflite_training() const override { return use_tflite_training_; }
+  bool http_protocol_supports_multiple_task_assignments() const override {
+    return true;
+  }
 
  private:
   bool use_http_federated_compute_protocol_ = false;

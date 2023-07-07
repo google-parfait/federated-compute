@@ -195,6 +195,7 @@ py_test(
         ":demo",
         "//fcp/client:client_runner_example_data_py_pb2",
         "//fcp/protos:plan_py_pb2",
+        "//fcp/protos:population_eligibility_spec_py_pb2",
     ],
 )
 

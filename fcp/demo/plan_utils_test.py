@@ -210,12 +210,6 @@ def create_checkpoint(tensor_name=b'test'):
 
 class PlanUtilsTest(absltest.TestCase):
 
-  def test_session_enter_exit(self):
-    self.assertIsNone(tf.compat.v1.get_default_session())
-    with plan_utils.Session(create_plan(), create_checkpoint()):
-      self.assertIsNotNone(tf.compat.v1.get_default_session())
-    self.assertIsNone(tf.compat.v1.get_default_session())
-
   def test_session_without_phase(self):
     plan = create_plan()
     plan.ClearField('phase')

@@ -73,11 +73,10 @@ class Session:
     }
 
   def __enter__(self) -> 'Session':
-    self._session.__enter__()
     return self
 
   def __exit__(self, exc_type, exc_value, tb) -> None:
-    self._session.__exit__(exc_type, exc_value, tb)
+    self.close()
 
   def close(self) -> None:
     """Closes the session, releasing resources."""
