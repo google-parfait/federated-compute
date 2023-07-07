@@ -190,13 +190,6 @@ class Flags {
   // allowed to continue with a no-op implementation like before.
   virtual bool log_opstats_initialization_errors() const { return false; }
 
-  // If true, enables the last_successful_contribution option in the opstats
-  // selection criteria which returns an opstats entry for the last successful
-  // contribution for the currently executing task.
-  virtual bool opstats_last_successful_contribution_criteria() const {
-    return false;
-  }
-
   // If true, enables an Example Query plan engine to be invoked for
   // non-TensorFlow tasks.
   virtual bool enable_example_query_plan_engine() const { return false; }

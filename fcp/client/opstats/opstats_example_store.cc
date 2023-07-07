@@ -221,19 +221,13 @@ OpStatsExampleIteratorFactory::CreateExampleIterator(
                        op_stats_logger_->GetOpStatsDb()->Read());
   std::vector<OperationalStats> selected_data;
   if (last_successful_contribution) {
-    if (opstats_last_successful_contribution_criteria_) {
-      // Selector specified last_successful_contribution, and the feature is
-      // enabled. Create a last_successful_contribution iterator.
-      std::optional<OperationalStats> last_successful_contribution_entry =
-          GetLastSuccessfulContribution(data,
-                                        op_stats_logger_->GetCurrentTaskName());
-      if (last_successful_contribution_entry.has_value()) {
-        selected_data.push_back(*last_successful_contribution_entry);
-      }
-    } else {
-      return absl::InvalidArgumentError(
-          "OpStats selection criteria has last_successful_contribution enabled "
-          "but feature not enabled in the runtime!");
+    // Selector specified last_successful_contribution, create a
+    // last_successful_contribution iterator.
+    std::optional<OperationalStats> last_successful_contribution_entry =
+        GetLastSuccessfulContribution(data,
+                                      op_stats_logger_->GetCurrentTaskName());
+    if (last_successful_contribution_entry.has_value()) {
+      selected_data.push_back(*last_successful_contribution_entry);
     }
   } else {
     for (auto it = data.opstats().rbegin(); it != data.opstats().rend(); ++it) {

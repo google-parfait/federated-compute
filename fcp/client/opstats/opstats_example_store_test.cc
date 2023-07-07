@@ -74,9 +74,7 @@ class OpStatsExampleStoreTest : public testing::Test {
   testing::StrictMock<MockOpStatsDb> mock_db_;
   testing::StrictMock<MockLogManager> mock_log_manager_;
   OpStatsExampleIteratorFactory iterator_factory_ =
-      OpStatsExampleIteratorFactory(
-          &mock_opstats_logger_, &mock_log_manager_,
-          /*opstats_last_successful_contribution_criteria=*/false);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
 };
 
 TEST_F(OpStatsExampleStoreTest, TestInvalidCollectionUrl) {
@@ -356,9 +354,7 @@ TEST_F(OpStatsExampleStoreTest, SelectionCriteriaOnlyContainsEndTime) {
 TEST_F(OpStatsExampleStoreTest,
        SelectionCriteriaLastSuccessfulContributionEnabledAndExists) {
   OpStatsExampleIteratorFactory iterator_factory =
-      OpStatsExampleIteratorFactory(
-          &mock_opstats_logger_, &mock_log_manager_,
-          /*opstats_last_successful_contribution_criteria=*/true);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
   OperationalStats included;
   included.set_task_name(kTestTaskName);
   included.mutable_events()->Add(CreateEvent(
@@ -410,9 +406,7 @@ TEST_F(OpStatsExampleStoreTest,
 TEST_F(OpStatsExampleStoreTest,
        SelectionCriteriaLastSuccessfulContributionEnabledAndDoesNotExist) {
   OpStatsExampleIteratorFactory iterator_factory =
-      OpStatsExampleIteratorFactory(
-          &mock_opstats_logger_, &mock_log_manager_,
-          /*opstats_last_successful_contribution_criteria=*/true);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
   OperationalStats non_matching;
   non_matching.set_task_name("non_matching_task_name");
   non_matching.mutable_events()->Add(CreateEvent(
@@ -442,45 +436,6 @@ TEST_F(OpStatsExampleStoreTest,
   std::unique_ptr<ExampleIterator> iterator = std::move(iterator_or.value());
   absl::StatusOr<std::string> example_or = iterator->Next();
   EXPECT_THAT(example_or.status(), IsCode(absl::StatusCode::kOutOfRange));
-}
-
-TEST_F(OpStatsExampleStoreTest,
-       SelectionCriteriaLastSuccessfulContributionDisabled) {
-  // disable the feature but put in some matching entries.
-  OpStatsExampleIteratorFactory iterator_factory =
-      OpStatsExampleIteratorFactory(
-          &mock_opstats_logger_, &mock_log_manager_,
-          /*opstats_last_successful_contribution_criteria=*/false);
-
-  OperationalStats included;
-  included.set_task_name(kTestTaskName);
-  included.mutable_events()->Add(CreateEvent(
-      OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED, 900L));
-  included.mutable_events()->Add(CreateEvent(
-      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1000L));
-
-  OperationalStats last_successful_contribution;
-  last_successful_contribution.set_task_name(kTestTaskName);
-  last_successful_contribution.mutable_events()->Add(CreateEvent(
-      OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED, 1200L));
-  last_successful_contribution.mutable_events()->Add(CreateEvent(
-      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 2001L));
-
-  OpStatsSequence opstats_sequence;
-  *opstats_sequence.add_opstats() = std::move(included);
-  *opstats_sequence.add_opstats() = std::move(last_successful_contribution);
-  EXPECT_CALL(mock_db_, Read()).WillOnce(Return(opstats_sequence));
-
-  ExampleSelector selector;
-  selector.set_collection_uri(kOpStatsCollectionUri);
-  OpStatsSelectionCriteria criteria;
-  criteria.set_last_successful_contribution(true);
-  selector.mutable_criteria()->PackFrom(criteria);
-  absl::StatusOr<std::unique_ptr<ExampleIterator>> iterator_or =
-      iterator_factory.CreateExampleIterator(selector);
-  // Enabling last successful contribution in the criteria when it's not enabled
-  // in the client returns INVALID_ARGUMENT.
-  EXPECT_THAT(iterator_or.status(), IsCode(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(OpStatsExampleStoreTest, FullSerialization) {

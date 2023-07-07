@@ -316,8 +316,7 @@ absl::Status RunLocalComputation(
   // Local compute plans can use example iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger, log_manager,
-      flags->opstats_last_successful_contribution_criteria());
+      opstats_logger, log_manager);
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(env_deps, selector_context);
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{

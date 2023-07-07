@@ -1945,8 +1945,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // Eligibility eval plans can use example iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger, log_manager,
-      flags->opstats_last_successful_contribution_criteria());
+      opstats_logger, log_manager);
   std::unique_ptr<engine::ExampleIteratorFactory>
       env_eligibility_example_iterator_factory =
           CreateSimpleTaskEnvironmentIteratorFactory(
@@ -2068,8 +2067,7 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   // Eligibility eval plans can only use iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger.get(), log_manager,
-      flags->opstats_last_successful_contribution_criteria());
+      opstats_logger.get(), log_manager);
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(env_deps, SelectorContext());
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{

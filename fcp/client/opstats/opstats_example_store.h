@@ -57,13 +57,9 @@ inline static constexpr char kEarliestTrustWorthyTimeMillis[] =
 class OpStatsExampleIteratorFactory
     : public fcp::client::engine::ExampleIteratorFactory {
  public:
-  OpStatsExampleIteratorFactory(
-      OpStatsLogger* op_stats_logger, LogManager* log_manager,
-      bool opstats_last_successful_contribution_criteria)
-      : op_stats_logger_(op_stats_logger),
-        log_manager_(log_manager),
-        opstats_last_successful_contribution_criteria_(
-            opstats_last_successful_contribution_criteria) {}
+  OpStatsExampleIteratorFactory(OpStatsLogger* op_stats_logger,
+                                LogManager* log_manager)
+      : op_stats_logger_(op_stats_logger), log_manager_(log_manager) {}
 
   bool CanHandle(const google::internal::federated::plan::ExampleSelector&
                      example_selector) override;
@@ -77,7 +73,6 @@ class OpStatsExampleIteratorFactory
  private:
   OpStatsLogger* op_stats_logger_;
   LogManager* log_manager_;
-  bool opstats_last_successful_contribution_criteria_;
 };
 
 }  // namespace opstats
