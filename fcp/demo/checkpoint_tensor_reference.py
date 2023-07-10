@@ -23,8 +23,13 @@ import tensorflow_federated as tff
 class CheckpointTensorReference(tff.program.MaterializableValueReference):
   """A reference to a tensor in a TF checkpoint file."""
 
-  def __init__(self, tensor_name: str, dtype: tf.DType, shape: Any,
-               checkpoint_future: tff.async_utils.SharedAwaitable):
+  def __init__(
+      self,
+      tensor_name: str,
+      dtype: tf.dtypes.DType,
+      shape: Any,
+      checkpoint_future: tff.async_utils.SharedAwaitable,
+  ):
     """Constructs a new CheckpointTensorReference object.
 
     Args:
