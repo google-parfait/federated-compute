@@ -916,7 +916,8 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
     absl::StatusOr<PerTaskInfo> task_info = CreatePerTaskInfoFromTaskAssignment(
         task_assignment, ObjectState::kMultipleTaskAssignmentsAccepted);
     if (!task_info.ok()) {
-      result.task_assignments.push_back(task_info.status());
+      result.task_assignments[task_assignment.aggregation_id()] =
+          task_info.status();
       continue;
     }
     TaskResources task_resources{
@@ -947,10 +948,12 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
   for (auto& task_assignment : pending_fetch_task_assignments) {
     auto payloads = payloads_it++;
     if (!payloads->ok()) {
-      result.task_assignments.push_back(payloads->status());
+      result.task_assignments[task_assignment.aggregation_session_id] =
+          payloads->status();
     } else {
       task_assignment.payloads = std::move(**payloads);
-      result.task_assignments.push_back(std::move(task_assignment));
+      result.task_assignments[task_assignment.aggregation_session_id] =
+          std::move(task_assignment);
     }
   }
 

@@ -25,6 +25,7 @@
 #include <variant>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -233,11 +234,15 @@ class FederatedProtocol {
       std::function<void(const TaskAssignment&)>
           payload_uris_received_callback) = 0;
 
-  // A list of absl::StatusOr<TaskAssignment> returned by
-  // PerformMultipleTaskAssignments. Individual absl::StatusOr<TaskAssignment>
-  // may be an error status due to failed to fetch the plan resources.
+  // A map of aggregation session id to absl::StatusOr<TaskAssignment> returned
+  // by PerformMultipleTaskAssignments. Individual
+  // absl::StatusOr<TaskAssignment> may be an error status due to failed to
+  // fetch the plan resources.
+  // Using btree_map to retain the order of the task assignments. It makes tests
+  // much easier to write.
   struct MultipleTaskAssignments {
-    std::vector<absl::StatusOr<TaskAssignment>> task_assignments;
+    absl::btree_map<std::string, absl::StatusOr<TaskAssignment>>
+        task_assignments;
   };
 
   // Checks in with a federated server to get multiple task assignments.

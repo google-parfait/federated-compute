@@ -1165,14 +1165,16 @@ struct CheckinResult {
 absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
     const FederatedProtocol::TaskAssignment& task_assignment,
     absl::string_view task_name, Files* files,
-    const std::function<void(absl::string_view)>& log_invalid_payload_error,
-    const std::function<void(const absl::Status&)>& log_io_error,
+    const std::function<void(absl::string_view, absl::string_view)>&
+        log_invalid_payload_error,
+    const std::function<void(absl::string_view, const absl::Status&)>&
+        log_io_error,
     const Flags* flags) {
   ClientOnlyPlan plan;
   auto plan_bytes = task_assignment.payloads.plan;
   if (!ParseFromStringOrCord(plan, plan_bytes)) {
     auto message = "Failed to parse received plan";
-    log_invalid_payload_error(message);
+    log_invalid_payload_error(task_name, message);
     FCP_LOG(ERROR) << message;
     return absl::InvalidArgumentError(message);
   }
@@ -1207,7 +1209,7 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
       auto message = absl::StrCat(
           "Failed to create checkpoint input file: code: ", status.code(),
           ", message: ", status.message());
-      log_io_error(status);
+      log_io_error(task_name, status);
       FCP_LOG(ERROR) << message;
       return status;
     }
@@ -1351,10 +1353,10 @@ absl::StatusOr<CheckinResult> IssueCheckin(
 
   auto task_assignment =
       absl::get<FederatedProtocol::TaskAssignment>(*checkin_result);
-  std::function<void(const absl::Status&)> log_io_error =
+  std::function<void(absl::string_view, const absl::Status&)> log_io_error =
       [&phase_logger, &federated_protocol, &network_stats_before_plan_download,
        &time_before_plan_download,
-       &reference_time](const absl::Status& status) {
+       &reference_time](absl::string_view unused, const absl::Status& status) {
         phase_logger.LogCheckinIOError(
             status,
             GetNetworkStatsSince(federated_protocol,
@@ -1362,9 +1364,12 @@ absl::StatusOr<CheckinResult> IssueCheckin(
                                  network_stats_before_plan_download),
             time_before_plan_download, reference_time);
       };
-  std::function<void(absl::string_view)> log_invalid_payload_error =
-      [&phase_logger, &federated_protocol, &network_stats_before_plan_download,
-       &time_before_plan_download, &reference_time](absl::string_view message) {
+  std::function<void(absl::string_view, absl::string_view)>
+      log_invalid_payload_error = [&phase_logger, &federated_protocol,
+                                   &network_stats_before_plan_download,
+                                   &time_before_plan_download,
+                                   &reference_time](absl::string_view unused,
+                                                    absl::string_view message) {
         phase_logger.LogCheckinInvalidPayload(
             message,
             GetNetworkStatsSince(federated_protocol,
@@ -1514,28 +1519,34 @@ std::vector<CheckinResult> IssueMultipleTaskAssignments(
   // callback should have already been called by this point by the protocol.
   FCP_CHECK(multiple_tasks_uris_received_callback_called);
 
-  std::function<void(absl::string_view)> log_invalid_payload_error =
-      [&phase_logger](absl::string_view message) {
-        // TODO(team): Attach task name to invalid payload errors.
+  std::function<void(absl::string_view, absl::string_view)>
+      log_invalid_payload_error = [&phase_logger](absl::string_view task_name,
+                                                  absl::string_view message) {
+        phase_logger.SetModelIdentifier(task_name);
         phase_logger.LogMultipleTaskAssignmentsInvalidPayload(message);
+        // We reset the model identifier right away because the next log event
+        // may not belong to the same task.
+        phase_logger.SetModelIdentifier("");
       };
-  std::function<void(const absl::Status&)> log_io_error =
-      [&phase_logger](const absl::Status& status) {
-        // TODO(team): Attach task name to payload IO errors.
+  std::function<void(absl::string_view, const absl::Status&)> log_io_error =
+      [&phase_logger](absl::string_view task_name, const absl::Status& status) {
+        phase_logger.SetModelIdentifier(task_name);
         phase_logger.LogMultipleTaskAssignmentsPayloadIOError(status);
+        // We reset the model identifier right away because the next log event
+        // may not belong to the same task.
+        phase_logger.SetModelIdentifier("");
       };
-  for (const auto& task_assignment :
+  for (const auto& [aggregation_session_id, task_assignment] :
        multiple_task_assignments->task_assignments) {
+    std::string task_name = ExtractTaskNameFromAggregationSessionId(
+        aggregation_session_id, population_name, *log_manager);
     if (!task_assignment.ok()) {
       // If the task assignment is not OK, it indicates that a task assignment
       // was received but that fetching the task's payloads failed.
-      // TODO(team): Attach task name to payload IO errors.
-      phase_logger.LogMultipleTaskAssignmentsPayloadIOError(
-          task_assignment.status());
+      log_io_error(task_name, task_assignment.status());
       continue;
     }
-    std::string task_name = ExtractTaskNameFromAggregationSessionId(
-        task_assignment->aggregation_session_id, population_name, *log_manager);
+
     auto result = CreateCheckinResultFromTaskAssignment(
         *task_assignment, task_name, files, log_invalid_payload_error,
         log_io_error, flags);

@@ -143,6 +143,7 @@ cc_library(
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos:population_eligibility_spec_cc_proto",
+        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
