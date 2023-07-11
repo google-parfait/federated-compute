@@ -1,0 +1,94 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fcp.confidentialcompute;
+
+import "google/protobuf/any.proto";
+
+// An interface for a service that transforms data in some way, e.g. as part of
+// a data processing pipeline. If these services run within externally-
+// verifiable enclaves, they can be used in combination with a Ledger to
+// implement externally-verifiable data pipelines.
+//
+// This service defines the API for a transform's Oak enclave app. The service
+// definition is compatible with the Oak microRPC libraries:
+// https://github.com/project-oak/oak/tree/main/micro_rpc.
+service PipelineTransform {
+  // Performs one-time initialization of the service. This method must be the
+  // first method called on the service and must not be called more than once.
+  // method_id: 1
+  rpc Initialize(InitializeRequest) returns (InitializeResponse);
+
+  // Transforms zero or more inputs into zero or more outputs. This method can
+  // be used to implement map (1 -> 1), filter (1 -> 0 or 1), combine (N ->
+  // 1), "do" (1 -> N), or more general (M -> N) operations.
+  // method_id: 2
+  rpc Transform(TransformRequest) returns (TransformResponse);
+}
+
+// A request to initialize the service.
+message InitializeRequest {
+  // Implementation-specific configuration (if any).
+  google.protobuf.Any configuration = 1;
+}
+
+// The result of initializing the service.
+message InitializeResponse {
+  // The serialized bytes of the enclave's Curve 25519 public key.
+  bytes public_key = 1;
+
+  // The attestation for the application supplying the public key.
+  bytes attestation = 2;
+}
+
+// A request providing the inputs to be transformed.
+message TransformRequest {
+  repeated Record inputs = 1;
+}
+
+// A response providing the results of the transformation.
+message TransformResponse {
+  repeated Record outputs = 1;
+}
+
+// A data record used as one of the inputs or outputs of a transform.
+message Record {
+  oneof kind {
+    bytes unencrypted_data = 1;
+    HpkePlusAeadData hpke_plus_aead_data = 2;
+  }
+
+  // Information about plaintext encrypted with AEAD, with the symmetric key
+  // then encrypted with HPKE.
+  message HpkePlusAeadData {
+    // The data, encrypted using AES-128-GCM.
+    bytes ciphertext = 1;
+
+    // The associated data for `ciphertext`.
+    bytes ciphertext_associated_data = 2;
+
+    // The symmetric key used to encrypt `ciphertext`, encrypted using HPKE.
+    bytes encrypted_symmetric_key = 3;
+
+    // The associated data for `encrypted_symmetric_key`. This field may be
+    // left unset if it's equal to `ciphertext_associated_data`.
+    optional bytes encrypted_symmetric_key_associated_data = 4;
+
+    // The ephemeral Diffe-Hellman key needed to derive the symmetric key used
+    // to encrypt `encrypted_secret_key`.
+    bytes encapsulated_public_key = 5;
+  }
+}

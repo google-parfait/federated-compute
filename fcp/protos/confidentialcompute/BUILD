@@ -49,3 +49,16 @@ cc_proto_library(
     name = "ledger_cc_proto",
     deps = [":ledger_proto"],
 )
+
+proto_library(
+    name = "pipeline_transform_proto",
+    srcs = ["pipeline_transform.proto"],
+    deps = [
+        "@com_google_protobuf//:any_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "pipeline_transform_cc_proto",
+    deps = [":pipeline_transform_proto"],
+)
