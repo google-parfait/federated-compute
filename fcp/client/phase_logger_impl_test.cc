@@ -367,6 +367,28 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationTensorflowError) {
       absl::Now() - absl::Minutes(5));
 }
 
+TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationIOError) {
+  std::string error_message = "Failed to read opstats dir";
+  std::string expected_error_message = absl::StrCat(
+      "Error during eligibility eval computation: code: 13, error: ",
+      error_message);
+  InSequence seq;
+  EXPECT_CALL(mock_event_publisher_,
+              PublishEligibilityEvalComputationIOError(expected_error_message,
+                                                       example_stats_, _));
+  EXPECT_CALL(
+      mock_opstats_logger_,
+      AddEventWithErrorMessage(
+          OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_IO,
+          expected_error_message));
+  VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
+  VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
+
+  phase_logger_->LogEligibilityEvalComputationIOError(
+      absl::InternalError(error_message), example_stats_,
+      absl::Now() - absl::Minutes(2), absl::Now() - absl::Minutes(5));
+}
+
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationInterrupted) {
   std::string error_message = "Client is no longer idle";
   std::string expected_error_message = absl::StrCat(

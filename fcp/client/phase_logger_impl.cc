@@ -238,6 +238,20 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationTensorflowError(
   LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
 }
 
+void PhaseLoggerImpl::LogEligibilityEvalComputationIOError(
+    absl::Status error_status, const ExampleStats& example_stats,
+    absl::Time run_plan_start_time, absl::Time reference_time) {
+  std::string error_message =
+      GetErrorMessage(error_status, kEligibilityComputationErrorPrefix,
+                      /* keep_error_message= */ true);
+  event_publisher_->PublishEligibilityEvalComputationIOError(
+      error_message, example_stats, absl::Now() - run_plan_start_time);
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_IO,
+      error_message);
+  LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
+}
+
 void PhaseLoggerImpl::LogEligibilityEvalComputationInterrupted(
     absl::Status error_status, const ExampleStats& example_stats,
     absl::Time run_plan_start_time, absl::Time reference_time) {

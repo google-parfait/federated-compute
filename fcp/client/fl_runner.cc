@@ -629,6 +629,28 @@ void LogEligibilityEvalComputationOutcome(
   }
 }
 
+void LogNativeEligibilityEvalComputationOutcome(PhaseLogger& phase_logger,
+                                                absl::Status status,
+                                                absl::Time run_plan_start_time,
+                                                absl::Time reference_time) {
+  // The only possible error statuses we can get when evaluating a native eet
+  // is INTERNAL from failing to read Opstats, or CANCELLED or INVALID_ARGUMENT
+  // from an ExampleIterator.
+  if (status.ok()) {
+    phase_logger.LogEligibilityEvalComputationCompleted(
+        ExampleStats(), run_plan_start_time, reference_time);
+  } else if (absl::IsCancelled(status)) {
+    phase_logger.LogEligibilityEvalComputationInterrupted(
+        status, ExampleStats(), run_plan_start_time, reference_time);
+  } else if (absl::IsInvalidArgument(status)) {
+    phase_logger.LogEligibilityEvalComputationInvalidArgument(
+        status, ExampleStats(), run_plan_start_time);
+  } else {
+    phase_logger.LogEligibilityEvalComputationIOError(
+        status, ExampleStats(), run_plan_start_time, reference_time);
+  }
+}
+
 void LogComputationOutcome(const engine::PlanResult& plan_result,
                            absl::Status computation_results_parsing_status,
                            PhaseLogger& phase_logger,
@@ -802,14 +824,8 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
 absl::StatusOr<std::optional<TaskEligibilityInfo>>
 MaybeComputeNativeEligibility(
     const FederatedProtocol::EligibilityEvalTask& eligibility_eval_task,
-    const Flags* flags, LogManager& log_manager, OpStatsLogger* opstats_logger,
-    Clock& clock,
+    LogManager& log_manager, OpStatsLogger* opstats_logger, Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories) {
-  if (!flags->enable_native_eets() ||
-      !eligibility_eval_task.population_eligibility_spec.has_value()) {
-    return std::nullopt;
-  }
-
   FCP_ASSIGN_OR_RETURN(opstats::OpStatsSequence opstats_sequence,
                        opstats_logger->GetOpStatsDb()->Read());
 
@@ -818,15 +834,6 @@ MaybeComputeNativeEligibility(
       ComputeEligibility(
           eligibility_eval_task.population_eligibility_spec.value(),
           log_manager, opstats_sequence, clock, example_iterator_factories));
-
-  // TODO(team): Add appropriate phase logging here.
-  // - If not ok, phaselog EligibilityEvalCheckinCompleted and IOError and halt.
-  // - If ok and empty, do not phaselog anything because we'll take the legacy
-  // EET plan path. If empty, we bailed very early so this should not affect
-  // timing too much for the legacy path.
-  // - If ok and not empty, phaselog EligibilityEvalCheckinCompleted,
-  //  EligibilityEvalComputationStarted, and  EligibilityEvalComputationOutcome
-  //  as is correct.
 
   if (task_eligibility_info.task_weights_size() == 0) {
     // Eligibility could not be decided.
@@ -849,18 +856,6 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     const absl::Time reference_time, const absl::Time time_before_checkin,
     const absl::Time time_before_plan_download,
     const NetworkStats& network_stats, Clock& clock) {
-  // If MaybeComputeNativeEligibility returns a non-ok status, bubble that up
-  // If it returns an empty optional, recompute eligibility with legacy EET
-  // plan, because this EET could not be computed via the native implementation.
-  // If it returns an ok task_eligibility_info, return that.
-  FCP_ASSIGN_OR_RETURN(
-      std::optional<TaskEligibilityInfo> native_task_eligibility_info,
-      MaybeComputeNativeEligibility(eligibility_eval_task, flags, *log_manager,
-                                    opstats_logger, clock,
-                                    example_iterator_factories));
-  if (native_task_eligibility_info.has_value()) {
-    return native_task_eligibility_info;
-  }
 
   ClientOnlyPlan plan;
   if (!ParseFromStringOrCord(plan, eligibility_eval_task.payloads.plan)) {
@@ -892,20 +887,49 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
                                                   /*time_before_plan_download=*/
                                                   time_before_plan_download);
 
-  absl::Time run_plan_start_time = absl::Now();
+  absl::Time run_computation_start_time = absl::Now();
   phase_logger.LogEligibilityEvalComputationStarted();
+
+  // It's a bit of a waste to create the input checkpoint file etc above if we
+  // don't end up using it due to a successful native eet computation, but it's
+  // worth it to get consistent phase logs that allows us to compare native eets
+  // to legacy eets.
+  if (flags->enable_native_eets() &&
+      eligibility_eval_task.population_eligibility_spec.has_value()) {
+    // TODO(team): Return ExampleStats out of the NEET engine so they can
+    // be measured.
+    absl::StatusOr<std::optional<TaskEligibilityInfo>>
+        native_task_eligibility_info = MaybeComputeNativeEligibility(
+            eligibility_eval_task, *log_manager, opstats_logger, clock,
+            example_iterator_factories);
+
+    // If native_task_eligibility_info has an OK status, and the wrapped
+    // optional contains a value, OR if we have a not-OK status, we should log
+    // and return. We don't log and return if we have an OK status but an empty
+    // optional, because that means we need to fall back to evaluating the
+    // legacy eet.
+    if ((native_task_eligibility_info.ok() &&
+         native_task_eligibility_info->has_value()) ||
+        !native_task_eligibility_info.ok()) {
+      LogNativeEligibilityEvalComputationOutcome(
+          phase_logger, native_task_eligibility_info.status(),
+          run_computation_start_time, reference_time);
+      return native_task_eligibility_info;
+    }
+  }
+
   engine::PlanResult plan_result = RunEligibilityEvalPlanWithTensorflowSpec(
       example_iterator_factories, should_abort, log_manager, opstats_logger,
       flags, plan, *checkpoint_input_filename, timing_config,
-      run_plan_start_time, reference_time);
+      run_computation_start_time, reference_time);
   absl::StatusOr<TaskEligibilityInfo> task_eligibility_info;
   if (plan_result.outcome == engine::PlanOutcome::kSuccess) {
     task_eligibility_info =
         ParseEligibilityEvalPlanOutput(plan_result.output_tensors);
   }
-  LogEligibilityEvalComputationOutcome(phase_logger, std::move(plan_result),
-                                       task_eligibility_info.status(),
-                                       run_plan_start_time, reference_time);
+  LogEligibilityEvalComputationOutcome(
+      phase_logger, std::move(plan_result), task_eligibility_info.status(),
+      run_computation_start_time, reference_time);
   return task_eligibility_info;
 }
 

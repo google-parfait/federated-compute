@@ -143,6 +143,10 @@ class EventPublisher {
   virtual void PublishEligibilityEvalComputationInvalidArgument(
       absl::string_view error_message, const ExampleStats& example_stats,
       absl::Duration phase_duration) = 0;
+  virtual void PublishEligibilityEvalComputationIOError(
+      absl::string_view error_message,
+      const ::fcp::client::ExampleStats& example_stats,
+      absl::Duration phase_duration) = 0;
   // Publish an example iterator error occurred during eligibility eval task.
   virtual void PublishEligibilityEvalComputationExampleIteratorError(
       absl::string_view error_message, const ExampleStats& example_stats,

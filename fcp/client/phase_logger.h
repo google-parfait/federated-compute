@@ -86,9 +86,13 @@ class PhaseLogger {
   virtual void LogEligibilityEvalComputationExampleIteratorError(
       absl::Status error_status, const ExampleStats& example_stats,
       absl::Time run_plan_start_time) = 0;
-  // Called when a tensorflow error happened during eligibiliity eval
+  // Called when a tensorflow error happened during eligibility eval
   // computation.
   virtual void LogEligibilityEvalComputationTensorflowError(
+      absl::Status error_status, const ExampleStats& example_stats,
+      absl::Time run_plan_start_time, absl::Time reference_time) = 0;
+  // Called when an internal error happened during eligibility eval computation.
+  virtual void LogEligibilityEvalComputationIOError(
       absl::Status error_status, const ExampleStats& example_stats,
       absl::Time run_plan_start_time, absl::Time reference_time) = 0;
   // Called when the eligibility eval computation is interrupted.

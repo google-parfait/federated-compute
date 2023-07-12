@@ -219,6 +219,12 @@ class FakeEventPublisher : public EventPublisher {
     FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
   }
 
+  void PublishEligibilityEvalComputationIOError(
+      absl::string_view error_message, const ExampleStats& example_stats,
+      absl::Duration phase_duration) override {
+    FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
+  }
+
   void PublishEligibilityEvalComputationInterrupted(
       absl::string_view error_message, const ExampleStats& example_stats,
       absl::Duration phase_duration) override {

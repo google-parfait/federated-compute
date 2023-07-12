@@ -85,6 +85,10 @@ class PhaseLoggerImpl : public PhaseLogger {
   void LogEligibilityEvalComputationTensorflowError(
       absl::Status error_status, const ExampleStats& example_stats,
       absl::Time run_plan_start_time, absl::Time reference_time) override;
+  void LogEligibilityEvalComputationIOError(absl::Status error_status,
+                                            const ExampleStats& example_stats,
+                                            absl::Time run_plan_start_time,
+                                            absl::Time reference_time) override;
   void LogEligibilityEvalComputationInterrupted(
       absl::Status error_status, const ExampleStats& example_stats,
       absl::Time run_plan_start_time, absl::Time reference_time) override;

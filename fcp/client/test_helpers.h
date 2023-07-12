@@ -148,6 +148,11 @@ class MockEventPublisher : public EventPublisher {
                const ExampleStats& example_stats,
                absl::Duration phase_duration),
               (override));
+  MOCK_METHOD(void, PublishEligibilityEvalComputationIOError,
+              (absl::string_view error_message,
+               const ExampleStats& example_stats,
+               absl::Duration phase_duration),
+              (override));
   MOCK_METHOD(void, PublishEligibilityEvalComputationInterrupted,
               (absl::string_view error_message,
                const ExampleStats& example_stats,
@@ -730,6 +735,10 @@ class MockPhaseLogger : public PhaseLogger {
                absl::Time run_plan_start_time),
               (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationTensorflowError,
+              (absl::Status error_status, const ExampleStats& example_stats,
+               absl::Time run_plan_start_time, absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogEligibilityEvalComputationIOError,
               (absl::Status error_status, const ExampleStats& example_stats,
                absl::Time run_plan_start_time, absl::Time reference_time),
               (override));
