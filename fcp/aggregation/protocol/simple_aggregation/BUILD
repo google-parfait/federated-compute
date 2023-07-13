@@ -46,6 +46,31 @@ cc_test(
 )
 
 cc_library(
+    name = "cancelable_callback",
+    srcs = ["cancelable_callback.cc"],
+    hdrs = ["cancelable_callback.h"],
+    copts = FCP_COPTS,
+    deps = [
+        "//fcp/base:clock",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "cancelable_callback_test",
+    srcs = ["cancelable_callback_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":cancelable_callback",
+        "//fcp/base:clock",
+        "//fcp/base:simulated_clock",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "simple_aggregation",
     srcs = [
         "simple_aggregation_protocol.cc",
