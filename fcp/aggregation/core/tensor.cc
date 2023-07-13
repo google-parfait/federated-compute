@@ -41,11 +41,12 @@ Status Tensor::CheckValid() const {
   }
 
   size_t value_size = 0;
-  DTYPE_CASES(dtype_, T, value_size = sizeof(T));
+  size_t alignment_size = 0;
+  DTYPE_CASES(dtype_, T, (value_size = sizeof(T), alignment_size = alignof(T)));
 
   // Verify that the storage is consistent with the value size in terms of
   // size and alignment.
-  FCP_RETURN_IF_ERROR(data_->CheckValid(value_size));
+  FCP_RETURN_IF_ERROR(data_->CheckValid(value_size, alignment_size));
 
   // Verify that the total size of the data is consistent with the value type
   // and the shape.

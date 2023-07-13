@@ -45,25 +45,26 @@ MockTensorData::MockTensorData(size_t data_pointer_offset, size_t size) {
 
 TEST(TensorDataTest, CheckValid_ZeroByteSize) {
   MockTensorData tensor_data(0, 0);
-  EXPECT_THAT(tensor_data.CheckValid(1), IsCode(FAILED_PRECONDITION));
+  EXPECT_THAT(tensor_data.CheckValid(1, 1), IsCode(FAILED_PRECONDITION));
 }
 
 TEST(TensorDataTest, CheckValid_ByteSizeNotAligned) {
   MockTensorData tensor_data(0, 33);
-  EXPECT_THAT(tensor_data.CheckValid(4), IsCode(FAILED_PRECONDITION));
+  EXPECT_THAT(tensor_data.CheckValid(4, 4), IsCode(FAILED_PRECONDITION));
 }
 
 TEST(TensorDataTest, CheckValid_AddressNotAligned) {
   MockTensorData tensor_data(3, 100);
-  EXPECT_THAT(tensor_data.CheckValid(4), IsCode(FAILED_PRECONDITION));
+  EXPECT_THAT(tensor_data.CheckValid(4, 4), IsCode(FAILED_PRECONDITION));
 }
 
 TEST(TensorDataTest, CheckValid_Success) {
-  MockTensorData tensor_data(0, 96);
-  EXPECT_THAT(tensor_data.CheckValid(1), IsOk());
-  EXPECT_THAT(tensor_data.CheckValid(2), IsOk());
-  EXPECT_THAT(tensor_data.CheckValid(4), IsOk());
-  EXPECT_THAT(tensor_data.CheckValid(8), IsOk());
+  MockTensorData tensor_data(8, 96);
+  EXPECT_THAT(tensor_data.CheckValid(1, 1), IsOk());
+  EXPECT_THAT(tensor_data.CheckValid(2, 2), IsOk());
+  EXPECT_THAT(tensor_data.CheckValid(4, 4), IsOk());
+  EXPECT_THAT(tensor_data.CheckValid(8, 8), IsOk());
+  EXPECT_THAT(tensor_data.CheckValid(16, 8), IsOk());
 }
 
 }  // namespace

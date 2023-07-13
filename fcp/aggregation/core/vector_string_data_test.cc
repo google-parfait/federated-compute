@@ -15,7 +15,6 @@
  */
 #include "fcp/aggregation/core/vector_string_data.h"
 
-#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -31,7 +30,7 @@ namespace {
 TEST(VectorDataTest, VectorStringDataValid) {
   VectorStringData vector_data(std::vector<std::string>(
       {"string1", "another-string", "one_more_string"}));
-  EXPECT_THAT(vector_data.CheckValid(sizeof(string_view)), IsOk());
+  EXPECT_THAT(vector_data.CheckValid<string_view>(), IsOk());
 }
 
 }  // namespace

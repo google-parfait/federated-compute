@@ -65,14 +65,19 @@ class TensorData {
   // The overall size of the tensor data in bytes.
   virtual size_t byte_size() const = 0;
 
-  // Validates TensorData constraints given the specified value_size.
-  // The value_size is the size of the native data type (e.g. 4 bytes for int32
-  // or float, 8 bytes for int64). This is used to verify data alignment - that
-  // all offsets and sizes are multiples of value_size that pointers are memory
-  // aligned to the value_size.
-  // TODO(team): Consider separate sizes for the pointer alignment and
-  // the slices offsets/sizes. The latter may need to be more coarse.
-  Status CheckValid(size_t value_size) const;
+  // Validates TensorData constraints given the specified value_size and
+  // alignment_size. The value_size is the size of the native data type
+  // (e.g. 4 bytes for int32 or float, 8 bytes for int64). The data size must be
+  // multiple of the value_size.  The alignment_size is used to verify that the
+  // data pointer is properly aligned in memory - the address must be a multiple
+  // of the alignment_size to avoid a significant cost to performance. Some CPU
+  // architectures may not handle unaligned memory access at all.
+  Status CheckValid(size_t value_size, size_t alignment_size) const;
+
+  template <typename T>
+  Status CheckValid() const {
+    return CheckValid(sizeof(T), alignof(T));
+  }
 };
 
 }  // namespace aggregation

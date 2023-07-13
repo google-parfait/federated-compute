@@ -30,7 +30,7 @@ TEST(MutableVectorDataTest, MutableVectorDataValid) {
   vector_data.push_back(1);
   vector_data.push_back(2);
   vector_data.push_back(3);
-  EXPECT_THAT(vector_data.CheckValid(sizeof(int64_t)), IsOk());
+  EXPECT_THAT(vector_data.CheckValid<int64_t>(), IsOk());
 }
 
 }  // namespace
