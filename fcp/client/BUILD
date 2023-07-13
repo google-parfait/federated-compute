@@ -167,18 +167,6 @@ cc_library(
     ],
 )
 
-cc_test(
-    name = "federated_protocol_util_test",
-    srcs = ["federated_protocol_util_test.cc"],
-    deps = [
-        ":diag_codes_cc_proto",
-        ":federated_protocol_util",
-        ":test_helpers",
-        "//fcp/testing",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
 cc_library(
     name = "grpc_federated_protocol",
     srcs = ["grpc_federated_protocol.cc"],

@@ -2136,10 +2136,11 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   // resources are fetched.
   EXPECT_CALL(
       mock_task_received_callback_,
-      Call(FieldsAre(FieldsAre("", ""), expected_federated_select_uri_template,
-                     expected_aggregation_session_id,
-                     Optional(FieldsAre(
-                         _, Eq(kMinimumClientsInServerVisibleAggregate))))));
+      Call(FieldsAre(
+          FieldsAre("", ""), expected_federated_select_uri_template,
+          expected_aggregation_session_id,
+          Optional(FieldsAre(_, Eq(kMinimumClientsInServerVisibleAggregate))),
+          kTaskName)));
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2157,8 +2158,8 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
           FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
           expected_federated_select_uri_template,
           expected_aggregation_session_id,
-          Optional(
-              FieldsAre(_, Eq(kMinimumClientsInServerVisibleAggregate))))));
+          Optional(FieldsAre(_, Eq(kMinimumClientsInServerVisibleAggregate))),
+          kTaskName)));
   // The Checkin call is expected to return the accepted retry window from the
   // response to the first eligibility eval request.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -2266,7 +2267,8 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(
       mock_task_received_callback_,
       Call(FieldsAre(FieldsAre("", ""), expected_federated_select_uri_template,
-                     expected_aggregation_session_id, Eq(std::nullopt))));
+                     expected_aggregation_session_id, Eq(std::nullopt),
+                     kTaskName)));
 
   // Issue the regular checkin.
   auto checkin_result = federated_protocol_->Checkin(
@@ -2279,7 +2281,7 @@ TEST_F(HttpFederatedProtocolTest,
       VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
           FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
           expected_federated_select_uri_template,
-          expected_aggregation_session_id, Eq(std::nullopt))));
+          expected_aggregation_session_id, Eq(std::nullopt), kTaskName)));
   // The Checkin call is expected to return the accepted retry window from the
   // response to the first eligibility eval request.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -2620,25 +2622,26 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
       federated_protocol_->PerformMultipleTaskAssignments(
           task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
   ASSERT_OK(multiple_task_assignment_result);
-  EXPECT_THAT(
-      multiple_task_assignment_result->task_assignments,
-      UnorderedElementsAre(
-          Pair(
-              kMultiTaskAggregationSessionId_1,
-              IsOkAndHolds(FieldsAre(
-                  FieldsAre(absl::Cord(expected_plan_1),
-                            absl::Cord(expected_checkpoint_1)),
-                  kFederatedSelectUriTemplate, kMultiTaskAggregationSessionId_1,
-                  Optional(FieldsAre(
-                      _, Eq(kMinimumClientsInServerVisibleAggregate)))))),
-          Pair(
-              kMultiTaskAggregationSessionId_2,
-              IsOkAndHolds(FieldsAre(
-                  FieldsAre(absl::Cord(expected_plan_2),
-                            absl::Cord(expected_checkpoint_2)),
-                  kFederatedSelectUriTemplate, kMultiTaskAggregationSessionId_2,
-                  Optional(FieldsAre(
-                      _, Eq(kMinimumClientsInServerVisibleAggregate))))))));
+  EXPECT_THAT(multiple_task_assignment_result->task_assignments,
+              UnorderedElementsAre(
+                  Pair(kMultiTaskId_1,
+                       IsOkAndHolds(FieldsAre(
+                           FieldsAre(absl::Cord(expected_plan_1),
+                                     absl::Cord(expected_checkpoint_1)),
+                           kFederatedSelectUriTemplate,
+                           kMultiTaskAggregationSessionId_1,
+                           Optional(FieldsAre(
+                               _, Eq(kMinimumClientsInServerVisibleAggregate))),
+                           kMultiTaskId_1))),
+                  Pair(kMultiTaskId_2,
+                       IsOkAndHolds(FieldsAre(
+                           FieldsAre(absl::Cord(expected_plan_2),
+                                     absl::Cord(expected_checkpoint_2)),
+                           kFederatedSelectUriTemplate,
+                           kMultiTaskAggregationSessionId_2,
+                           Optional(FieldsAre(
+                               _, Eq(kMinimumClientsInServerVisibleAggregate))),
+                           kMultiTaskId_2)))));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -2721,15 +2724,15 @@ TEST_F(HttpFederatedProtocolTest,
       multiple_task_assignment_result->task_assignments,
       UnorderedElementsAre(
           Pair(
-              kMultiTaskAggregationSessionId_1,
+              kMultiTaskId_1,
               IsOkAndHolds(FieldsAre(
                   FieldsAre(absl::Cord(expected_plan_1),
                             absl::Cord(expected_checkpoint_1)),
                   kFederatedSelectUriTemplate, kMultiTaskAggregationSessionId_1,
                   Optional(FieldsAre(
-                      _, Eq(kMinimumClientsInServerVisibleAggregate)))))),
-          Pair(kMultiTaskAggregationSessionId_2,
-               IsCode(absl::StatusCode::kInvalidArgument))));
+                      _, Eq(kMinimumClientsInServerVisibleAggregate))),
+                  kMultiTaskId_1))),
+          Pair(kMultiTaskId_2, IsCode(absl::StatusCode::kInvalidArgument))));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -2770,9 +2773,11 @@ TEST_F(HttpFederatedProtocolTest,
       plan_1, checkpoint_1, kFederatedSelectUriTemplate,
       kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
       kMultiTaskId_1, kMinimumClientsInServerVisibleAggregate);
-  // Add empty task assignment which is invalid.
+  // Add invalid task assignment which has empty target uri prefix in the
+  // forwarding info.
   auto* invalid_task_assignment = response.add_task_assignments();
   invalid_task_assignment->set_aggregation_id(kMultiTaskAggregationSessionId_2);
+  invalid_task_assignment->set_task_name(kMultiTaskId_2);
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2797,15 +2802,15 @@ TEST_F(HttpFederatedProtocolTest,
       multiple_task_assignment_result->task_assignments,
       UnorderedElementsAre(
           Pair(
-              kMultiTaskAggregationSessionId_1,
+              kMultiTaskId_1,
               IsOkAndHolds(FieldsAre(
                   FieldsAre(absl::Cord(expected_plan_1),
                             absl::Cord(expected_checkpoint_1)),
                   kFederatedSelectUriTemplate, kMultiTaskAggregationSessionId_1,
                   Optional(FieldsAre(
-                      _, Eq(kMinimumClientsInServerVisibleAggregate)))))),
-          Pair(kMultiTaskAggregationSessionId_2,
-               IsCode(absl::StatusCode::kInvalidArgument))));
+                      _, Eq(kMinimumClientsInServerVisibleAggregate))),
+                  kMultiTaskId_1))),
+          Pair(kMultiTaskId_2, IsCode(absl::StatusCode::kInvalidArgument))));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 

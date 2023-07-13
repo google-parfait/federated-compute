@@ -187,6 +187,7 @@ class FederatedProtocol {
     std::string federated_select_uri_template;
     std::string aggregation_session_id;
     std::optional<SecAggInfo> sec_agg_info;
+    std::string task_name;
   };
   // Checkin() returns either
   // 1. a `TaskAssignment` struct if the client was assigned a task to run, or
@@ -234,7 +235,7 @@ class FederatedProtocol {
       std::function<void(const TaskAssignment&)>
           payload_uris_received_callback) = 0;
 
-  // A map of aggregation session id to absl::StatusOr<TaskAssignment> returned
+  // A map of task names to absl::StatusOr<TaskAssignment> returned
   // by PerformMultipleTaskAssignments. Individual
   // absl::StatusOr<TaskAssignment> may be an error status due to failed to
   // fetch the plan resources.

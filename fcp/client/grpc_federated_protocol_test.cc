@@ -93,6 +93,7 @@ using ::testing::UnorderedElementsAre;
 using ::testing::VariantWith;
 
 constexpr char kPopulationName[] = "TEST/POPULATION";
+constexpr char kTaskName[] = "task_name";
 constexpr char kFederatedSelectUriTemplate[] = "https://federated.select";
 constexpr char kExecutionPhaseId[] = "TEST/POPULATION/TEST_TASK#1234.ab35";
 constexpr char kPlan[] = "CLIENT_ONLY_PLAN";
@@ -246,6 +247,7 @@ ServerStreamMessage GetFakeAcceptedCheckinResponse(
   acceptance_info->set_init_checkpoint(init_checkpoint);
   acceptance_info->mutable_federated_select_uri_info()->set_uri_template(
       federated_select_uri_template);
+  acceptance_info->set_task_name(kTaskName);
   if (use_secure_aggregation) {
     auto sec_agg =
         acceptance_info->mutable_side_channel_protocol_execution_info()
@@ -1251,7 +1253,8 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
                     kSecAggExpectedNumberOfClients),
               Field(&FederatedProtocol::SecAggInfo::
                         minimum_clients_in_server_visible_aggregate,
-                    kSecAggMinClientsInServerVisibleAggregate))))));
+                    kSecAggMinClientsInServerVisibleAggregate))),
+          kTaskName)));
 
   // Issue the regular checkin.
   auto checkin_result = federated_protocol_->Checkin(
@@ -1274,7 +1277,8 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
                     kSecAggExpectedNumberOfClients),
                 Field(&FederatedProtocol::SecAggInfo::
                           minimum_clients_in_server_visible_aggregate,
-                      kSecAggMinClientsInServerVisibleAggregate))))));
+                      kSecAggMinClientsInServerVisibleAggregate))),
+            kTaskName)));
   } else {
     EXPECT_THAT(
         *checkin_result,
@@ -1287,7 +1291,8 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAccept) {
                     kSecAggExpectedNumberOfClients),
                 Field(&FederatedProtocol::SecAggInfo::
                           minimum_clients_in_server_visible_aggregate,
-                      kSecAggMinClientsInServerVisibleAggregate))))));
+                      kSecAggMinClientsInServerVisibleAggregate))),
+            kTaskName)));
   }
   // The Checkin call is expected to return the accepted retry window from the
   // CheckinRequestAck response to the first eligibility eval request.
@@ -1354,7 +1359,8 @@ TEST_P(GrpcFederatedProtocolTest,
                     kSecAggExpectedNumberOfClients),
                 Field(&FederatedProtocol::SecAggInfo::
                           minimum_clients_in_server_visible_aggregate,
-                      kSecAggMinClientsInServerVisibleAggregate))))));
+                      kSecAggMinClientsInServerVisibleAggregate))),
+            kTaskName)));
 
     EXPECT_CALL(mock_http_client_,
                 PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -1395,7 +1401,8 @@ TEST_P(GrpcFederatedProtocolTest,
                     kSecAggExpectedNumberOfClients),
               Field(&FederatedProtocol::SecAggInfo::
                         minimum_clients_in_server_visible_aggregate,
-                    kSecAggMinClientsInServerVisibleAggregate))))));
+                    kSecAggMinClientsInServerVisibleAggregate))),
+          kTaskName)));
   // The Checkin call is expected to return the accepted retry window from the
   // CheckinRequestAck response to the first eligibility eval request.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -1550,14 +1557,14 @@ TEST_P(GrpcFederatedProtocolTest, TestCheckinAcceptNonSecAgg) {
                     FieldsAre(absl::Cord(kPlan), absl::Cord(kInitCheckpoint)),
                     kFederatedSelectUriTemplate, kExecutionPhaseId,
                     // There should be no SecAggInfo in the result.
-                    Eq(std::nullopt))));
+                    Eq(std::nullopt), kTaskName)));
   } else {
     EXPECT_THAT(*checkin_result,
                 VariantWith<FederatedProtocol::TaskAssignment>(
                     FieldsAre(FieldsAre(kPlan, kInitCheckpoint),
                               kFederatedSelectUriTemplate, kExecutionPhaseId,
                               // There should be no SecAggInfo in the result.
-                              Eq(std::nullopt))));
+                              Eq(std::nullopt), kTaskName)));
   }
 }
 

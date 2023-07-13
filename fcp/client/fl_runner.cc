@@ -1187,8 +1187,7 @@ struct CheckinResult {
 };
 
 absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
-    const FederatedProtocol::TaskAssignment& task_assignment,
-    absl::string_view task_name, Files* files,
+    const FederatedProtocol::TaskAssignment& task_assignment, Files* files,
     const std::function<void(absl::string_view, absl::string_view)>&
         log_invalid_payload_error,
     const std::function<void(absl::string_view, const absl::Status&)>&
@@ -1198,7 +1197,7 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
   auto plan_bytes = task_assignment.payloads.plan;
   if (!ParseFromStringOrCord(plan, plan_bytes)) {
     auto message = "Failed to parse received plan";
-    log_invalid_payload_error(task_name, message);
+    log_invalid_payload_error(task_assignment.task_name, message);
     FCP_LOG(ERROR) << message;
     return absl::InvalidArgumentError(message);
   }
@@ -1233,13 +1232,13 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
       auto message = absl::StrCat(
           "Failed to create checkpoint input file: code: ", status.code(),
           ", message: ", status.message());
-      log_io_error(task_name, status);
+      log_io_error(task_assignment.task_name, status);
       FCP_LOG(ERROR) << message;
       return status;
     }
   }
   return CheckinResult{
-      .task_name = std::string(task_name),
+      .task_name = task_assignment.task_name,
       .plan = std::move(plan),
       .minimum_clients_in_server_visible_aggregate =
           minimum_clients_in_server_visible_aggregate,
@@ -1277,8 +1276,6 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   phase_logger.SetModelIdentifier("");
   phase_logger.LogCheckinStarted();
 
-  std::string task_name;
-
   // Issue the checkin request (providing a callback that will be called when an
   // EET is assigned to the task but before its plan/checkpoint URIs have
   // actually been downloaded).
@@ -1286,20 +1283,17 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   std::function<void(const FederatedProtocol::TaskAssignment&)>
       plan_uris_received_callback =
           [&time_before_plan_download, &network_stats_before_plan_download,
-           &time_before_checkin, &network_stats_before_checkin, &task_name,
-           &federated_protocol, &population_name, &log_manager, &phase_logger,
+           &time_before_checkin, &network_stats_before_checkin,
+           &federated_protocol, &phase_logger,
            &plan_uris_received_callback_called](
               const FederatedProtocol::TaskAssignment& task_assignment) {
             // When the plan URIs have been received, we already know the name
             // of the task we have been assigned, so let's tell the PhaseLogger.
-            auto model_identifier = task_assignment.aggregation_session_id;
-            phase_logger.SetModelIdentifier(model_identifier);
+            phase_logger.SetModelIdentifier(task_assignment.task_name);
 
             // We also should log a corresponding log event.
-            task_name = ExtractTaskNameFromAggregationSessionId(
-                model_identifier, population_name, *log_manager);
             phase_logger.LogCheckinPlanUriReceived(
-                task_name,
+                task_assignment.task_name,
                 GetNetworkStatsSince(federated_protocol,
                                      /*fedselect_manager=*/nullptr,
                                      network_stats_before_checkin),
@@ -1402,11 +1396,10 @@ absl::StatusOr<CheckinResult> IssueCheckin(
             time_before_plan_download, reference_time);
       };
   absl::StatusOr<CheckinResult> result = CreateCheckinResultFromTaskAssignment(
-      task_assignment, task_name, files, log_invalid_payload_error,
-      log_io_error, flags);
+      task_assignment, files, log_invalid_payload_error, log_io_error, flags);
   if (result.ok()) {
     phase_logger.LogCheckinCompleted(
-        task_name,
+        result->task_name,
         GetNetworkStatsSince(federated_protocol,
                              /*fedselect_manager=*/nullptr,
                              network_stats_before_plan_download),
@@ -1560,10 +1553,8 @@ std::vector<CheckinResult> IssueMultipleTaskAssignments(
         // may not belong to the same task.
         phase_logger.SetModelIdentifier("");
       };
-  for (const auto& [aggregation_session_id, task_assignment] :
+  for (const auto& [task_name, task_assignment] :
        multiple_task_assignments->task_assignments) {
-    std::string task_name = ExtractTaskNameFromAggregationSessionId(
-        aggregation_session_id, population_name, *log_manager);
     if (!task_assignment.ok()) {
       // If the task assignment is not OK, it indicates that a task assignment
       // was received but that fetching the task's payloads failed.
@@ -1572,8 +1563,8 @@ std::vector<CheckinResult> IssueMultipleTaskAssignments(
     }
 
     auto result = CreateCheckinResultFromTaskAssignment(
-        *task_assignment, task_name, files, log_invalid_payload_error,
-        log_io_error, flags);
+        *task_assignment, files, log_invalid_payload_error, log_io_error,
+        flags);
     if (result.ok()) {
       checkin_results.push_back(*std::move(result));
     }

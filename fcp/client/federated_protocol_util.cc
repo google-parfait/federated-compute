@@ -97,20 +97,5 @@ GenerateRetryWindowFromRetryTime(absl::Time retry_time) {
   return retry_window;
 }
 
-std::string ExtractTaskNameFromAggregationSessionId(
-    const std::string& session_id, const std::string& population_name,
-    LogManager& log_manager) {
-  auto population_start = session_id.find(population_name + "/");
-  auto task_end = session_id.find('#');
-  if (population_start != 0 || task_end == std::string::npos ||
-      task_end <= population_name.length() + 1) {
-    log_manager.LogDiag(ProdDiagCode::OPSTATS_TASK_NAME_EXTRACTION_FAILED);
-    return session_id;
-  } else {
-    return session_id.substr(population_name.length() + 1,
-                             task_end - population_name.length() - 1);
-  }
-}
-
 }  // namespace client
 }  // namespace fcp

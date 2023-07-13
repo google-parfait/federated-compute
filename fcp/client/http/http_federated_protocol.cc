@@ -777,7 +777,8 @@ FederatedProtocol::TaskAssignment HttpFederatedProtocol::CreateTaskAssignment(
       .federated_select_uri_template =
           task_assignment.federated_select_uri_info().uri_template(),
       .aggregation_session_id = task_assignment.aggregation_id(),
-      .sec_agg_info = std::nullopt};
+      .sec_agg_info = std::nullopt,
+      .task_name = task_assignment.task_name()};
   if (task_assignment.has_secure_aggregation_info()) {
     result.sec_agg_info =
         SecAggInfo{.minimum_clients_in_server_visible_aggregate =
@@ -916,8 +917,7 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
     absl::StatusOr<PerTaskInfo> task_info = CreatePerTaskInfoFromTaskAssignment(
         task_assignment, ObjectState::kMultipleTaskAssignmentsAccepted);
     if (!task_info.ok()) {
-      result.task_assignments[task_assignment.aggregation_id()] =
-          task_info.status();
+      result.task_assignments[task_assignment.task_name()] = task_info.status();
       continue;
     }
     TaskResources task_resources{
@@ -948,11 +948,10 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
   for (auto& task_assignment : pending_fetch_task_assignments) {
     auto payloads = payloads_it++;
     if (!payloads->ok()) {
-      result.task_assignments[task_assignment.aggregation_session_id] =
-          payloads->status();
+      result.task_assignments[task_assignment.task_name] = payloads->status();
     } else {
       task_assignment.payloads = std::move(**payloads);
-      result.task_assignments[task_assignment.aggregation_session_id] =
+      result.task_assignments[task_assignment.task_name] =
           std::move(task_assignment);
     }
   }

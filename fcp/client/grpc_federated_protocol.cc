@@ -458,7 +458,8 @@ GrpcFederatedProtocol::ReceiveCheckinResponse(
           .federated_select_uri_template =
               acceptance_info.federated_select_uri_info().uri_template(),
           .aggregation_session_id = acceptance_info.execution_phase_id(),
-          .sec_agg_info = sec_agg_info};
+          .sec_agg_info = sec_agg_info,
+          .task_name = acceptance_info.task_name()};
 
       payload_uris_received_callback(result);
 
