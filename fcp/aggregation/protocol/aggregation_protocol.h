@@ -17,7 +17,10 @@
 #ifndef FCP_AGGREGATION_PROTOCOL_AGGREGATION_PROTOCOL_H_
 #define FCP_AGGREGATION_PROTOCOL_AGGREGATION_PROTOCOL_H_
 
+#include <memory>
+
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 
@@ -82,6 +85,14 @@ class AggregationProtocol {
   virtual absl::Status ReceiveClientMessage(int64_t client_id,
                                             const ClientMessage& message) = 0;
 
+  // Checks for outgoing messages to a given client.
+  //
+  // Returns a non-ok status if there is an error requiring the protocol to
+  // abort, otherwise it either returns any message waiting for the client,
+  // which could be null.
+  virtual absl::StatusOr<std::shared_ptr<ServerMessage>> PollServerMessage(
+      int64_t client_id) = 0;
+
   // Notifies the protocol about a communication with a given client being
   // closed, either normally or abnormally.
   //
@@ -116,6 +127,12 @@ class AggregationProtocol {
   // This method can still be called after the protocol has been completed or
   // aborted.
   virtual StatusMessage GetStatus() = 0;
+
+  // Returns the result of the aggregation.
+  //
+  // The protocol should be in the completed state when this is called if it is
+  // not then this method will return an empty Cord
+  virtual absl::StatusOr<absl::Cord> GetResult() = 0;
 
   // Callback interface which methods are implemented by the protocol host.
   class Callback {

@@ -474,6 +474,11 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
   return absl::OkStatus();
 }
 
+absl::StatusOr<std::shared_ptr<ServerMessage>>
+SimpleAggregationProtocol::PollServerMessage(int64_t client_id) {
+  return std::shared_ptr<ServerMessage>(nullptr);
+}
+
 absl::Status SimpleAggregationProtocol::CloseClient(
     int64_t client_id, absl::Status client_status) {
   {
@@ -579,6 +584,11 @@ StatusMessage SimpleAggregationProtocol::GetStatus() {
   message.set_num_clients_aborted(num_clients_aborted_);
   message.set_num_inputs_discarded(num_clients_discarded_);
   return message;
+}
+
+absl::StatusOr<absl::Cord> SimpleAggregationProtocol::GetResult() {
+  return absl::UnimplementedError(
+      "Results should be provided by Callback until this is implemented");
 }
 
 }  // namespace fcp::aggregation
