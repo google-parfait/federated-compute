@@ -22,6 +22,30 @@ package(
 )
 
 cc_library(
+    name = "latency_aggregator",
+    hdrs = ["latency_aggregator.h"],
+    copts = FCP_COPTS,
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "latency_aggregator_test",
+    srcs = ["latency_aggregator_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":latency_aggregator",
+        "//fcp/base",
+        "//fcp/testing",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "simple_aggregation",
     srcs = [
         "simple_aggregation_protocol.cc",
