@@ -29,7 +29,8 @@ message OperationalStats {
   string session_name = 2;
 
   // Name of the task that was executed.
-  string task_name = 3;
+  // Deprecated, use the task name inside PhaseStats.
+  string task_name = 3 [deprecated = true];
 
   // Timestamped training stages and error types.
   message Event {
@@ -161,6 +162,72 @@ message OperationalStats {
       // Always preceded by EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED.
       EVENT_KIND_ELIGIBILITY_CHECKIN_SERVER_ABORTED = 23;
 
+      // A multiple task assignments attempt started. This does not indicate
+      // whether the multiple task assignments request was actually sent.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_STARTED = 52;
+
+      // Client issued a multiple task assignments request, but an IO error
+      // was encountered.
+      // Always preceded by EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_STARTED.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_IO = 53;
+
+      // Client issued a multiple task assignments request, but an IO error
+      // occurred during the payload retrieval phase of multiple task
+      // assignments. This event is logged per failed payload retrieval. It can
+      // be logged multiple times during a multiple task assignments attempt.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_PAYLOAD_IO = 54;
+
+      // Client issued a multiple task assignments request, but an invalid
+      // payload was received during the payload retrieval phase of
+      // multiple task assignments.
+      // This event is logged every time that an invalid payload is received. It
+      // can be logged multiple times during a multiple task assignments
+      // attempt.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_INVALID_PAYLOAD = 55;
+
+      // Client issued a multiple task assignments request, but got interrupted
+      // on the client.
+      // Always preceded by EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_STARTED,
+      // EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_PAYLOAD_IO or
+      // EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_INVALID_PAYLOAD.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_CLIENT_INTERRUPTED = 56;
+
+      // Client issued a multiple task assignments request, but got aborted
+      // by the server.
+      // Always preceded by EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_STARTED.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_SERVER_ABORTED = 57;
+
+      // Client issued a multiple task assignments request, but the server
+      // assigned zero task. Always preceded by
+      // EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_STARTED.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_REJECTED = 58;
+
+      // Client issued a multiple task assignments request, and received Plan
+      // and checkpoint uris for all of the requested tasks.
+      // Always preceded by EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_STARTED.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PLAN_URI_RECEIVED = 59;
+
+      // Client issued a multiple task assignments request, and received Plan
+      // and checkpoint uris for some of the requested tasks, not all.
+      // Always preceded by
+      // EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_PAYLOAD_IO or
+      // EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_INVALID_PAYLOAD.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PLAN_URI_PARTIAL_RECEIVED = 60;
+
+      // Client was assigned at least one task by the server, but was only
+      //  able to successfully download the payloads for some, not all of those
+      //  assigned tasks.
+      // Always preceded by
+      // EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PLAN_URI_RECEIVED or
+      // EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PLAN_URI_PARTIAL_RECEIVED.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PARTIAL_COMPLETED = 61;
+
+      // Client was assigned at least one task by the server, and was able to
+      // successfully download the payloads for all those assigned tasks. Always
+      // preceded by TRAIN_MULTIPLE_TASK_ASSIGNMENTS_PARTIAL_PLAN_URI_RECEIVED
+      // or TRAIN_MULTIPLE_TASK_ASSIGNMENTS_PLAN_URI_RECEIVED.
+      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_COMPLETED = 62;
+
       // Client issued a regular checkin request, but got an IO error.
       // Always preceded by EVENT_KIND_CHECKIN_STARTED.
       EVENT_KIND_CHECKIN_ERROR_IO = 24;
@@ -274,7 +341,8 @@ message OperationalStats {
 
   // History of key training stages and errors encountered during a run. The
   // events are stored in sequential order, with the earliest event first.
-  repeated Event events = 4;
+  // Deprecated, use the events inside PhaseStats.
+  repeated Event events = 4 [deprecated = true];
 
   // Stats about the examples read from a given collection, potentially
   // aggregated over multiple iterators.
@@ -287,25 +355,69 @@ message OperationalStats {
   }
 
   // Map of dataset stats keyed on the collection URI.
-  map<string, DatasetStats> dataset_stats = 5;
+  // Deprecated, use the dataset_stats inside PhaseStats.
+  map<string, DatasetStats> dataset_stats = 5 [deprecated = true];
 
   // If this execution failed with an error, the message of that error.
-  string error_message = 6;
+  // Deprecated, use the error_message inside PhaseStats.
+  string error_message = 6 [deprecated = true];
 
   // The retry window returned by the fl runner.
   google.internal.federatedml.v2.RetryWindow retry_window = 7;
 
   // The number of bytes downloaded (payload size via the chunking layer, which
   // may be compressed) from the server while executing the task thus far.
-  int64 chunking_layer_bytes_downloaded = 10;
+  // Deprecated, use bytes_downloaded inside PhaseStats.
+  int64 chunking_layer_bytes_downloaded = 10 [deprecated = true];
 
   // The number of bytes uploaded (payload size via the chunking layer, which
   // may be compressed) from the server while executing the task thus far.
-  int64 chunking_layer_bytes_uploaded = 11;
+  // Deprecated, use bytes_uploaded inside PhaseStats.
+  int64 chunking_layer_bytes_uploaded = 11 [deprecated = true];
 
   // The duration of time spent waiting on the network (but excluding idle time
   // like the time between polling the server).
-  google.protobuf.Duration network_duration = 12;
+  // Deprecated, use network_duration inside PhaseStats.
+  google.protobuf.Duration network_duration = 12 [deprecated = true];
+
+  message PhaseStats {
+    enum Phase {
+      UNSPECIFIED = 0;
+      ELIGIBILITY_EVAL_CHECKIN = 1;
+      ELIGIBILITY_COMPUTATION = 2;
+      MULTIPLE_TASK_ASSIGNMENTS = 3;
+      CHECKIN = 4;
+      COMPUTATION = 5;
+      UPLOAD = 6;
+    }
+
+    // The name of the phase for the events associated with.
+    Phase phase = 1;
+
+    // Name of the task that was executed.
+    string task_name = 2;
+
+    // The events are stored in sequential order, with the earliest event first.
+    repeated Event events = 3;
+
+    // Map of dataset stats keyed on the collection URI.
+    map<string, DatasetStats> dataset_stats = 4;
+
+    // If this execution failed with an error, the message of that error.
+    string error_message = 5;
+
+    // The number of bytes downloaded in this phase thus far.
+    int64 bytes_downloaded = 6;
+
+    // The number of bytes uploaded in this phase thus far.
+    int64 bytes_uploaded = 7;
+
+    //  The duration of time spent waiting on the network (but excluding idle
+    //  time like the time between polling the server).
+    google.protobuf.Duration network_duration = 8;
+  }
+
+  repeated PhaseStats phase_stats = 13;
 
   reserved 8, 9;
 }
