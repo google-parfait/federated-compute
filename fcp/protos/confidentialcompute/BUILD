@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
+
 package(
-    default_visibility = ["//fcp:internal"],
+    default_visibility = ["//visibility:public"],
 )
 
 proto_library(
@@ -61,4 +63,11 @@ proto_library(
 cc_proto_library(
     name = "pipeline_transform_cc_proto",
     deps = [":pipeline_transform_proto"],
+)
+
+cc_grpc_library(
+    name = "pipeline_transform_cc_grpc",
+    srcs = [":pipeline_transform_proto"],
+    grpc_only = True,
+    deps = [":pipeline_transform_cc_proto"],
 )
