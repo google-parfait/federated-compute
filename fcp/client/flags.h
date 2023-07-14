@@ -183,7 +183,7 @@ class Flags {
   }
 
   // The number of threads that TFLite interpreter will use.
-  virtual int32_t num_threads_for_tflite() const { return 1; }
+  virtual int32_t num_threads_for_tflite() const { return 2; }
 
   // If true, Opstats initialization errors will be logged via
   // PhaseLogger.LogNonfatalInitializationError(). Execution will still be
