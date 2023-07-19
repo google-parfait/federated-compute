@@ -20,24 +20,27 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "absl/base/attributes.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
-#include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/protocol/resource_resolver.h"
+#include "fcp/aggregation/protocol/simple_aggregation/cancelable_callback.h"
+#include "fcp/aggregation/protocol/simple_aggregation/latency_aggregator.h"
+#include "fcp/base/clock.h"
 
 namespace fcp::aggregation {
 
@@ -48,6 +51,15 @@ namespace fcp::aggregation {
 // released only if the number of participants exceed configured threshold.
 class SimpleAggregationProtocol final : public AggregationProtocol {
  public:
+  struct OutlierDetectionParameters {
+    // Specifies an interval at which outlier detection should be performed
+    absl::Duration detection_interval;
+    // Specifies how long the protocol implementation will wait after
+    // determining that a pending client has become an outlier (e.g. the
+    // client is not responding like other clients) before closing that client.
+    absl::Duration grace_period;
+  };
+
   // Validates the Configuration that will subsequently be used to create an
   // instance of this protocol.
   // Returns INVALID_ARGUMENT if the configuration is invalid.
@@ -57,12 +69,32 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   //
   // Does not take ownership of the callback, which must refer to a valid object
   // that outlives the SimpleAggregationProtocol instance.
+  //
+  // Arguments:
+  // - `configuration`: aggregation intrinsics configuration.
+  // - `callback`: provided by the protocol host to receive the protocol
+  //   callbacks.
+  // - `checkpoint_parser_factory`: provides CheckpointParser instances for
+  //   parsing input checkpoints.
+  // - `checkpoint_builder_factory`: provides CheckpointBuilder instances for
+  //   building output checkpoints.
+  // - `resource_resolver`: if a client message references a resource, such as
+  //   an input checkpoint, this resolver provides ability to retrieve it.
+  // - `clock`: provides access to current time and ability to schedule delayed
+  //   callbacks.
+  // - `outlier_detection_parameters`: if provided, specifies parameters for the
+  //    outliers (stale clients) detection algorithm, which is based on
+  //    statistical analysis of client response times.  The purpose of the
+  //    outlier detection is to close unresonsive clients.
+  //    If not provided, the outlier detection is disabled.
   static absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>> Create(
       const Configuration& configuration,
       AggregationProtocol::Callback* callback,
       const CheckpointParserFactory* checkpoint_parser_factory,
       const CheckpointBuilderFactory* checkpoint_builder_factory,
-      ResourceResolver* resource_resolver);
+      ResourceResolver* resource_resolver, Clock* clock = Clock::RealClock(),
+      std::optional<OutlierDetectionParameters> outlier_detection_parameters =
+          std::nullopt);
 
   // Implementation of the overridden Aggregation Protocol methods.
   absl::Status Start(int64_t num_clients) override;
@@ -78,7 +110,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   StatusMessage GetStatus() override;
   absl::StatusOr<absl::Cord> GetResult() override;
 
-  ~SimpleAggregationProtocol() override = default;
+  ~SimpleAggregationProtocol() override;
 
   // SimpleAggregationProtocol is neither copyable nor movable.
   SimpleAggregationProtocol(const SimpleAggregationProtocol&) = delete;
@@ -93,7 +125,8 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
       AggregationProtocol::Callback* callback,
       const CheckpointParserFactory* checkpoint_parser_factory,
       const CheckpointBuilderFactory* checkpoint_builder_factory,
-      ResourceResolver* resource_resolver);
+      ResourceResolver* resource_resolver, Clock* clock,
+      std::optional<OutlierDetectionParameters> outlier_detection_parameters);
 
   // Creates an aggregator based on the intrinsic configuration.
   static absl::StatusOr<std::unique_ptr<TensorAggregator>> CreateAggregator(
@@ -146,6 +179,11 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   void SetProtocolState(ProtocolState state)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
 
+  // Add clients and initialize their state to CLIENT_PENDING.
+  // Returns the first index of newly added clients.
+  int64_t AddPendingClients(size_t num_clients)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
+
   // Gets the client state for the given client ID.
   absl::StatusOr<ClientState> GetClientState(int64_t client_id) const
       ABSL_SHARED_LOCKS_REQUIRED(state_mu_);
@@ -170,6 +208,13 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   absl::StatusOr<absl::Cord> CreateReport()
       ABSL_LOCKS_EXCLUDED(aggregation_mu_);
 
+  // Schedules PerformOutlierDetection to be called later if needed.
+  void ScheduleOutlierDetection() ABSL_LOCKS_EXCLUDED(state_mu_);
+  // Called periodically from a background thread to perform outlier detection.
+  void PerformOutlierDetection() ABSL_LOCKS_EXCLUDED(state_mu_);
+  // Stops outlier detection.
+  void StopOutlierDetection() ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
+
   // Protects the mutable state.
   absl::Mutex state_mu_;
   // Protects calls into the aggregators.
@@ -186,6 +231,21 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   // Holds state of all clients. The length of the vector equals
   // to the number of clients accepted into the protocol.
   std::vector<ClientState> client_states_ ABSL_GUARDED_BY(state_mu_);
+
+  // Holds information about pending clients - when each client joined the
+  // protocol. This helps to detect the outliers that remain in the pending
+  // state for too long.
+  absl::flat_hash_map<int64_t, absl::Time> pending_clients_
+      ABSL_GUARDED_BY(state_mu_);
+
+  // Calculates latency stats for clients that have successfully completed
+  // the protocol. This provides data for calculating the threshold for
+  // determining the outliers.
+  LatencyAggregator latency_aggregator_ ABSL_GUARDED_BY(state_mu_);
+
+  // Used to cancel pending outlier detection.
+  CancelationToken outlier_detection_cancelation_token_
+      ABSL_GUARDED_BY(state_mu_);
 
   // Counters for various client states other than pending.
   // Note that the number of pending clients can be found by subtracting the
@@ -207,6 +267,9 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   const CheckpointParserFactory* const checkpoint_parser_factory_;
   const CheckpointBuilderFactory* const checkpoint_builder_factory_;
   ResourceResolver* const resource_resolver_;
+  Clock* const clock_;
+
+  std::optional<OutlierDetectionParameters> const outlier_detection_parameters_;
 };
 }  // namespace fcp::aggregation
 

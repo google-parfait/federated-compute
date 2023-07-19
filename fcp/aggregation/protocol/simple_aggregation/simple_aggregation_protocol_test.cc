@@ -17,10 +17,13 @@
 #include "fcp/aggregation/protocol/simple_aggregation/simple_aggregation_protocol.h"
 
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <utility>
+#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -28,6 +31,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/synchronization/notification.h"
+#include "absl/time/time.h"
 #include "fcp/aggregation/core/agg_vector_aggregator.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor.h"
@@ -43,6 +47,7 @@
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/scheduler.h"
+#include "fcp/base/simulated_clock.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp::aggregation {
@@ -54,6 +59,7 @@ using ::testing::Eq;
 using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::StrEq;
+using ::testing::UnorderedElementsAreArray;
 
 // TODO(team): Consider moving mock classes into a separate test library.
 class MockCheckpointParser : public CheckpointParser {
@@ -102,11 +108,18 @@ class SimpleAggregationProtocolTest : public ::testing::Test {
 
   // Creates an instance of SimpleAggregationProtocol with the specified config.
   std::unique_ptr<SimpleAggregationProtocol> CreateProtocol(
-      Configuration config);
+      Configuration config,
+      std::optional<SimpleAggregationProtocol::OutlierDetectionParameters>
+          params = std::nullopt);
 
   // Creates an instance of SimpleAggregationProtocol with the default config.
   std::unique_ptr<SimpleAggregationProtocol> CreateProtocolWithDefaultConfig() {
     return CreateProtocol(default_configuration());
+  }
+
+  std::unique_ptr<SimpleAggregationProtocol> CreateProtocolWithDefaultConfig(
+      SimpleAggregationProtocol::OutlierDetectionParameters params) {
+    return CreateProtocol(default_configuration(), params);
   }
 
   MockAggregationProtocolCallback callback_;
@@ -114,6 +127,7 @@ class SimpleAggregationProtocolTest : public ::testing::Test {
   MockCheckpointParserFactory checkpoint_parser_factory_;
   MockCheckpointBuilderFactory checkpoint_builder_factory_;
   MockResourceResolver resource_resolver_;
+  SimulatedClock clock_;
 
  private:
   std::unique_ptr<MockCheckpointBuilder> wrapped_checkpoint_builder_ =
@@ -142,12 +156,16 @@ Configuration SimpleAggregationProtocolTest::default_configuration() const {
 }
 
 std::unique_ptr<SimpleAggregationProtocol>
-SimpleAggregationProtocolTest::CreateProtocol(Configuration config) {
+SimpleAggregationProtocolTest::CreateProtocol(
+    Configuration config,
+    std::optional<SimpleAggregationProtocol::OutlierDetectionParameters>
+        params) {
   // Verify that the protocol can be created successfully.
   absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>>
       protocol_or_status = SimpleAggregationProtocol::Create(
           config, &callback_, &checkpoint_parser_factory_,
-          &checkpoint_builder_factory_, &resource_resolver_);
+          &checkpoint_builder_factory_, &resource_resolver_, &clock_,
+          std::move(params));
   EXPECT_THAT(protocol_or_status, IsOk());
   return std::move(protocol_or_status).value();
 }
@@ -1142,6 +1160,180 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_AbortWhileQueued) {
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_completed: 10 "
                                                   "num_inputs_discarded: 10")));
+}
+
+struct IndexTimePair {
+  int64_t index;
+  int64_t seconds_since_start;
+
+  friend bool operator==(const IndexTimePair& lhs, const IndexTimePair& rhs) {
+    return lhs.index == rhs.index &&
+           lhs.seconds_since_start == rhs.seconds_since_start;
+  }
+};
+
+TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
+  constexpr absl::Duration kInterval = absl::Seconds(1);
+  constexpr absl::Duration kGracePeriod = absl::Seconds(1);
+
+  // Start by creating the protocol with 5 clients.
+  auto protocol = CreateProtocolWithDefaultConfig({kInterval, kGracePeriod});
+  EXPECT_CALL(callback_, OnAcceptClients(0, 5, _));
+  EXPECT_THAT(protocol->Start(5), IsOk());
+
+  // The following block will repeatedly create CheckpointParser instances
+  // which will be creating scalar int tensors with integer value 1.
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_)).WillRepeatedly(Invoke([&] {
+    auto parser = std::make_unique<MockCheckpointParser>();
+    EXPECT_CALL(*parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([&] {
+      return Tensor::Create(DT_INT32, {}, CreateTestData<int32_t>({1}));
+    }));
+    return parser;
+  }));
+
+  absl::Time start_time = clock_.Now();
+  std::vector<IndexTimePair> aborted_clients;
+
+  // This will be used to record the clients that were aborted and the
+  // time when they were aborted.
+  EXPECT_CALL(callback_, OnCloseClient(_, _))
+      .WillRepeatedly(Invoke([&](int64_t client_id, absl::Status status) {
+        if (!status.ok()) {
+          aborted_clients.push_back(IndexTimePair{
+              client_id, absl::ToInt64Seconds(clock_.Now() - start_time)});
+        }
+      }));
+
+  // 0 seconds into the protocol.
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
+
+  // 1 second
+  clock_.AdvanceTime(kInterval);
+  EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
+
+  // 2 seconds
+  // num_latency_samples = 2, mean_latency = 500ms,
+  // six_sigma_threshold = 4.2426406875s, num_pending_clients = 3
+  clock_.AdvanceTime(kInterval);
+  EXPECT_THAT(protocol->ReceiveClientMessage(3, MakeClientMessage()), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(4, MakeClientMessage()), IsOk());
+
+  // 3, 4, 5 seconds - iterate one seconds at a time to give the outlier
+  // detection more chances to run.
+  // num_latency_samples = 4, mean_latency = 1.25s,
+  // six_sigma_threshold = 5.7445626465s, num_pending_clients = 1
+  clock_.AdvanceTime(kInterval);
+  clock_.AdvanceTime(kInterval);
+  clock_.AdvanceTime(kInterval);
+
+  // Add 5 additional clients 5 seconds into the protocol.
+  EXPECT_CALL(callback_, OnAcceptClients(5, 5, _));
+  EXPECT_THAT(protocol->AddClients(5), IsOk());
+
+  // 6 seconds.
+  // num_latency_samples = 4, mean_latency = 1.25s,
+  // six_sigma_threshold = 5.7445626465s, num_pending_clients = 6
+  clock_.AdvanceTime(kInterval);
+  EXPECT_THAT(protocol->ReceiveClientMessage(5, MakeClientMessage()), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(7, MakeClientMessage()), IsOk());
+
+  // 7 seconds.
+  clock_.AdvanceTime(kInterval);
+  // Client #2 should be closed at this time. It wasn't closed earlier because
+  // the grace period (1 second) is added to the six_sigma_threshold (5.7s)
+  // So the first chance to close the client #2 is at 7 seconds.
+  EXPECT_THAT(aborted_clients,
+              UnorderedElementsAreArray<IndexTimePair>({{2, 7}}));
+
+  EXPECT_THAT(protocol->ReceiveClientMessage(9, MakeClientMessage()), IsOk());
+
+  // 8, 9, 10, 11 seconds.
+  // num_latency_samples = 7, mean_latency = 1.28571428575s,
+  // six_sigma_threshold = 4.535573676s, num_pending_clients = 2
+  clock_.AdvanceTime(kInterval);
+  clock_.AdvanceTime(kInterval);
+  clock_.AdvanceTime(kInterval);
+  clock_.AdvanceTime(kInterval);
+
+  // Client 2 closed at 7 seconds, clients 6 and 8 - at 11 seconds.
+  // Clients #6 and #8 are added at 5 seconds into the protocol.
+  // The first chance to abort them is at 11 seconds because the grace
+  // period (1s) is added to the six_sigma_threshold (4.5s). So the first chance
+  // to close those clients is at 11 seconds.
+  EXPECT_THAT(aborted_clients, UnorderedElementsAreArray<IndexTimePair>(
+                                   {{2, 7}, {6, 11}, {8, 11}}));
+
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 7 num_inputs_aggregated_and_included: 7 "
+          "num_clients_aborted: 3")));
+}
+
+TEST_F(SimpleAggregationProtocolTest, OutlierDetection_NoPendingClients) {
+  constexpr absl::Duration kInterval = absl::Seconds(1);
+  constexpr absl::Duration kGracePeriod = absl::Seconds(1);
+
+  // Start by creating the protocol with 5 clients.
+  auto protocol = CreateProtocolWithDefaultConfig({kInterval, kGracePeriod});
+  EXPECT_CALL(callback_, OnAcceptClients(0, 5, _));
+  EXPECT_THAT(protocol->Start(5), IsOk());
+
+  // The following block will repeatedly create CheckpointParser instances
+  // which will be creating scalar int tensors with integer value 1.
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_)).WillRepeatedly(Invoke([&] {
+    auto parser = std::make_unique<MockCheckpointParser>();
+    EXPECT_CALL(*parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([&] {
+      return Tensor::Create(DT_INT32, {}, CreateTestData<int32_t>({1}));
+    }));
+    return parser;
+  }));
+
+  EXPECT_CALL(callback_, OnCloseClient(_, _)).Times(4);
+
+  // Receive messages from 4 clients and close one client from the client side.
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
+  EXPECT_THAT(protocol->CloseClient(2, absl::InternalError("foo")), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(3, MakeClientMessage()), IsOk());
+  EXPECT_THAT(protocol->ReceiveClientMessage(4, MakeClientMessage()), IsOk());
+
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 4 num_inputs_aggregated_and_included: 4 "
+          "num_clients_failed: 1")));
+
+  // Advance the time by 10 seconds and verify that the outlier detection
+  // doesn't change outcome of any of the above clients.
+  clock_.AdvanceTime(10 * kInterval);
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 4 num_inputs_aggregated_and_included: 4 "
+          "num_clients_failed: 1")));
+}
+
+TEST_F(SimpleAggregationProtocolTest, OutlierDetection_AfterAbort) {
+  constexpr absl::Duration kInterval = absl::Seconds(1);
+  constexpr absl::Duration kGracePeriod = absl::Seconds(1);
+  auto protocol = CreateProtocolWithDefaultConfig({kInterval, kGracePeriod});
+  EXPECT_CALL(callback_, OnAcceptClients(0, 2, _));
+  EXPECT_THAT(protocol->Start(2), IsOk());
+
+  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(ABORTED)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(1), IsCode(ABORTED)));
+  EXPECT_THAT(protocol->Abort(), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 2")));
+
+  // Advance the time by 10 seconds and verify that the outlier detection
+  // doesn't make any additional callbacks.
+  clock_.AdvanceTime(10 * kInterval);
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 2")));
 }
 
 }  // namespace

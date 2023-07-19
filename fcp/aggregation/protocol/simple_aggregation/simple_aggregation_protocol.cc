@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,6 +28,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
@@ -38,6 +40,7 @@
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/config_converter.h"
+#include "fcp/aggregation/protocol/simple_aggregation/cancelable_callback.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp::aggregation {
@@ -72,11 +75,13 @@ SimpleAggregationProtocol::Create(
     const Configuration& configuration, AggregationProtocol::Callback* callback,
     const CheckpointParserFactory* checkpoint_parser_factory,
     const CheckpointBuilderFactory* checkpoint_builder_factory,
-    ResourceResolver* resource_resolver) {
+    ResourceResolver* resource_resolver, Clock* clock,
+    std::optional<OutlierDetectionParameters> outlier_detection_parameters) {
   FCP_CHECK(callback != nullptr);
   FCP_CHECK(checkpoint_parser_factory != nullptr);
   FCP_CHECK(checkpoint_builder_factory != nullptr);
   FCP_CHECK(resource_resolver != nullptr);
+  FCP_CHECK(clock != nullptr);
   FCP_RETURN_IF_ERROR(ValidateConfig(configuration));
 
   FCP_ASSIGN_OR_RETURN(std::vector<Intrinsic> intrinsics,
@@ -90,8 +95,8 @@ SimpleAggregationProtocol::Create(
 
   return absl::WrapUnique(new SimpleAggregationProtocol(
       std::move(intrinsics), std::move(aggregators), callback,
-      checkpoint_parser_factory, checkpoint_builder_factory,
-      resource_resolver));
+      checkpoint_parser_factory, checkpoint_builder_factory, resource_resolver,
+      clock, std::move(outlier_detection_parameters)));
 }
 
 SimpleAggregationProtocol::SimpleAggregationProtocol(
@@ -100,14 +105,23 @@ SimpleAggregationProtocol::SimpleAggregationProtocol(
     AggregationProtocol::Callback* callback,
     const CheckpointParserFactory* checkpoint_parser_factory,
     const CheckpointBuilderFactory* checkpoint_builder_factory,
-    ResourceResolver* resource_resolver)
+    ResourceResolver* resource_resolver, Clock* clock,
+    std::optional<OutlierDetectionParameters> outlier_detection_parameters)
     : protocol_state_(PROTOCOL_CREATED),
       intrinsics_(std::move(intrinsics)),
       aggregators_(std::move(aggregators)),
       callback_(callback),
       checkpoint_parser_factory_(checkpoint_parser_factory),
       checkpoint_builder_factory_(checkpoint_builder_factory),
-      resource_resolver_(resource_resolver) {}
+      resource_resolver_(resource_resolver),
+      clock_(clock),
+      outlier_detection_parameters_(std::move(outlier_detection_parameters)) {}
+
+SimpleAggregationProtocol::~SimpleAggregationProtocol() {
+  // Stop outlier detection in case it wasn't stopped before.
+  absl::MutexLock lock(&state_mu_);
+  StopOutlierDetection();
+}
 
 absl::string_view SimpleAggregationProtocol::ProtocolStateDebugString(
     ProtocolState state) {
@@ -172,6 +186,17 @@ SimpleAggregationProtocol::GetClientState(int64_t client_id) const {
   return client_states_[client_id];
 }
 
+int64_t SimpleAggregationProtocol::AddPendingClients(size_t num_clients) {
+  int64_t start_index = client_states_.size();
+  int64_t end_index = start_index + num_clients;
+  client_states_.resize(end_index, CLIENT_PENDING);
+  absl::Time now = clock_->Now();
+  for (int64_t client_id = start_index; client_id < end_index; ++client_id) {
+    pending_clients_.emplace(client_id, now);
+  }
+  return start_index;
+}
+
 void SimpleAggregationProtocol::SetClientState(int64_t client_id,
                                                ClientState to_state) {
   FCP_CHECK(client_id >= 0 && client_id < client_states_.size());
@@ -188,6 +213,8 @@ void SimpleAggregationProtocol::SetClientState(int64_t client_id,
     FCP_CHECK(from_state == CLIENT_PENDING)
         << "Client state can't be changed from "
         << ClientStateDebugString(from_state);
+    // Remove the client from the pending set.
+    pending_clients_.erase(client_id);
   }
   client_states_[client_id] = to_state;
   switch (to_state) {
@@ -358,12 +385,13 @@ absl::Status SimpleAggregationProtocol::Start(int64_t num_clients) {
     FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_CREATED));
     SetProtocolState(PROTOCOL_STARTED);
     FCP_CHECK(client_states_.empty());
-    client_states_.resize(num_clients, CLIENT_PENDING);
+    AddPendingClients(num_clients);
   }
   if (num_clients > 0) {
     AcceptanceMessage acceptance_message;
     callback_->OnAcceptClients(0, num_clients, acceptance_message);
   }
+  ScheduleOutlierDetection();
   return absl::OkStatus();
 }
 
@@ -375,8 +403,7 @@ absl::Status SimpleAggregationProtocol::AddClients(int64_t num_clients) {
     if (num_clients <= 0) {
       return absl::InvalidArgumentError("Non-zero number of clients required");
     }
-    start_index = client_states_.size();
-    client_states_.resize(start_index + num_clients, CLIENT_PENDING);
+    start_index = AddPendingClients(num_clients);
   }
   AcceptanceMessage acceptance_message;
   callback_->OnAcceptClients(start_index, num_clients, acceptance_message);
@@ -396,6 +423,8 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
         "Only inline_bytes or uri type of input is supported");
   }
 
+  absl::Duration client_latency;
+
   // Verify the state.
   {
     absl::MutexLock lock(&state_mu_);
@@ -412,6 +441,7 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
                     << ClientStateDebugString(client_state);
       return absl::OkStatus();
     }
+    client_latency = clock_->Now() - pending_clients_[client_id];
     SetClientState(client_id, CLIENT_RECEIVED_INPUT_AND_PENDING);
   }
 
@@ -461,15 +491,21 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
   }
 
   // Update the state post aggregation.
+  std::optional<int64_t> client_id_to_close;
   {
     absl::MutexLock lock(&state_mu_);
     // Change the client state only if the current state is still
     // CLIENT_RECEIVED_INPUT_AND_PENDING, meaning that the client wasn't already
     // closed by a concurrent Complete or Abort call.
     if (client_states_[client_id] == CLIENT_RECEIVED_INPUT_AND_PENDING) {
+      latency_aggregator_.Add(client_latency);
       SetClientState(client_id, client_completion_state);
-      callback_->OnCloseClient(client_id, client_completion_status);
+      client_id_to_close = client_id;
     }
+  }
+  if (client_id_to_close.has_value()) {
+    callback_->OnCloseClient(client_id_to_close.value(),
+                             client_completion_status);
   }
   return absl::OkStatus();
 }
@@ -505,6 +541,7 @@ absl::Status SimpleAggregationProtocol::Complete() {
   {
     absl::MutexLock lock(&state_mu_);
     FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
+    StopOutlierDetection();
     FCP_ASSIGN_OR_RETURN(result, CreateReport());
     SetProtocolState(PROTOCOL_COMPLETED);
     for (int64_t client_id = 0; client_id < client_states_.size();
@@ -537,6 +574,7 @@ absl::Status SimpleAggregationProtocol::Abort() {
   {
     absl::MutexLock lock(&state_mu_);
     FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
+    StopOutlierDetection();
     aggregation_finished_ = true;
     SetProtocolState(PROTOCOL_ABORTED);
     for (int64_t client_id = 0; client_id < client_states_.size();
@@ -589,6 +627,81 @@ StatusMessage SimpleAggregationProtocol::GetStatus() {
 absl::StatusOr<absl::Cord> SimpleAggregationProtocol::GetResult() {
   return absl::UnimplementedError(
       "Results should be provided by Callback until this is implemented");
+}
+
+void SimpleAggregationProtocol::ScheduleOutlierDetection() {
+  absl::MutexLock lock(&state_mu_);
+  if (outlier_detection_parameters_.has_value()) {
+    outlier_detection_cancelation_token_ = ScheduleCallback(
+        clock_, outlier_detection_parameters_->detection_interval, [this]() {
+          PerformOutlierDetection();
+          ScheduleOutlierDetection();
+        });
+  }
+}
+
+void SimpleAggregationProtocol::PerformOutlierDetection() {
+  std::vector<int64_t> client_ids_to_close;
+  // Perform this part of the algorithm under the lock to ensure exclusive
+  // access to the client_states_ and pending_clients_
+  {
+    absl::MutexLock lock(&state_mu_);
+    FCP_CHECK(CheckProtocolState(PROTOCOL_STARTED).ok());
+    FCP_CHECK(outlier_detection_parameters_.has_value());
+
+    // Cannot perform analysis if there are no pending clients or too few client
+    // latency samples.
+    if (pending_clients_.empty() || latency_aggregator_.GetCount() <= 1) return;
+
+    absl::StatusOr<absl::Duration> latency_standard_deviation =
+        latency_aggregator_.GetStandardDeviation();
+    // GetStandardDeviation can fail only if there are too few samples.
+    FCP_CHECK(latency_standard_deviation.ok())
+        << "GetStandardDeviation() has unexpectedly failed: "
+        << latency_standard_deviation.status();
+
+    absl::Duration six_sigma_threshold = 6 * latency_standard_deviation.value();
+    // TODO(team): Remove this logging once the outlier detection
+    // algorithm has been validated.
+    FCP_LOG(INFO) << "SimpleAggregationProtocol: num_latency_samples = "
+                  << latency_aggregator_.GetCount()
+                  << ", mean_latency = " << latency_aggregator_.GetMean()
+                  << ", six_sigma_threshold = " << six_sigma_threshold
+                  << ", num_pending_clients = " << pending_clients_.size();
+
+    absl::Duration outlier_threshold =
+        six_sigma_threshold + outlier_detection_parameters_->grace_period;
+    absl::Time now = clock_->Now();
+
+    for (auto [client_id, start_time] : pending_clients_) {
+      if (now - start_time > outlier_threshold) {
+        // TODO(team): Remove this logging once the outlier detection
+        // algorithm has been validated.
+        FCP_LOG(INFO) << "SimpleAggregationProtocol: client " << client_id
+                      << " is outlier: elapsed time = " << now - start_time
+                      << ", outlier_threshold = " << outlier_threshold;
+        client_ids_to_close.push_back(client_id);
+      }
+    }
+
+    for (int64_t client_id : client_ids_to_close) {
+      SetClientState(client_id, CLIENT_ABORTED);
+    }
+  }
+
+  // Send notifications outside of the mutex scope.
+  for (int64_t client_id : client_ids_to_close) {
+    callback_->OnCloseClient(
+        client_id, absl::AbortedError(
+                       "Client aborted due to being detected as an outlier"));
+  }
+}
+
+void SimpleAggregationProtocol::StopOutlierDetection() {
+  if (outlier_detection_cancelation_token_) {
+    outlier_detection_cancelation_token_->Cancel();
+    outlier_detection_cancelation_token_.reset();
+  }
 }
 
 }  // namespace fcp::aggregation

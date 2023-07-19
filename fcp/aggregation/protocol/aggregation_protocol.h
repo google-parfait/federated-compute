@@ -135,6 +135,9 @@ class AggregationProtocol {
   virtual absl::StatusOr<absl::Cord> GetResult() = 0;
 
   // Callback interface which methods are implemented by the protocol host.
+  //
+  // Thread safety: the protocol host should assume that the callback methods
+  // may be called asynchronously on any thread.
   class Callback {
    public:
     Callback() = default;
