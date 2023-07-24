@@ -585,75 +585,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
         )
 
   # Build aggregations.
-  # The client_to_server_aggregation computation is guaranteed to conform to
-  # a specific structure. It is a lambda computation whose result block contains
-  # locals that are exclusively aggregation-type intrinsics.
-  aggregations_bb = daf.client_to_server_aggregation.to_building_block()
-  aggregations_bb.check_lambda()
-  aggregations_bb.result.check_block()  # pytype: disable=attribute-error
-
-  # Get lists of the TensorSpecProtos for the inputs and outputs of all
-  # intrinsic calls. These lists are formatted such that the ith entry
-  # represents the TensorSpecProtos for the ith intrinsic in the aggregation
-  # computation. Since intrinsics may have one or more args, the ith entry in
-  # the input TensorSpecProto list is itself a list, where the jth entry
-  # represents the TensorSpecProtos corresponding to the jth argument of the
-  # ith intrinsic.
-  grouped_input_tensor_specs = variable_helpers.get_grouped_input_tensor_specs_for_aggregations(
-      aggregations_bb,
-      artifact_constants.AGGREGATION_INTRINSIC_ARG_SELECTION_INDEX_TO_NAME_DICT,
-  )
-  grouped_output_tensor_specs = (
-      variable_helpers.get_grouped_output_tensor_specs_for_aggregations(
-          aggregations_bb
-      )
-  )
-  assert len(grouped_input_tensor_specs) == len(grouped_output_tensor_specs)
-
-  intrinsic_uris = [
-      local_value.function.intrinsic_def().uri
-      for _, local_value in aggregations_bb.result.locals  # pytype: disable=attribute-error
-  ]
-  assert len(intrinsic_uris) == len(grouped_output_tensor_specs)
-
-  # Each intrinsic input arg can be a struct or even a nested struct, which
-  # requires the intrinsic to be applied independently to each element (e.g. a
-  # tff.federated_sum call applied to a struct will result in a federated_sum
-  # aggregation message for each element of the struct). Note that elements of
-  # structs can themselves be multi-dimensional tensors. When an intrinsic call
-  # has multiple args with mismatching structure (e.g. a federated_weighted_mean
-  # intrinsic applied to a 2D struct value arg and scalar weight arg), some args
-  # will need to be "scaled up" via repetition to match the args with the
-  # "largest" structure.
-  aggregations = []
-  secagg_client_output_tensor_specs = []
-  for intrinsic_index, (input_tensor_specs, output_tensor_specs) in enumerate(
-      zip(grouped_input_tensor_specs, grouped_output_tensor_specs)
-  ):
-    # Generate the aggregation messages for this intrinsic call.
-    aggregations.extend(
-        _generate_server_aggregation_configs_for_intrinsic_call(
-            intrinsic_uris[intrinsic_index],
-            input_tensor_specs,
-            output_tensor_specs,
-        )
-    )
-
-    # Generate the list of secagg tensor names that should be produced by the
-    # client for this intrinsic call.
-    if intrinsic_uris[intrinsic_index] in set(
-        [SECURE_SUM_URI, SECURE_MODULAR_SUM_URI, SECURE_SUM_BITWIDTH_URI]
-    ):
-      for input_tensor_spec_sublist in input_tensor_specs:
-        for input_tensor_spec in input_tensor_spec_sublist:
-          if input_tensor_spec.name.startswith(artifact_constants.UPDATE):
-            secagg_client_output_tensor_specs.append(
-                tf.TensorSpec(
-                    name=input_tensor_spec.name + ':0',
-                    dtype=input_tensor_spec.dtype,
-                    shape=input_tensor_spec.shape,
-                )
-            )
+  (aggregations, secagg_client_output_tensor_specs) = build_aggregations(daf)
 
   assert isinstance(
       daf.server_result.type_signature.result[0],  # pytype: disable=unsupported-operands
@@ -757,7 +689,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
     if uses_server_output:
       # To match the metric naming in the MRF pathway, turn the metric type into
       # a struct if it isn't already.
-      metric_type = daf.server_result.type_signature.result[1]
+      metric_type = daf.server_result.type_signature.result[1]  # pytype: disable=unsupported-operands
       assert isinstance(metric_type, tff.FederatedType)
       if not isinstance(metric_type.member, tff.StructType):
         metric_type = tff.StructType([metric_type])
@@ -797,7 +729,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
     metadata_vars = []
     metadata_control_dependencies = []
     if additional_checkpoint_metadata_var_fn:
-      metadata_vars = additional_checkpoint_metadata_var_fn(
+      metadata_vars = additional_checkpoint_metadata_var_fn(  # pytype: disable=wrong-arg-types
           state_names,
           metric_names_with_metric_prefix,
           write_metrics_to_checkpoint,
@@ -814,7 +746,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
         checkpoint_type_signature_var = metadata_vars[0]
         assign_tff_signature_op = checkpoint_type_signature_var.assign(
             tff.types.serialize_type(
-                daf.type_signature.result[0]
+                daf.type_signature.result[0]  # pytype: disable=unsupported-operands
             ).SerializeToString()
         )
         metadata_control_dependencies.append(assign_tff_signature_op.name)
@@ -1846,6 +1778,94 @@ def build_client_phase_with_example_query_spec(
   return plan_pb2.ClientPhase(
       example_query_spec=example_query_spec, federated_example_query=io_router
   )
+
+
+def build_aggregations(
+    daf: tff.backends.mapreduce.DistributeAggregateForm,
+) -> tuple[list[plan_pb2.ServerAggregationConfig], list[tf.TensorSpec]]:
+  """Build aggregations for a computation in DistributeAggregateForm.
+
+  Args:
+    daf: A TFF computation in DistributeAggregateForm.
+
+  Returns:
+   A `tuple` containing the following:
+     A list of plan_pb2.ServerAggregationConfig representing the aggregation
+     intrinsics to run in the server aggregation step.
+     A list of `tf.TensorSpec` giving the secagg tensor specs that should be
+     produced by the client for the intrinsic calls.
+  """
+  # The client_to_server_aggregation computation is guaranteed to conform to
+  # a specific structure. It is a lambda computation whose result block contains
+  # locals that are exclusively aggregation-type intrinsics.
+  aggregations_bb = daf.client_to_server_aggregation.to_building_block()
+  aggregations_bb.check_lambda()
+  aggregations_bb.result.check_block()  # pytype: disable=attribute-error
+
+  # Get lists of the TensorSpecProtos for the inputs and outputs of all
+  # intrinsic calls. These lists are formatted such that the ith entry
+  # represents the TensorSpecProtos for the ith intrinsic in the aggregation
+  # computation. Since intrinsics may have one or more args, the ith entry in
+  # the input TensorSpecProto list is itself a list, where the jth entry
+  # represents the TensorSpecProtos corresponding to the jth argument of the
+  # ith intrinsic.
+  grouped_input_tensor_specs = variable_helpers.get_grouped_input_tensor_specs_for_aggregations(
+      aggregations_bb,
+      artifact_constants.AGGREGATION_INTRINSIC_ARG_SELECTION_INDEX_TO_NAME_DICT,
+  )
+  grouped_output_tensor_specs = (
+      variable_helpers.get_grouped_output_tensor_specs_for_aggregations(
+          aggregations_bb
+      )
+  )
+  assert len(grouped_input_tensor_specs) == len(grouped_output_tensor_specs)
+
+  intrinsic_uris = [
+      local_value.function.intrinsic_def().uri
+      for _, local_value in aggregations_bb.result.locals  # pytype: disable=attribute-error
+  ]
+  assert len(intrinsic_uris) == len(grouped_output_tensor_specs)
+
+  # Each intrinsic input arg can be a struct or even a nested struct, which
+  # requires the intrinsic to be applied independently to each element (e.g. a
+  # tff.federated_sum call applied to a struct will result in a federated_sum
+  # aggregation message for each element of the struct). Note that elements of
+  # structs can themselves be multi-dimensional tensors. When an intrinsic call
+  # has multiple args with mismatching structure (e.g. a federated_weighted_mean
+  # intrinsic applied to a 2D struct value arg and scalar weight arg), some args
+  # will need to be "scaled up" via repetition to match the args with the
+  # "largest" structure.
+  aggregations = []
+  secagg_client_output_tensor_specs = []
+  for intrinsic_index, (input_tensor_specs, output_tensor_specs) in enumerate(
+      zip(grouped_input_tensor_specs, grouped_output_tensor_specs)
+  ):
+    # Generate the aggregation messages for this intrinsic call.
+    aggregations.extend(
+        _generate_server_aggregation_configs_for_intrinsic_call(
+            intrinsic_uris[intrinsic_index],
+            input_tensor_specs,
+            output_tensor_specs,
+        )
+    )
+
+    # Generate the list of secagg tensor names that should be produced by the
+    # client for this intrinsic call.
+    if intrinsic_uris[intrinsic_index] in set(
+        [SECURE_SUM_URI, SECURE_MODULAR_SUM_URI, SECURE_SUM_BITWIDTH_URI]
+    ):
+      for input_tensor_spec_sublist in input_tensor_specs:
+        for input_tensor_spec in input_tensor_spec_sublist:
+          if input_tensor_spec.name.startswith(artifact_constants.UPDATE):
+            secagg_client_output_tensor_specs.append(
+                tf.TensorSpec(
+                    name=input_tensor_spec.name + ':0',
+                    dtype=input_tensor_spec.dtype,
+                    shape=input_tensor_spec.shape,
+                )
+            )
+
+  return (aggregations, secagg_client_output_tensor_specs)
 
 
 def build_plan(
