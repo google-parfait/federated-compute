@@ -237,11 +237,9 @@ std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
             std::move(db_or).value(), log_manager, flags, session_name,
             population_name);
     } else {
-        if (flags->log_opstats_initialization_errors()) {
           return std::make_unique<OpStatsLogger>(
               /*opstats_enabled=*/flags->enable_opstats(),
               /*init_status=*/db_or.status());
-        }
     }
   }
   return std::make_unique<OpStatsLogger>(
