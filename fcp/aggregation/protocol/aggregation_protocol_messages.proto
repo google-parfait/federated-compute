@@ -54,21 +54,27 @@ message ServerMessage {
   }
 
   message SecureAggregation {
-    fcp.secagg.ServerToClientWrapperMessage content = 1;
+    oneof content_kind {
+      fcp.secagg.ServerToClientWrapperMessage content = 1;
+      SecureAggregationAcceptanceMessage acceptance_message = 2;
+    }
   }
+}
+
+message SecureAggregationAcceptanceMessage {
+  // TODO(team): define this message.
 }
 
 // Polymorhic server-to-client message which content is included into
 // response to each client when that client joins the aggregation and shortly
 // before the client begins the aggregation protocol.
 message AcceptanceMessage {
+  // TODO(team)
   oneof protocol_kind {
     SecureAggregation secure_aggregation = 1;
   }
 
-  message SecureAggregation {
-    // TODO(team): define this message.
-  }
+  message SecureAggregation {}
 }
 
 // Status of the aggregation protocol.

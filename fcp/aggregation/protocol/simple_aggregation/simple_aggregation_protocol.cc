@@ -510,9 +510,9 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::shared_ptr<ServerMessage>>
+absl::StatusOr<std::unique_ptr<ServerMessage>>
 SimpleAggregationProtocol::PollServerMessage(int64_t client_id) {
-  return std::shared_ptr<ServerMessage>(nullptr);
+  return std::make_unique<ServerMessage>();
 }
 
 absl::Status SimpleAggregationProtocol::CloseClient(

@@ -101,7 +101,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   absl::Status AddClients(int64_t num_clients) override;
   absl::Status ReceiveClientMessage(int64_t client_id,
                                     const ClientMessage& message) override;
-  absl::StatusOr<std::shared_ptr<ServerMessage>> PollServerMessage(
+  absl::StatusOr<std::unique_ptr<ServerMessage>> PollServerMessage(
       int64_t client_id) override;
   absl::Status CloseClient(int64_t client_id,
                            absl::Status client_status) override;

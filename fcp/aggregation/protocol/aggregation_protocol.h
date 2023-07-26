@@ -90,7 +90,7 @@ class AggregationProtocol {
   // Returns a non-ok status if there is an error requiring the protocol to
   // abort, otherwise it either returns any message waiting for the client,
   // which could be null.
-  virtual absl::StatusOr<std::shared_ptr<ServerMessage>> PollServerMessage(
+  virtual absl::StatusOr<std::unique_ptr<ServerMessage>> PollServerMessage(
       int64_t client_id) = 0;
 
   // Notifies the protocol about a communication with a given client being
