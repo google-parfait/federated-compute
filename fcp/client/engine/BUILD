@@ -187,6 +187,7 @@ cc_library(
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/lite:framework_stable",
         "@org_tensorflow//tensorflow/lite:string_util",
+        "@org_tensorflow//tensorflow/lite/c:c_api_types",
         "@org_tensorflow//tensorflow/lite/delegates/flex:delegate_only_runtime",
         "@org_tensorflow//tensorflow/lite/delegates/flex:util",
         "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",

@@ -26,6 +26,7 @@
 #include "absl/strings/str_format.h"
 #include "fcp/base/monitoring.h"
 #include "tensorflow/core/public/version.h"
+#include "tensorflow/lite/c/c_api_types.h"
 #include "tensorflow/lite/delegates/flex/util.h"
 #include "tensorflow/lite/interpreter.h"
 #include "tensorflow/lite/interpreter_builder.h"
@@ -36,8 +37,6 @@
 namespace fcp {
 namespace client {
 namespace engine {
-
-using ::tflite::ops::builtin::BuiltinOpResolver;
 
 namespace {
 
@@ -73,23 +72,25 @@ absl::StatusOr<std::unique_ptr<TfLiteWrapper>> TfLiteWrapper::Create(
   auto error_reporter = std::make_unique<CachingErrorReporter>();
   auto interpreter = std::make_unique<tflite::Interpreter>();
 
-  if (tflite::InterpreterBuilder(
-          flat_buffer_model->GetModel(), BuiltinOpResolver(),
-          error_reporter.get())(&interpreter) != kTfLiteOk) {
+  tflite::ops::builtin::BuiltinOpResolver resolver;
+
+  if (tflite::InterpreterBuilder(flat_buffer_model->GetModel(), resolver,
+                                 error_reporter.get())(&interpreter) !=
+      kTfLiteOk) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Failed to initiate interpreter: ",
-                     error_reporter->GetFirstErrorMessage()));
+        absl::StrFormat("Failed to initiate interpreter: %s",
+                        error_reporter->GetFirstErrorMessage()));
   }
   interpreter->SetNumThreads(num_threads);
   if (interpreter->ModifyGraphWithDelegate(delegate.get()) != kTfLiteOk) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Failed to modify graph with FlexDelegate: ",
-                     error_reporter->GetFirstErrorMessage()));
+        absl::StrFormat("Failed to modify graph with FlexDelegate: %s",
+                        error_reporter->GetFirstErrorMessage()));
   }
   if (interpreter->AllocateTensors() != kTfLiteOk) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Failed to allocate tensors: ",
-                     error_reporter->GetFirstErrorMessage()));
+        absl::StrFormat("Failed to allocate tensors: %s",
+                        error_reporter->GetFirstErrorMessage()));
   }
   interpreter->SetCancellationFunction(delegate->data_,
                                        tflite::FlexDelegate::HasCancelled);
