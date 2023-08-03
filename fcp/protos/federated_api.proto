@@ -331,6 +331,9 @@ message EligibilityEvalTaskCapabilities {
   // will not be provided information about tasks that require multiple task
   // assignment.
   bool supports_multiple_task_assignment = 1;
+
+  // Whether the client supports native evaluation of Eligibility Eval Tasks.
+  bool supports_native_eets = 2;
 }
 
 // Response to the `EligibilityEvalCheckinRequest`, sent to the
