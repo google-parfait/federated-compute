@@ -299,6 +299,8 @@ message ClientStats {
   // but does not include time spent on the network for retrieving the task
   // or uploading results).
   google.protobuf.Duration computation_execution_duration = 1;
+
+  reserved 2;
 }
 
 message ReportTaskResultResponse {}
