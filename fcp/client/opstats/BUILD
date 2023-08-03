@@ -120,6 +120,7 @@ cc_library(
     deps = [
         ":opstats_db",
         "//fcp/base",
+        "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
@@ -133,6 +134,7 @@ cc_test(
     deps = [
         ":opstats_utils",
         "//fcp/client:test_helpers",
+        "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],
 )

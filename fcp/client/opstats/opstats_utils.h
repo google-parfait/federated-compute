@@ -50,6 +50,12 @@ std::optional<google::protobuf::Timestamp>
 GetLastSuccessfulContributionTimeForPattern(const OpStatsSequence& data,
                                             const RE2& compiled_pattern);
 
+// Returns a list of OperationalStats for the tasks that ran in the given time
+// range in reverse time order.
+std::vector<OperationalStats> GetOperationalStatsForTimeRange(
+    const OpStatsSequence& data, absl::Time lower_bound_time,
+    absl::Time upper_bound_time);
+
 }  // namespace opstats
 }  // namespace client
 }  // namespace fcp

@@ -43,15 +43,6 @@ using ::google::protobuf::util::TimeUtil;
 
 namespace {
 
-absl::Time GetLastUpdatedTime(const OperationalStats& op_stats) {
-  if (op_stats.events().empty()) {
-    return absl::InfinitePast();
-  } else {
-    return absl::FromUnixMillis(TimeUtil::TimestampToMilliseconds(
-        op_stats.events().rbegin()->timestamp()));
-  }
-}
-
 tensorflow::Feature CreateFeatureFromString(const std::string& str) {
   tensorflow::Feature feature;
   feature.mutable_bytes_list()->add_value(str);
@@ -230,13 +221,8 @@ OpStatsExampleIteratorFactory::CreateExampleIterator(
       selected_data.push_back(*last_successful_contribution_entry);
     }
   } else {
-    for (auto it = data.opstats().rbegin(); it != data.opstats().rend(); ++it) {
-      absl::Time last_update_time = GetLastUpdatedTime(*it);
-      if (last_update_time >= lower_bound_time &&
-          last_update_time <= upper_bound_time) {
-        selected_data.push_back(*it);
-      }
-    }
+    selected_data = GetOperationalStatsForTimeRange(data, lower_bound_time,
+                                                    upper_bound_time);
   }
   return std::make_unique<OpStatsExampleIterator>(
       std::move(selected_data),

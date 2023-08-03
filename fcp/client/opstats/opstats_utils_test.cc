@@ -16,16 +16,22 @@
 
 #include "fcp/client/opstats/opstats_utils.h"
 
+#include <optional>
+#include <string>
 #include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "fcp/client/test_helpers.h"
+#include "fcp/testing/testing.h"
 
 namespace fcp {
 namespace client {
 namespace opstats {
 namespace {
+
+using ::fcp::EqualsProto;
+using ::testing::ElementsAre;
 
 constexpr char kTaskName[] = "task";
 OperationalStats::Event::EventKind kUploadStartedEvent =
@@ -41,6 +47,62 @@ OperationalStats::Event CreateEvent(
   t.set_seconds(event_time_seconds);
   *event.mutable_timestamp() = t;
   return event;
+}
+
+TEST(OpStatsUtils, GetLastSuccessfulContributionTimeMixedLegacyAndNewOpStats) {
+  OperationalStats first_success_run;
+  first_success_run.set_task_name(kTaskName);
+  *first_success_run.add_events() = CreateEvent(kUploadStartedEvent, 10000);
+  OperationalStats second_success_run;
+  OperationalStats::PhaseStats upload;
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  upload.set_task_name(kTaskName);
+  *upload.add_events() = CreateEvent(kUploadStartedEvent, 20000);
+  *second_success_run.add_phase_stats() = upload;
+  OperationalStats third_failure_run;
+  OperationalStats::PhaseStats failed_upload;
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  failed_upload.set_task_name(kTaskName);
+  *failed_upload.add_events() = CreateEvent(kUploadStartedEvent, 30000);
+  *failed_upload.add_events() = CreateEvent(kUploadServerAbortedEvent, 30001);
+  *third_failure_run.add_phase_stats() = failed_upload;
+  OpStatsSequence data;
+  *data.add_opstats() = first_success_run;
+  *data.add_opstats() = second_success_run;
+  *data.add_opstats() = third_failure_run;
+
+  std::optional<OperationalStats> returned_stats =
+      GetLastSuccessfulContribution(data, kTaskName);
+  ASSERT_TRUE(returned_stats.has_value());
+  std::optional<google::protobuf::Timestamp> last_contribution_time =
+      GetLastSuccessfulContributionTime(data, kTaskName);
+  ASSERT_EQ(last_contribution_time->seconds(), 20000);
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionTimeNotFoundMixedLegacyAndNewOpStats) {
+  OperationalStats first_success_run;
+  first_success_run.set_task_name("unrelated_task");
+  *first_success_run.add_events() = CreateEvent(kUploadStartedEvent, 10000);
+  OperationalStats second_success_run;
+  OperationalStats::PhaseStats upload;
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  upload.set_task_name("unrelated_task_2");
+  *upload.add_events() = CreateEvent(kUploadStartedEvent, 20000);
+  *second_success_run.add_phase_stats() = upload;
+  OperationalStats third_failure_run;
+  OperationalStats::PhaseStats failed_upload;
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  failed_upload.set_task_name(kTaskName);
+  *failed_upload.add_events() = CreateEvent(kUploadStartedEvent, 30000);
+  *failed_upload.add_events() = CreateEvent(kUploadServerAbortedEvent, 30001);
+  *third_failure_run.add_phase_stats() = failed_upload;
+  OpStatsSequence data;
+  *data.add_opstats() = first_success_run;
+  *data.add_opstats() = second_success_run;
+  *data.add_opstats() = third_failure_run;
+
+  ASSERT_EQ(GetLastSuccessfulContributionTime(data, kTaskName), std::nullopt);
 }
 
 TEST(OpStatsUtils,
@@ -76,6 +138,35 @@ TEST(OpStatsUtils,
   auto last_time =
       GetLastSuccessfulContributionTimeForPattern(opstats_sequence, pattern);
   EXPECT_EQ(last_time->seconds(), upload_started_time_sec);
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionTimeForPatternMixedLegacyAndNewOpStats) {
+  std::string task_name = "my_task.group_swor";
+  OperationalStats first_success_run;
+  first_success_run.set_task_name(task_name);
+  *first_success_run.add_events() = CreateEvent(kUploadStartedEvent, 10000);
+  OperationalStats second_success_run;
+  OperationalStats::PhaseStats upload;
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  upload.set_task_name(task_name);
+  *upload.add_events() = CreateEvent(kUploadStartedEvent, 20000);
+  *second_success_run.add_phase_stats() = upload;
+  OperationalStats third_failure_run;
+  OperationalStats::PhaseStats failed_upload;
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  failed_upload.set_task_name(task_name);
+  *failed_upload.add_events() = CreateEvent(kUploadStartedEvent, 30000);
+  *failed_upload.add_events() = CreateEvent(kUploadServerAbortedEvent, 30001);
+  *third_failure_run.add_phase_stats() = failed_upload;
+  OpStatsSequence data;
+  *data.add_opstats() = first_success_run;
+  *data.add_opstats() = second_success_run;
+  *data.add_opstats() = third_failure_run;
+
+  RE2 pattern("(.*\\b)group_swor(\\b.*)");
+  auto last_time = GetLastSuccessfulContributionTimeForPattern(data, pattern);
+  EXPECT_EQ(last_time->seconds(), 20000);
 }
 
 TEST(OpStatsUtils,
@@ -164,6 +255,126 @@ TEST(OpStatsUtils,
   *opstats_sequence.add_opstats() = std::move(stats);
   EXPECT_FALSE(GetLastSuccessfulContributionTime(opstats_sequence, kTaskName)
                    .has_value());
+}
+
+TEST(OpStatsUtils, GetOperationalStatsForTimeRange) {
+  // Successful contribution before the start of the time range.
+  OperationalStats first_run;
+  first_run.set_task_name("task_1");
+  *first_run.add_events() = CreateEvent(kUploadStartedEvent, 9999);
+
+  // Successful contribution within the time range.
+  OperationalStats second_run;
+  OperationalStats::PhaseStats* upload = second_run.add_phase_stats();
+  upload->set_task_name("task_2");
+  upload->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  OperationalStats::Event upload_event =
+      CreateEvent(kUploadStartedEvent, 11000);
+  *upload->add_events() = upload_event;
+
+  // Failed contribution within the time range.
+  OperationalStats third_run;
+  OperationalStats::PhaseStats* upload_2 = third_run.add_phase_stats();
+  upload_2->set_task_name("task_2");
+  upload_2->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  OperationalStats::Event upload_event_2 =
+      CreateEvent(kUploadStartedEvent, 12000);
+  *upload_2->add_events() = upload_event_2;
+  OperationalStats::Event upload_failed_event =
+      CreateEvent(kUploadServerAbortedEvent, 12001);
+  *upload_2->add_events() = upload_failed_event;
+
+  // Successful contribution after the end of the time range.
+  OperationalStats fourth_run;
+  OperationalStats::PhaseStats* upload_3 = fourth_run.add_phase_stats();
+  upload_3->set_task_name("task_1");
+  upload_3->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  *upload_3->add_events() = CreateEvent(kUploadStartedEvent, 14000);
+
+  OpStatsSequence data;
+  *data.add_opstats() = first_run;
+  *data.add_opstats() = second_run;
+  *data.add_opstats() = third_run;
+  *data.add_opstats() = fourth_run;
+
+  auto stats = GetOperationalStatsForTimeRange(
+      data, absl::FromUnixSeconds(10000), absl::FromUnixSeconds(13000));
+  // The returned OperationalStats should be in legacy format without
+  // PhaseStats.
+  OperationalStats expected_proto_1;
+  expected_proto_1.set_task_name("task_2");
+  *expected_proto_1.add_events() = upload_event;
+  OperationalStats expected_proto_2;
+  expected_proto_2.set_task_name("task_2");
+  *expected_proto_2.add_events() = upload_event_2;
+  *expected_proto_2.add_events() = upload_failed_event;
+  EXPECT_THAT(stats, ElementsAre(EqualsProto(expected_proto_2),
+                                 EqualsProto(expected_proto_1)));
+}
+
+TEST(OpStatsUtils, GetOperationalStatsForTimeRangeMultipleTasksInSameRun) {
+  OperationalStats run_with_3_tasks;
+
+  // First task is before the lower bound of time range.
+  OperationalStats::PhaseStats* computation_1 =
+      run_with_3_tasks.add_phase_stats();
+  computation_1->set_task_name("task_1");
+  computation_1->set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  OperationalStats::Event computation_event_1 = CreateEvent(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED, 10000);
+  *computation_1->add_events() = computation_event_1;
+  OperationalStats::PhaseStats* upload_1 = run_with_3_tasks.add_phase_stats();
+  upload_1->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  OperationalStats::Event upload_event_1 =
+      CreateEvent(kUploadStartedEvent, 10001);
+  *upload_1->add_events() = upload_event_1;
+
+  // Second task is within the time range.
+  OperationalStats::PhaseStats* computation_2 =
+      run_with_3_tasks.add_phase_stats();
+  computation_2->set_task_name("task_2");
+  computation_2->set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  OperationalStats::Event computation_event_2 = CreateEvent(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED, 11000);
+  *computation_2->add_events() = computation_event_2;
+  OperationalStats::PhaseStats* upload_2 = run_with_3_tasks.add_phase_stats();
+  upload_2->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  OperationalStats::Event upload_event_2 =
+      CreateEvent(kUploadStartedEvent, 11001);
+  *upload_2->add_events() = upload_event_2;
+
+  // Third task is also within the time range.
+  OperationalStats::PhaseStats* computation_3 =
+      run_with_3_tasks.add_phase_stats();
+  computation_3->set_task_name("task_3");
+  computation_3->set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  OperationalStats::Event computation_event_3 = CreateEvent(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED, 12000);
+  *computation_3->add_events() = computation_event_3;
+  OperationalStats::PhaseStats* upload_3 = run_with_3_tasks.add_phase_stats();
+  upload_3->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  OperationalStats::Event upload_event_3 =
+      CreateEvent(kUploadStartedEvent, 12001);
+  *upload_3->add_events() = upload_event_3;
+
+  OpStatsSequence data;
+  *data.add_opstats() = run_with_3_tasks;
+
+  auto stats = GetOperationalStatsForTimeRange(
+      data, absl::FromUnixSeconds(11000), absl::FromUnixSeconds(13000));
+
+  // The returned OperationalStats should be in legacy format without
+  // PhaseStats.
+  OperationalStats expected_proto_1;
+  expected_proto_1.set_task_name("task_2");
+  *expected_proto_1.add_events() = computation_event_2;
+  *expected_proto_1.add_events() = upload_event_2;
+  OperationalStats expected_proto_2;
+  expected_proto_2.set_task_name("task_3");
+  *expected_proto_2.add_events() = computation_event_3;
+  *expected_proto_2.add_events() = upload_event_3;
+  EXPECT_THAT(stats, ElementsAre(EqualsProto(expected_proto_2),
+                                 EqualsProto(expected_proto_1)));
 }
 
 }  // namespace
