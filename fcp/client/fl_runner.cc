@@ -1140,9 +1140,8 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
     return result;
   }
 
-  auto eligibility_eval_task =
-      absl::get<FederatedProtocol::EligibilityEvalTask>(
-          *eligibility_checkin_result);
+  auto eligibility_eval_task = std::get<FederatedProtocol::EligibilityEvalTask>(
+      *eligibility_checkin_result);
   // Parse and run the eligibility eval task if the server returned one.
   // Now we have a EligibilityEvalTask, if an error happens, we will report to
   // the server via the ReportEligibilityEvalError.
@@ -1370,7 +1369,7 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   }
 
   auto task_assignment =
-      absl::get<FederatedProtocol::TaskAssignment>(*checkin_result);
+      std::get<FederatedProtocol::TaskAssignment>(*checkin_result);
   std::function<void(absl::string_view, const absl::Status&)> log_io_error =
       [&phase_logger, &federated_protocol, &network_stats_before_plan_download,
        &time_before_plan_download,
