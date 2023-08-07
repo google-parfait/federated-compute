@@ -143,6 +143,14 @@ message AuthorizeAccessRequest {
   // policy. This field is an orchestration-level hint, not something attested
   // by the sealed application.
   string recipient_tag = 8;
+
+  // Nonce used by the recipient to ensure the same AuthorizeAccessResponse
+  // cannot be replayed multiple times by an unsealed portion of the stack to
+  // cause it to process the same data multiple times. The recipient will
+  // discard it after using it once as part of the associated data to decrypt
+  // the symmetric key. This nonce must be appended to the associated data for
+  // the symmetric key.
+  bytes recipient_nonce = 10;
 }
 
 message AuthorizeAccessResponse {
@@ -151,7 +159,8 @@ message AuthorizeAccessResponse {
 
   // The symmetric key for reading the data, encrypted with HPKE using
   // `AuthorizeAccessRequest.recipient_public_key`. The associated data for the
-  // hybrid encryption is `reencryption_public_key`.
+  // hybrid encryption is `reencryption_public_key` +
+  // `AuthorizeAccessRequest::recipient_nonce`.
   bytes encrypted_symmetric_key = 2;
 
   // If the application will be re-encrypting its output, the public key to use.
