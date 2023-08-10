@@ -152,9 +152,9 @@ Result<bool> Example_OneTryExpression_UnparenthesizedCommas(
     Result<std::variant<int, bool, Unit>> r) {
   std::variant<int, bool> v = FCP_TRY(r.Then(ExpectOneOf<int, bool>()));
   if (std::holds_alternative<int>(v)) {
-    return absl::get<int>(v) > 0;
+    return std::get<int>(v) > 0;
   } else {
-    return absl::get<bool>(v);
+    return std::get<bool>(v);
   }
 }
 

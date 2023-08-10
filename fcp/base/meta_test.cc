@@ -187,9 +187,9 @@ TEST(MetaTest, CastContainerElements_AllSuccess) {
   };
 
   auto actual = CastContainerElements<X, Y, X>(v, CastValByTag{});
-  auto expected = std::make_tuple(absl::make_optional(TypedVal<X>{123}),
-                                  absl::make_optional(TypedVal<Y>{456}),
-                                  absl::make_optional(TypedVal<X>{789}));
+  auto expected = std::make_tuple(std::make_optional(TypedVal<X>{123}),
+                                  std::make_optional(TypedVal<Y>{456}),
+                                  std::make_optional(TypedVal<X>{789}));
 
   EXPECT_THAT(actual, Eq(expected));
 }
@@ -203,9 +203,9 @@ TEST(MetaTest, CastContainerElements_AllSuccess_Pack) {
 
   // This uses the Pack<> overload instead.
   auto actual = CastContainerElements(Pack<X, Y, X>{}, v, CastValByTag{});
-  auto expected = std::make_tuple(absl::make_optional(TypedVal<X>{123}),
-                                  absl::make_optional(TypedVal<Y>{456}),
-                                  absl::make_optional(TypedVal<X>{789}));
+  auto expected = std::make_tuple(std::make_optional(TypedVal<X>{123}),
+                                  std::make_optional(TypedVal<Y>{456}),
+                                  std::make_optional(TypedVal<X>{789}));
 
   EXPECT_THAT(actual, Eq(expected));
 }
@@ -219,9 +219,9 @@ TEST(MetaTest, CastContainerElements_OneFails) {
 
   // Second element does not have the tag for Y.
   auto actual = CastContainerElements<X, Y, X>(v, CastValByTag{});
-  auto expected = std::make_tuple(absl::make_optional(TypedVal<X>{123}),
+  auto expected = std::make_tuple(std::make_optional(TypedVal<X>{123}),
                                   std::optional<TypedVal<Y>>(std::nullopt),
-                                  absl::make_optional(TypedVal<X>{789}));
+                                  std::make_optional(TypedVal<X>{789}));
 
   EXPECT_THAT(actual, Eq(expected));
 }

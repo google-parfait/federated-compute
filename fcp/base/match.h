@@ -174,19 +174,19 @@ struct MatchTraits<std::variant<AltTypes...>> {
 
   template <typename VisitFn>
   static constexpr auto Visit(ValueType const& v, VisitFn&& fn) {
-    return absl::visit(std::forward<VisitFn>(fn), v);
+    return std::visit(std::forward<VisitFn>(fn), v);
   }
 
   template <typename VisitFn>
   static constexpr auto Visit(ValueType&& v, VisitFn&& fn) {
-    return absl::visit(std::forward<VisitFn>(fn), std::move(v));
+    return std::visit(std::forward<VisitFn>(fn), std::move(v));
   }
 
   template <typename VisitFn>
   static constexpr auto Visit(ValueType* v, VisitFn&& fn) {
-    return absl::visit([fn = std::forward<VisitFn>(fn)](
-                           auto& alt) mutable { return fn(&alt); },
-                       *v);
+    return std::visit([fn = std::forward<VisitFn>(fn)](
+                          auto& alt) mutable { return fn(&alt); },
+                      *v);
   }
 };
 
@@ -223,7 +223,7 @@ struct MatchTraits<std::optional<T>> {
 
   template <typename V, typename VisitFn>
   static constexpr auto Visit(V&& v, VisitFn&& fn) {
-    return absl::visit(std::forward<VisitFn>(fn), Wrap(std::forward<V>(v)));
+    return std::visit(std::forward<VisitFn>(fn), Wrap(std::forward<V>(v)));
   }
 };
 

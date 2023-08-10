@@ -60,10 +60,10 @@ TEST(MatchTest, AllDefault) {
 }
 
 TEST(MatchTest, SingleDefault) {
-  constexpr auto matcher = MakeMatcher<V>(
-      [](X const& x) { return 10 + x.x; },  //
-      [](Z const& z) { return 20 + z.z; },
-      [](Default, V const& v) { return 30 + absl::get<Y>(v).y; });
+  constexpr auto matcher =
+      MakeMatcher<V>([](X const& x) { return 10 + x.x; },  //
+                     [](Z const& z) { return 20 + z.z; },
+                     [](Default, V const& v) { return 30 + std::get<Y>(v).y; });
   static_assert(matcher.Match(X{1}) == 11);
   static_assert(matcher.Match(Z{2}) == 22);
   static_assert(matcher.Match(Y{3}) == 33);
@@ -73,7 +73,7 @@ TEST(MatchTest, SingleDefault_Pointer) {
   constexpr auto matcher =
       MakeMatcher<V>([](X* x) { return 10 + x->x; },  //
                      [](Z* z) { return 20 + z->z; },
-                     [](Default, V* v) { return 30 + absl::get<Y>(*v).y; });
+                     [](Default, V* v) { return 30 + std::get<Y>(*v).y; });
 
   V x = X{1};
   V z = Z{2};

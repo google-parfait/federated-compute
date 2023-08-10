@@ -96,7 +96,7 @@ class ABSL_MUST_USE_RESULT Result {
   // Requires (CHECK): !is_error()
   constexpr T const& GetValueOrDie() const& {
     FCP_CHECK(std::holds_alternative<T>(val_));
-    return absl::get<T>(val_);
+    return std::get<T>(val_);
   }
 
   // Returns the contained value (by move).
@@ -112,14 +112,14 @@ class ABSL_MUST_USE_RESULT Result {
   // Requires (CHECK): !is_error()
   constexpr T GetValueOrDie() && {
     FCP_CHECK(std::holds_alternative<T>(val_));
-    return absl::get<T>(std::move(val_));
+    return std::get<T>(std::move(val_));
   }
 
   // Returns the contained error.
   // Requires (CHECK): is_error()
   Error GetErrorOrDie() const {
     FCP_CHECK(std::holds_alternative<Error>(val_));
-    return absl::get<Error>(val_);
+    return std::get<Error>(val_);
   }
 
   // Transforms this Result into another (with value type U).
@@ -188,7 +188,7 @@ class ABSL_MUST_USE_RESULT Result {
     if (r.is_error()) {
       return RetType(r.GetErrorOrDie());
     } else {
-      return fn(absl::get<T>(std::move(r).variant()));
+      return fn(std::get<T>(std::move(r).variant()));
     }
   }
 
@@ -258,7 +258,7 @@ struct ExpectIs : public ExpectBase {
   template <typename... Us>
   constexpr Result<T> operator()(std::variant<Us...> v) const {
     if (std::holds_alternative<T>(v)) {
-      return absl::get<T>(std::move(v));
+      return std::get<T>(std::move(v));
     } else {
       return TraceExpectError("ExpectIs");
     }
@@ -282,7 +282,7 @@ struct ExpectOneOf : public ExpectBase {
     static_assert(IsSubsetOf<Pack<Ts...>, Pack<Us...>>::value);
 
     // TODO(team): This should be expressible with Match
-    return absl::visit(
+    return std::visit(
         [this](auto arg) -> Result<std::variant<Ts...>> {
           if constexpr (IsTypeOneOf<std::decay_t<decltype(arg)>, Ts...>()) {
             return std::variant<Ts...>(std::move(arg));
