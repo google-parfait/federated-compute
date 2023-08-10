@@ -663,6 +663,35 @@ cc_binary(
 )
 
 cc_library(
+    name = "converters",
+    srcs = ["converters.cc"],
+    hdrs = ["converters.h"],
+    copts = FCP_COPTS,
+    deps = [
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/core:tensor_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "converters_test",
+    srcs = ["converters_test.cc"],
+    deps = [
+        ":converters",
+        ":example_query_result_cc_proto",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/core:tensor_cc_proto",
+        "//fcp/aggregation/testing",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "test_helpers",
     testonly = True,
     srcs = ["test_helpers.cc"],
