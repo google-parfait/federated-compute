@@ -429,11 +429,6 @@ template <template <typename> class M, typename Z>
 using UnapplyTemplate =
     typename meta_internal::UnwrapTemplateImpl<M, std::decay_t<Z>>::Type;
 
-template <template <typename> class M, typename Z>
-constexpr bool IsAppliedTemplate() {
-  return meta_internal::UnwrapTemplateImpl<M, std::decay_t<Z>>::kValid;
-}
-
 }  // namespace fcp
 
 #endif  // FCP_BASE_META_H_
