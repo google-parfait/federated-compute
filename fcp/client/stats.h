@@ -52,6 +52,11 @@ struct NetworkStats {
     *this = *this + other;
     return *this;
   }
+
+  NetworkStats& operator-=(const NetworkStats& other) {
+    *this = *this - other;
+    return *this;
+  }
 };
 
 inline bool operator==(const NetworkStats& s1, const NetworkStats& s2) {
