@@ -375,8 +375,9 @@ def get_grouped_input_tensor_specs_for_aggregations(
 
     # Collect the input TensorFlowSpecs for each argument for this intrinsic.
     input_tensor_specs_for_intrinsic = []
-    if (
-        local_value.function.intrinsic_def().type_signature.parameter.is_struct()
+    if isinstance(
+        local_value.function.intrinsic_def().type_signature.parameter,
+        tff.StructType,
     ):
       for element in local_value.argument.children():
         input_tensor_specs_for_intrinsic.append(
@@ -441,7 +442,7 @@ def get_grouped_output_tensor_specs_for_aggregations(
     tensor_specs = []
     # If the output is a struct, select the appropriate number of
     # TensorflowSpecs.
-    if local_value.type_signature.member.is_struct():
+    if isinstance(local_value.type_signature.member, tff.StructType):
       num_specs = len(tff.structure.flatten(local_value.type_signature.member))
       tensor_specs = output_tensor_specs[
           output_tensor_spec_index : output_tensor_spec_index + num_specs

@@ -65,7 +65,7 @@ def generate_example_selector_placeholders(
   type_checks.check_type(
       type_spec, (tff.SequenceType, tff.StructType), name='type_spec'
   )
-  if type_spec.is_sequence():
+  if isinstance(type_spec, tff.SequenceType):
     # Each client input is a sequence of serialized `tf.Example`s, which is why
     # the leaves of these TFF type signatures are sequences. Each input sequence
     # of `tf.Example`s requires a single `ExampleSelector` that determines that
@@ -495,7 +495,7 @@ def make_data_sources_with_dataspec(
   type_checks.check_type(
       type_spec, (tff.SequenceType, tff.StructType), name='type_spec'
   )
-  if type_spec.is_sequence():
+  if isinstance(type_spec, tff.SequenceType):
     type_checks.check_type(ds, data_spec.DataSpec)
     assert isinstance(ds, data_spec.DataSpec)
     assert ds.example_selector_proto is not None
@@ -529,8 +529,7 @@ def make_data_sources_with_dataspec(
 
     _validate_data_comp(data_comp, type_spec)
     return [data_comp]
-  else:
-    type_spec.check_struct()
+  elif isinstance(type_spec, tff.StructType):
     if isinstance(ds, data_spec.DataSpec):
       raise TypeError(
           'Expected nested structure of `DataSpec`s conforming to '
@@ -555,6 +554,11 @@ def make_data_sources_with_dataspec(
           make_data_sources_with_dataspec(element_type, ds[element_index])
       )
     return elements
+  else:
+    raise ValueError(
+        'Expected `type_spec` to be either a `tff.SequenceType` or a '
+        f'`tff.StructType`, found `{type(type_spec)}`.'
+    )
 
 
 def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
@@ -585,8 +589,7 @@ def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
   type_checks.check_type(
       type_spec, (tff.SequenceType, tff.StructType), name='type_spec'
   )
-  if type_spec.is_sequence():
-
+  if isinstance(type_spec, tff.SequenceType):
     @tff.tf_computation(tf.string, tf.string)
     def data_comp(token, example_selector):
       """The data source computation.

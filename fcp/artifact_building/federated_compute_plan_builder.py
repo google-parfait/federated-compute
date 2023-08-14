@@ -885,8 +885,8 @@ def _build_server_graph(
     # and the intermediate aggregators.
     # server_state_type will be a SERVER-placed federated type.
     server_state_type, server_metrics_type = mrf.type_signature.result  # pytype: disable=attribute-error
-    assert server_state_type.is_federated(), server_state_type
-    assert server_state_type.placement == tff.SERVER, server_state_type
+    assert isinstance(server_state_type, tff.FederatedType), server_state_type
+    assert server_state_type.placement is tff.SERVER, server_state_type
     # server_metrics_type can be a tff.FederatedType or a structure containing
     # tff.FederatedTypes.
     if isinstance(server_metrics_type, tff.FederatedType):

@@ -380,9 +380,9 @@ def pack_tff_value(
         f' {len(value_list)}.'
     )
 
-  if tff_type.is_tensor():
+  if isinstance(tff_type, tff.TensorType):
     return value_list[0]
-  elif tff_type.is_struct():
+  elif isinstance(tff_type, tff.StructType):
     return tff.structure.pack_sequence_as(tff_type, value_list)
   else:
     raise ValueError(
