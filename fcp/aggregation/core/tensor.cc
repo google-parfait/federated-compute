@@ -17,6 +17,7 @@
 #include "fcp/aggregation/core/tensor.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -164,7 +165,7 @@ class SerializedContentStringData : public TensorData {
 
     // The first pass reads the string sizes;
     for (size_t i = 0; i < num; ++i) {
-      size_t size;
+      uint64_t size;
       if (!coded_input.ReadVarint64(&size)) {
         return FCP_STATUS(INVALID_ARGUMENT)
                << "Expected to read " << num
