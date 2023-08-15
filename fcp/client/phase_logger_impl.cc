@@ -84,6 +84,8 @@ void PhaseLoggerImpl::LogFatalInitializationError(absl::Status error_status) {
 
 void PhaseLoggerImpl::LogEligibilityEvalCheckinStarted() {
   event_publisher_->PublishEligibilityEvalCheckin();
+  opstats_logger_->StartLoggingForPhase(
+      OperationalStats::PhaseStats::ELIGIBILITY_EVAL_CHECKIN);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
 }
@@ -99,6 +101,7 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinIOError(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_ERROR_IO,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogEligibilityEvalCheckinLatency(time_before_checkin);
 }
 
@@ -114,6 +117,7 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinClientInterrupted(
       OperationalStats::Event::
           EVENT_KIND_ELIGIBILITY_CHECKIN_CLIENT_INTERRUPTED,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogEligibilityEvalCheckinLatency(time_before_checkin);
 }
 
@@ -128,6 +132,7 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinServerAborted(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_SERVER_ABORTED,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogEligibilityEvalCheckinLatency(time_before_checkin);
 }
 
@@ -137,6 +142,7 @@ void PhaseLoggerImpl::LogEligibilityEvalNotConfigured(
       network_stats, absl::Now() - time_before_checkin);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogEligibilityEvalCheckinLatency(time_before_checkin);
 }
 
@@ -146,6 +152,7 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinTurnedAway(
       network_stats, absl::Now() - time_before_checkin);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogEligibilityEvalCheckinLatency(time_before_checkin);
 }
 
@@ -161,6 +168,7 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinInvalidPayloadError(
       OperationalStats::Event::
           EVENT_KIND_ELIGIBILITY_CHECKIN_ERROR_INVALID_PAYLOAD,
       std::string(error_message));
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogEligibilityEvalCheckinLatency(time_before_checkin);
 }
 
@@ -177,6 +185,7 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinCompleted(
     absl::Time time_before_plan_download) {
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   absl::Time before_time = time_before_plan_download;
   event_publisher_->PublishEligibilityEvalPlanReceived(
       network_stats, absl::Now() - before_time);
@@ -189,6 +198,8 @@ void PhaseLoggerImpl::LogEligibilityEvalCheckinCompleted(
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationStarted() {
   event_publisher_->PublishEligibilityEvalComputationStarted();
+  opstats_logger_->StartLoggingForPhase(
+      OperationalStats::PhaseStats::ELIGIBILITY_COMPUTATION);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_STARTED);
 }
@@ -207,6 +218,7 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationInvalidArgument(
       OperationalStats::Event::
           EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_INVALID_ARGUMENT,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationExampleIteratorError(
@@ -221,6 +233,7 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationExampleIteratorError(
       OperationalStats::Event::
           EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_EXAMPLE_ITERATOR,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
 }
 
 void PhaseLoggerImpl::LogEligibilityEvalComputationTensorflowError(
@@ -235,6 +248,7 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationTensorflowError(
       OperationalStats::Event::
           EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_TENSORFLOW,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
 }
 
@@ -249,6 +263,7 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationIOError(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_IO,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
 }
 
@@ -264,6 +279,7 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationInterrupted(
       OperationalStats::Event::
           EVENT_KIND_ELIGIBILITY_COMPUTATION_CLIENT_INTERRUPTED,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
 }
 
@@ -274,6 +290,7 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationCompleted(
       example_stats, absl::Now() - run_plan_start_time);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_FINISHED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   log_manager_->LogToLongHistogram(
       HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
       example_stats.example_size_bytes);
@@ -286,7 +303,10 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationCompleted(
 void PhaseLoggerImpl::LogMultipleTaskAssignmentsStarted() {
   // Log that we are about to check in with the server.
   event_publisher_->PublishMultipleTaskAssignmentsStarted();
-  // TODO(team): Update opstats for multiple task assignments events.
+  opstats_logger_->StartLoggingForPhase(
+      OperationalStats::PhaseStats::MULTIPLE_TASK_ASSIGNMENTS);
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_STARTED);
 }
 
 void PhaseLoggerImpl::LogMultipleTaskAssignmentsIOError(
@@ -299,7 +319,10 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsIOError(
   event_publisher_->PublishMultipleTaskAssignmentsIOError(
       error_message, network_stats,
       absl::Now() - time_before_multiple_task_assignments);
-  // TODO(team): Update opstats for multiple task assignments events.
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_IO,
+      error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
                                     reference_time);
 }
@@ -310,7 +333,11 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsPayloadIOError(
       GetErrorMessage(error_status, kMultipleTaskAssignmentsPrefix,
                       /* keep_error_message= */ true);
   event_publisher_->PublishMultipleTaskAssignmentsPayloadIOError(error_message);
-  // TODO(team): Update opstats for multiple task assignments events.
+  // Non-terminal events, we don't stop PhaseStats logging.
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::
+          EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_PAYLOAD_IO,
+      error_message);
 }
 
 void PhaseLoggerImpl::LogMultipleTaskAssignmentsInvalidPayload(
@@ -318,7 +345,11 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsInvalidPayload(
   log_manager_->LogDiag(
       ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN);
   event_publisher_->PublishMultipleTaskAssignmentsInvalidPayload(error_message);
-  // TODO(team): Update opstats for multiple task assignments events.
+  // Non-terminal events, we don't stop PhaseStats logging.
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::
+          EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_INVALID_PAYLOAD,
+      std::string(error_message));
 }
 
 void PhaseLoggerImpl::LogMultipleTaskAssignmentsClientInterrupted(
@@ -331,7 +362,11 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsClientInterrupted(
   event_publisher_->PublishMultipleTaskAssignmentsClientInterrupted(
       error_message, network_stats,
       absl::Now() - time_before_multiple_task_assignments);
-  // TODO(team): Update opstats for multiple task assignments events.
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::
+          EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_CLIENT_INTERRUPTED,
+      error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
                                     reference_time);
 }
@@ -346,7 +381,11 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsServerAborted(
   event_publisher_->PublishMultipleTaskAssignmentsServerAborted(
       error_message, network_stats,
       absl::Now() - time_before_multiple_task_assignments);
-  // TODO(team): Update opstats for multiple task assignments events.
+  opstats_logger_->AddEventWithErrorMessage(
+      OperationalStats::Event::
+          EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_SERVER_ABORTED,
+      error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
                                     reference_time);
 }
@@ -357,7 +396,9 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsTurnedAway(
     absl::Time reference_time) {
   event_publisher_->PublishMultipleTaskAssignmentsTurnedAway(
       network_stats, absl::Now() - time_before_multiple_task_assignments);
-  // TODO(team): Update opstats for multiple task assignments events.
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_REJECTED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
                                     reference_time);
 }
@@ -367,7 +408,10 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsPlanUriReceived(
     absl::Time time_before_multiple_task_assignments) {
   event_publisher_->PublishMultipleTaskAssignmentsPlanUriReceived(
       network_stats, absl::Now() - time_before_multiple_task_assignments);
-  // TODO(team): Update opstats for multiple task assignments events.
+  // Non-terminal events, we don't stop PhaseStats logging.
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::
+          EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PLAN_URI_RECEIVED);
 }
 
 void PhaseLoggerImpl::LogMultipleTaskAssignmentsPlanUriPartialReceived(
@@ -375,7 +419,10 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsPlanUriPartialReceived(
     absl::Time time_before_multiple_task_assignments) {
   event_publisher_->PublishMultipleTaskAssignmentsPlanUriPartialReceived(
       network_stats, absl::Now() - time_before_multiple_task_assignments);
-  // TODO(team): Update opstats for multiple task assignments events.
+  // Non-terminal events, we don't stop PhaseStats logging.
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::
+          EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PLAN_URI_PARTIAL_RECEIVED);
 }
 
 void PhaseLoggerImpl::LogMultipleTaskAssignmentsPartialCompleted(
@@ -385,7 +432,10 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsPartialCompleted(
   absl::Duration duration = absl::Now() - time_before_plan_download;
   event_publisher_->PublishMultipleTaskAssignmentsPartialCompleted(
       network_stats, duration);
-  // TODO(team): Update opstats for multiple task assignments events.
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::
+          EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PARTIAL_COMPLETED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
                                     reference_time);
 }
@@ -397,7 +447,9 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsCompleted(
   absl::Duration duration = absl::Now() - time_before_plan_download;
   event_publisher_->PublishMultipleTaskAssignmentsCompleted(network_stats,
                                                             duration);
-  // TODO(team): Update opstats for multiple task assignments events.
+  opstats_logger_->AddEvent(
+      OperationalStats::Event::EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_COMPLETED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogMultipleTaskAssignmentsLatency(time_before_multiple_task_assignments,
                                     reference_time);
 }
@@ -405,6 +457,7 @@ void PhaseLoggerImpl::LogMultipleTaskAssignmentsCompleted(
 void PhaseLoggerImpl::LogCheckinStarted() {
   // Log that we are about to check in with the server.
   event_publisher_->PublishCheckin();
+  opstats_logger_->StartLoggingForPhase(OperationalStats::PhaseStats::CHECKIN);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
 }
@@ -419,6 +472,7 @@ void PhaseLoggerImpl::LogCheckinIOError(absl::Status error_status,
                                           absl::Now() - time_before_checkin);
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_CHECKIN_ERROR_IO, error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
@@ -432,6 +486,7 @@ void PhaseLoggerImpl::LogCheckinClientInterrupted(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_CHECKIN_CLIENT_INTERRUPTED,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
@@ -446,6 +501,7 @@ void PhaseLoggerImpl::LogCheckinServerAborted(absl::Status error_status,
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_CHECKIN_SERVER_ABORTED,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
@@ -456,6 +512,7 @@ void PhaseLoggerImpl::LogCheckinTurnedAway(const NetworkStats& network_stats,
                                     absl::Now() - time_before_checkin);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
@@ -469,6 +526,7 @@ void PhaseLoggerImpl::LogCheckinInvalidPayload(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_CHECKIN_ERROR_INVALID_PAYLOAD,
       std::string(error_message));
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
@@ -477,6 +535,7 @@ void PhaseLoggerImpl::LogCheckinPlanUriReceived(
     absl::Time time_before_checkin) {
   event_publisher_->PublishCheckinPlanUriReceived(
       network_stats, absl::Now() - time_before_checkin);
+  // Non-terminal event, we don't stop PhaseStats logging.
   opstats_logger_->AddEventAndSetTaskName(
       std::string(task_name),
       OperationalStats::Event::EVENT_KIND_CHECKIN_PLAN_URI_RECEIVED);
@@ -493,6 +552,7 @@ void PhaseLoggerImpl::LogCheckinCompleted(absl::string_view task_name,
   // called, so we only have to add the event.
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   // The 'EligibilityEvalCheckinLatency' should cover the whole period from
   // eligibility eval checkin to completion (and not just the period from EET
   // plan URIs being received to completion).
@@ -501,6 +561,8 @@ void PhaseLoggerImpl::LogCheckinCompleted(absl::string_view task_name,
 
 void PhaseLoggerImpl::LogComputationStarted() {
   event_publisher_->PublishComputationStarted();
+  opstats_logger_->StartLoggingForPhase(
+      OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
 }
@@ -519,6 +581,7 @@ void PhaseLoggerImpl::LogComputationInvalidArgument(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_INVALID_ARGUMENT,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
 }
 
 void PhaseLoggerImpl::LogComputationIOError(absl::Status error_status,
@@ -533,6 +596,7 @@ void PhaseLoggerImpl::LogComputationIOError(absl::Status error_status,
       absl::Now() - run_plan_start_time);
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_IO, error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
 }
 
 void PhaseLoggerImpl::LogComputationExampleIteratorError(
@@ -546,6 +610,7 @@ void PhaseLoggerImpl::LogComputationExampleIteratorError(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_EXAMPLE_ITERATOR,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
 }
 
 void PhaseLoggerImpl::LogComputationTensorflowError(
@@ -560,6 +625,7 @@ void PhaseLoggerImpl::LogComputationTensorflowError(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_TENSORFLOW,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogComputationLatency(run_plan_start_time, reference_time);
 }
 
@@ -576,6 +642,7 @@ void PhaseLoggerImpl::LogComputationInterrupted(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_CLIENT_INTERRUPTED,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogComputationLatency(run_plan_start_time, reference_time);
 }
 
@@ -587,6 +654,7 @@ void PhaseLoggerImpl::LogComputationCompleted(const ExampleStats& example_stats,
       example_stats, network_stats, absl::Now() - run_plan_start_time);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   log_manager_->LogToLongHistogram(
       HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
       example_stats.example_size_bytes);
@@ -597,6 +665,7 @@ void PhaseLoggerImpl::LogComputationCompleted(const ExampleStats& example_stats,
 }
 
 absl::Status PhaseLoggerImpl::LogResultUploadStarted() {
+  opstats_logger_->StartLoggingForPhase(OperationalStats::PhaseStats::UPLOAD);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED);
   // Commit the run data accumulated thus far to Opstats and fail if
@@ -617,6 +686,7 @@ void PhaseLoggerImpl::LogResultUploadIOError(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_ERROR_IO,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogReportLatency(time_before_result_upload, reference_time);
 }
 
@@ -631,6 +701,7 @@ void PhaseLoggerImpl::LogResultUploadClientInterrupted(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_CLIENT_INTERRUPTED,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogReportLatency(time_before_result_upload, reference_time);
 }
 
@@ -645,6 +716,7 @@ void PhaseLoggerImpl::LogResultUploadServerAborted(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_SERVER_ABORTED,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogReportLatency(time_before_result_upload, reference_time);
 }
 
@@ -655,10 +727,12 @@ void PhaseLoggerImpl::LogResultUploadCompleted(
       network_stats, absl::Now() - time_before_result_upload);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_FINISHED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogReportLatency(time_before_result_upload, reference_time);
 }
 
 absl::Status PhaseLoggerImpl::LogFailureUploadStarted() {
+  opstats_logger_->StartLoggingForPhase(OperationalStats::PhaseStats::UPLOAD);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_STARTED);
   // Commit the run data accumulated thus far to Opstats and fail if
@@ -679,6 +753,7 @@ void PhaseLoggerImpl::LogFailureUploadIOError(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_ERROR_IO,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogReportLatency(time_before_failure_upload, reference_time);
 }
 
@@ -693,6 +768,7 @@ void PhaseLoggerImpl::LogFailureUploadClientInterrupted(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_CLIENT_INTERRUPTED,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogReportLatency(time_before_failure_upload, reference_time);
 }
 
@@ -707,6 +783,7 @@ void PhaseLoggerImpl::LogFailureUploadServerAborted(
   opstats_logger_->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_SERVER_ABORTED,
       error_message);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogReportLatency(time_before_failure_upload, reference_time);
 }
 
@@ -717,6 +794,7 @@ void PhaseLoggerImpl::LogFailureUploadCompleted(
       network_stats, absl::Now() - time_before_failure_upload);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_FINISHED);
+  opstats_logger_->StopLoggingForTheCurrentPhase();
   LogReportLatency(time_before_failure_upload, reference_time);
 }
 

@@ -66,6 +66,7 @@ cc_test(
         ":opstats_logger_impl",
         ":pds_backed_opstats_db",
         "//fcp/base",
+        "//fcp/base:time_util",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:histogram_counters_cc_proto",
         "//fcp/client:test_helpers",

@@ -201,6 +201,9 @@ class Flags {
   virtual bool enable_lightweight_client_report_wire_format() const {
     return false;
   }
+
+  // If true, OpStats logger enables PhaseStats logging.
+  virtual bool enable_phase_stats_logging() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

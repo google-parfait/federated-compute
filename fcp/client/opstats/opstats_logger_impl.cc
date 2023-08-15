@@ -15,10 +15,12 @@
  */
 #include "fcp/client/opstats/opstats_logger_impl.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 
 #include "google/protobuf/util/time_util.h"
+#include "absl/synchronization/mutex.h"
 #include "fcp/base/time_util.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
@@ -38,7 +40,9 @@ OpStatsLoggerImpl::OpStatsLoggerImpl(std::unique_ptr<OpStatsDb> db,
                                      const Flags* flags,
                                      const std::string& session_name,
                                      const std::string& population_name)
-    : db_(std::move(db)), log_manager_(log_manager) {
+    : db_(std::move(db)),
+      log_manager_(log_manager),
+      use_phase_stats_(flags->enable_phase_stats_logging()) {
   log_manager_->LogDiag(DebugDiagCode::TRAINING_OPSTATS_ENABLED);
   log_manager_->LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_EXPECTED);
 
@@ -55,23 +59,45 @@ OpStatsLoggerImpl::~OpStatsLoggerImpl() {
 void OpStatsLoggerImpl::AddEventAndSetTaskName(
     const std::string& task_name, OperationalStats::Event::EventKind event) {
   absl::MutexLock lock(&mutex_);
-  AddNewEventToStats(event);
-  stats_.set_task_name(task_name);
+  if (use_phase_stats_ && current_phase_stats_.phase() !=
+                              OperationalStats::PhaseStats::UNSPECIFIED) {
+    AddNewEventToCurrentPhaseStats(event);
+    current_phase_stats_.set_task_name(task_name);
+  } else {
+    AddNewEventToStats(event);
+    stats_.set_task_name(task_name);
+  }
 }
 
 void OpStatsLoggerImpl::AddEvent(OperationalStats::Event::EventKind event) {
   absl::MutexLock lock(&mutex_);
-  AddNewEventToStats(event);
+  // Initialization events don't belong to any phase, we'll log it at the
+  // top level of an OperationalStats message.
+  if (use_phase_stats_ && current_phase_stats_.phase() !=
+                              OperationalStats::PhaseStats::UNSPECIFIED) {
+    AddNewEventToCurrentPhaseStats(event);
+  } else {
+    AddNewEventToStats(event);
+  }
 }
 
 void OpStatsLoggerImpl::AddEventWithErrorMessage(
     OperationalStats::Event::EventKind event,
     const std::string& error_message) {
   absl::MutexLock lock(&mutex_);
-  AddNewEventToStats(event);
-  // Don't replace an existing error message.
-  if (stats_.error_message().empty()) {
-    stats_.set_error_message(error_message);
+  if (use_phase_stats_ && current_phase_stats_.phase() !=
+                              OperationalStats::PhaseStats::UNSPECIFIED) {
+    AddNewEventToCurrentPhaseStats(event);
+    // Don't replace an existing error message.
+    if (current_phase_stats_.error_message().empty()) {
+      current_phase_stats_.set_error_message(error_message);
+    }
+  } else {
+    AddNewEventToStats(event);
+    // Don't replace an existing error message.
+    if (stats_.error_message().empty()) {
+      stats_.set_error_message(error_message);
+    }
   }
 }
 
@@ -79,19 +105,48 @@ void OpStatsLoggerImpl::UpdateDatasetStats(
     const std::string& collection_uri, int additional_example_count,
     int64_t additional_example_size_bytes) {
   absl::MutexLock lock(&mutex_);
-  auto& dataset_stats = (*stats_.mutable_dataset_stats())[collection_uri];
-  dataset_stats.set_num_examples_read(dataset_stats.num_examples_read() +
-                                      additional_example_count);
-  dataset_stats.set_num_bytes_read(dataset_stats.num_bytes_read() +
-                                   additional_example_size_bytes);
+  OperationalStats::DatasetStats* dataset_stats;
+  if (use_phase_stats_ && current_phase_stats_.phase() !=
+                              OperationalStats::PhaseStats::UNSPECIFIED) {
+    dataset_stats =
+        &(*current_phase_stats_.mutable_dataset_stats())[collection_uri];
+  } else {
+    dataset_stats = &(*stats_.mutable_dataset_stats())[collection_uri];
+  }
+
+  dataset_stats->set_num_examples_read(dataset_stats->num_examples_read() +
+                                       additional_example_count);
+  dataset_stats->set_num_bytes_read(dataset_stats->num_bytes_read() +
+                                    additional_example_size_bytes);
 }
 
 void OpStatsLoggerImpl::SetNetworkStats(const NetworkStats& network_stats) {
   absl::MutexLock lock(&mutex_);
-  stats_.set_chunking_layer_bytes_downloaded(network_stats.bytes_downloaded);
-  stats_.set_chunking_layer_bytes_uploaded(network_stats.bytes_uploaded);
-  *stats_.mutable_network_duration() =
-      TimeUtil::ConvertAbslToProtoDuration(network_stats.network_duration);
+  if (use_phase_stats_ && current_phase_stats_.phase() !=
+                              OperationalStats::PhaseStats::UNSPECIFIED) {
+    // The input network stats is always the accumulated stats, but we want the
+    // per-phase network stats in PhaseStats.  Therefore, we calculates the
+    // difference between the new network stats with the accumulated network
+    // stats, and add the difference to the network stats for the current phase.
+    NetworkStats incremental_network_stats =
+        network_stats - accumulated_network_stats_;
+    current_phase_stats_.set_bytes_downloaded(
+        current_phase_stats_.bytes_downloaded() +
+        incremental_network_stats.bytes_downloaded);
+    current_phase_stats_.set_bytes_uploaded(
+        current_phase_stats_.bytes_uploaded() +
+        incremental_network_stats.bytes_uploaded);
+    *current_phase_stats_.mutable_network_duration() =
+        current_phase_stats_.network_duration() +
+        TimeUtil::ConvertAbslToProtoDuration(
+            incremental_network_stats.network_duration);
+    accumulated_network_stats_ = network_stats;
+  } else {
+    stats_.set_chunking_layer_bytes_downloaded(network_stats.bytes_downloaded);
+    stats_.set_chunking_layer_bytes_uploaded(network_stats.bytes_uploaded);
+    *stats_.mutable_network_duration() =
+        TimeUtil::ConvertAbslToProtoDuration(network_stats.network_duration);
+  }
 }
 
 void OpStatsLoggerImpl::SetRetryWindow(RetryWindow retry_window) {
@@ -107,12 +162,24 @@ void OpStatsLoggerImpl::AddNewEventToStats(
   *new_event->mutable_timestamp() = google::protobuf::util::TimeUtil::GetCurrentTime();
 }
 
+void OpStatsLoggerImpl::AddNewEventToCurrentPhaseStats(
+    OperationalStats::Event::EventKind kind) {
+  auto new_event = current_phase_stats_.add_events();
+  new_event->set_event_type(kind);
+  *new_event->mutable_timestamp() = google::protobuf::util::TimeUtil::GetCurrentTime();
+}
+
 absl::Status OpStatsLoggerImpl::CommitToStorage() {
   absl::MutexLock lock(&mutex_);
   log_manager_->LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_ATTEMPTED);
   const absl::Time before_commit_time = absl::Now();
+  OperationalStats copy = stats_;
+  if (use_phase_stats_ && current_phase_stats_.phase() !=
+                              OperationalStats::PhaseStats::UNSPECIFIED) {
+    *copy.add_phase_stats() = current_phase_stats_;
+  }
   auto status = already_committed_
-                    ? db_->Transform([stats = &stats_](OpStatsSequence& data) {
+                    ? db_->Transform([&copy](OpStatsSequence& data) {
                         // Check if opstats on disk somehow got cleared between
                         // the first commit and now, and handle appropriately.
                         // This can happen e.g. if the ttl for the opstats db
@@ -120,14 +187,13 @@ absl::Status OpStatsLoggerImpl::CommitToStorage() {
                         // causing the entire history to be lost as part of the
                         // update.
                         if (data.opstats_size() == 0) {
-                          *data.add_opstats() = *stats;
+                          *data.add_opstats() = copy;
                         } else {
-                          *data.mutable_opstats(data.opstats_size() - 1) =
-                              *stats;
+                          *data.mutable_opstats(data.opstats_size() - 1) = copy;
                         }
                       })
-                    : db_->Transform([stats = &stats_](OpStatsSequence& data) {
-                        *data.add_opstats() = *stats;
+                    : db_->Transform([&copy](OpStatsSequence& data) {
+                        *data.add_opstats() = copy;
                       });
   const absl::Time after_commit_time = absl::Now();
   log_manager_->LogToLongHistogram(
@@ -139,7 +205,50 @@ absl::Status OpStatsLoggerImpl::CommitToStorage() {
 
 std::string OpStatsLoggerImpl::GetCurrentTaskName() {
   absl::MutexLock lock(&mutex_);
+  if (use_phase_stats_) {
+    if (!current_phase_stats_.task_name().empty()) {
+      return current_phase_stats_.task_name();
+    }
+    for (auto it = stats_.phase_stats().rbegin();
+         it != stats_.phase_stats().rend(); it++) {
+      if (!it->task_name().empty()) {
+        return it->task_name();
+      }
+    }
+    // If we reach this line, it means we don't know the task name yet for the
+    // current run. Technically, it won't happen because this method is only
+    // called by the opstats example store and at that point we already know
+    // the task name.  Unfortunately, we can't enforce this at API level.
+    return "";
+  }
   return stats_.task_name();
+}
+
+void OpStatsLoggerImpl::StartLoggingForPhase(
+    OperationalStats::PhaseStats::Phase phase) {
+  absl::MutexLock lock(&mutex_);
+  if (!use_phase_stats_) {
+    return;
+  }
+
+  if (current_phase_stats_.phase() !=
+      OperationalStats::PhaseStats::UNSPECIFIED) {
+    // The user didn't stop the logging for the previous Phase. We'll add the
+    // cached PhaseStats to the stats first.
+    *stats_.add_phase_stats() = current_phase_stats_;
+    current_phase_stats_ = OperationalStats::PhaseStats();
+  }
+  current_phase_stats_.set_phase(phase);
+}
+
+void OpStatsLoggerImpl::StopLoggingForTheCurrentPhase() {
+  absl::MutexLock lock(&mutex_);
+  // Only add the current PhaseStats when it's not empty.
+  if (use_phase_stats_ && current_phase_stats_.phase() !=
+                              OperationalStats::PhaseStats::UNSPECIFIED) {
+    *stats_.add_phase_stats() = current_phase_stats_;
+    current_phase_stats_ = OperationalStats::PhaseStats();
+  }
 }
 
 }  // namespace opstats

@@ -559,6 +559,10 @@ class MockOpStatsLogger : public ::fcp::client::opstats::OpStatsLogger {
   MOCK_METHOD(bool, IsOpStatsEnabled, (), (const override));
   MOCK_METHOD(absl::Status, CommitToStorage, (), (override));
   MOCK_METHOD(std::string, GetCurrentTaskName, (), (override));
+  MOCK_METHOD(void, StartLoggingForPhase,
+              (::fcp::client::opstats::OperationalStats::PhaseStats::Phase),
+              (override));
+  MOCK_METHOD(void, StopLoggingForTheCurrentPhase, (), (override));
 };
 
 class MockSimpleTaskEnvironment : public SimpleTaskEnvironment {
@@ -654,6 +658,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, http_protocol_supports_multiple_task_assignments, (),
               (const, override));
   MOCK_METHOD(bool, enable_native_eets, (), (const, override));
+  MOCK_METHOD(bool, enable_phase_stats_logging, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

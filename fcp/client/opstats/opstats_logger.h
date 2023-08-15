@@ -89,6 +89,13 @@ class OpStatsLogger {
   // task name if called after `AddEventAndSetTaskName` is called.
   virtual std::string GetCurrentTaskName() { return ""; }
 
+  // Start logging stats for a new Phase.
+  virtual void StartLoggingForPhase(OperationalStats::PhaseStats::Phase phase) {
+  }
+
+  // Stop logging stats for the current Phase.
+  virtual void StopLoggingForTheCurrentPhase() {}
+
  private:
   bool opstats_enabled_;
   std::unique_ptr<OpStatsDb> db_;

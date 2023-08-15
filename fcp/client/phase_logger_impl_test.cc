@@ -129,6 +129,9 @@ TEST_P(PhaseLoggerImplTest, LogTaskNotStarted) {
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinStarted) {
   InSequence seq;
   EXPECT_CALL(mock_event_publisher_, PublishEligibilityEvalCheckin());
+  EXPECT_CALL(mock_opstats_logger_,
+              StartLoggingForPhase(
+                  OperationalStats::PhaseStats::ELIGIBILITY_EVAL_CHECKIN));
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(
@@ -149,6 +152,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinIOError) {
       AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_ERROR_IO,
           expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
 
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, Ge(0));
@@ -169,6 +173,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinClientInterrupted) {
                   OperationalStats::Event::
                       EVENT_KIND_ELIGIBILITY_CHECKIN_CLIENT_INTERRUPTED,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, Ge(0));
 
@@ -189,6 +194,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinServerAborted) {
                   OperationalStats::Event::
                       EVENT_KIND_ELIGIBILITY_CHECKIN_SERVER_ABORTED,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, Ge(0));
 
@@ -203,6 +209,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalNotConfigured) {
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_DISABLED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, Ge(0));
 
@@ -216,6 +223,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinTurnedAway) {
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, Ge(0));
 
@@ -239,6 +247,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinInvalidPayloadError) {
                   OperationalStats::Event::
                       EVENT_KIND_ELIGIBILITY_CHECKIN_ERROR_INVALID_PAYLOAD,
                   error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_ELIGIBILITY_EVAL_CHECKIN_LATENCY, Ge(0));
 
@@ -272,6 +281,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinCompleted) {
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_ELIGIBILITY_ENABLED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   EXPECT_CALL(mock_event_publisher_,
               PublishEligibilityEvalPlanReceived(
                   network_stats,
@@ -293,6 +303,9 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationStarted) {
   InSequence seq;
   EXPECT_CALL(mock_event_publisher_,
               PublishEligibilityEvalComputationStarted());
+  EXPECT_CALL(mock_opstats_logger_,
+              StartLoggingForPhase(
+                  OperationalStats::PhaseStats::ELIGIBILITY_COMPUTATION));
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(
@@ -319,6 +332,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationInvalidArgument) {
                   OperationalStats::Event::
                       EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_INVALID_ARGUMENT,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   phase_logger_->LogEligibilityEvalComputationInvalidArgument(
       absl::InvalidArgumentError(error_message), example_stats_, absl::Now());
 }
@@ -338,6 +352,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationExampleIteratorError) {
                   OperationalStats::Event::
                       EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_EXAMPLE_ITERATOR,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
 
   phase_logger_->LogEligibilityEvalComputationExampleIteratorError(
       error_status, example_stats_, absl::Now());
@@ -360,6 +375,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationTensorflowError) {
                   OperationalStats::Event::
                       EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_TENSORFLOW,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
   phase_logger_->LogEligibilityEvalComputationTensorflowError(
@@ -381,6 +397,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationIOError) {
       AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_ELIGIBILITY_COMPUTATION_ERROR_IO,
           expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
 
@@ -403,6 +420,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationInterrupted) {
                   OperationalStats::Event::
                       EVENT_KIND_ELIGIBILITY_COMPUTATION_CLIENT_INTERRUPTED,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
 
@@ -420,6 +438,7 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationCompleted) {
   EXPECT_CALL(mock_opstats_logger_,
               AddEvent(OperationalStats::Event::
                            EVENT_KIND_ELIGIBILITY_COMPUTATION_FINISHED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
                       kTotalExampleSizeBytes);
   VerifyCounterLogged(HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT,
@@ -434,6 +453,8 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationCompleted) {
 TEST_P(PhaseLoggerImplTest, LogCheckinStarted) {
   InSequence seq;
   EXPECT_CALL(mock_event_publisher_, PublishCheckin());
+  EXPECT_CALL(mock_opstats_logger_,
+              StartLoggingForPhase(OperationalStats::PhaseStats::CHECKIN));
   EXPECT_CALL(mock_opstats_logger_,
               AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED));
   phase_logger_->LogCheckinStarted();
@@ -450,6 +471,7 @@ TEST_P(PhaseLoggerImplTest, LogCheckinIOError) {
               AddEventWithErrorMessage(
                   OperationalStats::Event::EVENT_KIND_CHECKIN_ERROR_IO,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, Ge(0));
 
@@ -471,6 +493,7 @@ TEST_P(PhaseLoggerImplTest, LogCheckinClientInterrupted) {
       AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_CHECKIN_CLIENT_INTERRUPTED,
           expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, Ge(0));
 
@@ -491,6 +514,7 @@ TEST_P(PhaseLoggerImplTest, LogCheckinServerAborted) {
               AddEventWithErrorMessage(
                   OperationalStats::Event::EVENT_KIND_CHECKIN_SERVER_ABORTED,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
 
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, Ge(0));
@@ -505,6 +529,7 @@ TEST_P(PhaseLoggerImplTest, LogCheckinTurnedAway) {
   EXPECT_CALL(mock_event_publisher_, PublishRejected(network_stats_, _));
   EXPECT_CALL(mock_opstats_logger_,
               AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_REJECTED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, Ge(0));
 
@@ -526,6 +551,7 @@ TEST_P(PhaseLoggerImplTest, LogCheckinInvalidPayload) {
       AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_CHECKIN_ERROR_INVALID_PAYLOAD,
           error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME, Ge(0));
 
@@ -567,6 +593,7 @@ TEST_P(PhaseLoggerImplTest, LogCheckinCompleted) {
                         Lt(expected_duration + absl::Milliseconds(10)))));
   EXPECT_CALL(mock_opstats_logger_,
               AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   // The counter should always log the full duration, from before the start of
   // the checkin.
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY,
@@ -588,6 +615,8 @@ TEST_P(PhaseLoggerImplTest, LogCheckinCompleted) {
 TEST_P(PhaseLoggerImplTest, LogComputationStarted) {
   InSequence seq;
   EXPECT_CALL(mock_event_publisher_, PublishComputationStarted());
+  EXPECT_CALL(mock_opstats_logger_,
+              StartLoggingForPhase(OperationalStats::PhaseStats::COMPUTATION));
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED));
@@ -611,6 +640,7 @@ TEST_P(PhaseLoggerImplTest, LogComputationInvalidArgument) {
                   OperationalStats::Event::
                       EVENT_KIND_COMPUTATION_ERROR_INVALID_ARGUMENT,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   phase_logger_->LogComputationInvalidArgument(
       absl::InvalidArgumentError(error_message), example_stats_, network_stats_,
       absl::Now());
@@ -628,6 +658,7 @@ TEST_P(PhaseLoggerImplTest, LogComputationIOError) {
               AddEventWithErrorMessage(
                   OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_IO,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   phase_logger_->LogComputationIOError(
       absl::InvalidArgumentError(error_message), example_stats_, network_stats_,
       absl::Now());
@@ -647,6 +678,7 @@ TEST_P(PhaseLoggerImplTest, LogComputationExampleIteratorError) {
                   OperationalStats::Event::
                       EVENT_KIND_COMPUTATION_ERROR_EXAMPLE_ITERATOR,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   phase_logger_->LogComputationExampleIteratorError(
       error_status, example_stats_, network_stats_, absl::Now());
 }
@@ -668,6 +700,7 @@ TEST_P(PhaseLoggerImplTest, LogComputationTensorflowError) {
       AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_TENSORFLOW,
           expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
   phase_logger_->LogComputationTensorflowError(
@@ -690,6 +723,7 @@ TEST_P(PhaseLoggerImplTest, LogComputationInterrupted) {
       AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_COMPUTATION_CLIENT_INTERRUPTED,
           expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
 
   VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY, Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME, Ge(0));
@@ -709,6 +743,7 @@ TEST_P(PhaseLoggerImplTest, LogComputationCompleted) {
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
                       kTotalExampleSizeBytes);
   VerifyCounterLogged(HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT,
@@ -724,6 +759,8 @@ TEST_P(PhaseLoggerImplTest, LogComputationCompleted) {
 
 TEST_P(PhaseLoggerImplTest, LogResultUploadStartedOpStatsDbCommitSucceeds) {
   InSequence seq;
+  EXPECT_CALL(mock_opstats_logger_,
+              StartLoggingForPhase(OperationalStats::PhaseStats::UPLOAD));
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED));
@@ -736,6 +773,8 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadStartedOpStatsDbCommitSucceeds) {
 
 TEST_P(PhaseLoggerImplTest, LogResultUploadStartedOpStatsDbCommitFails) {
   InSequence seq;
+  EXPECT_CALL(mock_opstats_logger_,
+              StartLoggingForPhase(OperationalStats::PhaseStats::UPLOAD));
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED));
@@ -758,6 +797,7 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadIOError) {
               AddEventWithErrorMessage(
                   OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_ERROR_IO,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
                       Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
@@ -780,6 +820,7 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadClientInterrupted) {
       AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_CLIENT_INTERRUPTED,
           expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
                       Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
@@ -803,6 +844,7 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadServerAborted) {
       AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_SERVER_ABORTED,
           expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
                       Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
@@ -820,6 +862,7 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadCompleted) {
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_FINISHED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
                       Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
@@ -832,6 +875,8 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadCompleted) {
 
 TEST_P(PhaseLoggerImplTest, LogFailureUploadStartedOpstatsDbCommitSucceeds) {
   InSequence seq;
+  EXPECT_CALL(mock_opstats_logger_,
+              StartLoggingForPhase(OperationalStats::PhaseStats::UPLOAD));
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_STARTED));
@@ -843,6 +888,8 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadStartedOpstatsDbCommitSucceeds) {
 
 TEST_P(PhaseLoggerImplTest, LogFailureUploadStartedOpstatsDbCommitFails) {
   InSequence seq;
+  EXPECT_CALL(mock_opstats_logger_,
+              StartLoggingForPhase(OperationalStats::PhaseStats::UPLOAD));
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_STARTED));
@@ -864,6 +911,7 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadIOError) {
               AddEventWithErrorMessage(
                   OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_ERROR_IO,
                   expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
                       Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
@@ -886,6 +934,7 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadClientInterrupted) {
       AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_CLIENT_INTERRUPTED,
           expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
                       Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
@@ -908,6 +957,7 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadServerAborted) {
       AddEventWithErrorMessage(
           OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_SERVER_ABORTED,
           expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
                       Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
@@ -924,6 +974,7 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadCompleted) {
   EXPECT_CALL(
       mock_opstats_logger_,
       AddEvent(OperationalStats::Event::EVENT_KIND_FAILURE_UPLOAD_FINISHED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_LATENCY,
                       Ge(0));
   VerifyCounterLogged(HistogramCounters::TRAINING_FL_REPORT_RESULTS_END_TIME,
@@ -934,11 +985,19 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadCompleted) {
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsStarted) {
+  InSequence seq;
   EXPECT_CALL(mock_event_publisher_, PublishMultipleTaskAssignmentsStarted());
+  EXPECT_CALL(mock_opstats_logger_,
+              StartLoggingForPhase(
+                  OperationalStats::PhaseStats::MULTIPLE_TASK_ASSIGNMENTS));
+  EXPECT_CALL(mock_opstats_logger_,
+              AddEvent(OperationalStats::Event::
+                           EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_STARTED));
   phase_logger_->LogMultipleTaskAssignmentsStarted();
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsIOError) {
+  InSequence seq;
   std::string error_message = "Something's gone wrong.";
   std::string expected_error_message =
       absl::StrCat("Error during multiple task assignments: code: 13, error: ",
@@ -946,6 +1005,12 @@ TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsIOError) {
   EXPECT_CALL(mock_event_publisher_,
               PublishMultipleTaskAssignmentsIOError(expected_error_message,
                                                     network_stats_, _));
+  EXPECT_CALL(mock_opstats_logger_,
+              AddEventWithErrorMessage(
+                  OperationalStats::Event::
+                      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_IO,
+                  expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
   VerifyCounterLogged(
@@ -956,6 +1021,7 @@ TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsIOError) {
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsPayloadIOError) {
+  InSequence seq;
   std::string error_message = "Failed to retrieve plan.";
   std::string expected_error_message =
       absl::StrCat("Error during multiple task assignments: code: 13, error: ",
@@ -963,21 +1029,34 @@ TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsPayloadIOError) {
   EXPECT_CALL(
       mock_event_publisher_,
       PublishMultipleTaskAssignmentsPayloadIOError(expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_,
+              AddEventWithErrorMessage(
+                  OperationalStats::Event::
+                      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_PAYLOAD_IO,
+                  expected_error_message));
   phase_logger_->LogMultipleTaskAssignmentsPayloadIOError(
       absl::InternalError(error_message));
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsInvalidPayload) {
+  InSequence seq;
+  EXPECT_CALL(
+      mock_log_manager_,
+      LogDiag(ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN));
   std::string error_message = "Unable to parse initial checkpoint.";
   EXPECT_CALL(mock_event_publisher_,
               PublishMultipleTaskAssignmentsInvalidPayload(error_message));
   EXPECT_CALL(
-      mock_log_manager_,
-      LogDiag(ProdDiagCode::BACKGROUND_TRAINING_FAILED_CANNOT_PARSE_PLAN));
+      mock_opstats_logger_,
+      AddEventWithErrorMessage(
+          OperationalStats::Event::
+              EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_ERROR_INVALID_PAYLOAD,
+          error_message));
   phase_logger_->LogMultipleTaskAssignmentsInvalidPayload(error_message);
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsClientInterrupted) {
+  InSequence seq;
   std::string error_message = "The client is no longer idle";
   std::string expected_error_message =
       absl::StrCat("Error during multiple task assignments: code: 1, error: ",
@@ -985,6 +1064,12 @@ TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsClientInterrupted) {
   EXPECT_CALL(mock_event_publisher_,
               PublishMultipleTaskAssignmentsClientInterrupted(
                   expected_error_message, network_stats_, _));
+  EXPECT_CALL(mock_opstats_logger_,
+              AddEventWithErrorMessage(
+                  OperationalStats::Event::
+                      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_CLIENT_INTERRUPTED,
+                  expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
   VerifyCounterLogged(
@@ -995,6 +1080,7 @@ TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsClientInterrupted) {
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsServerAborted) {
+  InSequence seq;
   std::string error_message = "The request is aborted by the server";
   std::string expected_error_message =
       absl::StrCat("Error during multiple task assignments: code: 10, error: ",
@@ -1002,6 +1088,12 @@ TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsServerAborted) {
   EXPECT_CALL(mock_event_publisher_,
               PublishMultipleTaskAssignmentsServerAborted(
                   expected_error_message, network_stats_, _));
+  EXPECT_CALL(mock_opstats_logger_,
+              AddEventWithErrorMessage(
+                  OperationalStats::Event::
+                      EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_SERVER_ABORTED,
+                  expected_error_message));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
   VerifyCounterLogged(
@@ -1012,8 +1104,13 @@ TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsServerAborted) {
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsTurnedAway) {
+  InSequence seq;
   EXPECT_CALL(mock_event_publisher_,
               PublishMultipleTaskAssignmentsTurnedAway(network_stats_, _));
+  EXPECT_CALL(mock_opstats_logger_,
+              AddEvent(OperationalStats::Event::
+                           EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_REJECTED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
   VerifyCounterLogged(
@@ -1023,24 +1120,41 @@ TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsTurnedAway) {
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsPlanUriReceived) {
+  InSequence seq;
   EXPECT_CALL(mock_event_publisher_,
               PublishMultipleTaskAssignmentsPlanUriReceived(network_stats_, _));
+  EXPECT_CALL(
+      mock_opstats_logger_,
+      AddEvent(OperationalStats::Event::
+                   EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PLAN_URI_RECEIVED));
   phase_logger_->LogMultipleTaskAssignmentsPlanUriReceived(
       network_stats_, absl::Now() - absl::Minutes(2));
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsPlanUriPartialReceived) {
+  InSequence seq;
   EXPECT_CALL(
       mock_event_publisher_,
       PublishMultipleTaskAssignmentsPlanUriPartialReceived(network_stats_, _));
+  EXPECT_CALL(
+      mock_opstats_logger_,
+      AddEvent(
+          OperationalStats::Event::
+              EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PLAN_URI_PARTIAL_RECEIVED));
   phase_logger_->LogMultipleTaskAssignmentsPlanUriPartialReceived(
       network_stats_, absl::Now() - absl::Minutes(2));
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsPartialCompleted) {
+  InSequence seq;
   EXPECT_CALL(
       mock_event_publisher_,
       PublishMultipleTaskAssignmentsPartialCompleted(network_stats_, _));
+  EXPECT_CALL(
+      mock_opstats_logger_,
+      AddEvent(OperationalStats::Event::
+                   EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_PARTIAL_COMPLETED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
   VerifyCounterLogged(
@@ -1051,8 +1165,13 @@ TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsPartialCompleted) {
 }
 
 TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsCompleted) {
+  InSequence seq;
   EXPECT_CALL(mock_event_publisher_,
               PublishMultipleTaskAssignmentsCompleted(network_stats_, _));
+  EXPECT_CALL(mock_opstats_logger_,
+              AddEvent(OperationalStats::Event::
+                           EVENT_KIND_MULTIPLE_TASK_ASSIGNMENTS_COMPLETED));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   VerifyCounterLogged(
       HistogramCounters::TRAINING_FL_MULTIPLE_TASK_ASSIGNMENTS_LATENCY, Ge(0));
   VerifyCounterLogged(
