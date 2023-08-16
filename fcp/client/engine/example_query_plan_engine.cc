@@ -17,7 +17,6 @@
 #include "fcp/client/engine/example_query_plan_engine.h"
 
 #include <atomic>
-#include <cstdint>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -27,11 +26,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "fcp/aggregation/core/tensor.h"
-#include "fcp/aggregation/core/tensor.pb.h"
-#include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/client/converters.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/example_query_result.pb.h"
@@ -50,8 +45,6 @@ namespace engine {
 
 namespace tf = ::tensorflow;
 
-using ::fcp::aggregation::Tensor;
-using ::fcp::aggregation::TensorShape;
 using ::fcp::client::ExampleQueryResult;
 using ::fcp::client::engine::PlanResult;
 using ::fcp::client::opstats::OpStatsLogger;
@@ -184,90 +177,6 @@ absl::Status WriteCheckpoint(
     }
   }
   return ConvertFromTensorFlowStatus(slice_writer.Finish());
-}
-
-// Converts example query results to client report wire format tensors. Example
-// query results order must be the same as example_query_spec.example_queries.
-// TODO: b/294384093 -  add unit test once we start to invoke
-// GenerateWireFormatTensors() from RunPlan()
-// TODO: b/294384093 - pass vector<Tensor> to construct PlanResult
-absl::StatusOr<std::vector<Tensor>> GenerateAggregationTensors(
-    const std::vector<ExampleQueryResult>& example_query_results,
-    const ExampleQuerySpec& example_query_spec) {
-  std::vector<Tensor> tensors;
-  for (int i = 0; i < example_query_results.size(); ++i) {
-    const ExampleQueryResult& example_query_result = example_query_results[i];
-    const ExampleQuerySpec::ExampleQuery& example_query =
-        example_query_spec.example_queries()[i];
-    for (auto const& [vector_name, vector_tuple] :
-         GetOutputVectorSpecs(example_query)) {
-      std::string output_name = std::get<0>(vector_tuple);
-      ExampleQuerySpec::OutputVectorSpec output_vector_spec =
-          std::get<1>(vector_tuple);
-      auto it = example_query_result.vector_data().vectors().find(vector_name);
-      if (it == example_query_result.vector_data().vectors().end()) {
-        return absl::DataLossError(
-            "Expected value not found in the example query result");
-      }
-      const ExampleQueryResult::VectorData::Values values = it->second;
-      if (values.has_int32_values()) {
-        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::INT32));
-        FCP_ASSIGN_OR_RETURN(
-            tensors.emplace_back(),
-            ConvertNumericTensor<int32_t>(
-                aggregation::DT_INT32,
-                TensorShape({values.int32_values().value_size()}),
-                values.int32_values().value()));
-      } else if (values.has_int64_values()) {
-        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::INT64));
-        FCP_ASSIGN_OR_RETURN(
-            tensors.emplace_back(),
-            ConvertNumericTensor<int64_t>(
-                aggregation::DT_INT64,
-                TensorShape({values.int64_values().value_size()}),
-                values.int64_values().value()));
-      } else if (values.has_string_values()) {
-        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::STRING));
-        FCP_ASSIGN_OR_RETURN(
-            tensors.emplace_back(),
-            ConvertStringTensor(
-                TensorShape({values.string_values().value_size()}),
-                values.string_values().value()));
-      } else if (values.has_bool_values()) {
-        // TODO: b/296046539 - add support for bool values type
-        return absl::UnimplementedError("Bool values currently not supported.");
-      } else if (values.has_float_values()) {
-        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::FLOAT));
-        FCP_ASSIGN_OR_RETURN(
-            tensors.emplace_back(),
-            ConvertNumericTensor<float>(
-                aggregation::DT_FLOAT,
-                TensorShape({values.float_values().value_size()}),
-                values.float_values().value()));
-      } else if (values.has_double_values()) {
-        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::DOUBLE));
-        FCP_ASSIGN_OR_RETURN(
-            tensors.emplace_back(),
-            ConvertNumericTensor<double>(
-                aggregation::DT_DOUBLE,
-                TensorShape({values.double_values().value_size()}),
-                values.double_values().value()));
-      } else if (values.has_bytes_values()) {
-        // TODO: b/296046539 - add support for bytes values type
-        return absl::UnimplementedError(
-            "Bytes values currently not supported.");
-      } else {
-        return absl::DataLossError(
-            "Unexpected data type in the example query result");
-      }
-    }
-  }
-  return tensors;
 }
 
 }  // anonymous namespace
