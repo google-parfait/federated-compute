@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
+load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -58,6 +59,21 @@ proto_library(
     deps = [
         "@com_google_protobuf//:any_proto",
     ],
+)
+
+proto_library(
+    name = "tff_worker_configuration_proto",
+    srcs = ["tff_worker_configuration.proto"],
+)
+
+cc_proto_library(
+    name = "tff_worker_configuration_cc_proto",
+    deps = [":tff_worker_configuration_proto"],
+)
+
+py_proto_library(
+    name = "tff_worker_configuration_py_proto",
+    deps = [":tff_worker_configuration_proto"],
 )
 
 cc_proto_library(
