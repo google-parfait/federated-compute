@@ -17,20 +17,17 @@
 #ifndef FCP_CLIENT_TESTING_UTILS_H_
 #define FCP_CLIENT_TESTING_UTILS_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
-#include "google/protobuf/repeated_field.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "absl/time/time.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
-#include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/files.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -54,22 +51,21 @@ inline std::string MakeTestFileName(absl::string_view dir,
 // It iterates over examples from a given dataset.
 class TestExampleIterator : public ExampleIterator {
  public:
-  explicit TestExampleIterator(const Dataset::ClientDataset* dataset)
-      : next_example_(dataset->example().begin()),
-        end_(dataset->example().end()) {}
+  explicit TestExampleIterator(const std::vector<std::string>& dataset)
+      : dataset_(dataset), next_index_(0) {}
 
   absl::StatusOr<std::string> Next() override {
-    if (next_example_ == end_) {
+    if (next_index_ >= dataset_.size()) {
       return absl::OutOfRangeError("");
     }
-    return *(next_example_++);
+    return dataset_[next_index_++];
   }
 
   void Close() override {}
 
  private:
-  google::protobuf::RepeatedPtrField<std::string>::const_iterator next_example_;
-  google::protobuf::RepeatedPtrField<std::string>::const_iterator end_;
+  const std::vector<std::string>& dataset_;
+  int32_t next_index_;
 };
 
 // Implementation of TaskEnvironment, the interface by which the client plan
@@ -78,23 +74,15 @@ class TestExampleIterator : public ExampleIterator {
 class TestTaskEnvironment : public SimpleTaskEnvironment {
  public:
   explicit TestTaskEnvironment(const Dataset::ClientDataset* dataset,
-                               const std::string& base_dir)
-      : dataset_(dataset), base_dir_(base_dir) {}
+                               const std::string& base_dir);
 
   absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
       const google::internal::federated::plan::ExampleSelector&
-          example_selector) override {
-    SelectorContext unused;
-    return CreateExampleIterator(example_selector, unused);
-  }
+          example_selector) override;
 
   absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
       const ExampleSelector& example_selector,
-      const SelectorContext& selector_context) override {
-    std::unique_ptr<ExampleIterator> iter =
-        std::make_unique<TestExampleIterator>(dataset_);
-    return std::move(iter);
-  }
+      const SelectorContext& selector_context) override;
 
   std::string GetBaseDir() override { return base_dir_; }
 
@@ -102,10 +90,10 @@ class TestTaskEnvironment : public SimpleTaskEnvironment {
 
  private:
   bool TrainingConditionsSatisfied() override { return true; }
-
-  const Dataset::ClientDataset* dataset_;
   std::string base_dir_;
-  std::string checkpoint_file_;
+  // Key: serialized ExampleSelector, Value: serialized examples.
+  absl::flat_hash_map<std::string, std::vector<std::string>> data_;
+  std::vector<std::string> default_data_;
 };
 
 // Implementation of client file API that creates files in a temporary test

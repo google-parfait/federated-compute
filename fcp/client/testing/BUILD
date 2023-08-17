@@ -22,19 +22,18 @@ package(
 cc_library(
     name = "utils",
     testonly = True,
+    srcs = ["utils.cc"],
     hdrs = ["utils.h"],
     deps = [
         "//fcp/base",
         "//fcp/client:interfaces",
         "//fcp/client:simple_task_environment",
-        "//fcp/client/engine:engine_cc_proto",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_proto_cc",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -45,6 +44,7 @@ cc_test(
     deps = [
         ":utils",
         "//fcp/protos:plan_cc_proto",
+        "//fcp/testing",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],
