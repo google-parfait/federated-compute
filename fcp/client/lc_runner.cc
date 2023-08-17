@@ -331,7 +331,7 @@ absl::Status RunLocalComputation(
   };
 
   absl::Time run_plan_start_time = absl::Now();
-  phase_logger.LogComputationStarted();
+  phase_logger.LogComputationStarted("");
 
   absl::StatusOr<std::string> plan_str = fcp::ReadFileToString(plan_uri);
   if (!plan_str.ok()) {

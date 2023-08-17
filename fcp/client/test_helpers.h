@@ -829,7 +829,7 @@ class MockPhaseLogger : public PhaseLogger {
                absl::Time time_before_checkin,
                absl::Time time_before_plan_download, absl::Time reference_time),
               (override));
-  MOCK_METHOD(void, LogComputationStarted, (), (override));
+  MOCK_METHOD(void, LogComputationStarted, (absl::string_view), (override));
   MOCK_METHOD(void, LogComputationInvalidArgument,
               (absl::Status error_status, const ExampleStats& example_stats,
                const NetworkStats& network_stats,

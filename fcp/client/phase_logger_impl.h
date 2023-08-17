@@ -164,7 +164,7 @@ class PhaseLoggerImpl : public PhaseLogger {
                            absl::Time reference_time) override;
 
   // Computation phase.
-  void LogComputationStarted() override;
+  void LogComputationStarted(absl::string_view task_name) override;
   void LogComputationInvalidArgument(absl::Status error_status,
                                      const ExampleStats& example_stats,
                                      const NetworkStats& network_stats,

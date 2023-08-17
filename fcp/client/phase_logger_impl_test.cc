@@ -617,10 +617,12 @@ TEST_P(PhaseLoggerImplTest, LogComputationStarted) {
   EXPECT_CALL(mock_event_publisher_, PublishComputationStarted());
   EXPECT_CALL(mock_opstats_logger_,
               StartLoggingForPhase(OperationalStats::PhaseStats::COMPUTATION));
+  const std::string task_name = "my_task";
   EXPECT_CALL(
       mock_opstats_logger_,
-      AddEvent(OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED));
-  phase_logger_->LogComputationStarted();
+      AddEventAndSetTaskName(
+          task_name, OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED));
+  phase_logger_->LogComputationStarted(task_name);
 }
 
 TEST_P(PhaseLoggerImplTest, LogComputationInvalidArgument) {

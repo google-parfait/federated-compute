@@ -204,7 +204,7 @@ class PhaseLogger {
 
   // Computation phase.
   // Called when computation started.
-  virtual void LogComputationStarted() = 0;
+  virtual void LogComputationStarted(absl::string_view task_name) = 0;
   // Called when the input parameters are invalid.
   virtual void LogComputationInvalidArgument(
       absl::Status error_status, const ExampleStats& example_stats,

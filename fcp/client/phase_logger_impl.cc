@@ -559,11 +559,12 @@ void PhaseLoggerImpl::LogCheckinCompleted(absl::string_view task_name,
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
-void PhaseLoggerImpl::LogComputationStarted() {
+void PhaseLoggerImpl::LogComputationStarted(absl::string_view task_name) {
   event_publisher_->PublishComputationStarted();
   opstats_logger_->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
-  opstats_logger_->AddEvent(
+  opstats_logger_->AddEventAndSetTaskName(
+      std::string(task_name),
       OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
 }
 

@@ -1681,7 +1681,7 @@ RunPlanResults RunComputation(
   }
 
   RetryWindow report_retry_window;
-  phase_logger.LogComputationStarted();
+  phase_logger.LogComputationStarted(checkin_result->task_name);
   absl::Time run_plan_start_time = absl::Now();
   NetworkStats run_plan_start_network_stats =
       GetCumulativeNetworkStats(federated_protocol, fedselect_manager);
@@ -2098,7 +2098,7 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
       &opstats_example_iterator_factory, env_example_iterator_factory.get()};
 
-  phase_logger.LogComputationStarted();
+  phase_logger.LogComputationStarted("");
   if (client_plan.phase().has_federated_compute()) {
     absl::StatusOr<std::string> checkpoint_output_filename =
         files->CreateTempFile("output", ".ckp");

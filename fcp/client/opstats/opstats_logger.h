@@ -45,7 +45,8 @@ class OpStatsLogger {
 
   virtual ~OpStatsLogger() = default;
 
-  // Log a checkin accepted event and the corresponding task name.
+  // Log a checkin accepted event or a computation started event and the
+  // corresponding task name.
   virtual void AddEventAndSetTaskName(
       const std::string& task_name, OperationalStats::Event::EventKind event) {}
 
