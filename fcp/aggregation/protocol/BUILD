@@ -133,6 +133,39 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "federated_compute_checkpoint_builder",
+    srcs = ["federated_compute_checkpoint_builder.cc"],
+    hdrs = ["federated_compute_checkpoint_builder.h"],
+    deps = [
+        ":checkpoint_builder",
+        "//fcp/aggregation/core:tensor",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "federated_compute_checkpoint_builder_test",
+    srcs = ["federated_compute_checkpoint_builder_test.cc"],
+    deps = [
+        ":checkpoint_builder",
+        ":federated_compute_checkpoint_builder",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/core:tensor_cc_proto",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/testing",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
 cc_test(
     name = "config_converter_test",
     srcs = ["config_converter_test.cc"],
