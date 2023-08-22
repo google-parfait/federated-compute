@@ -19,7 +19,10 @@ load("//fcp:config.bzl", "FCP_COPTS")
 load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
 
 package(
-    default_visibility = ["//fcp/aggregation:internal"],
+    default_visibility = [
+        "//fcp/aggregation:internal",
+        "//fcp/client/engine:__pkg__",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 

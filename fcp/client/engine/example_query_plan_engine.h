@@ -19,8 +19,10 @@
 #include <string>
 #include <vector>
 
+#include "fcp/aggregation/protocol/federated_compute_checkpoint_builder.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/flags.h"
 #include "fcp/client/opstats/opstats_logger.h"
 
 namespace fcp {
@@ -33,7 +35,8 @@ class ExampleQueryPlanEngine {
  public:
   ExampleQueryPlanEngine(
       std::vector<ExampleIteratorFactory*> example_iterator_factories,
-      ::fcp::client::opstats::OpStatsLogger* opstats_logger);
+      ::fcp::client::opstats::OpStatsLogger* opstats_logger,
+      const Flags* flags);
 
   // Runs a plan and writes an output into a checkpoint at the given path.
   ::fcp::client::engine::PlanResult RunPlan(
@@ -44,6 +47,9 @@ class ExampleQueryPlanEngine {
  private:
   std::vector<ExampleIteratorFactory*> example_iterator_factories_;
   ::fcp::client::opstats::OpStatsLogger* opstats_logger_;
+  ::fcp::aggregation::FederatedComputeCheckpointBuilderFactory
+      federated_compute_checkpoint_builder_factory_;
+  const Flags& flags_;
 };
 }  // namespace engine
 }  // namespace client

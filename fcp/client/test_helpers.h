@@ -659,6 +659,8 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, enable_native_eets, (), (const, override));
   MOCK_METHOD(bool, enable_phase_stats_logging, (), (const, override));
+  MOCK_METHOD(bool, enable_lightweight_client_report_wire_format, (),
+              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

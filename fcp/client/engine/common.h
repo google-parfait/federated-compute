@@ -22,6 +22,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/strings/cord.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/plan.pb.h"
@@ -54,6 +55,9 @@ struct PlanResult {
   std::vector<tensorflow::Tensor> output_tensors;
   // Only set if `outcome` is `kSuccess`, otherwise this is empty.
   std::vector<std::string> output_names;
+  // Only set if 'outcome' is 'kSuccess' and the federated compute wire format
+  // is enabled, otherwise this is empty.
+  absl::Cord federated_compute_checkpoint;
   // When the outcome is `kSuccess`, the status is ok. Otherwise, this status
   // contain the original error status which leads to the PlanOutcome.
   absl::Status original_status;

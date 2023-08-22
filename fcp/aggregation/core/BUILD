@@ -20,6 +20,7 @@ package(
     default_visibility = [
         "//fcp/aggregation:internal",
         "//fcp/client:__pkg__",
+        "//fcp/client/engine:__pkg__",
     ],
     licenses = ["notice"],  # Apache 2.0
 )

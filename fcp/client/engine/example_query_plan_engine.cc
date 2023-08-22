@@ -17,6 +17,7 @@
 #include "fcp/client/engine/example_query_plan_engine.h"
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -26,10 +27,17 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/protocol/checkpoint_builder.h"
+#include "fcp/aggregation/protocol/federated_compute_checkpoint_builder.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/converters.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/example_query_result.pb.h"
+#include "fcp/client/flags.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
@@ -45,6 +53,9 @@ namespace engine {
 
 namespace tf = ::tensorflow;
 
+using ::fcp::aggregation::CheckpointBuilder;
+using ::fcp::aggregation::Tensor;
+using ::fcp::aggregation::TensorShape;
 using ::fcp::client::ExampleQueryResult;
 using ::fcp::client::engine::PlanResult;
 using ::fcp::client::opstats::OpStatsLogger;
@@ -179,13 +190,93 @@ absl::Status WriteCheckpoint(
   return ConvertFromTensorFlowStatus(slice_writer.Finish());
 }
 
+// Converts example query results to client report wire format tensors. Example
+// query results order must be the same as example_query_spec.example_queries.
+absl::Status GenerateAggregationTensors(
+    CheckpointBuilder& checkpoint_builder,
+    const std::vector<ExampleQueryResult>& example_query_results,
+    const ExampleQuerySpec& example_query_spec) {
+  for (int i = 0; i < example_query_results.size(); ++i) {
+    const ExampleQueryResult& example_query_result = example_query_results[i];
+    const ExampleQuerySpec::ExampleQuery& example_query =
+        example_query_spec.example_queries()[i];
+    for (auto const& [vector_name, vector_tuple] :
+         GetOutputVectorSpecs(example_query)) {
+      std::string output_name = std::get<0>(vector_tuple);
+      ExampleQuerySpec::OutputVectorSpec output_vector_spec =
+          std::get<1>(vector_tuple);
+      auto it = example_query_result.vector_data().vectors().find(vector_name);
+      if (it == example_query_result.vector_data().vectors().end()) {
+        return absl::DataLossError(
+            "Expected value not found in the example query result");
+      }
+      const ExampleQueryResult::VectorData::Values values = it->second;
+      Tensor tensor;
+      if (values.has_int32_values()) {
+        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
+            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::INT32));
+        FCP_ASSIGN_OR_RETURN(
+            tensor, ConvertNumericTensor<int32_t>(
+                        aggregation::DT_INT32,
+                        TensorShape({values.int32_values().value_size()}),
+                        values.int32_values().value()));
+
+      } else if (values.has_int64_values()) {
+        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
+            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::INT64));
+        FCP_ASSIGN_OR_RETURN(
+            tensor, ConvertNumericTensor<int64_t>(
+                        aggregation::DT_INT64,
+                        TensorShape({values.int64_values().value_size()}),
+                        values.int64_values().value()));
+      } else if (values.has_string_values()) {
+        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
+            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::STRING));
+        FCP_ASSIGN_OR_RETURN(
+            tensor, ConvertStringTensor(
+                        TensorShape({values.string_values().value_size()}),
+                        values.string_values().value()));
+      } else if (values.has_bool_values()) {
+        // TODO: b/296046539 - add support for bool values type
+        return absl::UnimplementedError("Bool values currently not supported.");
+      } else if (values.has_float_values()) {
+        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
+            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::FLOAT));
+        FCP_ASSIGN_OR_RETURN(
+            tensor, ConvertNumericTensor<float>(
+                        aggregation::DT_FLOAT,
+                        TensorShape({values.float_values().value_size()}),
+                        values.float_values().value()));
+      } else if (values.has_double_values()) {
+        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
+            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::DOUBLE));
+        FCP_ASSIGN_OR_RETURN(
+            tensor, ConvertNumericTensor<double>(
+                        aggregation::DT_DOUBLE,
+                        TensorShape({values.double_values().value_size()}),
+                        values.double_values().value()));
+      } else if (values.has_bytes_values()) {
+        // TODO: b/296046539 - add support for bytes values type
+        return absl::UnimplementedError(
+            "Bytes values currently not supported.");
+      } else {
+        return absl::DataLossError(
+            "Unexpected data type in the example query result");
+      }
+      FCP_RETURN_IF_ERROR(checkpoint_builder.Add(output_name, tensor));
+    }
+  }
+  return absl::OkStatus();
+}
+
 }  // anonymous namespace
 
 ExampleQueryPlanEngine::ExampleQueryPlanEngine(
     std::vector<ExampleIteratorFactory*> example_iterator_factories,
-    OpStatsLogger* opstats_logger)
+    OpStatsLogger* opstats_logger, const Flags* flags)
     : example_iterator_factories_(example_iterator_factories),
-      opstats_logger_(opstats_logger) {}
+      opstats_logger_(opstats_logger),
+      flags_(*flags) {}
 
 PlanResult ExampleQueryPlanEngine::RunPlan(
     const ExampleQuerySpec& example_query_spec,
@@ -236,21 +327,38 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
         example_query_result.stats().example_count_for_logs();
     example_query_results.push_back(std::move(example_query_result));
   }
-  absl::Status status = WriteCheckpoint(
-      output_checkpoint_filename, example_query_results, example_query_spec);
+
+  PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
+  absl::Status status;
+  if (!flags_.enable_lightweight_client_report_wire_format()) {
+    status = WriteCheckpoint(output_checkpoint_filename, example_query_results,
+                             example_query_spec);
+  } else {
+    auto checkpoint_builder =
+        federated_compute_checkpoint_builder_factory_.Create();
+    status = GenerateAggregationTensors(
+        *checkpoint_builder, example_query_results, example_query_spec);
+    if (status.ok()) {
+      auto checkpoint = checkpoint_builder->Build();
+      if (checkpoint.ok()) {
+        plan_result.federated_compute_checkpoint = std::move(*checkpoint);
+      } else {
+        status = checkpoint.status();
+      }
+    }
+  }
   if (!status.ok()) {
     return PlanResult(PlanOutcome::kExampleIteratorError, status);
   }
 
-  PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
   // Note that for the example_size_bytes stat, we use the number reported
   // by the DatasetIterator, since it'll give us the most accurate
   // representation of the amount of data that was actually passed over the
   // ExampleIterator layer. However, the DatasetIterator will only observe a
   // single 'example' for each query it issues, even though that single
-  // ExampleQueryResult will likely contain multiple items of data spread across
-  // a number of vectors. Instead, we pass the example counts calculated by
-  // example store layer directly.
+  // ExampleQueryResult will likely contain multiple items of data spread
+  // across a number of vectors. Instead, we pass the example counts
+  // calculated by example store layer directly.
   plan_result.example_stats = {.example_count = total_example_count,
                                .example_size_bytes = total_example_size_bytes};
   return plan_result;

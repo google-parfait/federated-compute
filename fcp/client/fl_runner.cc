@@ -581,7 +581,7 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
   }
 
   engine::ExampleQueryPlanEngine plan_engine(example_iterator_factories,
-                                             opstats_logger);
+                                             opstats_logger, flags);
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().example_query_spec(), checkpoint_output_filename);
   PlanResultAndCheckpointFile result(std::move(plan_result));
@@ -856,7 +856,6 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     const absl::Time reference_time, const absl::Time time_before_checkin,
     const absl::Time time_before_plan_download,
     const NetworkStats& network_stats, Clock& clock) {
-
   ClientOnlyPlan plan;
   if (!ParseFromStringOrCord(plan, eligibility_eval_task.payloads.plan)) {
     auto message = "Failed to parse received eligibility eval plan";

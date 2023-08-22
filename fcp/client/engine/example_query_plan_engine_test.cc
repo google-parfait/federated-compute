@@ -30,13 +30,22 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
+#include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/protocol/federated_compute_checkpoint_builder.h"
+#include "fcp/aggregation/testing/test_data.h"
 #include "fcp/client/client_runner.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/example_query_result.pb.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"
+#include "google/protobuf/io/coded_stream.h"
+#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "tensorflow/c/checkpoint_reader.h"
 #include "tensorflow/c/tf_status.h"
 #include "tensorflow/c/tf_status_helper.h"
@@ -51,6 +60,8 @@ namespace {
 
 namespace tf = ::tensorflow;
 
+using ::fcp::aggregation::Tensor;
+using ::fcp::aggregation::TensorShape;
 using ::fcp::client::ExampleQueryResult;
 using ::google::internal::federated::plan::AggregationConfig;
 using ::google::internal::federated::plan::ClientOnlyPlan;
@@ -241,6 +252,7 @@ class ExampleQueryPlanEngineTest : public testing::Test {
 
   fcp::client::FilesImpl files_impl_;
   StrictMock<MockOpStatsLogger> mock_opstats_logger_;
+  StrictMock<MockFlags> mock_flags_;
   std::unique_ptr<ExampleIteratorFactory> example_iterator_factory_;
 
   ExampleQueryResult example_query_result_;
@@ -258,9 +270,11 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceeds) {
   EXPECT_CALL(
       mock_opstats_logger_,
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
+  EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
+      .WillOnce(testing::Return(false));
 
   ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_);
+                                     &mock_opstats_logger_, &mock_flags_);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -351,8 +365,11 @@ TEST_F(ExampleQueryPlanEngineTest, MultipleQueries) {
       },
       kCollectionUri, "app:/second_collection");
 
+  EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
+      .WillOnce(testing::Return(false));
+
   ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_);
+                                     &mock_opstats_logger_, &mock_flags_);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -445,9 +462,11 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
   EXPECT_CALL(
       mock_opstats_logger_,
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
+  EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
+      .WillOnce(testing::Return(false));
 
   ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_);
+                                     &mock_opstats_logger_, &mock_flags_);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -477,9 +496,11 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecTypeMismatch) {
   EXPECT_CALL(
       mock_opstats_logger_,
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
+  EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
+      .WillOnce(testing::Return(false));
 
   ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_);
+                                     &mock_opstats_logger_, &mock_flags_);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -493,7 +514,7 @@ TEST_F(ExampleQueryPlanEngineTest, FactoryNotFound) {
       std::make_unique<InvalidExampleIteratorFactory>();
 
   ExampleQueryPlanEngine plan_engine({invalid_example_factory.get()},
-                                     &mock_opstats_logger_);
+                                     &mock_opstats_logger_, &mock_flags_);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -507,7 +528,7 @@ TEST_F(ExampleQueryPlanEngineTest, NoIteratorCreated) {
       std::make_unique<NoIteratorExampleIteratorFactory>();
 
   ExampleQueryPlanEngine plan_engine({invalid_example_factory.get()},
-                                     &mock_opstats_logger_);
+                                     &mock_opstats_logger_, &mock_flags_);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -533,12 +554,78 @@ TEST_F(ExampleQueryPlanEngineTest, InvalidExampleQueryResultFormat) {
               UpdateDatasetStats(kCollectionUri, 1, invalid_example.size()));
 
   ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_);
+                                     &mock_opstats_logger_, &mock_flags_);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
+}
+
+TEST_F(ExampleQueryPlanEngineTest,
+       PlanSucceedsWithFederatedComputeWireFormatEnabled) {
+  Initialize();
+
+  EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
+      .WillOnce(testing::Return(true));
+  EXPECT_CALL(
+      mock_opstats_logger_,
+      UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
+
+  ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
+                                     &mock_opstats_logger_, &mock_flags_);
+  engine::PlanResult result =
+      plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
+                          output_checkpoint_filename_);
+
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+
+  absl::string_view str = result.federated_compute_checkpoint.Flatten();
+  google::protobuf::io::ArrayInputStream input(str.data(), static_cast<int>(str.size()));
+  google::protobuf::io::CodedInputStream stream(&input);
+
+  std::string header;
+  ASSERT_TRUE(stream.ReadString(&header, 4));
+  ASSERT_EQ(header, aggregation::kFederatedComputeCheckpointHeader);
+
+  absl::StatusOr<Tensor> int_tensor =
+      Tensor::Create(aggregation::DT_INT64, TensorShape({2}),
+                     aggregation::CreateTestData<uint64_t>({42, 24}));
+  ASSERT_OK(int_tensor.status());
+  absl::StatusOr<Tensor> string_tensor = Tensor::Create(
+      aggregation::DT_STRING, TensorShape({2}),
+      aggregation::CreateTestData<absl::string_view>({"value1", "value2"}));
+  ASSERT_OK(string_tensor.status());
+
+  uint32_t name_size1;
+  ASSERT_TRUE(stream.ReadVarint32(&name_size1));
+  std::string name1;
+  ASSERT_TRUE(stream.ReadString(&name1, name_size1));
+
+  aggregation::Tensor& t1 =
+      name1 == kOutputIntTensorName ? *int_tensor : *string_tensor;
+  uint32_t tensor_size1;
+  ASSERT_TRUE(stream.ReadVarint32(&tensor_size1));
+  std::string tensor1;
+  ASSERT_TRUE(stream.ReadString(&tensor1, tensor_size1));
+  ASSERT_EQ(tensor1, t1.ToProto().SerializeAsString());
+
+  uint32_t name_size2;
+  ASSERT_TRUE(stream.ReadVarint32(&name_size2));
+  std::string name2;
+  ASSERT_TRUE(stream.ReadString(&name2, name_size2));
+
+  aggregation::Tensor& t2 =
+      name2 == kOutputIntTensorName ? *int_tensor : *string_tensor;
+  uint32_t tensor_size2;
+  ASSERT_TRUE(stream.ReadVarint32(&tensor_size2));
+  std::string tensor2;
+  ASSERT_TRUE(stream.ReadString(&tensor2, tensor_size2));
+  ASSERT_EQ(tensor2, t2.ToProto().SerializeAsString());
+
+  uint32_t zero;
+  ASSERT_TRUE(stream.ReadVarint32(&zero));
+  ASSERT_EQ(zero, 0);
 }
 
 }  // anonymous namespace
