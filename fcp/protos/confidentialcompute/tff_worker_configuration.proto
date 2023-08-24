@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+import "tensorflow/core/framework/types.proto";
+
 // Configuration for a sealed worker application that executes TensorFlow
 // Federated computations.
 message TffWorkerConfiguration {
@@ -44,6 +46,30 @@ message TffWorkerConfiguration {
     // This value is produced as the first output of the server_prepare
     // computation in the `tff.backends.mapreduce.DistributeAggregateForm`.
     bytes serialized_broadcasted_data = 2;
+
+    // Specification of the input format uploaded by clients. This informs the
+    // worker job of how to decode the client blob bytes into a structure that
+    // can be passed as input to the TFF computation encoded by
+    // `serialized_client_work_computation`.
+    oneof client_input_format {
+      FedSqlTensorflowCheckpoint fed_sql_tensorflow_checkpoint = 3;
+    }
+
+    // A TensorFlow checkpoint in columnar format encoding the output of a
+    // SQL query executied on the client.
+    // The checkpoint contains a tensor for each column in the SQL query output.
+    // Each column contains `n` scalars where `n` is the number of rows in the
+    // SQL query output.
+    // `n` varies between clients and is not known in advance.
+    message FedSqlTensorflowCheckpoint {
+      message FedSqlColumn {
+        // Name of the tensor in the TensorFlow checkpoint.
+        string name = 1;
+        // The data type of the tensor representing the column.
+        tensorflow.DataType data_type = 2;
+      }
+      repeated FedSqlColumn fed_sql_columns = 1;
+    }
   }
 
   // A worker job that aggregates together data derived fronm client uploads.
