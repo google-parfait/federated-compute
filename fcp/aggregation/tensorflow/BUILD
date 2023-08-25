@@ -43,6 +43,7 @@ cc_test(
         "//fcp/aggregation/testing",
         "//fcp/base",
         "//fcp/testing",
+        "//fcp/testing:parse_text_proto",
         "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",

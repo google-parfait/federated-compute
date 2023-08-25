@@ -180,6 +180,7 @@ cc_test(
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/testing",
+        "//fcp/testing:parse_text_proto",
         "@com_google_googletest//:gtest_main",
     ],
 )

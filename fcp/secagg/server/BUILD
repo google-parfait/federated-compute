@@ -225,6 +225,7 @@ cc_test(
         "//fcp/secagg/testing/server:experiments",
         "//fcp/secagg/testing/server:server_mocks",
         "//fcp/testing",
+        "//fcp/testing:parse_text_proto",
         "//fcp/tracing:test_tracing_recorder",
         "@com_google_googletest//:gtest_main",
     ],

@@ -3,6 +3,7 @@
 #include <utility>
 #include <vector>
 
+#include "fcp/testing/parse_text_proto.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "fcp/aggregation/core/tensor.h"

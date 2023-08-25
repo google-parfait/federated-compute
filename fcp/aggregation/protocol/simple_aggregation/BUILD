@@ -127,6 +127,7 @@ cc_test(
         "//fcp/base:scheduler",
         "//fcp/base:simulated_clock",
         "//fcp/testing",
+        "//fcp/testing:parse_text_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",

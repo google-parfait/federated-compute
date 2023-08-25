@@ -25,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include "fcp/testing/parse_text_proto.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
