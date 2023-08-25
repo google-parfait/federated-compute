@@ -1,6 +1,6 @@
 
-#ifndef FCP_CLIENT_ENGINE_CONVERTERS_H_
-#define FCP_CLIENT_ENGINE_CONVERTERS_H_
+#ifndef FCP_CLIENT_CONVERTERS_H_
+#define FCP_CLIENT_CONVERTERS_H_
 
 #include <cstddef>
 #include <string>
@@ -48,4 +48,4 @@ absl::StatusOr<aggregation::Tensor> ConvertStringTensor(
     const ::google::protobuf::RepeatedPtrField<std::string>& value);
 }  // namespace fcp::client
 
-#endif  // FCP_CLIENT_ENGINE_CONVERTERS_H_
+#endif  // FCP_CLIENT_CONVERTERS_H_
