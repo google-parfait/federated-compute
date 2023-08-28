@@ -57,9 +57,9 @@ message DataAccessPolicy {
     // Limits on the application's access to the data.
     AccessBudget access_budget = 4;
 
-    // The indexes of shared AccessBudgets this transform is also subject to.
+    // The indices of shared AccessBudgets this transform is also subject to.
     // *All* budgets must allow the usage for access to be granted.
-    repeated uint32 shared_access_budget_indexes = 5;
+    repeated uint32 shared_access_budget_indices = 5;
   }
 }
 
