@@ -105,20 +105,41 @@ MATCH_TYPE_AND_DTYPE(string_view, DT_STRING);
     break;                                      \
   }
 
+#define DTYPE_CASES_BEGIN(TYPE_ENUM) switch (TYPE_ENUM) {
+#define DTYPE_CASES_END(TYPE_ENUM)                      \
+  case DT_INVALID:                                      \
+    FCP_LOG(FATAL) << "Invalid type";                   \
+    break;                                              \
+  default:                                              \
+    FCP_LOG(FATAL) << "Unsupported type " << TYPE_ENUM; \
+    }
+
+#define DTYPE_FLOATING_CASES(TYPE_ARG, STMTS) \
+  DTYPE_CASE(float, TYPE_ARG, STMTS)          \
+  DTYPE_CASE(double, TYPE_ARG, STMTS)
+
+#define DTYPE_INTEGER_CASES(TYPE_ARG, STMTS) \
+  DTYPE_CASE(int32_t, TYPE_ARG, STMTS)       \
+  DTYPE_CASE(int64_t, TYPE_ARG, STMTS)
+
+#define DTYPE_NUMERICAL_CASES(TYPE_ARG, STMTS) \
+  DTYPE_FLOATING_CASES(TYPE_ARG, STMTS)        \
+  DTYPE_INTEGER_CASES(TYPE_ARG, STMTS)
+
+#define DTYPE_STRING_CASES(TYPE_ARG, STMTS) \
+  DTYPE_CASE(string_view, TYPE_ARG, STMTS)
+
 // TODO(team): Add other types.
-#define DTYPE_CASES(TYPE_ENUM, TYPE_ARG, STMTS)          \
-  switch (TYPE_ENUM) {                                   \
-    DTYPE_CASE(float, TYPE_ARG, SINGLE_ARG(STMTS))       \
-    DTYPE_CASE(double, TYPE_ARG, SINGLE_ARG(STMTS))      \
-    DTYPE_CASE(int32_t, TYPE_ARG, SINGLE_ARG(STMTS))     \
-    DTYPE_CASE(int64_t, TYPE_ARG, SINGLE_ARG(STMTS))     \
-    DTYPE_CASE(string_view, TYPE_ARG, SINGLE_ARG(STMTS)) \
-    case DT_INVALID:                                     \
-      FCP_LOG(FATAL) << "Invalid type";                  \
-      break;                                             \
-    default:                                             \
-      FCP_LOG(FATAL) << "Unknown type";                  \
-  }
+#define DTYPE_CASES(TYPE_ENUM, TYPE_ARG, STMTS)      \
+  DTYPE_CASES_BEGIN(TYPE_ENUM)                       \
+  DTYPE_NUMERICAL_CASES(TYPE_ARG, SINGLE_ARG(STMTS)) \
+  DTYPE_STRING_CASES(TYPE_ARG, SINGLE_ARG(STMTS))    \
+  DTYPE_CASES_END(TYPE_ENUM)
+
+#define NUMERICAL_ONLY_DTYPE_CASES(TYPE_ENUM, TYPE_ARG, STMTS) \
+  DTYPE_CASES_BEGIN(TYPE_ENUM)                                 \
+  DTYPE_NUMERICAL_CASES(TYPE_ARG, SINGLE_ARG(STMTS))           \
+  DTYPE_CASES_END(TYPE_ENUM)
 
 }  // namespace internal
 
