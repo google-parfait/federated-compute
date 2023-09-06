@@ -345,8 +345,7 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
         key='result',
     )
     self.build_plan.assert_called_once()
-    self.assertEqual(self.build_plan.call_args.args[0],
-                     self.count_clients_comp1.map_reduce_form)
+    self.assertIsNone(self.build_plan.call_args.args[0])
     self.assertEqual(
         self.build_plan.call_args.args[1],
         self.count_clients_comp1.distribute_aggregate_form,
@@ -402,8 +401,7 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
         key='result',
     )
     self.build_plan.assert_called_once()
-    self.assertEqual(self.build_plan.call_args.args[0],
-                     self.identity_comp.map_reduce_form)
+    self.assertIsNone(self.build_plan.call_args.args[0])
     self.assertEqual(
         self.build_plan.call_args.args[1],
         self.identity_comp.distribute_aggregate_form,
@@ -421,8 +419,7 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
         key='result',
     )
     self.build_plan.assert_called_once()
-    self.assertEqual(self.build_plan.call_args.args[0],
-                     self.count_clients_comp1.map_reduce_form)
+    self.assertIsNone(self.build_plan.call_args.args[0])
     self.assertEqual(
         self.build_plan.call_args.args[1],
         self.count_clients_comp1.distribute_aggregate_form,

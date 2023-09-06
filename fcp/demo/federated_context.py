@@ -136,11 +136,12 @@ class FederatedContext(tff.program.FederatedContext):
       plan = self._cached_comps[cache_key]
     except KeyError:
       plan = federated_compute_plan_builder.build_plan(
-          comp.map_reduce_form,
+          None,  # MapReduceForm is being deprecated
           comp.distribute_aggregate_form,
           self._get_nested_data_spec(config.example_selector),
           grappler_config=tf.compat.v1.ConfigProto(),
           generate_server_phase_v2=True,
+          generate_client_phase_from_daf=True,
       )
       # Add the TF Lite flatbuffer to the plan. If the conversion fails, the
       # flatbuffer will be silently omitted and the client will use the

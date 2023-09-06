@@ -71,28 +71,6 @@ class FederatedComputationTest(absltest.TestCase):
       fc.FederatedComputation(add_one, name='comp')
 
   @tff.test.with_context(
-      tff.backends.test.create_sync_test_cpp_execution_context
-  )
-  def test_map_reduce_form(self):
-    comp1 = fc.FederatedComputation(count_clients, name='comp1')
-    comp2 = fc.FederatedComputation(count_examples, name='comp2')
-    self.assertNotEqual(comp1.map_reduce_form, comp2.map_reduce_form)
-
-    # While we treat the MRF contents as an implementation detail, we can verify
-    # the invocation results of the corresponding computation.
-    # comp1 should return the number of clients.
-    self.assertEqual(
-        tff.backends.mapreduce.get_computation_for_map_reduce_form(
-            comp1.map_reduce_form
-        )(0, [['', '']] * 3),
-        (3, ()),
-    )
-    # comp2 should return the number of examples across all clients.
-    self.assertEqual(
-        tff.backends.mapreduce.get_computation_for_map_reduce_form(
-            comp2.map_reduce_form)(0, [['', '']] * 3), (6, ()))
-
-  @tff.test.with_context(
       tff.backends.native.create_sync_local_cpp_execution_context
   )
   def test_distribute_aggregate_form(self):

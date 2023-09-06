@@ -244,10 +244,7 @@ py_library(
     name = "plan_utils",
     srcs = ["plan_utils.py"],
     srcs_version = "PY3",
-    deps = [
-        "//fcp/protos:plan_py_pb2",
-        "//fcp/tensorflow:serve_slices_py",
-    ],
+    deps = ["//fcp/protos:plan_py_pb2"],
 )
 
 py_test(
@@ -260,7 +257,6 @@ py_test(
         ":plan_utils",
         ":test_utils",
         "//fcp/protos:plan_py_pb2",
-        "//fcp/tensorflow:serve_slices_py",
     ],
 )
 

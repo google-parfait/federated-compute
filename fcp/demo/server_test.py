@@ -67,30 +67,163 @@ def create_plan() -> plan_pb2.Plan:
         tensor_names=[COUNT_TENSOR_NAME],
         data=[count])
 
-  with tf.compat.v1.Graph().as_default() as server_graph:
-    filename = tf.compat.v1.placeholder(tf.string, shape=())
-    contribution_cap = tf.Variable(0, dtype=tf.int32)
+  server_prepare_input_tensors = []
+  server_prepare_target_nodes = []
+  with tf.Graph().as_default() as server_prepare_graph:
+    # Create the placeholders for the input and output filenames needed by
+    # the server_prepare step.
+    server_prepare_server_state_input_filepath_placeholder = (
+        tf.compat.v1.placeholder(
+            name='server_state_input_filepath', shape=(), dtype=tf.string
+        )
+    )
+    server_prepare_output_filepath_placeholder = tf.compat.v1.placeholder(
+        name='server_prepare_output_filepath', shape=(), dtype=tf.string
+    )
+    server_prepare_intermediate_state_output_filepath_placeholder = (
+        tf.compat.v1.placeholder(
+            name='server_intermediate_state_output_filepath',
+            shape=(),
+            dtype=tf.string,
+        )
+    )
+    server_prepare_input_tensors.extend([
+        server_prepare_server_state_input_filepath_placeholder,
+        server_prepare_output_filepath_placeholder,
+        server_prepare_intermediate_state_output_filepath_placeholder,
+    ])
+
     count = tf.Variable(0, dtype=tf.int32)
     load_initial_count = count.assign(
         tf.raw_ops.Restore(
-            file_pattern=filename, tensor_name=COUNT_TENSOR_NAME, dt=tf.int32),
-        read_value=False)
+            file_pattern=server_prepare_server_state_input_filepath_placeholder,
+            tensor_name=COUNT_TENSOR_NAME,
+            dt=tf.int32,
+        ),
+        read_value=False,
+    )
+    with tf.control_dependencies([load_initial_count]):
+      save_intermediate_state_op = tf.raw_ops.SaveSlices(
+          filename=server_prepare_intermediate_state_output_filepath_placeholder,
+          tensor_names=[COUNT_TENSOR_NAME],
+          shapes_and_slices=[''],
+          data=[count],
+      )
+    server_prepare_target_nodes.append(save_intermediate_state_op.name)
+
+    contribution_cap = tf.Variable(0, dtype=tf.int32)
     load_contribution_cap = contribution_cap.assign(
         tf.raw_ops.Restore(
-            file_pattern=filename, tensor_name=CAP_TENSOR_NAME, dt=tf.int32),
-        read_value=False)
-    with tf.control_dependencies([load_initial_count, load_contribution_cap]):
-      restore_server_savepoint = tf.no_op()
-    write_client_init = tf.raw_ops.Save(
-        filename=filename,
-        tensor_names=[CAP_TENSOR_NAME],
-        data=[contribution_cap])
+            file_pattern=server_prepare_server_state_input_filepath_placeholder,
+            tensor_name=CAP_TENSOR_NAME,
+            dt=tf.int32,
+        ),
+        read_value=False,
+    )
+    with tf.control_dependencies([load_contribution_cap]):
+      save_client_checkpoint_op = tf.raw_ops.SaveSlices(
+          filename=server_prepare_output_filepath_placeholder,
+          tensor_names=[CAP_TENSOR_NAME],
+          shapes_and_slices=[''],
+          data=[contribution_cap],
+      )
+    server_prepare_target_nodes.append(save_client_checkpoint_op.name)
 
-    read_intermediate_update = count.assign_add(
+  server_result_input_tensors = []
+  server_result_target_nodes = []
+  with tf.Graph().as_default() as server_result_graph:
+    # Create the placeholders for the input and output filenames needed by
+    # the server_result step.
+    server_result_intermediate_state_input_filepath_placeholder = (
+        tf.compat.v1.placeholder(
+            name='server_intermediate_state_input_filepath',
+            shape=(),
+            dtype=tf.string,
+        )
+    )
+    server_result_aggregate_result_input_filepath_placeholder = (
+        tf.compat.v1.placeholder(
+            name='aggregate_result_input_filepath', shape=(), dtype=tf.string
+        )
+    )
+    server_result_server_state_output_filepath_placeholder = (
+        tf.compat.v1.placeholder(
+            name='server_state_output_filepath', shape=(), dtype=tf.string
+        )
+    )
+    server_result_input_tensors.extend([
+        server_result_intermediate_state_input_filepath_placeholder,
+        server_result_aggregate_result_input_filepath_placeholder,
+        server_result_server_state_output_filepath_placeholder,
+    ])
+
+    updated_count = tf.Variable(0, dtype=tf.int32)
+    load_initial_count = updated_count.assign(
         tf.raw_ops.Restore(
-            file_pattern=filename, tensor_name=COUNT_TENSOR_NAME, dt=tf.int32))
-    save_count = tf.raw_ops.Save(
-        filename=filename, tensor_names=[COUNT_TENSOR_NAME], data=[count])
+            file_pattern=server_result_intermediate_state_input_filepath_placeholder,
+            tensor_name=COUNT_TENSOR_NAME,
+            dt=tf.int32,
+        ),
+        read_value=False,
+    )
+    with tf.control_dependencies([load_initial_count]):
+      combine_counts = updated_count.assign_add(
+          tf.raw_ops.Restore(
+              file_pattern=server_result_aggregate_result_input_filepath_placeholder,
+              tensor_name=COUNT_TENSOR_NAME,
+              dt=tf.int32,
+          )
+      )
+    with tf.control_dependencies([combine_counts]):
+      save_op = tf.raw_ops.SaveSlices(
+          filename=server_result_server_state_output_filepath_placeholder,
+          tensor_names=[COUNT_TENSOR_NAME],
+          shapes_and_slices=[''],
+          data=[updated_count],
+      )
+    server_result_target_nodes.append(save_op.name)
+
+  tensorflow_spec_prepare = plan_pb2.TensorflowSpec(
+      input_tensor_specs=[
+          tf.TensorSpec.from_tensor(t).experimental_as_proto()
+          for t in server_prepare_input_tensors
+      ],
+      target_node_names=server_prepare_target_nodes,
+  )
+  server_prepare_io_router = plan_pb2.ServerPrepareIORouter(
+      prepare_server_state_input_filepath_tensor_name=server_prepare_server_state_input_filepath_placeholder.name,
+      prepare_output_filepath_tensor_name=server_prepare_output_filepath_placeholder.name,
+      prepare_intermediate_state_output_filepath_tensor_name=server_prepare_intermediate_state_output_filepath_placeholder.name,
+  )
+  tensorflow_spec_result = plan_pb2.TensorflowSpec(
+      input_tensor_specs=[
+          tf.TensorSpec.from_tensor(t).experimental_as_proto()
+          for t in server_result_input_tensors
+      ],
+      target_node_names=server_result_target_nodes,
+  )
+  server_result_io_router = plan_pb2.ServerResultIORouter(
+      result_intermediate_state_input_filepath_tensor_name=server_result_intermediate_state_input_filepath_placeholder.name,
+      result_aggregate_result_input_filepath_tensor_name=server_result_aggregate_result_input_filepath_placeholder.name,
+      result_server_state_output_filepath_tensor_name=server_result_server_state_output_filepath_placeholder.name,
+  )
+  aggregations = [
+      plan_pb2.ServerAggregationConfig(
+          intrinsic_uri='federated_sum',
+          intrinsic_args=[
+              plan_pb2.ServerAggregationConfig.IntrinsicArg(
+                  input_tensor=tf.TensorSpec(
+                      (), tf.int32, COUNT_TENSOR_NAME
+                  ).experimental_as_proto()
+              )
+          ],
+          output_tensors=[
+              tf.TensorSpec(
+                  (), tf.int32, COUNT_TENSOR_NAME
+              ).experimental_as_proto()
+          ],
+      )
+  ]
 
   plan = plan_pb2.Plan(
       phase=[
@@ -100,46 +233,33 @@ def create_plan() -> plan_pb2.Plan:
                       dataset_token_tensor_name=dataset_token.op.name,
                       input_tensor_specs=[
                           tf.TensorSpec.from_tensor(
-                              input_filepath).experimental_as_proto(),
+                              input_filepath
+                          ).experimental_as_proto(),
                           tf.TensorSpec.from_tensor(
-                              output_filepath).experimental_as_proto(),
+                              output_filepath
+                          ).experimental_as_proto(),
                       ],
-                      target_node_names=[target_node.name]),
+                      target_node_names=[target_node.name],
+                  ),
                   federated_compute=plan_pb2.FederatedComputeIORouter(
                       input_filepath_tensor_name=input_filepath.op.name,
-                      output_filepath_tensor_name=output_filepath.op.name)),
-              server_phase=plan_pb2.ServerPhase(
-                  write_client_init=plan_pb2.CheckpointOp(
-                      saver_def=tf.compat.v1.train.SaverDef(
-                          filename_tensor_name=filename.name,
-                          save_tensor_name=write_client_init.name)),
-                  read_intermediate_update=plan_pb2.CheckpointOp(
-                      saver_def=tf.compat.v1.train.SaverDef(
-                          filename_tensor_name=filename.name,
-                          restore_op_name=read_intermediate_update.name))),
-              server_phase_v2=plan_pb2.ServerPhaseV2(aggregations=[
-                  plan_pb2.ServerAggregationConfig(
-                      intrinsic_uri='federated_sum',
-                      intrinsic_args=[
-                          plan_pb2.ServerAggregationConfig.IntrinsicArg(
-                              input_tensor=tf.TensorSpec(
-                                  (), tf.int32,
-                                  COUNT_TENSOR_NAME).experimental_as_proto())
-                      ],
-                      output_tensors=[
-                          tf.TensorSpec((), tf.int32, COUNT_TENSOR_NAME)
-                          .experimental_as_proto()
-                      ])
-              ]))
+                      output_filepath_tensor_name=output_filepath.op.name,
+                  ),
+              ),
+              server_phase_v2=plan_pb2.ServerPhaseV2(
+                  tensorflow_spec_prepare=tensorflow_spec_prepare,
+                  prepare_router=server_prepare_io_router,
+                  aggregations=aggregations,
+                  tensorflow_spec_result=tensorflow_spec_result,
+                  result_router=server_result_io_router,
+              ),
+          )
       ],
-      server_savepoint=plan_pb2.CheckpointOp(
-          saver_def=tf.compat.v1.train.SaverDef(
-              filename_tensor_name=filename.name,
-              save_tensor_name=save_count.name,
-              restore_op_name=restore_server_savepoint.name)),
-      version=1)
+      version=1,
+  )
   plan.client_graph_bytes.Pack(client_graph.as_graph_def())
-  plan.server_graph_bytes.Pack(server_graph.as_graph_def())
+  plan.server_graph_prepare_bytes.Pack(server_prepare_graph.as_graph_def())
+  plan.server_graph_result_bytes.Pack(server_result_graph.as_graph_def())
   return plan
 
 

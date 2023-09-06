@@ -149,13 +149,16 @@ class InProcessServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
             self._eligibility_eval_tasks_service.remove_task(task_name)
 
           stack.pop_all()
-          status, intermedia_update = (
-              self._aggregations_service.complete_session(session_id))
-          if (status.status != aggregations.AggregationStatus.COMPLETED or
-              intermedia_update is None):
+          status, aggregated_results = (
+              self._aggregations_service.complete_session(session_id)
+          )
+          if (
+              status.status != aggregations.AggregationStatus.COMPLETED
+              or aggregated_results is None
+          ):
             raise ValueError('Aggregation failed.')
         logging.debug('%s aggregation complete: %s', task_name, status)
-        return session.finalize(intermedia_update)
+        return session.finalize(aggregated_results)
 
   def _get_forwarding_info(self) -> common_pb2.ForwardingInfo:
     protocol = 'https' if isinstance(self.socket, ssl.SSLSocket) else 'http'

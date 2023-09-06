@@ -18,153 +18,86 @@ and when it should be run.
 """
 
 import functools
+import os
 import tempfile
-from typing import Any, Optional
-import uuid
 
 import tensorflow as tf
 
 from google.protobuf import message
 from fcp.protos import plan_pb2
-from fcp.tensorflow import serve_slices as serve_slices_registry
 
 
 class Session:
-  """A session for performing L2 Plan operations.
+  """A helper class for executing ServerPhaseV2."""
 
-  This class only supports loading a single intermediate update.
-  """
-
-  def __init__(self, plan: plan_pb2.Plan, checkpoint: bytes):
+  def __init__(self, plan: plan_pb2.Plan, server_checkpoint: bytes):
     if len(plan.phase) != 1:
       raise ValueError('plan must contain exactly 1 phase.')
-    if not plan.phase[0].HasField('server_phase'):
-      raise ValueError('plan.phase[0] is missing server_phase.')
-
-    graph_def = tf.compat.v1.GraphDef()
-    try:
-      plan.server_graph_bytes.Unpack(graph_def)
-    except message.DecodeError as e:
-      raise ValueError('Unable to parse server graph.') from e
-
-    graph = tf.Graph()
-    with graph.as_default():
-      tf.import_graph_def(graph_def, name='')
-    self._session = tf.compat.v1.Session(graph=graph)
+    if not plan.phase[0].HasField('server_phase_v2'):
+      raise ValueError('plan.phase[0] is missing ServerPhaseV2.')
     self._plan = plan
-    self._restore_state(plan.server_savepoint, checkpoint)
-    self._maybe_run(plan.phase[0].server_phase.phase_init_op)
+    self._server_phase_v2 = plan.phase[0].server_phase_v2
 
-    serve_slices_calls = []
+    self._server_prepare_graph_def = None
+    if plan.HasField('server_graph_prepare_bytes'):
+      self._server_prepare_graph_def = tf.compat.v1.GraphDef()
+      try:
+        plan.server_graph_prepare_bytes.Unpack(self._server_prepare_graph_def)
+      except message.DecodeError as e:
+        raise ValueError('Unable to parse server_prepare graph.') from e
 
-    def record_serve_slices_call(*args):
-      served_at_id = str(uuid.uuid4())
-      serve_slices_calls.append((served_at_id, args))
-      return served_at_id
+    self._server_result_graph_def = None
+    if plan.HasField('server_graph_result_bytes'):
+      self._server_result_graph_def = tf.compat.v1.GraphDef()
+      try:
+        plan.server_graph_result_bytes.Unpack(self._server_result_graph_def)
+      except message.DecodeError as e:
+        raise ValueError('Unable to parse server_result graph.') from e
 
-    with serve_slices_registry.register_serve_slices_callback(
-        record_serve_slices_call
-    ) as token:
-      self._client_checkpoint = self._save_state(
-          plan.phase[0].server_phase.write_client_init, session_token=token
-      )
-    self._slices = {
-        k: self._build_slices(*args) for k, args in serve_slices_calls
-    }
+    self._temp_dir = tempfile.TemporaryDirectory()
+    server_state_checkpoint_filename = os.path.join(
+        self._temp_dir.name, 'server_state.ckpt'
+    )
+    self._client_checkpoint_filename = os.path.join(
+        self._temp_dir.name, 'client_init.ckpt'
+    )
+    self._intermediate_state_checkpoint_filename = os.path.join(
+        self._temp_dir.name, 'intermediate_state.ckpt'
+    )
+
+    # Run server prepare logic (if it exists) to generate the intermediate state
+    # checkpoint and client checkpoint.
+    if self._server_prepare_graph_def:
+      with open(server_state_checkpoint_filename, 'wb') as f:
+        f.write(server_checkpoint)
+      graph = tf.Graph()
+      with graph.as_default():
+        tf.import_graph_def(self._server_prepare_graph_def, name='')
+      with tf.compat.v1.Session(graph=graph) as sess:
+        prepare_router = self._server_phase_v2.prepare_router
+        feed_dict = {
+            prepare_router.prepare_server_state_input_filepath_tensor_name: (
+                server_state_checkpoint_filename
+            ),
+            prepare_router.prepare_output_filepath_tensor_name: (
+                self._client_checkpoint_filename
+            ),
+            prepare_router.prepare_intermediate_state_output_filepath_tensor_name: (
+                self._intermediate_state_checkpoint_filename
+            ),
+        }
+        sess.run(
+            fetches=list(
+                self._server_phase_v2.tensorflow_spec_prepare.target_node_names
+            ),
+            feed_dict=feed_dict,
+        )
 
   def __enter__(self) -> 'Session':
     return self
 
   def __exit__(self, exc_type, exc_value, tb) -> None:
-    self.close()
-
-  def close(self) -> None:
-    """Closes the session, releasing resources."""
-    self._session.close()
-
-  def _maybe_run(
-      self, op: str, feed_dict: Optional[dict[str, Any]] = None
-  ) -> None:
-    """Runs an operation if it's non-empty."""
-    if op:
-      self._session.run(op, feed_dict=feed_dict)
-
-  def _restore_state(self, checkpoint_op: plan_pb2.CheckpointOp,
-                     checkpoint: bytes) -> None:
-    """Restores state from a TensorFlow checkpoint."""
-    self._maybe_run(checkpoint_op.before_restore_op)
-    if checkpoint_op.HasField('saver_def'):
-      with tempfile.NamedTemporaryFile('wb') as tmpfile:
-        tmpfile.write(checkpoint)
-        tmpfile.flush()
-        self._session.run(
-            checkpoint_op.saver_def.restore_op_name,
-            {checkpoint_op.saver_def.filename_tensor_name: tmpfile.name})
-    self._maybe_run(checkpoint_op.after_restore_op)
-
-  def _save_state(
-      self,
-      checkpoint_op: plan_pb2.CheckpointOp,
-      session_token: Optional[bytes] = None,
-  ) -> bytes:
-    """Saves state to a TensorFlow checkpoint."""
-    before_and_after_inputs = {}
-    if session_token and checkpoint_op.session_token_tensor_name:
-      before_and_after_inputs[checkpoint_op.session_token_tensor_name] = (
-          session_token
-      )
-
-    self._maybe_run(
-        checkpoint_op.before_save_op, feed_dict=before_and_after_inputs
-    )
-    result = b''
-    if checkpoint_op.HasField('saver_def'):
-      with tempfile.NamedTemporaryFile() as tmpfile:
-        save_tensor_inputs = before_and_after_inputs.copy()
-        save_tensor_inputs[checkpoint_op.saver_def.filename_tensor_name] = (
-            tmpfile.name
-        )
-        self._session.run(
-            checkpoint_op.saver_def.save_tensor_name,
-            feed_dict=save_tensor_inputs,
-        )
-        # TensorFlow overwrites (via move) the output file, so the data can't be
-        # read from the filehandle. Deletion still works properly, though.
-        with open(tmpfile.name, 'rb') as f:
-          result = f.read()
-    self._maybe_run(
-        checkpoint_op.after_save_op, feed_dict=before_and_after_inputs
-    )
-    return result
-
-  def _build_slices(
-      self,
-      callback_token: bytes,
-      server_val: list[Any],
-      max_key: int,
-      select_fn_initialize_op: str,
-      select_fn_server_val_input_tensor_names: list[str],
-      select_fn_key_input_tensor_name: str,
-      select_fn_filename_input_tensor_name: str,
-      select_fn_target_tensor_name: str,
-  ):
-    """Builds the slices for a ServeSlices call."""
-    del callback_token
-    slices: list[bytes] = []
-    for i in range(0, max_key + 1):
-      self._maybe_run(select_fn_initialize_op)
-      with tempfile.NamedTemporaryFile() as tmpfile:
-        feed_dict = dict(
-            zip(select_fn_server_val_input_tensor_names, server_val)
-        )
-        feed_dict[select_fn_key_input_tensor_name] = i
-        feed_dict[select_fn_filename_input_tensor_name] = tmpfile.name
-        self._session.run(select_fn_target_tensor_name, feed_dict=feed_dict)
-        # TensorFlow overwrites (via move) the output file, so the data can't be
-        # read from the filehandle. Deletion still works properly, though.
-        with open(tmpfile.name, 'rb') as f:
-          slices.append(f.read())
-    return slices
+    self._temp_dir.cleanup()
 
   @functools.cached_property
   def client_plan(self) -> bytes:
@@ -178,25 +111,60 @@ class Session:
           self._plan.tensorflow_config_proto)
     return client_only_plan.SerializeToString()
 
-  @property
+  @functools.cached_property
   def client_checkpoint(self) -> bytes:
     """The initial checkpoint for use by clients."""
-    return self._client_checkpoint
+    try:
+      with open(self._client_checkpoint_filename, 'rb') as f:
+        return f.read()
+    except FileNotFoundError:
+      return b''
 
-  def finalize(self, update: bytes) -> bytes:
-    """Loads an intermediate update and return the final result."""
-    self._restore_state(
-        self._plan.phase[0].server_phase.read_intermediate_update, update)
-    self._maybe_run(self._plan.phase[0].server_phase
-                    .intermediate_aggregate_into_accumulators_op)
-    # write_accumulators and metrics are not needed by Federated Program
-    # computations because all results are included in the server savepoint.
-    self._maybe_run(
-        self._plan.phase[0].server_phase.apply_aggregrated_updates_op)
-    return self._save_state(self._plan.server_savepoint)
+  def finalize(self, aggregation_result: bytes) -> bytes:
+    """Run server_result logic (if it exists)."""
+    if self._server_result_graph_def is None:
+      # When there is no server_result logic, the updated server state is just
+      # the aggregated client results.
+      return aggregation_result
+
+    aggregation_result_checkpoint_filename = os.path.join(
+        self._temp_dir.name, 'aggregation_result.ckpt'
+    )
+    updated_server_state_checkpoint_filename = os.path.join(
+        self._temp_dir.name, 'updated_server_state.ckpt'
+    )
+    with open(aggregation_result_checkpoint_filename, 'wb') as f:
+      f.write(aggregation_result)
+    graph = tf.Graph()
+    with graph.as_default():
+      tf.import_graph_def(self._server_result_graph_def, name='')
+    with tf.compat.v1.Session(graph=graph) as sess:
+      result_router = self._server_phase_v2.result_router
+      feed_dict = {
+          result_router.result_intermediate_state_input_filepath_tensor_name: (
+              self._intermediate_state_checkpoint_filename
+          ),
+          result_router.result_aggregate_result_input_filepath_tensor_name: (
+              aggregation_result_checkpoint_filename
+          ),
+          result_router.result_server_state_output_filepath_tensor_name: (
+              updated_server_state_checkpoint_filename
+          ),
+      }
+      sess.run(
+          fetches=list(
+              self._server_phase_v2.tensorflow_spec_result.target_node_names
+          ),
+          feed_dict=feed_dict,
+      )
+    try:
+      with open(updated_server_state_checkpoint_filename, 'rb') as f:
+        return f.read()
+    except FileNotFoundError:
+      return b''
 
   @property
   def slices(self) -> dict[str, list[bytes]]:
     """The Federated Select slices, keyed by served_at_id."""
-    # Return a copy to prevent mutations.
-    return self._slices.copy()
+    # DistributeAggregateForm does not currently support slices.
+    return {}
