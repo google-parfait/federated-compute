@@ -210,6 +210,34 @@ cc_library(
     hdrs = ["fedsql_constants.h"],
 )
 
+cc_library(
+    name = "federated_mean",
+    srcs = ["federated_mean.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        ":tensor",
+        "//fcp/base",
+    ],
+    alwayslink = 1,
+)
+
+cc_test(
+    name = "federated_mean_test",
+    srcs = ["federated_mean_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregator",
+        ":federated_mean",
+        ":tensor",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 cc_test(
     name = "federated_sum_test",
     srcs = ["federated_sum_test.cc"],

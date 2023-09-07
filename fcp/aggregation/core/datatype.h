@@ -141,6 +141,11 @@ MATCH_TYPE_AND_DTYPE(string_view, DT_STRING);
   DTYPE_NUMERICAL_CASES(TYPE_ARG, SINGLE_ARG(STMTS))           \
   DTYPE_CASES_END(TYPE_ENUM)
 
+#define FLOATING_ONLY_DTYPE_CASES(TYPE_ENUM, TYPE_ARG, STMTS) \
+  DTYPE_CASES_BEGIN(TYPE_ENUM)                                \
+  DTYPE_FLOATING_CASES(TYPE_ARG, SINGLE_ARG(STMTS))           \
+  DTYPE_CASES_END(TYPE_ENUM)
+
 }  // namespace internal
 
 }  // namespace aggregation
