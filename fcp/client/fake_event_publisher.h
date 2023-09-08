@@ -17,6 +17,8 @@
 #ifndef FCP_CLIENT_FAKE_EVENT_PUBLISHER_H_
 #define FCP_CLIENT_FAKE_EVENT_PUBLISHER_H_
 
+#include <cxxabi.h>  // IWYU pragma: keep
+
 #include "absl/strings/str_split.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
