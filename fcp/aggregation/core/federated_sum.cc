@@ -48,20 +48,6 @@ class FederatedSum final : public AggVectorAggregator<T> {
   }
 };
 
-template <typename T>
-StatusOr<std::unique_ptr<TensorAggregator>> CreateFederatedSum(
-    DataType dtype, TensorShape shape) {
-  return std::unique_ptr<TensorAggregator>(new FederatedSum<T>(dtype, shape));
-}
-
-// Not supported for DT_STRING
-template <>
-StatusOr<std::unique_ptr<TensorAggregator>> CreateFederatedSum<string_view>(
-    DataType dtype, TensorShape shape) {
-  return FCP_STATUS(INVALID_ARGUMENT)
-         << "FederatedSum isn't supported for DT_STRING datatype.";
-}
-
 // Factory class for the FederatedSum.
 class FederatedSumFactory final : public TensorAggregatorFactory {
  public:
@@ -105,12 +91,12 @@ class FederatedSumFactory final : public TensorAggregatorFactory {
              << "FederatedSumFactory: Input and output tensors have mismatched "
                 "specs.";
     }
-    StatusOr<std::unique_ptr<TensorAggregator>> aggregator;
-    DTYPE_CASES(input_spec.dtype(), T,
-                aggregator = CreateFederatedSum<T>(
-                    input_spec.dtype(), std::move(input_spec.shape())));
-    FCP_RETURN_IF_ERROR(aggregator);
-    return std::move(aggregator.value());
+    std::unique_ptr<TensorAggregator> aggregator;
+    NUMERICAL_ONLY_DTYPE_CASES(
+        input_spec.dtype(), T,
+        aggregator = std::make_unique<FederatedSum<T>>(
+            input_spec.dtype(), std::move(input_spec.shape())));
+    return aggregator;
   }
 };
 

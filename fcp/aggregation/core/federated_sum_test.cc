@@ -218,19 +218,6 @@ TEST(FederatedSumTest, Create_UnsupportedNestedIntrinsic) {
   EXPECT_THAT(s.message(), HasSubstr("Expected no nested intrinsics"));
 }
 
-TEST(FederatedSumTest, Create_UnsupportedStringDataType) {
-  Intrinsic intrinsic{"federated_sum",
-                      {TensorSpec{"foo", DT_STRING, {1}}},
-                      {TensorSpec{"foo_out", DT_STRING, {1}}},
-                      {},
-                      {}};
-
-  Status s = CreateTensorAggregator(intrinsic).status();
-  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
-  EXPECT_THAT(s.message(),
-              HasSubstr("FederatedSum isn't supported for DT_STRING datatype"));
-}
-
 }  // namespace
 }  // namespace aggregation
 }  // namespace fcp
