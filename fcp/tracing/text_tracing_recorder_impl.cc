@@ -66,7 +66,7 @@ void TextTracingRecorderImpl::LogSpan(bool begin, TracingSpanId id,
                                       absl::string_view text_format) {
   LogTime();
   *stream_ << id << (begin ? ": BEGIN" : ": END");
-  if (name.length() > 0) {
+  if (!name.empty()) {
     *stream_ << " " << name << " " << text_format;
   }
   if (begin && id != TracingSpanId(0)) {
