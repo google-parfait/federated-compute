@@ -1878,8 +1878,6 @@ def build_plan(
         Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
     ] = None,
     experimental_client_checkpoint_write: checkpoint_type.CheckpointFormatType = checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES,
-    generate_client_phase_from_daf: bool = False,
-    generate_server_phase_v2: bool = False,
     write_metrics_to_checkpoint: bool = True,
 ) -> plan_pb2.Plan:
   """Constructs an instance of `plan_pb2.Plan`.
@@ -1910,10 +1908,11 @@ def build_plan(
     such as the `read_aggregated_update` checkpoint op.
 
   Args:
-    mrf: Optional. An instance of `MapReduceForm`. At least one of `mrf` or
-      `daf` must be supplied.
-    daf: Optional. An instance of `DistributeAggregateForm`. At least one of
-      `mrf` or `daf` must be supplied.
+    mrf: Optional. An instance of `MapReduceForm`. Exactly one of `mrf` or `daf`
+      must be supplied. If provided, the plan will be derived from `mrf`.
+    daf: Optional. An instance of `DistributeAggregateForm`. Exactly one of
+      `mrf` or `daf` must be supplied. If provided, the plan will be derived
+      from `daf`.
     dataspec: If provided, either an instance of `data_spec.DataSpec` or a
       nested structure of these that matches the structure of the first element
       of the input to the client-side processing computation. If not provided
@@ -1937,11 +1936,6 @@ def build_plan(
     experimental_client_checkpoint_write: Determines the style of writing of the
       client checkpoint (client->server communication). The value affects the
       operation used and might have impact on overall task performance.
-    generate_client_phase_from_daf: If true, will derive the ClientPhase message
-      from `daf` instead of `mrf`. If true, generate_server_phase_v2 should also
-      be true.
-    generate_server_phase_v2: Iff `True`, will produce a ServerPhaseV2 message,
-      potentially in addition to a ServerPhase message (if `mrf` is set).
     write_metrics_to_checkpoint: If False, revert to legacy behavior where
       metrics values were handled by post-processing separate from the outputted
       checkpoint. Regardless, they will additionally continue to be written to
@@ -1963,14 +1957,19 @@ def build_plan(
     type_checks.check_type(
         daf, tff.backends.mapreduce.DistributeAggregateForm, name='daf'
     )
-  if not (mrf or daf):
-    raise ValueError('At least one of `mrf` or `daf` must be provided.')
+  if bool(mrf) == bool(daf):
+    raise ValueError('Exactly one of `mrf` or `daf` must be provided.')
 
   client_plan_type = (
       ClientPlanType.TENSORFLOW
       if example_query_spec is None
       else ClientPlanType.EXAMPLE_QUERY
   )
+  if daf and client_plan_type != ClientPlanType.TENSORFLOW:
+    raise ValueError(
+        'Only TensorFlow plan types are supported when DistributeAggregateForm'
+        ' is being used.'
+    )
 
   if example_query_spec is not None:
     if dataspec is not None:
@@ -1981,7 +1980,42 @@ def build_plan(
   with tff.framework.get_context_stack().install(
       tff.test.create_runtime_error_context()
   ):
-    if mrf:
+    if daf:
+      assert grappler_config
+      (
+          server_graph_def_prepare,
+          server_graph_def_result,
+          server_phase_v2,
+          secagg_client_output_tensor_specs,
+      ) = _build_server_graphs_from_distribute_aggregate_form(
+          daf,
+          grappler_config,
+          write_metrics_to_checkpoint,
+          additional_checkpoint_metadata_var_fn,
+      )
+      client_graph_def, client_phase = (
+          _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
+              daf.client_work,
+              dataspec,
+              grappler_config,
+              secagg_client_output_tensor_specs,
+              experimental_client_checkpoint_write,
+          )
+      )
+      plan = plan_pb2.Plan(
+          version=1,
+          phase=[
+              plan_pb2.Plan.Phase(
+                  client_phase=client_phase, server_phase_v2=server_phase_v2
+              )
+          ],
+      )
+      plan.client_graph_bytes.Pack(client_graph_def)
+      if server_graph_def_prepare:
+        plan.server_graph_prepare_bytes.Pack(server_graph_def_prepare)
+      plan.server_graph_result_bytes.Pack(server_graph_def_result)
+    else:
+      assert mrf
       is_broadcast_empty = (
           isinstance(mrf.prepare.type_signature.result, tff.StructType)
           and not mrf.prepare.type_signature.result
@@ -2022,36 +2056,7 @@ def build_plan(
           experimental_client_update_format=experimental_client_checkpoint_write,
       )
 
-    if generate_server_phase_v2:
-      assert daf
-      assert grappler_config
-      (
-          server_graph_def_prepare,
-          server_graph_def_result,
-          server_phase_v2,
-          secagg_client_output_tensor_specs,
-      ) = _build_server_graphs_from_distribute_aggregate_form(
-          daf,
-          grappler_config,
-          write_metrics_to_checkpoint,
-          additional_checkpoint_metadata_var_fn,
-      )
-
-    if client_plan_type == ClientPlanType.TENSORFLOW:
-      if generate_client_phase_from_daf:
-        assert generate_server_phase_v2
-        assert daf
-        client_graph_def, client_phase = (
-            _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
-                daf.client_work,
-                dataspec,
-                grappler_config,
-                secagg_client_output_tensor_specs,
-                experimental_client_checkpoint_write,
-            )
-        )
-      else:
-        assert mrf
+      if client_plan_type == ClientPlanType.TENSORFLOW:
         client_graph_def, client_phase = (
             _build_client_graph_with_tensorflow_spec(
                 mrf.work,
@@ -2061,42 +2066,35 @@ def build_plan(
                 experimental_checkpoint_write=experimental_client_checkpoint_write,
             )
         )
-    elif client_plan_type == ClientPlanType.EXAMPLE_QUERY:
-      # DistributeAggregateForm is not intended to be used with the SQL-based
-      # lightweight client.
-      assert mrf
-      vector_names_expected_by_aggregator = set(
-          variable_helpers.variable_names_from_type(
-              mrf.work.type_signature.result[0],  # pytype: disable=unsupported-operands
-              artifact_constants.UPDATE,
-          )
-      )
-      client_phase = build_client_phase_with_example_query_spec(
-          example_query_spec, vector_names_expected_by_aggregator
-      )
-    else:
-      raise ValueError(
-          f'Unexpected value for `client_plan_type`: {client_plan_type}'
-      )
+      elif client_plan_type == ClientPlanType.EXAMPLE_QUERY:
+        vector_names_expected_by_aggregator = set(
+            variable_helpers.variable_names_from_type(
+                mrf.work.type_signature.result[0],  # pytype: disable=unsupported-operands
+                artifact_constants.UPDATE,
+            )
+        )
+        client_phase = build_client_phase_with_example_query_spec(
+            example_query_spec, vector_names_expected_by_aggregator
+        )
+      else:
+        raise ValueError(
+            f'Unexpected value for `client_plan_type`: {client_plan_type}'
+        )
 
-    combined_phases = plan_pb2.Plan.Phase(client_phase=client_phase)
-    if mrf:
-      combined_phases.server_phase.CopyFrom(server_phase)
-    if generate_server_phase_v2:
-      combined_phases.server_phase_v2.CopyFrom(server_phase_v2)
-
-    plan = plan_pb2.Plan(version=1, phase=[combined_phases])
-    if client_plan_type == ClientPlanType.TENSORFLOW:
-      plan.client_graph_bytes.Pack(client_graph_def)
-    if mrf:
+      plan = plan_pb2.Plan(
+          version=1,
+          phase=[
+              plan_pb2.Plan.Phase(
+                  client_phase=client_phase, server_phase=server_phase
+              )
+          ],
+      )
+      if client_plan_type == ClientPlanType.TENSORFLOW:
+        plan.client_graph_bytes.Pack(client_graph_def)
       plan.server_graph_bytes.Pack(server_graph_def)
       plan.server_savepoint.CopyFrom(server_savepoint)
-    if generate_server_phase_v2:
-      if server_graph_def_prepare:
-        plan.server_graph_prepare_bytes.Pack(server_graph_def_prepare)
-      plan.server_graph_result_bytes.Pack(server_graph_def_result)
 
-  return plan
+    return plan
 
 
 def build_cross_round_aggregation_execution(
