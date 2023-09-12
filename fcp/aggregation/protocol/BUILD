@@ -142,6 +142,7 @@ cc_library(
     hdrs = ["federated_compute_checkpoint_builder.h"],
     deps = [
         ":checkpoint_builder",
+        ":checkpoint_header",
         "//fcp/aggregation/core:tensor",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -156,6 +157,7 @@ cc_test(
     srcs = ["federated_compute_checkpoint_builder_test.cc"],
     deps = [
         ":checkpoint_builder",
+        ":checkpoint_header",
         ":federated_compute_checkpoint_builder",
         "//fcp/aggregation/core:tensor",
         "//fcp/aggregation/core:tensor_cc_proto",
@@ -166,6 +168,50 @@ cc_test(
         "@com_google_absl//absl/strings:cord",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "federated_compute_checkpoint_parser",
+    srcs = ["federated_compute_checkpoint_parser.cc"],
+    hdrs = ["federated_compute_checkpoint_parser.h"],
+    deps = [
+        ":checkpoint_header",
+        ":checkpoint_parser",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/core:tensor_cc_proto",
+        "//fcp/base",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "checkpoint_header",
+    hdrs = ["checkpoint_header.h"],
+)
+
+cc_test(
+    name = "federated_compute_checkpoint_parser_test",
+    srcs = ["federated_compute_checkpoint_parser_test.cc"],
+    deps = [
+        ":checkpoint_builder",
+        ":checkpoint_parser",
+        ":federated_compute_checkpoint_builder",
+        ":federated_compute_checkpoint_parser",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/core:tensor_cc_proto",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/testing",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 

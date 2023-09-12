@@ -11,6 +11,7 @@
 #include "absl/strings/string_view.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
+#include "fcp/aggregation/protocol/checkpoint_header.h"
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 

@@ -66,7 +66,7 @@ using ::testing::UnorderedElementsAreArray;
 class MockCheckpointParser : public CheckpointParser {
  public:
   MOCK_METHOD(absl::StatusOr<Tensor>, GetTensor, (const std::string& name),
-              (const override));
+              (override));
 };
 
 class MockCheckpointParserFactory : public CheckpointParserFactory {

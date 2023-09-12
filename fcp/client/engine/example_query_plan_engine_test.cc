@@ -36,7 +36,7 @@
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_shape.h"
-#include "fcp/aggregation/protocol/federated_compute_checkpoint_builder.h"
+#include "fcp/aggregation/protocol/checkpoint_header.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/client/client_runner.h"
 #include "fcp/client/engine/common.h"

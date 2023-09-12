@@ -250,7 +250,7 @@ size_t CountInputs(const Intrinsic& intrinsic) {
 }
 
 absl::Status AddInputsToMap(
-    const Intrinsic& intrinsic, const CheckpointParser& parser,
+    const Intrinsic& intrinsic, CheckpointParser& parser,
     absl::flat_hash_map<std::string, Tensor>& tensor_map) {
   for (const TensorSpec& input_spec : intrinsic.inputs) {
     FCP_ASSIGN_OR_RETURN(Tensor tensor, parser.GetTensor(input_spec.name()));

@@ -98,7 +98,7 @@ cc_test(
         ":example_query_plan_engine",
         "//fcp/aggregation/core:tensor",
         "//fcp/aggregation/core:tensor_cc_proto",
-        "//fcp/aggregation/protocol:federated_compute_checkpoint_builder",
+        "//fcp/aggregation/protocol:checkpoint_header",
         "//fcp/aggregation/testing:test_data",
         "//fcp/client:client_runner",
         "//fcp/client:example_query_result_cc_proto",

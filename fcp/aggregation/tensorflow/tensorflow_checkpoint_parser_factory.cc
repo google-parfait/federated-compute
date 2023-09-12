@@ -55,7 +55,7 @@ class TensorflowCheckpointParser : public CheckpointParser {
     Env::Default()->DeleteFile(filename_).IgnoreError();
   }
 
-  absl::StatusOr<Tensor> GetTensor(const std::string& name) const override {
+  absl::StatusOr<Tensor> GetTensor(const std::string& name) override {
     return reader_->GetTensor(name);
   }
 

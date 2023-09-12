@@ -19,7 +19,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
@@ -34,7 +33,7 @@ class CheckpointParser {
   virtual ~CheckpointParser() = default;
 
   // Gets a tensor by name.
-  virtual absl::StatusOr<Tensor> GetTensor(const std::string& name) const = 0;
+  virtual absl::StatusOr<Tensor> GetTensor(const std::string& name) = 0;
 };
 
 // Describes an abstract factory for creating instances of CheckpointParser.

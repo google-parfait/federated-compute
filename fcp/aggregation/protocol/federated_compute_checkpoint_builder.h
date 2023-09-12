@@ -6,7 +6,6 @@
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 
 namespace fcp::aggregation {
-inline constexpr const char kFederatedComputeCheckpointHeader[] = "FCv1";
 
 // A CheckpointBuilderFactory implementation that builds checkpoint using new
 // wire format for federated compute.
