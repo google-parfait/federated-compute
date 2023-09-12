@@ -157,7 +157,6 @@ struct TypedVal {
   bool operator==(TypedVal<T> const& other) const {
     return other.value == value;
   }
-  bool operator!=(TypedVal<T> const& other) const { return !(*this == other); }
 };
 
 struct UntypedVal {
