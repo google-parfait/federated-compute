@@ -29,6 +29,7 @@
 #include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -48,6 +49,8 @@ namespace client {
 // * N QuantizedTensors, whose string keys must map to the tensor names
 //   provided in the server's CheckinResponse's SideChannelExecutionInfo.
 using TFCheckpoint = std::string;
+// Data type used to represent Federated Compute wire format checkpoint.
+using FCCheckpoint = absl::Cord;
 struct QuantizedTensor {
   std::vector<uint64_t> values;
   int32_t bitwidth = 0;
@@ -66,11 +69,12 @@ struct QuantizedTensor {
 // except copy construction and assignment are explicitly prohibited and move
 // semantics is enforced.
 class ComputationResults
-    : public absl::node_hash_map<std::string,
-                                 std::variant<TFCheckpoint, QuantizedTensor>> {
+    : public absl::node_hash_map<
+          std::string,
+          std::variant<TFCheckpoint, QuantizedTensor, FCCheckpoint>> {
  public:
-  using Base = absl::node_hash_map<std::string,
-                                   std::variant<TFCheckpoint, QuantizedTensor>>;
+  using Base = absl::node_hash_map<
+      std::string, std::variant<TFCheckpoint, QuantizedTensor, FCCheckpoint>>;
   using Base::Base;
   using Base::operator=;
   ComputationResults(const ComputationResults&) = delete;

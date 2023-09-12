@@ -43,6 +43,9 @@ namespace client {
 inline constexpr absl::string_view kTensorflowCheckpointAggregand =
     "tensorflow_checkpoint";
 
+inline constexpr absl::string_view kFederatedComputeCheckpoint =
+    "federated_compute_checkpoint";
+
 // Prod entry point for running a federated computation. Concurrent calls, with
 // the same SimpleTaskEnvironment::GetBaseDir(), are not supported.
 //

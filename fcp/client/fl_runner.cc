@@ -150,7 +150,8 @@ struct PlanResultAndCheckpointFile {
 // `tensorflow_spec != nullptr`.
 absl::StatusOr<ComputationResults> CreateComputationResults(
     const TensorflowSpec* tensorflow_spec,
-    const PlanResultAndCheckpointFile& plan_result_and_checkpoint_file) {
+    const PlanResultAndCheckpointFile& plan_result_and_checkpoint_file,
+    const Flags* flags) {
   const auto& [plan_result, checkpoint_file] = plan_result_and_checkpoint_file;
   if (plan_result.outcome != engine::PlanOutcome::kSuccess) {
     return absl::InvalidArgumentError("Computation failed.");
@@ -208,13 +209,22 @@ absl::StatusOr<ComputationResults> CreateComputationResults(
     }
   }
 
-  // Name of the TF checkpoint inside the aggregand map in the Checkpoint
-  // protobuf. This field name is ignored by the server.
-  if (!checkpoint_file.empty()) {
-    FCP_ASSIGN_OR_RETURN(std::string tf_checkpoint,
-                         fcp::ReadFileToString(checkpoint_file));
-    computation_results[std::string(kTensorflowCheckpointAggregand)] =
-        std::move(tf_checkpoint);
+  if (flags->enable_lightweight_client_report_wire_format()) {
+    // Reads string from federated_compute_checkpoint
+    if (plan_result.federated_compute_checkpoint.empty()) {
+      return absl::InvalidArgumentError("Empty federate compute checkpoint");
+    }
+    computation_results[kFederatedComputeCheckpoint] =
+        std::move(plan_result.federated_compute_checkpoint);
+  } else {
+    // Name of the TF checkpoint inside the aggregand map in the Checkpoint
+    // protobuf. This field name is ignored by the server.
+    if (!checkpoint_file.empty()) {
+      FCP_ASSIGN_OR_RETURN(std::string tf_checkpoint,
+                           fcp::ReadFileToString(checkpoint_file));
+      computation_results[std::string(kTensorflowCheckpointAggregand)] =
+          std::move(tf_checkpoint);
+    }
   }
   return computation_results;
 }
@@ -1737,7 +1747,7 @@ RunPlanResults RunComputation(
         checkin_result->plan.phase().has_example_query_spec()
             ? nullptr
             : &checkin_result->plan.phase().tensorflow_spec(),
-        plan_result_and_checkpoint_file);
+        plan_result_and_checkpoint_file, flags);
   }
   LogComputationOutcome(
       plan_result_and_checkpoint_file.plan_result, computation_results.status(),
