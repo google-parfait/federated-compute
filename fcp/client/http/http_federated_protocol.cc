@@ -636,8 +636,8 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
     *request.mutable_task_eligibility_info() = *task_eligibility_info;
   }
 
-    request.mutable_resource_capabilities()->add_supported_compression_formats(
-        ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  request.mutable_resource_capabilities()->add_supported_compression_formats(
+      ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
 
   std::vector<std::unique_ptr<HttpRequest>> requests;
 
@@ -996,10 +996,23 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
 absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(
     ComputationResults results, absl::Duration plan_duration,
     PerTaskInfo& task_info) {
-  if (results.size() != 1 ||
-      !std::holds_alternative<TFCheckpoint>(results.begin()->second)) {
+  if (results.size() != 1) {
+    return absl::InternalError(
+        "Simple Aggregation aggregands have unexpected results size.");
+  }
+  auto result = std::move(results.begin()->second);
+  bool enable_lightweight_client_report_wire_format =
+      flags_->enable_lightweight_client_report_wire_format();
+  if (!enable_lightweight_client_report_wire_format &&
+      !std::holds_alternative<TFCheckpoint>(result)) {
     return absl::InternalError(
         "Simple Aggregation aggregands have unexpected format.");
+  }
+  if (enable_lightweight_client_report_wire_format &&
+      !std::holds_alternative<FCCheckpoint>(result)) {
+    return absl::InternalError(
+        "Simple Aggregation aggregands have unexpected format for FC Wire "
+        "Format.");
   }
   auto start_upload_status = HandleStartDataAggregationUploadOperationResponse(
       PerformStartDataUploadRequestAndReportTaskResult(plan_duration,
@@ -1009,8 +1022,16 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(
     task_info.state = ObjectState::kReportFailedPermanentError;
     return start_upload_status;
   }
-  auto upload_status = UploadDataViaSimpleAgg(
-      std::get<TFCheckpoint>(std::move(results.begin()->second)), task_info);
+
+  std::string checkpoint;
+  if (enable_lightweight_client_report_wire_format) {
+    // TODO: b/300128447 - avoid copying serialized checkpoint once http
+    // federated protocol supports absl::Cord
+    absl::CopyCordToString(std::get<FCCheckpoint>(result), &checkpoint);
+  } else {
+    checkpoint = std::get<TFCheckpoint>(result);
+  }
+  auto upload_status = UploadDataViaSimpleAgg(std::move(checkpoint), task_info);
   if (!upload_status.ok()) {
     task_info.state = ObjectState::kReportFailedPermanentError;
     if (upload_status.code() != absl::StatusCode::kAborted &&

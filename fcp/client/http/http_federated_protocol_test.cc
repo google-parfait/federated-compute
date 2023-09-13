@@ -32,6 +32,7 @@
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/synchronization/notification.h"
@@ -2824,6 +2825,42 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSimpleAggSuccess) {
   std::string checkpoint_str(32, 'X');
   ComputationResults results;
   results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
+  ExpectSuccessfulByteStreamUploadRequest(
+      "https://bytestream.uri/upload/v1/media/"
+      "CHECKPOINT_RESOURCE?upload_protocol=raw",
+      checkpoint_str);
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/aggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto");
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedViaSimpleAggSuccessWithFCWireFormat) {
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  // Issue a regular checkin.
+  ASSERT_OK(RunSuccessfulCheckin());
+  // Enables enable_lightweight_client_report_wire_format flag.
+  EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
+      .WillRepeatedly(Return(true));
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  absl::Cord checkpoint_cord(checkpoint_str);
+  ComputationResults results;
+  results.emplace("fc_checkpoint", checkpoint_cord);
   absl::Duration plan_duration = absl::Minutes(5);
 
   ExpectSuccessfulReportTaskResultRequest(
