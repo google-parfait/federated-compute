@@ -85,13 +85,6 @@ class MockEventPublisher : public EventPublisher {
                absl::Duration phase_duration),
               (override));
   MOCK_METHOD(void, PublishRejected, (), (override));
-  MOCK_METHOD(void, PublishReportStarted, (int64_t report_size_bytes),
-              (override));
-  MOCK_METHOD(void, PublishReportFinished,
-              (const NetworkStats& network_stats,
-               absl::Duration report_duration),
-              (override));
-  MOCK_METHOD(void, PublishPlanExecutionStarted, (), (override));
   MOCK_METHOD(void, PublishTensorFlowError,
               (int example_count, absl::string_view error_message), (override));
   MOCK_METHOD(void, PublishIoError, (absl::string_view error_message),
@@ -99,9 +92,6 @@ class MockEventPublisher : public EventPublisher {
   MOCK_METHOD(void, PublishExampleSelectorError,
               (int example_count, absl::string_view error_message), (override));
   MOCK_METHOD(void, PublishInterruption,
-              (const ExampleStats& example_stats, absl::Time start_time),
-              (override));
-  MOCK_METHOD(void, PublishPlanCompleted,
               (const ExampleStats& example_stats, absl::Time start_time),
               (override));
   MOCK_METHOD(void, SetModelIdentifier, (const std::string& model_identifier),

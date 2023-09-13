@@ -78,18 +78,6 @@ class EventPublisher {
   // Publishes that the server rejected the device.
   virtual void PublishRejected() = 0;
 
-  // Publishes that the device is about to report the results of a federated
-  // computation to the server.
-  virtual void PublishReportStarted(int64_t report_size_bytes) = 0;
-
-  // Publishes that the device has successfully reported its results to the
-  // server and received instructions on when to reconnect.
-  virtual void PublishReportFinished(const NetworkStats& network_stats,
-                                     absl::Duration report_duration) = 0;
-
-  // Publishes that plan execution has started.
-  virtual void PublishPlanExecutionStarted() = 0;
-
   // Publishes a TensorFlow error that happened in the given ClientExecution.
   virtual void PublishTensorFlowError(int example_count,
                                       absl::string_view error_message) = 0;
@@ -106,9 +94,6 @@ class EventPublisher {
   virtual void PublishInterruption(const ExampleStats& example_stats,
                                    absl::Time start_time) = 0;
 
-  // Publishes an event that plan execution is complete.
-  virtual void PublishPlanCompleted(const ExampleStats& example_stats,
-                                    absl::Time start_time) = 0;
   // Publishes that the task didn't start.
   virtual void PublishTaskNotStarted(absl::string_view error_message) = 0;
 
