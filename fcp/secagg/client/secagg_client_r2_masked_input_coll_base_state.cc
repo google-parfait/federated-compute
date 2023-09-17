@@ -91,7 +91,7 @@ SecAggClientR2MaskedInputCollBaseState::HandleMaskedInputCollectionRequest(
       pairwise_key_shares->push_back({""});  // this will never be needed
       self_key_shares->push_back(own_self_key_share);
     } else if ((*other_client_states)[i] != OtherClientState::kAlive) {
-      if (request.encrypted_key_shares(i).length() > 0) {
+      if (!request.encrypted_key_shares(i).empty()) {
         // A client who was considered aborted sent key shares.
         *error_message =
             "Received encrypted key shares from an aborted client.";
@@ -100,7 +100,7 @@ SecAggClientR2MaskedInputCollBaseState::HandleMaskedInputCollectionRequest(
         pairwise_key_shares->push_back({""});
         self_key_shares->push_back({""});
       }
-    } else if (request.encrypted_key_shares(i).length() == 0) {
+    } else if (request.encrypted_key_shares(i).empty()) {
       // A client who was considered alive dropped out. Mark it as dead.
       (*other_client_states)[i] = OtherClientState::kDeadAtRound2;
       pairwise_key_shares->push_back({""});
