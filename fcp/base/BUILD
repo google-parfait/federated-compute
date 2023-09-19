@@ -17,7 +17,9 @@ tracing_schema_cc_library(
 # Used to detect when we're building for Android, using select().
 config_setting(
     name = "android",
-    values = {"crosstool_top": "//external:android/crosstool"},
+    constraint_values = [
+        "@platforms//os:android",
+    ],
 )
 
 cc_library(
