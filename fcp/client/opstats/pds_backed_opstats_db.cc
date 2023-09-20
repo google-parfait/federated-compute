@@ -127,6 +127,19 @@ absl::Status ResetInternal(protostore::ProtoDataStore<OpStatsSequence>& db,
 }
 
 absl::Time GetLastUpdateTime(const OperationalStats& operational_stats) {
+  // Depending on the state of the use_phase_stats flag when the opstats entry
+  // was logged, the entry may have events either in PhaseStats or in the
+  // deprecated events field.
+  // In order to support both kinds of entries until use_phase_stats has rolled
+  // out and all opstats entries with the legacy schema have TTLed, we will
+  // check PhaseStats, then the legacy events field.
+  for (auto it = operational_stats.phase_stats().rbegin();
+       it != operational_stats.phase_stats().rend(); ++it) {
+    if (!it->events().empty()) {
+      return absl::FromUnixSeconds(
+          TimeUtil::TimestampToSeconds(it->events().rbegin()->timestamp()));
+    }
+  }
   if (operational_stats.events().empty()) {
     return absl::InfinitePast();
   }

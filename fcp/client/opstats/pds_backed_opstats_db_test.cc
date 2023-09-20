@@ -69,6 +69,14 @@ class BasePdsBackedOpStatsDbTest {
     return op_stats;
   }
 
+  static OperationalStats CreateOperationalStatsWithSingleEventInPhaseStats(
+      OperationalStats::Event::EventKind kind, int64_t time_sec) {
+    OperationalStats op_stats;
+    auto phase_stats = op_stats.add_phase_stats();
+    phase_stats->mutable_events()->Add(CreateEvent(kind, time_sec));
+    return op_stats;
+  }
+
   std::string base_dir_;
   testing::StrictMock<MockLogManager> log_manager_;
   absl::Mutex mu_;
@@ -367,6 +375,107 @@ TEST_F(PdsBackedOpStatsDbTest, RemoveOpstatsDueToTtl) {
   OperationalStats op_stats_keep = CreateOperationalStatsWithSingleEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED,
       absl::ToUnixSeconds(benchmark_time - absl::Hours(23)));
+  auto initialCommit = [op_stats_remove, op_stats_keep](OpStatsSequence& data) {
+    *data.add_opstats() = op_stats_remove;
+    *data.add_opstats() = op_stats_keep;
+  };
+  EXPECT_CALL(
+      log_manager_,
+      LogToLongHistogram(HistogramCounters::OPSTATS_DB_SIZE_BYTES,
+                         /*execution_index=*/0, /*epoch_index=*/0,
+                         engine::DataSourceType::DATASET, /*value=*/Gt(0)))
+      .Times(2);
+  EXPECT_CALL(log_manager_,
+              LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
+                                 /*execution_index=*/0, /*epoch_index=*/0,
+                                 engine::DataSourceType::DATASET, /*value=*/2));
+  EXPECT_CALL(log_manager_,
+              LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
+                                 /*execution_index=*/0, /*epoch_index=*/0,
+                                 engine::DataSourceType::DATASET, /*value=*/1));
+  ASSERT_OK((*db)->Transform(initialCommit));
+
+  // We do a second unity commit to trigger the ttl cleanup.
+  auto unityCommit = [](OpStatsSequence& data) {};
+  ASSERT_OK((*db)->Transform(unityCommit));
+
+  absl::StatusOr<OpStatsSequence> data = (*db)->Read();
+  ASSERT_THAT(data, IsOk());
+  ASSERT_EQ(data->opstats().size(), 1);
+  ASSERT_THAT(data->opstats()[0], EqualsProto(op_stats_keep));
+  // The TTL is 24 hours, the timestamp should be set to the time when the db
+  // got purged - 24 hours.  It should be smaller than the kept
+  // OperationalStats, but larger than benchmark time - 24 hours.
+  google::protobuf::Timestamp lower_bound = TimeUtil::SecondsToTimestamp(
+      absl::ToUnixSeconds(benchmark_time - absl::Hours(24)));
+  google::protobuf::Timestamp upper_bound = TimeUtil::SecondsToTimestamp(
+      absl::ToUnixSeconds(benchmark_time - absl::Hours(23)));
+  EXPECT_TRUE(data->earliest_trustworthy_time() >= lower_bound);
+  EXPECT_TRUE(data->earliest_trustworthy_time() <= upper_bound);
+}
+
+TEST_F(PdsBackedOpStatsDbTest, RemoveOpstatsDueToTtlPhaseStats) {
+  auto db =
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
+  ASSERT_THAT(db, IsOk());
+  OperationalStats op_stats_remove =
+      CreateOperationalStatsWithSingleEventInPhaseStats(
+          OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED,
+          absl::ToUnixSeconds(benchmark_time - absl::Hours(25)));
+  OperationalStats op_stats_keep =
+      CreateOperationalStatsWithSingleEventInPhaseStats(
+          OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED,
+          absl::ToUnixSeconds(benchmark_time - absl::Hours(23)));
+  auto initialCommit = [op_stats_remove, op_stats_keep](OpStatsSequence& data) {
+    *data.add_opstats() = op_stats_remove;
+    *data.add_opstats() = op_stats_keep;
+  };
+  EXPECT_CALL(
+      log_manager_,
+      LogToLongHistogram(HistogramCounters::OPSTATS_DB_SIZE_BYTES,
+                         /*execution_index=*/0, /*epoch_index=*/0,
+                         engine::DataSourceType::DATASET, /*value=*/Gt(0)))
+      .Times(2);
+  EXPECT_CALL(log_manager_,
+              LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
+                                 /*execution_index=*/0, /*epoch_index=*/0,
+                                 engine::DataSourceType::DATASET, /*value=*/2));
+  EXPECT_CALL(log_manager_,
+              LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
+                                 /*execution_index=*/0, /*epoch_index=*/0,
+                                 engine::DataSourceType::DATASET, /*value=*/1));
+  ASSERT_OK((*db)->Transform(initialCommit));
+
+  // We do a second unity commit to trigger the ttl cleanup.
+  auto unityCommit = [](OpStatsSequence& data) {};
+  ASSERT_OK((*db)->Transform(unityCommit));
+
+  absl::StatusOr<OpStatsSequence> data = (*db)->Read();
+  ASSERT_THAT(data, IsOk());
+  ASSERT_EQ(data->opstats().size(), 1);
+  ASSERT_THAT(data->opstats()[0], EqualsProto(op_stats_keep));
+  // The TTL is 24 hours, the timestamp should be set to the time when the db
+  // got purged - 24 hours.  It should be smaller than the kept
+  // OperationalStats, but larger than benchmark time - 24 hours.
+  google::protobuf::Timestamp lower_bound = TimeUtil::SecondsToTimestamp(
+      absl::ToUnixSeconds(benchmark_time - absl::Hours(24)));
+  google::protobuf::Timestamp upper_bound = TimeUtil::SecondsToTimestamp(
+      absl::ToUnixSeconds(benchmark_time - absl::Hours(23)));
+  EXPECT_TRUE(data->earliest_trustworthy_time() >= lower_bound);
+  EXPECT_TRUE(data->earliest_trustworthy_time() <= upper_bound);
+}
+
+TEST_F(PdsBackedOpStatsDbTest, RemoveOpstatsDueToTtlLegacyAndPhaseStats) {
+  auto db =
+      PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
+  ASSERT_THAT(db, IsOk());
+  OperationalStats op_stats_remove = CreateOperationalStatsWithSingleEvent(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED,
+      absl::ToUnixSeconds(benchmark_time - absl::Hours(25)));
+  OperationalStats op_stats_keep =
+      CreateOperationalStatsWithSingleEventInPhaseStats(
+          OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED,
+          absl::ToUnixSeconds(benchmark_time - absl::Hours(23)));
   auto initialCommit = [op_stats_remove, op_stats_keep](OpStatsSequence& data) {
     *data.add_opstats() = op_stats_remove;
     *data.add_opstats() = op_stats_keep;

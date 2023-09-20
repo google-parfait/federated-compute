@@ -1009,6 +1009,101 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsCommitToStorage) {
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
+TEST_F(OpStatsLoggerImplTest, PhaseStatsLogCommitLogCommitKeepsAllEntries) {
+  auto start_time = TimeUtil::GetCurrentTime();
+  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/2,
+                             /*num_opstats_commits*/ 4);
+
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
+                                                /*use_phase_stats=*/true);
+  opstats_logger->StartLoggingForPhase(
+      OperationalStats::PhaseStats::COMPUTATION);
+  opstats_logger->AddEventAndSetTaskName(
+      kTaskName, OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
+  opstats_logger->AddEvent(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
+  opstats_logger->StopLoggingForTheCurrentPhase();
+
+  opstats_logger->StartLoggingForPhase(OperationalStats::PhaseStats::UPLOAD);
+  opstats_logger->AddEvent(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED);
+  // FL runner always triggers a commit after upload started for hardened swor
+  ASSERT_OK(opstats_logger->CommitToStorage());
+  opstats_logger->AddEvent(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_FINISHED);
+  opstats_logger->StopLoggingForTheCurrentPhase();
+  opstats_logger.reset();
+
+  // second run
+  auto opstats_logger2 = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
+                                                 /*use_phase_stats=*/true);
+  opstats_logger2->StartLoggingForPhase(
+      OperationalStats::PhaseStats::COMPUTATION);
+  opstats_logger2->AddEventAndSetTaskName(
+      kTaskName, OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
+  opstats_logger2->AddEvent(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
+  opstats_logger2->StopLoggingForTheCurrentPhase();
+
+  opstats_logger2->StartLoggingForPhase(OperationalStats::PhaseStats::UPLOAD);
+  opstats_logger2->AddEvent(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED);
+  // FL runner always triggers a commit after upload started for hardened swor
+  ASSERT_OK(opstats_logger2->CommitToStorage());
+  opstats_logger2->AddEvent(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_FINISHED);
+  opstats_logger2.reset();
+
+  auto db = PdsBackedOpStatsDb::Create(
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
+  ASSERT_OK(data);
+
+  OpStatsSequence expected;
+  auto expected_stats = expected.add_opstats();
+  expected_stats->set_population_name(kPopulationName);
+  expected_stats->set_session_name(kSessionName);
+  OperationalStats::PhaseStats* computation_phase =
+      expected_stats->add_phase_stats();
+  computation_phase->set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  computation_phase->set_task_name(kTaskName);
+  computation_phase->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
+  computation_phase->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
+  OperationalStats::PhaseStats* upload_phase =
+      expected_stats->add_phase_stats();
+  upload_phase->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  upload_phase->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED);
+  upload_phase->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_FINISHED);
+
+  auto second_run_stats = expected.add_opstats();
+  second_run_stats->set_population_name(kPopulationName);
+  second_run_stats->set_session_name(kSessionName);
+  OperationalStats::PhaseStats* second_run_computation_phase =
+      second_run_stats->add_phase_stats();
+  second_run_computation_phase->set_phase(
+      OperationalStats::PhaseStats::COMPUTATION);
+  second_run_computation_phase->set_task_name(kTaskName);
+  second_run_computation_phase->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
+  second_run_computation_phase->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
+  OperationalStats::PhaseStats* second_run_upload_phase =
+      second_run_stats->add_phase_stats();
+  second_run_upload_phase->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  second_run_upload_phase->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED);
+  second_run_upload_phase->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_FINISHED);
+
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
+}
+
 TEST_F(OpStatsLoggerImplTest, PhaseStatsGetCurrentTaskName) {
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
