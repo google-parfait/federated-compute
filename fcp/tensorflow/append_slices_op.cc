@@ -374,7 +374,7 @@ tensorflow::Status MetadataFromString(absl::string_view serialized,
   // NOTE: The conversion to `std::string` is unfortunately necessary here
   // because the OSS version of `ParseFromString` takes a `const std::string&`
   // rather than a `absl::string_view`.
-  if (!meta_out.ParseFromString(std::string(serialized))) {
+  if (!meta_out.ParseFromString(serialized)) {
     return tensorflow::Status(
         static_cast<tensorflow::errors::Code>(absl::StatusCode::kInternal),
         absl::StrCat("Failed to parse table entry as `SavedTensorSlices`: ",
