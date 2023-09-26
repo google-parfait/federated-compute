@@ -160,6 +160,14 @@ TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinIOError) {
       absl::InvalidArgumentError(error_message), network_stats_, absl::Now());
 }
 
+TEST_P(PhaseLoggerImplTest, LogCollectionFirstAccessTime) {
+  std::string collection_uri = "collection_uri";
+  EXPECT_CALL(mock_opstats_logger_,
+              RecordCollectionFirstAccessTime(collection_uri, _));
+
+  phase_logger_->LogCollectionFirstAccessTime(collection_uri);
+}
+
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinClientInterrupted) {
   std::string error_message = "Client is not idle";
   std::string expected_error_message = absl::StrCat(

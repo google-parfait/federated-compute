@@ -352,6 +352,9 @@ message OperationalStats {
 
     // Total number of bytes read.
     int64 num_bytes_read = 2;
+
+    // Timestamp at which the collection was first accessed.
+    google.protobuf.Timestamp first_access_timestamp = 3;
   }
 
   // Map of dataset stats keyed on the collection URI.

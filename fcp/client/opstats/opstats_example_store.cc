@@ -15,10 +15,12 @@
  */
 #include "fcp/client/opstats/opstats_example_store.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/util/time_util.h"
@@ -101,10 +103,13 @@ std::string CreateExample(const OperationalStats& op_stats,
   std::vector<std::string> uris;
   std::vector<int64_t> num_examples_read;
   std::vector<int64_t> num_bytes_read;
+  std::vector<int64_t> first_access_time_millis;
   for (const auto& stats : op_stats.dataset_stats()) {
     uris.push_back(stats.first);
     num_examples_read.push_back(stats.second.num_examples_read());
     num_bytes_read.push_back(stats.second.num_bytes_read());
+    first_access_time_millis.push_back(TimeUtil::TimestampToMilliseconds(
+        stats.second.first_access_timestamp()));
   }
   (*feature_map)[kDatasetStatsUri] = CreateFeatureFromStringVector(uris);
   (*feature_map)[kDatasetStatsNumExamplesRead] =

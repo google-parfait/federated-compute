@@ -23,6 +23,8 @@
 #include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
 #include "fcp/client/diag_codes.pb.h"
@@ -429,6 +431,51 @@ TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
   OperationalStats::DatasetStats dataset_stats;
   dataset_stats.set_num_examples_read(400);
   dataset_stats.set_num_bytes_read(4000);
+  (*new_opstats->mutable_dataset_stats())[kCollectionUri] =
+      std::move(dataset_stats);
+  OperationalStats::DatasetStats dataset_stats_other;
+  dataset_stats_other.set_num_examples_read(200);
+  dataset_stats_other.set_num_bytes_read(2000);
+  (*new_opstats->mutable_dataset_stats())[kCollectionUriOther] =
+      std::move(dataset_stats_other);
+
+  (*data).clear_earliest_trustworthy_time();
+  EXPECT_THAT(*data, EqualsProto(expected));
+}
+
+TEST_F(OpStatsLoggerImplTest, RecordCollectionFirstAccessTime) {
+  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
+
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
+  const std::string kCollectionUri = "app:/collection_uri";
+  const std::string kCollectionUriOther = "app:/collection_uri_other";
+  absl::Time collection_first_access_time = absl::Now();
+  opstats_logger->RecordCollectionFirstAccessTime(kCollectionUri,
+                                                  collection_first_access_time);
+  opstats_logger->UpdateDatasetStats(kCollectionUri,
+                                     /*additional_example_count=*/100,
+                                     /*additional_example_size_bytes=*/1000);
+  opstats_logger->UpdateDatasetStats(kCollectionUriOther,
+                                     /*additional_example_count=*/200,
+                                     /*additional_example_size_bytes=*/2000);
+  opstats_logger.reset();
+
+  auto db = PdsBackedOpStatsDb::Create(
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  auto data = (*db)->Read();
+  ASSERT_OK(data);
+
+  OpStatsSequence expected;
+  auto new_opstats = expected.add_opstats();
+  new_opstats->set_session_name(kSessionName);
+  new_opstats->set_population_name(kPopulationName);
+  OperationalStats::DatasetStats dataset_stats;
+  dataset_stats.set_num_examples_read(100);
+  dataset_stats.set_num_bytes_read(1000);
+  *dataset_stats.mutable_first_access_timestamp() =
+      ::fcp::TimeUtil::ConvertAbslToProtoTimestamp(
+          collection_first_access_time);
   (*new_opstats->mutable_dataset_stats())[kCollectionUri] =
       std::move(dataset_stats);
   OperationalStats::DatasetStats dataset_stats_other;

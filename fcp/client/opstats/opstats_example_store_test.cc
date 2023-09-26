@@ -15,6 +15,7 @@
  */
 #include "fcp/client/opstats/opstats_example_store.h"
 
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
@@ -65,10 +66,13 @@ class OpStatsExampleStoreTest : public testing::Test {
   }
 
   static OperationalStats::DatasetStats CreateDatasetStats(
-      int64_t num_examples_read, int64_t num_bytes_read) {
+      int64_t num_examples_read, int64_t num_bytes_read,
+      int64_t first_access_time_ms) {
     OperationalStats::DatasetStats stats;
     stats.set_num_bytes_read(num_bytes_read);
     stats.set_num_examples_read(num_examples_read);
+    *stats.mutable_first_access_timestamp() =
+        TimeUtil::MillisecondsToTimestamp(first_access_time_ms);
     return stats;
   }
 
@@ -525,14 +529,17 @@ TEST_F(OpStatsExampleStoreTest, FullSerialization) {
   std::string uri_a = "app:/train";
   int64_t num_examples_a = 10;
   int64_t example_bytes_a = 1000;
+  int64_t first_access_time_ms_a = 1000;
   std::string uri_b = "app:/test";
   int64_t num_examples_b = 5;
   int64_t example_bytes_b = 500;
-  OperationalStats::DatasetStats dataset_stats_1 =
-      CreateDatasetStats(num_examples_a, example_bytes_a);
+  int64_t first_access_time_ms_b = 1500;
+
+  OperationalStats::DatasetStats dataset_stats_1 = CreateDatasetStats(
+      num_examples_a, example_bytes_a, first_access_time_ms_a);
   (*stats.mutable_dataset_stats())[uri_a] = dataset_stats_1;
-  OperationalStats::DatasetStats dataset_stats_2 =
-      CreateDatasetStats(num_examples_b, example_bytes_b);
+  OperationalStats::DatasetStats dataset_stats_2 = CreateDatasetStats(
+      num_examples_b, example_bytes_b, first_access_time_ms_b);
   (*stats.mutable_dataset_stats())[uri_b] = dataset_stats_2;
 
   // Set retry window
@@ -630,7 +637,8 @@ TEST_F(OpStatsExampleStoreTest, FullSerializationWithPhaseStats) {
   const std::string task_name_1 = "task_1";
   computation_1.set_task_name(task_name_1);
   const std::string uri_1 = "app://collection_1";
-  OperationalStats::DatasetStats dataset_stats_1 = CreateDatasetStats(10, 1000);
+  OperationalStats::DatasetStats dataset_stats_1 =
+      CreateDatasetStats(10, 1000, 100);
   (*computation_1.mutable_dataset_stats())[uri_1] = dataset_stats_1;
   *stats.add_phase_stats() = computation_1;
 
@@ -689,7 +697,8 @@ TEST_F(OpStatsExampleStoreTest, FullSerializationWithPhaseStats) {
   const std::string task_name_3 = "task_3";
   computation_3.set_task_name(task_name_3);
   const std::string uri_3 = "app://collection_2";
-  OperationalStats::DatasetStats dataset_stats_3 = CreateDatasetStats(20, 500);
+  OperationalStats::DatasetStats dataset_stats_3 =
+      CreateDatasetStats(20, 500, 150);
   (*computation_3.mutable_dataset_stats())[uri_3] = dataset_stats_3;
   *stats.add_phase_stats() = computation_3;
 

@@ -20,7 +20,10 @@
 #include <utility>
 
 #include "google/protobuf/util/time_util.h"
+#include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "fcp/base/time_util.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
@@ -101,6 +104,14 @@ void OpStatsLoggerImpl::AddEventWithErrorMessage(
   }
 }
 
+void OpStatsLoggerImpl::RecordCollectionFirstAccessTime(
+    absl::string_view collection_uri, absl::Time first_access_time) {
+  absl::MutexLock lock(&mutex_);
+  if (!collection_first_access_time_map_.contains(collection_uri)) {
+    collection_first_access_time_map_[collection_uri] = first_access_time;
+  }
+}
+
 void OpStatsLoggerImpl::UpdateDatasetStats(
     const std::string& collection_uri, int additional_example_count,
     int64_t additional_example_size_bytes) {
@@ -118,6 +129,12 @@ void OpStatsLoggerImpl::UpdateDatasetStats(
                                        additional_example_count);
   dataset_stats->set_num_bytes_read(dataset_stats->num_bytes_read() +
                                     additional_example_size_bytes);
+
+  if (collection_first_access_time_map_.contains(collection_uri)) {
+    *dataset_stats->mutable_first_access_timestamp() =
+        TimeUtil::ConvertAbslToProtoTimestamp(
+            collection_first_access_time_map_[collection_uri]);
+  }
 }
 
 void OpStatsLoggerImpl::SetNetworkStats(const NetworkStats& network_stats) {

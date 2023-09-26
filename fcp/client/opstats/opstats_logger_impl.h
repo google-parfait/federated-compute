@@ -18,7 +18,9 @@
 
 #include <string>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"
@@ -66,6 +68,11 @@ class OpStatsLoggerImpl : public OpStatsLogger {
                           int64_t additional_example_size_bytes)
       ABSL_LOCKS_EXCLUDED(mutex_) override;
 
+  // Record the first access time of a dataset created for a given collection.
+  void RecordCollectionFirstAccessTime(absl::string_view collection_uri,
+                                       absl::Time first_access_time)
+      ABSL_LOCKS_EXCLUDED(mutex_) override;
+
   // Adds network stats, replacing any old stats for the run, to the cumulative
   // internal message.
   void SetNetworkStats(const NetworkStats& network_stats)
@@ -108,6 +115,8 @@ class OpStatsLoggerImpl : public OpStatsLogger {
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Cumulative message storing information about this run.
+  absl::flat_hash_map<std::string, absl::Time> collection_first_access_time_map_
+      ABSL_GUARDED_BY(mutex_);
   OperationalStats stats_ ABSL_GUARDED_BY(mutex_);
   bool already_committed_ ABSL_GUARDED_BY(mutex_) = false;
   std::unique_ptr<OpStatsDb> db_;

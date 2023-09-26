@@ -536,6 +536,9 @@ class MockOpStatsLogger : public ::fcp::client::opstats::OpStatsLogger {
               (::fcp::client::opstats::OperationalStats::Event::EventKind event,
                const std::string& error_message),
               (override));
+  MOCK_METHOD(void, RecordCollectionFirstAccessTime,
+              (absl::string_view collection_uri, absl::Time first_access_time),
+              (override));
   MOCK_METHOD(void, UpdateDatasetStats,
               (const std::string& collection_uri, int additional_example_count,
                int64_t additional_example_size_bytes),
@@ -820,6 +823,8 @@ class MockPhaseLogger : public PhaseLogger {
               (absl::string_view task_name, const NetworkStats& network_stats,
                absl::Time time_before_checkin,
                absl::Time time_before_plan_download, absl::Time reference_time),
+              (override));
+  MOCK_METHOD(void, LogCollectionFirstAccessTime, (absl::string_view),
               (override));
   MOCK_METHOD(void, LogComputationStarted, (absl::string_view), (override));
   MOCK_METHOD(void, LogComputationInvalidArgument,

@@ -204,6 +204,9 @@ class Flags {
 
   // If true, OpStats logger enables PhaseStats logging.
   virtual bool enable_phase_stats_logging() const { return false; }
+
+  // If true, log the first access time for each collection to opstats.
+  virtual bool log_collection_first_access_time() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

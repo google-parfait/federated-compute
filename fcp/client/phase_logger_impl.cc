@@ -17,6 +17,8 @@
 
 #include <string>
 
+#include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 
@@ -557,6 +559,11 @@ void PhaseLoggerImpl::LogCheckinCompleted(absl::string_view task_name,
   // eligibility eval checkin to completion (and not just the period from EET
   // plan URIs being received to completion).
   LogCheckinLatency(time_before_checkin, reference_time);
+}
+
+void PhaseLoggerImpl::LogCollectionFirstAccessTime(
+    absl::string_view collection_uri) {
+  opstats_logger_->RecordCollectionFirstAccessTime(collection_uri, absl::Now());
 }
 
 void PhaseLoggerImpl::LogComputationStarted(absl::string_view task_name) {

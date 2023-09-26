@@ -203,6 +203,9 @@ class PhaseLogger {
                                    absl::Time reference_time) = 0;
 
   // Computation phase.
+  // Called when collection is first accessed.
+  virtual void LogCollectionFirstAccessTime(
+      absl::string_view collection_uri) = 0;
   // Called when computation started.
   virtual void LogComputationStarted(absl::string_view task_name) = 0;
   // Called when the input parameters are invalid.

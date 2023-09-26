@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 
+#include "absl/time/time.h"
 #include "fcp/client/opstats/opstats_db.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -96,6 +97,10 @@ class OpStatsLogger {
 
   // Stop logging stats for the current Phase.
   virtual void StopLoggingForTheCurrentPhase() {}
+
+  // Record the first access time of a dataset created for a given collection.
+  virtual void RecordCollectionFirstAccessTime(absl::string_view collection_uri,
+                                               absl::Time first_access_time) {}
 
  private:
   bool opstats_enabled_;
