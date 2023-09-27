@@ -19,7 +19,10 @@
 #include <algorithm>
 #include <iterator>
 #include <memory>
-#include <thread>  // NOLINT(build/c++11)
+#include <utility>
+#include <vector>
+
+#include <thread>
 
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
