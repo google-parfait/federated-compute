@@ -632,6 +632,7 @@ absl::StatusOr<absl::Cord> SimpleAggregationProtocol::GetResult() {
 void SimpleAggregationProtocol::ScheduleOutlierDetection() {
   absl::MutexLock lock(&state_mu_);
   if (outlier_detection_parameters_.has_value()) {
+    FCP_LOG(INFO) << "Scheduling outlier detection";
     outlier_detection_cancelation_token_ = ScheduleCallback(
         clock_, outlier_detection_parameters_->detection_interval, [this]() {
           PerformOutlierDetection();
@@ -641,16 +642,19 @@ void SimpleAggregationProtocol::ScheduleOutlierDetection() {
 }
 
 void SimpleAggregationProtocol::PerformOutlierDetection() {
+  FCP_LOG(INFO) << "Performing outlier detection";
   std::vector<int64_t> client_ids_to_close;
   // Perform this part of the algorithm under the lock to ensure exclusive
   // access to the client_states_ and pending_clients_
   {
     absl::MutexLock lock(&state_mu_);
-    FCP_CHECK(CheckProtocolState(PROTOCOL_STARTED).ok());
-    FCP_CHECK(outlier_detection_parameters_.has_value());
+    FCP_CHECK(CheckProtocolState(PROTOCOL_STARTED).ok())
+        << "The protocol is not in PROTOCOL_STARTED state.";
+    FCP_CHECK(outlier_detection_parameters_.has_value())
+        << "outlier_detection_parameters_ has no value.";
 
-    // Cannot perform analysis if there are no pending clients or too few client
-    // latency samples.
+    // Cannot perform analysis if there are no pending clients or too few
+    // client latency samples.
     if (pending_clients_.empty() || latency_aggregator_.GetCount() <= 1) return;
 
     absl::StatusOr<absl::Duration> latency_standard_deviation =
@@ -699,6 +703,7 @@ void SimpleAggregationProtocol::PerformOutlierDetection() {
 
 void SimpleAggregationProtocol::StopOutlierDetection() {
   if (outlier_detection_cancelation_token_) {
+    FCP_LOG(INFO) << "Canceling outlier detection";
     outlier_detection_cancelation_token_->Cancel();
     outlier_detection_cancelation_token_.reset();
   }
