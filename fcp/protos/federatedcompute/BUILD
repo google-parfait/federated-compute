@@ -29,6 +29,7 @@ proto_library(
     srcs = [
         "aggregations.proto",
         "common.proto",
+        "confidential_aggregations.proto",
         "eligibility_eval_tasks.proto",
         "secure_aggregations.proto",
         "task_assignments.proto",
