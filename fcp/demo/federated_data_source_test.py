@@ -89,11 +89,6 @@ class FederatedDataSourceTest(absltest.TestCase):
                  ])),
             ]), tff.CLIENTS))
 
-  def test_capabilities(self):
-    ds = fds.FederatedDataSource(POPULATION_NAME, EXAMPLE_SELECTOR)
-    self.assertListEqual(ds.capabilities,
-                         [tff.program.Capability.SUPPORTS_REUSE])
-
   def test_iterator_federated_type(self):
     ds = fds.FederatedDataSource(POPULATION_NAME, EXAMPLE_SELECTOR)
     self.assertEqual(ds.iterator().federated_type, ds.federated_type)

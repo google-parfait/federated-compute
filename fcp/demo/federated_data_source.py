@@ -103,6 +103,7 @@ class FederatedDataSource(tff.program.FederatedDataSource):
     return tff.FederatedType(
         get_struct_type(self._example_selector), tff.CLIENTS)
 
+  # TODO: b/303319739 - Update to the latest version of TFF to delete this.
   @functools.cached_property
   def capabilities(self) -> list[tff.program.Capability]:
     return [tff.program.Capability.SUPPORTS_REUSE]
