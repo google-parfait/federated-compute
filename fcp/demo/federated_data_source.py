@@ -131,12 +131,20 @@ class _FederatedDataSourceIterator(tff.program.FederatedDataSourceIterator):
   def federated_type(self):
     return self._data_source.federated_type
 
-  def select(self, num_clients: Optional[int] = None) -> DataSelectionConfig:
-    if num_clients is None or num_clients <= 0:
-      raise ValueError('num_clients must be positive.')
+  def select(self, k: Optional[int] = None) -> DataSelectionConfig:
+    """Returns a new selection of data from this iterator.
+
+    Args:
+      k: A number of clients to select. Must be a positive integer.
+
+    Raises:
+      ValueError: If `k` is not a positive integer.
+    """
+    if k is None or k <= 0:
+      raise ValueError('k must be positive.')
     return DataSelectionConfig(
         self._data_source.population_name,
         self._data_source.example_selector,
         self._data_source.task_assignment_mode,
-        num_clients,
+        k,
     )
