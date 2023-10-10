@@ -681,7 +681,8 @@ void SimpleAggregationProtocol::PerformOutlierDetection() {
         << "GetStandardDeviation() has unexpectedly failed: "
         << latency_standard_deviation.status();
 
-    absl::Duration six_sigma_threshold = 6 * latency_standard_deviation.value();
+    absl::Duration six_sigma_threshold =
+        latency_aggregator_.GetMean() + 6 * latency_standard_deviation.value();
     // TODO(team): Remove this logging once the outlier detection
     // algorithm has been validated.
     FCP_LOG(INFO) << "SimpleAggregationProtocol: num_latency_samples = "

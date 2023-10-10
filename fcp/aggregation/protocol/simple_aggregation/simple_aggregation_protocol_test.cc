@@ -1214,7 +1214,7 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
 
   // 2 seconds
   // num_latency_samples = 2, mean_latency = 500ms,
-  // six_sigma_threshold = 4.2426406875s, num_pending_clients = 3
+  // six_sigma_threshold = 4.7426406875s, num_pending_clients = 3
   clock_.AdvanceTime(kInterval);
   EXPECT_THAT(protocol->ReceiveClientMessage(3, MakeClientMessage()), IsOk());
   EXPECT_THAT(protocol->ReceiveClientMessage(4, MakeClientMessage()), IsOk());
@@ -1222,7 +1222,7 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
   // 3, 4, 5 seconds - iterate one seconds at a time to give the outlier
   // detection more chances to run.
   // num_latency_samples = 4, mean_latency = 1.25s,
-  // six_sigma_threshold = 5.7445626465s, num_pending_clients = 1
+  // six_sigma_threshold = 6.9945626465s, num_pending_clients = 1
   clock_.AdvanceTime(kInterval);
   clock_.AdvanceTime(kInterval);
   clock_.AdvanceTime(kInterval);
@@ -1233,12 +1233,14 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
 
   // 6 seconds.
   // num_latency_samples = 4, mean_latency = 1.25s,
-  // six_sigma_threshold = 5.7445626465s, num_pending_clients = 6
+  // six_sigma_threshold = 6.9945626465s, num_pending_clients = 6
   clock_.AdvanceTime(kInterval);
   EXPECT_THAT(protocol->ReceiveClientMessage(5, MakeClientMessage()), IsOk());
   EXPECT_THAT(protocol->ReceiveClientMessage(7, MakeClientMessage()), IsOk());
 
   // 7 seconds.
+  // num_latency_samples = 6, mean_latency = 1.16666666675s,
+  // six_sigma_threshold = 5.68330258325s, num_pending_clients = 4
   clock_.AdvanceTime(kInterval);
   // Client #2 should be closed at this time. It wasn't closed earlier because
   // the grace period (1 second) is added to the six_sigma_threshold (5.7s)
@@ -1248,21 +1250,22 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
 
   EXPECT_THAT(protocol->ReceiveClientMessage(9, MakeClientMessage()), IsOk());
 
-  // 8, 9, 10, 11 seconds.
+  // 8, 9, 10, 11, 12 seconds.
   // num_latency_samples = 7, mean_latency = 1.28571428575s,
-  // six_sigma_threshold = 4.535573676s, num_pending_clients = 2
+  // six_sigma_threshold = 5.82128796175s, num_pending_clients = 2
+  clock_.AdvanceTime(kInterval);
   clock_.AdvanceTime(kInterval);
   clock_.AdvanceTime(kInterval);
   clock_.AdvanceTime(kInterval);
   clock_.AdvanceTime(kInterval);
 
-  // Client 2 closed at 7 seconds, clients 6 and 8 - at 11 seconds.
+  // Client 2 closed at 7 seconds, clients 6 and 8 - at 12 seconds.
   // Clients #6 and #8 are added at 5 seconds into the protocol.
-  // The first chance to abort them is at 11 seconds because the grace
-  // period (1s) is added to the six_sigma_threshold (4.5s). So the first chance
-  // to close those clients is at 11 seconds.
+  // The first chance to abort them is at 12 seconds because the grace
+  // period (1s) is added to the six_sigma_threshold (5.8s). So the first chance
+  // to close those clients is at 12 seconds.
   EXPECT_THAT(aborted_clients, UnorderedElementsAreArray<IndexTimePair>(
-                                   {{2, 7}, {6, 11}, {8, 11}}));
+                                   {{2, 7}, {6, 12}, {8, 12}}));
 
   EXPECT_THAT(
       protocol->GetStatus(),
