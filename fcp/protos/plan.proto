@@ -367,18 +367,6 @@ message MetricTestPredicates {
 // A `TensorflowSpec` that is executed on the client in a single `tf.Session`.
 // In federated optimization, this will correspond to one `ServerPhase`.
 message ClientPhase {
-  // A short CamelCase name for the ClientPhase.
-  string name = 2;
-
-  // Minimum number of clients in aggregation.
-  // In secure aggregation mode this is used to configure the protocol instance
-  // in a way that server can't learn aggregated values with number of
-  // participants lower than this number.
-  // Without secure aggregation server still respects this parameter,
-  // ensuring that aggregated values never leave server RAM unless they include
-  // data from (at least) specified number of participants.
-  int32 minimum_number_of_participants = 3;
-
   // If populated, `io_router` must be specified.
   oneof spec {
     // A functional interface for the TensorFlow logic the client should
@@ -400,7 +388,7 @@ message ClientPhase {
     FederatedExampleQueryIORouter federated_example_query = 8 [lazy = true];
   }
 
-  reserved 1;
+  reserved 1, 2, 3;
 }
 
 // TensorflowSpec message describes a single call into TensorFlow, including the
