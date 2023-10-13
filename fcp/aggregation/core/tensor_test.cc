@@ -18,7 +18,6 @@
 
 #include <cstdint>
 #include <initializer_list>
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -26,6 +25,7 @@
 #include "gtest/gtest.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/monitoring.h"
@@ -45,6 +45,16 @@ TEST(TensorTest, Create_Dense) {
   EXPECT_THAT(t->num_elements(), Eq(3));
   EXPECT_TRUE(t->is_dense());
   EXPECT_THAT(t->AsAggVector<float>().size(), Eq(3));
+}
+
+TEST(TensorTest, Create_ZeroDataSize) {
+  auto t = Tensor::Create(DT_INT32, {0}, CreateTestData<int>({}));
+  EXPECT_THAT(t, IsOk());
+  EXPECT_THAT(t->dtype(), Eq(DT_INT32));
+  EXPECT_THAT(t->shape(), Eq(TensorShape{0}));
+  EXPECT_THAT(t->num_elements(), Eq(0));
+  EXPECT_TRUE(t->is_dense());
+  EXPECT_THAT(t->AsAggVector<int>().size(), Eq(0));
 }
 
 TEST(TensorTest, Create_StringTensor) {

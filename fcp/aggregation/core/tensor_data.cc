@@ -16,6 +16,8 @@
 
 #include "fcp/aggregation/core/tensor_data.h"
 
+#include <cstddef>
+
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
@@ -23,21 +25,19 @@ namespace aggregation {
 
 Status TensorData::CheckValid(size_t value_size, size_t alignment_size) const {
   FCP_CHECK(value_size > 0);
-  if (byte_size() == 0) {
-    return FCP_STATUS(FAILED_PRECONDITION)
-           << "TensorData: non-empty size required";
-  }
 
-  if ((byte_size() % value_size) != 0) {
-    return FCP_STATUS(FAILED_PRECONDITION)
-           << "TensorData: byte_size() must be a multiple of value_size "
-           << value_size;
-  }
+  if (byte_size() > 0) {
+    if ((byte_size() % value_size) != 0) {
+      return FCP_STATUS(FAILED_PRECONDITION)
+             << "TensorData: byte_size() must be a multiple of value_size "
+             << value_size;
+    }
 
-  if ((reinterpret_cast<size_t>(data()) % alignment_size) != 0) {
-    return FCP_STATUS(FAILED_PRECONDITION)
-           << "TensorData: data() address is not aligned by alignment_size "
-           << alignment_size;
+    if ((reinterpret_cast<size_t>(data()) % alignment_size) != 0) {
+      return FCP_STATUS(FAILED_PRECONDITION)
+             << "TensorData: data() address is not aligned by alignment_size "
+             << alignment_size;
+    }
   }
 
   return FCP_STATUS(OK);

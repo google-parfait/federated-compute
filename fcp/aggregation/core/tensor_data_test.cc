@@ -16,11 +16,11 @@
 
 #include "fcp/aggregation/core/tensor_data.h"
 
-#include <cstdint>
-#include <memory>
+#include <cstddef>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp {
@@ -43,11 +43,6 @@ MockTensorData::MockTensorData(size_t data_pointer_offset, size_t size) {
       .WillRepeatedly(Return(reinterpret_cast<void*>(data_pointer_offset)));
 }
 
-TEST(TensorDataTest, CheckValid_ZeroByteSize) {
-  MockTensorData tensor_data(0, 0);
-  EXPECT_THAT(tensor_data.CheckValid(1, 1), IsCode(FAILED_PRECONDITION));
-}
-
 TEST(TensorDataTest, CheckValid_ByteSizeNotAligned) {
   MockTensorData tensor_data(0, 33);
   EXPECT_THAT(tensor_data.CheckValid(4, 4), IsCode(FAILED_PRECONDITION));
@@ -65,6 +60,11 @@ TEST(TensorDataTest, CheckValid_Success) {
   EXPECT_THAT(tensor_data.CheckValid(4, 4), IsOk());
   EXPECT_THAT(tensor_data.CheckValid(8, 8), IsOk());
   EXPECT_THAT(tensor_data.CheckValid(16, 8), IsOk());
+}
+
+TEST(TensorDataTest, CheckValid_ZeroByteSize_Success) {
+  MockTensorData tensor_data(0, 0);
+  EXPECT_THAT(tensor_data.CheckValid(1, 1), IsOk());
 }
 
 }  // namespace
