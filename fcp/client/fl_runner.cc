@@ -1226,6 +1226,14 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
 
   int32_t minimum_clients_in_server_visible_aggregate = 0;
   if (task_assignment.sec_agg_info.has_value()) {
+    auto minimum_number_of_participants =
+        plan.phase().minimum_number_of_participants();
+    if (task_assignment.sec_agg_info->expected_number_of_clients <
+        minimum_number_of_participants) {
+      return absl::InternalError(
+          "expectedNumberOfClients was less than Plan's "
+          "minimumNumberOfParticipants.");
+    }
     minimum_clients_in_server_visible_aggregate =
         task_assignment.sec_agg_info
             ->minimum_clients_in_server_visible_aggregate;
