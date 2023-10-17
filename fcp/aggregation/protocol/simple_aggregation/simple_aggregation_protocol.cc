@@ -392,15 +392,12 @@ absl::Status SimpleAggregationProtocol::Start(int64_t num_clients) {
     FCP_CHECK(client_states_.empty());
     AddPendingClients(num_clients);
   }
-  if (num_clients > 0) {
-    AcceptanceMessage acceptance_message;
-    callback_->OnAcceptClients(0, num_clients, acceptance_message);
-  }
   ScheduleOutlierDetection();
   return absl::OkStatus();
 }
 
-absl::Status SimpleAggregationProtocol::AddClients(int64_t num_clients) {
+absl::StatusOr<int64_t> SimpleAggregationProtocol::AddClients(
+    int64_t num_clients) {
   int64_t start_index;
   {
     absl::MutexLock lock(&state_mu_);
@@ -410,9 +407,7 @@ absl::Status SimpleAggregationProtocol::AddClients(int64_t num_clients) {
     }
     start_index = AddPendingClients(num_clients);
   }
-  AcceptanceMessage acceptance_message;
-  callback_->OnAcceptClients(start_index, num_clients, acceptance_message);
-  return absl::OkStatus();
+  return start_index;
 }
 
 absl::Status SimpleAggregationProtocol::ReceiveClientMessage(

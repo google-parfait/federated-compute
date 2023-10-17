@@ -118,53 +118,27 @@ class _AggregationProtocolCallback(
     aggregation_protocol.AggregationProtocol.Callback):
   """AggregationProtocol.Callback that writes events to queues."""
 
-  def __init__(self, on_abort: Callable[[], None]):
+  def __init__(self):
     """Constructs a new _AggregationProtocolCallback..
-
-    Args:
-      on_abort: A callback invoked if/when Abort is called.
     """
     super().__init__()
-    # When a client is accepted after calling AggregationProtocol.AddClients,
-    # this queue receives the new client's id as well as a queue that will
-    # provide the diagnostic status when the client is closed. (The status
-    # queue is being used as a future and will only receive one element.)
-    self.accepted_clients: queue.SimpleQueue[tuple[
-        int, queue.SimpleQueue[absl_status.Status]]] = queue.SimpleQueue()
     # A queue receiving the final result of the aggregation session: either the
     # aggregated tensors or a failure status. This queue is being used as a
     # future and will only receive one element.
     self.result: queue.SimpleQueue[bytes | absl_status.Status] = (
         queue.SimpleQueue())
 
-    self._on_abort = on_abort
-    self._client_results_lock = threading.Lock()
-    # A map from client id to the queue for each client's close status.
-    self._client_results: dict[int, queue.SimpleQueue[absl_status.Status]] = {}
-
-  def OnAcceptClients(self, start_client_id: int, num_clients: int,
-                      message: apm_pb2.AcceptanceMessage) -> None:
-    with self._client_results_lock:
-      for client_id in range(start_client_id, start_client_id + num_clients):
-        q = queue.SimpleQueue()
-        self._client_results[client_id] = q
-        self.accepted_clients.put((client_id, q))
-
-  def OnSendServerMessage(self, client_id: int,
-                          message: apm_pb2.ServerMessage) -> None:
-    raise NotImplementedError()
+    # A map from client id to the queue for each client's close status. The
+    # queue will provide the diagnostic status when the client is closed. (The
+    # status queue is being used as a future and will only receive one element.)
+    self.client_results: dict[int, queue.SimpleQueue[absl_status.Status]] = {}
 
   def OnCloseClient(self, client_id: int,
                     diagnostic_status: absl_status.Status) -> None:
-    with self._client_results_lock:
-      self._client_results.pop(client_id).put(diagnostic_status)
+    self.client_results.pop(client_id).put(diagnostic_status)
 
   def OnComplete(self, result: bytes) -> None:
     self.result.put(result)
-
-  def OnAbort(self, diagnostic_status: absl_status.Status) -> None:
-    self.result.put(diagnostic_status)
-    self._on_abort()
 
 
 @dataclasses.dataclass(eq=False)
@@ -203,8 +177,7 @@ class Service:
                      aggregation_requirements: AggregationRequirements) -> str:
     """Creates a new aggregation session and returns its id."""
     session_id = str(uuid.uuid4())
-    callback = _AggregationProtocolCallback(
-        functools.partial(self._handle_protocol_abort, session_id))
+    callback = _AggregationProtocolCallback()
     if (len(aggregation_requirements.plan.phase) != 1 or
         not aggregation_requirements.plan.phase[0].HasField('server_phase_v2')):
       raise ValueError('Plan must contain exactly one server_phase_v2.')
@@ -383,20 +356,6 @@ class Service:
             functools.partial(data.status_future.set_result, status))
       state.pending_waits.clear()
 
-  def _handle_protocol_abort(self, session_id: str) -> None:
-    """Notifies waiting clients when the protocol is aborted."""
-    with self._sessions_lock:
-      with contextlib.suppress(KeyError):
-        state = self._sessions[session_id]
-        state.status = AggregationStatus.FAILED
-        # Anyone waiting on the session should be notified it's been aborted.
-        if state.pending_waits:
-          status = self._get_session_status(state)
-          for data in state.pending_waits:
-            data.loop.call_soon_threadsafe(
-                functools.partial(data.status_future.set_result, status))
-          state.pending_waits.clear()
-
   @http_actions.proto_action(
       service='google.internal.federatedcompute.v1.Aggregations',
       method='StartAggregationDataUpload')
@@ -414,9 +373,10 @@ class Service:
       except KeyError as e:
         raise http_actions.HttpError(http.HTTPStatus.UNAUTHORIZED) from e
 
-    state.agg_protocol.AddClients(1)
+    client_id = state.agg_protocol.AddClients(1)
     client_token = str(uuid.uuid4())
-    client_id, close_status = state.callback.accepted_clients.get(timeout=1)
+    close_status = queue.SimpleQueue()
+    state.callback.client_results[client_id] = close_status
     upload_name = self._media_service.register_upload()
 
     with self._sessions_lock:

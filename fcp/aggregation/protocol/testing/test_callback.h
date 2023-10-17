@@ -17,7 +17,11 @@
 #ifndef FCP_AGGREGATION_PROTOCOL_TESTING_TEST_CALLBACK_H_
 #define FCP_AGGREGATION_PROTOCOL_TESTING_TEST_CALLBACK_H_
 
+#include <cstdint>
+
 #include "gmock/gmock.h"
+#include "absl/status/status.h"
+#include "absl/strings/cord.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 
@@ -25,16 +29,9 @@ namespace fcp::aggregation {
 
 class MockAggregationProtocolCallback : public AggregationProtocol::Callback {
  public:
-  MOCK_METHOD(void, OnAcceptClients,
-              (int64_t start_client_id, int64_t num_clients,
-               const AcceptanceMessage& message),
-              (override));
-  MOCK_METHOD(void, OnSendServerMessage,
-              (int64_t client_id, const ServerMessage& message), (override));
   MOCK_METHOD(void, OnCloseClient,
               (int64_t client_id, absl::Status diagnostic_status), (override));
   MOCK_METHOD(void, OnComplete, (absl::Cord result), (override));
-  MOCK_METHOD(void, OnAbort, (absl::Status diagnostic_status), (override));
 };
 
 }  // namespace fcp::aggregation

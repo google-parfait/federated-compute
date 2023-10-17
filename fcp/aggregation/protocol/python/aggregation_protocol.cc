@@ -32,26 +32,12 @@ namespace {
 
 namespace py = ::pybind11;
 
-using ::fcp::aggregation::AcceptanceMessage;
 using ::fcp::aggregation::AggregationProtocol;
-using ::fcp::aggregation::ServerMessage;
 
 // Allow AggregationProtocol::Callback to be subclassed in Python. See
 // https://pybind11.readthedocs.io/en/stable/advanced/classes.html#overriding-virtual-functions-in-python
 class PyAggregationProtocolCallback : public AggregationProtocol::Callback {
  public:
-  void OnAcceptClients(int64_t start_client_id, int64_t num_clients,
-                       const AcceptanceMessage& message) override {
-    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, OnAcceptClients,
-                           start_client_id, num_clients, message);
-  }
-
-  void OnSendServerMessage(int64_t client_id,
-                           const ServerMessage& message) override {
-    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback,
-                           OnSendServerMessage, client_id, message);
-  }
-
   void OnCloseClient(int64_t client_id,
                      absl::Status diagnostic_status) override {
     PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, OnCloseClient,
@@ -62,11 +48,6 @@ class PyAggregationProtocolCallback : public AggregationProtocol::Callback {
   void OnComplete(absl::Cord result) override {
     PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, OnComplete,
                            result);
-  }
-
-  void OnAbort(absl::Status diagnostic_status) override {
-    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, OnAbort,
-                           py::google::DoNotThrowStatus(diagnostic_status));
   }
 };
 
@@ -91,10 +72,6 @@ PYBIND11_MODULE(aggregation_protocol, m) {
                    PyAggregationProtocolCallback>(py_aggregation_protocol,
                                                   "Callback")
       .def(py::init<>())
-      .def("OnAcceptClients", &AggregationProtocol::Callback::OnAcceptClients)
-      .def("OnSendServerMessage",
-           &AggregationProtocol::Callback::OnSendServerMessage)
       .def("OnCloseClient", &AggregationProtocol::Callback::OnCloseClient)
-      .def("OnComplete", &AggregationProtocol::Callback::OnComplete)
-      .def("OnAbort", &AggregationProtocol::Callback::OnAbort);
+      .def("OnComplete", &AggregationProtocol::Callback::OnComplete);
 }

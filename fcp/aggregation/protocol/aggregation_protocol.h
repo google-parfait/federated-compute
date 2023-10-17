@@ -17,7 +17,7 @@
 #ifndef FCP_AGGREGATION_PROTOCOL_AGGREGATION_PROTOCOL_H_
 #define FCP_AGGREGATION_PROTOCOL_AGGREGATION_PROTOCOL_H_
 
-#include <memory>
+#include <cstdint>
 #include <optional>
 
 #include "absl/status/status.h"
@@ -63,7 +63,7 @@ class AggregationProtocol {
   // may be zero.  This method is guaranteed to be the first method called on
   // the protocol.
   //
-  // AcceptClients callback is expected in response to this method.
+  // The starting index of the batch of clients added is always 0.
   virtual absl::Status Start(int64_t num_clients) = 0;
 
   // Adds an additional batch of clients to the protocol.
@@ -71,8 +71,8 @@ class AggregationProtocol {
   // Depending on the protocol implementation, adding clients may not be allowed
   // and this method might return an error Status.
   //
-  // AcceptClients callback is expected in response to this method.
-  virtual absl::Status AddClients(int64_t num_clients) = 0;
+  // Returns the starting index of the batch of clients added.
+  virtual absl::StatusOr<int64_t> AddClients(int64_t num_clients) = 0;
 
   // Handles a message from a given client.
   //
@@ -144,20 +144,6 @@ class AggregationProtocol {
     Callback() = default;
     virtual ~Callback() = default;
 
-    // Called in response to either StartProtocol or AddClients methods being
-    // called and provides protocol parameters to be broadcasted to all newly
-    // joined clients.
-    virtual void OnAcceptClients(int64_t start_client_id, int64_t num_clients,
-                                 const AcceptanceMessage& message) = 0;
-
-    // Called by the protocol to deliver a message to a given client.
-    //
-    // Depending on the specific protocol implementation there may be multiple
-    // messages exchanged with each clients, but not all protocols need to
-    // send messages to clients.
-    virtual void OnSendServerMessage(int64_t client_id,
-                                     const ServerMessage& message) = 0;
-
     // Called by the protocol to force communication with a client to be closed,
     // for example due to a client specific error or due to the protocol getting
     // into a state where no further input for that client is needed.
@@ -174,14 +160,6 @@ class AggregationProtocol {
     // each specific aggregation protocol implementation.  Completing the
     // protocol should close communications with all remaining clients.
     virtual void OnComplete(absl::Cord result) = 0;
-
-    // Called by the protocol to indicate that the protocol has been aborted
-    // for internal reasons (e.g. the number of remaining clients dropping
-    // too low).
-    //
-    // Aborting the protocol should close communications with all remaining
-    // clients.
-    virtual void OnAbort(absl::Status diagnostic_status) = 0;
   };
 };
 

@@ -100,7 +100,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
 
   // Implementation of the overridden Aggregation Protocol methods.
   absl::Status Start(int64_t num_clients) override;
-  absl::Status AddClients(int64_t num_clients) override;
+  absl::StatusOr<int64_t> AddClients(int64_t num_clients) override;
   absl::Status ReceiveClientMessage(int64_t client_id,
                                     const ClientMessage& message) override;
   absl::StatusOr<std::optional<ServerMessage>> PollServerMessage(

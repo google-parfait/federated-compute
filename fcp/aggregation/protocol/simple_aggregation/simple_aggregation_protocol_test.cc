@@ -22,6 +22,7 @@
 #include <initializer_list>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -62,7 +63,8 @@ using ::testing::Return;
 using ::testing::StrEq;
 using ::testing::UnorderedElementsAreArray;
 
-// TODO(team): Consider moving mock classes into a separate test library.
+// TODO: b/305306005 - Consider moving mock classes into a separate test
+// library.
 class MockCheckpointParser : public CheckpointParser {
  public:
   MOCK_METHOD(absl::StatusOr<Tensor>, GetTensor, (const std::string& name),
@@ -359,24 +361,8 @@ TEST_F(SimpleAggregationProtocolTest, StartProtocol_Success) {
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 3")));
 }
 
-// TODO(team): Add similar tests for other callbacks.
-TEST_F(SimpleAggregationProtocolTest,
-       StartProtocol_AcceptClientsProtocolReentrace) {
-  // This verifies that the protocol can be re-entered from the callback.
-  auto protocol = CreateProtocolWithDefaultConfig();
-
-  EXPECT_CALL(callback_, OnAcceptClients(0, 1, _)).WillOnce(Invoke([&]() {
-    EXPECT_THAT(
-        protocol->GetStatus(),
-        EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
-  }));
-
-  EXPECT_THAT(protocol->Start(1), IsOk());
-}
-
 TEST_F(SimpleAggregationProtocolTest, StartProtocol_MultipleCalls) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients).Times(1);
   EXPECT_THAT(protocol->Start(1), IsOk());
   // The second Start call must fail.
   EXPECT_THAT(protocol->Start(1), IsCode(FAILED_PRECONDITION));
@@ -384,27 +370,25 @@ TEST_F(SimpleAggregationProtocolTest, StartProtocol_MultipleCalls) {
 
 TEST_F(SimpleAggregationProtocolTest, StartProtocol_ZeroClients) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients).Times(0);
   EXPECT_THAT(protocol->Start(0), IsOk());
 }
 
 TEST_F(SimpleAggregationProtocolTest, StartProtocol_NegativeClients) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients).Times(0);
   EXPECT_THAT(protocol->Start(-1), IsCode(INVALID_ARGUMENT));
 }
 
 TEST_F(SimpleAggregationProtocolTest, AddClients_Success) {
   auto protocol = CreateProtocolWithDefaultConfig();
 
-  EXPECT_CALL(callback_, OnAcceptClients(0, 1, _));
   EXPECT_THAT(protocol->Start(1), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
 
-  EXPECT_CALL(callback_, OnAcceptClients(1, 3, _));
-  EXPECT_THAT(protocol->AddClients(3), IsOk());
+  auto status_or_result = protocol->AddClients(3);
+  EXPECT_THAT(status_or_result, IsOk());
+  EXPECT_EQ(status_or_result.value(), 1);
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 4")));
@@ -412,8 +396,6 @@ TEST_F(SimpleAggregationProtocolTest, AddClients_Success) {
 
 TEST_F(SimpleAggregationProtocolTest, AddClients_ProtocolNotStarted) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  // Must fail because the protocol isn't started.
-  EXPECT_CALL(callback_, OnAcceptClients).Times(0);
   EXPECT_THAT(protocol->AddClients(1), IsCode(FAILED_PRECONDITION));
 }
 
@@ -442,7 +424,6 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_InvalidMessage) {
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_InvalidClientId) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
   // Must fail for the client_id -1 and 2.
   EXPECT_THAT(protocol->ReceiveClientMessage(-1, MakeClientMessage()),
@@ -454,7 +435,6 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_InvalidClientId) {
 TEST_F(SimpleAggregationProtocolTest,
        ReceiveClientMessage_DuplicateClientIdInputs) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(2), IsOk());
 
   auto parser = std::make_unique<MockCheckpointParser>();
@@ -477,7 +457,6 @@ TEST_F(SimpleAggregationProtocolTest,
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_AfterClosingClient) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   EXPECT_THAT(protocol->CloseClient(0, absl::OkStatus()), IsOk());
@@ -494,7 +473,6 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_AfterClosingClient) {
 TEST_F(SimpleAggregationProtocolTest,
        ReceiveClientMessage_FailureToParseInput) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   EXPECT_CALL(checkpoint_parser_factory_, Create(_))
@@ -512,7 +490,6 @@ TEST_F(SimpleAggregationProtocolTest,
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MissingTensor) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   auto parser = std::make_unique<MockCheckpointParser>();
@@ -533,7 +510,6 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MissingTensor) {
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MismatchingTensor) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   auto parser = std::make_unique<MockCheckpointParser>();
@@ -555,7 +531,6 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MismatchingTensor) {
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_UriType_Success) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
   auto parser = std::make_unique<MockCheckpointParser>();
   EXPECT_CALL(*parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
@@ -580,7 +555,6 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_UriType_Success) {
 TEST_F(SimpleAggregationProtocolTest,
        ReceiveClientMessage_UriType_FailToParse) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   // Receive invalid input for the client #0
@@ -641,7 +615,6 @@ TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
   )pb");
   auto protocol = CreateProtocol(config_message);
 
-  EXPECT_CALL(callback_, OnAcceptClients(0, 1, _));
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   // Verify that the checkpoint builder is created.
@@ -757,7 +730,6 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
     }
   )pb");
   auto protocol = CreateProtocol(config_message);
-  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(2), IsOk());
 
   // Expect five inputs.
@@ -939,7 +911,6 @@ TEST_F(SimpleAggregationProtocolTest,
     }
   )pb");
   auto protocol = CreateProtocol(config_message);
-  EXPECT_CALL(callback_, OnAcceptClients);
   EXPECT_THAT(protocol->Start(2), IsOk());
   // OnComplete cannot be called for fedsql_group_by intrinsics until at least
   // one input has been aggregated.
@@ -953,7 +924,6 @@ TEST_F(SimpleAggregationProtocolTest, Complete_ProtocolNotStarted) {
 
 TEST_F(SimpleAggregationProtocolTest, Abort_NoInputsReceived) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients(0, 2, _));
   EXPECT_THAT(protocol->Start(2), IsOk());
 
   EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(ABORTED)));
@@ -966,7 +936,6 @@ TEST_F(SimpleAggregationProtocolTest, Abort_NoInputsReceived) {
 
 TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients(0, 2, _));
   EXPECT_THAT(protocol->Start(2), IsOk());
 
   auto parser = std::make_unique<MockCheckpointParser>();
@@ -998,7 +967,6 @@ TEST_F(SimpleAggregationProtocolTest, Abort_ProtocolNotStarted) {
 TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_Success) {
   const int64_t kNumClients = 10;
   auto protocol = CreateProtocolWithDefaultConfig();
-  EXPECT_CALL(callback_, OnAcceptClients(0, kNumClients, _));
   EXPECT_THAT(protocol->Start(kNumClients), IsOk());
 
   // The following block will repeatedly create CheckpointParser instances
@@ -1110,7 +1078,6 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_AbortWhileQueued) {
       }
     }
   )pb"));
-  EXPECT_CALL(callback_, OnAcceptClients(0, kNumClients, _));
   EXPECT_THAT(protocol->Start(kNumClients), IsOk());
 
   EXPECT_CALL(checkpoint_parser_factory_, Create(_)).WillRepeatedly(Invoke([&] {
@@ -1179,7 +1146,6 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
 
   // Start by creating the protocol with 5 clients.
   auto protocol = CreateProtocolWithDefaultConfig({kInterval, kGracePeriod});
-  EXPECT_CALL(callback_, OnAcceptClients(0, 5, _));
   EXPECT_THAT(protocol->Start(5), IsOk());
 
   // The following block will repeatedly create CheckpointParser instances
@@ -1228,8 +1194,9 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
   clock_.AdvanceTime(kInterval);
 
   // Add 5 additional clients 5 seconds into the protocol.
-  EXPECT_CALL(callback_, OnAcceptClients(5, 5, _));
-  EXPECT_THAT(protocol->AddClients(5), IsOk());
+  auto status_or_result = protocol->AddClients(5);
+  EXPECT_THAT(status_or_result, IsOk());
+  EXPECT_EQ(status_or_result.value(), 5);
 
   // 6 seconds.
   // num_latency_samples = 4, mean_latency = 1.25s,
@@ -1280,7 +1247,6 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_NoPendingClients) {
 
   // Start by creating the protocol with 5 clients.
   auto protocol = CreateProtocolWithDefaultConfig({kInterval, kGracePeriod});
-  EXPECT_CALL(callback_, OnAcceptClients(0, 5, _));
   EXPECT_THAT(protocol->Start(5), IsOk());
 
   // The following block will repeatedly create CheckpointParser instances
@@ -1322,7 +1288,6 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_AfterAbort) {
   constexpr absl::Duration kInterval = absl::Seconds(1);
   constexpr absl::Duration kGracePeriod = absl::Seconds(1);
   auto protocol = CreateProtocolWithDefaultConfig({kInterval, kGracePeriod});
-  EXPECT_CALL(callback_, OnAcceptClients(0, 2, _));
   EXPECT_THAT(protocol->Start(2), IsOk());
 
   EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(ABORTED)));
