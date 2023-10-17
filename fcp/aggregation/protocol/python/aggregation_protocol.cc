@@ -21,7 +21,6 @@
 #include <cstdint>
 
 #include "absl/status/status.h"
-#include "absl/strings/cord.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "pybind11_abseil/absl_casters.h"
@@ -44,11 +43,6 @@ class PyAggregationProtocolCallback : public AggregationProtocol::Callback {
                            client_id,
                            py::google::DoNotThrowStatus(diagnostic_status));
   }
-
-  void OnComplete(absl::Cord result) override {
-    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, OnComplete,
-                           result);
-  }
 };
 
 }  // namespace
@@ -66,12 +60,12 @@ PYBIND11_MODULE(aggregation_protocol, m) {
           .def("CloseClient", &AggregationProtocol::CloseClient)
           .def("Complete", &AggregationProtocol::Complete)
           .def("Abort", &AggregationProtocol::Abort)
-          .def("GetStatus", &AggregationProtocol::GetStatus);
+          .def("GetStatus", &AggregationProtocol::GetStatus)
+          .def("GetResult", &AggregationProtocol::GetResult);
 
   pybind11::class_<AggregationProtocol::Callback,
                    PyAggregationProtocolCallback>(py_aggregation_protocol,
                                                   "Callback")
       .def(py::init<>())
-      .def("OnCloseClient", &AggregationProtocol::Callback::OnCloseClient)
-      .def("OnComplete", &AggregationProtocol::Callback::OnComplete);
+      .def("OnCloseClient", &AggregationProtocol::Callback::OnCloseClient);
 }

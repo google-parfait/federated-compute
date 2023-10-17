@@ -16,7 +16,6 @@ cc_library(
         "//fcp/aggregation/protocol:aggregation_protocol",
         "//fcp/aggregation/protocol:cc_proto",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:cord",
         "@com_google_googletest//:gtest_main",
     ],
 )

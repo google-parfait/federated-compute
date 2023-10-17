@@ -54,9 +54,6 @@ class CallbackProxy(aggregation_protocol.AggregationProtocol.Callback):
   def OnCloseClient(self, client_id: int, diagnostic_status: status.Status):
     self._callback.OnCloseClient(client_id, diagnostic_status)
 
-  def OnComplete(self, result: bytes):
-    self._callback.OnComplete(result)
-
 
 class AggregationProtocolsTest(absltest.TestCase):
 
@@ -93,9 +90,8 @@ class AggregationProtocolsTest(absltest.TestCase):
     ])
 
     agg_protocol.Complete()
-    callback.OnComplete.assert_called_once()
     with tempfile.NamedTemporaryFile('wb') as tmpfile:
-      tmpfile.write(callback.OnComplete.call_args.args[0])
+      tmpfile.write(agg_protocol.GetResult())
       tmpfile.flush()
       self.assertEqual(
           tf.raw_ops.Restore(

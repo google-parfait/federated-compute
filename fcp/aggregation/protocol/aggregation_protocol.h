@@ -131,8 +131,8 @@ class AggregationProtocol {
 
   // Returns the result of the aggregation.
   //
-  // The protocol should be in the completed state when this is called if it is
-  // not then this method will return an empty Cord
+  // Returns FAILED_PRECONDITION error if the protocol is not in COMPLETED state
+  // when this method is invoked.
   virtual absl::StatusOr<absl::Cord> GetResult() = 0;
 
   // Callback interface which methods are implemented by the protocol host.
@@ -152,14 +152,6 @@ class AggregationProtocol {
     // after this method.
     virtual void OnCloseClient(int64_t client_id,
                                absl::Status diagnostic_status) = 0;
-
-    // Indicates successful completion of the aggregation protocol, contains
-    // the result of the aggregation.
-    //
-    // The format of the result blob is unspecified and can be different for
-    // each specific aggregation protocol implementation.  Completing the
-    // protocol should close communications with all remaining clients.
-    virtual void OnComplete(absl::Cord result) = 0;
   };
 };
 

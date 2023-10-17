@@ -542,7 +542,7 @@ absl::Status SimpleAggregationProtocol::Complete() {
   {
     absl::MutexLock lock(&state_mu_);
     FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
-    FCP_ASSIGN_OR_RETURN(result, CreateReport());
+    FCP_ASSIGN_OR_RETURN(result_, CreateReport());
     SetProtocolState(PROTOCOL_COMPLETED);
     for (int64_t client_id = 0; client_id < client_states_.size();
          client_id++) {
@@ -565,7 +565,6 @@ absl::Status SimpleAggregationProtocol::Complete() {
         client_id, absl::AbortedError("The protocol has completed before the "
                                       "client input has been aggregated."));
   }
-  callback_->OnComplete(std::move(result));
   return absl::OkStatus();
 }
 
@@ -625,8 +624,9 @@ StatusMessage SimpleAggregationProtocol::GetStatus() {
 }
 
 absl::StatusOr<absl::Cord> SimpleAggregationProtocol::GetResult() {
-  return absl::UnimplementedError(
-      "Results should be provided by Callback until this is implemented");
+  absl::MutexLock lock(&state_mu_);
+  FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_COMPLETED));
+  return result_;
 }
 
 void SimpleAggregationProtocol::ScheduleOutlierDetection() {

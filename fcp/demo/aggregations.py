@@ -122,12 +122,6 @@ class _AggregationProtocolCallback(
     """Constructs a new _AggregationProtocolCallback..
     """
     super().__init__()
-    # A queue receiving the final result of the aggregation session: either the
-    # aggregated tensors or a failure status. This queue is being used as a
-    # future and will only receive one element.
-    self.result: queue.SimpleQueue[bytes | absl_status.Status] = (
-        queue.SimpleQueue())
-
     # A map from client id to the queue for each client's close status. The
     # queue will provide the diagnostic status when the client is closed. (The
     # status queue is being used as a future and will only receive one element.)
@@ -136,9 +130,6 @@ class _AggregationProtocolCallback(
   def OnCloseClient(self, client_id: int,
                     diagnostic_status: absl_status.Status) -> None:
     self.client_results.pop(client_id).put(diagnostic_status)
-
-  def OnComplete(self, result: bytes) -> None:
-    self.result.put(result)
 
 
 @dataclasses.dataclass(eq=False)
@@ -224,7 +215,7 @@ class Service:
             'minimum_clients_in_server_published_aggregate has not been met.')
 
       state.agg_protocol.Complete()
-      result = state.callback.result.get(timeout=1)
+      result = state.agg_protocol.GetResult()
       if isinstance(result, absl_status.Status):
         raise absl_status.StatusNotOk(result)
       state.status = AggregationStatus.COMPLETED
@@ -288,15 +279,19 @@ class Service:
   ) -> configuration_pb2.Configuration.ServerAggregationConfig.IntrinsicArg:
     """Transform an aggregation intrinsic arg for the aggregation service."""
     if intrinsic_arg.HasField('input_tensor'):
-      return configuration_pb2.Configuration.ServerAggregationConfig.IntrinsicArg(
-          input_tensor=intrinsic_arg.input_tensor)
+      return (
+          configuration_pb2.Configuration.ServerAggregationConfig.IntrinsicArg(
+              input_tensor=intrinsic_arg.input_tensor
+          )
+      )
     elif intrinsic_arg.HasField('state_tensor'):
       raise ValueError(
           'Non-client intrinsic args are not supported in this demo.'
       )
     else:
       raise AssertionError(
-          'Cases should have exhausted all possible types of intrinsic args.')
+          'Cases should have exhausted all possible types of intrinsic args.'
+      )
 
   def _translate_server_aggregation_config(
       self, plan_aggregation_config: plan_pb2.ServerAggregationConfig

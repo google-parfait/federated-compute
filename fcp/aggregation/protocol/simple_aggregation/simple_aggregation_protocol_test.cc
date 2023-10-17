@@ -633,13 +633,12 @@ TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
 
   // Verify that the pending client is closed.
   EXPECT_CALL(callback_, OnCloseClient(0, IsCode(ABORTED)));
-  // Verify that the Complete callback method is called.
-  EXPECT_CALL(callback_, OnComplete);
 
   EXPECT_THAT(protocol->Complete(), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 1")));
+  EXPECT_OK(protocol->GetResult());
 }
 
 TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
@@ -812,14 +811,12 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
               Add(StrEq("baz_out"), IsTensor({3}, {3.f, 7.f, 5.f})))
       .WillOnce(Return(absl::OkStatus()));
 
-  // Verify that the OnComplete callback method is called.
-  EXPECT_CALL(callback_, OnComplete);
-
   EXPECT_THAT(protocol->Complete(), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
           "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+  EXPECT_OK(protocol->GetResult());
 }
 
 TEST_F(SimpleAggregationProtocolTest,
@@ -912,9 +909,10 @@ TEST_F(SimpleAggregationProtocolTest,
   )pb");
   auto protocol = CreateProtocol(config_message);
   EXPECT_THAT(protocol->Start(2), IsOk());
-  // OnComplete cannot be called for fedsql_group_by intrinsics until at least
-  // one input has been aggregated.
+  // Complete/GetResult cannot be called for fedsql_group_by intrinsics until at
+  // least one input has been aggregated.
   EXPECT_THAT(protocol->Complete(), IsCode(FAILED_PRECONDITION));
+  EXPECT_THAT(protocol->GetResult(), IsCode(FAILED_PRECONDITION));
 }
 
 TEST_F(SimpleAggregationProtocolTest, Complete_ProtocolNotStarted) {
@@ -998,9 +996,8 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_Success) {
   EXPECT_CALL(checkpoint_builder, Add(StrEq("foo_out"), IsTensor({}, {55})))
       .WillOnce(Return(absl::OkStatus()));
 
-  // Verify that the OnComplete callback method is called.
-  EXPECT_CALL(callback_, OnComplete);
   EXPECT_THAT(protocol->Complete(), IsOk());
+  EXPECT_OK(protocol->GetResult());
 }
 
 // A trivial test aggregator that delegates aggregation to a function.

@@ -190,44 +190,6 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     mock_agg_protocol.Complete.assert_called_once()
     mock_agg_protocol.Abort.assert_not_called()
 
-  @mock.patch.object(
-      aggregation_protocols,
-      'create_simple_aggregation_protocol',
-      autospec=True)
-  def test_complete_session_aborts(self, mock_create_simple_agg_protocol):
-    # Use a mock since it's not easy to cause
-    # SimpleAggregationProtocol::Complete to trigger a protocol abort.
-    mock_agg_protocol = mock.create_autospec(
-        aggregation_protocol.AggregationProtocol, instance=True)
-    mock_create_simple_agg_protocol.return_value = mock_agg_protocol
-
-    service = aggregations.Service(lambda: FORWARDING_INFO,
-                                   self.mock_media_service)
-    session_id = service.create_session(AGGREGATION_REQUIREMENTS)
-
-    required_clients = (
-        AGGREGATION_REQUIREMENTS.minimum_clients_in_server_published_aggregate)
-    agg_status = apm_pb2.StatusMessage(
-        num_inputs_aggregated_and_included=required_clients)
-    mock_agg_protocol.GetStatus.side_effect = lambda: agg_status
-
-    def on_complete():
-      agg_status.num_inputs_discarded = (
-          agg_status.num_inputs_aggregated_and_included)
-      agg_status.num_inputs_aggregated_and_included = 0
-
-    mock_agg_protocol.Complete.side_effect = on_complete
-
-    status, aggregate = service.complete_session(session_id)
-    self.assertEqual(
-        status,
-        aggregations.SessionStatus(
-            status=aggregations.AggregationStatus.FAILED,
-            num_inputs_discarded=required_clients))
-    self.assertIsNone(aggregate)
-    mock_agg_protocol.Complete.assert_called_once()
-    mock_agg_protocol.Abort.assert_not_called()
-
   def test_complete_session_without_enough_inputs(self):
     service = aggregations.Service(lambda: FORWARDING_INFO,
                                    self.mock_media_service)

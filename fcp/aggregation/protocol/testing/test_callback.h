@@ -21,7 +21,6 @@
 
 #include "gmock/gmock.h"
 #include "absl/status/status.h"
-#include "absl/strings/cord.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 
@@ -31,7 +30,6 @@ class MockAggregationProtocolCallback : public AggregationProtocol::Callback {
  public:
   MOCK_METHOD(void, OnCloseClient,
               (int64_t client_id, absl::Status diagnostic_status), (override));
-  MOCK_METHOD(void, OnComplete, (absl::Cord result), (override));
 };
 
 }  // namespace fcp::aggregation

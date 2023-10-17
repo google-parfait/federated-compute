@@ -18,6 +18,7 @@
 #define FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_SIMPLE_AGGREGATION_PROTOCOL_H_
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -33,6 +34,7 @@
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
@@ -268,6 +270,8 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   const CheckpointBuilderFactory* const checkpoint_builder_factory_;
   ResourceResolver* const resource_resolver_;
   Clock* const clock_;
+  // The result of the aggregation.
+  absl::Cord result_ ABSL_GUARDED_BY(state_mu_);
 
   // Fields related to outlier detection.
   absl::Mutex outlier_detection_mu_;
