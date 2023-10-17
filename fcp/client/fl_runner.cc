@@ -355,12 +355,13 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
   std::vector<std::string> output_names = {
       io_router.task_eligibility_info_tensor_name()};
 
-  if (!client_plan.tflite_graph().empty()) {
+  const bool tflite_model_included = !client_plan.tflite_graph().empty();
+  if (tflite_model_included) {
     log_manager->LogDiag(
         ProdDiagCode::BACKGROUND_TRAINING_TFLITE_MODEL_INCLUDED);
   }
 
-  if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
+  if (flags->use_tflite_training() && tflite_model_included) {
     std::unique_ptr<TfLiteInputs> tflite_inputs =
         ConstructTfLiteInputsForEligibilityEvalPlan(io_router,
                                                     checkpoint_input_filename);
@@ -517,8 +518,13 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
         engine::PlanOutcome::kInvalidArgument, output_names.status()));
   }
 
+  const bool tflite_model_included = !client_plan.tflite_graph().empty();
+  if (tflite_model_included) {
+    log_manager->LogDiag(
+        ProdDiagCode::BACKGROUND_TRAINING_TFLITE_MODEL_INCLUDED);
+  }
   // Run plan and get a set of output tensors back.
-  if (flags->use_tflite_training() && !client_plan.tflite_graph().empty()) {
+  if (flags->use_tflite_training() && tflite_model_included) {
     std::unique_ptr<TfLiteInputs> tflite_inputs =
         ConstructTFLiteInputsForTensorflowSpecPlan(
             client_plan.phase().federated_compute(), checkpoint_input_filename,
