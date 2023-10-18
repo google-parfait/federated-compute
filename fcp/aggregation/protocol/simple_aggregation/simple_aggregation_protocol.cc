@@ -258,6 +258,19 @@ absl::Status AddInputsToMap(
     const Intrinsic& intrinsic, CheckpointParser& parser,
     absl::flat_hash_map<std::string, Tensor>& tensor_map) {
   for (const TensorSpec& input_spec : intrinsic.inputs) {
+    auto existing_tensor_it = tensor_map.find(input_spec.name());
+    if (existing_tensor_it != tensor_map.end()) {
+      // Tensor with a matching name is already in the map.
+      const Tensor& existing_tensor = existing_tensor_it->second;
+      if (input_spec.dtype() == existing_tensor.dtype() &&
+          input_spec.shape().MatchesKnownDimensions(existing_tensor.shape())) {
+        continue;
+      } else {
+        return absl::InvalidArgumentError(
+            "Tensor with same name but unmatching spec already exists.");
+      }
+    }
+
     FCP_ASSIGN_OR_RETURN(Tensor tensor, parser.GetTensor(input_spec.name()));
     if (tensor.dtype() != input_spec.dtype() ||
         !input_spec.shape().MatchesKnownDimensions(tensor.shape())) {

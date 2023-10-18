@@ -915,6 +915,127 @@ TEST_F(SimpleAggregationProtocolTest,
   EXPECT_THAT(protocol->GetResult(), IsCode(FAILED_PRECONDITION));
 }
 
+TEST_F(SimpleAggregationProtocolTest, Complete_TensorUsedInMultipleIntrinsics) {
+  Configuration config_message = PARSE_TEXT_PROTO(R"pb(
+    aggregation_configs: {
+      intrinsic_uri: "fedsql_group_by"
+      intrinsic_args {
+        input_tensor {
+          name: "key1"
+          dtype: DT_FLOAT
+          shape { dim { size: -1 } }
+        }
+      }
+      intrinsic_args {
+        input_tensor {
+          name: "key2"
+          dtype: DT_FLOAT
+          shape { dim { size: -1 } }
+        }
+      }
+      output_tensors {
+        name: ""
+        dtype: DT_FLOAT
+        shape { dim { size: -1 } }
+      }
+      output_tensors {
+        name: ""
+        dtype: DT_FLOAT
+        shape { dim { size: -1 } }
+      }
+      inner_aggregations {
+        intrinsic_uri: "GoogleSQL:sum"
+        intrinsic_args {
+          input_tensor {
+            name: "key1"
+            dtype: DT_FLOAT
+            shape {}
+          }
+        }
+        output_tensors {
+          name: "key1_out"
+          dtype: DT_FLOAT
+          shape {}
+        }
+      }
+      inner_aggregations {
+        intrinsic_uri: "GoogleSQL:sum"
+        intrinsic_args {
+          input_tensor {
+            name: "key2"
+            dtype: DT_FLOAT
+            shape {}
+          }
+        }
+        output_tensors {
+          name: "key2_out"
+          dtype: DT_FLOAT
+          shape {}
+        }
+      }
+    }
+  )pb");
+  auto protocol = CreateProtocol(config_message);
+  EXPECT_THAT(protocol->Start(2), IsOk());
+
+  // Expect five inputs.
+  auto parser1 = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser1, GetTensor(StrEq("key1"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {2}, CreateTestData({1.f, 2.f}));
+  }));
+  EXPECT_CALL(*parser1, GetTensor(StrEq("key2"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {2}, CreateTestData({3.f, 4.f}));
+  }));
+
+  auto parser2 = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser2, GetTensor(StrEq("key1"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {2}, CreateTestData({1.f, 2.f}));
+  }));
+  EXPECT_CALL(*parser2, GetTensor(StrEq("key2"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {2}, CreateTestData({3.f, 5.f}));
+  }));
+
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_))
+      .WillOnce(Return(ByMove(std::move(parser1))))
+      .WillOnce(Return(ByMove(std::move(parser2))));
+
+  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(OK)));
+  EXPECT_CALL(callback_, OnCloseClient(Eq(1), IsCode(OK)));
+
+  // Handle the inputs.
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "num_clients_pending: 1 num_clients_completed: 1 "
+                  "num_inputs_aggregated_and_included: 1")));
+
+  EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+
+  // Complete the protocol.
+  // Verify that the checkpoint builder is created.
+  auto& checkpoint_builder = ExpectCheckpointBuilder();
+
+  // Verify that expected output tensors are added to the result checkpoint.
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("key1_out"), IsTensor({3}, {2.f, 2.f, 2.f})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("key2_out"), IsTensor({3}, {6.f, 4.f, 5.f})))
+      .WillOnce(Return(absl::OkStatus()));
+
+  EXPECT_THAT(protocol->Complete(), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+
+  EXPECT_OK(protocol->GetResult());
+}
+
 TEST_F(SimpleAggregationProtocolTest, Complete_ProtocolNotStarted) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_THAT(protocol->Complete(), IsCode(FAILED_PRECONDITION));
