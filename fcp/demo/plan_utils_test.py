@@ -158,7 +158,7 @@ def create_plan(log_file: Optional[str] = None) -> plan_pb2.Plan:
   plan = plan_pb2.Plan(
       phase=[
           plan_pb2.Plan.Phase(
-              client_phase=plan_pb2.ClientPhase(name='ClientPhase'),
+              client_phase=plan_pb2.ClientPhase(),
               server_phase_v2=plan_pb2.ServerPhaseV2(
                   tensorflow_spec_prepare=tensorflow_spec_prepare,
                   prepare_router=server_prepare_io_router,
