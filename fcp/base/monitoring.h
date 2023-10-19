@@ -16,22 +16,18 @@
 #ifndef FCP_BASE_MONITORING_H_
 #define FCP_BASE_MONITORING_H_
 
+#ifdef FCP_BAREMETAL
 #include <string>
 #include <utility>
 
 #include "fcp/base/new.h"
-
-#ifdef FCP_BAREMETAL
 #include "fcp/base/string_stream.h"
 #else
-#include <cstdlib>
-#include <iostream>
-#include <ostream>
 #include <sstream>
 
 #include "absl/base/attributes.h"
-#include "absl/base/log_severity.h"
 #include "absl/base/optimization.h"
+#include "absl/log/absl_log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #endif  // FCP_BAREMETAL
@@ -41,46 +37,78 @@ namespace fcp {
 // General Definitions
 // ===================
 
-/**
- * Indicates to run the functionality in this file in debugging mode. This
- * creates more exhaustive diagnostics in some cases, as documented case by
- * case.
- *
- * We may want to make this a flag if this turns out to be often needed.
- */
-constexpr bool fcp_debug = false;
-
 // Logging and Assertions
 // ======================
 
 /**
  * Defines a subset of Google style logging. Use FCP_LOG(INFO),
  * FCP_LOG(WARNING), FCP_LOG(ERROR) or FCP_LOG(FATAL) to stream log messages.
+ *
+ * These macros should be preferred over using Absl's log macros directly, since
+ * they are compatible with the different environments some of the FCP code is
+ * used in. E.g. they support being used in 'bare metal' environments that don't
+ * support Absl. They also reduce the logging verbosity on Android, to ensure
+ * that INFO or VLOG logs are not logged to logcat unless
+ * FCP_VERBOSE_ANDROID_LOGCAT is defined at build time.
+ *
  * Example:
  *
  *     FCP_LOG(INFO) << "some info log";
+ *     FCP_VLOG(1) << "some verbose log";
  */
-// TODO(team): adapt to absl logging once available
+
 #define FCP_LOG(severity) _FCP_LOG_##severity
-
-#define FCP_LOG_IF(severity, condition) \
-  !(condition) ? (void)0                \
-               : ::fcp::internal::LogMessageVoidify() & _FCP_LOG_##severity
-
-/**
- * Log Severity
- */
-#ifdef FCP_BAREMETAL
-enum class LogSeverity : int {
-  kInfo = 0,
-  kWarning = 1,
-  kError = 2,
-  kFatal = 3,
-};
-#else
-using LogSeverity = absl::LogSeverity;
+#ifndef FCP_BAREMETAL
+#define FCP_LOG_IF(severity, condition) _FCP_LOG_IF_##severity(condition)
 #endif  // FCP_BAREMETAL
+// An FCP_VLOG is also defined (below), but note that these log statements may
+// be evaluated regardless of whether the binary's verbosity level is set high
+// enough for them to be included in the actual logs, so be careful when using
+// it with expensive-to-evaluate log statements.
 
+#if !defined(__ANDROID__) && !defined(FCP_BAREMETAL)
+// On regular (non-Android, non-bare metal) builds we forward all logs to Absl
+// as-is.
+#define _FCP_LOG_INFO ABSL_LOG(INFO)
+#define _FCP_LOG_WARNING ABSL_LOG(WARNING)
+#define _FCP_LOG_ERROR ABSL_LOG(ERROR)
+#define _FCP_LOG_FATAL ABSL_LOG(FATAL)
+#define _FCP_LOG_IF_INFO(condition) ABSL_LOG_IF(INFO, condition)
+#define _FCP_LOG_IF_WARNING(condition) ABSL_LOG_IF(WARNING, condition)
+#define _FCP_LOG_IF_ERROR(condition) ABSL_LOG_IF(ERROR, condition)
+#define _FCP_LOG_IF_FATAL(condition) ABSL_LOG_IF(FATAL, condition)
+#define FCP_VLOG(verbosity) ABSL_LOG(INFO).WithVerbosity(verbosity)
+
+#elif defined(__ANDROID__)
+// On Android we prepend "fcp: " to all logs, since Absl will set the log tag
+// for all process-wide logs to a generic "native". Prefixing by "fcp" helps us
+// find FCP-related logs in the logcat more easily.
+
+#define _FCP_LOG_WARNING ABSL_LOG(WARNING) << "fcp: "
+#define _FCP_LOG_ERROR ABSL_LOG(ERROR) << "fcp: "
+#define _FCP_LOG_FATAL ABSL_LOG(FATAL) << "fcp: "
+#define _FCP_LOG_IF_WARNING(condition) \
+  ABSL_LOG_IF(WARNING, condition) << "fcp: "
+#define _FCP_LOG_IF_ERROR(condition) ABSL_LOG_IF(ERROR, condition) << "fcp: "
+#define _FCP_LOG_IF_FATAL(condition) ABSL_LOG_IF(FATAL, condition) << "fcp: "
+
+// On Android we also, by default, do not log INFO level logs (or more verbose
+// VLOGs) to Absl (which in turn would log them to logcat). Only if
+// FCP_VERBOSE_ANDROID_LOGCAT is defined do we log those logs. If that is not
+// defined, then the logs will be stripped out by the linker due to our use of
+// ABSL_LOG_IF(..., false).
+
+#ifdef FCP_VERBOSE_ANDROID_LOGCAT
+#define _FCP_LOG_INFO ABSL_LOG(INFO) << "fcp: "
+#define _FCP_LOG_IF_INFO(condition) ABSL_LOG_IF(INFO, condition) << "fcp: "
+#define FCP_VLOG(verbosity) ABSL_LOG(INFO).WithVerbosity(verbosity) << "fcp: "
+#else
+#define _FCP_LOG_INFO ABSL_LOG_IF(INFO, false)
+#define _FCP_LOG_IF_INFO(condition) ABSL_LOG_IF(INFO, false)
+#define FCP_VLOG(verbosity) ABSL_LOG_IF(INFO, false)
+#endif  // FCP_VERBOSE_ANDROID_LOGCAT
+
+#elif defined(FCP_BAREMETAL)
 #define _FCP_LOG_INFO \
   ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kInfo)
 #define _FCP_LOG_WARNING \
@@ -89,6 +117,10 @@ using LogSeverity = absl::LogSeverity;
   ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kError)
 #define _FCP_LOG_FATAL \
   ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kFatal)
+#define FCP_LOG_IF(severity, condition) \
+  !(condition) ? (void)0                \
+               : ::fcp::internal::LogMessageVoidify() & _FCP_LOG_##severity
+#endif  // FCP_BAREMETAL
 
 #ifdef FCP_BAREMETAL
 #define FCP_PREDICT_FALSE(x) (x)
@@ -118,8 +150,19 @@ using LogSeverity = absl::LogSeverity;
   FCP_LOG_IF(FATAL, __check_status.code() != ::fcp::StatusCode::kOk) \
       << "status not OK: " << __check_status
 
-// Logging Implementation Details
-// ==============================
+#ifdef FCP_BAREMETAL
+// Bare Metal Logging Implementation Details
+// =========================================
+// When building for bare metal, we cannot use any existing logging library
+// directly. Instead, we introduce a Logger class of which one global instance
+// can be registered to handle log messages.
+
+enum class LogSeverity : int {
+  kInfo = 0,
+  kWarning = 1,
+  kError = 2,
+  kFatal = 3,
+};
 
 namespace internal {
 
@@ -149,10 +192,6 @@ class Logger {
 Logger* logger();
 void set_logger(Logger* logger);
 
-#ifndef FCP_BAREMETAL
-using StringStream = std::ostringstream;
-#endif  // FCP_BAREMETAL
-
 /**
  * Object allowing to construct a log message by streaming into it. This is
  * used by the macro LOG(severity).
@@ -167,13 +206,6 @@ class LogMessage {
     message_ << x;
     return *this;
   }
-
-#ifndef FCP_BAREMETAL
-  LogMessage& operator<<(std::ostream& (*pf)(std::ostream&)) {
-    message_ << pf;
-    return *this;
-  }
-#endif
 
   ~LogMessage() {
     logger()->Log(file_, line_, severity_, message_.str().c_str());
@@ -200,8 +232,8 @@ class LogMessageVoidify {
  public:
   void operator&(LogMessage&) {}  // NOLINT
 };
-
 }  // namespace internal
+#endif  // FCP_BAREMETAL
 
 // Status and StatusOr
 // ===================
@@ -218,15 +250,6 @@ class LogMessageVoidify {
  *
  * FCP_STATUS can be used in places which either expect a Status or a
  * StatusOr<T>.
- *
- * You can configure the constructed status to also emit a log entry if the
- * status is not OK by using LogInfo, LogWarning, LogError, or LogFatal as
- * below:
- *
- *   FCP_STATUS(code).LogInfo() << message;
- *
- * If the constant rx_debug is true, by default, all FCP_STATUS invocations
- * will be logged on INFO level.
  */
 #define FCP_STATUS(code) \
   ::fcp::internal::MakeStatusBuilder(code, __FILE__, __LINE__)
@@ -238,7 +261,6 @@ class LogMessageVoidify {
 #endif
 
 #ifdef FCP_BAREMETAL
-
 // The bare-metal implementation doesn't depend on Abseil library and
 // provides its own implementations of StatusCode, Status and StatusOr that are
 // source code compatible with absl::StatusCode, absl::Status,
@@ -534,30 +556,6 @@ class FCP_MUST_USE_RESULT StatusBuilder {
     return *this;
   }
 
-  /** Mark this builder to emit a log message when the result is constructed. */
-  inline StatusBuilder& LogInfo() {
-    log_severity_ = LogSeverity::kInfo;
-    return *this;
-  }
-
-  /** Mark this builder to emit a log message when the result is constructed. */
-  inline StatusBuilder& LogWarning() {
-    log_severity_ = LogSeverity::kWarning;
-    return *this;
-  }
-
-  /** Mark this builder to emit a log message when the result is constructed. */
-  inline StatusBuilder& LogError() {
-    log_severity_ = LogSeverity::kError;
-    return *this;
-  }
-
-  /** Mark this builder to emit a log message when the result is constructed. */
-  inline StatusBuilder& LogFatal() {
-    log_severity_ = LogSeverity::kFatal;
-    return *this;
-  }
-
   /** Implicit conversion to Status. */
   operator Status();  // NOLINT
 
@@ -568,12 +566,14 @@ class FCP_MUST_USE_RESULT StatusBuilder {
   }
 
  private:
-  static constexpr LogSeverity kNoLog = static_cast<LogSeverity>(-1);
   const char* const file_;
   const int line_;
   const StatusCode code_;
+
+#ifndef FCP_BAREMETAL
+  using StringStream = std::ostringstream;
+#endif  // FCP_BAREMETAL
   StringStream message_;
-  LogSeverity log_severity_ = fcp_debug ? LogSeverity::kInfo : kNoLog;
 };
 
 inline StatusBuilder MakeStatusBuilder(StatusCode code, const char* file,

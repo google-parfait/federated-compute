@@ -43,6 +43,7 @@ MATCHER_P(IsOkAndHolds, m, "") {
          testing::ExplainMatchResult(m, arg.value(), result_listener);
 }
 
+#ifdef FCP_BAREMETAL
 class BaremetalLogger final : public internal::Logger {
  public:
   void Log(const char* file, int line, LogSeverity severity,
@@ -53,15 +54,28 @@ class BaremetalLogger final : public internal::Logger {
                   BaseName(file), line, message);
   }
 };
+#endif
 
 class MonitoringTest : public ::testing::TestWithParam<bool> {
  public:
   void SetUp() override {
+#ifdef FCP_BAREMETAL
     if (replace_logger_) {
       prev_logger_ = internal::logger();
       internal::set_logger(&logger_);
     }
+#else // !FCP_BAREMETAL
+    // The first log message will make Absl print a warning about how all logs
+    // are routed to stderr until absl::InitializeLog is called. We do want the
+    // logs to go to stderr for this test, but we do not want this warning
+    // message to occur in the captured output of any of the tests below. So we
+    // log an initial message here to trigger the warning early, before any
+    // tests actually run.
+    FCP_LOG(INFO) << "Test log message. You can ignore this.";
+#endif  // FCP_BAREMETAL
   }
+
+#ifdef FCP_BAREMETAL
   void TearDown() override {
     if (replace_logger_) {
       internal::set_logger(prev_logger_);
@@ -72,6 +86,7 @@ class MonitoringTest : public ::testing::TestWithParam<bool> {
   const bool replace_logger_ = GetParam();
   internal::Logger* prev_logger_ = nullptr;
   BaremetalLogger logger_;
+#endif
 };
 
 #ifdef FCP_BAREMETAL
@@ -103,36 +118,6 @@ TEST_P(MonitoringTest, LogError) {
 
 TEST_P(MonitoringTest, LogFatal) {
   ASSERT_DEATH({ FCP_LOG(FATAL) << "fatal log"; }, "fatal log");
-}
-
-TEST_P(MonitoringTest, StatusBuilderLogInfo) {
-  testing::internal::CaptureStderr();
-  Status status = (FCP_STATUS(ABORTED) << "something happened").LogInfo();
-  std::string output = testing::internal::GetCapturedStderr();
-  ASSERT_THAT(output, MatchesRegex("I.*something happened\n"));
-}
-
-TEST_P(MonitoringTest, StatusBuilderLogWarning) {
-  testing::internal::CaptureStderr();
-  Status status = (FCP_STATUS(ABORTED) << "something happened").LogWarning();
-  std::string output = testing::internal::GetCapturedStderr();
-  ASSERT_THAT(output, MatchesRegex("W.*something happened\n"));
-}
-
-TEST_P(MonitoringTest, StatusBuilderLogError) {
-  testing::internal::CaptureStderr();
-  Status status = (FCP_STATUS(ABORTED) << "something happened").LogError();
-  std::string output = testing::internal::GetCapturedStderr();
-  ASSERT_THAT(output, MatchesRegex("E.*something happened\n"));
-}
-
-TEST_P(MonitoringTest, StatusBuilderLogFatal) {
-  ASSERT_DEATH(
-      {
-        Status status =
-            (FCP_STATUS(ABORTED) << "something happened").LogFatal();
-      },
-      "something happened");
 }
 
 TEST_P(MonitoringTest, LogIfTrue) {
