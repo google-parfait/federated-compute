@@ -21,6 +21,11 @@ build --define=open_source_build=true
 # this Bazel change is related: https://github.com/bazelbuild/bazel/issues/7362
 build --define=framework_shared_object=false
 
+# Without this the build of some TF ops fails with "'dnnl.hpp' file not found".
+# TF specifies the flag for all Linux builds by default as well
+# (https://github.com/tensorflow/tensorflow/blob/1cb1a030a62b169d90d34c747ab9b09f332bf905/.bazelrc#L228).
+build --define=build_with_onednn_v2=true
+
 # Disable some default TF features (avoids some build-time dependencies).
 build --define=no_aws_support=true
 build --define=no_gcp_support=true
