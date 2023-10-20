@@ -59,29 +59,6 @@ load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
 
 bazel_skylib_workspace()
 
-# GoogleTest/GoogleMock framework. Used by most unit-tests.
-http_archive(
-    name = "com_google_googletest",
-    patches = ["//fcp/patches:googletest.patch"],
-    sha256 = "81964fe578e9bd7c94dfdb09c8e4d6e6759e19967e397dbea48d1c10e45d0df2",
-    strip_prefix = "googletest-release-1.12.1",
-    urls = ["https://github.com/google/googletest/archive/refs/tags/release-1.12.1.tar.gz"],
-)
-
-http_archive(
-    name = "com_github_gflags_gflags",
-    sha256 = "34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf",
-    strip_prefix = "gflags-2.2.2",
-    urls = ["https://github.com/gflags/gflags/archive/v2.2.2.tar.gz"],
-)
-
-http_archive(
-    name = "com_github_google_glog",
-    sha256 = "21bc744fb7f2fa701ee8db339ded7dce4f975d0d55837a97be7d46e8382dea5a",
-    strip_prefix = "glog-0.5.0",
-    urls = ["https://github.com/google/glog/archive/v0.5.0.zip"],
-)
-
 http_archive(
     name = "com_github_grpc_grpc",
     sha256 = "76900ab068da86378395a8e125b5cc43dfae671e09ff6462ddfef18676e2165a",
@@ -89,7 +66,7 @@ http_archive(
     urls = ["https://github.com/grpc/grpc/archive/refs/tags/v1.50.0.tar.gz"],
 )
 
-# TensorFlow 2.11.0 pins an old version of upb that's compatible with their old
+# TensorFlow 2.13.0 pins an old version of upb that's compatible with their old
 # version of gRPC, but not with the newer version we use. Pin the version that
 # would be added by gRPC 1.50.0.
 http_archive(
@@ -102,7 +79,7 @@ http_archive(
     ],
 )
 
-# The version provided by TensorFlow 2.11 doesn't support equality checks for
+# The version provided by TensorFlow 2.13.0 doesn't support equality checks for
 # absl::Status.
 http_archive(
     name = "pybind11_abseil",
@@ -198,14 +175,6 @@ system_provided_tf(
     name = "system_provided_tf",
 )
 
-http_archive(
-    name = "com_google_benchmark",
-    sha256 = "23082937d1663a53b90cb5b61df4bcc312f6dee7018da78ba00dd6bd669dfef2",
-    strip_prefix = "benchmark-1.5.1",
-    urls = [
-        "https://github.com/google/benchmark/archive/v1.5.1.tar.gz",
-    ],
-)
 
 # Cpp ProtoDataStore
 http_archive(
@@ -239,14 +208,6 @@ http_archive(
 load("@tensorflow_serving//tensorflow_serving:workspace.bzl", "tf_serving_workspace")
 
 tf_serving_workspace()
-
-# Java Maven-based repositories.
-http_archive(
-    name = "rules_jvm_external",
-    sha256 = "cd1a77b7b02e8e008439ca76fd34f5b07aecb8c752961f9640dea15e9e5ba1ca",
-    strip_prefix = "rules_jvm_external-4.2",
-    url = "https://github.com/bazelbuild/rules_jvm_external/archive/4.2.zip",
-)
 
 load("@rules_jvm_external//:repositories.bzl", "rules_jvm_external_deps")
 
