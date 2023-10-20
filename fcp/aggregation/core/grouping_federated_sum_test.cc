@@ -13,17 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cstdint>
 #include <memory>
 #include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp {
@@ -43,7 +47,7 @@ Intrinsic GetDefaultIntrinsic() {
                    {}};
 }
 
-TEST(GroupingFederatedSumTest, ScalarAggregation_Succeeds) {
+TEST(GroupingFederatedSumTest, ScalarAggregationSucceeds) {
   auto aggregator = CreateTensorAggregator(GetDefaultIntrinsic()).value();
   Tensor ordinal =
       Tensor::Create(DT_INT64, {}, CreateTestData<int64_t>({0})).value();
@@ -62,7 +66,7 @@ TEST(GroupingFederatedSumTest, ScalarAggregation_Succeeds) {
   EXPECT_THAT(result.value()[0], IsTensor({1}, {6}));
 }
 
-TEST(GroupingFederatedSumTest, DenseAggregation_Succeeds) {
+TEST(GroupingFederatedSumTest, DenseAggregationSucceeds) {
   TensorShape shape{4};
   auto aggregator = CreateTensorAggregator(GetDefaultIntrinsic()).value();
   Tensor ordinals =
@@ -89,7 +93,76 @@ TEST(GroupingFederatedSumTest, DenseAggregation_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupingFederatedSumTest, Merge_Succeeds) {
+TEST(GroupingFederatedSumTest, DenseAggregationCastToLargerTypeSucceeds) {
+  TensorShape shape{4};
+  auto aggregator =
+      CreateTensorAggregator(Intrinsic{"GoogleSQL:sum",
+                                       {TensorSpec{"foo", DT_INT32, {-1}}},
+                                       {TensorSpec{"foo_out", DT_INT64, {-1}}},
+                                       {},
+                                       {}})
+          .value();
+  Tensor ordinals =
+      Tensor::Create(DT_INT64, shape, CreateTestData<int64_t>({0, 1, 2, 3}))
+          .value();
+  Tensor t1 =
+      Tensor::Create(DT_INT32, shape, CreateTestData({1, 3, 15, 27})).value();
+  Tensor t2 =
+      Tensor::Create(DT_INT32, shape, CreateTestData({10, 5, 1, 2})).value();
+  Tensor t3 =
+      Tensor::Create(DT_INT32, shape, CreateTestData({3, 11, 7, 20})).value();
+  EXPECT_THAT(aggregator->Accumulate({&ordinals, &t1}), IsOk());
+  EXPECT_THAT(aggregator->Accumulate({&ordinals, &t2}), IsOk());
+  EXPECT_THAT(aggregator->Accumulate({&ordinals, &t3}), IsOk());
+  EXPECT_THAT(aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result->size(), Eq(1));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0], IsTensor<int64_t>(shape, {14, 19, 23, 49}));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+}
+
+TEST(GroupingFederatedSumTest, DenseAggregationCastToLargerFloatTypeSucceeds) {
+  TensorShape shape{4};
+  auto aggregator =
+      CreateTensorAggregator(Intrinsic{"GoogleSQL:sum",
+                                       {TensorSpec{"foo", DT_FLOAT, {-1}}},
+                                       {TensorSpec{"foo_out", DT_DOUBLE, {-1}}},
+                                       {},
+                                       {}})
+          .value();
+  Tensor ordinals =
+      Tensor::Create(DT_INT64, shape, CreateTestData<int64_t>({0, 1, 2, 3}))
+          .value();
+  Tensor t1 =
+      Tensor::Create(DT_FLOAT, shape, CreateTestData<float>({1, 3, 15, 27}))
+          .value();
+  Tensor t2 =
+      Tensor::Create(DT_FLOAT, shape, CreateTestData<float>({10, 5, 1, 2}))
+          .value();
+  Tensor t3 =
+      Tensor::Create(DT_FLOAT, shape, CreateTestData<float>({3, 11, 7, 20}))
+          .value();
+  EXPECT_THAT(aggregator->Accumulate({&ordinals, &t1}), IsOk());
+  EXPECT_THAT(aggregator->Accumulate({&ordinals, &t2}), IsOk());
+  EXPECT_THAT(aggregator->Accumulate({&ordinals, &t3}), IsOk());
+  EXPECT_THAT(aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result->size(), Eq(1));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0], IsTensor<double>(shape, {14, 19, 23, 49}));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+}
+
+TEST(GroupingFederatedSumTest, MergeSucceeds) {
   auto aggregator1 = CreateTensorAggregator(GetDefaultIntrinsic()).value();
   auto aggregator2 = CreateTensorAggregator(GetDefaultIntrinsic()).value();
   Tensor ordinal =
@@ -111,7 +184,34 @@ TEST(GroupingFederatedSumTest, Merge_Succeeds) {
   EXPECT_THAT(result.value()[0], IsTensor({1}, {6}));
 }
 
-TEST(GroupingFederatedSumTest, Create_WrongUri) {
+TEST(GroupingFederatedSumTest, MergeInputTypeDiffersFromOutputTypeSucceeds) {
+  Intrinsic intrinsic{"GoogleSQL:sum",
+                      {TensorSpec{"foo", DT_INT32, {-1}}},
+                      {TensorSpec{"foo_out", DT_INT64, {-1}}},
+                      {},
+                      {}};
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+  Tensor ordinal =
+      Tensor::Create(DT_INT64, {}, CreateTestData<int64_t>({0})).value();
+  Tensor t1 = Tensor::Create(DT_INT32, {}, CreateTestData({1})).value();
+  Tensor t2 = Tensor::Create(DT_INT32, {}, CreateTestData({2})).value();
+  Tensor t3 = Tensor::Create(DT_INT32, {}, CreateTestData({3})).value();
+  EXPECT_THAT(aggregator1->Accumulate({&ordinal, &t1}), IsOk());
+  EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t2}), IsOk());
+  EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t3}), IsOk());
+
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor<int64_t>({1}, {6}));
+}
+
+TEST(GroupingFederatedSumTest, CreateWrongUri) {
   Intrinsic intrinsic = Intrinsic{"wrong_uri",
                                   {TensorSpec{"foo", DT_INT32, {}}},
                                   {TensorSpec{"foo_out", DT_INT32, {}}},
@@ -123,7 +223,7 @@ TEST(GroupingFederatedSumTest, Create_WrongUri) {
   EXPECT_THAT(s.message(), HasSubstr("Expected intrinsic URI GoogleSQL:sum"));
 }
 
-TEST(GroupingFederatedSumTest, Create_UnsupportedNumberOfInputs) {
+TEST(GroupingFederatedSumTest, CreateUnsupportedNumberOfInputs) {
   Intrinsic intrinsic = Intrinsic{
       "GoogleSQL:sum",
       {TensorSpec{"foo", DT_INT32, {}}, TensorSpec{"bar", DT_INT32, {}}},
@@ -135,7 +235,7 @@ TEST(GroupingFederatedSumTest, Create_UnsupportedNumberOfInputs) {
   EXPECT_THAT(s.message(), HasSubstr("Exactly one input is expected"));
 }
 
-TEST(GroupingFederatedSumTest, Create_UnsupportedEmptyIntrinsic) {
+TEST(GroupingFederatedSumTest, CreateUnsupportedEmptyIntrinsic) {
   Status s = (*GetAggregatorFactory("GoogleSQL:sum"))
                  ->Create(Intrinsic{"GoogleSQL:sum", {}, {}, {}, {}})
                  .status();
@@ -143,7 +243,7 @@ TEST(GroupingFederatedSumTest, Create_UnsupportedEmptyIntrinsic) {
   EXPECT_THAT(s.message(), HasSubstr("Exactly one input is expected"));
 }
 
-TEST(GroupingFederatedSumTest, Create_UnsupportedNumberOfOutputs) {
+TEST(GroupingFederatedSumTest, CreateUnsupportedNumberOfOutputs) {
   Intrinsic intrinsic{"GoogleSQL:sum",
                       {TensorSpec{"foo", DT_INT32, {}}},
                       {TensorSpec{"foo_out", DT_INT32, {}},
@@ -156,7 +256,7 @@ TEST(GroupingFederatedSumTest, Create_UnsupportedNumberOfOutputs) {
 }
 
 TEST(GroupingFederatedSumTest,
-     Create_UnsupportedUnmatchingInputAndOutputDataType) {
+     CreateUnsupportedUnmatchingInputAndOutputDataType) {
   Intrinsic intrinsic{"GoogleSQL:sum",
                       {TensorSpec{"foo", DT_INT32, {}}},
                       {TensorSpec{"foo_out", DT_FLOAT, {}}},
@@ -165,12 +265,13 @@ TEST(GroupingFederatedSumTest,
 
   Status s = CreateTensorAggregator(intrinsic).status();
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
-  EXPECT_THAT(s.message(),
-              HasSubstr("Input and output tensors have mismatched specs"));
+  EXPECT_THAT(
+      s.message(),
+      HasSubstr("Input and output tensors have mismatched dtypes: input tensor "
+                "has dtype DT_INT32 and output tensor has dtype DT_FLOAT"));
 }
 
-TEST(GroupingFederatedSumTest,
-     Create_UnsupportedUnmatchingInputAndOutputShape) {
+TEST(GroupingFederatedSumTest, CreateUnsupportedUnmatchingInputAndOutputShape) {
   Intrinsic intrinsic = Intrinsic{"GoogleSQL:sum",
                                   {TensorSpec{"foo", DT_INT32, {1}}},
                                   {TensorSpec{"foo", DT_INT32, {2}}},
@@ -178,9 +279,11 @@ TEST(GroupingFederatedSumTest,
                                   {}};
   Status s = CreateTensorAggregator(intrinsic).status();
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(),
+              HasSubstr("Input and output tensors have mismatched shapes"));
 }
 
-TEST(GroupingFederatedSumTest, Create_UnsupportedIntrinsicWithParameter) {
+TEST(GroupingFederatedSumTest, CreateUnsupportedIntrinsicWithParameter) {
   Tensor tensor = Tensor::Create(DT_FLOAT, {2, 3},
                                  CreateTestData<float>({1, 2, 3, 4, 5, 6}))
                       .value();
@@ -195,7 +298,7 @@ TEST(GroupingFederatedSumTest, Create_UnsupportedIntrinsicWithParameter) {
   EXPECT_THAT(s.message(), HasSubstr("No input parameters expected"));
 }
 
-TEST(GroupingFederatedSumTest, Create_UnsupportedNestedIntrinsic) {
+TEST(GroupingFederatedSumTest, CreateUnsupportedNestedIntrinsic) {
   Intrinsic inner = Intrinsic{"GoogleSQL:sum",
                               {TensorSpec{"foo", DT_INT32, {8}}},
                               {TensorSpec{"foo_out", DT_INT32, {16}}},
@@ -213,7 +316,7 @@ TEST(GroupingFederatedSumTest, Create_UnsupportedNestedIntrinsic) {
               HasSubstr("Not expected to have inner aggregations"));
 }
 
-TEST(GroupingFederatedSumTest, Create_UnsupportedStringDataType) {
+TEST(GroupingFederatedSumTest, CreateUnsupportedStringDataType) {
   Intrinsic intrinsic = Intrinsic{"GoogleSQL:sum",
                                   {TensorSpec{"foo", DT_STRING, {1}}},
                                   {TensorSpec{"foo_out", DT_STRING, {1}}},

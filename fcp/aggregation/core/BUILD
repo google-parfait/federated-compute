@@ -340,6 +340,7 @@ cc_test(
         ":tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],

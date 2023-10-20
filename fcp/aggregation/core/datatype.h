@@ -62,6 +62,14 @@ enum DataType {
 
 namespace internal {
 
+// The type kind, which indicates what sort of operations are valid to
+// perform on the type.
+enum TypeKind {
+  kUnknown = 0,
+  kNumeric = 1,
+  kString = 2,
+};
+
 // This struct is used to map typename T to DataType and specify other traits
 // of typename T.
 template <typename T>
@@ -69,19 +77,20 @@ struct TypeTraits {
   constexpr static DataType kDataType = DT_INVALID;
 };
 
-#define MATCH_TYPE_AND_DTYPE(TYPE, DTYPE)        \
-  template <>                                    \
-  struct TypeTraits<TYPE> {                      \
-    constexpr static DataType kDataType = DTYPE; \
+#define MATCH_TYPE_AND_DTYPE(TYPE, DTYPE, TYPE_KIND) \
+  template <>                                        \
+  struct TypeTraits<TYPE> {                          \
+    constexpr static DataType kDataType = DTYPE;     \
+    constexpr static TypeKind type_kind = TYPE_KIND; \
   }
 
 // Mapping of native types to DT_ types.
 // TODO(team): Add other types.
-MATCH_TYPE_AND_DTYPE(float, DT_FLOAT);
-MATCH_TYPE_AND_DTYPE(double, DT_DOUBLE);
-MATCH_TYPE_AND_DTYPE(int32_t, DT_INT32);
-MATCH_TYPE_AND_DTYPE(int64_t, DT_INT64);
-MATCH_TYPE_AND_DTYPE(string_view, DT_STRING);
+MATCH_TYPE_AND_DTYPE(float, DT_FLOAT, TypeKind::kNumeric);
+MATCH_TYPE_AND_DTYPE(double, DT_DOUBLE, TypeKind::kNumeric);
+MATCH_TYPE_AND_DTYPE(int32_t, DT_INT32, TypeKind::kNumeric);
+MATCH_TYPE_AND_DTYPE(int64_t, DT_INT64, TypeKind::kNumeric);
+MATCH_TYPE_AND_DTYPE(string_view, DT_STRING, TypeKind::kString);
 
 // The macros DTYPE_CASE and DTYPE_CASES are used to translate Tensor DataType
 // to strongly typed calls of code parameterized with the template typename

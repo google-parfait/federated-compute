@@ -17,6 +17,7 @@
 #ifndef FCP_AGGREGATION_CORE_GROUP_BY_AGGREGATOR_H_
 #define FCP_AGGREGATION_CORE_GROUP_BY_AGGREGATOR_H_
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -52,6 +53,23 @@ namespace aggregation {
 // This class is not thread safe.
 class GroupByAggregator : public TensorAggregator {
  public:
+  // Merge this GroupByAggregator with another GroupByAggregator that operates
+  // on compatible types using compatible inner intrinsics.
+  Status MergeWith(TensorAggregator&& other) override;
+
+  // Returns the number of inputs that have been accumulated or merged into this
+  // GroupByAggregator.
+  int GetNumInputs() const override { return num_inputs_; }
+
+  // Override CanReport to ensure that outputs of Report will contain all
+  // expected output tensors. It is not valid to create empty tensors, so in
+  // order to produce a report containing the expected number of output tensors,
+  // at least one input must have been aggregated.
+  bool CanReport() const override;
+
+ protected:
+  friend class GroupByFactory;
+
   // Constructs a GroupByAggregator.
   //
   // This constructor is meant for use by the GroupByFactory; most callers
@@ -92,21 +110,6 @@ class GroupByAggregator : public TensorAggregator {
                     const std::vector<Intrinsic>* intrinsics,
                     std::vector<std::unique_ptr<TensorAggregator>> aggregators);
 
-  // Merge this GroupByAggregator with another GroupByAggregator that operates
-  // on compatible types using compatible inner intrinsics.
-  Status MergeWith(TensorAggregator&& other) override;
-
-  // Returns the number of inputs that have been accumulated or merged into this
-  // GroupByAggregator.
-  int GetNumInputs() const override { return num_inputs_; }
-
-  // Override CanReport to ensure that outputs of Report will contain all
-  // expected output tensors. It is not valid to create empty tensors, so in
-  // order to produce a report containing the expected number of output tensors,
-  // at least one input must have been aggregated.
-  bool CanReport() const override;
-
- protected:
   // Perform aggregation of the tensors in a single InputTensorList into the
   // state of this GroupByAggregator and increment the count of aggregated
   // tensors.

@@ -16,48 +16,32 @@
 
 #include "fcp/aggregation/core/group_by_aggregator.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
-#include <typeinfo>
 #include <utility>
 #include <vector>
 
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/composite_key_combiner.h"
+#include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/fedsql_constants.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/intrinsic.h"
-#include "fcp/aggregation/core/one_dim_grouping_aggregator.h"
+#include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
+#include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
 namespace aggregation {
-
-namespace {
-
-// Ensures that the provided TensorAggregator is a subclass of
-// OneDimGroupingAggregator templated by the expected type, and that
-// CheckValid returns true on the OneDimGroupingAggregator.
-template <typename T>
-Status CheckValidOneDimGroupingAggregator(const TensorAggregator& aggregator) {
-  // TODO(team): For the bare metal environment, we will need a version
-  // of this class that does not rely on dynamic_cast.
-  const OneDimGroupingAggregator<T>* grouping_aggregator =
-      dynamic_cast<const OneDimGroupingAggregator<T>*>(&aggregator);
-  if (grouping_aggregator == nullptr) {
-    return FCP_STATUS(INVALID_ARGUMENT)
-           << "Expected OneDimGroupingAggregator of type " << typeid(T).name();
-  }
-  return grouping_aggregator->CheckValid();
-}
-}  // namespace
 
 GroupByAggregator::GroupByAggregator(
     const std::vector<TensorSpec>& input_key_specs,
@@ -69,19 +53,13 @@ GroupByAggregator::GroupByAggregator(
       intrinsics_(*intrinsics),
       output_key_specs_(*output_key_specs),
       aggregators_(std::move(aggregators)) {
-  // All intrinsics held by a GroupByAggregator must hold some subclass
-  // of OneDimGroupingAggregator templated by a type matching the output data
-  // type specified in the intrinsic.
+  // Most invariants on construction of the GroupByAggregator such as which
+  // nested intrinsics are supported should be enforced in the factory class.
+  // This constructor just performs a few backup checks.
   int num_value_inputs = 0;
   FCP_CHECK(intrinsics_.size() == aggregators_.size())
       << "Intrinsics and aggregators vectors must be the same size.";
   for (int i = 0; i < intrinsics_.size(); ++i) {
-    Status intrinsic_status;
-    DTYPE_CASES(intrinsics_[i].outputs[0].dtype(), T,
-                intrinsic_status =
-                    CheckValidOneDimGroupingAggregator<T>(*aggregators_[i]));
-    FCP_CHECK(intrinsic_status.ok())
-        << "GroupByAggregator: " << intrinsic_status.message();
     num_value_inputs += intrinsics_[i].inputs.size();
   }
   num_tensors_per_input_ = num_keys_per_input_ + num_value_inputs;
@@ -113,8 +91,7 @@ GroupByAggregator::GroupByAggregator(
     FCP_CHECK(input_spec.shape() == TensorShape{-1} &&
               output_spec.shape() == TensorShape{-1})
         << "All input and output tensors must have one dimension of unknown "
-           "size. "
-           "TensorShape should be {-1}";
+           "size. TensorShape should be {-1}";
     key_types.push_back(input_spec.dtype());
   }
   key_combiner_.emplace(std::move(key_types));
@@ -122,6 +99,8 @@ GroupByAggregator::GroupByAggregator(
 
 Status GroupByAggregator::MergeWith(TensorAggregator&& other) {
   FCP_RETURN_IF_ERROR(CheckValid());
+  // TODO(team): For the bare metal environment, we will need a version
+  // of this class that does not rely on dynamic_cast.
   GroupByAggregator* other_ptr = dynamic_cast<GroupByAggregator*>(&other);
   if (other_ptr == nullptr) {
     return FCP_STATUS(INVALID_ARGUMENT)
@@ -362,9 +341,7 @@ StatusOr<std::unique_ptr<TensorAggregator>> GroupByFactory::Create(
         output_spec.shape() != TensorShape{-1}) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "All input and output tensors must have one dimension of "
-                "unknown "
-                "size. "
-                "TensorShape should be {-1}";
+                "unknown size. TensorShape should be {-1}";
     }
   }
 
@@ -393,9 +370,12 @@ StatusOr<std::unique_ptr<TensorAggregator>> GroupByFactory::Create(
     return FCP_STATUS(INVALID_ARGUMENT) << "GroupByFactory: Must operate on a "
                                            "nonzero number of input tensors.";
   }
-  return std::make_unique<GroupByAggregator>(
+  // Use new rather than make_unique here because the factory function that uses
+  // a non-public constructor can't use std::make_unique, and we don't want to
+  // add a dependency on absl::WrapUnique.
+  return std::unique_ptr<GroupByAggregator>(new GroupByAggregator(
       intrinsic.inputs, &intrinsic.outputs, &intrinsic.nested_intrinsics,
-      std::move(nested_aggregators));
+      std::move(nested_aggregators)));
 }
 
 // TODO(team): Revise the registration mechanism below.

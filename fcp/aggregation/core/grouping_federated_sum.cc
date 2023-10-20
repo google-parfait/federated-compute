@@ -14,16 +14,20 @@
  * limitations under the License.
  */
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
+#include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/one_dim_grouping_aggregator.h"
+#include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
@@ -31,16 +35,18 @@ namespace aggregation {
 
 constexpr char kGoogleSqlSumUri[] = "GoogleSQL:sum";
 
-// Implementation of a generic sum grouping aggregator.
-template <typename T>
-class GroupingFederatedSum final : public OneDimGroupingAggregator<T> {
+// Implementation of a generic sum grouping aggregator for numeric types.
+template <typename InputT, typename OutputT>
+class GroupingFederatedSum final
+    : public OneDimGroupingAggregator<InputT, OutputT> {
  public:
-  using OneDimGroupingAggregator<T>::OneDimGroupingAggregator;
-  using OneDimGroupingAggregator<T>::data;
+  using OneDimGroupingAggregator<InputT, OutputT>::OneDimGroupingAggregator;
+  using OneDimGroupingAggregator<InputT, OutputT>::data;
 
  private:
-  void AggregateVectorByOrdinals(const AggVector<int64_t>& ordinals_vector,
-                                 const AggVector<T>& value_vector) override {
+  void AggregateVectorByOrdinals(
+      const AggVector<int64_t>& ordinals_vector,
+      const AggVector<InputT>& value_vector) override {
     auto value_it = value_vector.begin();
     for (auto o : ordinals_vector) {
       int64_t output_index = o.value;
@@ -58,31 +64,36 @@ class GroupingFederatedSum final : public OneDimGroupingAggregator<T> {
              "are mismatched.";
       // Delegate the actual aggregation to the specific aggregation
       // intrinsic implementation.
-      AggregateValue(output_index, value_it++.value());
+      AggregateValue(output_index, OutputT{value_it++.value()});
     }
   }
 
-  void AggregateVector(const AggVector<T>& value_vector) override {
+  void AggregateVector(const AggVector<OutputT>& value_vector) override {
     for (auto it : value_vector) {
       AggregateValue(it.index, it.value);
     }
   }
 
-  inline void AggregateValue(int64_t i, T value) { data()[i] += value; }
+  inline void AggregateValue(int64_t i, OutputT value) { data()[i] += value; }
 
-  T GetDefaultValue() override { return static_cast<T>(0); }
+  OutputT GetDefaultValue() override { return OutputT{0}; }
 };
 
-template <typename T>
-StatusOr<std::unique_ptr<TensorAggregator>> CreateGroupingFederatedSum(
-    DataType dtype) {
-  return std::unique_ptr<TensorAggregator>(new GroupingFederatedSum<T>(dtype));
+template <typename OutputT>
+StatusOr<std::unique_ptr<TensorAggregator>> CreateGroupingFederatedSum() {
+  if (internal::TypeTraits<OutputT>::type_kind !=
+      internal::TypeKind::kNumeric) {
+    // Ensure the type is numeric in case new non-numeric types are added.
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "GroupingFederatedSum is only supported for numeric datatypes.";
+  }
+  return std::unique_ptr<TensorAggregator>(
+      new GroupingFederatedSum<OutputT, OutputT>());
 }
 
-// Not supported for DT_STRING
 template <>
 StatusOr<std::unique_ptr<TensorAggregator>>
-CreateGroupingFederatedSum<string_view>(DataType dtype) {
+CreateGroupingFederatedSum<string_view>() {
   return FCP_STATUS(INVALID_ARGUMENT)
          << "GroupingFederatedSum isn't supported for DT_STRING datatype.";
 }
@@ -134,15 +145,36 @@ class GroupingFederatedSumFactory final : public TensorAggregatorFactory {
 
     const TensorSpec& input_spec = intrinsic.inputs[0];
     const TensorSpec& output_spec = intrinsic.outputs[0];
-    if (input_spec.dtype() != output_spec.dtype() ||
-        input_spec.shape() != output_spec.shape()) {
+    if (input_spec.shape() != output_spec.shape()) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "GroupingFederatedSumFactory: Input and output tensors have "
-                "mismatched specs.";
+                "mismatched shapes.";
+    }
+
+    if (input_spec.dtype() != output_spec.dtype()) {
+      // In the GoogleSQL spec, summing floats produces doubles and summing
+      // int32 produces int64. Allow the input and output type to differ in this
+      // case.
+      if (input_spec.dtype() == DataType::DT_INT32 &&
+          output_spec.dtype() == DataType::DT_INT64) {
+        return std::unique_ptr<TensorAggregator>(
+            new GroupingFederatedSum<int32_t, int64_t>());
+      } else if (input_spec.dtype() == DataType::DT_FLOAT &&
+                 output_spec.dtype() == DataType::DT_DOUBLE) {
+        return std::unique_ptr<TensorAggregator>(
+            new GroupingFederatedSum<float, double>());
+      } else {
+        return FCP_STATUS(INVALID_ARGUMENT)
+               << "GroupingFederatedSumFactory: Input and output tensors have "
+                  "mismatched dtypes: input tensor has dtype "
+               << DataType_Name(input_spec.dtype())
+               << " and output tensor has dtype "
+               << DataType_Name(output_spec.dtype());
+      }
     }
     StatusOr<std::unique_ptr<TensorAggregator>> aggregator;
-    DTYPE_CASES(input_spec.dtype(), T,
-                aggregator = CreateGroupingFederatedSum<T>(input_spec.dtype()));
+    DTYPE_CASES(output_spec.dtype(), OutputT,
+                aggregator = CreateGroupingFederatedSum<OutputT>());
     return aggregator;
   }
 };

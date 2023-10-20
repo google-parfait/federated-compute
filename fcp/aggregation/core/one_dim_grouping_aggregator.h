@@ -16,6 +16,7 @@
 #ifndef FCP_AGGREGATION_CORE_ONE_DIM_GROUPING_AGGREGATOR_H_
 #define FCP_AGGREGATION_CORE_ONE_DIM_GROUPING_AGGREGATOR_H_
 
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -47,36 +48,36 @@ namespace aggregation {
 // The implementation operates on AggVector<T> instances rather than tensors.
 //
 // This class is not thread safe.
-template <typename T>
+template <typename InputT, typename OutputT = InputT>
 class OneDimGroupingAggregator : public TensorAggregator {
  public:
   // TODO(team): Support accumulating tensors of multiple dimensions. In
   // that case, the size of all dimensions but one (the dimension corresponding
   // to the ordinal tensor) should be known in advance and thus this constructor
   // should take in a shape with a single unknown dimension.
-  explicit OneDimGroupingAggregator(DataType dtype)
-      : data_vector_(std::make_unique<MutableVectorData<T>>()), num_inputs_(0) {
-    FCP_CHECK(internal::TypeTraits<T>::kDataType == dtype)
-        << "Incompatible dtype";
-  }
+  OneDimGroupingAggregator()
+      : data_vector_(std::make_unique<MutableVectorData<OutputT>>()),
+        num_inputs_(0) {}
 
   Status MergeWith(TensorAggregator&& other) override {
     FCP_RETURN_IF_ERROR(CheckValid());
-    OneDimGroupingAggregator<T>* other_ptr =
-        dynamic_cast<OneDimGroupingAggregator<T>*>(&other);
+    OneDimGroupingAggregator<InputT, OutputT>* other_ptr =
+        dynamic_cast<OneDimGroupingAggregator<InputT, OutputT>*>(&other);
     if (other_ptr == nullptr) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "OneDimGroupingAggregator::MergeOutputTensors: Can only merge "
-                "with "
-                "another GroupingAggregator operating on the same dtype "
-             << internal::TypeTraits<T>::kDataType;
+                "with another GroupingAggregator with the same input data type "
+             << internal::TypeTraits<InputT>::kDataType
+             << " producing the same dtype "
+             << internal::TypeTraits<OutputT>::kDataType;
     }
     FCP_RETURN_IF_ERROR((*other_ptr).CheckValid());
     int other_num_inputs = other.GetNumInputs();
     OutputTensorList output_tensors = std::move(*other_ptr).TakeOutputs();
 
     if (output_tensors.size() == 1) {
-      AggVector<T> other_data_vector = output_tensors[0].AsAggVector<T>();
+      AggVector<OutputT> other_data_vector =
+          output_tensors[0].AsAggVector<OutputT>();
       if (other_data_vector.size() > data_vector_->size()) {
         data_vector_->resize(other_data_vector.size(), GetDefaultValue());
       }
@@ -106,7 +107,7 @@ class OneDimGroupingAggregator : public TensorAggregator {
 
  protected:
   // Provides mutable access to the aggregator data as a vector<T>
-  inline std::vector<T>& data() { return *data_vector_; }
+  inline std::vector<OutputT>& data() { return *data_vector_; }
 
   // Implementation of the tensor aggregation.
   // Expects 2 tensors as input: a tensor containing ordinals and a tensor
@@ -125,7 +126,7 @@ class OneDimGroupingAggregator : public TensorAggregator {
                 "for tensor 0. Expected DT_INT64.";
     }
     const Tensor* tensor = tensors[1];
-    if (tensor->dtype() != internal::TypeTraits<T>::kDataType) {
+    if (tensor->dtype() != internal::TypeTraits<InputT>::kDataType) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "OneDimGroupingAggregator::AggregateTensors: dtype mismatch "
                 "for tensor 1";
@@ -148,7 +149,7 @@ class OneDimGroupingAggregator : public TensorAggregator {
                 "tensors are supported.";
     }
     num_inputs_++;
-    AggVector<T> value_vector = tensor->AsAggVector<T>();
+    AggVector<InputT> value_vector = tensor->AsAggVector<InputT>();
     AggVector<int64_t> ordinals_vector = ordinals->AsAggVector<int64_t>();
     size_t final_size = data_vector_->size();
     for (auto o : ordinals_vector) {
@@ -168,7 +169,7 @@ class OneDimGroupingAggregator : public TensorAggregator {
       FCP_CHECK(data_vector_->size() <= LONG_MAX)
           << "TensorShape: Dimension size too large to be represented as a "
              "signed long.";
-      outputs.push_back(Tensor::Create(internal::TypeTraits<T>::kDataType,
+      outputs.push_back(Tensor::Create(internal::TypeTraits<OutputT>::kDataType,
                                        TensorShape{static_cast<int64_t>(
                                            data_vector_->size())},
                                        std::move(data_vector_))
@@ -189,7 +190,7 @@ class OneDimGroupingAggregator : public TensorAggregator {
   // iterating over the vectors.
   virtual void AggregateVectorByOrdinals(
       const AggVector<int64_t>& ordinals_vector,
-      const AggVector<T>& value_vector) = 0;
+      const AggVector<InputT>& value_vector) = 0;
 
   // Delegates AggVector aggregation to a derived class.
   //
@@ -199,13 +200,13 @@ class OneDimGroupingAggregator : public TensorAggregator {
   // vector is passed to the subclass for aggregation, which provides better
   // performance but comes at the cost of duplicated code between subclasses for
   // iterating over the vectors.
-  virtual void AggregateVector(const AggVector<T>& agg_vector) = 0;
+  virtual void AggregateVector(const AggVector<OutputT>& agg_vector) = 0;
 
   // Delegates initialization of previously unseen ordinals to a derived class.
-  virtual T GetDefaultValue() = 0;
+  virtual OutputT GetDefaultValue() = 0;
 
  private:
-  std::unique_ptr<MutableVectorData<T>> data_vector_;
+  std::unique_ptr<MutableVectorData<OutputT>> data_vector_;
   int num_inputs_;
 };
 
