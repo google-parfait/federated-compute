@@ -279,14 +279,6 @@ constexpr auto Match(From&& v, CaseFnTypes... fns) {
   return m.Match(std::forward<From>(v));
 }
 
-template <typename To = void, typename From, typename... CaseFnTypes>
-constexpr auto Match(From* v, CaseFnTypes... fns) {
-  // 'From' is intended to be deduced. For MakeMatcher, we want V (not e.g. V
-  // const*).
-  auto m = MakeMatcher<std::decay_t<From>, To>(fns...);
-  return m.Match(v);
-}
-
 }  // namespace fcp
 
 #endif  // FCP_BASE_MATCH_H_
