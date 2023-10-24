@@ -22,6 +22,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/container/flat_hash_map.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/testing/testing.h"
 
@@ -34,6 +35,7 @@ using ::fcp::EqualsProto;
 using ::testing::ElementsAre;
 
 constexpr char kTaskName[] = "task";
+constexpr char kCollectionUri[] = "collection_uri";
 OperationalStats::Event::EventKind kUploadStartedEvent =
     OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED;
 OperationalStats::Event::EventKind kUploadServerAbortedEvent =
@@ -47,6 +49,15 @@ OperationalStats::Event CreateEvent(
   t.set_seconds(event_time_seconds);
   *event.mutable_timestamp() = t;
   return event;
+}
+
+OperationalStats::DatasetStats CreateDatasetStats(
+    int64_t first_access_timestamp_seconds) {
+  OperationalStats::DatasetStats dataset_stats;
+  google::protobuf::Timestamp t;
+  t.set_seconds(first_access_timestamp_seconds);
+  *(dataset_stats.mutable_first_access_timestamp()) = t;
+  return dataset_stats;
 }
 
 TEST(OpStatsUtils, GetLastSuccessfulContributionTimeMixedLegacyAndNewOpStats) {
@@ -377,6 +388,105 @@ TEST(OpStatsUtils, GetOperationalStatsForTimeRangeMultipleTasksInSameRun) {
                                  EqualsProto(expected_proto_1)));
 }
 
+TEST(OpStatsUtils, GetPreviousCollectionFirstAccessTimeReturnsFirstAccessTime) {
+  OperationalStats stats;
+  stats.set_task_name(kTaskName);
+
+  int64_t first_access_time_sec = 2000;
+  stats.mutable_events()->Add(CreateEvent(kUploadStartedEvent, 1000));
+  stats.mutable_dataset_stats()->insert(
+      {kCollectionUri, CreateDatasetStats(first_access_time_sec)});
+
+  OpStatsSequence opstats_sequence;
+  *opstats_sequence.add_opstats() = std::move(stats);
+
+  auto first_access_time_map =
+      GetPreviousCollectionFirstAccessTimeMap(opstats_sequence, kTaskName);
+  EXPECT_TRUE(first_access_time_map.value().contains(kCollectionUri));
+  EXPECT_EQ(first_access_time_map.value()[kCollectionUri].seconds(),
+            first_access_time_sec);
+}
+
+TEST(OpStatsUtils,
+     GetPreviousCollectionFirstAccessTimeReturnsMostRecentAccessTime) {
+  OpStatsSequence opstats_sequence;
+
+  OperationalStats old_stats;
+  old_stats.set_task_name(kTaskName);
+  old_stats.mutable_events()->Add(CreateEvent(kUploadStartedEvent, 1000));
+  old_stats.mutable_dataset_stats()->insert(
+      {kCollectionUri, CreateDatasetStats(1500)});
+  *opstats_sequence.add_opstats() = std::move(old_stats);
+
+  OperationalStats new_stats;
+  new_stats.set_task_name(kTaskName);
+  int64_t first_access_time_sec = 2000;
+  new_stats.mutable_events()->Add(CreateEvent(kUploadStartedEvent, 2500));
+  new_stats.mutable_dataset_stats()->insert(
+      {kCollectionUri, CreateDatasetStats(first_access_time_sec)});
+  *opstats_sequence.add_opstats() = std::move(new_stats);
+
+  auto first_access_time_map =
+      GetPreviousCollectionFirstAccessTimeMap(opstats_sequence, kTaskName);
+  EXPECT_TRUE(first_access_time_map.value().contains(kCollectionUri));
+  EXPECT_EQ(first_access_time_map.value()[kCollectionUri].seconds(),
+            first_access_time_sec);
+}
+
+TEST(OpStatsUtils,
+     GetPreviousCollectionFirstAccessTimeReturnNotFoundAbortedByServer) {
+  OperationalStats stats;
+  stats.set_task_name(kTaskName);
+  stats.mutable_events()->Add(CreateEvent(kUploadStartedEvent, 1000));
+  stats.mutable_events()->Add(CreateEvent(kUploadServerAbortedEvent, 1001));
+  stats.mutable_dataset_stats()->insert(
+      {kCollectionUri, CreateDatasetStats(1002)});
+
+  OpStatsSequence opstats_sequence;
+  *opstats_sequence.add_opstats() = std::move(stats);
+
+  EXPECT_FALSE(
+      GetPreviousCollectionFirstAccessTimeMap(opstats_sequence, kTaskName)
+          .has_value());
+}
+
+TEST(OpStatsUtils,
+     GetPreviousCollectionFirstAccessTimeMixedLegacyAndNewOpStats) {
+  OperationalStats first_success_run;
+  first_success_run.set_task_name(kTaskName);
+  *first_success_run.add_events() = CreateEvent(kUploadStartedEvent, 10000);
+  first_success_run.mutable_dataset_stats()->insert(
+      {kCollectionUri, CreateDatasetStats(10001)});
+  OperationalStats second_success_run;
+  OperationalStats::PhaseStats upload;
+  int first_access_time_sec = 20001;
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  upload.set_task_name(kTaskName);
+  *upload.add_events() = CreateEvent(kUploadStartedEvent, 20000);
+  upload.mutable_dataset_stats()->insert(
+      {kCollectionUri, CreateDatasetStats(first_access_time_sec)});
+  *second_success_run.add_phase_stats() = upload;
+  OperationalStats third_failure_run;
+  OperationalStats::PhaseStats failed_upload;
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  failed_upload.set_task_name(kTaskName);
+  *failed_upload.add_events() = CreateEvent(kUploadStartedEvent, 30000);
+  *failed_upload.add_events() = CreateEvent(kUploadServerAbortedEvent, 30001);
+  failed_upload.mutable_dataset_stats()->insert(
+      {kCollectionUri, CreateDatasetStats(2500)});
+  *third_failure_run.add_phase_stats() = failed_upload;
+  OpStatsSequence data;
+  *data.add_opstats() = first_success_run;
+  *data.add_opstats() = second_success_run;
+  *data.add_opstats() = third_failure_run;
+
+  std::optional<absl::flat_hash_map<std::string, google::protobuf::Timestamp>>
+      first_access_time_map =
+          GetPreviousCollectionFirstAccessTimeMap(data, kTaskName);
+  EXPECT_TRUE(first_access_time_map.value().contains(kCollectionUri));
+  EXPECT_EQ(first_access_time_map.value()[kCollectionUri].seconds(),
+            first_access_time_sec);
+}
 }  // namespace
 }  // namespace opstats
 }  // namespace client

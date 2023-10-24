@@ -21,6 +21,7 @@
 #include <string>
 
 #include "google/protobuf/timestamp.pb.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/opstats/opstats_db.h"
@@ -29,6 +30,13 @@
 namespace fcp {
 namespace client {
 namespace opstats {
+
+// Returns an optional containing a map of collection URIs to the timestamp of
+// the first time the collection was accessed when the runtime last
+// successfully contributed to a task.
+std::optional<absl::flat_hash_map<std::string, google::protobuf::Timestamp>>
+GetPreviousCollectionFirstAccessTimeMap(const OpStatsSequence& data,
+                                        absl::string_view task_name);
 
 // Returns an optional containing an OperationalStats of the last time the
 // runtime successfully contributed to a task with the given task name,

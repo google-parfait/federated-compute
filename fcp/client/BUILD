@@ -362,6 +362,7 @@ cc_library(
         "//fcp/protos:population_eligibility_spec_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@boringssl//:crypto",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",

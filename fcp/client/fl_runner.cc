@@ -27,6 +27,7 @@
 #include <variant>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
@@ -1659,6 +1660,20 @@ RunPlanResults RunComputation(
               ->mutable_historical_context()
               ->mutable_last_successful_contribution_time()) =
             *last_successful_contribution_time;
+      }
+      std::optional<
+          absl::flat_hash_map<std::string, google::protobuf::Timestamp>>
+          collection_first_access_times =
+              opstats::GetPreviousCollectionFirstAccessTimeMap(
+                  *data, checkin_result->task_name);
+      if (collection_first_access_times.has_value()) {
+        federated_selector_context_with_task_name
+            .mutable_computation_properties()
+            ->mutable_federated()
+            ->mutable_historical_context()
+            ->mutable_collection_first_access_times()
+            ->insert(collection_first_access_times->begin(),
+                     collection_first_access_times->end());
       }
     }
   }

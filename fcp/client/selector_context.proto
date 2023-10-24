@@ -124,4 +124,8 @@ message SecureAggregation {
 message HistoricalContext {
   // Timestamp of when this task was last successfully contributed to.
   google.protobuf.Timestamp last_successful_contribution_time = 1;
+
+  // The map of collection URIs to the timestamp of when this task first
+  // accessed the collection on the previous successful execution.
+  map<string, google.protobuf.Timestamp> collection_first_access_times = 2;
 }
