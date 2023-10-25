@@ -325,7 +325,7 @@ CreateSimpleTaskEnvironmentIteratorFactory(
                   example_selector) {
         if (should_log_collection_first_access_time &&
             flags->log_collection_first_access_time()) {
-          phase_logger->LogCollectionFirstAccessTime(
+          phase_logger->MaybeLogCollectionFirstAccessTime(
               example_selector.collection_uri());
         }
         return task_env->CreateExampleIterator(example_selector,

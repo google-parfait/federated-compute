@@ -824,7 +824,7 @@ class MockPhaseLogger : public PhaseLogger {
                absl::Time time_before_checkin,
                absl::Time time_before_plan_download, absl::Time reference_time),
               (override));
-  MOCK_METHOD(void, LogCollectionFirstAccessTime, (absl::string_view),
+  MOCK_METHOD(void, MaybeLogCollectionFirstAccessTime, (absl::string_view),
               (override));
   MOCK_METHOD(void, LogComputationStarted, (absl::string_view), (override));
   MOCK_METHOD(void, LogComputationInvalidArgument,

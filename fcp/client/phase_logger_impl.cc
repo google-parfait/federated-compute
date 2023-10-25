@@ -561,7 +561,7 @@ void PhaseLoggerImpl::LogCheckinCompleted(absl::string_view task_name,
   LogCheckinLatency(time_before_checkin, reference_time);
 }
 
-void PhaseLoggerImpl::LogCollectionFirstAccessTime(
+void PhaseLoggerImpl::MaybeLogCollectionFirstAccessTime(
     absl::string_view collection_uri) {
   opstats_logger_->RecordCollectionFirstAccessTime(collection_uri, absl::Now());
 }

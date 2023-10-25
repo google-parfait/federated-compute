@@ -165,7 +165,7 @@ TEST_P(PhaseLoggerImplTest, LogCollectionFirstAccessTime) {
   EXPECT_CALL(mock_opstats_logger_,
               RecordCollectionFirstAccessTime(collection_uri, _));
 
-  phase_logger_->LogCollectionFirstAccessTime(collection_uri);
+  phase_logger_->MaybeLogCollectionFirstAccessTime(collection_uri);
 }
 
 TEST_P(PhaseLoggerImplTest, LogEligibilityEvalCheckinClientInterrupted) {
