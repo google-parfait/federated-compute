@@ -175,6 +175,7 @@ cc_library(
     name = "federated_compute_checkpoint_parser",
     srcs = ["federated_compute_checkpoint_parser.cc"],
     hdrs = ["federated_compute_checkpoint_parser.h"],
+    visibility = ["//visibility:public"],
     deps = [
         ":checkpoint_header",
         ":checkpoint_parser",
