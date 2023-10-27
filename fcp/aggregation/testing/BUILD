@@ -60,6 +60,7 @@ cc_library(
         "test_data.h",
     ],
     copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         "//fcp/aggregation/core:tensor",
     ],
