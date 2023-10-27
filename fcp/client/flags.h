@@ -207,6 +207,13 @@ class Flags {
 
   // If true, log the first access time for each collection to opstats.
   virtual bool log_collection_first_access_time() const { return false; }
+
+  // If true, issue single task assignment only when the
+  // EligibilityPopulationSpec indicates the population supports single task
+  // assignment, or when the EligibilityPopulationSpec is missing.
+  virtual bool check_eligibility_population_spec_before_checkin() const {
+    return false;
+  }
 };
 }  // namespace client
 }  // namespace fcp

@@ -17,6 +17,7 @@
 
 #include <fcntl.h>
 
+#include <algorithm>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -961,6 +962,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
 struct EligibilityEvalResult {
   std::optional<TaskEligibilityInfo> task_eligibility_info;
   std::vector<std::string> task_names_for_multiple_task_assignments;
+  bool population_supports_single_task_assignment = false;
 };
 
 // Create an EligibilityEvalResult from a TaskEligibilityInfo and
@@ -972,22 +974,37 @@ EligibilityEvalResult CreateEligibilityEvalResult(
     const std::optional<TaskEligibilityInfo>& task_eligibility_info,
     const std::optional<PopulationEligibilitySpec>& population_spec) {
   EligibilityEvalResult result;
-  if (population_spec.has_value() && task_eligibility_info.has_value()) {
-    absl::flat_hash_set<std::string> task_names_for_multiple_task_assignments;
+  std::vector<std::string> task_names_for_multiple_task_assignments;
+  if (population_spec.has_value()) {
     for (const auto& task_info : population_spec.value().task_info()) {
       if (task_info.task_assignment_mode() ==
           PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE) {
-        task_names_for_multiple_task_assignments.insert(task_info.task_name());
+        task_names_for_multiple_task_assignments.push_back(
+            task_info.task_name());
+      } else if (task_info.task_assignment_mode() ==
+                 PopulationEligibilitySpec::TaskInfo::
+                     TASK_ASSIGNMENT_MODE_SINGLE) {
+        result.population_supports_single_task_assignment = true;
       }
     }
+  } else {
+    // If the server didn't return a PopulationEligibilitySpec, single task
+    // assignment is enabled by default.
+    result.population_supports_single_task_assignment = true;
+  }
+
+  if (task_eligibility_info.has_value()) {
     TaskEligibilityInfo single_task_assignment_eligibility_info;
     single_task_assignment_eligibility_info.set_version(
         task_eligibility_info.value().version());
     for (const auto& task_weight :
          task_eligibility_info.value().task_weights()) {
       const std::string& task_name = task_weight.task_name();
-      if (task_names_for_multiple_task_assignments.contains(task_name) &&
-          task_weight.weight() > 0) {
+      if (task_weight.weight() > 0 &&
+          std::find(task_names_for_multiple_task_assignments.begin(),
+                    task_names_for_multiple_task_assignments.end(),
+                    task_name) !=
+              task_names_for_multiple_task_assignments.end()) {
         result.task_names_for_multiple_task_assignments.push_back(task_name);
       } else {
         *single_task_assignment_eligibility_info.mutable_task_weights()->Add() =
@@ -997,6 +1014,8 @@ EligibilityEvalResult CreateEligibilityEvalResult(
     result.task_eligibility_info = single_task_assignment_eligibility_info;
   } else {
     result.task_eligibility_info = task_eligibility_info;
+    result.task_names_for_multiple_task_assignments =
+        std::move(task_names_for_multiple_task_assignments);
   }
   return result;
 }
@@ -1146,23 +1165,12 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
     // the population then there is nothing more to do. We simply proceed to
     // the "checkin" phase below without providing it a TaskEligibilityInfo
     // proto.
-    result.task_eligibility_info = std::nullopt;
     auto eligibility_eval_disabled =
         std::get<FederatedProtocol::EligibilityEvalDisabled>(
             *eligibility_checkin_result);
-    if (eligibility_eval_disabled.population_eligibility_spec.has_value()) {
-      for (const auto& task_info :
-           eligibility_eval_disabled.population_eligibility_spec.value()
-               .task_info()) {
-        if (task_info.task_assignment_mode() ==
-            PopulationEligibilitySpec::TaskInfo::
-                TASK_ASSIGNMENT_MODE_MULTIPLE) {
-          result.task_names_for_multiple_task_assignments.push_back(
-              task_info.task_name());
-        }
-      }
-    }
-    return result;
+    return CreateEligibilityEvalResult(
+        /*task_eligibility_info=*/std::nullopt,
+        eligibility_eval_disabled.population_eligibility_spec);
   }
 
   auto eligibility_eval_task = std::get<FederatedProtocol::EligibilityEvalTask>(
@@ -2053,33 +2061,36 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         timing_config, reference_time);
   }
 
-  // Run single task assignment.
+  if (!flags->check_eligibility_population_spec_before_checkin() ||
+      eligibility_eval_result->population_supports_single_task_assignment) {
+    // Run single task assignment.
 
-  // We increment expected_num_tasks because we expect the server to assign a
-  // task.
-  expected_num_tasks++;
+    // We increment expected_num_tasks because we expect the server to assign a
+    // task.
+    expected_num_tasks++;
 
-  auto checkin_result =
-      IssueCheckin(phase_logger, log_manager, files, federated_protocol,
-                   std::move(eligibility_eval_result->task_eligibility_info),
-                   reference_time, population_name, fl_runner_result, flags);
+    auto checkin_result =
+        IssueCheckin(phase_logger, log_manager, files, federated_protocol,
+                     std::move(eligibility_eval_result->task_eligibility_info),
+                     reference_time, population_name, fl_runner_result, flags);
 
-  if (checkin_result.ok()) {
-    auto run_plan_results = RunComputation(
-        checkin_result, federated_selector_context, env_deps, phase_logger,
-        files, log_manager, opstats_logger, flags, federated_protocol,
-        fedselect_manager, &opstats_example_iterator_factory, fl_runner_result,
-        should_abort, timing_config, reference_time);
+    if (checkin_result.ok()) {
+      auto run_plan_results = RunComputation(
+          checkin_result, federated_selector_context, env_deps, phase_logger,
+          files, log_manager, opstats_logger, flags, federated_protocol,
+          fedselect_manager, &opstats_example_iterator_factory,
+          fl_runner_result, should_abort, timing_config, reference_time);
 
-    absl::Status report_result = ReportPlanResult(
-        federated_protocol, phase_logger,
-        std::move(run_plan_results.computation_results),
-        run_plan_results.run_plan_start_time, reference_time, std::nullopt);
-    if (run_plan_results.outcome == engine::PlanOutcome::kSuccess &&
-        report_result.ok()) {
-      // Only if training succeeded *and* reporting succeeded do we consider
-      // the device to have contributed successfully.
-      successful_task_names.push_back(checkin_result->task_name);
+      absl::Status report_result = ReportPlanResult(
+          federated_protocol, phase_logger,
+          std::move(run_plan_results.computation_results),
+          run_plan_results.run_plan_start_time, reference_time, std::nullopt);
+      if (run_plan_results.outcome == engine::PlanOutcome::kSuccess &&
+          report_result.ok()) {
+        // Only if training succeeded *and* reporting succeeded do we consider
+        // the device to have contributed successfully.
+        successful_task_names.push_back(checkin_result->task_name);
+      }
     }
   }
 
