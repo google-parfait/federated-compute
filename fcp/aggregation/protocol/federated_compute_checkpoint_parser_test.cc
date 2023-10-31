@@ -32,9 +32,13 @@ TEST(FederatedComputeCheckpointParserTest, GetTensors) {
       Tensor::Create(DT_STRING, TensorShape({2}),
                      CreateTestData<absl::string_view>({"value1", "value2"}));
   ASSERT_OK(t2.status());
+  absl::StatusOr<Tensor> t3 = Tensor::Create(
+      DataType::DT_INT32, TensorShape({2}), CreateTestData<int32_t>({1, 2}));
+  ASSERT_OK(t3.status());
 
   EXPECT_OK(builder->Add("t1", *t1));
   EXPECT_OK(builder->Add("t2", *t2));
+  EXPECT_OK(builder->Add("t3", *t3));
   auto checkpoint = builder->Build();
   ASSERT_OK(checkpoint.status());
 
@@ -45,8 +49,12 @@ TEST(FederatedComputeCheckpointParserTest, GetTensors) {
   ASSERT_OK(tensor1.status());
   auto tensor2 = (*parser)->GetTensor("t2");
   ASSERT_OK(tensor2.status());
+  auto tensor3 = (*parser)->GetTensor("t3");
+  ASSERT_OK(tensor2.status());
   EXPECT_THAT(*tensor1, IsTensor<int64_t>({3}, {1, 2, 3}));
   EXPECT_THAT(*tensor2, IsTensor<absl::string_view>({2}, {"value1", "value2"}));
+  EXPECT_THAT(*tensor3, IsTensor<int32_t>({2}, {1, 2}));
 }
+
 }  // namespace
 }  // namespace fcp::aggregation

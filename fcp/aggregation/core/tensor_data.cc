@@ -23,6 +23,10 @@
 namespace fcp {
 namespace aggregation {
 
+bool TensorData::IsAligned(const void* data, size_t alignment_size) {
+  return (reinterpret_cast<size_t>(data) % alignment_size) == 0;
+}
+
 Status TensorData::CheckValid(size_t value_size, size_t alignment_size) const {
   FCP_CHECK(value_size > 0);
 
@@ -33,7 +37,7 @@ Status TensorData::CheckValid(size_t value_size, size_t alignment_size) const {
              << value_size;
     }
 
-    if ((reinterpret_cast<size_t>(data()) % alignment_size) != 0) {
+    if (!IsAligned(data(), alignment_size)) {
       return FCP_STATUS(FAILED_PRECONDITION)
              << "TensorData: data() address is not aligned by alignment_size "
              << alignment_size;

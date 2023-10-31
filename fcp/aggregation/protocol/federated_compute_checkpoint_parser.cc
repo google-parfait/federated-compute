@@ -106,7 +106,7 @@ FederatedComputeCheckpointParserFactory::Create(
     stream.PopLimit(limit);
 
     FCP_ASSIGN_OR_RETURN(Tensor aggregation_tensor,
-                         Tensor::FromProto(tensor_proto));
+                         Tensor::FromProto(std::move(tensor_proto)));
     tensors.emplace(name, std::move(aggregation_tensor));
   }
   return std::make_unique<FederatedComputeCheckpointParser>(std::move(tensors));

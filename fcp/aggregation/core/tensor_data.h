@@ -78,6 +78,8 @@ class TensorData {
   Status CheckValid() const {
     return CheckValid(sizeof(T), alignof(T));
   }
+
+  static bool IsAligned(const void* data, size_t alignment_size);
 };
 
 }  // namespace aggregation
