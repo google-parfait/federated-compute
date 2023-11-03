@@ -476,7 +476,7 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
       FCP_LOG(WARNING) << "Report with resource uri "
                        << message.simple_aggregation().input().uri()
                        << " for client " << client_id << "is missing. "
-                       << client_completion_status.ToString();
+                       << client_completion_status;
     } else {
       report = std::move(report_or_status.value());
     }
@@ -489,7 +489,7 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
       client_completion_status = tensor_map_or_status.status();
       client_completion_state = CLIENT_FAILED;
       FCP_LOG(WARNING) << "Client " << client_id << " input can't be parsed: "
-                       << client_completion_status.ToString();
+                       << client_completion_status;
     } else {
       // Aggregate the client input which would block on aggregation_mu_ if
       // there are any concurrent AggregateClientInput calls.
@@ -497,8 +497,8 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
           AggregateClientInput(std::move(tensor_map_or_status).value());
       if (!client_completion_status.ok()) {
         client_completion_state = CLIENT_DISCARDED;
-        FCP_LOG(INFO) << "Client " << client_id << " input is discarded: "
-                      << client_completion_status.ToString();
+        FCP_LOG(INFO) << "Client " << client_id
+                      << " input is discarded: " << client_completion_status;
       }
     }
   }
@@ -539,7 +539,7 @@ absl::Status SimpleAggregationProtocol::CloseClient(
     // Close the client only if the client is currently pending.
     if (client_state == CLIENT_PENDING) {
       FCP_LOG(INFO) << "Closing client " << client_id << " with the status "
-                    << client_status.ToString();
+                    << client_status;
       SetClientState(client_id,
                      client_status.ok() ? CLIENT_DISCARDED : CLIENT_FAILED);
     }
