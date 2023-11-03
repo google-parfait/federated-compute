@@ -69,7 +69,7 @@ absl::StatusOr<CacheManifest> FileBackedResourceCache::ReadInternal() {
   // called.
   auto ignored_status = DeleteManifest();
   if (!ignored_status.ok()) {
-    FCP_LOG(INFO) << "Failed to delete manifest: " << ignored_status.ToString();
+    FCP_LOG(INFO) << "Failed to delete manifest: " << ignored_status;
   }
   return absl::InternalError(
       absl::StrCat("Failed to read from database, with error message: ",
@@ -89,8 +89,7 @@ absl::Status FileBackedResourceCache::WriteInternal(
     // time Initialize() is called.
     auto ignored_status = DeleteManifest();
     if (!ignored_status.ok()) {
-      FCP_LOG(INFO) << "Failed to delete manifest: "
-                    << ignored_status.ToString();
+      FCP_LOG(INFO) << "Failed to delete manifest: " << ignored_status;
     }
   }
   return status;
