@@ -51,6 +51,17 @@
 
 namespace fcp::aggregation {
 
+namespace {
+ServerMessage MakeCloseClientMessage(absl::Status status) {
+  ServerMessage message;
+  message.mutable_simple_aggregation()->mutable_close_message()->set_code(
+      static_cast<int>(status.code()));
+  message.mutable_simple_aggregation()->mutable_close_message()->set_message(
+      std::string(std::move(status).message()));
+  return message;
+}
+}  // namespace
+
 // Creates an aggregation intrinsic based on the intrinsic configuration.
 absl::StatusOr<std::unique_ptr<TensorAggregator>>
 SimpleAggregationProtocol::CreateAggregator(const Intrinsic& intrinsic) {
@@ -184,17 +195,17 @@ void SimpleAggregationProtocol::SetProtocolState(ProtocolState state) {
 
 absl::StatusOr<SimpleAggregationProtocol::ClientState>
 SimpleAggregationProtocol::GetClientState(int64_t client_id) const {
-  if (client_id < 0 || client_id >= client_states_.size()) {
+  if (client_id < 0 || client_id >= all_clients_.size()) {
     return absl::InvalidArgumentError(
         absl::StrFormat("client_id %ld is outside the valid range", client_id));
   }
-  return client_states_[client_id];
+  return all_clients_[client_id].state;
 }
 
 int64_t SimpleAggregationProtocol::AddPendingClients(size_t num_clients) {
-  int64_t start_index = client_states_.size();
+  int64_t start_index = all_clients_.size();
   int64_t end_index = start_index + num_clients;
-  client_states_.resize(end_index, CLIENT_PENDING);
+  all_clients_.resize(end_index, {CLIENT_PENDING, std::nullopt});
   absl::Time now = clock_->Now();
   for (int64_t client_id = start_index; client_id < end_index; ++client_id) {
     pending_clients_.emplace(client_id, now);
@@ -204,8 +215,8 @@ int64_t SimpleAggregationProtocol::AddPendingClients(size_t num_clients) {
 
 void SimpleAggregationProtocol::SetClientState(int64_t client_id,
                                                ClientState to_state) {
-  FCP_CHECK(client_id >= 0 && client_id < client_states_.size());
-  ClientState from_state = client_states_[client_id];
+  FCP_CHECK(client_id >= 0 && client_id < all_clients_.size());
+  ClientState from_state = all_clients_[client_id].state;
   FCP_CHECK(from_state != to_state);
   if (from_state == CLIENT_RECEIVED_INPUT_AND_PENDING) {
     num_clients_received_and_pending_--;
@@ -221,7 +232,7 @@ void SimpleAggregationProtocol::SetClientState(int64_t client_id,
     // Remove the client from the pending set.
     pending_clients_.erase(client_id);
   }
-  client_states_[client_id] = to_state;
+  all_clients_[client_id].state = to_state;
   switch (to_state) {
     case CLIENT_PENDING:
       FCP_LOG(FATAL) << "Client state can't be changed to CLIENT_PENDING";
@@ -402,7 +413,7 @@ absl::Status SimpleAggregationProtocol::Start(int64_t num_clients) {
     absl::MutexLock lock(&state_mu_);
     FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_CREATED));
     SetProtocolState(PROTOCOL_STARTED);
-    FCP_CHECK(client_states_.empty());
+    FCP_CHECK(all_clients_.empty());
     AddPendingClients(num_clients);
   }
   ScheduleOutlierDetection();
@@ -510,10 +521,13 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
     // Change the client state only if the current state is still
     // CLIENT_RECEIVED_INPUT_AND_PENDING, meaning that the client wasn't already
     // closed by a concurrent Complete or Abort call.
-    if (client_states_[client_id] == CLIENT_RECEIVED_INPUT_AND_PENDING) {
+    if (all_clients_[client_id].state == CLIENT_RECEIVED_INPUT_AND_PENDING) {
       latency_aggregator_.Add(client_latency);
       SetClientState(client_id, client_completion_state);
       client_id_to_close = client_id;
+      ServerMessage close_message =
+          MakeCloseClientMessage(client_completion_status);
+      all_clients_[client_id].server_message = std::move(close_message);
     }
   }
   if (client_id_to_close.has_value()) {
@@ -525,7 +539,17 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
 
 absl::StatusOr<std::optional<ServerMessage>>
 SimpleAggregationProtocol::PollServerMessage(int64_t client_id) {
-  return std::nullopt;
+  absl::MutexLock lock(&state_mu_);
+  if (protocol_state_ == PROTOCOL_CREATED) {
+    return absl::FailedPreconditionError("The protocol hasn't been started");
+  }
+  if (client_id < 0 || client_id >= all_clients_.size()) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("client_id %ld is outside the valid range", client_id));
+  }
+  std::optional<ServerMessage> output;
+  std::swap(all_clients_[client_id].server_message, output);
+  return output;
 }
 
 absl::Status SimpleAggregationProtocol::CloseClient(
@@ -557,16 +581,20 @@ absl::Status SimpleAggregationProtocol::Complete() {
     FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
     FCP_ASSIGN_OR_RETURN(result_, CreateReport());
     SetProtocolState(PROTOCOL_COMPLETED);
-    for (int64_t client_id = 0; client_id < client_states_.size();
-         client_id++) {
-      switch (client_states_[client_id]) {
+    ServerMessage close_message = MakeCloseClientMessage(
+        absl::AbortedError("The protocol has completed before the "
+                           "client input has been aggregated."));
+    for (int64_t client_id = 0; client_id < all_clients_.size(); client_id++) {
+      switch (all_clients_[client_id].state) {
         case CLIENT_PENDING:
           SetClientState(client_id, CLIENT_ABORTED);
           client_ids_to_close.push_back(client_id);
+          all_clients_[client_id].server_message = close_message;
           break;
         case CLIENT_RECEIVED_INPUT_AND_PENDING:
           SetClientState(client_id, CLIENT_DISCARDED);
           client_ids_to_close.push_back(client_id);
+          all_clients_[client_id].server_message = close_message;
           break;
         default:
           break;
@@ -589,16 +617,20 @@ absl::Status SimpleAggregationProtocol::Abort() {
     FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
     aggregation_finished_ = true;
     SetProtocolState(PROTOCOL_ABORTED);
-    for (int64_t client_id = 0; client_id < client_states_.size();
-         client_id++) {
-      switch (client_states_[client_id]) {
+    ServerMessage close_message = MakeCloseClientMessage(
+        absl::AbortedError("The protocol has aborted before the "
+                           "client input has been aggregated."));
+    for (int64_t client_id = 0; client_id < all_clients_.size(); client_id++) {
+      switch (all_clients_[client_id].state) {
         case CLIENT_PENDING:
           SetClientState(client_id, CLIENT_ABORTED);
           client_ids_to_close.push_back(client_id);
+          all_clients_[client_id].server_message = close_message;
           break;
         case CLIENT_RECEIVED_INPUT_AND_PENDING:
           SetClientState(client_id, CLIENT_DISCARDED);
           client_ids_to_close.push_back(client_id);
+          all_clients_[client_id].server_message = close_message;
           break;
         case CLIENT_COMPLETED:
           SetClientState(client_id, CLIENT_DISCARDED);
@@ -625,9 +657,8 @@ StatusMessage SimpleAggregationProtocol::GetStatus() {
   StatusMessage message;
   message.set_num_clients_completed(num_clients_completed);
   message.set_num_clients_failed(num_clients_failed_);
-  message.set_num_clients_pending(client_states_.size() -
-                                  num_clients_completed - num_clients_failed_ -
-                                  num_clients_aborted_);
+  message.set_num_clients_pending(all_clients_.size() - num_clients_completed -
+                                  num_clients_failed_ - num_clients_aborted_);
   message.set_num_inputs_aggregated_and_included(num_clients_aggregated_);
   message.set_num_inputs_aggregated_and_pending(
       num_clients_received_and_pending_);
@@ -672,7 +703,7 @@ void SimpleAggregationProtocol::PerformOutlierDetection() {
 
   std::vector<int64_t> client_ids_to_close;
   // Perform this part of the algorithm under the lock to ensure exclusive
-  // access to the client_states_ and pending_clients_
+  // access to the all_clients_ and pending_clients_
   {
     absl::MutexLock lock(&state_mu_);
     FCP_CHECK(CheckProtocolState(PROTOCOL_STARTED).ok())
@@ -713,8 +744,11 @@ void SimpleAggregationProtocol::PerformOutlierDetection() {
       }
     }
 
+    ServerMessage close_message = MakeCloseClientMessage(absl::AbortedError(
+        "Client aborted due to being detected as an outlier"));
     for (int64_t client_id : client_ids_to_close) {
       SetClientState(client_id, CLIENT_ABORTED);
+      all_clients_[client_id].server_message = close_message;
     }
   }
 

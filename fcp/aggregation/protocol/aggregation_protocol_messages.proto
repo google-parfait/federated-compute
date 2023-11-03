@@ -51,12 +51,26 @@ message ClientMessage {
 message ServerMessage {
   oneof protocol_kind {
     SecureAggregation secure_aggregation = 1;
+    SimpleAggregation simple_aggregation = 2;
   }
 
   message SecureAggregation {
     oneof content_kind {
       fcp.secagg.ServerToClientWrapperMessage content = 1;
       SecureAggregationAcceptanceMessage acceptance_message = 2;
+    }
+  }
+
+  message SimpleAggregation {
+    oneof content_kind {
+      CloseMessage close_message = 1;
+    }
+
+    message CloseMessage {
+      // The status code, which should be an enum value of absl::StatusCode.
+      int32 code = 1;
+      // An optional diagnostic message.
+      string message = 2;
     }
   }
 }

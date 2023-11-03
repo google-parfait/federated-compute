@@ -169,6 +169,17 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
     CLIENT_DISCARDED
   };
 
+  struct ClientInfo {
+    // State of the client.
+    ClientState state;
+    // Pending server message for a client that should be polled. In the case of
+    // SimpleAggregation, the client (device) does not directly poll this
+    // message, rather the server infrastructure does on behalf of the client.
+    //
+    // If empty, there is no message to poll.
+    std::optional<ServerMessage> server_message;
+  };
+
   // Returns string representation of the protocol state.
   static absl::string_view ProtocolStateDebugString(ProtocolState state);
 
@@ -236,7 +247,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
 
   // Holds state of all clients. The length of the vector equals
   // to the number of clients accepted into the protocol.
-  std::vector<ClientState> client_states_ ABSL_GUARDED_BY(state_mu_);
+  std::vector<ClientInfo> all_clients_ ABSL_GUARDED_BY(state_mu_);
 
   // Holds information about pending clients - when each client joined the
   // protocol. This helps to detect the outliers that remain in the pending
