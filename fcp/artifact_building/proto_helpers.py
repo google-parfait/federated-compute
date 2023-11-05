@@ -84,12 +84,17 @@ def make_measurement(
         f'`tff_type.dtype`: {tff_type.dtype} does not match '
         f"provided tensor's dtype: {t.dtype}."
     )
-  if tff_type.shape.is_fully_defined() and t.shape.is_fully_defined():
-    if tff_type.shape.as_list() != t.shape.as_list():
-      raise ValueError(
-          f'`tff_type.shape`: {tff_type.shape} does not match '
-          f"provided tensor's shape: {t.shape}."
-      )
+
+  if (
+      # TODO: b/309218024 - Update to the latest version of TFF to replace.
+      tff_type.shape.is_fully_defined()
+      and t.shape.is_fully_defined()
+      and tff_type.shape.as_list() != t.shape.as_list()
+  ):
+    raise ValueError(
+        f'`tff_type.shape`: {tff_type.shape} does not match '
+        f"provided tensor's shape: {t.shape}."
+    )
   return plan_pb2.Measurement(
       read_op_name=t.name,
       name=name,
