@@ -68,6 +68,7 @@ message EligibilityPolicyEvalSpec {
     DataAvailabilityPolicy data_availability_policy = 3;
     SamplingWithoutReplacementPolicy swor_policy = 4;
     TensorFlowCustomPolicy tf_custom_policy = 5;
+    MinimumSeparationPolicy min_sep_policy = 6;
   }
 }
 
@@ -100,4 +101,14 @@ message TensorFlowCustomPolicy {
   // Serialized arguments that will be evaluated by the TensorFlow custom
   // policy implementation.
   bytes arguments = 1;
+}
+
+// Minimum separation policy parameters.
+message MinimumSeparationPolicy {
+  // The current index (e.g., algorithmic round number) of the federated
+  // computation.
+  int64 current_index = 1;
+
+  // The minimum index separation required between successful contributions.
+  int64 minimum_separation = 2;
 }
