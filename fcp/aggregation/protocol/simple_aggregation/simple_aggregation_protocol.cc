@@ -139,20 +139,6 @@ SimpleAggregationProtocol::~SimpleAggregationProtocol() {
   StopOutlierDetection();
 }
 
-absl::string_view SimpleAggregationProtocol::ProtocolStateDebugString(
-    ProtocolState state) {
-  switch (state) {
-    case PROTOCOL_CREATED:
-      return "PROTOCOL_CREATED";
-    case PROTOCOL_STARTED:
-      return "PROTOCOL_STARTED";
-    case PROTOCOL_COMPLETED:
-      return "PROTOCOL_COMPLETED";
-    case PROTOCOL_ABORTED:
-      return "PROTOCOL_ABORTED";
-  }
-}
-
 absl::string_view SimpleAggregationProtocol::ClientStateDebugString(
     ClientState state) {
   switch (state) {
@@ -174,10 +160,9 @@ absl::string_view SimpleAggregationProtocol::ClientStateDebugString(
 absl::Status SimpleAggregationProtocol::CheckProtocolState(
     ProtocolState state) const {
   if (protocol_state_ != state) {
-    return absl::FailedPreconditionError(
-        absl::StrFormat("The current protocol state is %s, expected %s.",
-                        ProtocolStateDebugString(protocol_state_),
-                        ProtocolStateDebugString(state)));
+    return absl::FailedPreconditionError(absl::StrFormat(
+        "The current protocol state is %s, expected %s.",
+        ProtocolState_Name(protocol_state_), ProtocolState_Name(state)));
   }
   return absl::OkStatus();
 }
@@ -188,8 +173,8 @@ void SimpleAggregationProtocol::SetProtocolState(ProtocolState state) {
       (protocol_state_ == PROTOCOL_STARTED &&
        (state == PROTOCOL_COMPLETED || state == PROTOCOL_ABORTED)))
       << "Invalid protocol state transition from "
-      << ProtocolStateDebugString(protocol_state_) << " to "
-      << ProtocolStateDebugString(state) << ".";
+      << ProtocolState_Name(protocol_state_) << " to "
+      << ProtocolState_Name(state) << ".";
   protocol_state_ = state;
 }
 

@@ -79,6 +79,22 @@ message SecureAggregationAcceptanceMessage {
   // TODO(team): define this message.
 }
 
+// Describes the overall protocol state.
+enum ProtocolState {
+  PROTOCOL_STATE_UNKNOWN = 0;
+  // The initial state indicating that the protocol was created.
+  PROTOCOL_CREATED = 1;
+  // The protocol `Start` method has been called.
+  PROTOCOL_STARTED = 2;
+  // The protocol `Complete` method has been called but there is outstanding
+  // work.
+  PROTOCOL_COMPLETING = 3;
+  // The protocol has finished successfully.
+  PROTOCOL_COMPLETED = 4;
+  // The protocol `Abort` method has been called.
+  PROTOCOL_ABORTED = 5;
+}
+
 // Status of the aggregation protocol.
 message StatusMessage {
   // The below buckets are mutually exclusive and exhaustive, such that
@@ -124,4 +140,7 @@ message StatusMessage {
   // whatever reason, for example if the protocol has reached a state where it
   // no longer needs client inputs to complete.
   int64 num_inputs_discarded = 7;
+
+  // Current state of the protocol
+  ProtocolState protocol_state = 8;
 }

@@ -136,18 +136,6 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   static absl::StatusOr<std::unique_ptr<TensorAggregator>> CreateAggregator(
       const Intrinsic& intrinsic);
 
-  // Describes the overall protocol state.
-  enum ProtocolState {
-    // The initial state indicating that the protocol was created.
-    PROTOCOL_CREATED,
-    // The protocol `Start` method has been called.
-    PROTOCOL_STARTED,
-    // The protocol `Complete` method has finished successfully.
-    PROTOCOL_COMPLETED,
-    // The protocol `Abort` method has been called.
-    PROTOCOL_ABORTED
-  };
-
   // Describes state of each client participating in the protocol.
   enum ClientState : uint8_t {
     // No input received from the client yet.
@@ -179,9 +167,6 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
     // If empty, there is no message to poll.
     std::optional<ServerMessage> server_message;
   };
-
-  // Returns string representation of the protocol state.
-  static absl::string_view ProtocolStateDebugString(ProtocolState state);
 
   // Returns string representation of the client state.
   static absl::string_view ClientStateDebugString(ClientState state);
