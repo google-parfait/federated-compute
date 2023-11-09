@@ -28,6 +28,7 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
@@ -313,8 +314,19 @@ absl::StatusOr<int> AddOutputsToCheckpoint(
     }
     num_outputs++;
     const Tensor& tensor = outputs[output_index++];
-    FCP_CHECK(tensor.dtype() == output_spec.dtype());
-    FCP_CHECK(output_spec.shape().MatchesKnownDimensions(tensor.shape()));
+    if (tensor.dtype() != output_spec.dtype()) {
+      return absl::InternalError(absl::StrCat(
+          "Output tensor spec mismatch for output tensor ", output_spec.name(),
+          ". Tensor has dtype ", DataType_Name(tensor.dtype()),
+          " and output spec has dtype ", DataType_Name(output_spec.dtype())));
+    }
+    if (!output_spec.shape().MatchesKnownDimensions(tensor.shape())) {
+      return absl::InternalError(absl::StrCat(
+          "Output tensor spec known dimensions mismatch for output tensor ",
+          output_spec.name(), ". Tensor has shape ",
+          tensor.shape().ToProto().DebugString(), " and output spec has shape ",
+          output_spec.shape().ToProto().DebugString()));
+    }
     FCP_RETURN_IF_ERROR(checkpoint_builder.Add(output_spec.name(), tensor));
   }
   for (const Intrinsic& nested_intrinsic : intrinsic.nested_intrinsics) {
