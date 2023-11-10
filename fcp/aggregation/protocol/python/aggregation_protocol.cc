@@ -18,9 +18,6 @@
 
 #include <pybind11/pybind11.h>
 
-#include <cstdint>
-
-#include "absl/status/status.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "pybind11_abseil/absl_casters.h"
@@ -32,18 +29,6 @@ namespace {
 namespace py = ::pybind11;
 
 using ::fcp::aggregation::AggregationProtocol;
-
-// Allow AggregationProtocol::Callback to be subclassed in Python. See
-// https://pybind11.readthedocs.io/en/stable/advanced/classes.html#overriding-virtual-functions-in-python
-class PyAggregationProtocolCallback : public AggregationProtocol::Callback {
- public:
-  void OnCloseClient(int64_t client_id,
-                     absl::Status diagnostic_status) override {
-    PYBIND11_OVERRIDE_PURE(void, AggregationProtocol::Callback, OnCloseClient,
-                           client_id,
-                           py::google::DoNotThrowStatus(diagnostic_status));
-  }
-};
 
 }  // namespace
 
@@ -61,11 +46,6 @@ PYBIND11_MODULE(aggregation_protocol, m) {
           .def("Complete", &AggregationProtocol::Complete)
           .def("Abort", &AggregationProtocol::Abort)
           .def("GetStatus", &AggregationProtocol::GetStatus)
-          .def("GetResult", &AggregationProtocol::GetResult);
-
-  pybind11::class_<AggregationProtocol::Callback,
-                   PyAggregationProtocolCallback>(py_aggregation_protocol,
-                                                  "Callback")
-      .def(py::init<>())
-      .def("OnCloseClient", &AggregationProtocol::Callback::OnCloseClient);
+          .def("GetResult", &AggregationProtocol::GetResult)
+          .def("PollServerMessage", &AggregationProtocol::PollServerMessage);
 }

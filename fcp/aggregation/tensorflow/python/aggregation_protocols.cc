@@ -28,8 +28,6 @@
 #include "pybind11_abseil/status_casters.h"
 #include "pybind11_protobuf/native_proto_caster.h"
 
-namespace py = ::pybind11;
-
 using ::fcp::aggregation::AggregationProtocol;
 using ::fcp::aggregation::Configuration;
 using ::fcp::aggregation::ResourceResolver;
@@ -53,15 +51,11 @@ PYBIND11_MODULE(aggregation_protocols, m) {
       kCheckpointParserFactory = new TensorflowCheckpointParserFactory();
   static ResourceResolver* kResourceResolver = new DefaultResourceResolver();
 
-  m.def(
-      "create_simple_aggregation_protocol",
-      [](const Configuration& configuration,
-         AggregationProtocol::Callback* callback)
-          -> absl::StatusOr<std::unique_ptr<AggregationProtocol>> {
-        return fcp::aggregation::SimpleAggregationProtocol::Create(
-            configuration, callback, kCheckpointParserFactory,
-            kCheckpointBuilderFactory, kResourceResolver);
-      },
-      // Ensure the Callback object outlives the AggregationProtocol.
-      py::keep_alive<0, 2>());
+  m.def("create_simple_aggregation_protocol",
+        [](const Configuration& configuration)
+            -> absl::StatusOr<std::unique_ptr<AggregationProtocol>> {
+          return fcp::aggregation::SimpleAggregationProtocol::Create(
+              configuration, kCheckpointParserFactory,
+              kCheckpointBuilderFactory, kResourceResolver);
+        });
 }

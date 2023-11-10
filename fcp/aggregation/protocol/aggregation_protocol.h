@@ -100,27 +100,27 @@ class AggregationProtocol {
   // The client_status indicates whether the client connection was closed
   // normally.
   //
-  // No further calls or callbacks specific to the given client are expected
-  // after this method.
+  // No further calls (except `PollServerMessage`) specific to the given client
+  // are expected after this method.
   virtual absl::Status CloseClient(int64_t client_id,
                                    absl::Status client_status) = 0;
 
   // Forces the protocol to complete.
   //
-  // Once the protocol has completed successfully, the Complete callback will
-  // be invoked and provide the aggregation result.  If the protocol cannot be
+  // Once the protocol has completed successfully, the caller should invoke
+  // `GetResult` to get the aggregation result.  If the protocol cannot be
   // completed in its current state, this method should return an error status.
   // It is also possible for the completion to fail eventually due to finishing
-  // some asynchronous work, in which case the Abort callback will be invoked.
+  // some asynchronous work.
   //
-  // No further protocol method calls except Abort and GetStatus are expected
-  // after this method.
+  // No further protocol method calls except Abort, GetStatus and
+  // PollServerMessage are expected after this method.
   virtual absl::Status Complete() = 0;
 
   // Forces the protocol to Abort.
   //
-  // No further protocol method calls except GetStatus are expected after this
-  // method.
+  // No further protocol method calls except GetStatus and PollServerMessage are
+  // expected after this method.
   virtual absl::Status Abort() = 0;
 
   // Called periodically to receive the protocol status.
@@ -134,25 +134,6 @@ class AggregationProtocol {
   // Returns FAILED_PRECONDITION error if the protocol is not in COMPLETED state
   // when this method is invoked.
   virtual absl::StatusOr<absl::Cord> GetResult() = 0;
-
-  // Callback interface which methods are implemented by the protocol host.
-  //
-  // Thread safety: the protocol host should assume that the callback methods
-  // may be called asynchronously on any thread.
-  class Callback {
-   public:
-    Callback() = default;
-    virtual ~Callback() = default;
-
-    // Called by the protocol to force communication with a client to be closed,
-    // for example due to a client specific error or due to the protocol getting
-    // into a state where no further input for that client is needed.
-    //
-    // No further calls or callbacks specific to the given client are expected
-    // after this method.
-    virtual void OnCloseClient(int64_t client_id,
-                               absl::Status diagnostic_status) = 0;
-  };
 };
 
 }  // namespace fcp::aggregation

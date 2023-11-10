@@ -93,7 +93,6 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   //    If not provided, the outlier detection is disabled.
   static absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>> Create(
       const Configuration& configuration,
-      AggregationProtocol::Callback* callback,
       const CheckpointParserFactory* checkpoint_parser_factory,
       const CheckpointBuilderFactory* checkpoint_builder_factory,
       ResourceResolver* resource_resolver, Clock* clock = Clock::RealClock(),
@@ -126,7 +125,6 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   SimpleAggregationProtocol(
       std::vector<Intrinsic> intrinsics,
       std::vector<std::unique_ptr<TensorAggregator>> aggregators,
-      AggregationProtocol::Callback* callback,
       const CheckpointParserFactory* checkpoint_parser_factory,
       const CheckpointBuilderFactory* checkpoint_builder_factory,
       ResourceResolver* resource_resolver, Clock* clock,
@@ -261,7 +259,6 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   std::vector<std::unique_ptr<TensorAggregator>> aggregators_
       ABSL_GUARDED_BY(aggregation_mu_);
 
-  AggregationProtocol::Callback* const callback_;
   const CheckpointParserFactory* const checkpoint_parser_factory_;
   const CheckpointBuilderFactory* const checkpoint_builder_factory_;
   ResourceResolver* const resource_resolver_;

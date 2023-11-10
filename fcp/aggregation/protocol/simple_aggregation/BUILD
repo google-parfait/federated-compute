@@ -123,7 +123,6 @@ cc_test(
         "//fcp/aggregation/protocol:checkpoint_parser",
         "//fcp/aggregation/protocol:configuration_cc_proto",
         "//fcp/aggregation/protocol:resource_resolver",
-        "//fcp/aggregation/protocol/testing:mock_callback",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/base",

@@ -44,7 +44,6 @@
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
-#include "fcp/aggregation/protocol/testing/test_callback.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/monitoring.h"
@@ -57,11 +56,9 @@ namespace {
 
 using ::testing::_;
 using ::testing::ByMove;
-using ::testing::Eq;
 using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::StrEq;
-using ::testing::UnorderedElementsAreArray;
 
 // TODO: b/305306005 - Consider moving mock classes into a separate test
 // library.
@@ -125,8 +122,6 @@ class SimpleAggregationProtocolTest : public ::testing::Test {
     return CreateProtocol(default_configuration(), params);
   }
 
-  MockAggregationProtocolCallback callback_;
-
   MockCheckpointParserFactory checkpoint_parser_factory_;
   MockCheckpointBuilderFactory checkpoint_builder_factory_;
   MockResourceResolver resource_resolver_;
@@ -166,9 +161,8 @@ SimpleAggregationProtocolTest::CreateProtocol(
   // Verify that the protocol can be created successfully.
   absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>>
       protocol_or_status = SimpleAggregationProtocol::Create(
-          config, &callback_, &checkpoint_parser_factory_,
-          &checkpoint_builder_factory_, &resource_resolver_, &clock_,
-          std::move(params));
+          config, &checkpoint_parser_factory_, &checkpoint_builder_factory_,
+          &resource_resolver_, &clock_, std::move(params));
   EXPECT_THAT(protocol_or_status, IsOk());
   return std::move(protocol_or_status).value();
 }
@@ -205,7 +199,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedNumberOfInputs) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(
-                  config_message, &callback_, &checkpoint_parser_factory_,
+                  config_message, &checkpoint_parser_factory_,
                   &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -234,7 +228,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedNumberOfOutputs) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(
-                  config_message, &callback_, &checkpoint_parser_factory_,
+                  config_message, &checkpoint_parser_factory_,
                   &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -252,7 +246,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedInputType) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(
-                  config_message, &callback_, &checkpoint_parser_factory_,
+                  config_message, &checkpoint_parser_factory_,
                   &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -276,7 +270,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedIntrinsicUri) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(
-                  config_message, &callback_, &checkpoint_parser_factory_,
+                  config_message, &checkpoint_parser_factory_,
                   &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -300,7 +294,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnsupportedInputSpec) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(
-                  config_message, &callback_, &checkpoint_parser_factory_,
+                  config_message, &checkpoint_parser_factory_,
                   &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -324,7 +318,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnmatchingInputAndOutputDataType) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(
-                  config_message, &callback_, &checkpoint_parser_factory_,
+                  config_message, &checkpoint_parser_factory_,
                   &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -348,7 +342,7 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnmatchingInputAndOutputShape) {
     }
   )pb");
   EXPECT_THAT(SimpleAggregationProtocol::Create(
-                  config_message, &callback_, &checkpoint_parser_factory_,
+                  config_message, &checkpoint_parser_factory_,
                   &checkpoint_builder_factory_, &resource_resolver_),
               IsCode(INVALID_ARGUMENT));
 }
@@ -493,8 +487,6 @@ TEST_F(SimpleAggregationProtocolTest,
       .WillOnce(
           Return(ByMove(absl::InvalidArgumentError("Invalid checkpoint"))));
 
-  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(INVALID_ARGUMENT)));
-
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
   EXPECT_EQ(protocol->PollServerMessage(0)
@@ -518,8 +510,6 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MissingTensor) {
 
   EXPECT_CALL(checkpoint_parser_factory_, Create(_))
       .WillOnce(Return(ByMove(std::move(parser))));
-
-  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(NOT_FOUND)));
 
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
@@ -545,8 +535,6 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MismatchingTensor) {
 
   EXPECT_CALL(checkpoint_parser_factory_, Create(_))
       .WillOnce(Return(ByMove(std::move(parser))));
-
-  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(INVALID_ARGUMENT)));
 
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
@@ -576,7 +564,6 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_UriType_Success) {
       .WillOnce(Return(absl::Cord{}));
   ClientMessage message;
   message.mutable_simple_aggregation()->mutable_input()->set_uri("foo_uri");
-  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(OK)));
   EXPECT_THAT(protocol->ReceiveClientMessage(0, message), IsOk());
   EXPECT_EQ(protocol->PollServerMessage(0)
                 .value()
@@ -600,7 +587,6 @@ TEST_F(SimpleAggregationProtocolTest,
       .WillOnce(Return(absl::InvalidArgumentError("Invalid uri")));
   ClientMessage message;
   message.mutable_simple_aggregation()->mutable_input()->set_uri("foo_uri");
-  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(INVALID_ARGUMENT)));
 
   // Receiving the client input should still succeed.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, message), IsOk());
@@ -675,14 +661,12 @@ TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
 
-  // Verify that the pending client is closed.
-  EXPECT_CALL(callback_, OnCloseClient(0, IsCode(ABORTED)));
-
   EXPECT_THAT(protocol->Complete(), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 1")));
   EXPECT_OK(protocol->GetResult());
+  // Verify that the pending client is closed.
   EXPECT_EQ(protocol->PollServerMessage(0)
                 .value()
                 ->simple_aggregation()
@@ -825,9 +809,6 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
   EXPECT_CALL(checkpoint_parser_factory_, Create(_))
       .WillOnce(Return(ByMove(std::move(parser1))))
       .WillOnce(Return(ByMove(std::move(parser2))));
-
-  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(OK)));
-  EXPECT_CALL(callback_, OnCloseClient(Eq(1), IsCode(OK)));
 
   // Handle the inputs.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
@@ -1061,8 +1042,6 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TensorUsedInMultipleIntrinsics) {
       .WillOnce(Return(ByMove(std::move(parser1))))
       .WillOnce(Return(ByMove(std::move(parser2))));
 
-  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(OK)));
-  EXPECT_CALL(callback_, OnCloseClient(Eq(1), IsCode(OK)));
 
   // Handle the inputs.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
@@ -1119,8 +1098,6 @@ TEST_F(SimpleAggregationProtocolTest, Abort_NoInputsReceived) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_THAT(protocol->Start(2), IsOk());
 
-  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(ABORTED)));
-  EXPECT_CALL(callback_, OnCloseClient(Eq(1), IsCode(ABORTED)));
   EXPECT_THAT(protocol->Abort(), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
@@ -1152,7 +1129,6 @@ TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
       .WillOnce(Return(ByMove(std::move(parser))));
 
   // Receive input for the client #1
-  EXPECT_CALL(callback_, OnCloseClient(Eq(1), IsCode(OK)));
   EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
   EXPECT_EQ(protocol->PollServerMessage(1)
                 .value()
@@ -1162,7 +1138,6 @@ TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
             static_cast<int>(OK));
 
   // The client #0 should be aborted on Abort().
-  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(ABORTED)));
   EXPECT_THAT(protocol->Abort(), IsOk());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
@@ -1346,16 +1321,6 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_AbortWhileQueued) {
                                                   "num_inputs_discarded: 10")));
 }
 
-struct IndexTimePair {
-  int64_t index;
-  int64_t seconds_since_start;
-
-  friend bool operator==(const IndexTimePair& lhs, const IndexTimePair& rhs) {
-    return lhs.index == rhs.index &&
-           lhs.seconds_since_start == rhs.seconds_since_start;
-  }
-};
-
 TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
   constexpr absl::Duration kInterval = absl::Seconds(1);
   constexpr absl::Duration kGracePeriod = absl::Seconds(1);
@@ -1373,19 +1338,6 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
     }));
     return parser;
   }));
-
-  absl::Time start_time = clock_.Now();
-  std::vector<IndexTimePair> aborted_clients;
-
-  // This will be used to record the clients that were aborted and the
-  // time when they were aborted.
-  EXPECT_CALL(callback_, OnCloseClient(_, _))
-      .WillRepeatedly(Invoke([&](int64_t client_id, absl::Status status) {
-        if (!status.ok()) {
-          aborted_clients.push_back(IndexTimePair{
-              client_id, absl::ToInt64Seconds(clock_.Now() - start_time)});
-        }
-      }));
 
   // Validate that no clients have any pending messages to poll at the start.
   for (int i = 0; i < 5; ++i) {
@@ -1436,8 +1388,6 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
   // Client #2 should be closed at this time. It wasn't closed earlier because
   // the grace period (1 second) is added to the six_sigma_threshold (5.7s)
   // So the first chance to close the client #2 is at 7 seconds.
-  EXPECT_THAT(aborted_clients,
-              UnorderedElementsAreArray<IndexTimePair>({{2, 7}}));
   EXPECT_EQ(protocol->PollServerMessage(2)
                 .value()
                 ->simple_aggregation()
@@ -1461,8 +1411,6 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
   // The first chance to abort them is at 12 seconds because the grace
   // period (1s) is added to the six_sigma_threshold (5.8s). So the first chance
   // to close those clients is at 12 seconds.
-  EXPECT_THAT(aborted_clients, UnorderedElementsAreArray<IndexTimePair>(
-                                   {{2, 7}, {6, 12}, {8, 12}}));
   EXPECT_EQ(protocol->PollServerMessage(6)
                 .value()
                 ->simple_aggregation()
@@ -1500,8 +1448,6 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_NoPendingClients) {
     }));
     return parser;
   }));
-
-  EXPECT_CALL(callback_, OnCloseClient(_, _)).Times(4);
 
   // Receive messages from 4 clients and close one client from the client side.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
@@ -1541,8 +1487,6 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_AfterAbort) {
   auto protocol = CreateProtocolWithDefaultConfig({kInterval, kGracePeriod});
   EXPECT_THAT(protocol->Start(2), IsOk());
 
-  EXPECT_CALL(callback_, OnCloseClient(Eq(0), IsCode(ABORTED)));
-  EXPECT_CALL(callback_, OnCloseClient(Eq(1), IsCode(ABORTED)));
   EXPECT_THAT(protocol->Abort(), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
@@ -1560,8 +1504,7 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_AfterAbort) {
                 .code(),
             static_cast<int>(ABORTED));
 
-  // Advance the time by 10 seconds and verify that the outlier detection
-  // doesn't make any additional callbacks.
+  // Advance the time by 10 seconds and verify num_clients_aborted.
   clock_.AdvanceTime(10 * kInterval);
   EXPECT_THAT(
       protocol->GetStatus(),

@@ -15,16 +15,15 @@
 
 import tempfile
 from typing import Any
-from unittest import mock
 
 from absl.testing import absltest
 import tensorflow as tf
 
 from fcp.aggregation.protocol import aggregation_protocol_messages_pb2 as apm_pb2
 from fcp.aggregation.protocol import configuration_pb2
-from fcp.aggregation.protocol.python import aggregation_protocol
+from fcp.aggregation.protocol.python import aggregation_protocol  # pylint:disable=unused-import
 from fcp.aggregation.tensorflow.python import aggregation_protocols
-from pybind11_abseil import status
+from pybind11_abseil import status  # pylint:disable=unused-import
 
 
 def create_client_input(tensors: dict[str, Any]) -> apm_pb2.ClientMessage:
@@ -37,22 +36,6 @@ def create_client_input(tensors: dict[str, Any]) -> apm_pb2.ClientMessage:
       return apm_pb2.ClientMessage(
           simple_aggregation=apm_pb2.ClientMessage.SimpleAggregation(
               input=apm_pb2.ClientResource(inline_bytes=f.read())))
-
-
-class CallbackProxy(aggregation_protocol.AggregationProtocol.Callback):
-  """A pass-through Callback that delegates to another Callback.
-
-  This works around the issue that mock.Mock objects aren't recognized as
-  Callback subclasses by pybind11.
-  """
-
-  def __init__(self,
-               callback: aggregation_protocol.AggregationProtocol.Callback):
-    super().__init__()
-    self._callback = callback
-
-  def OnCloseClient(self, client_id: int, diagnostic_status: status.Status):
-    self._callback.OnCloseClient(client_id, diagnostic_status)
 
 
 class AggregationProtocolsTest(absltest.TestCase):
@@ -70,11 +53,10 @@ class AggregationProtocolsTest(absltest.TestCase):
             output_tensors=[output_tensor.experimental_as_proto()],
         ),
     ])
-    callback = mock.create_autospec(
-        aggregation_protocol.AggregationProtocol.Callback, instance=True)
 
     agg_protocol = aggregation_protocols.create_simple_aggregation_protocol(
-        config, CallbackProxy(callback))
+        config
+    )
     self.assertIsNotNone(agg_protocol)
 
     agg_protocol.Start(2)
@@ -84,10 +66,6 @@ class AggregationProtocolsTest(absltest.TestCase):
         start_client_id, create_client_input({input_tensor.name: 3}))
     agg_protocol.ReceiveClientMessage(
         start_client_id + 1, create_client_input({input_tensor.name: 5}))
-    callback.OnCloseClient.assert_has_calls([
-        mock.call(start_client_id, status.Status.OkStatus()),
-        mock.call(start_client_id + 1, status.Status.OkStatus()),
-    ])
 
     agg_protocol.Complete()
     with tempfile.NamedTemporaryFile('wb') as tmpfile:

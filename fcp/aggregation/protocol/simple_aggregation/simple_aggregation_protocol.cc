@@ -40,7 +40,6 @@
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/core/tensor_spec.h"
-#include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
@@ -90,12 +89,11 @@ absl::Status SimpleAggregationProtocol::ValidateConfig(
 
 absl::StatusOr<std::unique_ptr<SimpleAggregationProtocol>>
 SimpleAggregationProtocol::Create(
-    const Configuration& configuration, AggregationProtocol::Callback* callback,
+    const Configuration& configuration,
     const CheckpointParserFactory* checkpoint_parser_factory,
     const CheckpointBuilderFactory* checkpoint_builder_factory,
     ResourceResolver* resource_resolver, Clock* clock,
     std::optional<OutlierDetectionParameters> outlier_detection_parameters) {
-  FCP_CHECK(callback != nullptr);
   FCP_CHECK(checkpoint_parser_factory != nullptr);
   FCP_CHECK(checkpoint_builder_factory != nullptr);
   FCP_CHECK(resource_resolver != nullptr);
@@ -112,15 +110,14 @@ SimpleAggregationProtocol::Create(
   }
 
   return absl::WrapUnique(new SimpleAggregationProtocol(
-      std::move(intrinsics), std::move(aggregators), callback,
-      checkpoint_parser_factory, checkpoint_builder_factory, resource_resolver,
-      clock, std::move(outlier_detection_parameters)));
+      std::move(intrinsics), std::move(aggregators), checkpoint_parser_factory,
+      checkpoint_builder_factory, resource_resolver, clock,
+      std::move(outlier_detection_parameters)));
 }
 
 SimpleAggregationProtocol::SimpleAggregationProtocol(
     std::vector<Intrinsic> intrinsics,
     std::vector<std::unique_ptr<TensorAggregator>> aggregators,
-    AggregationProtocol::Callback* callback,
     const CheckpointParserFactory* checkpoint_parser_factory,
     const CheckpointBuilderFactory* checkpoint_builder_factory,
     ResourceResolver* resource_resolver, Clock* clock,
@@ -128,7 +125,6 @@ SimpleAggregationProtocol::SimpleAggregationProtocol(
     : protocol_state_(PROTOCOL_CREATED),
       intrinsics_(std::move(intrinsics)),
       aggregators_(std::move(aggregators)),
-      callback_(callback),
       checkpoint_parser_factory_(checkpoint_parser_factory),
       checkpoint_builder_factory_(checkpoint_builder_factory),
       resource_resolver_(resource_resolver),
@@ -512,7 +508,6 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
   }
 
   // Update the state post aggregation.
-  std::optional<int64_t> client_id_to_close;
   {
     absl::MutexLock lock(&state_mu_);
     // Change the client state only if the current state is still
@@ -521,15 +516,10 @@ absl::Status SimpleAggregationProtocol::ReceiveClientMessage(
     if (all_clients_[client_id].state == CLIENT_RECEIVED_INPUT_AND_PENDING) {
       latency_aggregator_.Add(client_latency);
       SetClientState(client_id, client_completion_state);
-      client_id_to_close = client_id;
       ServerMessage close_message =
           MakeCloseClientMessage(client_completion_status);
       all_clients_[client_id].server_message = std::move(close_message);
     }
-  }
-  if (client_id_to_close.has_value()) {
-    callback_->OnCloseClient(client_id_to_close.value(),
-                             client_completion_status);
   }
   return absl::OkStatus();
 }
@@ -572,76 +562,55 @@ absl::Status SimpleAggregationProtocol::CloseClient(
 absl::Status SimpleAggregationProtocol::Complete() {
   StopOutlierDetection();
   absl::Cord result;
-  std::vector<int64_t> client_ids_to_close;
-  {
-    absl::MutexLock lock(&state_mu_);
-    FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
-    FCP_ASSIGN_OR_RETURN(result_, CreateReport());
-    SetProtocolState(PROTOCOL_COMPLETED);
-    ServerMessage close_message = MakeCloseClientMessage(
-        absl::AbortedError("The protocol has completed before the "
-                           "client input has been aggregated."));
-    for (int64_t client_id = 0; client_id < all_clients_.size(); client_id++) {
-      switch (all_clients_[client_id].state) {
-        case CLIENT_PENDING:
-          SetClientState(client_id, CLIENT_ABORTED);
-          client_ids_to_close.push_back(client_id);
-          all_clients_[client_id].server_message = close_message;
-          break;
-        case CLIENT_RECEIVED_INPUT_AND_PENDING:
-          SetClientState(client_id, CLIENT_DISCARDED);
-          client_ids_to_close.push_back(client_id);
-          all_clients_[client_id].server_message = close_message;
-          break;
-        default:
-          break;
-      }
+  absl::MutexLock lock(&state_mu_);
+  FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
+  FCP_ASSIGN_OR_RETURN(result_, CreateReport());
+  SetProtocolState(PROTOCOL_COMPLETED);
+  ServerMessage close_message = MakeCloseClientMessage(
+      absl::AbortedError("The protocol has completed before the "
+                         "client input has been aggregated."));
+  for (int64_t client_id = 0; client_id < all_clients_.size(); client_id++) {
+    switch (all_clients_[client_id].state) {
+      case CLIENT_PENDING:
+        SetClientState(client_id, CLIENT_ABORTED);
+        all_clients_[client_id].server_message = close_message;
+        break;
+      case CLIENT_RECEIVED_INPUT_AND_PENDING:
+        SetClientState(client_id, CLIENT_DISCARDED);
+        all_clients_[client_id].server_message = close_message;
+        break;
+      default:
+        break;
     }
-  }
-  for (int64_t client_id : client_ids_to_close) {
-    callback_->OnCloseClient(
-        client_id, absl::AbortedError("The protocol has completed before the "
-                                      "client input has been aggregated."));
   }
   return absl::OkStatus();
 }
 
 absl::Status SimpleAggregationProtocol::Abort() {
   StopOutlierDetection();
-  std::vector<int64_t> client_ids_to_close;
-  {
-    absl::MutexLock lock(&state_mu_);
-    FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
-    aggregation_finished_ = true;
-    SetProtocolState(PROTOCOL_ABORTED);
-    ServerMessage close_message = MakeCloseClientMessage(
-        absl::AbortedError("The protocol has aborted before the "
-                           "client input has been aggregated."));
-    for (int64_t client_id = 0; client_id < all_clients_.size(); client_id++) {
-      switch (all_clients_[client_id].state) {
-        case CLIENT_PENDING:
-          SetClientState(client_id, CLIENT_ABORTED);
-          client_ids_to_close.push_back(client_id);
-          all_clients_[client_id].server_message = close_message;
-          break;
-        case CLIENT_RECEIVED_INPUT_AND_PENDING:
-          SetClientState(client_id, CLIENT_DISCARDED);
-          client_ids_to_close.push_back(client_id);
-          all_clients_[client_id].server_message = close_message;
-          break;
-        case CLIENT_COMPLETED:
-          SetClientState(client_id, CLIENT_DISCARDED);
-          break;
-        default:
-          break;
-      }
+  absl::MutexLock lock(&state_mu_);
+  FCP_RETURN_IF_ERROR(CheckProtocolState(PROTOCOL_STARTED));
+  aggregation_finished_ = true;
+  SetProtocolState(PROTOCOL_ABORTED);
+  ServerMessage close_message = MakeCloseClientMessage(
+      absl::AbortedError("The protocol has aborted before the "
+                         "client input has been aggregated."));
+  for (int64_t client_id = 0; client_id < all_clients_.size(); client_id++) {
+    switch (all_clients_[client_id].state) {
+      case CLIENT_PENDING:
+        SetClientState(client_id, CLIENT_ABORTED);
+        all_clients_[client_id].server_message = close_message;
+        break;
+      case CLIENT_RECEIVED_INPUT_AND_PENDING:
+        SetClientState(client_id, CLIENT_DISCARDED);
+        all_clients_[client_id].server_message = close_message;
+        break;
+      case CLIENT_COMPLETED:
+        SetClientState(client_id, CLIENT_DISCARDED);
+        break;
+      default:
+        break;
     }
-  }
-
-  for (int64_t client_id : client_ids_to_close) {
-    callback_->OnCloseClient(
-        client_id, absl::AbortedError("The protocol has aborted before the "
-                                      "client input has been aggregated."));
   }
   return absl::OkStatus();
 }
@@ -747,13 +716,6 @@ void SimpleAggregationProtocol::PerformOutlierDetection() {
       SetClientState(client_id, CLIENT_ABORTED);
       all_clients_[client_id].server_message = close_message;
     }
-  }
-
-  // Send notifications outside of the mutex scope.
-  for (int64_t client_id : client_ids_to_close) {
-    callback_->OnCloseClient(
-        client_id, absl::AbortedError(
-                       "Client aborted due to being detected as an outlier"));
   }
 }
 
