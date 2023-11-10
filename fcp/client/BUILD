@@ -823,6 +823,7 @@ java_proto_library(
 proto_library(
     name = "example_query_result_proto",
     srcs = ["example_query_result.proto"],
+    visibility = ["//visibility:public"],
 )
 
 java_proto_library(
@@ -832,5 +833,6 @@ java_proto_library(
 
 cc_proto_library(
     name = "example_query_result_cc_proto",
+    visibility = ["//visibility:public"],
     deps = [":example_query_result_proto"],
 )
