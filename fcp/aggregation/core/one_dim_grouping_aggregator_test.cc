@@ -130,7 +130,8 @@ TEST(OneDimGroupingAggregatorTest, EmptyReport) {
   SumGroupingAggregator<int32_t> aggregator;
   auto result = std::move(aggregator).Report();
   EXPECT_THAT(result, IsOk());
-  EXPECT_THAT(result->size(), Eq(0));
+  EXPECT_THAT(result->size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor<int32_t>({0}, {}));
 }
 
 TEST(OneDimGroupingAggregatorTest, ScalarAggregation_Succeeds) {
@@ -319,7 +320,8 @@ TEST(OneDimGroupingAggregatorTest, Merge_BothEmpty_Succeeds) {
 
   auto result = std::move(aggregator1).Report();
   EXPECT_THAT(result, IsOk());
-  EXPECT_THAT(result->size(), Eq(0));
+  EXPECT_THAT(result->size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor<int32_t>({0}, {}));
 }
 
 TEST(OneDimGroupingAggregatorTest, Merge_ThisOutputEmpty_Succeeds) {
