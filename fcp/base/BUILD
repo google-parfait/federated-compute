@@ -37,6 +37,7 @@ cc_library(
         "platform.h",
     ],
     copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/log:absl_log",
