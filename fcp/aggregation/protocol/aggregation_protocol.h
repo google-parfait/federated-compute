@@ -134,6 +134,9 @@ class AggregationProtocol {
   // Returns FAILED_PRECONDITION error if the protocol is not in COMPLETED state
   // when this method is invoked.
   virtual absl::StatusOr<absl::Cord> GetResult() = 0;
+
+  // Returns true if the client has been closed in the protocol.
+  virtual absl::StatusOr<bool> IsClientClosed(int64_t client_id) = 0;
 };
 
 }  // namespace fcp::aggregation

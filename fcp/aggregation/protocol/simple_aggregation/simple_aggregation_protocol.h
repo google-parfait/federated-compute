@@ -112,6 +112,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   absl::Status Abort() override;
   StatusMessage GetStatus() override;
   absl::StatusOr<absl::Cord> GetResult() override;
+  absl::StatusOr<bool> IsClientClosed(int64_t client_id) override;
 
   ~SimpleAggregationProtocol() override;
 

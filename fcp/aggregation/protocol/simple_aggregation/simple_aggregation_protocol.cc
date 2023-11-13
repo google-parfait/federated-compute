@@ -639,6 +639,18 @@ absl::StatusOr<absl::Cord> SimpleAggregationProtocol::GetResult() {
   return result_;
 }
 
+absl::StatusOr<bool> SimpleAggregationProtocol::IsClientClosed(
+    int64_t client_id) {
+  absl::MutexLock lock(&state_mu_);
+  if (client_id < 0 || client_id >= all_clients_.size()) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("client_id %ld is outside the valid range", client_id));
+  }
+  ClientState client_state = all_clients_[client_id].state;
+  return client_state == CLIENT_COMPLETED || client_state == CLIENT_ABORTED ||
+         client_state == CLIENT_DISCARDED || client_state == CLIENT_FAILED;
+}
+
 void SimpleAggregationProtocol::ScheduleOutlierDetection() {
   absl::MutexLock lock(&outlier_detection_mu_);
   if (outlier_detection_parameters_.has_value()) {

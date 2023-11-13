@@ -407,6 +407,14 @@ TEST_F(SimpleAggregationProtocolTest, PollServerMessage_InvalidClientId) {
   EXPECT_THAT(protocol->PollServerMessage(2), IsCode(INVALID_ARGUMENT));
 }
 
+TEST_F(SimpleAggregationProtocolTest, IsClientClosed_InvalidClient) {
+  auto protocol = CreateProtocolWithDefaultConfig();
+  EXPECT_THAT(protocol->Start(1), IsOk());
+  // Must fail for the client_id -1 and 2.
+  EXPECT_THAT(protocol->IsClientClosed(-1), IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(protocol->IsClientClosed(2), IsCode(INVALID_ARGUMENT));
+}
+
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_ProtocolNotStarted) {
   auto protocol = CreateProtocolWithDefaultConfig();
   // Must fail because the protocol isn't started.
@@ -468,6 +476,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_AfterClosingClient) {
   EXPECT_THAT(protocol->Start(1), IsOk());
 
   EXPECT_THAT(protocol->CloseClient(0, absl::OkStatus()), IsOk());
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
                   "num_clients_completed: 1 num_inputs_discarded: 1")));
@@ -495,6 +504,7 @@ TEST_F(SimpleAggregationProtocolTest,
                 .close_message()
                 .code(),
             static_cast<int>(INVALID_ARGUMENT));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
@@ -519,6 +529,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MissingTensor) {
                 .close_message()
                 .code(),
             static_cast<int>(NOT_FOUND));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
@@ -544,6 +555,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MismatchingTensor) {
                 .close_message()
                 .code(),
             static_cast<int>(INVALID_ARGUMENT));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
@@ -571,6 +583,7 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_UriType_Success) {
                 .close_message()
                 .code(),
             static_cast<int>(OK));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
@@ -596,6 +609,7 @@ TEST_F(SimpleAggregationProtocolTest,
                 .close_message()
                 .code(),
             static_cast<int>(INVALID_ARGUMENT));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
@@ -673,6 +687,7 @@ TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
                 .close_message()
                 .code(),
             static_cast<int>(ABORTED));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
 }
 
 TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
@@ -812,12 +827,14 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
 
   // Handle the inputs.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
                   "num_clients_pending: 1 num_clients_completed: 1 "
                   "num_inputs_aggregated_and_included: 1")));
 
   EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
+  EXPECT_TRUE(protocol->IsClientClosed(1).value());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
@@ -860,6 +877,8 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
                 .close_message()
                 .code(),
             static_cast<int>(OK));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
+  EXPECT_TRUE(protocol->IsClientClosed(1).value());
 }
 
 TEST_F(SimpleAggregationProtocolTest,
@@ -1087,6 +1106,8 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TensorUsedInMultipleIntrinsics) {
                 .close_message()
                 .code(),
             static_cast<int>(OK));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
+  EXPECT_TRUE(protocol->IsClientClosed(1).value());
 }
 
 TEST_F(SimpleAggregationProtocolTest, Complete_ProtocolNotStarted) {
@@ -1114,6 +1135,8 @@ TEST_F(SimpleAggregationProtocolTest, Abort_NoInputsReceived) {
                 .close_message()
                 .code(),
             static_cast<int>(ABORTED));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
+  EXPECT_TRUE(protocol->IsClientClosed(1).value());
 }
 
 TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
@@ -1136,9 +1159,11 @@ TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
                 .close_message()
                 .code(),
             static_cast<int>(OK));
+  EXPECT_TRUE(protocol->IsClientClosed(1).value());
 
   // The client #0 should be aborted on Abort().
   EXPECT_THAT(protocol->Abort(), IsOk());
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
                   "num_clients_aborted: 1 num_clients_completed:1 "
@@ -1345,14 +1370,17 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
         protocol->PollServerMessage(i);
     EXPECT_OK(polled_message.status());
     EXPECT_FALSE(polled_message.value().has_value());
+    EXPECT_FALSE(protocol->IsClientClosed(i).value());
   }
 
   // 0 seconds into the protocol.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
 
   // 1 second
   clock_.AdvanceTime(kInterval);
   EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
+  EXPECT_TRUE(protocol->IsClientClosed(1).value());
 
   // 2 seconds
   // num_latency_samples = 2, mean_latency = 500ms,
@@ -1360,6 +1388,8 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
   clock_.AdvanceTime(kInterval);
   EXPECT_THAT(protocol->ReceiveClientMessage(3, MakeClientMessage()), IsOk());
   EXPECT_THAT(protocol->ReceiveClientMessage(4, MakeClientMessage()), IsOk());
+  EXPECT_TRUE(protocol->IsClientClosed(3).value());
+  EXPECT_TRUE(protocol->IsClientClosed(4).value());
 
   // 3, 4, 5 seconds - iterate one seconds at a time to give the outlier
   // detection more chances to run.
@@ -1380,6 +1410,8 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
   clock_.AdvanceTime(kInterval);
   EXPECT_THAT(protocol->ReceiveClientMessage(5, MakeClientMessage()), IsOk());
   EXPECT_THAT(protocol->ReceiveClientMessage(7, MakeClientMessage()), IsOk());
+  EXPECT_TRUE(protocol->IsClientClosed(5).value());
+  EXPECT_TRUE(protocol->IsClientClosed(7).value());
 
   // 7 seconds.
   // num_latency_samples = 6, mean_latency = 1.16666666675s,
@@ -1394,8 +1426,10 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
                 .close_message()
                 .code(),
             static_cast<int>(ABORTED));
+  EXPECT_TRUE(protocol->IsClientClosed(2).value());
 
   EXPECT_THAT(protocol->ReceiveClientMessage(9, MakeClientMessage()), IsOk());
+  EXPECT_TRUE(protocol->IsClientClosed(9).value());
 
   // 8, 9, 10, 11, 12 seconds.
   // num_latency_samples = 7, mean_latency = 1.28571428575s,
@@ -1423,6 +1457,8 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
                 .close_message()
                 .code(),
             static_cast<int>(ABORTED));
+  EXPECT_TRUE(protocol->IsClientClosed(6).value());
+  EXPECT_TRUE(protocol->IsClientClosed(8).value());
 
   EXPECT_THAT(
       protocol->GetStatus(),
@@ -1457,6 +1493,7 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_NoPendingClients) {
   EXPECT_THAT(protocol->CloseClient(4, absl::InternalError("foo")), IsOk());
 
   for (int i = 0; i < 4; ++i) {
+    EXPECT_TRUE(protocol->IsClientClosed(i).value());
     EXPECT_EQ(protocol->PollServerMessage(i)
                   .value()
                   ->simple_aggregation()
@@ -1491,6 +1528,8 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_AfterAbort) {
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 2")));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
+  EXPECT_TRUE(protocol->IsClientClosed(1).value());
   EXPECT_EQ(protocol->PollServerMessage(0)
                 .value()
                 ->simple_aggregation()
