@@ -16,7 +16,6 @@ load("//fcp:config.bzl", "FCP_COPTS")
 load("//fcp/tracing:build_defs.bzl", "tracing_schema_cc_library")
 
 package(
-    default_visibility = ["//fcp:internal"],
     licenses = ["notice"],  # Apache 2.0
 )
 
