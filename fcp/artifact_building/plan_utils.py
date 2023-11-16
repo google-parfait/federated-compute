@@ -100,17 +100,13 @@ def convert_graphdef_to_flatbuffer(
   return converter.convert()
 
 
-def generate_and_add_flat_buffer_to_plan(
-    plan: _PlanT, forgive_tflite_conversion_failure=True
-) -> _PlanT:
+def generate_and_add_flat_buffer_to_plan(plan: _PlanT) -> _PlanT:
   """Generates and adds a TFLite model to the specified Plan.
 
   Note: This method mutates the plan argument.
 
   Args:
     plan: An input plan_pb2.Plan object.
-    forgive_tflite_conversion_failure: If True, if TFLite conversion fails no
-      exception will be raised and the Plan will be returned unmutated.
 
   Returns:
     The input Plan mutated to include a TFLite model when TFLite conversion
@@ -139,8 +135,6 @@ def generate_and_add_flat_buffer_to_plan(
           and not guarantee_all_funcs_one_use
       ):
         return convert(graph_def, tensorflow_spec, True)
-      elif forgive_tflite_conversion_failure:
-        return b''
       else:
         raise RuntimeError(
             f'Failure during TFLite conversion of the client graph: {str(e)}'

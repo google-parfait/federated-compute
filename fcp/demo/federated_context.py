@@ -141,11 +141,7 @@ class FederatedContext(tff.program.FederatedContext):
           self._get_nested_data_spec(config.example_selector),
           grappler_config=tf.compat.v1.ConfigProto(),
       )
-      # Add the TF Lite flatbuffer to the plan. If the conversion fails, the
-      # flatbuffer will be silently omitted and the client will use the
-      # TensorFlow graph in `plan.client_graph_bytes` instead.
-      # NOTE: If conversion failures should not be silent, pass
-      # `forgive_tflite_conversion_failure=False`.
+      # Add the TF Lite flatbuffer to the plan.
       plan = plan_utils.generate_and_add_flat_buffer_to_plan(plan)
       self._cached_comps[cache_key] = plan
 

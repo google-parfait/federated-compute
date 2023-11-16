@@ -123,19 +123,7 @@ class TfLiteTest(tf.test.TestCase):
     with self.assertRaisesRegex(
         RuntimeError, 'Failure during TFLite conversion'
     ):
-      plan_utils.generate_and_add_flat_buffer_to_plan(
-          plan, forgive_tflite_conversion_failure=False
-      )
-
-  def test_forgive_tflite_conversion_failure_for_plan(self):
-    plan = plan_pb2.Plan()
-    plan.client_graph_bytes.Pack(tf.compat.v1.GraphDef())
-    plan.phase.add()
-    plan_after_conversion = plan_utils.generate_and_add_flat_buffer_to_plan(
-        plan, forgive_tflite_conversion_failure=True
-    )
-    self.assertIsInstance(plan_after_conversion, plan_pb2.Plan)
-    self.assertEmpty(plan_after_conversion.client_tflite_graph_bytes)
+      plan_utils.generate_and_add_flat_buffer_to_plan(plan)
 
   def test_caught_exception_in_tflite_conversion_failure_for_client_only_plan(
       self,
@@ -145,18 +133,7 @@ class TfLiteTest(tf.test.TestCase):
     with self.assertRaisesRegex(
         RuntimeError, 'Failure during TFLite conversion'
     ):
-      plan_utils.generate_and_add_flat_buffer_to_plan(
-          client_only_plan, forgive_tflite_conversion_failure=False
-      )
-
-  def test_forgive_tflite_conversion_failure_for_client_only_plan(self):
-    client_only_plan = plan_pb2.ClientOnlyPlan()
-    client_only_plan.graph = tf.compat.v1.GraphDef().SerializeToString()
-    plan_after_conversion = plan_utils.generate_and_add_flat_buffer_to_plan(
-        client_only_plan, forgive_tflite_conversion_failure=True
-    )
-    self.assertIsInstance(plan_after_conversion, plan_pb2.ClientOnlyPlan)
-    self.assertEmpty(plan_after_conversion.tflite_graph)
+      plan_utils.generate_and_add_flat_buffer_to_plan(client_only_plan)
 
   def _create_test_graph_with_associated_tensor_specs(self):
     # Create a graph for y = x ^ 2.
