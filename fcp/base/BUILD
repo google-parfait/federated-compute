@@ -360,6 +360,7 @@ cc_library(
     name = "status_converters",
     srcs = ["status_converters.cc"],
     hdrs = ["status_converters.h"],
+    visibility = ["//visibility:public"],
     deps = [
         ":base",
         "@com_github_grpc_grpc//:grpc++",
