@@ -61,6 +61,7 @@ cc_library(
     srcs = TENSOR_SRCS,
     hdrs = TENSOR_HDRS,
     copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         ":tensor_cc_proto",
         "//fcp/base",
