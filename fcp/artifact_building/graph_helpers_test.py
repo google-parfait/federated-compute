@@ -180,7 +180,7 @@ class GraphHelperTest(absltest.TestCase):
   def test_import_tensorflow_with_session_token(self):
     @tff.tf_computation
     def return_value():
-      return tff.framework.get_session_token()
+      return tff.framework.get_context_stack().current.session_token  # pytype: disable=attribute-error
 
     with tf.Graph().as_default():
       x = tf.compat.v1.placeholder(dtype=tf.string)
