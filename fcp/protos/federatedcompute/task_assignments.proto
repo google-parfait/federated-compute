@@ -204,6 +204,12 @@ message TaskAssignment {
     int32 minimum_clients_in_server_visible_aggregate = 1;
   }
 
+  message ConfidentialAggregationInfo {
+    // The `fcp.confidentialcompute.DataAccessPolicy` that will apply to client
+    // contributions.
+    Resource data_access_policy = 1;
+  }
+
   oneof aggregation_type {
     // If set, indicates that the Aggregations service (see
     // `aggregations.proto`) should be used to perform aggregation.
@@ -212,6 +218,10 @@ message TaskAssignment {
     // If set, indicates that the SecureAggregations service (see
     // `secure_aggregations.proto`) should be used to perform aggregation.
     SecureAggregationInfo secure_aggregation_info = 10;
+
+    // If set, indicates that the ConfidentialAggregations service (see
+    // `confidential_aggregations.proto`) should be used to perform aggregation.
+    ConfidentialAggregationInfo confidential_aggregation_info = 11;
   }
 
   // Unique identifier for the client's protocol session.
