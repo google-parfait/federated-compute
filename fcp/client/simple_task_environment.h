@@ -24,6 +24,7 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/selector_context.pb.h"
+#include "fcp/client/task_result_info.pb.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp {
@@ -89,6 +90,14 @@ class SimpleTaskEnvironment {
   // made to TrainingConditionsSatisfied, returns false.
   bool ShouldAbort(absl::Time current_time,
                    absl::Duration condition_polling_period);
+
+  // This method is called when a task completes. It's called right after a
+  // task's upload has finished, except if the task failed then it's called
+  // right after the failure.  This method might be called multiple times if
+  // more than one tasks were assigned to the device.
+  virtual bool OnTaskCompleted(const TaskResultInfo& task_result_info) {
+    return true;
+  }
 
  private:
   virtual bool TrainingConditionsSatisfied() = 0;

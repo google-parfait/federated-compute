@@ -73,6 +73,7 @@
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
+#include "fcp/client/task_result_info.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -1820,11 +1821,18 @@ std::vector<std::string> HandleMultipleTaskAssignments(
                          std::move(run_plan_results.computation_results),
                          run_plan_results.run_plan_start_time, reference_time,
                          task_assignment.aggregation_session_id);
+    TaskResultInfo task_result_info;
     if (run_plan_results.outcome == engine::PlanOutcome::kSuccess &&
         report_result.ok()) {
       // Only if training succeeded *and* reporting succeeded do we consider
       // the device to have contributed successfully.
       successful_task_names.push_back(task_assignment.task_name);
+      task_result_info.set_result(true);
+    } else {
+      task_result_info.set_result(false);
+    }
+    if (flags->enable_task_completion_callback()) {
+      env_deps->OnTaskCompleted(std::move(task_result_info));
     }
   }
   return successful_task_names;
@@ -2068,7 +2076,6 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     // We increment expected_num_tasks because we expect the server to assign a
     // task.
     expected_num_tasks++;
-
     auto checkin_result =
         IssueCheckin(phase_logger, log_manager, files, federated_protocol,
                      std::move(eligibility_eval_result->task_eligibility_info),
@@ -2085,11 +2092,18 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           federated_protocol, phase_logger,
           std::move(run_plan_results.computation_results),
           run_plan_results.run_plan_start_time, reference_time, std::nullopt);
+      TaskResultInfo task_result_info;
       if (run_plan_results.outcome == engine::PlanOutcome::kSuccess &&
           report_result.ok()) {
         // Only if training succeeded *and* reporting succeeded do we consider
         // the device to have contributed successfully.
         successful_task_names.push_back(checkin_result->task_name);
+        task_result_info.set_result(true);
+      } else {
+        task_result_info.set_result(false);
+      }
+      if (flags->enable_task_completion_callback()) {
+        env_deps->OnTaskCompleted(std::move(task_result_info));
       }
     }
   }

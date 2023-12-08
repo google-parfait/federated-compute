@@ -249,6 +249,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":selector_context_cc_proto",
+        ":task_result_info_cc_proto",
         "//fcp/base",
         "//fcp/client/http:http_client",
         "//fcp/protos:plan_cc_proto",
@@ -341,6 +342,7 @@ cc_library(
         ":secagg_runner",
         ":selector_context_cc_proto",
         ":simple_task_environment",
+        ":task_result_info_cc_proto",
         "//fcp/base",
         "//fcp/base:clock",
         "//fcp/client/cache:file_backed_resource_cache",
@@ -835,4 +837,21 @@ cc_proto_library(
     name = "example_query_result_cc_proto",
     visibility = ["//visibility:public"],
     deps = [":example_query_result_proto"],
+)
+
+# --------------------------------------------------------------------
+# task_result_info.proto
+
+proto_library(
+    name = "task_result_info_proto",
+    srcs = ["task_result_info.proto"],
+    deps = [
+        ":selector_context_proto",
+        "@com_google_protobuf//:any_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "task_result_info_cc_proto",
+    deps = [":task_result_info_proto"],
 )

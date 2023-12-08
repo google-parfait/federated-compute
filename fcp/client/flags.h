@@ -214,6 +214,10 @@ class Flags {
   virtual bool check_eligibility_population_spec_before_checkin() const {
     return false;
   }
+
+  // If true, a callback will be called when a task completes.  For multiple
+  // task assignments, the callback could be called multiple times.
+  virtual bool enable_task_completion_callback() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

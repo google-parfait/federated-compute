@@ -576,6 +576,8 @@ class MockSimpleTaskEnvironment : public SimpleTaskEnvironment {
   MOCK_METHOD(std::unique_ptr<fcp::client::http::HttpClient>, CreateHttpClient,
               (), (override));
   MOCK_METHOD(bool, TrainingConditionsSatisfied, (), (override));
+  MOCK_METHOD(bool, OnTaskCompleted, (const TaskResultInfo& task_result_info),
+              (override));
 };
 
 class MockExampleIterator : public ExampleIterator {
@@ -656,6 +658,7 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, check_eligibility_population_spec_before_checkin, (),
               (const, override));
+  MOCK_METHOD(bool, enable_task_completion_callback, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
