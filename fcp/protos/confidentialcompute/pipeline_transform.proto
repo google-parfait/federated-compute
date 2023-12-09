@@ -125,7 +125,8 @@ message TransformResponse {
 // A data record used as one of the inputs or outputs of a transform.
 message Record {
   oneof kind {
-    bytes unencrypted_data = 1 [ctype = CORD];
+    bytes unencrypted_data = 1
+        ;
     HpkePlusAeadData hpke_plus_aead_data = 2;
   }
 
