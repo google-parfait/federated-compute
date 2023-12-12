@@ -1320,10 +1320,19 @@ message Plan {
   google.protobuf.Any tensorflow_config_proto = 11;
 }
 
+// The data that will be persisted on the client. The configuration of where and
+// for how long this data will live is up to the client implementation. There
+// are no guarantees on how long this information will be kept around.
+message ClientPersistedData {
+  // A map from policy name to current index of MinimumSeparationPolicy that
+  // applied to this computation execution.
+  map<string, int64> min_sep_policy_current_index = 1;
+}
+
 // Represents a client part of the plan of federated optimization.
 // This also used to describe a client-only plan for standalone on-device
 // training, known as personalization.
-// NEXT_TAG: 6
+// NEXT_TAG: 7
 message ClientOnlyPlan {
   reserved 3;
 
@@ -1340,6 +1349,12 @@ message ClientOnlyPlan {
 
   // A TensorFlow ConfigProto.
   google.protobuf.Any tensorflow_config_proto = 4;
+
+  // Optional. The data to be persisted on the client.
+  // The configuration of where and for how long this data will live is up to
+  // the client implementation. There are no guarantees on how long this
+  // information will be kept around.
+  optional ClientPersistedData client_persisted_data = 6;
 }
 
 // Represents the cross round aggregation portion for user defined measurements.
