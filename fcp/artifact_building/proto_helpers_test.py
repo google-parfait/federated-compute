@@ -15,6 +15,7 @@
 
 import collections
 
+import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -167,7 +168,7 @@ class MakeMeasurementTest(tf.test.TestCase):
   def test_fails_for_non_matching_dtype(self):
     with tf.Graph().as_default():
       tensor = tf.constant(1.0)
-      tff_type = tff.types.TensorType(tf.int32, tensor.shape)
+      tff_type = tff.types.TensorType(np.int32, tensor.shape)
 
       with self.assertRaisesRegex(ValueError, ".* does not match.*"):
         proto_helpers.make_measurement(t=tensor, name="test", tff_type=tff_type)
