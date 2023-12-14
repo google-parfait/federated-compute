@@ -48,8 +48,9 @@ def add_one(x):
 
 
 @tff.federated_computation(
-    tff.type_at_server(tf.int32),
-    tff.type_at_clients(tff.SequenceType(tf.string)))
+    tff.FederatedType(tf.int32, tff.SERVER),
+    tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
+)
 def count_clients(state, client_data):
   """Example TFF computation that counts clients."""
   del client_data
@@ -59,8 +60,10 @@ def count_clients(state, client_data):
 
 
 @tff.federated_computation(
-    tff.type_at_server(tff.StructType([('foo', tf.int32), ('bar', tf.int32)])),
-    tff.type_at_clients(tff.SequenceType(tf.string)),
+    tff.FederatedType(
+        tff.StructType([('foo', tf.int32), ('bar', tf.int32)]), tff.SERVER
+    ),
+    tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
 )
 def irregular_arrays(state, client_data):
   """Example TFF computation that returns irregular data."""
@@ -87,8 +90,8 @@ attrs_type = init.type_signature.result
 
 
 @tff.federated_computation(
-    tff.type_at_server(attrs_type),
-    tff.type_at_clients(tff.SequenceType(tf.string)),
+    tff.FederatedType(attrs_type, tff.SERVER),
+    tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
 )
 def attrs_computation(state, client_data):
   """Example TFF computation that returns an attrs class."""
@@ -217,7 +220,8 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     with tff.framework.get_context_stack().install(ctx):
       state, _ = comp(3, DATA_SOURCE.iterator().select(10))
       await release_manager.release(
-          state, tff.type_at_server(tf.int32), key='result')
+          state, tff.FederatedType(tf.int32, tff.SERVER), key='result'
+      )
 
     self.assertEqual(release_manager.values()['result'][0], 7)
 
@@ -255,7 +259,8 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
       state, _ = comp(3, DATA_SOURCE.iterator().select(10))
       state, _ = comp(state, DATA_SOURCE.iterator().select(10))
       await release_manager.release(
-          state, tff.type_at_server(tf.int32), key='result')
+          state, tff.FederatedType(tf.int32, tff.SERVER), key='result'
+      )
 
     self.assertEqual(release_manager.values()['result'][0], 5678)
 
@@ -293,7 +298,8 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
       state, _ = comp(0, DATA_SOURCE.iterator().select(10))
       with self.assertRaisesRegex(ValueError, 'message'):
         await release_manager.release(
-            state, tff.type_at_server(tf.int32), key='result')
+            state, tff.FederatedType(tf.int32, tff.SERVER), key='result'
+        )
 
 
 class FederatedContextPlanCachingTest(absltest.TestCase,
@@ -303,8 +309,9 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
     await super().asyncSetUp()
 
     @tff.federated_computation(
-        tff.type_at_server(tf.int32),
-        tff.type_at_clients(tff.SequenceType(tf.string)))
+        tff.FederatedType(tf.int32, tff.SERVER),
+        tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
+    )
     def identity(state, client_data):
       del client_data
       return state, tff.federated_value((), tff.SERVER)

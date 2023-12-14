@@ -28,8 +28,9 @@ def add_values(x, y):
 
 
 @tff.federated_computation(
-    tff.type_at_server(tf.int32),
-    tff.type_at_clients(tff.SequenceType(tf.string)))
+    tff.FederatedType(tf.int32, tff.SERVER),
+    tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
+)
 def count_clients(state, client_data):
   """Example TFF computation that counts clients."""
   del client_data
@@ -40,8 +41,9 @@ def count_clients(state, client_data):
 
 
 @tff.federated_computation(
-    tff.type_at_server(tf.int32),
-    tff.type_at_clients(tff.SequenceType(tf.string)))
+    tff.FederatedType(tf.int32, tff.SERVER),
+    tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
+)
 def count_examples(state, client_data):
   """Example TFF computation that counts client examples."""
 
@@ -63,7 +65,7 @@ class FederatedComputationTest(absltest.TestCase):
 
   def test_incompatible_computation(self):
     # This function doesn't have the return value structure required for MRF.
-    @tff.federated_computation(tff.type_at_server(tf.int32))
+    @tff.federated_computation(tff.FederatedType(tf.int32, tff.SERVER))
     def add_one(value):
       return value + tff.federated_value(1, tff.SERVER)
 

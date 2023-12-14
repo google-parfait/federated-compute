@@ -23,7 +23,8 @@ from fcp.artifact_building import variable_helpers
 
 
 @tff.federated_computation(
-    tff.type_at_server(tf.int32), tff.type_at_clients(tf.float32)
+    tff.FederatedType(tf.int32, tff.SERVER),
+    tff.FederatedType(tf.float32, tff.CLIENTS),
 )
 def sample_comp(x, y):
   a = tff.federated_broadcast(x)

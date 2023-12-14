@@ -43,8 +43,9 @@ def initialize() -> tff.Value:
 
 
 @tff.federated_computation(
-    tff.type_at_server(tf.int32),
-    tff.type_at_clients(tff.SequenceType(tf.string)))
+    tff.FederatedType(tf.int32, tff.SERVER),
+    tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
+)
 def sum_counts(state, client_data):
   """Sums the value of all 'count' features across all clients."""
 
@@ -67,8 +68,8 @@ def sum_counts(state, client_data):
 
 
 @tff.federated_computation(
-    tff.type_at_server(tf.int32),
-    tff.type_at_clients(tff.SequenceType(tf.string)),
+    tff.FederatedType(tf.int32, tff.SERVER),
+    tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
 )
 def count_clients(state, client_data):
   """Counts the number of clients."""
@@ -204,7 +205,7 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         release_manager.values()['0/result'],
         (
             num_rounds * sum([sum(l) for l in client_counts]),
-            tff.type_at_server(tf.int32),
+            tff.FederatedType(tf.int32, tff.SERVER),
         ),
     )
     for i in range(num_rounds):
@@ -212,7 +213,9 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
           release_manager.values()[f'0/metrics/{i}'],
           (
               (len(client_counts),),
-              tff.type_at_server(tff.StructWithPythonType([tf.int32], tuple)),
+              tff.FederatedType(
+                  tff.StructWithPythonType([tf.int32], tuple), tff.SERVER
+              ),
           ),
       )
 
@@ -265,11 +268,14 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     # computations.
     self.assertSequenceEqual(
         release_manager.values()['0/result'],
-        (sum([sum(l) for l in client_counts]), tff.type_at_server(tf.int32)),
+        (
+            sum([sum(l) for l in client_counts]),
+            tff.FederatedType(tf.int32, tff.SERVER),
+        ),
     )
     self.assertSequenceEqual(
         release_manager.values()['1/result'],
-        (len(client_counts), tff.type_at_server(tf.int32)),
+        (len(client_counts), tff.FederatedType(tf.int32, tff.SERVER)),
     )
 
 
