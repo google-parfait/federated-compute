@@ -27,6 +27,7 @@
 #include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+#include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/simple_task_environment.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor.pb.h"
@@ -43,11 +44,13 @@ SimplePlanEngine::SimplePlanEngine(
     std::vector<ExampleIteratorFactory*> example_iterator_factories,
     std::function<bool()> should_abort, LogManager* log_manager,
     OpStatsLogger* opstats_logger,
+    ExampleIteratorQueryRecorder* example_iterator_query_recorder,
     const InterruptibleRunner::TimingConfig* timing_config)
     : example_iterator_factories_(example_iterator_factories),
       should_abort_(should_abort),
       log_manager_(log_manager),
       opstats_logger_(opstats_logger),
+      example_iterator_query_recorder_(example_iterator_query_recorder),
       timing_config_(timing_config) {}
 
 PlanResult SimplePlanEngine::RunPlan(
@@ -125,7 +128,8 @@ SimplePlanEngine::RunPlanInternal(
   // object. Hold onto the HostObjectRegistration object since it de-registers
   // upon destruction.
   HostObjectRegistration host_registration = AddDatasetTokenToInputs(
-      example_iterator_factories_, opstats_logger_, inputs.get(),
+      example_iterator_factories_, opstats_logger_,
+      example_iterator_query_recorder_, inputs.get(),
       tensorflow_spec.dataset_token_tensor_name(), total_example_count,
       total_example_size_bytes, example_iterator_status);
 

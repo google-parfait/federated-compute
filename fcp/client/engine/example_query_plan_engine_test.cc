@@ -272,9 +272,9 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceeds) {
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillOnce(testing::Return(false));
-
-  ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_, &mock_flags_);
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_, &mock_flags_,
+      /*example_iterator_query_recorder=*/nullptr);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -368,8 +368,9 @@ TEST_F(ExampleQueryPlanEngineTest, MultipleQueries) {
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillOnce(testing::Return(false));
 
-  ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_, &mock_flags_);
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_, &mock_flags_,
+      /*example_iterator_query_recorder=*/nullptr);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -465,8 +466,9 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillOnce(testing::Return(false));
 
-  ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_, &mock_flags_);
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_, &mock_flags_,
+      /*example_iterator_query_recorder=*/nullptr);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -499,8 +501,9 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecTypeMismatch) {
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillOnce(testing::Return(false));
 
-  ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_, &mock_flags_);
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_, &mock_flags_,
+      /*example_iterator_query_recorder=*/nullptr);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -513,8 +516,9 @@ TEST_F(ExampleQueryPlanEngineTest, FactoryNotFound) {
   auto invalid_example_factory =
       std::make_unique<InvalidExampleIteratorFactory>();
 
-  ExampleQueryPlanEngine plan_engine({invalid_example_factory.get()},
-                                     &mock_opstats_logger_, &mock_flags_);
+  ExampleQueryPlanEngine plan_engine(
+      {invalid_example_factory.get()}, &mock_opstats_logger_, &mock_flags_,
+      /*example_iterator_query_recorder=*/nullptr);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -527,8 +531,9 @@ TEST_F(ExampleQueryPlanEngineTest, NoIteratorCreated) {
   auto invalid_example_factory =
       std::make_unique<NoIteratorExampleIteratorFactory>();
 
-  ExampleQueryPlanEngine plan_engine({invalid_example_factory.get()},
-                                     &mock_opstats_logger_, &mock_flags_);
+  ExampleQueryPlanEngine plan_engine(
+      {invalid_example_factory.get()}, &mock_opstats_logger_, &mock_flags_,
+      /*example_iterator_query_recorder=*/nullptr);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -553,8 +558,9 @@ TEST_F(ExampleQueryPlanEngineTest, InvalidExampleQueryResultFormat) {
   EXPECT_CALL(mock_opstats_logger_,
               UpdateDatasetStats(kCollectionUri, 1, invalid_example.size()));
 
-  ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_, &mock_flags_);
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_, &mock_flags_,
+      /*example_iterator_query_recorder=*/nullptr);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);
@@ -572,8 +578,9 @@ TEST_F(ExampleQueryPlanEngineTest,
       mock_opstats_logger_,
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
 
-  ExampleQueryPlanEngine plan_engine({example_iterator_factory_.get()},
-                                     &mock_opstats_logger_, &mock_flags_);
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_, &mock_flags_,
+      /*example_iterator_query_recorder=*/nullptr);
   engine::PlanResult result =
       plan_engine.RunPlan(client_only_plan_.phase().example_query_spec(),
                           output_checkpoint_filename_);

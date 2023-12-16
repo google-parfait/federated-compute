@@ -329,6 +329,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":eligibility_decider",
+        ":example_iterator_query_recorder",
         ":federated_protocol",
         ":federated_protocol_util",
         ":federated_select",
@@ -384,6 +385,7 @@ cc_library(
     defines = TF_OPTIONAL_DEFINES,
     visibility = ["//visibility:public"],
     deps = [
+        ":example_iterator_query_recorder",
         ":interfaces",
         ":phase_logger",
         ":phase_logger_impl",
@@ -692,6 +694,34 @@ cc_test(
         "//fcp/aggregation/testing",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "example_iterator_query_recorder",
+    srcs = ["example_iterator_query_recorder.cc"],
+    hdrs = ["example_iterator_query_recorder.h"],
+    deps = [
+        ":selector_context_cc_proto",
+        ":task_result_info_cc_proto",
+        "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "example_iterator_query_recorder_test",
+    srcs = ["example_iterator_query_recorder_test.cc"],
+    deps = [
+        ":example_iterator_query_recorder",
+        ":selector_context_cc_proto",
+        ":task_result_info_cc_proto",
+        "//fcp/protos:plan_cc_proto",
+        "//fcp/testing",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 

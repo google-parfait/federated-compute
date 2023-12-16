@@ -29,6 +29,7 @@
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/event_publisher.h"
+#include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -100,6 +101,7 @@ class DatasetIterator : public ExternalDatasetIterator {
  public:
   DatasetIterator(std::unique_ptr<ExampleIterator> example_iterator,
                   opstats::OpStatsLogger* opstats_logger,
+                  SingleExampleIteratorQueryRecorder* single_query_recorder,
                   std::atomic<int>* total_example_count,
                   std::atomic<int64_t>* total_example_size_bytes,
                   ExampleIteratorStatus* example_iterator_status,
@@ -113,6 +115,7 @@ class DatasetIterator : public ExternalDatasetIterator {
   std::unique_ptr<ExampleIterator> example_iterator_
       ABSL_GUARDED_BY(iterator_lock_);
   opstats::OpStatsLogger* opstats_logger_;
+  SingleExampleIteratorQueryRecorder* single_query_recorder_;
   absl::Time iterator_start_time_;
   // Example stats across all datasets.
   std::atomic<int>* total_example_count_;
@@ -138,6 +141,7 @@ class DatasetIterator : public ExternalDatasetIterator {
 HostObjectRegistration AddDatasetTokenToInputs(
     std::vector<ExampleIteratorFactory*> example_iterator_factories,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger,
+    ExampleIteratorQueryRecorder* example_iterator_query_recorder,
     std::vector<std::pair<std::string, tensorflow::Tensor>>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
@@ -156,6 +160,7 @@ HostObjectRegistration AddDatasetTokenToInputs(
 HostObjectRegistration AddDatasetTokenToInputsForTfLite(
     std::vector<ExampleIteratorFactory*> example_iterator_factories,
     ::fcp::client::opstats::OpStatsLogger* opstats_logger,
+    ExampleIteratorQueryRecorder* example_iterator_query_recorder,
     absl::flat_hash_map<std::string, std::string>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,

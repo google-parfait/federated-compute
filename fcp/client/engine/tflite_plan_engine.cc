@@ -92,7 +92,8 @@ PlanResult TfLitePlanEngine::RunPlan(
   std::atomic<int64_t> total_example_size_bytes = 0;
   ExampleIteratorStatus example_iterator_status;
   HostObjectRegistration host_registration = AddDatasetTokenToInputsForTfLite(
-      example_iterator_factories_, opstats_logger_, inputs.get(),
+      example_iterator_factories_, opstats_logger_,
+      example_iterator_query_recorder_, inputs.get(),
       tensorflow_spec.dataset_token_tensor_name(), &total_example_count,
       &total_example_size_bytes, &example_iterator_status);
   // If the constant inputs are provided and the flag is enabled, add these to

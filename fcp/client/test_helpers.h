@@ -659,6 +659,8 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, check_eligibility_population_spec_before_checkin, (),
               (const, override));
   MOCK_METHOD(bool, enable_task_completion_callback, (), (const, override));
+  MOCK_METHOD(bool, enable_native_example_query_recording, (),
+              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

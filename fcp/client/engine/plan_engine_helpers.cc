@@ -15,6 +15,7 @@
  */
 #include "fcp/client/engine/plan_engine_helpers.h"
 
+#include <atomic>
 #include <functional>
 #include <string>
 #include <utility>
@@ -22,6 +23,7 @@
 
 #include "absl/status/statusor.h"
 #include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/opstats/opstats_logger_impl.h"
 #include "fcp/client/opstats/pds_backed_opstats_db.h"
@@ -55,11 +57,14 @@ class TrainingDatasetProvider
  public:
   TrainingDatasetProvider(
       std::vector<ExampleIteratorFactory*> example_iterator_factories,
-      OpStatsLogger* opstats_logger, std::atomic<int>* total_example_count,
+      OpStatsLogger* opstats_logger,
+      ExampleIteratorQueryRecorder* example_iterator_query_recorder,
+      std::atomic<int>* total_example_count,
       std::atomic<int64_t>* total_example_size_bytes,
       ExampleIteratorStatus* example_iterator_status)
       : example_iterator_factories_(example_iterator_factories),
         opstats_logger_(opstats_logger),
+        example_iterator_query_recorder_(example_iterator_query_recorder),
         total_example_count_(total_example_count),
         total_example_size_bytes_(total_example_size_bytes),
         example_iterator_status_(example_iterator_status) {}
@@ -68,8 +73,9 @@ class TrainingDatasetProvider
       ExampleSelector selector) final {
     return ExternalDataset::FromFunction(
         [example_iterator_factories = example_iterator_factories_,
-         opstats_logger = opstats_logger_, selector,
-         total_example_count = total_example_count_,
+         opstats_logger = opstats_logger_,
+         example_iterator_query_recorder = example_iterator_query_recorder_,
+         selector, total_example_count = total_example_count_,
          total_example_size_bytes = total_example_size_bytes_,
          example_iterator_status = example_iterator_status_]()
             -> std::unique_ptr<ExternalDatasetIterator> {
@@ -91,17 +97,25 @@ class TrainingDatasetProvider
             return std::make_unique<FailingDatasetIterator>(
                 example_iterator.status());
           }
+          SingleExampleIteratorQueryRecorder* single_query_recorder = nullptr;
+          if (example_iterator_query_recorder) {
+            single_query_recorder =
+                example_iterator_query_recorder->RecordQuery(selector);
+          }
           return std::make_unique<DatasetIterator>(
-              std::move(*example_iterator), opstats_logger, total_example_count,
+              std::move(*example_iterator), opstats_logger,
+              single_query_recorder, total_example_count,
               total_example_size_bytes, example_iterator_status,
               selector.collection_uri(),
-              /*collect_stats=*/example_iterator_factory->ShouldCollectStats());
+              /*collect_stats=*/
+              example_iterator_factory->ShouldCollectStats());
         });
   }
 
  private:
   std::vector<ExampleIteratorFactory*> example_iterator_factories_;
   OpStatsLogger* opstats_logger_;
+  ExampleIteratorQueryRecorder* example_iterator_query_recorder_;
   std::atomic<int>* total_example_count_;
   std::atomic<int64_t>* total_example_size_bytes_;
   ExampleIteratorStatus* example_iterator_status_;
@@ -112,12 +126,14 @@ class TrainingDatasetProvider
 DatasetIterator::DatasetIterator(
     std::unique_ptr<ExampleIterator> example_iterator,
     opstats::OpStatsLogger* opstats_logger,
+    SingleExampleIteratorQueryRecorder* single_query_recorder,
     std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes,
     ExampleIteratorStatus* example_iterator_status,
     const std::string& collection_uri, bool collect_stats)
     : example_iterator_(std::move(example_iterator)),
       opstats_logger_(opstats_logger),
+      single_query_recorder_(single_query_recorder),
       iterator_start_time_(absl::Now()),
       total_example_count_(total_example_count),
       total_example_size_bytes_(total_example_size_bytes),
@@ -149,15 +165,20 @@ absl::StatusOr<std::string> DatasetIterator::GetNext() {
     example_iterator_->Close();
     iterator_finished_ = true;
   }
-  // If we're not forwarding an OUT_OF_RANGE to the caller, record example
-  // stats for metrics logging.
-  if (collect_stats_ && example.ok()) {
-    // TODO(team): Consider reducing logic duplication in
-    // cross-dataset and single-dataset example stat variables.
-    *total_example_count_ += 1;
-    *total_example_size_bytes_ += example->size();
-    example_count_ += 1;
-    example_size_bytes_ += example->size();
+  if (example.ok()) {
+    if (single_query_recorder_) {
+      single_query_recorder_->Increment();
+    }
+    // If we're not forwarding an OUT_OF_RANGE to the caller, record example
+    // stats for metrics logging.
+    if (collect_stats_) {
+      // TODO: b/184863488 - Consider reducing logic duplication in
+      // cross-dataset and single-dataset example stat variables.
+      *total_example_count_ += 1;
+      *total_example_size_bytes_ += example->size();
+      example_count_ += 1;
+      example_size_bytes_ += example->size();
+    }
   }
   return example;
 }
@@ -181,6 +202,7 @@ absl::Status ExampleIteratorStatus::GetStatus() {
 HostObjectRegistration AddDatasetTokenToInputs(
     std::vector<ExampleIteratorFactory*> example_iterator_factories,
     OpStatsLogger* opstats_logger,
+    ExampleIteratorQueryRecorder* example_iterator_query_recorder,
     std::vector<std::pair<std::string, tensorflow::Tensor>>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
@@ -190,7 +212,8 @@ HostObjectRegistration AddDatasetTokenToInputs(
   // ExternalDatasetProviderRegistry.
   auto host_registration = fcp::ExternalDatasetProviderRegistry::Register(
       std::make_shared<TrainingDatasetProvider>(
-          example_iterator_factories, opstats_logger, total_example_count,
+          example_iterator_factories, opstats_logger,
+          example_iterator_query_recorder, total_example_count,
           total_example_size_bytes, example_iterator_status));
   // Pack the token returned from registering the provider into a string
   // tensor. TensorFlow will use that token via the ExternalDatasetOp to create
@@ -207,6 +230,7 @@ HostObjectRegistration AddDatasetTokenToInputs(
 HostObjectRegistration AddDatasetTokenToInputsForTfLite(
     std::vector<ExampleIteratorFactory*> example_iterator_factories,
     OpStatsLogger* opstats_logger,
+    ExampleIteratorQueryRecorder* example_iterator_query_recorder,
     absl::flat_hash_map<std::string, std::string>* inputs,
     const std::string& dataset_token_tensor_name,
     std::atomic<int>* total_example_count,
@@ -216,7 +240,8 @@ HostObjectRegistration AddDatasetTokenToInputsForTfLite(
   // ExternalDatasetProviderRegistry.
   auto host_registration = fcp::ExternalDatasetProviderRegistry::Register(
       std::make_shared<TrainingDatasetProvider>(
-          example_iterator_factories, opstats_logger, total_example_count,
+          example_iterator_factories, opstats_logger,
+          example_iterator_query_recorder, total_example_count,
           total_example_size_bytes, example_iterator_status));
   // Adds the token returned from registering the provider to the map of inputs.
   // TfLite will use that token via the ExternalDatasetOp to create
@@ -233,13 +258,13 @@ std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
         base_dir, flags->opstats_ttl_days() * absl::Hours(24), *log_manager,
         flags->opstats_db_size_limit_bytes());
     if (db_or.ok()) {
-        return std::make_unique<OpStatsLoggerImpl>(
-            std::move(db_or).value(), log_manager, flags, session_name,
-            population_name);
+      return std::make_unique<OpStatsLoggerImpl>(std::move(db_or).value(),
+                                                 log_manager, flags,
+                                                 session_name, population_name);
     } else {
-          return std::make_unique<OpStatsLogger>(
-              /*opstats_enabled=*/flags->enable_opstats(),
-              /*init_status=*/db_or.status());
+      return std::make_unique<OpStatsLogger>(
+          /*opstats_enabled=*/flags->enable_opstats(),
+          /*init_status=*/db_or.status());
     }
   }
   return std::make_unique<OpStatsLogger>(

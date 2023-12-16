@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
 load("//fcp:config.bzl", "FCP_COPTS")
+load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
 
 default_visibility = [
     "//fcp:internal",
@@ -40,6 +40,7 @@ cc_library(
         ":plan_engine_helpers",
         ":tf_wrapper",
         "//fcp/base",
+        "//fcp/client:example_iterator_query_recorder",
         "//fcp/client:histogram_counters_cc_proto",
         "//fcp/client:interfaces",
         "//fcp/client:interruptible_runner",
@@ -76,6 +77,7 @@ cc_library(
         "//fcp/aggregation/protocol:federated_compute_checkpoint_builder",
         "//fcp/base",
         "//fcp/client:converters",
+        "//fcp/client:example_iterator_query_recorder",
         "//fcp/client:example_query_result_cc_proto",
         "//fcp/client:interfaces",
         "//fcp/client:simple_task_environment",
@@ -169,6 +171,7 @@ cc_library(
         ":example_iterator_factory",
         "//fcp/base",
         "//fcp/client:diag_codes_cc_proto",
+        "//fcp/client:example_iterator_query_recorder",
         "//fcp/client:interfaces",
         "//fcp/client:simple_task_environment",
         "//fcp/client/opstats:opstats_logger",
@@ -239,6 +242,7 @@ cc_library(
         ":example_iterator_factory",
         ":plan_engine_helpers",
         ":tflite_wrapper",
+        "//fcp/client:example_iterator_query_recorder",
         "//fcp/client:interfaces",
         "//fcp/client:interruptible_runner",
         "//fcp/client:simple_task_environment",

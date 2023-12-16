@@ -55,6 +55,7 @@ class SimplePlanEngine {
       std::vector<ExampleIteratorFactory*> example_iterator_factories,
       std::function<bool()> should_abort, LogManager* log_manager,
       ::fcp::client::opstats::OpStatsLogger* opstats_logger,
+      ExampleIteratorQueryRecorder* example_iterator_query_recorder,
       const InterruptibleRunner::TimingConfig* timing_config);
 
   PlanResult RunPlan(
@@ -94,6 +95,7 @@ class SimplePlanEngine {
   std::function<bool()> should_abort_;
   LogManager* log_manager_;
   ::fcp::client::opstats::OpStatsLogger* opstats_logger_;
+  ExampleIteratorQueryRecorder* example_iterator_query_recorder_;
   const InterruptibleRunner::TimingConfig* timing_config_;
 };
 
