@@ -55,13 +55,17 @@ inline static constexpr char kChunkingLayerBytesUploaded[] =
 inline static constexpr char kNetworkDuration[] = "network_duration";
 inline static constexpr char kEarliestTrustWorthyTimeMillis[] =
     "earliest_trustworthy_time";
+inline static constexpr char kSupportsNeetContext[] = "supports_neet_context";
 
 class OpStatsExampleIteratorFactory
     : public fcp::client::engine::ExampleIteratorFactory {
  public:
   OpStatsExampleIteratorFactory(OpStatsLogger* op_stats_logger,
-                                LogManager* log_manager)
-      : op_stats_logger_(op_stats_logger), log_manager_(log_manager) {}
+                                LogManager* log_manager,
+                                bool neet_tf_custom_policy_support)
+      : op_stats_logger_(op_stats_logger),
+        log_manager_(log_manager),
+        neet_tf_custom_policy_support_(neet_tf_custom_policy_support) {}
 
   bool CanHandle(const google::internal::federated::plan::ExampleSelector&
                      example_selector) override;
@@ -75,6 +79,7 @@ class OpStatsExampleIteratorFactory
  private:
   OpStatsLogger* op_stats_logger_;
   LogManager* log_manager_;
+  bool neet_tf_custom_policy_support_;
 };
 
 }  // namespace opstats

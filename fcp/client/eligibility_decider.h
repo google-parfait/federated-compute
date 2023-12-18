@@ -17,10 +17,12 @@
 #ifndef FCP_CLIENT_ELIGIBILITY_DECIDER_H_
 #define FCP_CLIENT_ELIGIBILITY_DECIDER_H_
 
+#include <functional>
 #include <vector>
 
 #include "absl/status/statusor.h"
 #include "fcp/base/clock.h"
+#include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -31,6 +33,17 @@ namespace fcp::client {
 
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
+
+// Pure virtual interface for helper class so we can mock it in tests.
+class EetPlanRunner {
+ public:
+  virtual ~EetPlanRunner() = default;
+  virtual engine::PlanResult RunPlan(
+      std::vector<engine::ExampleIteratorFactory*>
+          example_iterator_factories) = 0;
+  virtual absl::StatusOr<TaskEligibilityInfo> ParseOutput(
+      const std::vector<tensorflow::Tensor>& output_tensors) = 0;
+};
 
 // Computes the eligibility of the client for the given tasks in the population
 // eligibility spec.
@@ -53,7 +66,8 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
     const PopulationEligibilitySpec& eligibility_spec, LogManager& log_manager,
     const opstats::OpStatsSequence& opstats_sequence, Clock& clock,
-    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories);
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+    bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner);
 
 }  // namespace fcp::client
 

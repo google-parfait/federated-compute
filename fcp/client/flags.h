@@ -197,6 +197,10 @@ class Flags {
   // If true, enables support for native computation of Eligibility Eval Tasks.
   virtual bool enable_native_eets() const { return false; }
 
+  // If true, enables support for TensorFlow custom policies in the native
+  // Eligibility Eval stack.
+  virtual bool neet_tf_custom_policy_support() const { return false; }
+
   // If true, enables new client report wire format for lightweight client.
   virtual bool enable_lightweight_client_report_wire_format() const {
     return false;

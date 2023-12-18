@@ -261,6 +261,37 @@ std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
   return inputs;
 }
 
+// A helper class for running TensorFlowSpec Eligibility Eval Plans.
+class EetPlanRunnerImpl : public EetPlanRunner {
+ public:
+  explicit EetPlanRunnerImpl(
+      const std::function<engine::PlanResult(
+          std::vector<engine::ExampleIteratorFactory*>)>& run_plan_func,
+      const std::function<absl::StatusOr<TaskEligibilityInfo>(
+          std::vector<tensorflow::Tensor>)>& parse_output_func)
+      : run_plan_func_(run_plan_func), parse_output_func_(parse_output_func) {}
+
+  engine::PlanResult RunPlan(std::vector<engine::ExampleIteratorFactory*>
+                                 example_iterator_factories) override {
+    return run_plan_func_(example_iterator_factories);
+  }
+
+  absl::StatusOr<TaskEligibilityInfo> ParseOutput(
+      const std::vector<tensorflow::Tensor>& output_tensors) override {
+    return parse_output_func_(output_tensors);
+  }
+
+  ~EetPlanRunnerImpl() override = default;
+
+ private:
+  std::function<engine::PlanResult(
+      std::vector<engine::ExampleIteratorFactory*>)>
+      run_plan_func_;
+  std::function<absl::StatusOr<TaskEligibilityInfo>(
+      std::vector<tensorflow::Tensor>)>
+      parse_output_func_;
+};
+
 // Returns the cumulative network stats (those incurred up until this point in
 // time).
 //
@@ -856,7 +887,8 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>>
 MaybeComputeNativeEligibility(
     const FederatedProtocol::EligibilityEvalTask& eligibility_eval_task,
     LogManager& log_manager, OpStatsLogger* opstats_logger, Clock& clock,
-    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories) {
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+    bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner) {
   FCP_ASSIGN_OR_RETURN(opstats::OpStatsSequence opstats_sequence,
                        opstats_logger->GetOpStatsDb()->Read());
 
@@ -864,7 +896,8 @@ MaybeComputeNativeEligibility(
       TaskEligibilityInfo task_eligibility_info,
       ComputeEligibility(
           eligibility_eval_task.population_eligibility_spec.value(),
-          log_manager, opstats_sequence, clock, example_iterator_factories));
+          log_manager, opstats_sequence, clock, example_iterator_factories,
+          neet_tf_custom_policy_support, eet_plan_runner));
 
   if (task_eligibility_info.task_weights_size() == 0) {
     // Eligibility could not be decided.
@@ -926,12 +959,34 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
   // to legacy eets.
   if (flags->enable_native_eets() &&
       eligibility_eval_task.population_eligibility_spec.has_value()) {
+    std::function<engine::PlanResult(
+        std::vector<engine::ExampleIteratorFactory*>)>
+        run_plan_func = [&should_abort, &log_manager, &opstats_logger, &flags,
+                         &plan, &checkpoint_input_filename, &timing_config,
+                         &run_computation_start_time, &reference_time](
+                            std::vector<engine::ExampleIteratorFactory*>
+                                override_iterator_factories) {
+          return RunEligibilityEvalPlanWithTensorflowSpec(
+              override_iterator_factories, should_abort, log_manager,
+              opstats_logger, flags, plan, *checkpoint_input_filename,
+              timing_config, run_computation_start_time, reference_time);
+        };
+
+    std::function<absl::StatusOr<TaskEligibilityInfo>(
+        std::vector<tensorflow::Tensor>)>
+        parse_output_func = [](std::vector<tensorflow::Tensor> output_tensors) {
+          return ParseEligibilityEvalPlanOutput(output_tensors);
+        };
+
+    EetPlanRunnerImpl eet_plan_runner(run_plan_func, parse_output_func);
+
     // TODO(team): Return ExampleStats out of the NEET engine so they can
     // be measured.
     absl::StatusOr<std::optional<TaskEligibilityInfo>>
         native_task_eligibility_info = MaybeComputeNativeEligibility(
             eligibility_eval_task, *log_manager, opstats_logger, clock,
-            example_iterator_factories);
+            example_iterator_factories, flags->neet_tf_custom_policy_support(),
+            eet_plan_runner);
 
     // If native_task_eligibility_info has an OK status, and the wrapped
     // optional contains a value, OR if we have a not-OK status, we should log
@@ -2048,7 +2103,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // Eligibility eval plans can use example iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger, log_manager);
+      opstats_logger, log_manager, flags->neet_tf_custom_policy_support());
   // This iterator factory is used by the task to query the environment's
   // example store for eligibility, and thus does not log first access time
   // since we do not implement example-level SWOR for eligibility.
@@ -2202,7 +2257,8 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   // Eligibility eval plans can only use iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger.get(), log_manager);
+      opstats_logger.get(), log_manager,
+      flags->neet_tf_custom_policy_support());
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(env_deps, SelectorContext(),
                                                  &phase_logger, flags, true);

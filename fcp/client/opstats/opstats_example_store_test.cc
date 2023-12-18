@@ -132,7 +132,8 @@ class OpStatsExampleStoreTest : public testing::Test {
   testing::StrictMock<MockOpStatsDb> mock_db_;
   testing::StrictMock<MockLogManager> mock_log_manager_;
   OpStatsExampleIteratorFactory iterator_factory_ =
-      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_,
+                                    /*neet_tf_custom_policy_support=*/false);
 };
 
 TEST_F(OpStatsExampleStoreTest, TestInvalidCollectionUrl) {
@@ -412,7 +413,8 @@ TEST_F(OpStatsExampleStoreTest, SelectionCriteriaOnlyContainsEndTime) {
 TEST_F(OpStatsExampleStoreTest,
        SelectionCriteriaLastSuccessfulContributionEnabledAndExists) {
   OpStatsExampleIteratorFactory iterator_factory =
-      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_,
+                                    /*neet_tf_custom_policy_support=*/false);
   OperationalStats included;
   included.set_task_name(kTestTaskName);
   included.mutable_events()->Add(CreateEvent(
@@ -464,7 +466,8 @@ TEST_F(OpStatsExampleStoreTest,
 TEST_F(OpStatsExampleStoreTest,
        SelectionCriteriaLastSuccessfulContributionEnabledAndDoesNotExist) {
   OpStatsExampleIteratorFactory iterator_factory =
-      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_,
+                                    /*neet_tf_custom_policy_support=*/false);
   OperationalStats non_matching;
   non_matching.set_task_name("non_matching_task_name");
   non_matching.mutable_events()->Add(CreateEvent(
