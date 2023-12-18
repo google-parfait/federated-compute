@@ -143,11 +143,13 @@ cc_library(
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos:population_eligibility_spec_cc_proto",
+        "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/time",
     ],
 )
 
@@ -436,7 +438,7 @@ cc_library(
 )
 
 cc_test(
-    name = "eligbility_decider_test",
+    name = "eligibility_decider_test",
     srcs = ["eligibility_decider_test.cc"],
     deps = [
         ":diag_codes_cc_proto",
@@ -756,6 +758,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
         "@org_tensorflow//tensorflow/core:protos_all_cc",

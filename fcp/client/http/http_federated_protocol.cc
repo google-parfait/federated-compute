@@ -425,6 +425,10 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   request.mutable_client_version()->set_version_code(client_version_);
   request.mutable_attestation_measurement()->set_value(
       attestation_measurement_);
+  if (flags_->enable_confidential_aggregation()) {
+    request.mutable_resource_capabilities()
+        ->set_supports_confidential_aggregation(true);
+  }
 
   request.mutable_resource_capabilities()->add_supported_compression_formats(
       ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
@@ -638,6 +642,10 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
 
   request.mutable_resource_capabilities()->add_supported_compression_formats(
       ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  if (flags_->enable_confidential_aggregation()) {
+    request.mutable_resource_capabilities()
+        ->set_supports_confidential_aggregation(true);
+  }
 
   std::vector<std::unique_ptr<HttpRequest>> requests;
 
@@ -845,6 +853,10 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   request.mutable_client_version()->set_version_code(client_version_);
   request.mutable_resource_capabilities()->add_supported_compression_formats(
       ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  if (flags_->enable_confidential_aggregation()) {
+    request.mutable_resource_capabilities()
+        ->set_supports_confidential_aggregation(true);
+  }
   for (const auto& task_name : task_names) {
     *request.add_task_names() = task_name;
   }
@@ -991,6 +1003,15 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
     return ReportViaSecureAggregation(std::move(results), plan_duration,
                                       *task_info);
   }
+}
+
+absl::Status HttpFederatedProtocol::ReportViaConfidentialAggregation(
+    const google::internal::federatedcompute::v1::TaskAssignment::
+        ConfidentialAggregationInfo& agg_info,
+    ComputationResults results, absl::Duration plan_duration,
+    std::optional<std::string> aggregation_session_id) {
+  return absl::UnimplementedError(
+      "Confidential Aggregation not yet implemented");
 }
 
 absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(

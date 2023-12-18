@@ -17,6 +17,7 @@
 #define FCP_CLIENT_TEST_HELPERS_H_
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -26,6 +27,7 @@
 #include "gmock/gmock.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/event_publisher.h"
@@ -485,6 +487,17 @@ class MockFederatedProtocol : public FederatedProtocol {
               (ComputationResults results, absl::Duration plan_duration,
                std::optional<std::string> aggregation_session_id));
 
+  absl::Status ReportViaConfidentialAggregation(
+      const google::internal::federatedcompute::v1::TaskAssignment::
+          ConfidentialAggregationInfo& agg_info,
+      ComputationResults results, absl::Duration plan_duration,
+      std::optional<std::string> aggregation_session_id) final {
+    return absl::UnimplementedError("");
+  };
+  MOCK_METHOD(absl::Status, MockReportViaConfidentialAggregation,
+              (ComputationResults results, absl::Duration plan_duration,
+               std::optional<std::string> aggregation_session_id));
+
   absl::Status ReportNotCompleted(
       engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) final {
@@ -661,6 +674,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_task_completion_callback, (), (const, override));
   MOCK_METHOD(bool, enable_native_example_query_recording, (),
               (const, override));
+  MOCK_METHOD(bool, enable_confidential_aggregation, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

@@ -102,6 +102,9 @@ message ResourceCapabilities {
   // Compression formats supported for resources downloaded via `Resource.uri`.
   // All clients are assumed to support uncompressed payloads.
   repeated ResourceCompressionFormat supported_compression_formats = 1;
+  // Whether or not the client supports "Confidential Aggregation". This can be
+  // used by the server to perform task filtering.
+  bool supports_confidential_aggregation = 2;
 }
 
 // Different file formats that may be used to compress resources.

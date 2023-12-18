@@ -605,6 +605,14 @@ absl::Status GrpcFederatedProtocol::ReportCompleted(
   return response;
 }
 
+absl::Status GrpcFederatedProtocol::ReportViaConfidentialAggregation(
+    const google::internal::federatedcompute::v1::TaskAssignment::
+        ConfidentialAggregationInfo& agg_info,
+    ComputationResults results, absl::Duration plan_duration,
+    std::optional<std::string> aggregation_session_id) {
+  return absl::UnimplementedError("Confidential Aggregation not supported");
+}
+
 absl::Status GrpcFederatedProtocol::ReportNotCompleted(
     engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
     std::optional<std::string> aggregation_session_Id) {

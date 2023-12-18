@@ -226,6 +226,9 @@ class Flags {
   // If true, example query recording will happen in the native code. But if
   // enable_task_completion_callback is false, the recorded data won't be used.
   virtual bool enable_native_example_query_recording() const { return false; }
+
+  // If true, confidential aggregation is advertised & can be used for uploads.
+  virtual bool enable_confidential_aggregation() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

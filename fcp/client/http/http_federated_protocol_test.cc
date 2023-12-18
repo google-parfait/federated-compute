@@ -34,21 +34,16 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
-#include "absl/synchronization/blocking_counter.h"
 #include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/base/platform.h"
 #include "fcp/base/time_util.h"
-#include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/cache/test_helpers.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
-#include "fcp/client/federated_protocol_util.h"
 #include "fcp/client/http/http_client.h"
-#include "fcp/client/http/http_client_util.h"
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
@@ -310,7 +305,8 @@ void ExpectRejectedRetryWindow(
 }
 
 EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest(
-    bool supports_multiple_task_assignments = false) {
+    bool supports_multiple_task_assignments = false,
+    bool enable_confidential_aggregation = false) {
   EligibilityEvalTaskRequest request;
   // Note: we don't expect population_name to be set, since it should be set in
   // the URI instead.
@@ -319,9 +315,12 @@ EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest(
   request.mutable_resource_capabilities()
       ->mutable_supported_compression_formats()
       ->Add(ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  request.mutable_resource_capabilities()
+      ->set_supports_confidential_aggregation(enable_confidential_aggregation);
   request.mutable_eligibility_eval_task_capabilities()
       ->set_supports_multiple_task_assignment(
           supports_multiple_task_assignments);
+
   return request;
 }
 
@@ -378,7 +377,8 @@ TaskEligibilityInfo GetFakeTaskEligibilityInfo() {
 }
 
 StartTaskAssignmentRequest GetExpectedStartTaskAssignmentRequest(
-    const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
+    const std::optional<TaskEligibilityInfo>& task_eligibility_info,
+    bool enable_confidential_aggregation = false) {
   // Note: we don't expect population_name or session_id to be set, since they
   // should be set in the URI instead.
   StartTaskAssignmentRequest request;
@@ -389,6 +389,8 @@ StartTaskAssignmentRequest GetExpectedStartTaskAssignmentRequest(
   request.mutable_resource_capabilities()
       ->mutable_supported_compression_formats()
       ->Add(ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+  request.mutable_resource_capabilities()
+      ->set_supports_confidential_aggregation(enable_confidential_aggregation);
   return request;
 }
 
@@ -506,6 +508,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
 
     EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
         .WillRepeatedly(Return(false));
+    EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+        .WillRepeatedly(Return(false));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -553,7 +557,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // absl::Status, which the caller should verify is OK using ASSERT_OK.
   absl::Status RunSuccessfulEligibilityEvalCheckin(
       bool eligibility_eval_enabled = true,
-      bool support_multiple_task_assignments = false) {
+      bool support_multiple_task_assignments = false,
+      bool enable_confidential_aggregation = false) {
     EligibilityEvalTaskResponse eval_task_response;
     if (eligibility_eval_enabled) {
       // We return a fake response which returns the plan/initial checkpoint
@@ -578,7 +583,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
                     request_uri, HttpRequest::Method::kPost, _,
                     EligibilityEvalTaskRequestMatcher(
                         EqualsProto(GetExpectedEligibilityEvalTaskRequest(
-                            support_multiple_task_assignments))))))
+                            support_multiple_task_assignments,
+                            enable_confidential_aggregation))))))
         .WillOnce(Return(FakeHttpResponse(
             200, HeaderList(), eval_task_response.SerializeAsString())));
 
@@ -601,7 +607,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // successful execution of Checkin(). It returns a
   // absl::Status, which the caller should verify is OK using ASSERT_OK.
   absl::Status RunSuccessfulCheckin(
-      bool report_eligibility_eval_result = true) {
+      bool report_eligibility_eval_result = true,
+      bool enable_confidential_aggregation = false) {
     // We return a fake response which returns the plan/initial checkpoint
     // data inline, to keep things simple.
     std::string expected_plan = kPlan;
@@ -628,7 +635,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
                     request_uri, HttpRequest::Method::kPost, _,
                     StartTaskAssignmentRequestMatcher(
                         EqualsProto(GetExpectedStartTaskAssignmentRequest(
-                            expected_eligibility_info))))))
+                            expected_eligibility_info,
+                            enable_confidential_aggregation))))))
         .WillOnce(Return(FakeHttpResponse(
             200, HeaderList(),
             CreateDoneOperation(kOperationName, task_assignment_response)
@@ -2164,6 +2172,24 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   // The Checkin call is expected to return the accepted retry window from the
   // response to the first eligibility eval request.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestCheckinTaskAssignedConfidentalAggregationEnabled) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*support_multiple_task_assignments=*/false,
+      /*enable_confidential_aggregation*/ true));
+  ASSERT_OK(RunSuccessfulCheckin(
+      /*report_eligibility_eval_result*/ true,
+      /*enable_confidential_aggregation*/ true));
+  ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+  EXPECT_THAT(federated_protocol_->ReportViaConfidentialAggregation(
+                  {}, {}, absl::ZeroDuration(), ""),
+              IsCode(UNIMPLEMENTED));
 }
 
 TEST_F(HttpFederatedProtocolTest,

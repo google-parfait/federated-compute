@@ -21,9 +21,9 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -31,7 +31,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -43,6 +42,7 @@
 #include "fcp/client/http/protocol_request_helper.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/stats.h"
@@ -53,7 +53,6 @@
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
-#include "fcp/secagg/client/secagg_client.h"
 
 namespace fcp {
 namespace client {
@@ -96,6 +95,12 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       override;
 
   absl::Status ReportCompleted(
+      ComputationResults results, absl::Duration plan_duration,
+      std::optional<std::string> aggregation_session_id) override;
+
+  absl::Status ReportViaConfidentialAggregation(
+      const google::internal::federatedcompute::v1::TaskAssignment::
+          ConfidentialAggregationInfo& agg_info,
       ComputationResults results, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) override;
 

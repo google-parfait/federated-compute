@@ -109,6 +109,12 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
       ComputationResults results, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) override;
 
+  absl::Status ReportViaConfidentialAggregation(
+      const google::internal::federatedcompute::v1::TaskAssignment::
+          ConfidentialAggregationInfo& agg_info,
+      ComputationResults results, absl::Duration plan_duration,
+      std::optional<std::string> aggregation_session_id) override;
+
   absl::Status ReportNotCompleted(
       engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) override;
@@ -250,8 +256,8 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
   // This field will have an absent value until that message has been received.
   std::optional<CheckinRequestAckInfo> checkin_request_ack_info_;
   // The identifier of the task that was received in a CheckinResponse. Note
-  // that this does not refer to the identifier of the eligbility eval task that
-  // may have been received in an EligibilityEvalCheckinResponse.
+  // that this does not refer to the identifier of the eligibility eval task
+  // that may have been received in an EligibilityEvalCheckinResponse.
   std::string execution_phase_id_;
   absl::flat_hash_map<
       std::string, google::internal::federatedml::v2::SideChannelExecutionInfo>
