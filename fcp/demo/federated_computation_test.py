@@ -16,6 +16,7 @@
 from unittest import mock
 
 from absl.testing import absltest
+import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -65,12 +66,12 @@ class FederatedComputationTest(absltest.TestCase):
 
   def test_incompatible_computation(self):
     # This function doesn't have the return value structure required for MRF.
-    @tff.federated_computation(tff.FederatedType(tf.int32, tff.SERVER))
-    def add_one(value):
-      return value + tff.federated_value(1, tff.SERVER)
+    @tff.federated_computation(tff.FederatedType(np.int32, tff.SERVER))
+    def _identity(value):
+      return value
 
     with self.assertRaises(TypeError):
-      fc.FederatedComputation(add_one, name='comp')
+      fc.FederatedComputation(_identity, name='comp')
 
   @tff.test.with_context(
       tff.backends.native.create_sync_local_cpp_execution_context

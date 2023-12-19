@@ -22,6 +22,7 @@ from unittest import mock
 
 from absl.testing import absltest
 import attr
+import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -47,6 +48,11 @@ def add_one(x):
   return x + 1
 
 
+@tff.tf_computation(np.int32, np.int32)
+def _add(x: int, y: int) -> int:
+  return x + y
+
+
 @tff.federated_computation(
     tff.FederatedType(tf.int32, tff.SERVER),
     tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
@@ -55,8 +61,9 @@ def count_clients(state, client_data):
   """Example TFF computation that counts clients."""
   del client_data
   num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
+  updated_state = tff.federated_map(_add, (state, num_clients))
   non_state = tff.federated_value((), tff.SERVER)
-  return state + num_clients, non_state
+  return updated_state, non_state
 
 
 @tff.federated_computation(
@@ -70,7 +77,8 @@ def irregular_arrays(state, client_data):
   del client_data
   num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
   non_state = tff.federated_value(1, tff.SERVER)
-  return state, non_state + num_clients
+  updated_non_state = tff.federated_map(_add, (non_state, num_clients))
+  return state, updated_non_state
 
 
 @attr.s(eq=False, frozen=True, slots=True)
@@ -98,7 +106,9 @@ def attrs_computation(state, client_data):
   del client_data
   num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
   non_state = tff.federated_value(1, tff.SERVER)
-  return state, non_state + num_clients
+
+  metrics = tff.federated_map(_add, (non_state, num_clients))
+  return state, metrics
 
 
 def build_result_checkpoint(state: int) -> bytes:

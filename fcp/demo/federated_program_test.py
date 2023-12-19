@@ -20,6 +20,7 @@ import unittest
 
 from absl import flags
 from absl.testing import absltest
+import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -42,6 +43,11 @@ def initialize() -> tff.Value:
   return tff.federated_value(0, tff.SERVER)
 
 
+@tff.tf_computation(np.int32, np.int32)
+def _add(x: int, y: int) -> int:
+  return x + y
+
+
 @tff.federated_computation(
     tff.FederatedType(tf.int32, tff.SERVER),
     tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
@@ -62,9 +68,10 @@ def sum_counts(state, client_data):
   client_counts = tff.federated_map(client_work, client_data)
   aggregated_count = tff.federated_sum(client_counts)
 
+  updated_state = tff.federated_map(_add, (state, aggregated_count))
   num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
   metrics = tff.federated_zip((num_clients,))
-  return state + aggregated_count, metrics
+  return updated_state, metrics
 
 
 @tff.federated_computation(
@@ -75,8 +82,9 @@ def count_clients(state, client_data):
   """Counts the number of clients."""
   del client_data
   num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
+  updated_state = tff.federated_map(_add, (state, num_clients))
   metrics = tff.federated_zip((tff.federated_value(0, tff.SERVER),))
-  return state + num_clients, metrics
+  return updated_state, metrics
 
 
 async def program_logic(
