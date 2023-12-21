@@ -62,9 +62,6 @@ def generate_example_selector_placeholders(
     A list of tf.compat.v2.placeholders.
   """
   type_spec = tff.to_type(type_spec)
-  type_checks.check_type(
-      type_spec, (tff.SequenceType, tff.StructType), name='type_spec'
-  )
   if isinstance(type_spec, tff.SequenceType):
     # Each client input is a sequence of serialized `tf.Example`s, which is why
     # the leaves of these TFF type signatures are sequences. Each input sequence
@@ -72,9 +69,8 @@ def generate_example_selector_placeholders(
     # stream of `tf.Example`s is selected from the data store, which is why we
     # only have a single placeholder for the `ExampleSelector`.
     return [tf.compat.v1.placeholder(tf.string, shape=[], name=name_prefix)]
-  else:
-    type_spec.check_struct()
-    type_spec_elements = tff.structure.to_elements(type_spec)  # pytype: disable=wrong-arg-types
+  elif isinstance(type_spec, tff.StructType):
+    type_spec_elements = tff.structure.to_elements(type_spec)
     placeholders = []
     for element_index, (_, element_type) in enumerate(type_spec_elements):
       placeholders.extend(
@@ -83,6 +79,8 @@ def generate_example_selector_placeholders(
           )
       )
     return placeholders
+  else:
+    raise NotImplementedError(f'Unexpected type found: {type_spec}.')
 
 
 def embed_data_logic(
@@ -586,9 +584,6 @@ def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
     TypeError: If the arguments are of the wrong types.
   """
   type_spec = tff.to_type(type_spec)
-  type_checks.check_type(
-      type_spec, (tff.SequenceType, tff.StructType), name='type_spec'
-  )
   if isinstance(type_spec, tff.SequenceType):
     @tff.tf_computation(tf.string, tf.string)
     def data_comp(token, example_selector):
@@ -614,13 +609,14 @@ def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
 
     _validate_data_comp(data_comp, type_spec)
     return [data_comp]
-  else:  # type_spec is a struct.
-    type_spec.check_struct()
-    type_spec_elements = tff.structure.to_elements(type_spec)  # pytype: disable=wrong-arg-types
+  elif isinstance(type_spec, tff.StructType):
+    type_spec_elements = tff.structure.to_elements(type_spec)
     elements = []
     for _, element_type in type_spec_elements:
       elements.extend(make_data_sources_without_dataspec(element_type))
     return elements
+  else:
+    raise NotImplementedError(f'Unexpected type found: {type_spec}.')
 
 
 def _list_tensor_names_in_binding(
