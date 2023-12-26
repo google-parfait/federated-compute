@@ -69,7 +69,7 @@ TEST(Tracing, Basic) {
   ASSERT_TRUE(PostProcessOutput(&report));
   // Producing report which is expected to precisely match .baseline file.
   std::ostringstream expected;
-  expected << "" << std::endl;
+  expected << "" << '\n';
 
   // Compare produced report with baseline.
   std::string baseline_path =
