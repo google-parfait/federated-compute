@@ -89,12 +89,12 @@ void DoTest() {
 
   // Producing report which is expected to precisely match .baseline file.
   std::ostringstream report;
-  report << "============== " << source_file << " ============" << std::endl;
-  report << PostProcessOutput(source) << std::endl;
-  report << "============== diagnosis ============" << std::endl;
-  report << PostProcessOutput(err) << std::endl;
-  report << "============== result ============" << std::endl;
-  report << PostProcessOutput(out) << std::endl;
+  report << "============== " << source_file << " ============" << '\n';
+  report << PostProcessOutput(source) << '\n';
+  report << "============== diagnosis ============" << '\n';
+  report << PostProcessOutput(err) << '\n';
+  report << "============== result ============" << '\n';
+  report << PostProcessOutput(out) << '\n';
 
   // Compare produced report with baseline.
   std::string baseline_path =
