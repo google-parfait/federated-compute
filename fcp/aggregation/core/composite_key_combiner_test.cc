@@ -38,7 +38,6 @@ namespace aggregation {
 namespace {
 
 using testing::Eq;
-using testing::IsEmpty;
 
 TEST(CompositeKeyCombinerTest, EmptyInput_Invalid) {
   CompositeKeyCombiner combiner(std::vector<DataType>{DT_FLOAT});
@@ -58,7 +57,7 @@ TEST(CompositeKeyCombinerTest, InputWithWrongShapeTensor_Invalid) {
   ASSERT_THAT(result, IsCode(INVALID_ARGUMENT));
 }
 
-TEST(CompositeKeyCombinerTest, InputWithTooFewTensors_Invalid) {
+TEST(CompositeKeyCombinerTest, InputWithTooFewTensorsInvalid) {
   CompositeKeyCombiner combiner(std::vector<DataType>{DT_FLOAT, DT_INT32});
   Tensor t1 =
       Tensor::Create(DT_FLOAT, {3}, CreateTestData<float>({1.1, 1.2, 1.3}))
@@ -94,10 +93,11 @@ TEST(CompositeKeyCombinerTest, InputWithWrongTypes_Invalid) {
   ASSERT_THAT(result, IsCode(INVALID_ARGUMENT));
 }
 
-TEST(CompositeKeyCombinerTest, OutputBeforeAccumulate_Empty) {
+TEST(CompositeKeyCombinerTest, OutputBeforeAccumulateOutputsEmptyTensor) {
   CompositeKeyCombiner combiner(std::vector<DataType>{DT_FLOAT});
   OutputTensorList output = combiner.GetOutputKeys();
-  EXPECT_THAT(output, IsEmpty());
+  EXPECT_THAT(output.size(), Eq(1));
+  EXPECT_THAT(output[0], IsTensor<float>({0}, {}));
 }
 
 TEST(CompositeKeyCombinerTest, AccumulateAndOutput_SingleElement) {

@@ -88,12 +88,14 @@ TEST(GroupByAggregatorTest, EmptyReport) {
   // Intrinsic lifetime must outlast that of the TensorAggregator.
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
-  // CanReport should return false because calling Report will not be able to
-  // output the correct number of tensors for the intrinsic as empty tensors
-  // cannot be created.
-  EXPECT_FALSE(group_by_aggregator->CanReport());
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+
   auto result = std::move(*group_by_aggregator).Report();
-  EXPECT_THAT(result, IsCode(FAILED_PRECONDITION));
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0], IsTensor<string_view>({0}, {}));
+  EXPECT_THAT(result.value()[1], IsTensor<int32_t>({0}, {}));
 }
 
 TEST(GroupByAggregatorTest, ScalarAggregation_Succeeds) {
@@ -119,6 +121,28 @@ TEST(GroupByAggregatorTest, ScalarAggregation_Succeeds) {
   EXPECT_THAT(result.value()[1], IsTensor({1}, {6}));
 }
 
+TEST(GroupByAggregatorTest, AggregateOnlyEmptyTensorsSucceeds) {
+  // Intrinsic lifetime must outlast that of the TensorAggregator.
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor key =
+      Tensor::Create(DT_STRING, {0}, CreateTestData<string_view>({})).value();
+  Tensor t1 =
+      Tensor::Create(DT_INT32, {0}, CreateTestData<int32_t>({})).value();
+  EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0], IsTensor<string_view>({0}, {}));
+  EXPECT_THAT(result.value()[1], IsTensor<int32_t>({0}, {}));
+}
+
 TEST(GroupByAggregatorTest, DenseAggregation_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic = CreateDefaultIntrinsic();
@@ -139,6 +163,49 @@ TEST(GroupByAggregatorTest, DenseAggregation_Succeeds) {
   EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t3}), IsOk());
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result->size(), Eq(2));
+  // Verify the resulting tensors.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>(shape, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor(shape, {14, 19, 23, 49}));
+  // Also ensure that the resulting tensors are dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+  EXPECT_TRUE(result.value()[1].is_dense());
+}
+
+TEST(GroupByAggregatorTest, AccumulateEmptyInputDoesNotAffectResult) {
+  const TensorShape shape = {4};
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  Tensor keys =
+      Tensor::Create(
+          DT_STRING, shape,
+          CreateTestData<string_view>({"zero", "one", "two", "three"}))
+          .value();
+  Tensor t1 =
+      Tensor::Create(DT_INT32, shape, CreateTestData({1, 3, 15, 27})).value();
+  Tensor t2 =
+      Tensor::Create(DT_INT32, shape, CreateTestData({10, 5, 1, 2})).value();
+  Tensor t3 =
+      Tensor::Create(DT_INT32, shape, CreateTestData({3, 11, 7, 20})).value();
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t1}), IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t2}), IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t3}), IsOk());
+
+  // Now accumulate an empty input. This will increase NumInputs to 4 but
+  // otherwise has no effect on the result.
+  Tensor empty_keys =
+      Tensor::Create(DT_STRING, {0}, CreateTestData<string_view>({})).value();
+  Tensor empty_tensor =
+      Tensor::Create(DT_INT32, {0}, CreateTestData<int32_t>({})).value();
+  EXPECT_THAT(group_by_aggregator->Accumulate({&empty_keys, &empty_tensor}),
+              IsOk());
+
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(4));
 
   auto result = std::move(*group_by_aggregator).Report();
   EXPECT_THAT(result, IsOk());
@@ -438,6 +505,42 @@ TEST(GroupByAggregatorTest,
   EXPECT_THAT(result.value()[0],
               IsTensor<string_view>({4}, {"cat", "cat", "dog", "dog"}));
   EXPECT_THAT(result.value()[1], IsTensor({4}, {9, 26, 27, 2}));
+}
+
+TEST(GroupByAggregatorTest,
+     MultipleKeyTensorsSomeKeysNotInOutputSucceedsWhenAllInputsEmpty) {
+  const TensorShape shape = {0};
+  Intrinsic intrinsic{
+      "fedsql_group_by",
+      {CreateTensorSpec("key1", DT_STRING),
+       CreateTensorSpec("key2", DT_STRING)},
+      // An empty string in the output keys means that the key should not be
+      // included in the output.
+      {CreateTensorSpec("", DT_STRING), CreateTensorSpec("animals", DT_STRING)},
+      {},
+      {}};
+  intrinsic.nested_intrinsics.push_back(CreateDefaultInnerIntrinsic(DT_INT32));
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+
+  Tensor size_keys =
+      Tensor::Create(DT_STRING, {0}, CreateTestData<string_view>({})).value();
+  Tensor animal_keys =
+      Tensor::Create(DT_STRING, {0}, CreateTestData<string_view>({})).value();
+  Tensor t = Tensor::Create(DT_INT32, {0}, CreateTestData<int32_t>({})).value();
+  EXPECT_THAT(group_by_aggregator->Accumulate({&size_keys, &animal_keys, &t}),
+              IsOk());
+  EXPECT_THAT(group_by_aggregator->Accumulate({&size_keys, &animal_keys, &t}),
+              IsOk());
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2));
+
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  // Verify the resulting tensors, which should be empty.
+  // Only the second key tensor should be included in the output.
+  EXPECT_THAT(result.value().size(), Eq(2));
+  EXPECT_THAT(result.value()[0], IsTensor<string_view>({0}, {}));
+  EXPECT_THAT(result.value()[1], IsTensor<int32_t>({0}, {}));
 }
 
 TEST(GroupByAggregatorTest, Accumulate_NoKeyTensors) {
@@ -776,7 +879,7 @@ TEST(GroupByAggregatorTest, Merge_NoKeyTensors) {
   EXPECT_THAT(result.value()[0], IsTensor<int32_t>({1}, {108}));
 }
 
-TEST(GroupByAggregatorTest, Merge_ThisOutputEmpty_Succeeds) {
+TEST(GroupByAggregatorTest, MergeThisOutputReceivedNoInputsSucceeds) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto aggregator1 = CreateTensorAggregator(intrinsic).value();
   auto aggregator2 = CreateTensorAggregator(intrinsic).value();
@@ -813,7 +916,51 @@ TEST(GroupByAggregatorTest, Merge_ThisOutputEmpty_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupByAggregatorTest, Merge_OtherOutputEmpty_Succeeds) {
+TEST(GroupByAggregatorTest, MergeThisOutputReceivedOnlyEmptyInputsSucceeds) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1 = Tensor::Create(DT_STRING, {2},
+                                CreateTestData<string_view>({"zero", "one"}))
+                     .value();
+  Tensor t1 = Tensor::Create(DT_INT32, {2}, CreateTestData({1, 3})).value();
+  EXPECT_THAT(aggregator2->Accumulate({&keys1, &t1}), IsOk());
+  // aggregator2 totals: [1, 3]
+  Tensor keys2 =
+      Tensor::Create(DT_STRING, {6},
+                     CreateTestData<string_view>(
+                         {"two", "one", "zero", "one", "three", "two"}))
+          .value();
+  Tensor t2 = Tensor::Create(DT_INT32, {6}, CreateTestData({10, 5, 1, 2, 4, 9}))
+                  .value();
+  EXPECT_THAT(aggregator2->Accumulate({&keys2, &t2}), IsOk());
+  // aggregator2 totals: [2, 10, 19, 4]
+
+  // aggregator1 receives only an empty input.
+  Tensor empty_keys =
+      Tensor::Create(DT_STRING, {0}, CreateTestData<string_view>({})).value();
+  Tensor empty_tensor =
+      Tensor::Create(DT_INT32, {0}, CreateTestData<int32_t>({})).value();
+  EXPECT_THAT(aggregator1->Accumulate({&empty_keys, &empty_tensor}), IsOk());
+
+  // Merge aggregator2 into aggregator1 which has not received any inputs.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor({4}, {2, 10, 19, 4}));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+}
+
+TEST(GroupByAggregatorTest, MergeOtherAggregatorReceivedNoInputsSucceeds) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto aggregator1 = CreateTensorAggregator(intrinsic).value();
   auto aggregator2 = CreateTensorAggregator(intrinsic).value();
@@ -850,11 +997,56 @@ TEST(GroupByAggregatorTest, Merge_OtherOutputEmpty_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
+TEST(GroupByAggregatorTest,
+     MergeOtherAggregatorReceivedOnlyEmptyInputsSucceeds) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
+  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
+
+  Tensor keys1 = Tensor::Create(DT_STRING, {2},
+                                CreateTestData<string_view>({"zero", "one"}))
+                     .value();
+  Tensor t1 = Tensor::Create(DT_INT32, {2}, CreateTestData({1, 3})).value();
+  EXPECT_THAT(aggregator1->Accumulate({&keys1, &t1}), IsOk());
+  // aggregator1 totals: [1, 3]
+  Tensor keys2 =
+      Tensor::Create(DT_STRING, {6},
+                     CreateTestData<string_view>(
+                         {"two", "one", "zero", "one", "three", "two"}))
+          .value();
+  Tensor t2 = Tensor::Create(DT_INT32, {6}, CreateTestData({10, 5, 1, 2, 4, 9}))
+                  .value();
+  EXPECT_THAT(aggregator1->Accumulate({&keys2, &t2}), IsOk());
+  // aggregator1 totals: [2, 10, 19, 4]
+
+  // aggregator2 receives only an empty input.
+  Tensor empty_keys =
+      Tensor::Create(DT_STRING, {0}, CreateTestData<string_view>({})).value();
+  Tensor empty_tensor =
+      Tensor::Create(DT_INT32, {0}, CreateTestData<int32_t>({})).value();
+  EXPECT_THAT(aggregator2->Accumulate({&empty_keys, &empty_tensor}), IsOk());
+
+  // Merge with aggregator2 which has only received empty inputs.
+  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(2));
+  // Verify the resulting tensor.
+  EXPECT_THAT(result.value()[0],
+              IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
+  EXPECT_THAT(result.value()[1], IsTensor({4}, {2, 10, 19, 4}));
+  // Also ensure that the resulting tensor is dense.
+  EXPECT_TRUE(result.value()[0].is_dense());
+}
+
 // TODO(team): Expand on the tests below to check that even when
 // Accumulate or MergeWith return INVALID_ARGUMENT, the internal state of the
 // GroupByAggregator remains unaffected, exactly the same as if the failed
 // operation had never been called.
-TEST(GroupByAggregatorTest, Accumulate_KeyTensorHasIncompatibleDataType) {
+TEST(GroupByAggregatorTest, AccumulateKeyTensorHasIncompatibleDataType) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
   Tensor key =
@@ -867,7 +1059,7 @@ TEST(GroupByAggregatorTest, Accumulate_KeyTensorHasIncompatibleDataType) {
       testing::HasSubstr("Tensor at position 0 did not have expected dtype"));
 }
 
-TEST(GroupByAggregatorTest, Accumulate_ValueTensorHasIncompatibleDataType) {
+TEST(GroupByAggregatorTest, AccumulateValueTensorHasIncompatibleDataType) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
   Tensor key =

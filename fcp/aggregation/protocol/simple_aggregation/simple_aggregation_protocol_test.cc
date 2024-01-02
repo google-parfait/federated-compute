@@ -881,36 +881,12 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
   EXPECT_TRUE(protocol->IsClientClosed(1).value());
 }
 
-TEST_F(SimpleAggregationProtocolTest,
-       Complete_NoInputsReceived_InvalidForFedSqlGroupBy) {
-  // Two intrinsics:
-  // 1) federated_sum "foo" that takes int32 {2,3} tensors.
-  // 2) fedsql_group_by with two grouping keys key1 and key2, only the first one
+TEST_F(SimpleAggregationProtocolTest, CompleteNoInputsReceivedFedSqlGroupBy) {
+  // One intrinsic:
+  //    fedsql_group_by with two grouping keys key1 and key2, only the first one
   //    of which should be output, and two inner GoogleSQL:sum intrinsics bar
   //    and baz operating on float tensors.
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
-      intrinsic_uri: "federated_sum"
-      intrinsic_args {
-        input_tensor {
-          name: "foo"
-          dtype: DT_INT32
-          shape {
-            dim { size: 2 }
-            dim { size: 3 }
-          }
-        }
-      }
-      output_tensors {
-        name: "foo_out"
-        dtype: DT_INT32
-        shape {
-          dim { size: 2 }
-          dim { size: 3 }
-        }
-      }
-    }
-
     aggregation_configs: {
       intrinsic_uri: "fedsql_group_by"
       intrinsic_args {
@@ -970,11 +946,145 @@ TEST_F(SimpleAggregationProtocolTest,
     }
   )pb");
   auto protocol = CreateProtocol(config_message);
+  EXPECT_THAT(protocol->Start(1), IsOk());
+
+  // Verify that the checkpoint builder is created.
+  auto& checkpoint_builder = ExpectCheckpointBuilder();
+  // Verify that empty tensors are added to the result checkpoint.
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("key1_out"), IsTensor<string_view>({0}, {})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("bar_out"), IsTensor<float>({0}, {})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("baz_out"), IsTensor<float>({0}, {})))
+      .WillOnce(Return(absl::OkStatus()));
+
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
+
+  EXPECT_THAT(protocol->Complete(), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 1")));
+  EXPECT_OK(protocol->GetResult());
+  // Verify that the pending client is closed.
+  EXPECT_EQ(protocol->PollServerMessage(0)
+                .value()
+                ->simple_aggregation()
+                .close_message()
+                .code(),
+            static_cast<int>(ABORTED));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
+}
+
+TEST_F(SimpleAggregationProtocolTest,
+       CompleteOnlyEmptyInputsReceivedFedSqlGroupBy) {
+  Configuration config_message = PARSE_TEXT_PROTO(R"pb(
+    aggregation_configs: {
+      intrinsic_uri: "fedsql_group_by"
+      intrinsic_args {
+        input_tensor {
+          name: "key1"
+          dtype: DT_FLOAT
+          shape { dim { size: -1 } }
+        }
+      }
+      output_tensors {
+        name: "key1_out"
+        dtype: DT_FLOAT
+        shape { dim { size: -1 } }
+      }
+      inner_aggregations {
+        intrinsic_uri: "GoogleSQL:sum"
+        intrinsic_args {
+          input_tensor {
+            name: "val1"
+            dtype: DT_FLOAT
+            shape {}
+          }
+        }
+        output_tensors {
+          name: "val1_out"
+          dtype: DT_FLOAT
+          shape {}
+        }
+      }
+    }
+  )pb");
+  auto protocol = CreateProtocol(config_message);
   EXPECT_THAT(protocol->Start(2), IsOk());
-  // Complete/GetResult cannot be called for fedsql_group_by intrinsics until at
-  // least one input has been aggregated.
-  EXPECT_THAT(protocol->Complete(), IsCode(FAILED_PRECONDITION));
-  EXPECT_THAT(protocol->GetResult(), IsCode(FAILED_PRECONDITION));
+
+  // Expect two empty client inputs.
+  auto parser1 = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser1, GetTensor(StrEq("key1"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {0}, CreateTestData<float>({}));
+  }));
+  EXPECT_CALL(*parser1, GetTensor(StrEq("val1"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {0}, CreateTestData<float>({}));
+  }));
+
+  auto parser2 = std::make_unique<MockCheckpointParser>();
+  EXPECT_CALL(*parser2, GetTensor(StrEq("key1"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {0}, CreateTestData<float>({}));
+  }));
+  EXPECT_CALL(*parser2, GetTensor(StrEq("val1"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_FLOAT, {0}, CreateTestData<float>({}));
+  }));
+
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_))
+      .WillOnce(Return(ByMove(std::move(parser1))))
+      .WillOnce(Return(ByMove(std::move(parser2))));
+
+  // Handle the inputs.
+  EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "num_clients_pending: 1 num_clients_completed: 1 "
+                  "num_inputs_aggregated_and_included: 1")));
+
+  EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+
+  // Complete the protocol.
+  // Verify that the checkpoint builder is created.
+  auto& checkpoint_builder = ExpectCheckpointBuilder();
+
+  // Verify that expected empty output tensors are added to the result
+  // checkpoint.
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("key1_out"), IsTensor<float>({0}, {})))
+      .WillOnce(Return(absl::OkStatus()));
+  EXPECT_CALL(checkpoint_builder,
+              Add(StrEq("val1_out"), IsTensor<float>({0}, {})))
+      .WillOnce(Return(absl::OkStatus()));
+
+  EXPECT_THAT(protocol->Complete(), IsOk());
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+
+  EXPECT_OK(protocol->GetResult());
+  EXPECT_EQ(protocol->PollServerMessage(0)
+                .value()
+                ->simple_aggregation()
+                .close_message()
+                .code(),
+            static_cast<int>(OK));
+  EXPECT_EQ(protocol->PollServerMessage(1)
+                .value()
+                ->simple_aggregation()
+                .close_message()
+                .code(),
+            static_cast<int>(OK));
+  EXPECT_TRUE(protocol->IsClientClosed(0).value());
+  EXPECT_TRUE(protocol->IsClientClosed(1).value());
 }
 
 TEST_F(SimpleAggregationProtocolTest, Complete_TensorUsedInMultipleIntrinsics) {

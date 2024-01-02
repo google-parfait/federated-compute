@@ -15,6 +15,7 @@
  */
 #include "fcp/aggregation/core/composite_key_combiner.h"
 
+#include <climits>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -225,11 +226,9 @@ StatusOr<Tensor> CompositeKeyCombiner::Accumulate(
 
 OutputTensorList CompositeKeyCombiner::GetOutputKeys() const {
   OutputTensorList output_keys;
-  // Creating empty tensors is not allowed, so if there are no keys yet,
-  // which could happen if GetOutputKeys is called before Accumulate, return
-  // an empty vector.
-  if (key_vec_.empty()) return output_keys;
-  // Otherwise reserve space for a tensor for each data type.
+  // Reserve space for a tensor for each data type. Even if no data has been
+  // accumulated, there will always be one tensor output for each data type that
+  // this CompositeKeyCombiner was configured to accept.
   output_keys.reserve(dtypes_.size());
   std::vector<const uint64_t*> key_iters;
   key_iters.reserve(key_vec_.size());
