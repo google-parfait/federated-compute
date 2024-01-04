@@ -847,6 +847,7 @@ proto_library(
     name = "selector_context_proto",
     srcs = ["selector_context.proto"],
     deps = [
+        "@com_google_protobuf//:any_proto",
         "@com_google_protobuf//:timestamp_proto",
     ],
 )

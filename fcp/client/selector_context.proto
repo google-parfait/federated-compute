@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package fcp.client;
 
+import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
 option java_package = "com.google.intelligence.fcp.client";
@@ -23,6 +24,9 @@ option java_multiple_files = true;
 
 message SelectorContext {
   QueryTimeComputationProperties computation_properties = 1;
+
+  // Platform-specific context to be forwarded to ExampleIterators.
+  google.protobuf.Any platform_extras = 2;
 }
 
 // Properties about the computation exposed to the iterator.
