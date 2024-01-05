@@ -36,6 +36,7 @@
 #include "absl/time/time.h"
 #include "fcp/aggregation/core/agg_vector_aggregator.h"
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
@@ -350,9 +351,9 @@ TEST_F(SimpleAggregationProtocolTest, Create_UnmatchingInputAndOutputShape) {
 TEST_F(SimpleAggregationProtocolTest, StartProtocol_Success) {
   auto protocol = CreateProtocolWithDefaultConfig();
   EXPECT_THAT(protocol->Start(3), IsOk());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 3")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_pending: 3")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, StartProtocol_MultipleCalls) {
@@ -376,16 +377,16 @@ TEST_F(SimpleAggregationProtocolTest, AddClients_Success) {
   auto protocol = CreateProtocolWithDefaultConfig();
 
   EXPECT_THAT(protocol->Start(1), IsOk());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_pending: 1")));
 
   auto status_or_result = protocol->AddClients(3);
   EXPECT_THAT(status_or_result, IsOk());
   EXPECT_EQ(status_or_result.value(), 1);
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 4")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_pending: 4")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, AddClients_ProtocolNotStarted) {
@@ -465,10 +466,11 @@ TEST_F(SimpleAggregationProtocolTest,
   // The second input for the same client must succeed to without changing the
   // aggregated state.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
-  EXPECT_THAT(protocol->GetStatus(),
-              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-                  "num_clients_pending: 1 num_clients_completed: 1 "
-                  "num_inputs_aggregated_and_included: 1")));
+  EXPECT_THAT(
+      protocol->GetStatus(),
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "protocol_state: PROTOCOL_STARTED num_clients_pending: 1 "
+          "num_clients_completed: 1 num_inputs_aggregated_and_included: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_AfterClosingClient) {
@@ -479,12 +481,14 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_AfterClosingClient) {
   EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-                  "num_clients_completed: 1 num_inputs_discarded: 1")));
+                  "protocol_state: PROTOCOL_STARTED num_clients_completed: 1 "
+                  "num_inputs_discarded: 1")));
   // This must succeed to without changing the aggregated state.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-                  "num_clients_completed: 1 num_inputs_discarded: 1")));
+                  "protocol_state: PROTOCOL_STARTED num_clients_completed: 1 "
+                  "num_inputs_discarded: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest,
@@ -505,9 +509,9 @@ TEST_F(SimpleAggregationProtocolTest,
                 .code(),
             static_cast<int>(INVALID_ARGUMENT));
   EXPECT_TRUE(protocol->IsClientClosed(0).value());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_failed: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MissingTensor) {
@@ -530,9 +534,9 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MissingTensor) {
                 .code(),
             static_cast<int>(NOT_FOUND));
   EXPECT_TRUE(protocol->IsClientClosed(0).value());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_failed: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MismatchingTensor) {
@@ -556,9 +560,9 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_MismatchingTensor) {
                 .code(),
             static_cast<int>(INVALID_ARGUMENT));
   EXPECT_TRUE(protocol->IsClientClosed(0).value());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_failed: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_UriType_Success) {
@@ -584,10 +588,10 @@ TEST_F(SimpleAggregationProtocolTest, ReceiveClientMessage_UriType_Success) {
                 .code(),
             static_cast<int>(OK));
   EXPECT_TRUE(protocol->IsClientClosed(0).value());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-          "num_clients_completed: 1 num_inputs_aggregated_and_included: 1")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_completed: 1 "
+                  "num_inputs_aggregated_and_included: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest,
@@ -610,9 +614,9 @@ TEST_F(SimpleAggregationProtocolTest,
                 .code(),
             static_cast<int>(INVALID_ARGUMENT));
   EXPECT_TRUE(protocol->IsClientClosed(0).value());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_failed: 1")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_failed: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
@@ -671,14 +675,15 @@ TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
   EXPECT_CALL(checkpoint_builder, Add(StrEq("bar_out"), IsTensor({}, {0.f})))
       .WillOnce(Return(absl::OkStatus()));
 
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_pending: 1")));
 
   EXPECT_THAT(protocol->Complete(), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 1")));
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "protocol_state: PROTOCOL_COMPLETED num_clients_aborted: 1")));
   EXPECT_OK(protocol->GetResult());
   // Verify that the pending client is closed.
   EXPECT_EQ(protocol->PollServerMessage(0)
@@ -830,15 +835,16 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
   EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-                  "num_clients_pending: 1 num_clients_completed: 1 "
+                  "protocol_state: PROTOCOL_STARTED num_clients_pending: 1 "
+                  "num_clients_completed: 1 "
                   "num_inputs_aggregated_and_included: 1")));
 
   EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
   EXPECT_TRUE(protocol->IsClientClosed(1).value());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_completed: 2 "
+                  "num_inputs_aggregated_and_included: 2")));
 
   // Complete the protocol.
   // Verify that the checkpoint builder is created.
@@ -860,10 +866,10 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
       .WillOnce(Return(absl::OkStatus()));
 
   EXPECT_THAT(protocol->Complete(), IsOk());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_COMPLETED num_clients_completed: 2 "
+                  "num_inputs_aggregated_and_included: 2")));
   EXPECT_OK(protocol->GetResult());
   EXPECT_EQ(protocol->PollServerMessage(0)
                 .value()
@@ -961,14 +967,15 @@ TEST_F(SimpleAggregationProtocolTest, CompleteNoInputsReceivedFedSqlGroupBy) {
               Add(StrEq("baz_out"), IsTensor<float>({0}, {})))
       .WillOnce(Return(absl::OkStatus()));
 
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_pending: 1")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_pending: 1")));
 
   EXPECT_THAT(protocol->Complete(), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 1")));
+      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "protocol_state: PROTOCOL_COMPLETED num_clients_aborted: 1")));
   EXPECT_OK(protocol->GetResult());
   // Verify that the pending client is closed.
   EXPECT_EQ(protocol->PollServerMessage(0)
@@ -1040,16 +1047,17 @@ TEST_F(SimpleAggregationProtocolTest,
 
   // Handle the inputs.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
-  EXPECT_THAT(protocol->GetStatus(),
-              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-                  "num_clients_pending: 1 num_clients_completed: 1 "
-                  "num_inputs_aggregated_and_included: 1")));
-
-  EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+          "protocol_state: PROTOCOL_STARTED num_clients_pending: 1 "
+          "num_clients_completed: 1 num_inputs_aggregated_and_included: 1")));
+
+  EXPECT_THAT(protocol->ReceiveClientMessage(1, MakeClientMessage()), IsOk());
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED num_clients_completed: 2 "
+                  "num_inputs_aggregated_and_included: 2")));
 
   // Complete the protocol.
   // Verify that the checkpoint builder is created.
@@ -1065,10 +1073,10 @@ TEST_F(SimpleAggregationProtocolTest,
       .WillOnce(Return(absl::OkStatus()));
 
   EXPECT_THAT(protocol->Complete(), IsOk());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-          "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_COMPLETED num_clients_completed: 2 "
+                  "num_inputs_aggregated_and_included: 2")));
 
   EXPECT_OK(protocol->GetResult());
   EXPECT_EQ(protocol->PollServerMessage(0)
@@ -1171,11 +1179,11 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TensorUsedInMultipleIntrinsics) {
       .WillOnce(Return(ByMove(std::move(parser1))))
       .WillOnce(Return(ByMove(std::move(parser2))));
 
-
   // Handle the inputs.
   EXPECT_THAT(protocol->ReceiveClientMessage(0, MakeClientMessage()), IsOk());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_STARTED "
                   "num_clients_pending: 1 num_clients_completed: 1 "
                   "num_inputs_aggregated_and_included: 1")));
 
@@ -1183,6 +1191,7 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TensorUsedInMultipleIntrinsics) {
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "protocol_state: PROTOCOL_STARTED "
           "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
 
   // Complete the protocol.
@@ -1201,6 +1210,7 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TensorUsedInMultipleIntrinsics) {
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+          "protocol_state: PROTOCOL_COMPLETED "
           "num_clients_completed: 2 num_inputs_aggregated_and_included: 2")));
 
   EXPECT_OK(protocol->GetResult());
@@ -1230,9 +1240,9 @@ TEST_F(SimpleAggregationProtocolTest, Abort_NoInputsReceived) {
   EXPECT_THAT(protocol->Start(2), IsOk());
 
   EXPECT_THAT(protocol->Abort(), IsOk());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 2")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_ABORTED num_clients_aborted: 2")));
   EXPECT_EQ(protocol->PollServerMessage(0)
                 .value()
                 ->simple_aggregation()
@@ -1276,8 +1286,8 @@ TEST_F(SimpleAggregationProtocolTest, Abort_OneInputReceived) {
   EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-                  "num_clients_aborted: 1 num_clients_completed:1 "
-                  "num_inputs_discarded: 1")));
+                  "protocol_state: PROTOCOL_ABORTED num_clients_aborted: 1 "
+                  "num_clients_completed:1 num_inputs_discarded: 1")));
   EXPECT_EQ(protocol->PollServerMessage(0)
                 .value()
                 ->simple_aggregation()
@@ -1439,7 +1449,8 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_AbortWhileQueued) {
   // treats received and pending (queued) inputs "as aggregated and pending".
   EXPECT_THAT(protocol->GetStatus(),
               EqualsProto<StatusMessage>(
-                  PARSE_TEXT_PROTO("num_clients_completed: 10 "
+                  PARSE_TEXT_PROTO("protocol_state: PROTOCOL_STARTED "
+                                   "num_clients_completed: 10 "
                                    "num_inputs_aggregated_and_pending: 7 "
                                    "num_inputs_aggregated_and_included: 3")));
 
@@ -1450,10 +1461,106 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_AbortWhileQueued) {
   scheduler->WaitUntilIdle();
 
   // All 10 inputs should now be discarded.
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_completed: 10 "
-                                                  "num_inputs_discarded: 10")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_ABORTED num_clients_completed: 10 "
+                  "num_inputs_discarded: 10")));
+}
+
+TEST_F(SimpleAggregationProtocolTest,
+       ConcurrentAggregation_CompleteWhileQueued) {
+  const int64_t kNumClients = 10;
+  const int64_t kNumClientBeforeBlocking = 3;
+
+  // Notifies the aggregation to unblock;
+  absl::Notification resume_aggregation_notification;
+  absl::Notification aggregation_blocked_notification;
+  std::atomic<int> agg_counter = 0;
+  FunctionAggregatorFactory agg_factory([&](int a, int b) {
+    if (++agg_counter > kNumClientBeforeBlocking &&
+        !aggregation_blocked_notification.HasBeenNotified()) {
+      aggregation_blocked_notification.Notify();
+      resume_aggregation_notification.WaitForNotification();
+    }
+    return a + b;
+  });
+  RegisterAggregatorFactory("foo2_aggregation", &agg_factory);
+
+  // The configuration below refers to the custom aggregation registered
+  // above.
+  auto protocol = CreateProtocol(PARSE_TEXT_PROTO(R"pb(
+    aggregation_configs {
+      intrinsic_uri: "foo2_aggregation"
+      intrinsic_args {
+        input_tensor {
+          name: "foo"
+          dtype: DT_INT32
+          shape {}
+        }
+      }
+      output_tensors {
+        name: "foo_out"
+        dtype: DT_INT32
+        shape {}
+      }
+    }
+  )pb"));
+  EXPECT_THAT(protocol->Start(kNumClients), IsOk());
+
+  EXPECT_CALL(checkpoint_parser_factory_, Create(_)).WillRepeatedly(Invoke([&] {
+    auto parser = std::make_unique<MockCheckpointParser>();
+    EXPECT_CALL(*parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([&] {
+      return Tensor::Create(DT_INT32, {}, CreateTestData({1}));
+    }));
+    return parser;
+  }));
+
+  // Schedule receiving inputs on 10 concurrent threads.
+  auto scheduler = CreateThreadPoolScheduler(10);
+  for (int64_t i = 0; i < kNumClients; ++i) {
+    scheduler->Schedule([&, i]() {
+      EXPECT_THAT(protocol->ReceiveClientMessage(i, MakeClientMessage()),
+                  IsOk());
+    });
+  }
+
+  aggregation_blocked_notification.WaitForNotification();
+
+  StatusMessage status_message;
+  do {
+    status_message = protocol->GetStatus();
+  } while (status_message.num_clients_pending() > 0);
+
+  // At this point one input must be blocked inside the aggregation waiting for
+  // the notification, 3 inputs should already be gone through the aggregation,
+  // and the remaining 6 inputs should be blocked waiting to enter the
+  // aggregation.
+
+  // TODO: b/260946510 - Need to revise the status implementation because it
+  // treats received and pending (queued) inputs "as aggregated and pending".
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(
+                  PARSE_TEXT_PROTO("protocol_state: PROTOCOL_STARTED "
+                                   "num_clients_completed: 10 "
+                                   "num_inputs_aggregated_and_pending: 7 "
+                                   "num_inputs_aggregated_and_included: 3")));
+
+  resume_aggregation_notification.Notify();
+
+  // Complete and let all blocked aggregations continue.
+  auto& checkpoint_builder = ExpectCheckpointBuilder();
+  // Verify that foo_out tensor is added to the result checkpoint
+  EXPECT_CALL(checkpoint_builder, Add(StrEq("foo_out"), _))
+      .WillOnce(Return(absl::OkStatus()));
+
+  EXPECT_THAT(protocol->Complete(), IsOk());
+  scheduler->WaitUntilIdle();
+
+  status_message = protocol->GetStatus();
+  ASSERT_EQ(status_message.protocol_state(), PROTOCOL_COMPLETED);
+  ASSERT_EQ(status_message.num_clients_completed(), 10);
+  // At least 4 clients must be aggregated
+  ASSERT_GE(status_message.num_inputs_aggregated_and_included(), 4);
 }
 
 TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
@@ -1573,8 +1680,8 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_ClosePendingClients) {
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-          "num_clients_completed: 7 num_inputs_aggregated_and_included: 7 "
-          "num_clients_aborted: 3")));
+          "protocol_state: PROTOCOL_STARTED num_clients_completed: 7 "
+          "num_inputs_aggregated_and_included: 7 num_clients_aborted: 3")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, OutlierDetection_NoPendingClients) {
@@ -1615,8 +1722,8 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_NoPendingClients) {
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-          "num_clients_completed: 4 num_inputs_aggregated_and_included: 4 "
-          "num_clients_failed: 1")));
+          "protocol_state: PROTOCOL_STARTED num_clients_completed: 4 "
+          "num_inputs_aggregated_and_included: 4 num_clients_failed: 1")));
 
   // Advance the time by 10 seconds and verify that the outlier detection
   // doesn't change outcome of any of the above clients.
@@ -1624,8 +1731,8 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_NoPendingClients) {
   EXPECT_THAT(
       protocol->GetStatus(),
       EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
-          "num_clients_completed: 4 num_inputs_aggregated_and_included: 4 "
-          "num_clients_failed: 1")));
+          "protocol_state: PROTOCOL_STARTED num_clients_completed: 4 "
+          "num_inputs_aggregated_and_included: 4 num_clients_failed: 1")));
 }
 
 TEST_F(SimpleAggregationProtocolTest, OutlierDetection_AfterAbort) {
@@ -1635,9 +1742,9 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_AfterAbort) {
   EXPECT_THAT(protocol->Start(2), IsOk());
 
   EXPECT_THAT(protocol->Abort(), IsOk());
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 2")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_ABORTED num_clients_aborted: 2")));
   EXPECT_TRUE(protocol->IsClientClosed(0).value());
   EXPECT_TRUE(protocol->IsClientClosed(1).value());
   EXPECT_EQ(protocol->PollServerMessage(0)
@@ -1655,9 +1762,97 @@ TEST_F(SimpleAggregationProtocolTest, OutlierDetection_AfterAbort) {
 
   // Advance the time by 10 seconds and verify num_clients_aborted.
   clock_.AdvanceTime(10 * kInterval);
-  EXPECT_THAT(
-      protocol->GetStatus(),
-      EqualsProto<StatusMessage>(PARSE_TEXT_PROTO("num_clients_aborted: 2")));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_ABORTED num_clients_aborted: 2")));
+}
+
+// Fake aggregator that accepts inputs but always produces a predefined output.
+class FakeAggregator final : public TensorAggregator {
+ public:
+  explicit FakeAggregator(Tensor output) : output_(std::move(output)) {}
+
+  absl::Status AggregateTensors(InputTensorList tensors) override {
+    return absl::OkStatus();
+  }
+
+  absl::Status MergeWith(TensorAggregator&& other) override {
+    return absl::OkStatus();
+  }
+
+  absl::Status CheckValid() const override { return absl::OkStatus(); }
+
+  OutputTensorList TakeOutputs() && override {
+    OutputTensorList outputs(1);
+    outputs.push_back(std::move(output_));
+    return outputs;
+  }
+
+  int GetNumInputs() const override { return 0; }
+
+ private:
+  Tensor output_;
+};
+
+// Factory for the FakeAggregator.
+class FakeAggregatorFactory final : public TensorAggregatorFactory {
+ public:
+  explicit FakeAggregatorFactory(Tensor output) : output_(std::move(output)) {}
+
+ private:
+  absl::StatusOr<std::unique_ptr<TensorAggregator>> Create(
+      const Intrinsic& intrinsic) const override {
+    return std::make_unique<FakeAggregator>(std::move(output_));
+  }
+
+  mutable Tensor output_;
+};
+
+TEST_F(SimpleAggregationProtocolTest,
+       Complete_ErrorToProduceOutputFollowedByClientInput) {
+  // This is a special case where an error is triggered by a mismatched output,
+  // which transitions the protocol into an invalid state where the protocol
+  // must be aborted. In this state any subsequent client inputs must be
+  // handled gracefully.
+
+  // Register a factory for the fake aggregator that returns a scalar string
+  // tensor with string value "foo".
+  auto string_tensor =
+      Tensor::Create(DT_STRING, {}, CreateTestData<string_view>({"foo"}))
+          .value();
+  FakeAggregatorFactory agg_factory(std::move(string_tensor));
+  RegisterAggregatorFactory("fake1_aggregation", &agg_factory);
+
+  // The configuration below refers to fake1_aggregation registered above,
+  // but the expected output is DT_INT32.
+  auto protocol = CreateProtocol(PARSE_TEXT_PROTO(R"pb(
+    aggregation_configs {
+      intrinsic_uri: "fake1_aggregation"
+      intrinsic_args {
+        input_tensor {
+          name: "foo"
+          dtype: DT_INT32
+          shape {}
+        }
+      }
+      output_tensors {
+        name: "foo_out"
+        dtype: DT_INT32
+        shape {}
+      }
+    }
+  )pb"));
+
+  EXPECT_THAT(protocol->Start(1), IsOk());
+
+  EXPECT_CALL(checkpoint_builder_factory_, Create())
+      .WillOnce(Return(ByMove(std::make_unique<MockCheckpointBuilder>())));
+  EXPECT_THAT(protocol->Complete(), IsCode(INTERNAL));
+  EXPECT_THAT(protocol->GetStatus(),
+              EqualsProto<StatusMessage>(PARSE_TEXT_PROTO(
+                  "protocol_state: PROTOCOL_ABORTED num_clients_aborted: 1")));
+
+  EXPECT_OK(protocol->ReceiveClientMessage(0, MakeClientMessage()));
 }
 
 }  // namespace

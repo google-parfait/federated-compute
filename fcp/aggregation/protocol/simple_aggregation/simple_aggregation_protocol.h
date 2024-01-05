@@ -191,6 +191,14 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   void SetClientState(int64_t client_id, ClientState state)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
 
+  // Close all pending clients when the protocol is terminated.
+  void CloseAllClients() ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
+
+  // This two functions are used to wait for a condition where there are no
+  // clients waiting for the their input to be aggregated.
+  bool IsAggregationQueueEmpty() ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
+  void AwaitAggregationQueueEmpty() ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
+
   // Parses and validates the client report.
   // This function involves a potentially expensive I/O and parsing and should
   // run concurrently as much as possible. The ABSL_LOCKS_EXCLUDED attribution
