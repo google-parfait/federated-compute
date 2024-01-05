@@ -11,12 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for data_spec.py."""
 
 import collections
 
 from absl.testing import absltest
-
+import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -57,10 +56,8 @@ class DataSpecTest(absltest.TestCase):
     ds = data_spec.DataSpec(_TEST_EXAMPLE_SELECTOR, preprocessing_fn)
 
     expected_type = tff.SequenceType(
-        tff.types.to_type(
-            collections.OrderedDict(
-                [('key', tf.TensorSpec(shape=(1,), dtype=tf.int64))]
-            )
+        tff.StructWithPythonType(
+            [('key', tff.TensorType(np.int64, (1,)))], collections.OrderedDict
         )
     )
     self.assertEqual(ds.type_signature, expected_type)
