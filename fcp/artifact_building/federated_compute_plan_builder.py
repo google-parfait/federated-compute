@@ -23,6 +23,7 @@ import enum
 from typing import Optional, TypeVar, Union
 
 import attr
+import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -2024,6 +2025,7 @@ def build_plan(
         # This MapReduceForm does not send any server state to clients, however
         # we need something to satisfy current restrictions from the FCP server.
         # Use a placeholder scalar int.
+        # TODO: b/309218024 - Update to the latest version of TFF to replace.
         broadcast_tff_type = tff.TensorType(tf.int32)
       else:
         broadcast_tff_type = mrf.prepare.type_signature.result

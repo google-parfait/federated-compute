@@ -16,6 +16,7 @@
 from collections.abc import Callable
 from typing import Any, Optional, Union
 
+import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -88,6 +89,7 @@ class DataSpec:
             'preprocessing tff.Computation cannot be generated.'
         )
       self._preprocessing_comp = tff.tf_computation(
+          # TODO: b/309218024 - Update to the latest version of TFF to replace.
           self.preprocessing_fn, tff.SequenceType(tf.string)
       )
     return self._preprocessing_comp

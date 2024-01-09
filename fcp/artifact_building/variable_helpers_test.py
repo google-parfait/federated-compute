@@ -14,7 +14,7 @@
 """Tests for variable_helpers.py."""
 
 from absl.testing import absltest
-
+import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -23,6 +23,7 @@ from fcp.artifact_building import variable_helpers
 
 
 @tff.federated_computation(
+    # TODO: b/309218024 - Update to the latest version of TFF to replace.
     tff.FederatedType(tf.int32, tff.SERVER),
     tff.FederatedType(tf.float32, tff.CLIENTS),
 )
@@ -38,9 +39,10 @@ class VariableHelpersTest(absltest.TestCase):
   def test_create_vars_for_tff_type(self):
     with tf.Graph().as_default():
       vl = variable_helpers.create_vars_for_tff_type(
+          # TODO: b/309218024 - Update to the latest version of TFF to replace.
           tff.to_type(
               [('a', tf.int32), ('b', [('c', tf.bool), ('d', tf.float32)])]
-          ),  # pytype: disable=wrong-arg-types
+          ),
           'x',
       )
     self.assertLen(vl, 3)
@@ -53,6 +55,7 @@ class VariableHelpersTest(absltest.TestCase):
   def test_create_vars_for_tff_type_with_none_and_zero_shape(self):
     with tf.Graph().as_default():
       vl = variable_helpers.create_vars_for_tff_type(
+          # TODO: b/309218024 - Update to the latest version of TFF to replace.
           tff.TensorType(dtype=tf.int32, shape=[5, None, 0])
       )
       self.assertLen(vl, 1)
@@ -61,6 +64,7 @@ class VariableHelpersTest(absltest.TestCase):
       self.assertEqual(test_variable.shape.as_list(), [5, None, None])
 
   def test_create_vars_for_tff_federated_type(self):
+    # TODO: b/309218024 - Update to the latest version of TFF to replace.
     tff_type = tff.FederatedType(tff.TensorType(tf.int32), tff.SERVER)
     with tf.Graph().as_default():
       vl = variable_helpers.create_vars_for_tff_type(tff_type)
@@ -76,10 +80,14 @@ class VariableHelpersTest(absltest.TestCase):
     tff_type = tff.StructType([
         (
             'num_examples_secagg',
+            # TODO: b/309218024 - Update to the latest version of TFF to
+            # replace.
             tff.FederatedType(tff.TensorType(tf.int32), tff.SERVER),
         ),
         (
             'num_examples_simpleagg',
+            # TODO: b/309218024 - Update to the latest version of TFF to
+            # replace.
             tff.FederatedType(tff.TensorType(tf.int32), tff.SERVER),
         ),
     ])
@@ -90,6 +98,7 @@ class VariableHelpersTest(absltest.TestCase):
     for v in vl:
       self.assertTrue(type(v).__name__.endswith('Variable'))
       self.assertEqual(v.shape.ndims, 0)
+      # TODO: b/309218024 - Update to the latest version of TFF to replace.
       self.assertEqual([v.dtype for v in vl], [tf.int32, tf.int32])
       self.assertEqual(
           [v.name for v in vl],
@@ -98,18 +107,21 @@ class VariableHelpersTest(absltest.TestCase):
 
   def test_variable_names_from_type_with_tensor_type_and_no_name(self):
     names = variable_helpers.variable_names_from_type(
+        # TODO: b/309218024 - Update to the latest version of TFF to replace.
         tff.TensorType(dtype=tf.int32)
     )
     self.assertEqual(names, ['v'])
 
   def test_variable_names_from_type_with_tensor_type(self):
     names = variable_helpers.variable_names_from_type(
+        # TODO: b/309218024 - Update to the latest version of TFF to replace.
         tff.TensorType(dtype=tf.int32), 'test_name'
     )
     self.assertEqual(names, ['test_name'])
 
   def test_variable_names_from_type_with_federated_type(self):
     names = variable_helpers.variable_names_from_type(
+        # TODO: b/309218024 - Update to the latest version of TFF to replace.
         tff.FederatedType(tff.TensorType(dtype=tf.int32), tff.SERVER),
         'test_name',
     )
@@ -118,6 +130,8 @@ class VariableHelpersTest(absltest.TestCase):
   def test_variable_names_from_type_with_named_tuple_type_and_no_name(self):
     names = variable_helpers.variable_names_from_type(
         tff.to_type(
+            # TODO: b/309218024 - Update to the latest version of TFF to
+            # replace.
             [('a', tf.int32), ('b', [('c', tf.bool), ('d', tf.float32)])]
         )  # pytype: disable=wrong-arg-types
     )
@@ -126,6 +140,8 @@ class VariableHelpersTest(absltest.TestCase):
   def test_variable_names_from_type_with_named_tuple_type(self):
     names = variable_helpers.variable_names_from_type(
         tff.to_type(
+            # TODO: b/309218024 - Update to the latest version of TFF to
+            # replace.
             [('a', tf.int32), ('b', [('c', tf.bool), ('d', tf.float32)])]
         ),  # pytype: disable=wrong-arg-types
         'test_name',
@@ -134,13 +150,15 @@ class VariableHelpersTest(absltest.TestCase):
 
   def test_variable_names_from_type_with_named_tuple_type_no_name_field(self):
     names = variable_helpers.variable_names_from_type(
-        tff.to_type([(tf.int32), ('b', [(tf.bool), ('d', tf.float32)])]),  # pytype: disable=wrong-arg-types
+        # TODO: b/309218024 - Update to the latest version of TFF to replace.
+        tff.to_type([(tf.int32), ('b', [(tf.bool), ('d', tf.float32)])]),
         'test_name',
     )
     self.assertEqual(names, ['test_name/0', 'test_name/b/0', 'test_name/b/d'])
 
   def test_get_flattened_tensor_specs_with_tensor_type(self):
     specs = variable_helpers.get_flattened_tensor_specs(
+        # TODO: b/309218024 - Update to the latest version of TFF to replace.
         tff.TensorType(dtype=tf.int32, shape=tf.TensorShape([3, 5])),
         'test_name',
     )
@@ -158,6 +176,8 @@ class VariableHelpersTest(absltest.TestCase):
   def test_get_flattened_tensor_specs_with_federated_type(self):
     specs = variable_helpers.get_flattened_tensor_specs(
         tff.FederatedType(
+            # TODO: b/309218024 - Update to the latest version of TFF to
+            # replace.
             tff.TensorType(dtype=tf.int32, shape=tf.TensorShape([3, 5])),
             tff.SERVER,
         ),
@@ -179,15 +199,19 @@ class VariableHelpersTest(absltest.TestCase):
         tff.StructType([
             (
                 'a',
+                # TODO: b/309218024 - Update to the latest version of TFF to
+                # replace.
                 tff.TensorType(dtype=tf.int32, shape=tf.TensorShape([3, 5])),
             ),
             (
                 'b',
                 tff.StructType([
-                    (tff.TensorType(dtype=tf.bool, shape=tf.TensorShape([4]))),
+                    (tff.TensorType(dtype=np.bool_, shape=[4])),
                     (
                         'd',
                         tff.TensorType(
+                            # TODO: b/309218024 - Update to the latest version
+                            # of TFF to replace.
                             dtype=tf.float32,
                             shape=tf.TensorShape([1, 3, 5]),
                         ),

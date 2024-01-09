@@ -28,7 +28,8 @@ class MakeMetricTest(tf.test.TestCase):
   def test_make_metric(self):
     with tf.Graph().as_default():
       v = variable_helpers.create_vars_for_tff_type(
-          tff.to_type(collections.OrderedDict([("bar", tf.int32)])),  # pytype: disable=wrong-arg-types
+          # TODO: b/309218024 - Update to the latest version of TFF to replace.
+          tff.to_type(collections.OrderedDict([("bar", tf.int32)])),
           name="foo",
       )
       self.assertProtoEquals(
@@ -155,6 +156,7 @@ class MakeMeasurementTest(tf.test.TestCase):
   def test_succeeds(self):
     with tf.Graph().as_default():
       tensor = tf.constant(1)
+      # TODO: b/309218024 - Update to the latest version of TFF to replace.
       tff_type = tff.types.TensorType(tensor.dtype, tensor.shape)
       m = proto_helpers.make_measurement(
           t=tensor, name="test", tff_type=tff_type
@@ -168,6 +170,7 @@ class MakeMeasurementTest(tf.test.TestCase):
   def test_fails_for_non_matching_dtype(self):
     with tf.Graph().as_default():
       tensor = tf.constant(1.0)
+      # TODO: b/309218024 - Update to the latest version of TFF to replace.
       tff_type = tff.types.TensorType(np.int32, tensor.shape)
 
       with self.assertRaisesRegex(ValueError, ".* does not match.*"):
@@ -176,6 +179,7 @@ class MakeMeasurementTest(tf.test.TestCase):
   def test_fails_for_non_matching_shape(self):
     with tf.Graph().as_default():
       tensor = tf.constant(1.0)
+      # TODO: b/309218024 - Update to the latest version of TFF to replace.
       tff_type = tff.types.TensorType(tensor.dtype, shape=[5])
 
       with self.assertRaisesRegex(ValueError, ".* does not match.*"):
