@@ -581,6 +581,17 @@ void SimpleAggregationProtocol::CloseAllClients() {
         all_clients_[client_id].server_message = close_message;
         break;
       case CLIENT_RECEIVED_INPUT_AND_PENDING:
+        // Please note that all clients in this state are supposed to finish
+        // and change their state to either CLIENT_COMPLETED or CLIENT_DISCARDED
+        // by the time this method is called. Hitting this case is most likely
+        // an indication of some error.  Normally all concurrent calls to
+        // ReceiveClientMessage() should get an opportunity to finish when the
+        // AwaitAggregationQueueEmpty() method is called.  At that time the
+        // aggregation_finished_ flag is already set to true, which should let
+        // all pending ReceiveClientMessage() calls finish quickly.
+        FCP_LOG(WARNING) << "Client " << client_id
+                         << " is in CLIENT_RECEIVED_INPUT_AND_PENDING state at "
+                            "the termination of the protocol.";
         SetClientState(client_id, CLIENT_DISCARDED);
         all_clients_[client_id].server_message = close_message;
         break;
