@@ -182,6 +182,7 @@ cc_library(
         "//fcp/tensorflow:host_object",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
         "@org_tensorflow//tensorflow/core:framework",
     ],
 )

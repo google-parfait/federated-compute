@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -253,22 +254,17 @@ HostObjectRegistration AddDatasetTokenToInputsForTfLite(
 std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
     const std::string& base_dir, const Flags* flags, LogManager* log_manager,
     const std::string& session_name, const std::string& population_name) {
-  if (flags->enable_opstats()) {
-    auto db_or = PdsBackedOpStatsDb::Create(
-        base_dir, flags->opstats_ttl_days() * absl::Hours(24), *log_manager,
-        flags->opstats_db_size_limit_bytes());
-    if (db_or.ok()) {
-      return std::make_unique<OpStatsLoggerImpl>(std::move(db_or).value(),
-                                                 log_manager, flags,
-                                                 session_name, population_name);
-    } else {
-      return std::make_unique<OpStatsLogger>(
-          /*opstats_enabled=*/flags->enable_opstats(),
-          /*init_status=*/db_or.status());
-    }
+  auto db_or = PdsBackedOpStatsDb::Create(
+      base_dir, flags->opstats_ttl_days() * absl::Hours(24), *log_manager,
+      flags->opstats_db_size_limit_bytes());
+  if (db_or.ok()) {
+    return std::make_unique<OpStatsLoggerImpl>(std::move(db_or).value(),
+                                               log_manager, flags, session_name,
+                                               population_name);
+  } else {
+    return std::make_unique<OpStatsLogger>(
+        /*init_status=*/db_or.status());
   }
-  return std::make_unique<OpStatsLogger>(
-      /*opstats_enabled=*/flags->enable_opstats());
 }
 
 PlanResult CreateComputationErrorPlanResult(

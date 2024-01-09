@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/time/time.h"
 #include "fcp/client/opstats/opstats_db.h"
 #include "fcp/client/stats.h"
@@ -34,15 +35,8 @@ class OpStatsLogger {
  public:
   OpStatsLogger() = default;
 
-  explicit OpStatsLogger(bool opstats_enabled)
-      : opstats_enabled_(opstats_enabled),
-        db_(std::make_unique<OpStatsDb>()),
-        init_status_(absl::OkStatus()) {}
-
-  OpStatsLogger(bool opstats_enabled, absl::Status init_status)
-      : opstats_enabled_(opstats_enabled),
-        db_(std::make_unique<OpStatsDb>()),
-        init_status_(init_status) {}
+  explicit OpStatsLogger(absl::Status init_status)
+      : db_(std::make_unique<OpStatsDb>()), init_status_(init_status) {}
 
   virtual ~OpStatsLogger() = default;
 
@@ -77,9 +71,6 @@ class OpStatsLogger {
   // Get the underlying opstats database.
   virtual OpStatsDb* GetOpStatsDb() { return db_.get(); }
 
-  // Whether opstats is enabled.
-  virtual bool IsOpStatsEnabled() const { return opstats_enabled_; }
-
   // Syncs all logged events to storage.
   virtual absl::Status CommitToStorage() { return absl::OkStatus(); }
 
@@ -103,7 +94,6 @@ class OpStatsLogger {
                                                absl::Time first_access_time) {}
 
  private:
-  bool opstats_enabled_;
   std::unique_ptr<OpStatsDb> db_;
   // If there was an error initializing the OpStats logger such that the no-op
   // impl was returned instead, this will hold the status detailing the error.

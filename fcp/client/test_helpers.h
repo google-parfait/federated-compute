@@ -562,7 +562,6 @@ class MockOpStatsLogger : public ::fcp::client::opstats::OpStatsLogger {
               (google::internal::federatedml::v2::RetryWindow retry_window),
               (override));
   MOCK_METHOD(::fcp::client::opstats::OpStatsDb*, GetOpStatsDb, (), (override));
-  MOCK_METHOD(bool, IsOpStatsEnabled, (), (const override));
   MOCK_METHOD(absl::Status, CommitToStorage, (), (override));
   MOCK_METHOD(std::string, GetCurrentTaskName, (), (override));
   MOCK_METHOD(void, StartLoggingForPhase,
@@ -630,7 +629,6 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(int64_t, grpc_channel_deadline_seconds, (), (const, override));
   MOCK_METHOD(bool, log_tensorflow_error_messages, (), (const, override));
-  MOCK_METHOD(bool, enable_opstats, (), (const, override));
   MOCK_METHOD(int64_t, opstats_ttl_days, (), (const, override));
   MOCK_METHOD(int64_t, opstats_db_size_limit_bytes, (), (const, override));
   MOCK_METHOD(int64_t, federated_training_transient_errors_retry_delay_secs, (),

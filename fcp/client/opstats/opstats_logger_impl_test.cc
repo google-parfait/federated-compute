@@ -53,7 +53,6 @@ constexpr char kTaskName[] = "TASK";
 class OpStatsLoggerImplTest : public testing::Test {
  protected:
   void SetUp() override {
-    ON_CALL(mock_flags_, enable_opstats()).WillByDefault(Return(true));
     ON_CALL(mock_flags_, opstats_ttl_days()).WillByDefault(Return(1));
     ON_CALL(mock_flags_, opstats_db_size_limit_bytes())
         .WillByDefault(Return(1 * 1024 * 1024));

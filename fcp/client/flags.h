@@ -52,10 +52,6 @@ class Flags {
   // Whether to log the error message strings from TensorFlow exceptions.
   virtual bool log_tensorflow_error_messages() const = 0;
 
-  // Whether to enable recording to and querying from the Operational Statistics
-  // db.
-  virtual bool enable_opstats() const { return true; }
-
   // The number of days for data to live in the OpStatsDb without update.
   virtual int64_t opstats_ttl_days() const { return 30; }
 

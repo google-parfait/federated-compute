@@ -39,6 +39,7 @@ cc_library(
         "//fcp/client:interfaces",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/time",
     ],
 )

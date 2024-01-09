@@ -47,8 +47,6 @@ constexpr char kTestTaskName[] = "stefans_really_cool_task";
 class OpStatsExampleStoreTest : public testing::Test {
  public:
   OpStatsExampleStoreTest() {
-    EXPECT_CALL(mock_opstats_logger_, IsOpStatsEnabled())
-        .WillRepeatedly(Return(true));
     EXPECT_CALL(mock_opstats_logger_, GetOpStatsDb())
         .WillRepeatedly(Return(&mock_db_));
     EXPECT_CALL(mock_opstats_logger_, GetCurrentTaskName())

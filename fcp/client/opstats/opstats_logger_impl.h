@@ -87,10 +87,6 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   // Get the underlying opstats database.
   OpStatsDb* GetOpStatsDb() override { return db_.get(); }
 
-  // Whether opstats is enabled. An instance of this class should only ever be
-  // created when opstats is enabled.
-  bool IsOpStatsEnabled() const override { return true; }
-
   // Syncs all logged events to storage.
   absl::Status CommitToStorage() override;
 

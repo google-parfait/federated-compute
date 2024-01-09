@@ -202,11 +202,6 @@ OpStatsExampleIteratorFactory::CreateExampleIterator(
         "The collection uri is ", example_selector.collection_uri(),
         ", which is not the expected uri: ", kOpStatsCollectionUri));
   }
-  if (!op_stats_logger_->IsOpStatsEnabled()) {
-    log_manager_->LogDiag(
-        ProdDiagCode::OPSTATS_EXAMPLE_STORE_REQUESTED_NOT_ENABLED);
-    return absl::InvalidArgumentError("OpStats example store is not enabled.");
-  }
 
   absl::Time lower_bound_time = absl::InfinitePast();
   absl::Time upper_bound_time = absl::InfiniteFuture();
