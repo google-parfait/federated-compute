@@ -17,7 +17,6 @@
 #define FCP_CLIENT_FLAGS_H_
 
 #include <cstdint>
-#include <string>
 
 #include "absl/status/status.h"
 
@@ -225,6 +224,9 @@ class Flags {
 
   // If true, confidential aggregation is advertised & can be used for uploads.
   virtual bool enable_confidential_aggregation() const { return false; }
+
+  // If true, enables MinimumSeparationPolicy for clients.
+  virtual bool enable_minimum_separation_policy() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
