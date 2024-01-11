@@ -400,6 +400,72 @@ TEST_F(OpStatsLoggerImplTest, AddEventWithErrorMessage) {
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
+TEST_F(OpStatsLoggerImplTest, SetMinSepPolicyCurrentIndex) {
+  auto start_time = TimeUtil::GetCurrentTime();
+  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/3);
+
+  google::protobuf::Map<std::string, int64_t> current_index;
+  current_index["min_sep_policy"] = 1;
+
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
+  opstats_logger->AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  opstats_logger->SetMinSepPolicyCurrentIndex(&current_index);
+  // Update the current index.
+  current_index["min_sep_policy"] = 2;
+  opstats_logger->SetMinSepPolicyCurrentIndex(&current_index);
+  opstats_logger.reset();
+
+  auto opstats_logger_null_current_index =
+      CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
+  opstats_logger_null_current_index->AddEvent(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  opstats_logger_null_current_index->SetMinSepPolicyCurrentIndex(nullptr);
+  opstats_logger_null_current_index.reset();
+
+  google::protobuf::Map<std::string, int64_t> empty_current_index;
+  auto opstats_logger_empty_current_index =
+      CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
+  opstats_logger_empty_current_index->AddEvent(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  opstats_logger_empty_current_index->SetMinSepPolicyCurrentIndex(
+      &empty_current_index);
+  opstats_logger_empty_current_index.reset();
+
+  auto db = PdsBackedOpStatsDb::Create(
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
+  ASSERT_OK(data);
+
+  OpStatsSequence expected;
+  // Add the first run which should log the latest min_sep_policy_current_index
+  // as it is nonempty.
+  auto new_opstats = expected.add_opstats();
+  new_opstats->set_session_name(kSessionName);
+  new_opstats->set_population_name(kPopulationName);
+  new_opstats->mutable_min_sep_policy_current_index()->insert(
+      {"min_sep_policy", 2});
+  new_opstats->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  // Add the second run which doesn't log the min_sep_policy_current_index as it
+  // is nullptr.
+  new_opstats = expected.add_opstats();
+  new_opstats->set_session_name(kSessionName);
+  new_opstats->set_population_name(kPopulationName);
+  new_opstats->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+  // Add the third run which doesn't log the min_sep_policy_current_index as it
+  // is empty.
+  new_opstats = expected.add_opstats();
+  new_opstats->set_session_name(kSessionName);
+  new_opstats->set_population_name(kPopulationName);
+  new_opstats->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
+}
+
 TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
 

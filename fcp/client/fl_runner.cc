@@ -18,6 +18,7 @@
 #include <fcntl.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -1481,14 +1482,38 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   absl::StatusOr<CheckinResult> result = CreateCheckinResultFromTaskAssignment(
       task_assignment, files, log_invalid_payload_error, log_io_error, flags);
   if (result.ok()) {
-    phase_logger.LogCheckinCompleted(
-        result->task_name,
-        GetNetworkStatsSince(federated_protocol,
-                             /*fedselect_manager=*/nullptr,
-                             network_stats_before_plan_download),
-        /*time_before_checkin=*/time_before_checkin,
-        /*time_before_plan_download=*/time_before_plan_download,
-        reference_time);
+    // Only log the current index of the MinimumSeparationPolicy if the flag
+    // `enable_minimum_separation_policy` is true and the current index map
+    // is nonempty.
+    if (flags->enable_minimum_separation_policy() &&
+        result.value().plan.has_client_persisted_data() &&
+        !result.value()
+             .plan.client_persisted_data()
+             .min_sep_policy_current_index()
+             .empty()) {
+      const google::protobuf::Map<std::string, int64_t>* min_sep_policy_current_index =
+          &(result.value()
+                .plan.client_persisted_data()
+                .min_sep_policy_current_index());
+      phase_logger.LogCheckinCompleted(
+          result->task_name,
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_plan_download),
+          /*time_before_checkin=*/time_before_checkin,
+          /*time_before_plan_download=*/time_before_plan_download,
+          reference_time, min_sep_policy_current_index);
+    } else {
+      phase_logger.LogCheckinCompleted(
+          result->task_name,
+          GetNetworkStatsSince(federated_protocol,
+                               /*fedselect_manager=*/nullptr,
+                               network_stats_before_plan_download),
+          /*time_before_checkin=*/time_before_checkin,
+          /*time_before_plan_download=*/time_before_plan_download,
+          reference_time,
+          /*min_sep_policy_current_index=*/nullptr);
+    }
   }
   return result;
 }

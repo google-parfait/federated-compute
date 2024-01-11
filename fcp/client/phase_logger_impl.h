@@ -161,7 +161,9 @@ class PhaseLoggerImpl : public PhaseLogger {
                            const NetworkStats& network_stats,
                            absl::Time time_before_checkin,
                            absl::Time time_before_plan_download,
-                           absl::Time reference_time) override;
+                           absl::Time reference_time,
+                           const google::protobuf::Map<std::string, int64_t>*
+                               min_sep_policy_current_index) override;
 
   // Computation phase.
   void MaybeLogCollectionFirstAccessTime(

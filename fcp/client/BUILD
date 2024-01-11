@@ -484,6 +484,7 @@ cc_library(
         "//fcp/protos:federated_api_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 

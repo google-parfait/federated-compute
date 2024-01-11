@@ -422,6 +422,10 @@ message OperationalStats {
 
   repeated PhaseStats phase_stats = 13;
 
+  // A map from policy name to the current index of the MinimumSeparationPolicy
+  // that is applied to this computation execution.
+  map<string, int64> min_sep_policy_current_index = 14;
+
   reserved 8, 9;
 }
 

@@ -26,6 +26,7 @@
 #include "absl/time/time.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/testing/testing.h"
+#include "google/protobuf/map.h"
 
 namespace fcp {
 namespace client {
@@ -617,7 +618,50 @@ TEST_P(PhaseLoggerImplTest, LogCheckinCompleted) {
       task_name, network_stats,
       /*time_before_checkin=*/absl::Now() - absl::Minutes(2),
       /*time_before_plan_download=*/absl::Now() - absl::Minutes(1),
-      /*reference_time=*/absl::Now() - absl::Minutes(8));
+      /*reference_time=*/absl::Now() - absl::Minutes(8),
+      /*min_sep_policy_current_index=*/nullptr);
+}
+
+TEST_P(PhaseLoggerImplTest, LogCheckinCompletedWithMinSepPolicyCurrentIndex) {
+  NetworkStats network_stats{.bytes_downloaded = 100,
+                             .bytes_uploaded = 200,
+                             .network_duration = absl::Seconds(40)};
+
+  absl::Duration expected_duration = absl::Minutes(1);
+
+  google::protobuf::Map<std::string, int64_t> current_index;
+  current_index["min_sep_policy"] = 1;
+  const auto* current_index_ptr = &current_index;
+
+  std::string task_name = "my_task";
+  InSequence seq;
+  EXPECT_CALL(mock_event_publisher_,
+              PublishCheckinFinishedV2(
+                  network_stats,
+                  AllOf(Ge(expected_duration),
+                        Lt(expected_duration + absl::Milliseconds(10)))));
+  EXPECT_CALL(mock_opstats_logger_,
+              AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED));
+  EXPECT_CALL(mock_opstats_logger_,
+              SetMinSepPolicyCurrentIndex(current_index_ptr));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
+  // The counter should always log the full duration, from before the start of
+  // the checkin.
+  VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY,
+                      AllOf(Ge(absl::ToInt64Milliseconds(absl::Minutes(2))),
+                            Lt(absl::ToInt64Milliseconds(
+                                absl::Minutes(2) + absl::Milliseconds(100)))));
+  VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME,
+                      AllOf(Ge(absl::ToInt64Milliseconds(absl::Minutes(8))),
+                            Lt(absl::ToInt64Milliseconds(
+                                absl::Minutes(8) + absl::Milliseconds(100)))));
+
+  phase_logger_->LogCheckinCompleted(
+      task_name, network_stats,
+      /*time_before_checkin=*/absl::Now() - absl::Minutes(2),
+      /*time_before_plan_download=*/absl::Now() - absl::Minutes(1),
+      /*reference_time=*/absl::Now() - absl::Minutes(8),
+      /*min_sep_policy_current_index=*/current_index_ptr);
 }
 
 TEST_P(PhaseLoggerImplTest, LogComputationStarted) {

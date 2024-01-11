@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_OPSTATS_OPSTATS_LOGGER_IMPL_H_
 #define FCP_CLIENT_OPSTATS_OPSTATS_LOGGER_IMPL_H_
 
+#include <cstdint>
 #include <string>
 
 #include "absl/container/flat_hash_map.h"
@@ -77,6 +78,10 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   // internal message.
   void SetNetworkStats(const NetworkStats& network_stats)
       ABSL_LOCKS_EXCLUDED(mutex_) override;
+
+  // Log current index of min sep policies, replacing any old stats for the run.
+  void SetMinSepPolicyCurrentIndex(const google::protobuf::Map<std::string, int64_t>*
+                                       min_sep_policy_current_index) override;
 
   // Sets the retry window, replacing any old retry window, in the cumulative
   // internal message. Any retry token in the retry window message is dropped.

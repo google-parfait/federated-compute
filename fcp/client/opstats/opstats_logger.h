@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_OPSTATS_OPSTATS_LOGGER_H_
 #define FCP_CLIENT_OPSTATS_OPSTATS_LOGGER_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -62,6 +63,10 @@ class OpStatsLogger {
 
   // Log network stats, replacing any old stats for the run.
   virtual void SetNetworkStats(const NetworkStats& network_stats) {}
+
+  // Log current index of min sep policies, replacing any old stats for the run.
+  virtual void SetMinSepPolicyCurrentIndex(
+      const google::protobuf::Map<std::string, int64_t>* current_index) {}
 
   // Log the retry window, replacing any old retry window. Ignore any retry
   // token in the retry window message.

@@ -15,6 +15,7 @@
  */
 #include "fcp/client/opstats/opstats_logger_impl.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -101,6 +102,18 @@ void OpStatsLoggerImpl::AddEventWithErrorMessage(
     if (stats_.error_message().empty()) {
       stats_.set_error_message(error_message);
     }
+  }
+}
+
+void OpStatsLoggerImpl::SetMinSepPolicyCurrentIndex(
+    const google::protobuf::Map<std::string, int64_t>* min_sep_policy_current_index) {
+  absl::MutexLock lock(&mutex_);
+  if (min_sep_policy_current_index != nullptr &&
+      !min_sep_policy_current_index->empty()) {
+    stats_.clear_min_sep_policy_current_index();
+    stats_.mutable_min_sep_policy_current_index()->insert(
+        min_sep_policy_current_index->begin(),
+        min_sep_policy_current_index->end());
   }
 }
 
