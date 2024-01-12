@@ -14,9 +14,9 @@
 
 # Aggregation Protocol Package
 
-load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
 load("//fcp:config.bzl", "FCP_COPTS")
 load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
+load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
 
 package(
     default_visibility = [

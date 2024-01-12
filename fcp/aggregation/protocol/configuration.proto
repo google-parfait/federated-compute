@@ -29,7 +29,9 @@ message Configuration {
   // Represents a single aggregation operation, combining one or more input
   // tensors from a collection of clients into one or more output tensors on the
   // server.
-  // TODO(team): Remove usage of TensorFlow from this message.
+  // TODO: b/319473534 - This is a deprecated legacy configuration of
+  // intrinsic that uses Tensorflow messages.  The new code must use the
+  // IntrinsicConfig message instead.
   message ServerAggregationConfig {
     // The uri of the aggregation intrinsic (e.g. 'federated_sum').
     string intrinsic_uri = 1;
@@ -64,5 +66,7 @@ message Configuration {
   }
 
   // A list of client-to-server aggregations to perform.
-  repeated ServerAggregationConfig aggregation_configs = 1;
+  // TODO: b/319473534 - remove aggregation_configs once migration to the new
+  // intrinsic configs is complete.
+  repeated ServerAggregationConfig aggregation_configs = 1 [deprecated = true];
 }
