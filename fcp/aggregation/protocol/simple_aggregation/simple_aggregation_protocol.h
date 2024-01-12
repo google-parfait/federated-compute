@@ -17,12 +17,10 @@
 #ifndef FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_SIMPLE_AGGREGATION_PROTOCOL_H_
 #define FCP_AGGREGATION_PROTOCOL_SIMPLE_AGGREGATION_SIMPLE_AGGREGATION_PROTOCOL_H_
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <string>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
@@ -34,10 +32,10 @@
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "fcp/aggregation/core/intrinsic.h"
-#include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/protocol/aggregation_protocol.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
+#include "fcp/aggregation/protocol/checkpoint_aggregator.h"
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
@@ -124,8 +122,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
  private:
   // Private constructor.
   SimpleAggregationProtocol(
-      std::vector<Intrinsic> intrinsics,
-      std::vector<std::unique_ptr<TensorAggregator>> aggregators,
+      std::unique_ptr<CheckpointAggregator> checkpoint_aggregator,
       const CheckpointParserFactory* checkpoint_parser_factory,
       const CheckpointBuilderFactory* checkpoint_builder_factory,
       ResourceResolver* resource_resolver, Clock* clock,
@@ -199,21 +196,8 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   bool IsAggregationQueueEmpty() ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
   void AwaitAggregationQueueEmpty() ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
 
-  // Parses and validates the client report.
-  // This function involves a potentially expensive I/O and parsing and should
-  // run concurrently as much as possible. The ABSL_LOCKS_EXCLUDED attribution
-  // below is used to emphasize that.
-  using TensorMap = absl::flat_hash_map<std::string, Tensor>;
-  absl::StatusOr<TensorMap> ParseCheckpoint(absl::Cord report) const
-      ABSL_LOCKS_EXCLUDED(state_mu_, aggregation_mu_);
-
-  // Aggregates the input via the underlying aggregators.
-  absl::Status AggregateClientInput(TensorMap tensor_map)
-      ABSL_LOCKS_EXCLUDED(state_mu_, aggregation_mu_);
-
   // Produces the report via the underlying aggregators.
-  absl::StatusOr<absl::Cord> CreateReport()
-      ABSL_LOCKS_EXCLUDED(aggregation_mu_);
+  absl::StatusOr<absl::Cord> CreateReport();
 
   void ScheduleOutlierDetection()
       ABSL_LOCKS_EXCLUDED(state_mu_, outlier_detection_mu_);
@@ -226,14 +210,6 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
 
   // Protects the mutable state.
   absl::Mutex state_mu_;
-  // Protects calls into the aggregators.
-  absl::Mutex aggregation_mu_;
-  // This indicates that the aggregation has finished either by completing
-  // the protocol or by aborting it. This can be triggered without locking on
-  // the aggregation_mu_ mutex first to allow aborting the protocol promptly and
-  // discarding all the pending aggregation calls.
-  std::atomic_bool aggregation_finished_ = false;
-
   // The overall state of the protocol.
   ProtocolState protocol_state_ ABSL_GUARDED_BY(state_mu_);
 
@@ -261,13 +237,7 @@ class SimpleAggregationProtocol final : public AggregationProtocol {
   uint64_t num_clients_aborted_ ABSL_GUARDED_BY(state_mu_) = 0;
   uint64_t num_clients_discarded_ ABSL_GUARDED_BY(state_mu_) = 0;
 
-  // The intrinsics vector need not be guarded by the mutex, as accessing
-  // immutable state can happen concurrently.
-  std::vector<Intrinsic> const intrinsics_;
-  // TensorAggregators are not thread safe and must be protected by a mutex.
-  std::vector<std::unique_ptr<TensorAggregator>> aggregators_
-      ABSL_GUARDED_BY(aggregation_mu_);
-
+  std::unique_ptr<CheckpointAggregator> checkpoint_aggregator_;
   const CheckpointParserFactory* const checkpoint_parser_factory_;
   const CheckpointBuilderFactory* const checkpoint_builder_factory_;
   ResourceResolver* const resource_resolver_;

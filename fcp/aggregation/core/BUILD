@@ -27,25 +27,6 @@ package(
 
 # TODO(team): Create a "core" library that bundles all core libraries together.
 
-TENSOR_SRCS = [
-    "tensor.cc",
-    "tensor_data.cc",
-    "tensor_shape.cc",
-    "input_tensor_list.cc",
-]
-
-TENSOR_HDRS = [
-    "agg_vector.h",
-    "agg_vector_iterator.h",
-    "datatype.h",
-    "tensor.h",
-    "tensor_data.h",
-    "tensor_shape.h",
-    "tensor_spec.h",
-    "mutable_vector_data.h",
-    "input_tensor_list.h",
-]
-
 proto_library(
     name = "tensor_proto",
     srcs = ["tensor.proto"],
@@ -58,8 +39,23 @@ cc_proto_library(
 
 cc_library(
     name = "tensor",
-    srcs = TENSOR_SRCS,
-    hdrs = TENSOR_HDRS,
+    srcs = [
+        "input_tensor_list.cc",
+        "tensor.cc",
+        "tensor_data.cc",
+        "tensor_shape.cc",
+    ],
+    hdrs = [
+        "agg_vector.h",
+        "agg_vector_iterator.h",
+        "datatype.h",
+        "input_tensor_list.h",
+        "mutable_vector_data.h",
+        "tensor.h",
+        "tensor_data.h",
+        "tensor_shape.h",
+        "tensor_spec.h",
+    ],
     copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = [
@@ -70,25 +66,21 @@ cc_library(
     ],
 )
 
-AGGREGATOR_SRCS = [
-    "tensor_aggregator.cc",
-    "tensor_aggregator_registry.cc",
-]
-
-AGGREGATOR_HDRS = [
-    "agg_vector_aggregator.h",
-    "one_dim_grouping_aggregator.h",
-    "aggregator.h",
-    "intrinsic.h",
-    "tensor_aggregator.h",
-    "tensor_aggregator_factory.h",
-    "tensor_aggregator_registry.h",
-]
-
 cc_library(
     name = "aggregator",
-    srcs = AGGREGATOR_SRCS,
-    hdrs = AGGREGATOR_HDRS,
+    srcs = [
+        "tensor_aggregator.cc",
+        "tensor_aggregator_registry.cc",
+    ],
+    hdrs = [
+        "agg_vector_aggregator.h",
+        "aggregator.h",
+        "intrinsic.h",
+        "one_dim_grouping_aggregator.h",
+        "tensor_aggregator.h",
+        "tensor_aggregator_factory.h",
+        "tensor_aggregator_registry.h",
+    ],
     copts = FCP_COPTS,
     deps = [
         ":tensor",
@@ -99,9 +91,11 @@ cc_library(
 )
 
 cc_library(
-    name = "fedsql_group_by",
+    name = "aggregation_cores",
     srcs = [
         "composite_key_combiner.cc",
+        "federated_mean.cc",
+        "federated_sum.cc",
         "group_by_aggregator.cc",
         "grouping_federated_sum.cc",
     ],
@@ -185,22 +179,6 @@ cc_test(
 )
 
 cc_library(
-    name = "federated_sum",
-    srcs = [
-        "federated_sum.cc",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":aggregator",
-        ":tensor",
-        "//fcp/base",
-    ],
-    alwayslink = 1,
-)
-
-# Separate target from :tensor is required for vector_string_data as string_view is not yet
-# supported for nanolibc.
-cc_library(
     name = "vector_string_data",
     hdrs = ["vector_string_data.h"],
     deps = [":tensor"],
@@ -211,25 +189,13 @@ cc_library(
     hdrs = ["fedsql_constants.h"],
 )
 
-cc_library(
-    name = "federated_mean",
-    srcs = ["federated_mean.cc"],
-    copts = FCP_COPTS,
-    deps = [
-        ":aggregator",
-        ":tensor",
-        "//fcp/base",
-    ],
-    alwayslink = 1,
-)
-
 cc_test(
     name = "federated_mean_test",
     srcs = ["federated_mean_test.cc"],
     copts = FCP_COPTS,
     deps = [
+        ":aggregation_cores",
         ":aggregator",
-        ":federated_mean",
         ":tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
@@ -244,8 +210,8 @@ cc_test(
     srcs = ["federated_sum_test.cc"],
     copts = FCP_COPTS,
     deps = [
+        ":aggregation_cores",
         ":aggregator",
-        ":federated_sum",
         ":tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
@@ -268,8 +234,8 @@ cc_test(
     name = "composite_key_combiner_test",
     srcs = ["composite_key_combiner_test.cc"],
     deps = [
+        ":aggregation_cores",
         ":aggregator",
-        ":fedsql_group_by",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",
@@ -305,7 +271,7 @@ cc_test(
     name = "one_dim_grouping_aggregator_test",
     srcs = ["one_dim_grouping_aggregator_test.cc"],
     deps = [
-        ":fedsql_group_by",
+        ":aggregation_cores",
         ":tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
@@ -319,8 +285,8 @@ cc_test(
     name = "group_by_aggregator_test",
     srcs = ["group_by_aggregator_test.cc"],
     deps = [
+        ":aggregation_cores",
         ":aggregator",
-        ":fedsql_group_by",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",
@@ -336,8 +302,8 @@ cc_test(
     srcs = ["grouping_federated_sum_test.cc"],
     copts = FCP_COPTS,
     deps = [
+        ":aggregation_cores",
         ":aggregator",
-        ":fedsql_group_by",
         ":tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
@@ -354,8 +320,8 @@ cc_binary(
     copts = FCP_COPTS,
     linkstatic = 1,
     deps = [
+        ":aggregation_cores",
         ":aggregator",
-        ":federated_sum",
         ":tensor",
         "@com_google_benchmark//:benchmark_main",
     ],

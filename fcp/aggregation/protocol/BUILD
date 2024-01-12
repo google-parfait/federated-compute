@@ -122,6 +122,44 @@ cc_library(
 )
 
 cc_library(
+    name = "checkpoint_aggregator",
+    srcs = ["checkpoint_aggregator.cc"],
+    hdrs = ["checkpoint_aggregator.h"],
+    copts = FCP_COPTS,
+    deps = [
+        ":checkpoint_builder",
+        ":checkpoint_parser",
+        ":config_converter",
+        ":configuration_cc_proto",
+        "//fcp/aggregation/core:aggregation_cores",
+        "//fcp/aggregation/core:aggregator",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/base",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+cc_test(
+    name = "checkpoint_aggregator_test",
+    srcs = ["checkpoint_aggregator_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":checkpoint_aggregator",
+        ":configuration_cc_proto",
+        "//fcp/base",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "config_converter",
     srcs = ["config_converter.cc"],
     hdrs = ["config_converter.h"],
