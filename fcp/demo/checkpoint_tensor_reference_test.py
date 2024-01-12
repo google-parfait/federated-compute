@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either expresus or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for checkpoint_tensor_reference."""
 
 import unittest
 
@@ -40,7 +39,10 @@ class CheckpointTensorReferenceTest(absltest.TestCase,
     ref = ctr.CheckpointTensorReference(
         TENSOR_NAME, DTYPE, SHAPE,
         tff.async_utils.SharedAwaitable(get_test_checkpoint()))
-    self.assertEqual(ref.type_signature, tff.TensorType(DTYPE, SHAPE))
+    self.assertEqual(
+        ref.type_signature,
+        tff.TensorType(DTYPE, SHAPE)
+    )
 
   async def test_get_value(self):
 
