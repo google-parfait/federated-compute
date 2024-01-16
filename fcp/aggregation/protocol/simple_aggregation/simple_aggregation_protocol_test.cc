@@ -1265,10 +1265,14 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_AbortWhileQueued) {
 
   aggregation_blocked_notification.WaitForNotification();
 
+  // Poll until 3 inputs are reported as aggregated and there are no pending
+  // clients. The polling is needed to work around the concurrent execution from
+  // all clients.
   StatusMessage status_message;
   do {
     status_message = protocol->GetStatus();
-  } while (status_message.num_clients_pending() > 0);
+  } while (status_message.num_clients_pending() > 0 ||
+           status_message.num_inputs_aggregated_and_included() < 3);
 
   // At this point one input must be blocked inside the aggregation waiting for
   // the notification, 3 inputs should already be gone through the aggregation,
@@ -1356,10 +1360,14 @@ TEST_F(SimpleAggregationProtocolTest,
 
   aggregation_blocked_notification.WaitForNotification();
 
+  // Poll until 3 inputs are reported as aggregated and there are no pending
+  // clients. The polling is needed to work around the concurrent execution from
+  // all clients.
   StatusMessage status_message;
   do {
     status_message = protocol->GetStatus();
-  } while (status_message.num_clients_pending() > 0);
+  } while (status_message.num_clients_pending() > 0 ||
+           status_message.num_inputs_aggregated_and_included() < 3);
 
   // At this point one input must be blocked inside the aggregation waiting for
   // the notification, 3 inputs should already be gone through the aggregation,
