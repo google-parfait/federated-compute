@@ -44,6 +44,7 @@ cc_library(
         "tensor.cc",
         "tensor_data.cc",
         "tensor_shape.cc",
+        "tensor_spec.cc",
     ],
     hdrs = [
         "agg_vector.h",
@@ -121,6 +122,7 @@ cc_test(
     srcs = [
         "tensor_data_test.cc",
         "tensor_shape_test.cc",
+        "tensor_spec_test.cc",
         "tensor_test.cc",
     ],
     copts = FCP_COPTS,

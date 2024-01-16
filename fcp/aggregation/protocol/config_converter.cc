@@ -19,13 +19,19 @@
 #include <utility>
 #include <vector>
 
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
+#include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/fedsql_constants.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/tensorflow/converters.h"
+#include "fcp/base/monitoring.h"
 #include "google/protobuf/repeated_ptr_field.h"
 
 namespace fcp {
@@ -58,6 +64,14 @@ void TransformFedSqlSpecs(Intrinsic& intrinsic) {
           TensorSpec(output_spec.name(), output_spec.dtype(), TensorShape{-1});
     }
   }
+}
+
+Status ServerAggregationConfigArgumentError(
+    const Configuration::ServerAggregationConfig& aggregation_config,
+    string_view error_message) {
+  return FCP_STATUS(INVALID_ARGUMENT)
+         << absl::StrCat("ServerAggregationConfig: ", error_message, ":\n",
+                         aggregation_config.DebugString());
 }
 
 // Parses a ServerAggregationConfig proto into an Intrinsic struct to
@@ -157,16 +171,22 @@ StatusOr<Intrinsic> ParseFromConfig(
 
 }  // namespace
 
-Status ServerAggregationConfigArgumentError(
-    const Configuration::ServerAggregationConfig& aggregation_config,
-    string_view error_message) {
-  return FCP_STATUS(INVALID_ARGUMENT)
-         << "ServerAggregationConfig: " << error_message << ":\n"
-         << aggregation_config.DebugString();
+StatusOr<std::vector<Intrinsic>> ParseFromConfig(const Configuration& config) {
+  FCP_RETURN_IF_ERROR(ValidateConfiguration(config));
+  return ParseFromConfig("", config.aggregation_configs());
 }
 
-StatusOr<std::vector<Intrinsic>> ParseFromConfig(const Configuration& config) {
-  return ParseFromConfig("", config.aggregation_configs());
+absl::Status ValidateConfiguration(const Configuration& configuration) {
+  for (const Configuration::ServerAggregationConfig& aggregation_config :
+       configuration.aggregation_configs()) {
+    if (!GetAggregatorFactory(aggregation_config.intrinsic_uri()).ok()) {
+      return ServerAggregationConfigArgumentError(
+          aggregation_config,
+          absl::StrFormat("%s is not a supported intrinsic_uri.",
+                          aggregation_config.intrinsic_uri()));
+    }
+  }
+  return absl::OkStatus();
 }
 
 }  // namespace aggregation

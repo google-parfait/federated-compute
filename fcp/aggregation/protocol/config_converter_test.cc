@@ -1,17 +1,24 @@
 #include "fcp/aggregation/protocol/config_converter.h"
 
+#include <initializer_list>
+#include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "fcp/testing/parse_text_proto.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp {
@@ -20,7 +27,34 @@ namespace {
 
 using testing::SizeIs;
 
-TEST(ConfigConverterTest, ConvertEmpty) {
+class MockFactory : public TensorAggregatorFactory {
+  MOCK_METHOD(StatusOr<std::unique_ptr<TensorAggregator>>, Create,
+              (const Intrinsic&), (const override));
+};
+
+class ConfigConverterTest : public ::testing::Test {
+ protected:
+  ConfigConverterTest() {
+    if (!is_registered_) {
+      MockFactory mock_factory;
+      RegisterAggregatorFactory("my_intrinsic", &mock_factory);
+      RegisterAggregatorFactory("inner_intrinsic", &mock_factory);
+      RegisterAggregatorFactory("outer_intrinsic", &mock_factory);
+      RegisterAggregatorFactory("other_intrinsic", &mock_factory);
+      RegisterAggregatorFactory("fedsql_group_by", &mock_factory);
+      RegisterAggregatorFactory("GoogleSQL:sum", &mock_factory);
+      RegisterAggregatorFactory("GoogleSQL:max", &mock_factory);
+      is_registered_ = true;
+    }
+  }
+
+ private:
+  static bool is_registered_;
+};
+
+bool ConfigConverterTest::is_registered_ = false;
+
+TEST_F(ConfigConverterTest, ConvertEmpty) {
   Configuration config = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs: { intrinsic_uri: "my_intrinsic" }
   )pb");
@@ -31,7 +65,7 @@ TEST(ConfigConverterTest, ConvertEmpty) {
               EqIntrinsic(Intrinsic{"my_intrinsic", {}, {}, {}, {}}));
 }
 
-TEST(ConfigConverterTest, ConvertInputs) {
+TEST_F(ConfigConverterTest, ConvertInputs_Legacy) {
   Configuration config = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs: {
       intrinsic_uri: "my_intrinsic"
@@ -67,7 +101,7 @@ TEST(ConfigConverterTest, ConvertInputs) {
                                     {}}));
 }
 
-TEST(ConfigConverterTest, ConvertOutputs) {
+TEST_F(ConfigConverterTest, ConvertOutputs_Legacy) {
   Configuration config = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs: {
       intrinsic_uri: "my_intrinsic"
@@ -98,7 +132,7 @@ TEST(ConfigConverterTest, ConvertOutputs) {
                                     {}}));
 }
 
-TEST(ConfigConverterTest, ConvertParams) {
+TEST_F(ConfigConverterTest, ConvertParams_Legacy) {
   Configuration config = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs: {
       intrinsic_uri: "my_intrinsic"
@@ -131,7 +165,7 @@ TEST(ConfigConverterTest, ConvertParams) {
   ASSERT_THAT(parsed_intrinsics.value()[0], EqIntrinsic(std::move(expected)));
 }
 
-TEST(ConfigConverterTest, ConvertInnerAggregations) {
+TEST_F(ConfigConverterTest, ConvertInnerAggregations_Legacy) {
   Configuration config = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs: {
       intrinsic_uri: "my_intrinsic"
@@ -165,7 +199,7 @@ TEST(ConfigConverterTest, ConvertInnerAggregations) {
   ASSERT_THAT(parsed_intrinsics.value()[0], EqIntrinsic(std::move(expected)));
 }
 
-TEST(ConfigConverterTest, ConvertFedSql_GroupByAlreadyPresent) {
+TEST_F(ConfigConverterTest, ConvertFedSql_GroupByAlreadyPresent_Legacy) {
   Configuration config = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs: {
       intrinsic_uri: "fedsql_group_by"
@@ -237,7 +271,7 @@ TEST(ConfigConverterTest, ConvertFedSql_GroupByAlreadyPresent) {
   ASSERT_THAT(parsed_intrinsics.value()[0], EqIntrinsic(std::move(expected)));
 }
 
-TEST(ConfigConverterTest, ConvertFedSql_WrapWhenGroupByNotPresent) {
+TEST_F(ConfigConverterTest, ConvertFedSql_WrapWhenGroupByNotPresent_Legacy) {
   Configuration config = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs: {
       intrinsic_uri: "GoogleSQL:sum"
@@ -316,7 +350,8 @@ TEST(ConfigConverterTest, ConvertFedSql_WrapWhenGroupByNotPresent) {
               EqIntrinsic(std::move(expected_groupby)));
 }
 
-TEST(ConfigConverterTest, ConvertFedSql_WrapWhenGroupByNotPresent_Nested) {
+TEST_F(ConfigConverterTest,
+       ConvertFedSql_WrapWhenGroupByNotPresent_Nested_Legacy) {
   Configuration config = PARSE_TEXT_PROTO(R"pb(
     aggregation_configs: {
       intrinsic_uri: "outer_intrinsic"

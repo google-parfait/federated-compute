@@ -20,8 +20,8 @@
 #include <string>
 #include <utility>
 
-#include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/base/monitoring.h"
 
 namespace fcp {
 namespace aggregation {
@@ -44,6 +44,13 @@ class TensorSpec final {
   }
 
   bool operator!=(const TensorSpec& other) const { return !(*this == other); }
+
+  // Creates a TensorSpec instance from a TensorSpecProto.
+  static StatusOr<TensorSpec> FromProto(
+      const TensorSpecProto& tensor_spec_proto);
+
+  // Converts TensorSpec to TensorSpecProto.
+  TensorSpecProto ToProto() const;
 
   const std::string& name() const { return name_; }
   DataType dtype() const { return dtype_; }

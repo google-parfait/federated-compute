@@ -27,7 +27,6 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
 #include "absl/synchronization/mutex.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/intrinsic.h"
@@ -63,16 +62,7 @@ absl::Status CheckCompatible(const std::vector<Intrinsic>& intrinsics,
 
 absl::Status CheckpointAggregator::ValidateConfig(
     const Configuration& configuration) {
-  for (const Configuration::ServerAggregationConfig& aggregation_config :
-       configuration.aggregation_configs()) {
-    if (!GetAggregatorFactory(aggregation_config.intrinsic_uri()).ok()) {
-      return ServerAggregationConfigArgumentError(
-          aggregation_config,
-          absl::StrFormat("%s is not a supported intrinsic_uri.",
-                          aggregation_config.intrinsic_uri()));
-    }
-  }
-  return absl::OkStatus();
+  return ValidateConfiguration(configuration);
 }
 
 absl::StatusOr<std::unique_ptr<CheckpointAggregator>>

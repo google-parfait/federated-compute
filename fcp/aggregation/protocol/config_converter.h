@@ -18,6 +18,7 @@
 
 #include <vector>
 
+#include "absl/status/status.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "fcp/base/monitoring.h"
@@ -25,10 +26,9 @@
 namespace fcp {
 namespace aggregation {
 
-// Creates an INVALID_ARGUMENT error with the provided error message.
-Status ServerAggregationConfigArgumentError(
-    const Configuration::ServerAggregationConfig& aggregation_config,
-    string_view error_message);
+// Validates the Configuration.
+// Returns INVALID_ARGUMENT if the configuration is invalid.
+absl::Status ValidateConfiguration(const Configuration& configuration);
 
 // Parses a Configuration proto into a vector of Intrinsic structs to
 // represent the aggregation intrinsic independently from the proto.
