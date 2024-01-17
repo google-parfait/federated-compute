@@ -41,7 +41,7 @@ class CheckpointTensorReferenceTest(absltest.TestCase,
         tff.async_utils.SharedAwaitable(get_test_checkpoint()))
     self.assertEqual(
         ref.type_signature,
-        tff.TensorType(DTYPE, SHAPE)
+        tff.types.tensorflow_to_type((DTYPE, SHAPE)),
     )
 
   async def test_get_value(self):

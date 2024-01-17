@@ -13,6 +13,7 @@
 # limitations under the License.
 """MaterializableValueReference that reads from a TensorFlow checkpoint."""
 
+import typing
 from typing import Any, Optional
 import uuid
 
@@ -41,7 +42,8 @@ class CheckpointTensorReference(tff.program.MaterializableValueReference):
         the TF checkpoint bytes once they're available.
     """
     self._tensor_name = tensor_name
-    self._type_signature = tff.TensorType(dtype, shape)
+    type_signature = tff.types.tensorflow_to_type((dtype, shape))
+    self._type_signature = typing.cast(tff.TensorType, type_signature)
     self._checkpoint_future = checkpoint_future
     self._tensor: Optional[tf.Tensor] = None
 

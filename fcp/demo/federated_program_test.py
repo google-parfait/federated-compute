@@ -209,22 +209,14 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         # All clients should complete successfully.
         self.assertListEqual(return_codes, [0] * len(client_counts))
 
-    self.assertSequenceEqual(
+    self.assertEqual(
         release_manager.values()['0/result'],
-        (
-            num_rounds * sum([sum(l) for l in client_counts]),
-            tff.FederatedType(tf.int32, tff.SERVER),
-        ),
+        num_rounds * sum([sum(l) for l in client_counts]),
     )
     for i in range(num_rounds):
-      self.assertSequenceEqual(
+      self.assertEqual(
           release_manager.values()[f'0/metrics/{i}'],
-          (
-              (len(client_counts),),
-              tff.FederatedType(
-                  tff.StructWithPythonType([tf.int32], tuple), tff.SERVER
-              ),
-          ),
+          (len(client_counts),),
       )
 
   async def test_multiple_assignment(self):
@@ -274,16 +266,14 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
 
     # With multiple assignment, clients should have contributed to both
     # computations.
-    self.assertSequenceEqual(
+    self.assertEqual(
         release_manager.values()['0/result'],
-        (
-            sum([sum(l) for l in client_counts]),
-            tff.FederatedType(tf.int32, tff.SERVER),
-        ),
+        sum([sum(l) for l in client_counts]),
     )
-    self.assertSequenceEqual(
+    expected_result = len(client_counts)
+    self.assertEqual(
         release_manager.values()['1/result'],
-        (len(client_counts), tff.FederatedType(tf.int32, tff.SERVER)),
+        expected_result,
     )
 
 

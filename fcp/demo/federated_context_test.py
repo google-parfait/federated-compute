@@ -233,7 +233,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
           state, tff.FederatedType(tf.int32, tff.SERVER), key='result'
       )
 
-    self.assertEqual(release_manager.values()['result'][0], 7)
+    self.assertEqual(release_manager.values()['result'], 7)
 
     run_computation.assert_called_once_with(
         mock.ANY,
@@ -272,7 +272,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
           state, tff.FederatedType(tf.int32, tff.SERVER), key='result'
       )
 
-    self.assertEqual(release_manager.values()['result'][0], 5678)
+    self.assertEqual(release_manager.values()['result'], 5678)
 
     input_var_names = variable_helpers.variable_names_from_type(
         count_clients.type_signature.parameter[0],
