@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+import "proto/attestation/reference_value.proto";
+
 option java_multiple_files = true;
 
 // A policy imposing limits on what can access a data blob and how many times,
@@ -69,6 +71,10 @@ message ApplicationMatcher {
   // An unvalidated tag associated with the application, used to disambiguate
   // otherwise identical applications.
   optional string tag = 1;
+
+  // Oak ReferenceValues specifying the binaries running at each layer of the
+  // DICE attestation.
+  oak.attestation.v1.ReferenceValues reference_values = 2;
 }
 
 // Defines limits on the accesses to a blob. This currently only supports

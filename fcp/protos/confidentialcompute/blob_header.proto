@@ -27,7 +27,11 @@ message BlobHeader {
   bytes blob_id = 1;
 
   // The identifier for the public key used to encrypt the blob.
-  fixed32 public_key_id = 2;
+  fixed32 public_key_id = 2 [deprecated = true];
+
+  // The COSE "kid" property (RFC 9052) of the asymmetric key used to encrypt
+  // the blob.
+  bytes key_id = 5;
 
   // A SHA-256 hash of the access policy to use for the blob.
   bytes access_policy_sha256 = 3;

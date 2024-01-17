@@ -23,6 +23,9 @@ package(
 proto_library(
     name = "access_policy_proto",
     srcs = ["access_policy.proto"],
+    deps = [
+        "@oak//proto/attestation:reference_value_proto",
+    ],
 )
 
 cc_proto_library(
@@ -46,6 +49,8 @@ proto_library(
     deps = [
         "@com_google_protobuf//:duration_proto",
         "@com_google_protobuf//:timestamp_proto",
+        "@oak//proto/attestation:endorsement_proto",
+        "@oak//proto/attestation:evidence_proto",
     ],
 )
 

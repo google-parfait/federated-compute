@@ -32,7 +32,9 @@ service PipelineTransform {
   // TODO(team): Remove this method once callers are all updated to use
   // the more flexible ConfigureAndAttest.
   // method_id: 1
-  rpc Initialize(InitializeRequest) returns (InitializeResponse);
+  rpc Initialize(InitializeRequest) returns (InitializeResponse) {
+    option deprecated = true;
+  }
 
   // Performs configuration of the service that overwrites previous
   // configuration provided to Initialize or to this method, and attests the
@@ -81,16 +83,22 @@ message ConfigureAndAttestRequest {
 }
 
 message ConfigureAndAttestResponse {
-  // The serialized bytes of the enclave's Curve 25519 public key. A new keypair
-  // will be generated whenever the ConfigureAndAttest method is called with a
-  // new configuration.
+  // The CBOR Web Token (CTW; RFC 8392) containing the enclave's public key. The
+  // CWT will contain all the claims and properties required by
+  // `fcp.confidentialcompute.AuthorizeAccessRequest.recipient_public_key`. A
+  // new keypair will be generated whenever the ConfigureAndAttest method is
+  // called with a new configuration.
+  // TODO: b/288331695 - Add a private claim for the configuration.
+  //
+  // Note: During the migration to CWTs, this may instead be a raw 32-byte Curve
+  // 25519 public key.
   bytes public_key = 1;
 
   // The attestation for the sealed application supplying the public key.
   // The public key, the configuration with any proprietary fields omitted based
   // on the provided field mask, and the hash of the full configuration will all
   // be attested.
-  bytes attestation = 2;
+  bytes attestation = 2 [deprecated = true];
 }
 
 message GenerateNoncesRequest {
@@ -140,6 +148,9 @@ message Record {
     bytes ciphertext_associated_data = 2;
 
     // The symmetric key used to encrypt `ciphertext`, encrypted using HPKE.
+    // The key is encoded as a COSE_Key struct (RFC 9052); at least the
+    // following algorithms should be supported:
+    //   -65538: AEAD_AES_128_GCM_SIV (fixed nonce)
     bytes encrypted_symmetric_key = 3;
 
     // The associated data for `encrypted_symmetric_key`. This field may be
@@ -170,11 +181,16 @@ message Record {
     // application after the Ledger has checked the policy and rewrapped the
     // symmetric key for access by the worker.
     message RewrappedAssociatedData {
-      // If the application will be re-encrypting its output, the public key to
-      // use. Reusing the same public key as the input ensures that derived
-      // objects have the same expiration time as the original data. This key
-      // can be ignored if the application doesn't encrypt its outputs (e.g.,
-      // because it produces anonymized aggregate results).
+      // If the application will be re-encrypting its output, the CWT for the
+      // public key to use. The CWT has the same required claims and parameters
+      // as `fcp.confidentialcompute.CreateKeyResponse.public_key`. Reusing the
+      // same public key as the input ensures that derived objects have the same
+      // expiration time as the original data. This key can be ignored if the
+      // application doesn't encrypt its outputs (e.g., because it produces
+      // anonymized aggregate results).
+      //
+      // Note: During the migration to CWTs, this may instead be a raw 32-byte
+      // key.
       bytes reencryption_public_key = 1;
 
       // Unique nonce for this record to protect against replay attacks by an
