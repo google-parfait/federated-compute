@@ -47,7 +47,7 @@ template<> class TracingTraits<DoesntContainFields>: public TracingTraitsBase {
     parser.Parse(schema_file.c_str(), include_directories);
     std::string jsongen;
     parser.SetRootType("DoesntContainFields");
-    GenerateText(parser, flatbuf_bytes, &jsongen);
+    GenText(parser, flatbuf_bytes, &jsongen);
     return jsongen;
   }
   static flatbuffers::Offset<DoesntContainFields> Create(flatbuffers::FlatBufferBuilder* fbb) {

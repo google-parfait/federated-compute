@@ -51,7 +51,7 @@ template<> class TracingTraits<OrderWithIds>: public TracingTraitsBase {
     parser.Parse(schema_file.c_str(), include_directories);
     std::string jsongen;
     parser.SetRootType("OrderWithIds");
-    GenerateText(parser, flatbuf_bytes, &jsongen);
+    GenText(parser, flatbuf_bytes, &jsongen);
     return jsongen;
   }
   static flatbuffers::Offset<OrderWithIds> Create(std::int32_t fieldx, std::int32_t fieldz, std::int32_t fieldy, flatbuffers::FlatBufferBuilder* fbb) {

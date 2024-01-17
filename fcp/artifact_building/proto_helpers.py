@@ -86,10 +86,9 @@ def make_measurement(
     )
 
   if (
-      # TODO: b/309218024 - Update to the latest version of TFF to replace.
-      tff_type.shape.is_fully_defined()
+      tff.types.is_shape_fully_defined(tff_type.shape)
       and t.shape.is_fully_defined()
-      and tff_type.shape.as_list() != t.shape.as_list()
+      and tff_type.shape != tuple(t.shape.as_list())
   ):
     raise ValueError(
         f'`tff_type.shape`: {tff_type.shape} does not match '

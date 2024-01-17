@@ -308,8 +308,7 @@ def tff_type_to_tensor_spec_list(
       tff_type, (tff.TensorType, tff.FederatedType, tff.StructType)
   )
   if isinstance(tff_type, tff.TensorType):
-    # TODO: b/309218024 - Update to the latest version of TFF to replace.
-    return [tf.TensorSpec(tff_type.shape, dtype=tff_type.dtype)]
+    return [tf.TensorSpec(tff_type.shape, dtype=tf.as_dtype(tff_type.dtype))]
   elif isinstance(tff_type, tff.FederatedType):
     return tff_type_to_tensor_spec_list(tff_type.member)
   else:  # tff.StructType

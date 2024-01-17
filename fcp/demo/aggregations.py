@@ -414,7 +414,9 @@ class Service:
       if isinstance(e, KeyError):
         e = absl_status.StatusNotOk(
             absl_status.internal_error('Failed to finalize upload'))
-      state.agg_protocol.CloseClient(client_data.client_id, e.status)
+      state.agg_protocol.CloseClient(
+          client_data.client_id, e.status.message(), e.status.raw_code()
+      )
       raise http_actions.HttpError(self._get_http_status(
           e.status.code())) from e
 
@@ -477,10 +479,14 @@ class Service:
     if request.status.code == code_pb2.Code.OK:
       status = absl_status.Status.OkStatus()
     else:
-      status = absl_status.BuildStatusNotOk(
+      status = absl_status.Status(
           absl_status.StatusCodeFromInt(request.status.code),
-          request.status.message)
-    state.agg_protocol.CloseClient(client_data.client_id, status)
+          request.status.message,
+      )
+
+    state.agg_protocol.CloseClient(
+        client_data.client_id, status.message(), status.raw_code()
+    )
 
     logging.debug('[%s] AbortAggregation: %s', request.aggregation_id,
                   request.status)

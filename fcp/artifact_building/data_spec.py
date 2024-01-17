@@ -89,8 +89,8 @@ class DataSpec:
             'preprocessing tff.Computation cannot be generated.'
         )
       self._preprocessing_comp = tff.tf_computation(
-          # TODO: b/309218024 - Update to the latest version of TFF to replace.
-          self.preprocessing_fn, tff.SequenceType(tf.string)
+          self.preprocessing_fn,
+          tff.SequenceType(np.str_),
       )
     return self._preprocessing_comp
 

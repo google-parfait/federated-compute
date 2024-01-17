@@ -55,7 +55,7 @@ template<> class TracingTraits<DeprecatedInt>: public TracingTraitsBase {
     parser.Parse(schema_file.c_str(), include_directories);
     std::string jsongen;
     parser.SetRootType("DeprecatedInt");
-    GenerateText(parser, flatbuf_bytes, &jsongen);
+    GenText(parser, flatbuf_bytes, &jsongen);
     return jsongen;
   }
   static flatbuffers::Offset<DeprecatedInt> Create(std::int32_t field2, flatbuffers::FlatBufferBuilder* fbb) {
@@ -91,7 +91,7 @@ template<> class TracingTraits<DeprecatedString>: public TracingTraitsBase {
     parser.Parse(schema_file.c_str(), include_directories);
     std::string jsongen;
     parser.SetRootType("DeprecatedString");
-    GenerateText(parser, flatbuf_bytes, &jsongen);
+    GenText(parser, flatbuf_bytes, &jsongen);
     return jsongen;
   }
   static flatbuffers::Offset<DeprecatedString> Create(std::int32_t field2, flatbuffers::FlatBufferBuilder* fbb) {

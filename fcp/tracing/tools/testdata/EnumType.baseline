@@ -53,7 +53,7 @@ template<> class TracingTraits<Monster>: public TracingTraitsBase {
     parser.Parse(schema_file.c_str(), include_directories);
     std::string jsongen;
     parser.SetRootType("Monster");
-    GenerateText(parser, flatbuf_bytes, &jsongen);
+    GenText(parser, flatbuf_bytes, &jsongen);
     return jsongen;
   }
   static flatbuffers::Offset<Monster> Create(std::int32_t hp, Color color, flatbuffers::FlatBufferBuilder* fbb) {

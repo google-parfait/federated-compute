@@ -60,6 +60,7 @@ build:clang --per_file_copt=+^//@-Wno-error=deprecated-declarations
 
 # TF now has `cc_shared_library` targets, so it needs the experimental flag.
 build --experimental_cc_shared_library
+build --experimental_link_static_libraries_once=false
 
 # Bazel defaults to --std=c++0x
 build --cxxopt=-std=c++17

@@ -56,7 +56,7 @@ template<> class TracingTraits<IntegersOnly>: public TracingTraitsBase {
     parser.Parse(schema_file.c_str(), include_directories);
     std::string jsongen;
     parser.SetRootType("IntegersOnly");
-    GenerateText(parser, flatbuf_bytes, &jsongen);
+    GenText(parser, flatbuf_bytes, &jsongen);
     return jsongen;
   }
   static flatbuffers::Offset<IntegersOnly> Create(std::int32_t field1, std::int32_t field2, flatbuffers::FlatBufferBuilder* fbb) {
@@ -92,7 +92,7 @@ template<> class TracingTraits<IntegersWithString>: public TracingTraitsBase {
     parser.Parse(schema_file.c_str(), include_directories);
     std::string jsongen;
     parser.SetRootType("IntegersWithString");
-    GenerateText(parser, flatbuf_bytes, &jsongen);
+    GenText(parser, flatbuf_bytes, &jsongen);
     return jsongen;
   }
   static flatbuffers::Offset<IntegersWithString> Create(std::int32_t field1, absl::string_view field2, flatbuffers::FlatBufferBuilder* fbb) {

@@ -54,7 +54,7 @@ template<> class TracingTraits<foo::bar::TestTable>: public TracingTraitsBase {
     parser.Parse(schema_file.c_str(), include_directories);
     std::string jsongen;
     parser.SetRootType("foo::bar::TestTable");
-    GenerateText(parser, flatbuf_bytes, &jsongen);
+    GenText(parser, flatbuf_bytes, &jsongen);
     return jsongen;
   }
   static flatbuffers::Offset<foo::bar::TestTable> Create(std::int32_t id, foo::bar::Color color, flatbuffers::FlatBufferBuilder* fbb) {

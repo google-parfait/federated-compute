@@ -60,7 +60,7 @@ template<> class TracingTraits<AllTypes>: public TracingTraitsBase {
     parser.Parse(schema_file.c_str(), include_directories);
     std::string jsongen;
     parser.SetRootType("AllTypes");
-    GenerateText(parser, flatbuf_bytes, &jsongen);
+    GenText(parser, flatbuf_bytes, &jsongen);
     return jsongen;
   }
   static flatbuffers::Offset<AllTypes> Create(std::int8_t fieldz, std::uint8_t fieldy, bool fieldx, std::int16_t fieldw, std::uint16_t fieldv, std::int32_t fieldu, std::uint32_t fieldt, float fields, std::int64_t fieldr, std::uint64_t fieldq, double fieldp, absl::string_view fieldo, flatbuffers::FlatBufferBuilder* fbb) {

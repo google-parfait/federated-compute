@@ -351,7 +351,7 @@ int main(int argc, const char** argv) {
     // can have different tables.
     std::cout << "    parser.SetRootType(\"" << fully_qualified_table_name
               << "\");" << '\n';
-    std::cout << "    GenerateText(parser, flatbuf_bytes, &jsongen);" << '\n';
+    std::cout << "    GenText(parser, flatbuf_bytes, &jsongen);" << '\n';
     std::cout << "    return jsongen;" << '\n';
     std::cout << "  }" << '\n';
     std::cout << "  static flatbuffers::Offset<" << fully_qualified_table_name;

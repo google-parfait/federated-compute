@@ -66,7 +66,7 @@ http_archive(
     urls = ["https://github.com/grpc/grpc/archive/refs/tags/v1.50.0.tar.gz"],
 )
 
-# TensorFlow 2.13.0 pins an old version of upb that's compatible with their old
+# TensorFlow 2.14.0 pins an old version of upb that's compatible with their old
 # version of gRPC, but not with the newer version we use. Pin the version that
 # would be added by gRPC 1.50.0.
 http_archive(
@@ -120,7 +120,7 @@ load("@com_google_api_gax_java//:repositories.bzl", "com_google_api_gax_java_rep
 
 com_google_api_gax_java_repositories()
 
-# Tensorflow v2.13.0
+# Tensorflow v2.14.0
 http_archive(
     name = "org_tensorflow",
     patch_tool = "patch",
@@ -132,9 +132,6 @@ http_archive(
         # download versions of LLVM pointed to by non-HEAD TensorFlow.
         # TODO(team): Remove this patch when resolved.
         "//fcp/patches:tensorflow_llvm_url.patch",
-        # TensorFlow's custom pybind11 BUILD file is missing the osx config
-        # setting expected by pybind11_bazel.
-        "//fcp/patches:tensorflow_pybind11_osx.patch",
         # This patch removes tf_custom_op_py_library's dependency on the Bazel
         # version of TensorFlow since for all of our Python code, we rely on a
         # system-provided TensorFlow.
@@ -142,11 +139,17 @@ http_archive(
         # gRPC v1.48.0-pre1 and later include zconf.h in addition to zlib.h;
         # TensorFlow's build rule for zlib only exports the latter.
         "//fcp/patches:tensorflow_zlib.patch",
+        # TensorFlow has moved to using hermetic Python configs in their OSS
+        # builds (cl/546059481) and now requires a Python toolchain to be
+        # defined in our WORKSPACE file, rather than depending on the
+        # system-installed Python by default. Here we apply a patch to use
+        # system-installed Python instead.
+        "//fcp/patches:python_toolchain.patch",
     ],
-    sha256 = "e58c939079588623e6fa1d054aec2f90f95018266e0a970fd353a5244f5173dc",
-    strip_prefix = "tensorflow-2.13.0",
+    sha256 = "ce357fd0728f0d1b0831d1653f475591662ec5bca736a94ff789e6b1944df19f",
+    strip_prefix = "tensorflow-2.14.0",
     urls = [
-        "https://github.com/tensorflow/tensorflow/archive/v2.13.0.tar.gz",
+        "https://github.com/tensorflow/tensorflow/archive/v2.14.0.tar.gz",
     ],
 )
 

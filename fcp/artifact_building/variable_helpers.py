@@ -54,14 +54,15 @@ def _create_var_for_tff_tensor(
   #   `tf.Variable`.
   initial_value_shape = []
   variable_shape = []
-  # TODO: b/309218024 - Update to the latest version of TFF to replace.
-  for shape in tff_type.shape.as_list():
+
+  for shape in tff_type.shape:
     if shape is None or shape == 0:
       initial_value_shape.append(0)
       variable_shape.append(None)
     else:
       initial_value_shape.append(shape)
       variable_shape.append(shape)
+
   return tf.Variable(
       initial_value=tf.zeros(shape=initial_value_shape, dtype=tff_type.dtype),
       name=name,

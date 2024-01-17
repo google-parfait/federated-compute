@@ -18,6 +18,10 @@
 
 #include <pybind11/pybind11.h>
 
+#include <cstdint>
+#include <string>
+
+#include "absl/status/status.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
 #include "pybind11_abseil/absl_casters.h"
@@ -42,7 +46,17 @@ PYBIND11_MODULE(aggregation_protocol, m) {
           .def("AddClients", &AggregationProtocol::AddClients)
           .def("ReceiveClientMessage",
                &AggregationProtocol::ReceiveClientMessage)
-          .def("CloseClient", &AggregationProtocol::CloseClient)
+          // TODO: b/319889173 - Re-enable `absl::Status` use here once the TF
+          // pybind11_abseil import issue is resolved.
+          .def("CloseClient",
+               [](AggregationProtocol* ap, int64_t client_id,
+                  const std::string& client_status_msg,
+                  int32_t client_status_code) {
+                 return ap->CloseClient(
+                     client_id,
+                     absl::Status(absl::StatusCode(client_status_code),
+                                  client_status_msg));
+               })
           .def("Complete", &AggregationProtocol::Complete)
           .def("Abort", &AggregationProtocol::Abort)
           .def("GetStatus", &AggregationProtocol::GetStatus)

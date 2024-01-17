@@ -20,9 +20,9 @@
 # requires unique handling, we use a different version specifier and comment the
 # versioning scheme or reasoning.
 
-absl-py>=1.0,==1.*
+absl-py>=2.0,==2.*
 protobuf~=3.20
 # The TensorFlow version should match what's specified in the WORKSPACE file for
 # C++ targets.
-tensorflow==2.13.0
-tensorflow-federated~=0.63
+tensorflow==2.14.0
+tensorflow-federated~=0.67

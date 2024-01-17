@@ -45,9 +45,7 @@ class EmbedDataLogicTest(absltest.TestCase):
     with tf.Graph().as_default():
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
-              # TODO: b/309218024 - Update to the latest version of TFF to
-              # replace.
-              tff.SequenceType((tf.string)),
+              tff.SequenceType((np.str_)),
               data_spec.DataSpec(
                   plan_pb2.ExampleSelector(collection_uri='app://fake_uri')
               ),
@@ -64,10 +62,8 @@ class EmbedDataLogicTest(absltest.TestCase):
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
-                  # TODO: b/309218024 - Update to the latest version of TFF to
-                  # replace.
-                  A=tff.SequenceType((tf.string)),
-                  B=tff.SequenceType((tf.string)),
+                  A=tff.SequenceType((np.str_)),
+                  B=tff.SequenceType((np.str_)),
               ),  # pytype: disable=wrong-arg-types
               collections.OrderedDict(
                   A=data_spec.DataSpec(
@@ -146,9 +142,7 @@ class EmbedDataLogicTest(absltest.TestCase):
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
-                  # TODO: b/309218024 - Update to the latest version of TFF to
-                  # replace.
-                  A=collections.OrderedDict(B=tff.SequenceType((tf.string)))
+                  A=collections.OrderedDict(B=tff.SequenceType((np.str_)))
               )  # pytype: disable=wrong-arg-types
           )
       )
@@ -165,8 +159,7 @@ class GraphHelperTest(absltest.TestCase):
   def test_import_tensorflow(self):
     # NOTE: Minimal test for now, since this is exercised by other components,
     # just a single example with a combo of all flavors of params and results.
-    # TODO: b/309218024 - Update to the latest version of TFF to replace.
-    @tff.tf_computation(tff.SequenceType(tf.int64), tf.int64)
+    @tff.tf_computation(tff.SequenceType(np.int64), tf.int64)
     def work(ds, x):
       return x + 1, ds.map(lambda a: a + x)
 
@@ -295,8 +288,7 @@ class GraphHelperTest(absltest.TestCase):
   def test_create_tensor_map_with_non_sequence_binding_and_vars(self):
     with tf.Graph().as_default():
       vars_list = variable_helpers.create_vars_for_tff_type(
-          # TODO: b/309218024 - Update to the latest version of TFF to replace.
-          tff.to_type([('a', tf.int32), ('b', tf.int32)])
+          tff.StructType([('a', np.int32), ('b', np.int32)])
       )
       init_op = tf.compat.v1.global_variables_initializer()
       assign_op = tf.group(

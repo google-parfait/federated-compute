@@ -14,7 +14,6 @@ pybind_extension(
         "//fcp/aggregation/protocol:cc_proto",
         "//fcp/aggregation/protocol:configuration_cc_proto",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
         "@pybind11_abseil//pybind11_abseil:absl_casters",
         "@pybind11_abseil//pybind11_abseil:status_casters",
         "@pybind11_protobuf//pybind11_protobuf:native_proto_caster",
