@@ -33,6 +33,7 @@
 #include "fcp/base/time_util.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/flags.h"
 #include "fcp/client/opstats/opstats_utils.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -47,6 +48,7 @@ namespace fcp::client {
 using ::google::internal::federated::plan::DataAvailabilityPolicy;
 using ::google::internal::federated::plan::EligibilityPolicyEvalSpec;
 using ::google::internal::federated::plan::ExampleSelector;
+using ::google::internal::federated::plan::MinimumSeparationPolicy;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federated::plan::SamplingWithoutReplacementPolicy;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
@@ -57,6 +59,7 @@ namespace {
 const int32_t kDataAvailabilityImplementationVersion = 1;
 const int32_t kSworImplementationVersion = 1;
 const int32_t kTfCustomPolicyImplementationVersion = 1;
+const int32_t kMinimumSeparationPolicyImplementationVersion = 1;
 
 // URI handled by the eligibility decider for an example selector that will
 // return a single example containing the name of the policy implementation to
@@ -306,6 +309,36 @@ ComputeTfCustomPolicyEligibility(
   return eligible_task_names;
 }
 
+// Computes minimum separation eligibility for the given set of tasks based on
+// the execution history in opstats.
+absl::flat_hash_set<std::string> ComputeMinimumSeparationPolicyEligibility(
+    const MinimumSeparationPolicy& min_sep_policy,
+    const std::string& policy_name,
+    const absl::flat_hash_set<std::string>& task_names,
+    const opstats::OpStatsSequence& opstats_sequence, const Flags* flags) {
+  absl::flat_hash_set<std::string> eligibility_results;
+  for (const std::string& task_name : task_names) {
+    std::optional<int64_t> last_successful_contribution_index =
+        opstats::GetLastSuccessfulContributionMinSepPolicyIndex(
+            opstats_sequence, task_name, policy_name);
+
+    // If there was no last successful contribution index, we've never executed
+    // this task with this policy.
+    if (!last_successful_contribution_index.has_value()) {
+      eligibility_results.insert(task_name);
+      continue;
+    }
+
+    if ((min_sep_policy.current_index() -
+         last_successful_contribution_index.value()) >=
+        min_sep_policy.minimum_separation()) {
+      eligibility_results.insert(task_name);
+    }
+  }
+
+  return eligibility_results;
+}
+
 }  // namespace
 
 absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
@@ -313,7 +346,8 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
     LogManager& log_manager, const opstats::OpStatsSequence& opstats_sequence,
     Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
-    bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner) {
+    bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner,
+    const Flags* flags) {
   // Initialize the TaskEligibilityInfo to return. If eligibility cannot be
   // decided, i.e. due to insufficient implementations, we'll return this
   // unfilled.
@@ -354,6 +388,12 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
           return eligibility_result;
         }
         if (kTfCustomPolicyImplementationVersion < policy_spec.min_version()) {
+          return eligibility_result;
+        }
+        break;
+      case EligibilityPolicyEvalSpec::PolicyTypeCase::kMinSepPolicy:
+        if (kMinimumSeparationPolicyImplementationVersion <
+            policy_spec.min_version()) {
           return eligibility_result;
         }
         break;
@@ -448,6 +488,14 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
                              ComputeTfCustomPolicyEligibility(
                                  policy_spec, policy_task_names,
                                  example_iterator_factories, eet_plan_runner));
+      } break;
+      case EligibilityPolicyEvalSpec::PolicyTypeCase::kMinSepPolicy: {
+        if (flags->enable_minimum_separation_policy()) {
+          eligible_policy_task_names =
+              ComputeMinimumSeparationPolicyEligibility(
+                  policy_spec.min_sep_policy(), policy_spec.name(),
+                  policy_task_names, opstats_sequence, flags);
+        }
       } break;
       default:
         // Should never happen, because we pre-filtered above based on

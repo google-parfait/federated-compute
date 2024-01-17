@@ -17,6 +17,7 @@
 #include "fcp/client/opstats/opstats_utils.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -347,6 +348,25 @@ std::vector<OperationalStats> GetOperationalStatsForTimeRange(
     }
   }
   return selected_data;
+}
+
+std::optional<int64_t> GetLastSuccessfulContributionMinSepPolicyIndex(
+    const OpStatsSequence& data, absl::string_view task_name,
+    absl::string_view policy_name) {
+  std::optional<OperationalStats> last_successful_entry =
+      GetLastSuccessfulContribution(data, task_name);
+
+  // Note that it is possible that there there was a successful contribution,
+  // but the opstats db got corrupted/deleted within the minimum separation
+  // period, so the client no longer has the entry indicating their last
+  // successful contribution.
+  if (!last_successful_entry.has_value() ||
+      !last_successful_entry->min_sep_policy_current_index().contains(
+          policy_name)) {
+    return std::nullopt;
+  }
+
+  return last_successful_entry->min_sep_policy_current_index().at(policy_name);
 }
 
 }  // namespace opstats

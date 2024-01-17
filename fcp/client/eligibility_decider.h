@@ -24,6 +24,7 @@
 #include "fcp/base/clock.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
@@ -67,7 +68,8 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
     const PopulationEligibilitySpec& eligibility_spec, LogManager& log_manager,
     const opstats::OpStatsSequence& opstats_sequence, Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
-    bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner);
+    bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner,
+    const Flags* flags);
 
 }  // namespace fcp::client
 

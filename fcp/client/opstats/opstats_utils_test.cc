@@ -36,6 +36,7 @@ using ::testing::ElementsAre;
 
 constexpr char kTaskName[] = "task";
 constexpr char kCollectionUri[] = "collection_uri";
+constexpr char kMinSepPolicyName[] = "min_sep_policy";
 OperationalStats::Event::EventKind kUploadStartedEvent =
     OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED;
 OperationalStats::Event::EventKind kUploadServerAbortedEvent =
@@ -486,6 +487,113 @@ TEST(OpStatsUtils,
   EXPECT_TRUE(first_access_time_map.value().contains(kCollectionUri));
   EXPECT_EQ(first_access_time_map.value()[kCollectionUri].seconds(),
             first_access_time_sec);
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionMinSepPolicyIndexReturnsNullForUnkownTask) {
+  OperationalStats stats;
+  stats.set_task_name(kTaskName);
+  stats.mutable_min_sep_policy_current_index()->insert({kMinSepPolicyName, 1});
+
+  OpStatsSequence opstats_sequence;
+  *opstats_sequence.add_opstats() = std::move(stats);
+  EXPECT_FALSE(GetLastSuccessfulContributionMinSepPolicyIndex(
+                   opstats_sequence, /*task_name=*/"unknown_task_name",
+                   kMinSepPolicyName)
+                   .has_value());
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionMinSepPolicyIndexReturnsNullForUnkownPolicy) {
+  OperationalStats stats;
+  stats.set_task_name(kTaskName);
+  stats.mutable_min_sep_policy_current_index()->insert({kMinSepPolicyName, 1});
+
+  OpStatsSequence opstats_sequence;
+  *opstats_sequence.add_opstats() = std::move(stats);
+  EXPECT_FALSE(GetLastSuccessfulContributionMinSepPolicyIndex(
+                   opstats_sequence, kTaskName,
+                   /*policy_name=*/"unknown_policy_name")
+                   .has_value());
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionMinSepPolicyIndexReturnsMostRecentIndex) {
+  OpStatsSequence opstats_sequence;
+
+  OperationalStats old_stats;
+  old_stats.set_task_name(kTaskName);
+  old_stats.mutable_min_sep_policy_current_index()->insert(
+      {kMinSepPolicyName, 1});
+  *opstats_sequence.add_opstats() = std::move(old_stats);
+
+  OperationalStats new_stats;
+  new_stats.set_task_name(kTaskName);
+  new_stats.mutable_min_sep_policy_current_index()->insert(
+      {kMinSepPolicyName, 2});
+  new_stats.mutable_events()->Add(CreateEvent(kUploadStartedEvent, 1000));
+  *opstats_sequence.add_opstats() = std::move(new_stats);
+
+  auto last_index = GetLastSuccessfulContributionMinSepPolicyIndex(
+      opstats_sequence, kTaskName, kMinSepPolicyName);
+  EXPECT_EQ(last_index.value(), 2);
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionMinSepPolicyIndexReturnsNullIfAborted) {
+  OperationalStats stats;
+  stats.set_task_name(kTaskName);
+  stats.mutable_events()->Add(CreateEvent(kUploadStartedEvent, 1000));
+  stats.mutable_events()->Add(CreateEvent(kUploadServerAbortedEvent, 1001));
+  stats.mutable_min_sep_policy_current_index()->insert({kMinSepPolicyName, 1});
+
+  OpStatsSequence opstats_sequence;
+  *opstats_sequence.add_opstats() = std::move(stats);
+
+  EXPECT_FALSE(GetLastSuccessfulContributionMinSepPolicyIndex(
+                   opstats_sequence, kTaskName, kMinSepPolicyName)
+                   .has_value());
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionMinSepPolicyIndexReturnsOlderIfNewerAborted) {
+  OpStatsSequence opstats_sequence;
+
+  OperationalStats old_stats;
+  old_stats.set_task_name(kTaskName);
+  old_stats.mutable_events()->Add(CreateEvent(kUploadStartedEvent, 1000));
+  old_stats.mutable_min_sep_policy_current_index()->insert(
+      {kMinSepPolicyName, 1});
+  *opstats_sequence.add_opstats() = std::move(old_stats);
+
+  OperationalStats new_stats;
+  new_stats.set_task_name(kTaskName);
+  new_stats.mutable_events()->Add(CreateEvent(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 2000));
+  new_stats.mutable_events()->Add(CreateEvent(
+      OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_SERVER_ABORTED, 2001));
+  new_stats.mutable_min_sep_policy_current_index()->insert(
+      {kMinSepPolicyName, 2});
+  *opstats_sequence.add_opstats() = std::move(new_stats);
+
+  auto last_index = GetLastSuccessfulContributionMinSepPolicyIndex(
+      opstats_sequence, kTaskName, kMinSepPolicyName);
+  EXPECT_EQ(last_index.value(), 1);
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionMinSepPolicyIndexReturnsNullIfNoUpload) {
+  OperationalStats stats;
+  stats.set_task_name(kTaskName);
+  stats.mutable_events()->Add(
+      CreateEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED, 1000));
+  stats.mutable_min_sep_policy_current_index()->insert({kMinSepPolicyName, 1});
+
+  OpStatsSequence opstats_sequence;
+  *opstats_sequence.add_opstats() = std::move(stats);
+  EXPECT_FALSE(GetLastSuccessfulContributionMinSepPolicyIndex(
+                   opstats_sequence, kTaskName, kMinSepPolicyName)
+                   .has_value());
 }
 }  // namespace
 }  // namespace opstats
