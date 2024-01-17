@@ -37,6 +37,12 @@ cc_proto_library(
     deps = [":tensor_proto"],
 )
 
+java_proto_library(
+    name = "tensor_java_proto",
+    visibility = ["//visibility:public"],
+    deps = [":tensor_proto"],
+)
+
 cc_library(
     name = "tensor",
     srcs = [
