@@ -251,8 +251,8 @@ http_archive(
 )
 
 http_archive(
-  name = "oak",
-  sha256 = "8bf19718abc453bea10c676178d37479bc309dc193d875e391c27853f1203c8e",
-  strip_prefix = "oak-0acf3f6dc0af2035d40884fe1258b1e0e7db5488",
-  url = "https://github.com/project-oak/oak/archive/0acf3f6dc0af2035d40884fe1258b1e0e7db5488.tar.gz",
+    name = "oak",
+    sha256 = "8bf19718abc453bea10c676178d37479bc309dc193d875e391c27853f1203c8e",
+    strip_prefix = "oak-0acf3f6dc0af2035d40884fe1258b1e0e7db5488",
+    url = "https://github.com/project-oak/oak/archive/0acf3f6dc0af2035d40884fe1258b1e0e7db5488.tar.gz",
 )
