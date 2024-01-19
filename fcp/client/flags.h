@@ -219,6 +219,12 @@ class Flags {
     return false;
   }
 
+  // If true, then TASK_ASSIGNMENT_MODE_UNSPECIFIED will be treated as
+  // TASK_ASSIGNMENT_MODE_SINGLE.
+  virtual bool task_assignment_mode_treat_unspecified_as_single() const {
+    return false;
+  }
+
   // If true, a callback will be called when a task completes.  For multiple
   // task assignments, the callback could be called multiple times.
   virtual bool enable_task_completion_callback() const { return false; }

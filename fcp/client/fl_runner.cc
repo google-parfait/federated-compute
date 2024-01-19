@@ -1033,7 +1033,8 @@ struct EligibilityEvalResult {
 // and a vector of task names for multiple task assignment.
 EligibilityEvalResult CreateEligibilityEvalResult(
     const std::optional<TaskEligibilityInfo>& task_eligibility_info,
-    const std::optional<PopulationEligibilitySpec>& population_spec) {
+    const std::optional<PopulationEligibilitySpec>& population_spec,
+    bool task_assignment_mode_treat_unspecified_as_single) {
   EligibilityEvalResult result;
   std::vector<std::string> task_names_for_multiple_task_assignments;
   if (population_spec.has_value()) {
@@ -1043,8 +1044,12 @@ EligibilityEvalResult CreateEligibilityEvalResult(
         task_names_for_multiple_task_assignments.push_back(
             task_info.task_name());
       } else if (task_info.task_assignment_mode() ==
-                 PopulationEligibilitySpec::TaskInfo::
-                     TASK_ASSIGNMENT_MODE_SINGLE) {
+                     PopulationEligibilitySpec::TaskInfo::
+                         TASK_ASSIGNMENT_MODE_SINGLE ||
+                 (task_assignment_mode_treat_unspecified_as_single &&
+                  task_info.task_assignment_mode() ==
+                      PopulationEligibilitySpec::TaskInfo::
+                          TASK_ASSIGNMENT_MODE_UNSPECIFIED)) {
         result.population_supports_single_task_assignment = true;
       }
     }
@@ -1231,7 +1236,9 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
             *eligibility_checkin_result);
     return CreateEligibilityEvalResult(
         /*task_eligibility_info=*/std::nullopt,
-        eligibility_eval_disabled.population_eligibility_spec);
+        eligibility_eval_disabled.population_eligibility_spec,
+        /* task_assignment_mode_treat_unspecified_as_single=*/
+        flags->task_assignment_mode_treat_unspecified_as_single());
   }
 
   auto eligibility_eval_task = std::get<FederatedProtocol::EligibilityEvalTask>(
@@ -1265,8 +1272,9 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
     return task_eligibility_info.status();
   }
   return CreateEligibilityEvalResult(
-      *task_eligibility_info,
-      eligibility_eval_task.population_eligibility_spec);
+      *task_eligibility_info, eligibility_eval_task.population_eligibility_spec,
+      /* task_assignment_mode_treat_unspecified_as_single=*/
+      flags->task_assignment_mode_treat_unspecified_as_single());
 }
 
 struct CheckinResult {
