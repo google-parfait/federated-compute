@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either expresus or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for federated_computation."""
 
 from unittest import mock
 
@@ -29,8 +28,8 @@ def add_values(x, y):
 
 
 @tff.federated_computation(
-    tff.FederatedType(tf.int32, tff.SERVER),
-    tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
+    tff.FederatedType(np.int32, tff.SERVER),
+    tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
 )
 def count_clients(state, client_data):
   """Example TFF computation that counts clients."""
@@ -42,8 +41,8 @@ def count_clients(state, client_data):
 
 
 @tff.federated_computation(
-    tff.FederatedType(tf.int32, tff.SERVER),
-    tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS),
+    tff.FederatedType(np.int32, tff.SERVER),
+    tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
 )
 def count_examples(state, client_data):
   """Example TFF computation that counts client examples."""

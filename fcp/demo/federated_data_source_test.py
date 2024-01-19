@@ -11,10 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either expresus or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for federated_data_source."""
 
 from absl.testing import absltest
-import tensorflow as tf
+import numpy as np
 import tensorflow_federated as tff
 
 from fcp.demo import federated_data_source as fds
@@ -64,7 +63,8 @@ class FederatedDataSourceTest(absltest.TestCase):
     ds = fds.FederatedDataSource(POPULATION_NAME, EXAMPLE_SELECTOR)
     self.assertEqual(
         ds.federated_type,
-        tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS))
+        tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
+    )
 
   def test_federated_type_nested(self):
     nested_example_selector = {
@@ -80,14 +80,19 @@ class FederatedDataSourceTest(absltest.TestCase):
         ds.federated_type,
         tff.FederatedType(
             tff.StructType([
-                ('a', tff.SequenceType(tf.string)),
-                ('b', tff.SequenceType(tf.string)),
-                ('c',
-                 tff.StructType([
-                     ('1', tff.SequenceType(tf.string)),
-                     ('2', tff.SequenceType(tf.string)),
-                 ])),
-            ]), tff.CLIENTS))
+                ('a', tff.SequenceType(np.str_)),
+                ('b', tff.SequenceType(np.str_)),
+                (
+                    'c',
+                    tff.StructType([
+                        ('1', tff.SequenceType(np.str_)),
+                        ('2', tff.SequenceType(np.str_)),
+                    ]),
+                ),
+            ]),
+            tff.CLIENTS,
+        ),
+    )
 
   def test_iterator_federated_type(self):
     ds = fds.FederatedDataSource(POPULATION_NAME, EXAMPLE_SELECTOR)

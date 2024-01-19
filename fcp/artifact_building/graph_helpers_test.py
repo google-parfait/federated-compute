@@ -11,12 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for graph_helpers.py."""
 
 import collections
 
 from absl.testing import absltest
-
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -88,7 +86,7 @@ class EmbedDataLogicTest(absltest.TestCase):
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
-                  A=collections.OrderedDict(B=tff.SequenceType((tf.string)))
+                  A=collections.OrderedDict(B=tff.SequenceType(np.str_))
               ),  # pytype: disable=wrong-arg-types
               collections.OrderedDict(
                   A=collections.OrderedDict(
@@ -108,7 +106,7 @@ class EmbedDataLogicTest(absltest.TestCase):
   def test_one_dataset_of_integers_without_dataspec(self):
     with tf.Graph().as_default():
       token_placeholder, data_values, placeholders = (
-          graph_helpers.embed_data_logic(tff.SequenceType((tf.string)))
+          graph_helpers.embed_data_logic(tff.SequenceType(np.str_))
       )
 
     self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
@@ -122,8 +120,8 @@ class EmbedDataLogicTest(absltest.TestCase):
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
-                  A=tff.SequenceType((tf.string)),
-                  B=tff.SequenceType((tf.string)),
+                  A=tff.SequenceType(np.str_),
+                  B=tff.SequenceType(np.str_),
               )  # pytype: disable=wrong-arg-types
           )
       )
@@ -142,7 +140,7 @@ class EmbedDataLogicTest(absltest.TestCase):
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
-                  A=collections.OrderedDict(B=tff.SequenceType((np.str_)))
+                  A=collections.OrderedDict(B=tff.SequenceType(np.str_))
               )  # pytype: disable=wrong-arg-types
           )
       )

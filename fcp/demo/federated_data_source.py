@@ -18,7 +18,7 @@ import functools
 import re
 from typing import Optional, Union
 
-import tensorflow as tf
+import numpy as np
 import tensorflow_federated as tff
 
 from fcp.protos import plan_pb2
@@ -48,7 +48,7 @@ class FederatedDataSource(tff.program.FederatedDataSource):
   on-device data over which computations should be invoked.
   """
 
-  _FEDERATED_TYPE = tff.FederatedType(tff.SequenceType(tf.string), tff.CLIENTS)
+  _FEDERATED_TYPE = tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS)
 
   def __init__(
       self,
@@ -98,7 +98,7 @@ class FederatedDataSource(tff.program.FederatedDataSource):
         ])
       # ExternalDataset always returns a sequence of tf.strings, which should be
       # serialized `tf.train.Example` protos.
-      return tff.SequenceType(tf.string)
+      return tff.SequenceType(np.str_)
 
     return tff.FederatedType(
         get_struct_type(self._example_selector), tff.CLIENTS)
