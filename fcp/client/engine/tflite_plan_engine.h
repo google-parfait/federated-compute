@@ -20,15 +20,14 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
-#include "fcp/client/event_publisher.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
-#include "fcp/client/simple_task_environment.h"
 
 namespace fcp {
 namespace client {

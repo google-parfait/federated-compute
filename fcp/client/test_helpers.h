@@ -16,7 +16,10 @@
 #ifndef FCP_CLIENT_TEST_HELPERS_H_
 #define FCP_CLIENT_TEST_HELPERS_H_
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -27,14 +30,15 @@
 #include "gmock/gmock.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/federated_select.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/http/http_client.h"
+#include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -42,6 +46,8 @@
 #include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/simple_task_environment.h"
+#include "fcp/client/stats.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "tensorflow/core/example/example.pb.h"
 #include "tensorflow/core/example/feature.pb.h"
 
@@ -679,6 +685,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_confidential_aggregation, (), (const, override));
   MOCK_METHOD(bool, enable_minimum_separation_policy, (), (const, override));
   MOCK_METHOD(bool, graceful_eligibility_policy_failure, (), (const, override));
+  MOCK_METHOD(bool, use_thread_safe_tflite_wrapper, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

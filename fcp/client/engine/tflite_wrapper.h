@@ -27,6 +27,7 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/simple_task_environment.h"
 #include "tensorflow/lite/delegates/flex/delegate.h"
+#include "tensorflow/lite/delegates/utils/simple_delegate.h"
 #include "tensorflow/lite/interpreter.h"
 #include "tensorflow/lite/model_builder.h"
 
@@ -113,6 +114,20 @@ class TfLiteWrapper {
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
   const std::vector<std::string> output_names_;
 };
+
+// Like TfLiteWrapper, does the whole TFLite interpreter initialization *as well
+// as* invocation in one go. It also differs from TfLiteWrapper in that it only
+// invokes TF Lite APIs from a single thread (except for those explicitly marked
+// as thread-safe, such as FlexDelegate::Cancel), whereas TfLiteWrapper
+// initializes various TFLite objects on the calling thread but invokes the
+// interpreter on a 2nd thread through the InterruptibleRunner.
+absl::StatusOr<OutputTensors> RunTfLiteModelThreadSafe(
+    const std::string& model, std::function<bool()> should_abort,
+    const InterruptibleRunner::TimingConfig& timing_config,
+    LogManager* log_manager,
+    std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
+    std::vector<std::string> output_names,
+    const TfLiteInterpreterOptions& interpreter_options, int32_t num_threads);
 
 }  // namespace engine
 }  // namespace client
