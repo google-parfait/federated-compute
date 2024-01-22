@@ -287,6 +287,15 @@ void PhaseLoggerImpl::LogEligibilityEvalComputationInterrupted(
   LogEligibilityEvalComputationLatency(run_plan_start_time, reference_time);
 }
 
+void PhaseLoggerImpl::LogEligibilityEvalComputationErrorNonfatal(
+    absl::Status error_status) {
+  std::string error_message =
+      GetErrorMessage(error_status, kEligibilityComputationErrorPrefix,
+                      /* keep_error_message= */ true);
+  event_publisher_->PublishEligibilityEvalComputationErrorNonfatal(
+      error_message);
+}
+
 void PhaseLoggerImpl::LogEligibilityEvalComputationCompleted(
     const ExampleStats& example_stats, absl::Time run_plan_start_time,
     absl::Time reference_time) {

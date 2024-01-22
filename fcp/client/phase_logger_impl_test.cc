@@ -1235,6 +1235,16 @@ TEST_P(PhaseLoggerImplTest, LogMultipleTaskAssignmentsCompleted) {
       absl::Now() - absl::Minutes(1), absl::Now() - absl::Minutes(4));
 }
 
+TEST_P(PhaseLoggerImplTest, LogEligibilityEvalComputationErrorNonfatal) {
+  absl::Status error = absl::InternalError("oh no!");
+  EXPECT_CALL(mock_event_publisher_,
+              PublishEligibilityEvalComputationErrorNonfatal(
+                  "Error during eligibility eval computation: code: 13, error: "
+                  "oh no!"));
+
+  phase_logger_->LogEligibilityEvalComputationErrorNonfatal(error);
+}
+
 }  // namespace
 }  // namespace client
 }  // namespace fcp

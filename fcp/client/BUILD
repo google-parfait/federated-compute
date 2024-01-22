@@ -415,6 +415,7 @@ cc_library(
     hdrs = ["eligibility_decider.h"],
     deps = [
         ":interfaces",
+        ":phase_logger",
         ":simple_task_environment",
         "//fcp/base:clock",
         "//fcp/base:time_util",

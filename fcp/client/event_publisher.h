@@ -144,6 +144,10 @@ class EventPublisher {
   virtual void PublishEligibilityEvalComputationInterrupted(
       absl::string_view error_message, const ExampleStats& example_stats,
       absl::Duration phase_duration) = 0;
+  // Publish that a native eligibility policy computation produced an error but
+  // client execution was allowed to continue.
+  virtual void PublishEligibilityEvalComputationErrorNonfatal(
+      absl::string_view error_message) = 0;
   // Publish an eligibility eval task finished.
   virtual void PublishEligibilityEvalComputationCompleted(
       const ExampleStats& example_stats, absl::Duration phase_duration) = 0;

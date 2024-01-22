@@ -102,6 +102,10 @@ class PhaseLogger {
   virtual void LogEligibilityEvalComputationInterrupted(
       absl::Status error_status, const ExampleStats& example_stats,
       absl::Time run_plan_start_time, absl::Time reference_time) = 0;
+  // Called when a native eligibility policy computation produces an error but
+  // client execution is allowed to continue.
+  virtual void LogEligibilityEvalComputationErrorNonfatal(
+      absl::Status error_status) = 0;
   // Called when the eligibility eval computation is completed.
   virtual void LogEligibilityEvalComputationCompleted(
       const ExampleStats& example_stats, absl::Time run_plan_start_time,

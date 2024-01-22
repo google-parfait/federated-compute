@@ -26,6 +26,7 @@
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/phase_logger.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
@@ -49,14 +50,6 @@ class EetPlanRunner {
 // Computes the eligibility of the client for the given tasks in the population
 // eligibility spec.
 //
-// Arguments:
-// - eligibility_spec: The PopulationEligibilitySpec describing the tasks
-// available in the population.
-// - log_manager: A LogManager to log to.
-// - opstats_sequence: A snapshot of the opstats proto db at the time
-// eligibility is being decided.
-// - clock: A clock for getting the time.
-//
 // Returns:
 // - On success, returns a filled out TaskEligibilityInfo for the tasks in the
 // PopulationEligibilitySpec.
@@ -66,7 +59,8 @@ class EetPlanRunner {
 // - On failure, returns an error status for unrecoverable errors (IO, etc).
 absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
     const PopulationEligibilitySpec& eligibility_spec, LogManager& log_manager,
-    const opstats::OpStatsSequence& opstats_sequence, Clock& clock,
+    PhaseLogger& phase_logger, const opstats::OpStatsSequence& opstats_sequence,
+    Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner,
     const Flags* flags);

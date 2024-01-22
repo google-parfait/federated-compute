@@ -887,7 +887,8 @@ absl::StatusOr<std::string> CreateInputCheckpointFile(
 absl::StatusOr<std::optional<TaskEligibilityInfo>>
 MaybeComputeNativeEligibility(
     const FederatedProtocol::EligibilityEvalTask& eligibility_eval_task,
-    LogManager& log_manager, OpStatsLogger* opstats_logger, Clock& clock,
+    LogManager& log_manager, PhaseLogger& phase_logger,
+    OpStatsLogger* opstats_logger, Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner,
     const Flags* flags) {
@@ -898,8 +899,9 @@ MaybeComputeNativeEligibility(
       TaskEligibilityInfo task_eligibility_info,
       ComputeEligibility(
           eligibility_eval_task.population_eligibility_spec.value(),
-          log_manager, opstats_sequence, clock, example_iterator_factories,
-          neet_tf_custom_policy_support, eet_plan_runner, flags));
+          log_manager, phase_logger, opstats_sequence, clock,
+          example_iterator_factories, neet_tf_custom_policy_support,
+          eet_plan_runner, flags));
 
   if (task_eligibility_info.task_weights_size() == 0) {
     // Eligibility could not be decided.
@@ -986,9 +988,9 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     // be measured.
     absl::StatusOr<std::optional<TaskEligibilityInfo>>
         native_task_eligibility_info = MaybeComputeNativeEligibility(
-            eligibility_eval_task, *log_manager, opstats_logger, clock,
-            example_iterator_factories, flags->neet_tf_custom_policy_support(),
-            eet_plan_runner, flags);
+            eligibility_eval_task, *log_manager, phase_logger, opstats_logger,
+            clock, example_iterator_factories,
+            flags->neet_tf_custom_policy_support(), eet_plan_runner, flags);
 
     // If native_task_eligibility_info has an OK status, and the wrapped
     // optional contains a value, OR if we have a not-OK status, we should log

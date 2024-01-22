@@ -156,6 +156,8 @@ class MockEventPublisher : public EventPublisher {
                const ExampleStats& example_stats,
                absl::Duration phase_duration),
               (override));
+  MOCK_METHOD(void, PublishEligibilityEvalComputationErrorNonfatal,
+              (absl::string_view error_message), (override));
   MOCK_METHOD(void, PublishEligibilityEvalComputationCompleted,
               (const ExampleStats& example_stats,
                absl::Duration phase_duration),
@@ -778,6 +780,8 @@ class MockPhaseLogger : public PhaseLogger {
               (absl::Status error_status, const ExampleStats& example_stats,
                absl::Time run_plan_start_time, absl::Time reference_time),
               (override));
+  MOCK_METHOD(void, LogEligibilityEvalComputationErrorNonfatal,
+              (absl::Status error_status), (override));
   MOCK_METHOD(void, LogEligibilityEvalComputationCompleted,
               (const ExampleStats& example_stats,
                absl::Time run_plan_start_time, absl::Time reference_time),

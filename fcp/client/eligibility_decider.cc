@@ -34,7 +34,9 @@
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/flags.h"
+#include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_utils.h"
+#include "fcp/client/phase_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -343,8 +345,8 @@ absl::flat_hash_set<std::string> ComputeMinimumSeparationPolicyEligibility(
 
 absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
     const PopulationEligibilitySpec& population_eligibility_spec,
-    LogManager& log_manager, const opstats::OpStatsSequence& opstats_sequence,
-    Clock& clock,
+    LogManager& log_manager, PhaseLogger& phase_logger,
+    const opstats::OpStatsSequence& opstats_sequence, Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner,
     const Flags* flags) {
@@ -411,7 +413,11 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kMinSepPolicy:
         if (kMinimumSeparationPolicyImplementationVersion <
             policy_spec.min_version()) {
-          return eligibility_result;
+          if (graceful_eligibility_policy_failure) {
+            policy_implemented = false;
+          } else {
+            return eligibility_result;
+          }
         }
         break;
       default:
@@ -531,7 +537,11 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
             // No tasks are eligible, so leave eligible_policy_task_names empty.
           } else {
             if (graceful_eligibility_policy_failure) {
-              // TODO: b/320412619 - Emit log with nonfatal failure.
+              phase_logger.LogEligibilityEvalComputationErrorNonfatal(
+                  data_is_available.status());
+              // No tasks are eligible, so leave eligible_policy_task_names
+              // empty. Below, we'll remove them from the overall eligible
+              // tasks.
             } else {
               return data_is_available.status();
             }
@@ -547,7 +557,10 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
           eligible_policy_task_names = *tf_policy_task_names;
         } else {
           if (graceful_eligibility_policy_failure) {
-            // TODO: b/320412619 - Emit log with nonfatal failure.
+            phase_logger.LogEligibilityEvalComputationErrorNonfatal(
+                tf_policy_task_names.status());
+            // No tasks are eligible, so leave eligible_policy_task_names empty.
+            // Below, we'll remove them from the overall eligible tasks.
           } else {
             return tf_policy_task_names.status();
           }

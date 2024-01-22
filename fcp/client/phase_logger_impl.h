@@ -95,6 +95,8 @@ class PhaseLoggerImpl : public PhaseLogger {
   void LogEligibilityEvalComputationCompleted(
       const ExampleStats& example_stats, absl::Time run_plan_start_time,
       absl::Time reference_time) override;
+  void LogEligibilityEvalComputationErrorNonfatal(
+      absl::Status error_status) override;
 
   // Multiple task assignments phase.
   void LogMultipleTaskAssignmentsStarted() override;
