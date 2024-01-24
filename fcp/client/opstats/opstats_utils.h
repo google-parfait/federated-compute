@@ -63,8 +63,7 @@ GetLastSuccessfulContributionTimeForPattern(const OpStatsSequence& data,
 // time the runtime successfully contributed to a task with the given task name,
 // otherwise returns an empty optional.
 std::optional<int64_t> GetLastSuccessfulContributionMinSepPolicyIndex(
-    const OpStatsSequence& data, absl::string_view task_name,
-    absl::string_view policy_name);
+    const OpStatsSequence& data, absl::string_view task_name);
 
 // Returns a list of OperationalStats for the tasks that ran in the given time
 // range in reverse time order.

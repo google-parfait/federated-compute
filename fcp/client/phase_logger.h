@@ -17,7 +17,7 @@
 #define FCP_CLIENT_PHASE_LOGGER_H_
 
 #include <cstdint>
-#include <string>
+#include <optional>
 
 #include "absl/strings/string_view.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -207,10 +207,9 @@ class PhaseLogger {
       absl::string_view task_name, const NetworkStats& network_stats,
       absl::Time time_before_checkin, absl::Time time_before_plan_download,
       absl::Time reference_time,
-      // A map from policy name to the current index of MinimumSeparationPolicy
-      // that is applied to this computation execution.
-      const google::protobuf::Map<std::string, int64_t>*
-          min_sep_policy_current_index) = 0;
+      // The current index of MinimumSeparationPolicy that is applied to this
+      // computation execution.
+      std::optional<int64_t> min_sep_policy_index) = 0;
 
   // Computation phase.
   // Called when collection is first accessed.

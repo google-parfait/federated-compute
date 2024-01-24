@@ -80,8 +80,7 @@ class OpStatsLoggerImpl : public OpStatsLogger {
       ABSL_LOCKS_EXCLUDED(mutex_) override;
 
   // Log current index of min sep policies, replacing any old stats for the run.
-  void SetMinSepPolicyCurrentIndex(const google::protobuf::Map<std::string, int64_t>*
-                                       min_sep_policy_current_index) override;
+  void SetMinSepPolicyIndex(int64_t current_index) override;
 
   // Sets the retry window, replacing any old retry window, in the cumulative
   // internal message. Any retry token in the retry window message is dropped.

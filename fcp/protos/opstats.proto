@@ -424,7 +424,18 @@ message OperationalStats {
 
   // A map from policy name to the current index of the MinimumSeparationPolicy
   // that is applied to this computation execution.
-  map<string, int64> min_sep_policy_current_index = 14;
+  // Deprecated. Use min_sep_policy_index instead.
+  // TODO: b/307758509 - Delete this field after updating all code to use
+  // `min_sep_policy_index`.
+  map<string, int64> min_sep_policy_current_index = 14 [deprecated = true];
+
+  // The current index of MinimumSeparationPolicy that applied to this
+  // computation execution.
+  // The MinimumSeparationPolicy now is only used for enabling round-based
+  // sampling-without-replacement. The index (i.e., the round number) should be
+  // the same no matter what the value of the minimum separation is. So use a
+  // single value to record the index.
+  optional int64 min_sep_policy_index = 15;
 
   reserved 8, 9;
 }

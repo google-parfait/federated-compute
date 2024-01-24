@@ -105,16 +105,9 @@ void OpStatsLoggerImpl::AddEventWithErrorMessage(
   }
 }
 
-void OpStatsLoggerImpl::SetMinSepPolicyCurrentIndex(
-    const google::protobuf::Map<std::string, int64_t>* min_sep_policy_current_index) {
+void OpStatsLoggerImpl::SetMinSepPolicyIndex(int64_t current_index) {
   absl::MutexLock lock(&mutex_);
-  if (min_sep_policy_current_index != nullptr &&
-      !min_sep_policy_current_index->empty()) {
-    stats_.clear_min_sep_policy_current_index();
-    stats_.mutable_min_sep_policy_current_index()->insert(
-        min_sep_policy_current_index->begin(),
-        min_sep_policy_current_index->end());
-  }
+  stats_.set_min_sep_policy_index(current_index);
 }
 
 void OpStatsLoggerImpl::RecordCollectionFirstAccessTime(

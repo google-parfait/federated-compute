@@ -16,6 +16,8 @@
 #ifndef FCP_CLIENT_PHASE_LOGGER_IMPL_H_
 #define FCP_CLIENT_PHASE_LOGGER_IMPL_H_
 
+#include <cstdint>
+#include <optional>
 #include <string>
 
 #include "absl/strings/string_view.h"
@@ -159,13 +161,11 @@ class PhaseLoggerImpl : public PhaseLogger {
   void LogCheckinPlanUriReceived(absl::string_view task_name,
                                  const NetworkStats& network_stats,
                                  absl::Time time_before_checkin) override;
-  void LogCheckinCompleted(absl::string_view task_name,
-                           const NetworkStats& network_stats,
-                           absl::Time time_before_checkin,
-                           absl::Time time_before_plan_download,
-                           absl::Time reference_time,
-                           const google::protobuf::Map<std::string, int64_t>*
-                               min_sep_policy_current_index) override;
+  void LogCheckinCompleted(
+      absl::string_view task_name, const NetworkStats& network_stats,
+      absl::Time time_before_checkin, absl::Time time_before_plan_download,
+      absl::Time reference_time,
+      std::optional<int64_t> min_sep_policy_index) override;
 
   // Computation phase.
   void MaybeLogCollectionFirstAccessTime(

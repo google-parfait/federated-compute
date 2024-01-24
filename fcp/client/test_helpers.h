@@ -566,10 +566,7 @@ class MockOpStatsLogger : public ::fcp::client::opstats::OpStatsLogger {
               (override));
   MOCK_METHOD(void, SetNetworkStats, (const NetworkStats& network_stats),
               (override));
-  MOCK_METHOD(
-      void, SetMinSepPolicyCurrentIndex,
-      ((const google::protobuf::Map<std::string, int64_t>* min_sep_policy_current_index)),
-      (override));
+  MOCK_METHOD(void, SetMinSepPolicyIndex, (int64_t current_index), (override));
   MOCK_METHOD(void, SetRetryWindow,
               (google::internal::federatedml::v2::RetryWindow retry_window),
               (override));
@@ -855,13 +852,12 @@ class MockPhaseLogger : public PhaseLogger {
               (absl::string_view task_name, const NetworkStats& network_stats,
                absl::Time time_before_checkin),
               (override));
-  MOCK_METHOD(
-      void, LogCheckinCompleted,
-      (absl::string_view task_name, const NetworkStats& network_stats,
-       absl::Time time_before_checkin, absl::Time time_before_plan_download,
-       absl::Time reference_time,
-       (const google::protobuf::Map<std::string, int64_t>* min_sep_policy_current_index)),
-      (override));
+  MOCK_METHOD(void, LogCheckinCompleted,
+              (absl::string_view task_name, const NetworkStats& network_stats,
+               absl::Time time_before_checkin,
+               absl::Time time_before_plan_download, absl::Time reference_time,
+               (std::optional<int64_t> min_sep_policy_index)),
+              (override));
   MOCK_METHOD(void, MaybeLogCollectionFirstAccessTime, (absl::string_view),
               (override));
   MOCK_METHOD(void, LogComputationStarted, (absl::string_view), (override));

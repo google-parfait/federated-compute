@@ -1055,7 +1055,7 @@ TEST_F(EligibilityDeciderTest,
       spec.mutable_eligibility_policies()->Add();
   min_sep_spec->set_name("min_sep_policy_3_rounds");
   min_sep_spec->set_min_version(1);
-  min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
+  min_sep_spec->mutable_min_sep_policy()->set_current_index(6);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
 
   // The task's current index separation equals to the minimum separation.
@@ -1078,16 +1078,17 @@ TEST_F(EligibilityDeciderTest,
 
   opstats::OperationalStats stats1;
   stats1.set_task_name(task_info1->task_name());
-  stats1.mutable_min_sep_policy_current_index()->insert(
-      {min_sep_spec->name(), 2});
+  // Index separation for task1 is 3, which equals to the minimum separation.
+  stats1.set_min_sep_policy_index(2);
   stats1.mutable_events()->Add(CreateOpstatsEvent(
       opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
   *opstats_sequence.add_opstats() = std::move(stats1);
 
   opstats::OperationalStats stats2;
   stats2.set_task_name(task_info2->task_name());
-  stats2.mutable_min_sep_policy_current_index()->insert(
-      {min_sep_spec->name(), 1});
+  // Index separation for task2 is 4, which is greater than the minimum
+  // separation.
+  stats2.set_min_sep_policy_index(1);
   stats2.mutable_events()->Add(CreateOpstatsEvent(
       opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
   *opstats_sequence.add_opstats() = std::move(stats2);
@@ -1126,8 +1127,7 @@ TEST_F(EligibilityDeciderTest,
   opstats::OpStatsSequence opstats_sequence;
   opstats::OperationalStats stats;
   stats.set_task_name(task_info->task_name());
-  stats.mutable_min_sep_policy_current_index()->insert(
-      {min_sep_spec->name(), 3});
+  stats.set_min_sep_policy_index(3);
   stats.mutable_events()->Add(CreateOpstatsEvent(
       opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED,
       1000));
@@ -1152,7 +1152,7 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyDisabledIsAlwaysNotEligible) {
       spec.mutable_eligibility_policies()->Add();
   min_sep_spec->set_name("min_swor_policy_3_rounds");
   min_sep_spec->set_min_version(1);
-  min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
+  min_sep_spec->mutable_min_sep_policy()->set_current_index(6);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
 
   // The task's current index separation equals to the minimum separation.
@@ -1191,24 +1191,21 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyDisabledIsAlwaysNotEligible) {
 
   opstats::OperationalStats stats1;
   stats1.set_task_name(task_info1->task_name());
-  stats1.mutable_min_sep_policy_current_index()->insert(
-      {min_sep_spec->name(), 2});
+  stats1.set_min_sep_policy_index(2);
   stats1.mutable_events()->Add(CreateOpstatsEvent(
       opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
   *opstats_sequence.add_opstats() = std::move(stats1);
 
   opstats::OperationalStats stats2;
   stats2.set_task_name(task_info2->task_name());
-  stats2.mutable_min_sep_policy_current_index()->insert(
-      {min_sep_spec->name(), 1});
+  stats2.set_min_sep_policy_index(1);
   stats2.mutable_events()->Add(CreateOpstatsEvent(
       opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
   *opstats_sequence.add_opstats() = std::move(stats2);
 
   opstats::OperationalStats stats3;
   stats3.set_task_name(task_info3->task_name());
-  stats3.mutable_min_sep_policy_current_index()->insert(
-      {min_sep_spec->name(), 3});
+  stats3.set_min_sep_policy_index(3);
   stats3.mutable_events()->Add(CreateOpstatsEvent(
       opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
   *opstats_sequence.add_opstats() = std::move(stats3);

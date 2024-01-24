@@ -315,14 +315,13 @@ ComputeTfCustomPolicyEligibility(
 // the execution history in opstats.
 absl::flat_hash_set<std::string> ComputeMinimumSeparationPolicyEligibility(
     const MinimumSeparationPolicy& min_sep_policy,
-    const std::string& policy_name,
     const absl::flat_hash_set<std::string>& task_names,
     const opstats::OpStatsSequence& opstats_sequence, const Flags* flags) {
   absl::flat_hash_set<std::string> eligibility_results;
   for (const std::string& task_name : task_names) {
     std::optional<int64_t> last_successful_contribution_index =
         opstats::GetLastSuccessfulContributionMinSepPolicyIndex(
-            opstats_sequence, task_name, policy_name);
+            opstats_sequence, task_name);
 
     // If there was no last successful contribution index, we've never executed
     // this task with this policy.
@@ -331,8 +330,10 @@ absl::flat_hash_set<std::string> ComputeMinimumSeparationPolicyEligibility(
       continue;
     }
 
+    // Note that the index separation is defined to be the number of indexes
+    // (exclusive) between two consecutive contributions.
     if ((min_sep_policy.current_index() -
-         last_successful_contribution_index.value()) >=
+         last_successful_contribution_index.value()) >
         min_sep_policy.minimum_separation()) {
       eligibility_results.insert(task_name);
     }
@@ -570,8 +571,8 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
         if (flags->enable_minimum_separation_policy()) {
           eligible_policy_task_names =
               ComputeMinimumSeparationPolicyEligibility(
-                  policy_spec.min_sep_policy(), policy_spec.name(),
-                  policy_task_names, opstats_sequence, flags);
+                  policy_spec.min_sep_policy(), policy_task_names,
+                  opstats_sequence, flags);
         }
       } break;
       default:

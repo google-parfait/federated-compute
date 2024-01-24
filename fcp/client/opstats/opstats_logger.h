@@ -65,8 +65,7 @@ class OpStatsLogger {
   virtual void SetNetworkStats(const NetworkStats& network_stats) {}
 
   // Log current index of min sep policies, replacing any old stats for the run.
-  virtual void SetMinSepPolicyCurrentIndex(
-      const google::protobuf::Map<std::string, int64_t>* current_index) {}
+  virtual void SetMinSepPolicyIndex(int64_t current_index) {}
 
   // Log the retry window, replacing any old retry window. Ignore any retry
   // token in the retry window message.

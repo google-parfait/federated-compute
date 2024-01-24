@@ -15,6 +15,8 @@
  */
 #include "fcp/client/phase_logger_impl.h"
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <tuple>
 
@@ -26,7 +28,6 @@
 #include "absl/time/time.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/testing/testing.h"
-#include "google/protobuf/map.h"
 
 namespace fcp {
 namespace client {
@@ -619,19 +620,17 @@ TEST_P(PhaseLoggerImplTest, LogCheckinCompleted) {
       /*time_before_checkin=*/absl::Now() - absl::Minutes(2),
       /*time_before_plan_download=*/absl::Now() - absl::Minutes(1),
       /*reference_time=*/absl::Now() - absl::Minutes(8),
-      /*min_sep_policy_current_index=*/nullptr);
+      /*min_sep_policy_index=*/std::nullopt);
 }
 
-TEST_P(PhaseLoggerImplTest, LogCheckinCompletedWithMinSepPolicyCurrentIndex) {
+TEST_P(PhaseLoggerImplTest, LogCheckinCompletedWithMinSepPolicyIndex) {
   NetworkStats network_stats{.bytes_downloaded = 100,
                              .bytes_uploaded = 200,
                              .network_duration = absl::Seconds(40)};
 
   absl::Duration expected_duration = absl::Minutes(1);
 
-  google::protobuf::Map<std::string, int64_t> current_index;
-  current_index["min_sep_policy"] = 1;
-  const auto* current_index_ptr = &current_index;
+  std::optional<int64_t> min_sep_policy_index = 1;
 
   std::string task_name = "my_task";
   InSequence seq;
@@ -642,8 +641,7 @@ TEST_P(PhaseLoggerImplTest, LogCheckinCompletedWithMinSepPolicyCurrentIndex) {
                         Lt(expected_duration + absl::Milliseconds(10)))));
   EXPECT_CALL(mock_opstats_logger_,
               AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED));
-  EXPECT_CALL(mock_opstats_logger_,
-              SetMinSepPolicyCurrentIndex(current_index_ptr));
+  EXPECT_CALL(mock_opstats_logger_, SetMinSepPolicyIndex(1));
   EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
   // The counter should always log the full duration, from before the start of
   // the checkin.
@@ -660,8 +658,7 @@ TEST_P(PhaseLoggerImplTest, LogCheckinCompletedWithMinSepPolicyCurrentIndex) {
       task_name, network_stats,
       /*time_before_checkin=*/absl::Now() - absl::Minutes(2),
       /*time_before_plan_download=*/absl::Now() - absl::Minutes(1),
-      /*reference_time=*/absl::Now() - absl::Minutes(8),
-      /*min_sep_policy_current_index=*/current_index_ptr);
+      /*reference_time=*/absl::Now() - absl::Minutes(8), min_sep_policy_index);
 }
 
 TEST_P(PhaseLoggerImplTest, LogComputationStarted) {
