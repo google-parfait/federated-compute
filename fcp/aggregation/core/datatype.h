@@ -50,6 +50,7 @@ enum DataType {
   DT_INT32 = 3,
   DT_STRING = 7,
   DT_INT64 = 9,
+  DT_UINT64 = 23;
 
   // TODO(team): Add other types.
   // This should be a small subset of tensorflow::DataType types and include
@@ -90,6 +91,7 @@ MATCH_TYPE_AND_DTYPE(float, DT_FLOAT, TypeKind::kNumeric);
 MATCH_TYPE_AND_DTYPE(double, DT_DOUBLE, TypeKind::kNumeric);
 MATCH_TYPE_AND_DTYPE(int32_t, DT_INT32, TypeKind::kNumeric);
 MATCH_TYPE_AND_DTYPE(int64_t, DT_INT64, TypeKind::kNumeric);
+MATCH_TYPE_AND_DTYPE(uint64_t, DT_UINT64, TypeKind::kNumeric);
 MATCH_TYPE_AND_DTYPE(string_view, DT_STRING, TypeKind::kString);
 
 // The macros DTYPE_CASE and DTYPE_CASES are used to translate Tensor DataType
@@ -128,8 +130,9 @@ MATCH_TYPE_AND_DTYPE(string_view, DT_STRING, TypeKind::kString);
   DTYPE_CASE(double, TYPE_ARG, STMTS)
 
 #define DTYPE_INTEGER_CASES(TYPE_ARG, STMTS) \
-  DTYPE_CASE(int32_t, TYPE_ARG, STMTS)       \
-  DTYPE_CASE(int64_t, TYPE_ARG, STMTS)
+DTYPE_CASE(int32_t, TYPE_ARG, STMTS)         \
+DTYPE_CASE(int64_t, TYPE_ARG, STMTS)         \
+DTYPE_CASE(uint64_t, TYPE_ARG, STMTS)
 
 #define DTYPE_NUMERICAL_CASES(TYPE_ARG, STMTS) \
   DTYPE_FLOATING_CASES(TYPE_ARG, STMTS)        \

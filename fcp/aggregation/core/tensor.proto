@@ -30,6 +30,7 @@ enum DataType {
   DT_INT32 = 3;
   DT_STRING = 7;
   DT_INT64 = 9;
+  DT_UINT64 = 23;
   // TODO(team): Add other types
 }
 

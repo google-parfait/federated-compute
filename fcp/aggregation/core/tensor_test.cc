@@ -16,10 +16,12 @@
 
 #include "fcp/aggregation/core/tensor.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -55,6 +57,17 @@ TEST(TensorTest, Create_ZeroDataSize) {
   EXPECT_THAT(t->num_elements(), Eq(0));
   EXPECT_TRUE(t->is_dense());
   EXPECT_THAT(t->AsAggVector<int>().size(), Eq(0));
+}
+
+TEST(TensorTest, Create_ScalarTensor) {
+  auto t = Tensor::Create(DT_INT32, {}, CreateTestData<int>({555}));
+  EXPECT_THAT(t, IsOk());
+  EXPECT_THAT(t->dtype(), Eq(DT_INT32));
+  EXPECT_THAT(t->shape(), Eq(TensorShape{}));
+  EXPECT_THAT(t->num_elements(), Eq(1));
+  EXPECT_TRUE(t->is_dense());
+  EXPECT_THAT(t->AsAggVector<int>().size(), Eq(1));
+  EXPECT_THAT(t->AsAggVector<int>().begin().value(), Eq(555));
 }
 
 TEST(TensorTest, Create_StringTensor) {
@@ -116,11 +129,23 @@ std::string ToProtoContent(std::initializer_list<string_view> values) {
   return content;
 }
 
-TEST(TensorTest, ToProto_Numeric_Success) {
+TEST(TensorTest, ToProto_Int32_Success) {
   std::initializer_list<int32_t> values{1, 2, 3, 4};
   auto t = Tensor::Create(DT_INT32, {2, 2}, CreateTestData(values));
   TensorProto expected_proto;
   expected_proto.set_dtype(DT_INT32);
+  expected_proto.mutable_shape()->add_dim_sizes(2);
+  expected_proto.mutable_shape()->add_dim_sizes(2);
+  expected_proto.set_content(ToProtoContent(values));
+  EXPECT_THAT(t->ToProto(), EqualsProto(expected_proto));
+}
+
+TEST(TensorTest, ToProto_Uint64_Success) {
+  std::initializer_list<uint64_t> values{4294967296, 4294967297, 4294967298,
+                                         4294967299};
+  auto t = Tensor::Create(DT_UINT64, {2, 2}, CreateTestData(values));
+  TensorProto expected_proto;
+  expected_proto.set_dtype(DT_UINT64);
   expected_proto.mutable_shape()->add_dim_sizes(2);
   expected_proto.mutable_shape()->add_dim_sizes(2);
   expected_proto.set_content(ToProtoContent(values));
@@ -139,10 +164,23 @@ TEST(TensorTest, ToProto_String_Success) {
   EXPECT_THAT(t->ToProto(), EqualsProto(expected_proto));
 }
 
-TEST(TensorTest, FromProto_Numeric_Success) {
+TEST(TensorTest, FromProto_Int32_Success) {
   std::initializer_list<int32_t> values{5, 6, 7, 8, 9, 10};
   TensorProto tensor_proto;
   tensor_proto.set_dtype(DT_INT32);
+  tensor_proto.mutable_shape()->add_dim_sizes(2);
+  tensor_proto.mutable_shape()->add_dim_sizes(3);
+  tensor_proto.set_content(ToProtoContent(values));
+  auto t = Tensor::FromProto(tensor_proto);
+  EXPECT_THAT(t, IsOk());
+  EXPECT_THAT(*t, IsTensor({2, 3}, values));
+}
+
+TEST(TensorTest, FromProto_Uint64_Success) {
+  std::initializer_list<uint64_t> values{4294967296, 4294967297, 4294967298,
+                                         4294967299, 4294967300, 4294967301};
+  TensorProto tensor_proto;
+  tensor_proto.set_dtype(DT_UINT64);
   tensor_proto.mutable_shape()->add_dim_sizes(2);
   tensor_proto.mutable_shape()->add_dim_sizes(3);
   tensor_proto.set_content(ToProtoContent(values));
