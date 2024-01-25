@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef FCP_AGGREGATION_CORE_CHECKPOINT_AGGREGATOR_H_
-#define FCP_AGGREGATION_CORE_CHECKPOINT_AGGREGATOR_H_
+#ifndef FCP_AGGREGATION_PROTOCOL_CHECKPOINT_AGGREGATOR_H_
+#define FCP_AGGREGATION_PROTOCOL_CHECKPOINT_AGGREGATOR_H_
 
 #include <stdbool.h>
 
@@ -99,4 +99,4 @@ class CheckpointAggregator {
 }  // namespace aggregation
 }  // namespace fcp
 
-#endif  // FCP_AGGREGATION_CORE_CHECKPOINT_AGGREGATOR_H_
+#endif  // FCP_AGGREGATION_PROTOCOL_CHECKPOINT_AGGREGATOR_H_
