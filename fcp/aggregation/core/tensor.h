@@ -22,13 +22,10 @@
 
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_data.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
-
-#ifndef FCP_NANOLIBC
-#include "fcp/aggregation/core/tensor.pb.h"
-#endif
 
 namespace fcp {
 namespace aggregation {
@@ -71,7 +68,6 @@ class Tensor final {
   static StatusOr<Tensor> Create(DataType dtype, TensorShape shape,
                                  std::unique_ptr<TensorData> data);
 
-#ifndef FCP_NANOLIBC
   // Creates a Tensor instance from a TensorProto.
   static StatusOr<Tensor> FromProto(const TensorProto& tensor_proto);
 
@@ -80,7 +76,6 @@ class Tensor final {
 
   // Converts Tensor to TensorProto
   TensorProto ToProto() const;
-#endif  // FCP_NANOLIBC
 
   // Validates the tensor.
   Status CheckValid() const;

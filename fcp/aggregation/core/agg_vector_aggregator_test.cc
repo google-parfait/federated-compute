@@ -23,15 +23,12 @@
 #include "gtest/gtest.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
-
-#ifndef FCP_NANOLIBC
-#include "fcp/aggregation/core/tensor.pb.h"
-#endif
 
 namespace fcp {
 namespace aggregation {

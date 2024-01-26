@@ -18,11 +18,8 @@
 
 #include <utility>
 
-#include "fcp/base/monitoring.h"
-
-#ifndef FCP_NANOLIBC
 #include "fcp/aggregation/core/tensor.pb.h"
-#endif
+#include "fcp/base/monitoring.h"
 
 namespace fcp {
 namespace aggregation {
@@ -39,8 +36,6 @@ StatusOr<size_t> TensorShape::NumElements() const {
   }
   return num_elements;
 }
-
-#ifndef FCP_NANOLIBC
 
 StatusOr<TensorShape> TensorShape::FromProto(
     const TensorShapeProto& shape_proto) {
@@ -74,8 +69,6 @@ bool TensorShape::MatchesKnownDimensions(const TensorShape& other) const {
   }
   return true;
 }
-
-#endif  // FCP_NANOLIBC
 
 }  // namespace aggregation
 }  // namespace fcp

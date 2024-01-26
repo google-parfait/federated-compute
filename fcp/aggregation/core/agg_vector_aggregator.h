@@ -123,7 +123,6 @@ class AggVectorAggregator : public TensorAggregator {
   }
 
   StatusOr<AggVectorAggregator<T>*> CastOther(TensorAggregator& other) {
-#ifndef FCP_NANOLIBC
     AggVectorAggregator<T>* other_ptr =
         dynamic_cast<AggVectorAggregator<T>*>(&other);
     if (other_ptr == nullptr) {
@@ -133,16 +132,6 @@ class AggVectorAggregator : public TensorAggregator {
              << internal::TypeTraits<T>::kDataType;
     }
     return other_ptr;
-#else /* FCP_NANOLIBC */
-    // When compiling in nanolibc we do not have access to runtime type
-    // information or std::type_traits. Thus we cannot use dynamic cast and use
-    // static_cast instead.
-    // This means we are relying on the caller to always call the MergeWith
-    // method on two TensorAggregators of the same underlying type, or the
-    // program will have undefined behavior due to a static_cast to the wrong
-    // type.
-    return static_cast<AggVectorAggregator<T>*>(&other);
-#endif
   }
 
   Tensor result_tensor_;

@@ -25,15 +25,12 @@
 #include <vector>
 
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_data.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
-
-#ifndef FCP_NANOLIBC
-#include "fcp/aggregation/core/tensor.pb.h"
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
-#endif
 
 namespace fcp {
 namespace aggregation {
@@ -70,8 +67,6 @@ StatusOr<Tensor> Tensor::Create(DataType dtype, TensorShape shape,
   FCP_RETURN_IF_ERROR(tensor.CheckValid());
   return std::move(tensor);
 }
-
-#ifndef FCP_NANOLIBC
 
 // SerializedContentNumericData implements TensorData by wrapping the serialized
 // content string and using it directly as a backing storage. This relies on the
@@ -285,8 +280,6 @@ TensorProto Tensor::ToProto() const {
   *(tensor_proto.mutable_content()) = std::move(content);
   return tensor_proto;
 }
-
-#endif  // FCP_NANOLIBC
 
 }  // namespace aggregation
 }  // namespace fcp

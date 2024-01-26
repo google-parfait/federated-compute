@@ -23,11 +23,8 @@
 #include <utility>
 #include <vector>
 
-#include "fcp/base/monitoring.h"
-
-#ifndef FCP_NANOLIBC
 #include "fcp/aggregation/core/tensor.pb.h"
-#endif
+#include "fcp/base/monitoring.h"
 
 namespace fcp {
 namespace aggregation {
@@ -48,14 +45,12 @@ class TensorShape final {
   TensorShape(std::initializer_list<int64_t> dim_sizes)
       : TensorShape(dim_sizes.begin(), dim_sizes.end()) {}
 
-#ifndef FCP_NANOLIBC
   // Creates a TensorShape from a TensorShapeProto.
   // Returns an error if any of the shape dimensions are unknown.
   static StatusOr<TensorShape> FromProto(const TensorShapeProto& shape_proto);
 
   // Returns a TensorShapeProto representation of the tensor shape.
   TensorShapeProto ToProto() const;
-#endif
 
   // Gets the dimensions and their sizes.
   const DimSizesVector& dim_sizes() const { return dim_sizes_; }
