@@ -42,6 +42,8 @@ proto_library(
         "@com_google_googleapis//google/rpc:code_proto",
         "@com_google_googleapis//google/rpc:status_proto",
         "@com_google_protobuf//:duration_proto",
+        "@oak//proto/attestation:endorsement_proto",
+        "@oak//proto/attestation:evidence_proto",
     ],
 )
 

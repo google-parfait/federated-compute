@@ -20,6 +20,8 @@ import "google/api/annotations.proto";
 import "google/longrunning/operations.proto";
 import "google/rpc/status.proto";
 import "fcp/protos/federatedcompute/common.proto";
+import "proto/attestation/endorsement.proto";
+import "proto/attestation/evidence.proto";
 
 option java_package = "com.google.internal.federatedcompute.v1";
 option java_multiple_files = true;
@@ -138,16 +140,38 @@ message StartConfidentialAggregationDataUploadResponse {
 // The specification of how data should be encrypted and the attestation for the
 // server that generated the encryption key.
 message ConfidentialEncryptionConfig {
-  // The Curve25519 public key for encrypting uploads.
+  // The public key for encrypting uploads, encoded as a CBOR Web Token (CWT;
+  // RFC 8392) signed by the application key in `attestation_evidence`. The CWT
+  // and COSE key (RFC 9052) will contain at least the following claims and
+  // parameters:
+  //
+  // CWT Claims (https://www.iana.org/assignments/cwt/cwt.xhtml)
+  //   -65537: COSE_Key containing the public key parameters (bstr)
+  //        4: Expiration Time (int)
+  //        6: Issued At (int)
+  //
+  // COSE Key Parameters (https://www.iana.org/assignments/cose/cose.xhtml)
+  //        1: Key Type (int)
+  //        2: Key ID (bstr)
+  //        3: Algorithm (int)
+  //
+  // Supported COSE Algorithms:
+  //   -65537: HPKE-Base-X25519-SHA256-AES128GCM
   bytes public_key = 1;
 
   // A serialized fcp.confidentialcompute.PublicKeyDetails message providing
   // additional information about the public key. This field is signed along
   // with the public key in the attestation.
-  bytes public_key_details = 2;
+  bytes public_key_details = 2 [deprecated = true];
 
   // The attestation for the application supplying the public key and details.
-  bytes attestation = 3;
+  bytes attestation = 3 [deprecated = true];
+
+  // The attestation evidence for the service providing the public key.
+  oak.attestation.v1.Evidence attestation_evidence = 4;
+
+  // The attestation endorsements for the service providing the public key.
+  oak.attestation.v1.Endorsements attestation_endorsements = 5;
 }
 
 message SubmitConfidentialAggregationResultRequest {
@@ -207,7 +231,11 @@ message RevokeConfidentialAggregationResultRequest {
 
   // The id of the public key used to encrypt the blob; see
   // fcp.confidentialcompute.BlobHeader.public_key_id.
-  fixed32 public_key_id = 2;
+  fixed32 public_key_id = 2 [deprecated = true];
+
+  // The id of the public key used to encrypt the blob; see
+  // fcp.confidentialcompute.BlobHeader.key_id.
+  bytes key_id = 4;
 
   // The client-selected identifier for the uploaded data; see
   // fcp.confidentialcompute.BlobHeader.blob_id.
