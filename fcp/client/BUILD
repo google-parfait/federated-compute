@@ -779,6 +779,10 @@ java_proto_library(
 
 cc_proto_library(
     name = "histogram_counters_cc_proto",
+    visibility = [
+        "//assistant/ondevice/federated/plan_engine:__pkg__",
+        "//fcp:internal",
+    ],
     deps = [":histogram_counters_proto"],
 )
 
@@ -819,6 +823,10 @@ java_proto_library(
 
 cc_proto_library(
     name = "diag_codes_cc_proto",
+    visibility = [
+        "//assistant/ondevice/federated/plan_engine:__pkg__",
+        "//fcp:internal",
+    ],
     deps = [":diag_codes_proto"],
 )
 
