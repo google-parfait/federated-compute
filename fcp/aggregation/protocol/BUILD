@@ -152,8 +152,17 @@ cc_test(
     deps = [
         ":checkpoint_aggregator",
         ":configuration_cc_proto",
+        "//fcp/aggregation/core:aggregator",
+        "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:mocks",
+        "//fcp/aggregation/testing:test_data",
         "//fcp/base",
+        "//fcp/base:scheduler",
         "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/synchronization",
         "@com_google_googletest//:gtest_main",
     ],
 )

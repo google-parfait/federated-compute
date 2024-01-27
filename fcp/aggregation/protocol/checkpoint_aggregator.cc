@@ -150,6 +150,10 @@ bool CheckpointAggregator::CanReport() const {
 absl::Status CheckpointAggregator::Report(
     CheckpointBuilder& checkpoint_builder) {
   absl::MutexLock lock(&aggregation_mu_);
+  if (aggregation_finished_) {
+    return absl::AbortedError("Aggregation has already been finished.");
+  }
+
   aggregation_finished_ = true;
 
   for (const auto& aggregator : aggregators_) {

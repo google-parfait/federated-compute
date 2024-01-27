@@ -26,11 +26,6 @@
 #include <utility>
 #include <vector>
 
-#include "fcp/aggregation/core/agg_vector.h"
-#include "fcp/aggregation/core/intrinsic.h"
-#include "fcp/aggregation/core/tensor_aggregator.h"
-#include "fcp/aggregation/core/tensor_shape.h"
-#include "fcp/aggregation/protocol/resource_resolver.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
@@ -38,17 +33,20 @@
 #include "absl/strings/cord.h"
 #include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
+#include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/agg_vector_aggregator.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
+#include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
+#include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/protocol/aggregation_protocol_messages.pb.h"
-#include "fcp/aggregation/protocol/checkpoint_builder.h"
-#include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
+#include "fcp/aggregation/testing/mocks.h"
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/monitoring.h"
@@ -64,38 +62,6 @@ using ::testing::ByMove;
 using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::StrEq;
-
-// TODO: b/305306005 - Consider moving mock classes into a separate test
-// library.
-class MockCheckpointParser : public CheckpointParser {
- public:
-  MOCK_METHOD(absl::StatusOr<Tensor>, GetTensor, (const std::string& name),
-              (override));
-};
-
-class MockCheckpointParserFactory : public CheckpointParserFactory {
- public:
-  MOCK_METHOD(absl::StatusOr<std::unique_ptr<CheckpointParser>>, Create,
-              (const absl::Cord& serialized_checkpoint), (const override));
-};
-
-class MockCheckpointBuilder : public CheckpointBuilder {
- public:
-  MOCK_METHOD(absl::Status, Add,
-              (const std::string& name, const Tensor& tensor), (override));
-  MOCK_METHOD(absl::StatusOr<absl::Cord>, Build, (), (override));
-};
-
-class MockCheckpointBuilderFactory : public CheckpointBuilderFactory {
- public:
-  MOCK_METHOD(std::unique_ptr<CheckpointBuilder>, Create, (), (const override));
-};
-
-class MockResourceResolver : public ResourceResolver {
- public:
-  MOCK_METHOD(absl::StatusOr<absl::Cord>, RetrieveResource,
-              (int64_t client_id, const std::string& uri), (override));
-};
 
 class SimpleAggregationProtocolTest : public ::testing::Test {
  protected:
