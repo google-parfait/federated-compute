@@ -17,9 +17,9 @@
 #ifndef FCP_AGGREGATION_TESTING_TESTING_H_
 #define FCP_AGGREGATION_TESTING_TESTING_H_
 
-#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <initializer_list>
-#include <optional>
 #include <ostream>
 #include <string>
 #include <utility>
@@ -27,6 +27,10 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
+#include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
@@ -35,6 +39,7 @@
 #include "tensorflow/cc/framework/ops.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.pb.h"
+#include "tensorflow/core/platform/status.h"
 
 namespace fcp::aggregation {
 
@@ -104,6 +109,31 @@ void DescribeTensor(::std::ostream* os, DataType dtype, TensorShape shape,
     insert_comma = true;
   }
   *os << "}}";
+}
+
+template <typename T>
+std::string ToProtoContent(std::initializer_list<T> values) {
+  return std::string(reinterpret_cast<char*>(std::vector(values).data()),
+                     values.size() * sizeof(T));
+}
+
+template <>
+inline std::string ToProtoContent(std::initializer_list<string_view> values) {
+  // The following is the simplified version of serializing the string values
+  // that works only for short strings that are shorter than 128 characters, in
+  // which case string lengths can be encoded with one byte each.
+  std::string content(values.size(), '\0');
+  size_t index = 0;
+  // Write sizes of strings first.
+  for (string_view value : values) {
+    FCP_CHECK(value.size() < 128);
+    content[index++] = static_cast<char>(value.size());
+  }
+  // Append data of all strings.
+  for (string_view value : values) {
+    content.append(value.data(), value.size());
+  }
+  return content;
 }
 
 // Writes description of a tensor to the ostream.

@@ -16,12 +16,10 @@
 
 #include "fcp/aggregation/core/tensor.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -102,31 +100,6 @@ TEST(TensorTest, AsAggVector_TypeCheckFailure) {
   auto t = Tensor::Create(DT_FLOAT, {1}, CreateTestData<float>({1}));
   EXPECT_DEATH(t->AsAggVector<FooBar>(), "Incompatible tensor dtype()");
   EXPECT_DEATH(t->AsAggVector<int>(), "Incompatible tensor dtype()");
-}
-
-template <typename T>
-std::string ToProtoContent(std::initializer_list<T> values) {
-  return std::string(reinterpret_cast<char*>(std::vector(values).data()),
-                     values.size() * sizeof(T));
-}
-
-template <>
-std::string ToProtoContent(std::initializer_list<string_view> values) {
-  // The following is the simplified version of serializing the string values
-  // that works only for short strings that are shorter than 128 characters, in
-  // which case string lengths can be encoded with one byte each.
-  std::string content(values.size(), '\0');
-  size_t index = 0;
-  // Write sizes of strings first.
-  for (string_view value : values) {
-    FCP_CHECK(value.size() < 128);
-    content[index++] = static_cast<char>(value.size());
-  }
-  // Append data of all strings.
-  for (string_view value : values) {
-    content.append(value.data(), value.size());
-  }
-  return content;
 }
 
 TEST(TensorTest, ToProto_Int32_Success) {

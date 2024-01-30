@@ -19,6 +19,7 @@ from typing import Any
 from absl.testing import absltest
 import tensorflow as tf
 
+from fcp.aggregation.core import tensor_pb2
 from fcp.aggregation.protocol import aggregation_protocol_messages_pb2 as apm_pb2
 from fcp.aggregation.protocol import configuration_pb2
 from fcp.aggregation.protocol.python import aggregation_protocol  # pylint:disable=unused-import
@@ -41,18 +42,25 @@ def create_client_input(tensors: dict[str, Any]) -> apm_pb2.ClientMessage:
 class AggregationProtocolsTest(absltest.TestCase):
 
   def test_simple_aggregation_protocol(self):
-    input_tensor = tf.TensorSpec((), tf.int32, 'in')
-    output_tensor = tf.TensorSpec((), tf.int32, 'out')
-    config = configuration_pb2.Configuration(aggregation_configs=[
-        configuration_pb2.Configuration.ServerAggregationConfig(
-            intrinsic_uri='federated_sum',
-            intrinsic_args=[
-                configuration_pb2.Configuration.ServerAggregationConfig.
-                IntrinsicArg(input_tensor=input_tensor.experimental_as_proto()),
-            ],
-            output_tensors=[output_tensor.experimental_as_proto()],
-        ),
-    ])
+    input_tensor = tensor_pb2.TensorSpecProto(
+        name='in', dtype=tensor_pb2.DT_INT32, shape={}
+    )
+    output_tensor = tensor_pb2.TensorSpecProto(
+        name='out', dtype=tensor_pb2.DT_INT32, shape={}
+    )
+    config = configuration_pb2.Configuration(
+        intrinsic_configs=[
+            configuration_pb2.Configuration.IntrinsicConfig(
+                intrinsic_uri='federated_sum',
+                intrinsic_args=[
+                    configuration_pb2.Configuration.IntrinsicConfig.IntrinsicArg(
+                        input_tensor=input_tensor
+                    ),
+                ],
+                output_tensors=[output_tensor],
+            ),
+        ]
+    )
 
     agg_protocol = aggregation_protocols.create_simple_aggregation_protocol(
         config

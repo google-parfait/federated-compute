@@ -31,6 +31,7 @@ py_test(
     data = ["@pybind11_abseil//pybind11_abseil:status.so"],
     deps = [
         ":aggregation_protocols",
+        "//fcp/aggregation/core:tensor_py_pb2",
         "//fcp/aggregation/protocol:configuration_py_pb2",
         "//fcp/aggregation/protocol:py_pb2",
     ],

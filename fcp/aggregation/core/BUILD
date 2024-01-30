@@ -15,6 +15,7 @@
 # Aggregation Core API
 
 load("//fcp:config.bzl", "FCP_COPTS")
+load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
 
 package(
     default_visibility = [
@@ -41,6 +42,13 @@ java_proto_library(
     name = "tensor_java_proto",
     visibility = ["//visibility:public"],
     deps = [":tensor_proto"],
+)
+
+py_proto_library(
+    name = "tensor_py_pb2",
+    deps = [
+        ":tensor_proto",
+    ],
 )
 
 cc_library(

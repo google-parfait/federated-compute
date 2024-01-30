@@ -16,22 +16,39 @@
 
 #include "fcp/aggregation/testing/testing.h"
 
+#include <cstdint>
+#include <initializer_list>
 #include <memory>
 #include <ostream>
 #include <string>
 #include <utility>
 
+#include "gtest/gtest.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/memory/memory.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
+#include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor_shape.h"
+#include "fcp/aggregation/core/tensor_spec.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/tensorflow/status.h"
 #include "fcp/testing/testing.h"
 #include "tensorflow/c/checkpoint_reader.h"
 #include "tensorflow/c/tf_status.h"
 #include "tensorflow/c/tf_status_helper.h"
+#include "tensorflow/cc/framework/ops.h"
 #include "tensorflow/cc/framework/scope.h"
 #include "tensorflow/cc/ops/io_ops.h"
 #include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/platform/status.h"
+#include "tensorflow/core/platform/tstring.h"
 #include "tensorflow/core/public/session.h"
+#include "tensorflow/core/public/session_options.h"
 
 namespace fcp::aggregation {
 

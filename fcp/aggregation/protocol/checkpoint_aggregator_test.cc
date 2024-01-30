@@ -57,7 +57,7 @@ using ::testing::StrEq;
 Configuration default_configuration() {
   // One "federated_sum" intrinsic with a single scalar int32 tensor.
   return PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
@@ -77,21 +77,21 @@ Configuration default_configuration() {
 
 Configuration default_fedsql_configuration() {
   return PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs: {
+    intrinsic_configs: {
       intrinsic_uri: "fedsql_group_by"
       intrinsic_args {
         input_tensor {
           name: "key1"
           dtype: DT_FLOAT
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       output_tensors {
         name: "key1_out"
         dtype: DT_FLOAT
-        shape { dim { size: -1 } }
+        shape { dim_sizes: -1 }
       }
-      inner_aggregations {
+      inner_intrinsics {
         intrinsic_uri: "GoogleSQL:sum"
         intrinsic_args {
           input_tensor {
@@ -130,7 +130,7 @@ TEST(CheckpointAggregatorTest, CreateSuccess) {
 
 TEST(CheckpointAggregatorTest, CreateUnsupportedNumberOfInputs) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
@@ -159,7 +159,7 @@ TEST(CheckpointAggregatorTest, CreateUnsupportedNumberOfInputs) {
 
 TEST(CheckpointAggregatorTest, CreateUnsupportedNumberOfOutputs) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
@@ -186,7 +186,7 @@ TEST(CheckpointAggregatorTest, CreateUnsupportedNumberOfOutputs) {
 
 TEST(CheckpointAggregatorTest, CreateUnsupportedInputType) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args { parameter {} }
       output_tensors {
@@ -202,7 +202,7 @@ TEST(CheckpointAggregatorTest, CreateUnsupportedInputType) {
 
 TEST(CheckpointAggregatorTest, CreateUnsupportedIntrinsicUri) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "unsupported_xyz"
       intrinsic_args {
         input_tensor {
@@ -224,13 +224,13 @@ TEST(CheckpointAggregatorTest, CreateUnsupportedIntrinsicUri) {
 
 TEST(CheckpointAggregatorTest, CreateUnsupportedInputSpec) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
           name: "foo"
           dtype: DT_INT32
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       output_tensors {
@@ -246,7 +246,7 @@ TEST(CheckpointAggregatorTest, CreateUnsupportedInputSpec) {
 
 TEST(CheckpointAggregatorTest, CreateMismatchingInputAndOutputDataType) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
@@ -268,19 +268,19 @@ TEST(CheckpointAggregatorTest, CreateMismatchingInputAndOutputDataType) {
 
 TEST(CheckpointAggregatorTest, CreateMismatchingInputAndOutputShape) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
           name: "foo"
           dtype: DT_INT32
-          shape { dim { size: 1 } }
+          shape { dim_sizes: 1 }
         }
       }
       output_tensors {
         name: "foo_out"
         dtype: DT_INT32
-        shape { dim { size: 2 } }
+        shape { dim_sizes: 2 }
       }
     }
   )pb");
@@ -381,40 +381,34 @@ TEST(CheckpointAggregatorTest, ReportTwoInputs) {
 
 TEST(CheckpointAggregatorTest, ReportMultipleTensors) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
           name: "foo"
           dtype: DT_INT32
-          shape { dim { size: 3 } }
+          shape { dim_sizes: 3 }
         }
       }
       output_tensors {
         name: "foo_out"
         dtype: DT_INT32
-        shape { dim { size: 3 } }
+        shape { dim_sizes: 3 }
       }
     }
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
           name: "bar"
           dtype: DT_FLOAT
-          shape {
-            dim { size: 2 }
-            dim { size: 2 }
-          }
+          shape { dim_sizes: 2 dim_sizes: 2 }
         }
       }
       output_tensors {
         name: "bar_out"
         dtype: DT_FLOAT
-        shape {
-          dim { size: 2 }
-          dim { size: 2 }
-        }
+        shape { dim_sizes: 2 dim_sizes: 2 }
       }
     })pb");
   auto aggregator = Create(config_message);
@@ -482,7 +476,7 @@ TEST(CheckpointAggregatorTest, ReportWithFailedCanReportPrecondition) {
   // Configuration that uses the CannotReportAggregatorFactory above.
   // This aggregation is supposed to always fail the CanReport call.
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "foo1_aggregation"
       intrinsic_args {
         input_tensor {
@@ -510,33 +504,33 @@ TEST(CheckpointAggregatorTest, ReportFedSqlZeroInputs) {
   //    of which should be output, and two inner GoogleSQL:sum intrinsics bar
   //    and baz operating on float tensors.
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs: {
+    intrinsic_configs: {
       intrinsic_uri: "fedsql_group_by"
       intrinsic_args {
         input_tensor {
           name: "key1"
           dtype: DT_STRING
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       intrinsic_args {
         input_tensor {
           name: "key2"
           dtype: DT_STRING
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       output_tensors {
         name: "key1_out"
         dtype: DT_STRING
-        shape { dim { size: -1 } }
+        shape { dim_sizes: -1 }
       }
       output_tensors {
         name: ""
         dtype: DT_STRING
-        shape { dim { size: -1 } }
+        shape { dim_sizes: -1 }
       }
-      inner_aggregations {
+      inner_intrinsics {
         intrinsic_uri: "GoogleSQL:sum"
         intrinsic_args {
           input_tensor {
@@ -551,7 +545,7 @@ TEST(CheckpointAggregatorTest, ReportFedSqlZeroInputs) {
           shape {}
         }
       }
-      inner_aggregations {
+      inner_intrinsics {
         intrinsic_uri: "GoogleSQL:sum"
         intrinsic_args {
           input_tensor {
@@ -761,7 +755,7 @@ TEST(CheckpointAggregatorTest, ConcurrentAccumulationAbortWhileQueued) {
   RegisterAggregatorFactory("foo2_aggregation", &agg_factory);
 
   auto aggregator = Create(PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "foo2_aggregation"
       intrinsic_args {
         input_tensor {

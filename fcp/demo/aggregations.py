@@ -26,9 +26,11 @@ from typing import Optional
 import uuid
 
 from absl import logging
+import tensorflow as tf
 
 from google.longrunning import operations_pb2
 from google.rpc import code_pb2
+from fcp.aggregation.core import tensor_pb2 as aggregation_tensor_pb2
 from fcp.aggregation.protocol import aggregation_protocol_messages_pb2 as apm_pb2
 from fcp.aggregation.protocol import configuration_pb2
 from fcp.aggregation.protocol.python import aggregation_protocol
@@ -156,7 +158,7 @@ class Service:
     # are still in development as of Jan 2023.
     agg_protocol = aggregation_protocols.create_simple_aggregation_protocol(
         configuration_pb2.Configuration(
-            aggregation_configs=[
+            intrinsic_configs=[
                 self._translate_server_aggregation_config(aggregation_config)
                 for aggregation_config in aggregation_requirements.plan.phase[
                     0
@@ -253,14 +255,41 @@ class Service:
       self._sessions[session_id].authorization_tokens |= tokens
     return list(tokens)
 
+  def _translate_tensor_spec_proto(
+      self, tensor_spec_proto
+  ) -> aggregation_tensor_pb2.TensorSpecProto:
+    """Transform TensorSpecProto for use by the aggregation service."""
+    transformed_tensor = aggregation_tensor_pb2.TensorSpecProto(
+        name=tensor_spec_proto.name
+    )
+    transformed_tensor.shape.dim_sizes.extend(
+        [dim.size for dim in tensor_spec_proto.shape.dim]
+    )
+    dtype = tf.dtypes.as_dtype(tensor_spec_proto.dtype)
+    if dtype == tf.float32:
+      transformed_tensor.dtype = aggregation_tensor_pb2.DataType.DT_FLOAT
+    elif dtype == tf.double:
+      transformed_tensor.dtype = aggregation_tensor_pb2.DataType.DT_DOUBLE
+    elif dtype == tf.string:
+      transformed_tensor.dtype = aggregation_tensor_pb2.DataType.DT_STRING
+    elif dtype == tf.int32:
+      transformed_tensor.dtype = aggregation_tensor_pb2.DataType.DT_INT32
+    elif dtype == tf.int64:
+      transformed_tensor.dtype = aggregation_tensor_pb2.DataType.DT_INT64
+    elif dtype == tf.uint64:
+      transformed_tensor.dtype = aggregation_tensor_pb2.DataType.DT_UINT64
+    else:
+      raise AssertionError('Cases should have exhausted all possible dtypes.')
+    return transformed_tensor
+
   def _translate_intrinsic_arg(
       self, intrinsic_arg: plan_pb2.ServerAggregationConfig.IntrinsicArg
-  ) -> configuration_pb2.Configuration.ServerAggregationConfig.IntrinsicArg:
+  ) -> configuration_pb2.Configuration.IntrinsicConfig.IntrinsicArg:
     """Transform an aggregation intrinsic arg for the aggregation service."""
     if intrinsic_arg.HasField('input_tensor'):
-      return (
-          configuration_pb2.Configuration.ServerAggregationConfig.IntrinsicArg(
-              input_tensor=intrinsic_arg.input_tensor
+      return configuration_pb2.Configuration.IntrinsicConfig.IntrinsicArg(
+          input_tensor=self._translate_tensor_spec_proto(
+              intrinsic_arg.input_tensor
           )
       )
     elif intrinsic_arg.HasField('state_tensor'):
@@ -274,17 +303,21 @@ class Service:
 
   def _translate_server_aggregation_config(
       self, plan_aggregation_config: plan_pb2.ServerAggregationConfig
-  ) -> configuration_pb2.Configuration.ServerAggregationConfig:
+  ) -> configuration_pb2.Configuration.IntrinsicConfig:
     """Transform the aggregation config for use by the aggregation service."""
     if plan_aggregation_config.inner_aggregations:
       raise AssertionError('Nested intrinsic structrues are not supported yet.')
-    return configuration_pb2.Configuration.ServerAggregationConfig(
+    return configuration_pb2.Configuration.IntrinsicConfig(
         intrinsic_uri=plan_aggregation_config.intrinsic_uri,
         intrinsic_args=[
             self._translate_intrinsic_arg(intrinsic_arg)
             for intrinsic_arg in plan_aggregation_config.intrinsic_args
         ],
-        output_tensors=plan_aggregation_config.output_tensors)
+        output_tensors=[
+            self._translate_tensor_spec_proto(output_tensor)
+            for output_tensor in plan_aggregation_config.output_tensors
+        ],
+    )
 
   def _get_session_status(self,
                           state: _AggregationSessionState) -> SessionStatus:

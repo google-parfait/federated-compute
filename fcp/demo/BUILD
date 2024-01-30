@@ -36,6 +36,7 @@ py_library(
     deps = [
         ":http_actions",
         ":media",
+        "//fcp/aggregation/core:tensor_py_pb2",
         "//fcp/aggregation/protocol:configuration_py_pb2",
         "//fcp/aggregation/protocol:py_pb2",
         "//fcp/aggregation/protocol/python:aggregation_protocol",

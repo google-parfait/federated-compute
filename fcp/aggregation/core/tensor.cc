@@ -240,6 +240,9 @@ StatusOr<std::unique_ptr<TensorData>> DecodeContent<string_view>(
 }
 
 StatusOr<Tensor> Tensor::FromProto(const TensorProto& tensor_proto) {
+  if (tensor_proto.dtype() == DT_INVALID) {
+    return FCP_STATUS(INVALID_ARGUMENT) << "Invalid Tensor dtype.";
+  }
   FCP_ASSIGN_OR_RETURN(TensorShape shape,
                        TensorShape::FromProto(tensor_proto.shape()));
   // TODO(team): The num_values is valid only for dense tensors.

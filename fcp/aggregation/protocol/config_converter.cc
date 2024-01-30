@@ -30,7 +30,6 @@
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/aggregation/protocol/configuration.pb.h"
-#include "fcp/aggregation/tensorflow/converters.h"
 #include "fcp/base/monitoring.h"
 #include "google/protobuf/repeated_ptr_field.h"
 
@@ -66,23 +65,23 @@ void TransformFedSqlSpecs(Intrinsic& intrinsic) {
   }
 }
 
-Status ServerAggregationConfigArgumentError(
-    const Configuration::ServerAggregationConfig& aggregation_config,
+Status IntrinsicConfigArgumentError(
+    const Configuration::IntrinsicConfig& intrinsic_config,
     string_view error_message) {
   return FCP_STATUS(INVALID_ARGUMENT)
-         << absl::StrCat("ServerAggregationConfig: ", error_message, ":\n",
-                         aggregation_config.DebugString());
+         << absl::StrCat("IntrinsicConfig: ", error_message, ":\n",
+                         intrinsic_config.DebugString());
 }
 
-// Parses a ServerAggregationConfig proto into an Intrinsic struct to
+// Parses an IntrinsicConfig proto into an Intrinsic struct to
 // represent the aggregation intrinsic independently from the proto.
 StatusOr<Intrinsic> ParseFromConfig(
-    const Configuration::ServerAggregationConfig& aggregation_config);
+    const Configuration::IntrinsicConfig& intrinsic_config);
 
 StatusOr<std::vector<Intrinsic>> ParseFromConfig(
     string_view parent_uri,
-    const google::protobuf::RepeatedPtrField<Configuration::ServerAggregationConfig>&
-        aggregation_configs) {
+    const google::protobuf::RepeatedPtrField<Configuration::IntrinsicConfig>&
+        intrinsic_configs) {
   std::vector<Intrinsic> intrinsics;
   std::vector<Intrinsic> wrapped_fedsql_intrinsics;
   bool need_fedsql_wrapper = false;
@@ -93,16 +92,16 @@ StatusOr<std::vector<Intrinsic>> ParseFromConfig(
   // added to wrap the FedSQL intrinsic. For efficiency, use the same
   // fedsql_group_by to wrap multiple fedsql intrinsics rather than wrapping
   // each with a separate fedsql_group_by.
-  // TODO(team): Revisit the design decision to perform this
+  // TODO: b/285201184 - Revisit the design decision to perform this
   // transformation in this location; as it requires this class to have special
   // knowledge about FedSQL intrinsics.
   if (parent_uri != kGroupByUri) {
     need_fedsql_wrapper = true;
   }
-  for (const Configuration::ServerAggregationConfig& aggregation_config :
-       aggregation_configs) {
+  for (const Configuration::IntrinsicConfig& intrinsic_config :
+       intrinsic_configs) {
     FCP_ASSIGN_OR_RETURN(Intrinsic intrinsic,
-                         ParseFromConfig(aggregation_config));
+                         ParseFromConfig(intrinsic_config));
     // Disable lint checks recommending use of absl::StrContains() here, because
     // we don't want to take a dependency on absl libraries in the aggregation
     // core implementations.
@@ -128,44 +127,42 @@ StatusOr<std::vector<Intrinsic>> ParseFromConfig(
 }
 
 StatusOr<Intrinsic> ParseFromConfig(
-    const Configuration::ServerAggregationConfig& aggregation_config) {
-  // Convert the tensor specifications.
+    const Configuration::IntrinsicConfig& intrinsic_config) {
   std::vector<TensorSpec> input_tensor_specs;
   std::vector<Tensor> params;
-  for (const auto& intrinsic_arg : aggregation_config.intrinsic_args()) {
+  for (const auto& intrinsic_arg : intrinsic_config.intrinsic_args()) {
     switch (intrinsic_arg.arg_case()) {
-      case Configuration_ServerAggregationConfig_IntrinsicArg::kInputTensor: {
+      case Configuration_IntrinsicConfig_IntrinsicArg::kInputTensor: {
         FCP_ASSIGN_OR_RETURN(
             TensorSpec input_spec,
-            tensorflow::ConvertTensorSpec(intrinsic_arg.input_tensor()));
+            TensorSpec::FromProto(intrinsic_arg.input_tensor()));
         input_tensor_specs.push_back(std::move(input_spec));
         break;
       }
-      case Configuration_ServerAggregationConfig_IntrinsicArg::kParameter: {
-        FCP_ASSIGN_OR_RETURN(Tensor param, tensorflow::ConvertTensorProto(
-                                               intrinsic_arg.parameter()));
+      case Configuration_IntrinsicConfig_IntrinsicArg::kParameter: {
+        FCP_ASSIGN_OR_RETURN(Tensor param,
+                             Tensor::FromProto(intrinsic_arg.parameter()));
         params.push_back(std::move(param));
         break;
       }
-      case Configuration_ServerAggregationConfig_IntrinsicArg::ARG_NOT_SET: {
-        return ServerAggregationConfigArgumentError(
-            aggregation_config, "All intrinsic args must have an arg value.");
+      case Configuration_IntrinsicConfig_IntrinsicArg::ARG_NOT_SET: {
+        return IntrinsicConfigArgumentError(
+            intrinsic_config, "All intrinsic args must have an arg value.");
       }
     }
   }
   std::vector<TensorSpec> output_tensor_specs;
   for (const auto& output_tensor_spec_proto :
-       aggregation_config.output_tensors()) {
-    FCP_ASSIGN_OR_RETURN(TensorSpec output_spec, tensorflow::ConvertTensorSpec(
-                                                     output_tensor_spec_proto));
+       intrinsic_config.output_tensors()) {
+    FCP_ASSIGN_OR_RETURN(TensorSpec output_spec,
+                         TensorSpec::FromProto(output_tensor_spec_proto));
     output_tensor_specs.push_back(std::move(output_spec));
   }
-  FCP_ASSIGN_OR_RETURN(
-      std::vector<Intrinsic> intrinsics,
-      ParseFromConfig(aggregation_config.intrinsic_uri(),
-                      aggregation_config.inner_aggregations()));
+  FCP_ASSIGN_OR_RETURN(std::vector<Intrinsic> intrinsics,
+                       ParseFromConfig(intrinsic_config.intrinsic_uri(),
+                                       intrinsic_config.inner_intrinsics()));
   return Intrinsic{
-      aggregation_config.intrinsic_uri(), std::move(input_tensor_specs),
+      intrinsic_config.intrinsic_uri(), std::move(input_tensor_specs),
       std::move(output_tensor_specs), std::move(params), std::move(intrinsics)};
 }
 
@@ -173,17 +170,17 @@ StatusOr<Intrinsic> ParseFromConfig(
 
 StatusOr<std::vector<Intrinsic>> ParseFromConfig(const Configuration& config) {
   FCP_RETURN_IF_ERROR(ValidateConfiguration(config));
-  return ParseFromConfig("", config.aggregation_configs());
+  return ParseFromConfig("", config.intrinsic_configs());
 }
 
 absl::Status ValidateConfiguration(const Configuration& configuration) {
-  for (const Configuration::ServerAggregationConfig& aggregation_config :
-       configuration.aggregation_configs()) {
-    if (!GetAggregatorFactory(aggregation_config.intrinsic_uri()).ok()) {
-      return ServerAggregationConfigArgumentError(
-          aggregation_config,
+  for (const Configuration::IntrinsicConfig& intrinsic_config :
+       configuration.intrinsic_configs()) {
+    if (!GetAggregatorFactory(intrinsic_config.intrinsic_uri()).ok()) {
+      return IntrinsicConfigArgumentError(
+          intrinsic_config,
           absl::StrFormat("%s is not a supported intrinsic_uri.",
-                          aggregation_config.intrinsic_uri()));
+                          intrinsic_config.intrinsic_uri()));
     }
   }
   return absl::OkStatus();

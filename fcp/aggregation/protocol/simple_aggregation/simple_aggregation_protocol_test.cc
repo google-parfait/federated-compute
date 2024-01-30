@@ -106,7 +106,7 @@ class SimpleAggregationProtocolTest : public ::testing::Test {
 Configuration SimpleAggregationProtocolTest::default_configuration() const {
   // One "federated_sum" intrinsic with a single scalar int32 tensor.
   return PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
@@ -420,28 +420,22 @@ TEST_F(SimpleAggregationProtocolTest, Complete_NoInputsReceived) {
   // 1) federated_sum "foo" that takes int32 {2,3} tensors.
   // 2) federated_sum "bar" that takes scalar float tensors.
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
           name: "foo"
           dtype: DT_INT32
-          shape {
-            dim { size: 2 }
-            dim { size: 3 }
-          }
+          shape { dim_sizes: 2 dim_sizes: 3 }
         }
       }
       output_tensors {
         name: "foo_out"
         dtype: DT_INT32
-        shape {
-          dim { size: 2 }
-          dim { size: 3 }
-        }
+        shape { dim_sizes: 2 dim_sizes: 3 }
       }
     }
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
@@ -498,55 +492,49 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
   //    of which should be output, and two inner GoogleSQL:sum intrinsics bar
   //    and baz operating on float tensors.
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "federated_sum"
       intrinsic_args {
         input_tensor {
           name: "foo"
           dtype: DT_INT32
-          shape {
-            dim { size: 2 }
-            dim { size: 3 }
-          }
+          shape { dim_sizes: 2 dim_sizes: 3 }
         }
       }
       output_tensors {
         name: "foo_out"
         dtype: DT_INT32
-        shape {
-          dim { size: 2 }
-          dim { size: 3 }
-        }
+        shape { dim_sizes: 2 dim_sizes: 3 }
       }
     }
 
-    aggregation_configs: {
+    intrinsic_configs: {
       intrinsic_uri: "fedsql_group_by"
       intrinsic_args {
         input_tensor {
           name: "key1"
           dtype: DT_STRING
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       intrinsic_args {
         input_tensor {
           name: "key2"
           dtype: DT_STRING
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       output_tensors {
         name: "key1_out"
         dtype: DT_STRING
-        shape { dim { size: -1 } }
+        shape { dim_sizes: -1 }
       }
       output_tensors {
         name: ""
         dtype: DT_STRING
-        shape { dim { size: -1 } }
+        shape { dim_sizes: -1 }
       }
-      inner_aggregations {
+      inner_intrinsics {
         intrinsic_uri: "GoogleSQL:sum"
         intrinsic_args {
           input_tensor {
@@ -561,7 +549,7 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TwoInputsReceived) {
           shape {}
         }
       }
-      inner_aggregations {
+      inner_intrinsics {
         intrinsic_uri: "GoogleSQL:sum"
         intrinsic_args {
           input_tensor {
@@ -689,33 +677,33 @@ TEST_F(SimpleAggregationProtocolTest, CompleteNoInputsReceivedFedSqlGroupBy) {
   //    of which should be output, and two inner GoogleSQL:sum intrinsics bar
   //    and baz operating on float tensors.
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs: {
+    intrinsic_configs: {
       intrinsic_uri: "fedsql_group_by"
       intrinsic_args {
         input_tensor {
           name: "key1"
           dtype: DT_STRING
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       intrinsic_args {
         input_tensor {
           name: "key2"
           dtype: DT_STRING
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       output_tensors {
         name: "key1_out"
         dtype: DT_STRING
-        shape { dim { size: -1 } }
+        shape { dim_sizes: -1 }
       }
       output_tensors {
         name: ""
         dtype: DT_STRING
-        shape { dim { size: -1 } }
+        shape { dim_sizes: -1 }
       }
-      inner_aggregations {
+      inner_intrinsics {
         intrinsic_uri: "GoogleSQL:sum"
         intrinsic_args {
           input_tensor {
@@ -730,7 +718,7 @@ TEST_F(SimpleAggregationProtocolTest, CompleteNoInputsReceivedFedSqlGroupBy) {
           shape {}
         }
       }
-      inner_aggregations {
+      inner_intrinsics {
         intrinsic_uri: "GoogleSQL:sum"
         intrinsic_args {
           input_tensor {
@@ -786,21 +774,21 @@ TEST_F(SimpleAggregationProtocolTest, CompleteNoInputsReceivedFedSqlGroupBy) {
 TEST_F(SimpleAggregationProtocolTest,
        CompleteOnlyEmptyInputsReceivedFedSqlGroupBy) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs: {
+    intrinsic_configs: {
       intrinsic_uri: "fedsql_group_by"
       intrinsic_args {
         input_tensor {
           name: "key1"
           dtype: DT_FLOAT
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       output_tensors {
         name: "key1_out"
         dtype: DT_FLOAT
-        shape { dim { size: -1 } }
+        shape { dim_sizes: -1 }
       }
-      inner_aggregations {
+      inner_intrinsics {
         intrinsic_uri: "GoogleSQL:sum"
         intrinsic_args {
           input_tensor {
@@ -893,33 +881,33 @@ TEST_F(SimpleAggregationProtocolTest,
 
 TEST_F(SimpleAggregationProtocolTest, Complete_TensorUsedInMultipleIntrinsics) {
   Configuration config_message = PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs: {
+    intrinsic_configs: {
       intrinsic_uri: "fedsql_group_by"
       intrinsic_args {
         input_tensor {
           name: "key1"
           dtype: DT_FLOAT
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       intrinsic_args {
         input_tensor {
           name: "key2"
           dtype: DT_FLOAT
-          shape { dim { size: -1 } }
+          shape { dim_sizes: -1 }
         }
       }
       output_tensors {
         name: ""
         dtype: DT_FLOAT
-        shape { dim { size: -1 } }
+        shape { dim_sizes: -1 }
       }
       output_tensors {
         name: ""
         dtype: DT_FLOAT
-        shape { dim { size: -1 } }
+        shape { dim_sizes: -1 }
       }
-      inner_aggregations {
+      inner_intrinsics {
         intrinsic_uri: "GoogleSQL:sum"
         intrinsic_args {
           input_tensor {
@@ -934,7 +922,7 @@ TEST_F(SimpleAggregationProtocolTest, Complete_TensorUsedInMultipleIntrinsics) {
           shape {}
         }
       }
-      inner_aggregations {
+      inner_intrinsics {
         intrinsic_uri: "GoogleSQL:sum"
         intrinsic_args {
           input_tensor {
@@ -1194,7 +1182,7 @@ TEST_F(SimpleAggregationProtocolTest, ConcurrentAggregation_AbortWhileQueued) {
   // The configuration below refers to the custom aggregation registered
   // above.
   auto protocol = CreateProtocol(PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "foo1_aggregation"
       intrinsic_args {
         input_tensor {
@@ -1289,7 +1277,7 @@ TEST_F(SimpleAggregationProtocolTest,
   // The configuration below refers to the custom aggregation registered
   // above.
   auto protocol = CreateProtocol(PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "foo2_aggregation"
       intrinsic_args {
         input_tensor {
@@ -1630,7 +1618,7 @@ TEST_F(SimpleAggregationProtocolTest,
   // The configuration below refers to fake1_aggregation registered above,
   // but the expected output is DT_INT32.
   auto protocol = CreateProtocol(PARSE_TEXT_PROTO(R"pb(
-    aggregation_configs {
+    intrinsic_configs {
       intrinsic_uri: "fake1_aggregation"
       intrinsic_args {
         input_tensor {

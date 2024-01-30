@@ -38,6 +38,10 @@ cc_library(
         "//fcp/base",
         "//fcp/tensorflow:status",
         "//fcp/testing",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
         "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/c:checkpoint_reader",
         "@org_tensorflow//tensorflow/c:tf_status_headers",
@@ -49,6 +53,8 @@ cc_library(
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@org_tensorflow//tensorflow/core:tensorflow",
+        "@org_tensorflow//tensorflow/core/platform:status",
+        "@org_tensorflow//tensorflow/core/platform:tstring",
     ],
 )
 
