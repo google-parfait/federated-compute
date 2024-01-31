@@ -102,6 +102,62 @@ TEST(TensorTest, AsAggVector_TypeCheckFailure) {
   EXPECT_DEATH(t->AsAggVector<int>(), "Incompatible tensor dtype()");
 }
 
+TEST(TensorTest, AsScalar_NumericScalarTensor) {
+  auto t = Tensor::Create(DT_FLOAT, {}, CreateTestData<float>({5.5f}));
+  EXPECT_EQ(t->AsScalar<float>(), 5.5f);
+  EXPECT_EQ(t->AsScalar<double>(), 5.5);
+  EXPECT_EQ(t->AsScalar<int>(), 5);
+}
+
+TEST(TensorTest, AsScalar_StringScalarTensor) {
+  auto t = Tensor::Create(DT_STRING, {}, CreateTestData<string_view>({"foo"}));
+  EXPECT_EQ(t->AsScalar<string_view>(), "foo");
+}
+
+TEST(TensorTest, AsScalar_MismatchType) {
+  auto t = Tensor::Create(DT_STRING, {}, CreateTestData<string_view>({"foo"}));
+  EXPECT_DEATH(t->AsScalar<int>(), "Unsupported type");
+
+  t = Tensor::Create(DT_FLOAT, {}, CreateTestData<float>({5.5f}));
+  EXPECT_DEATH(t->AsScalar<string_view>(), "Incompatible tensor dtype()");
+}
+
+TEST(TensorTest, AsScalar_NonScalar) {
+  auto t = Tensor::Create(DT_STRING, {2},
+                          CreateTestData<string_view>({"foo", "bar"}));
+  EXPECT_DEATH(t->AsScalar<string_view>(),
+               "AsScalar should only be used on scalar tensors");
+
+  t = Tensor::Create(DT_FLOAT, {3}, CreateTestData<float>({5.5f, 5.7f, 5.9f}));
+  EXPECT_DEATH(t->AsScalar<float>(),
+               "AsScalar should only be used on scalar tensors");
+}
+
+TEST(TensorTest, AsSpan_NumericTensor) {
+  auto t =
+      Tensor::Create(DT_FLOAT, {3}, CreateTestData<float>({5.5f, 5.7f, 5.9f}));
+  auto span = t->AsSpan<float>();
+  EXPECT_EQ(span.size(), 3);
+  EXPECT_EQ(span.at(0), 5.5f);
+  EXPECT_EQ(span.at(1), 5.7f);
+  EXPECT_EQ(span.at(2), 5.9f);
+}
+
+TEST(TensorTest, AsSpan_StringTensor) {
+  auto t = Tensor::Create(DT_STRING, {2},
+                          CreateTestData<string_view>({"foo", "bar"}));
+  auto span = t->AsSpan<string_view>();
+  EXPECT_EQ(span.size(), 2);
+  EXPECT_EQ(span.at(0), "foo");
+  EXPECT_EQ(span.at(1), "bar");
+}
+
+TEST(TensorTest, AsSpan_MismatchType) {
+  auto t = Tensor::Create(DT_STRING, {2},
+                          CreateTestData<string_view>({"foo", "bar"}));
+  EXPECT_DEATH(t->AsSpan<int>(), "Incompatible tensor dtype()");
+}
+
 TEST(TensorTest, ToProto_Int32_Success) {
   std::initializer_list<int32_t> values{1, 2, 3, 4};
   auto t = Tensor::Create(DT_INT32, {2, 2}, CreateTestData(values));

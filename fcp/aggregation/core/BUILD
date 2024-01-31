@@ -77,6 +77,7 @@ cc_library(
         ":tensor_cc_proto",
         "//fcp/base",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
     ],
 )
