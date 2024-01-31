@@ -109,3 +109,23 @@ py_grpc_library(
     srcs = [":pipeline_transform_proto"],
     deps = [":pipeline_transform_py_proto"],
 )
+
+proto_library(
+    name = "sql_query_proto",
+    srcs = ["sql_query.proto"],
+)
+
+cc_proto_library(
+    name = "sql_query_cc_proto",
+    deps = [":sql_query_proto"],
+)
+
+py_proto_library(
+    name = "sql_query_py_proto",
+    deps = [":sql_query_proto"],
+)
+
+java_lite_proto_library(
+    name = "sql_query_java_proto_lite",
+    deps = [":sql_query_proto"],
+)
