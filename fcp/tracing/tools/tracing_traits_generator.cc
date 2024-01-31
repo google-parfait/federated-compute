@@ -384,7 +384,7 @@ int main(int argc, const char** argv) {
     // MakeTuple helper, which allows to generate std::tuple from a table.
     std::string tuple_type = "std::tuple<";
     std::string make_tuple_args;
-    for (auto [name, type] : fields) {
+    for (const auto& [name, type] : fields) {
       if (!make_tuple_args.empty()) {
         tuple_type += ", ";
         make_tuple_args += ", ";
