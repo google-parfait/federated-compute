@@ -1324,13 +1324,6 @@ message Plan {
 // for how long this data will live is up to the client implementation. There
 // are no guarantees on how long this information will be kept around.
 message ClientPersistedData {
-  // A map from policy name to current index of MinimumSeparationPolicy that
-  // applied to this computation execution.
-  // Deprecated. Use min_sep_policy_index instead.
-  // TODO: b/307758509 - Delete this field after updating all code to use
-  // `min_sep_policy_index`.
-  map<string, int64> min_sep_policy_current_index = 1 [deprecated = true];
-
   // The current index of MinimumSeparationPolicy that applied to this
   // computation execution.
   // The MinimumSeparationPolicy now is only used for enabling round-based
@@ -1338,6 +1331,8 @@ message ClientPersistedData {
   // the same no matter what the value of the minimum separation is. So use a
   // single value to record the index.
   optional int64 min_sep_policy_index = 2;
+
+  reserved 1;
 }
 
 // Represents a client part of the plan of federated optimization.
