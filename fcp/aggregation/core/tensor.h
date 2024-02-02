@@ -18,6 +18,7 @@
 #define FCP_AGGREGATION_CORE_TENSOR_H_
 
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 #include "absl/types/span.h"
@@ -107,7 +108,8 @@ class Tensor final {
 
   // Provides access to the (numerical) tensor data as a scalar. Values are
   // automatically casted to the requested type.
-  template <typename T>
+  template <typename T, typename std::enable_if<!std::is_same<
+                            string_view, T>::value>::type* = nullptr>
   T AsScalar() const {
     FCP_CHECK(num_elements() == 1)
         << "AsScalar should only be used on scalar tensors";
@@ -118,11 +120,12 @@ class Tensor final {
   }
 
   // Provides access to the (string) tensor data as a scalar.
-  template <>
-  string_view AsScalar<string_view>() const {
+  template <typename T, typename std::enable_if<std::is_same<
+                            string_view, T>::value>::type* = nullptr>
+  T AsScalar() const {
     FCP_CHECK(num_elements() == 1)
         << "AsScalar should only be used on scalar tensors";
-    return *GetData<string_view>();
+    return *GetData<T>();
   }
 
   // Provides access to the tensor data as a span.
