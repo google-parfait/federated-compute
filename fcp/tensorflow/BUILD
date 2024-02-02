@@ -47,42 +47,6 @@ py_test(
     python_version = "PY3",
 )
 
-# Library for converting between the FCP and TensorFlow versions of a Status.
-# Note that this library is intended to be usable in an op .so, thus it depends
-# on TF headers but *not* an implementation (the final binary needs to link it
-# in). We must also use the right copy of headers, depending on whether the
-# build is targeting a system-provided TF library or a bazel-built one.
-cc_library(
-    name = "status",
-    srcs = [
-        "status.cc",
-    ],
-    hdrs = [
-        "status.h",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        "//fcp/base",
-    ] + select({
-        "@system_provided_tf//:system_provided_tf_build": ["@system_provided_tf//:tf_headers"],
-        "//conditions:default": ["@org_tensorflow//tensorflow/core:framework_headers_lib"],
-    }),
-)
-
-cc_test(
-    name = "status_test",
-    srcs = [
-        "status_test.cc",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":status",
-        "@com_google_googletest//:gtest_main",
-        # See remarks on :status about the TF framework dependency
-        "@org_tensorflow//tensorflow/core:framework",
-    ],
-)
-
 cc_library(
     name = "host_object",
     srcs = [
@@ -127,9 +91,10 @@ cc_library(
     hdrs = ["tf_session.h"],
     copts = FCP_COPTS,
     deps = [
-        ":status",
         ":tracing_schema",
+        ":tracing_schema_fb",
         "//fcp/base",
+        "//fcp/base:meta",
         "//fcp/base:process_unique_id",
         "//fcp/base:result",
         "//fcp/protos:plan_cc_proto",
@@ -138,6 +103,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@org_tensorflow//tensorflow/core:core_cpu",
+        "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@org_tensorflow//tensorflow/core:tensorflow",
     ],
@@ -239,8 +205,11 @@ EXTERNAL_DATASET_OP_SRCS = ["external_dataset_op.cc"]
 
 EXTERNAL_DATASET_OP_DEPS = [
     ":external_dataset",
-    ":status",
+    "@com_google_absl//absl/status",
+    "@com_google_absl//absl/status:statusor",
     "@com_google_absl//absl/strings:str_format",
+    "@com_google_absl//absl/synchronization",
+    "@com_google_absl//absl/types:span",
     "//fcp/base:random_token",
 ]
 
@@ -335,6 +304,10 @@ tf_cc_test(
         ":external_dataset",
         ":external_dataset_op_lib",
         ":test_selector_cc_proto",
+        "//fcp/base",
+        "//fcp/base:random_token",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
         "@org_tensorflow//tensorflow/core:core_cpu",
@@ -343,12 +316,18 @@ tf_cc_test(
         "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@org_tensorflow//tensorflow/core:tensorflow_opensource",
         "@org_tensorflow//tensorflow/core:testlib",
+        "@org_tensorflow//tensorflow/core/platform:tstring",
+        "@org_tensorflow//tensorflow/tsl/platform:status",
     ],
 )
 
 CRC32_OP_SRCS = [
     "crc32_op.cc",
     "tensor_crc32.cc",
+]
+
+CRC32_OP_DEPS = [
+    "@com_google_absl//absl/status",
 ]
 
 # Custom op to compute the CRC32 checksum of a tensor.
@@ -361,7 +340,7 @@ cc_library(
     hdrs = ["tensor_crc32.h"],
     copts = FCP_COPTS,
     visibility = ["//visibility:public"],
-    deps = [
+    deps = CRC32_OP_DEPS + [
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:lib",
     ],
@@ -373,6 +352,7 @@ tf_custom_op_library(
     name = "_crc32_op.so",
     srcs = CRC32_OP_SRCS + ["tensor_crc32.h"],
     copts = FCP_COPTS,
+    deps = CRC32_OP_DEPS,
 )
 
 # Generates the basic op wrapper for use in Python.
@@ -405,6 +385,7 @@ EXAMPLE_SELECTOR_FUSER_OP_SRCS = ["example_selector_fuser_op.cc"]
 
 EXAMPLE_SELECTOR_FUSER_OP_DEPS = [
     "@com_google_protobuf//:protobuf",
+    "@com_google_absl//absl/status",
     "//fcp/protos:plan_cc_proto",
 ]
 
@@ -498,8 +479,11 @@ SERVE_SLICES_OP_SRCS = ["serve_slices_op.cc"]
 
 SERVE_SLICES_OP_DEPS = [
     ":serve_slices_registry",
+    "@com_google_absl//absl/status",
     "@com_google_absl//absl/strings",
+    "@com_google_absl//absl/types:span",
     "@com_google_absl//absl/strings:str_format",
+    "//fcp/base:random_token",
 ]
 
 # Custom op to register slices to serve for a `federated_select`.
@@ -582,6 +566,7 @@ tf_cc_test(
     deps = [
         ":serve_slices_op_lib",
         ":serve_slices_registry",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
@@ -663,6 +648,8 @@ APPEND_SLICES_OP_SRCS = ["append_slices_op.cc"]
 
 APPEND_SLICES_OP_DEPS = [
     "@com_google_absl//absl/base:core_headers",
+    "@com_google_absl//absl/status",
+    "@com_google_absl//absl/strings",
     "@com_google_absl//absl/synchronization",
     "@org_tensorflow//tensorflow/core/util:saved_tensor_slice_proto_cc",
 ]
@@ -729,6 +716,8 @@ DELETE_FILE_OP_SRCS = ["delete_file_op.cc"]
 
 DELETE_FILE_OP_DEPS = [
     "@com_google_absl//absl/base:core_headers",
+    "@com_google_absl//absl/log",
+    "@com_google_absl//absl/status",
     "@com_google_absl//absl/synchronization",
 ]
 

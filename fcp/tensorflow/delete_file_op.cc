@@ -13,12 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cstdint>
+
+#include "absl/log/log.h"
+#include "absl/status/status.h"
+#include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/op_requires.h"
 #include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/framework/versions.pb.h"
 #include "tensorflow/core/platform/errors.h"
-#include "tensorflow/core/platform/stringpiece.h"
+#include "tensorflow/core/platform/tstring.h"
 #include "tensorflow/core/util/saved_tensor_slice.pb.h"
 
 namespace fcp {
@@ -60,7 +66,7 @@ class DeleteDirOp : public OpKernel {
       if (recursively) {
         int64_t undeleted_files = 0;
         int64_t undeleted_dirs = 0;
-        tensorflow::Status delete_status = context->env()->DeleteRecursively(
+        absl::Status delete_status = context->env()->DeleteRecursively(
             dirname, &undeleted_files, &undeleted_dirs);
         if (!delete_status.ok()) {
           // The directory could be already deleted by another op. Let's not
@@ -71,7 +77,7 @@ class DeleteDirOp : public OpKernel {
                        << delete_status;
         }
       } else {
-        tensorflow::Status delete_status = context->env()->DeleteDir(dirname);
+        absl::Status delete_status = context->env()->DeleteDir(dirname);
         if (!delete_status.ok()) {
           // The directory could be already deleted by another op. Let's not
           // propagate this error.
@@ -108,7 +114,7 @@ class DeleteFileOp : public OpKernel {
     const tensorflow::tstring& filename =
         filename_t.scalar<tensorflow::tstring>()();
     if (context->env()->FileExists(filename).ok()) {
-      tensorflow::Status delete_status = context->env()->DeleteFile(filename);
+      absl::Status delete_status = context->env()->DeleteFile(filename);
       if (!delete_status.ok()) {
         // The file could be already deleted by another op. Let's not propagate
         // this error.

@@ -17,22 +17,30 @@
 #include "fcp/tensorflow/tf_session.h"
 
 #include <cstdio>
-#include <fstream>
-#include <iostream>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/strings/cord.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "absl/strings/strip.h"
+#include "fcp/base/meta.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/base/process_unique_id.h"
 #include "fcp/base/result.h"
-#include "fcp/tensorflow/status.h"
+#include "fcp/tensorflow/tracing_schema_generated.h"
+#include "fcp/tracing/tracing_span.h"
+#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/protobuf/saver.pb.h"
+#include "tensorflow/core/public/session.h"
+#include "tensorflow/core/public/session_options.h"
 
 namespace fcp {
 
-#define TF_STATUS_EXPECT_OK(tf_status) \
-  Result(ConvertFromTensorFlowStatus(tf_status)).Then(ExpectOk())
+#define TF_STATUS_EXPECT_OK(tf_status) Result(tf_status).Then(ExpectOk())
 
 using CheckpointOp = google::internal::federated::plan::CheckpointOp;
 
@@ -50,7 +58,7 @@ TfSession::TfSession(const std::filesystem::path& tmp_dir,
                       << "Could not parse GraphDef.";
     return;
   }
-  session_status_ = ConvertFromTensorFlowStatus(session_->Create(graph_def));
+  session_status_ = session_->Create(graph_def);
 }
 
 TfSession::TfSession(const std::filesystem::path& tmp_dir,

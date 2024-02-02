@@ -30,6 +30,7 @@ cc_library(
     deps = [
         "//fcp/base:result",
         "//fcp/tensorflow:tf_session",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:cord",
         "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/cc:cc_ops",

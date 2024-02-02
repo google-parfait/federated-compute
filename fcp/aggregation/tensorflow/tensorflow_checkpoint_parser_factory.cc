@@ -34,7 +34,6 @@
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/tensorflow/checkpoint_reader.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/tensorflow/status.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/file_system.h"
 
@@ -79,15 +78,14 @@ TensorflowCheckpointParserFactory::Create(
 
   // Write the checkpoint to the temporary file.
   std::unique_ptr<::tensorflow::WritableFile> file;
-  FCP_RETURN_IF_ERROR(ConvertFromTensorFlowStatus(
-      Env::Default()->NewWritableFile(filename, &file)));
+  FCP_RETURN_IF_ERROR(Env::Default()->NewWritableFile(filename, &file));
   absl::Cleanup cleanup = [&] {
     Env::Default()->DeleteFile(filename).IgnoreError();
   };
   for (absl::string_view chunk : serialized_checkpoint.Chunks()) {
-    FCP_RETURN_IF_ERROR(ConvertFromTensorFlowStatus(file->Append(chunk)));
+    FCP_RETURN_IF_ERROR(file->Append(chunk));
   }
-  FCP_RETURN_IF_ERROR(ConvertFromTensorFlowStatus(file->Close()));
+  FCP_RETURN_IF_ERROR(file->Close());
 
   // Return a TensorflowCheckpointParser that will read from the file.
   FCP_ASSIGN_OR_RETURN(std::unique_ptr<CheckpointReader> reader,

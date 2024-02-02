@@ -42,7 +42,6 @@
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
-#include "fcp/tensorflow/status.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_slice.h"
 #include "tensorflow/core/platform/tstring.h"
@@ -73,8 +72,7 @@ absl::Status WriteSlice(tf::checkpoint::TensorSliceWriter& slice_writer,
   tf::TensorShape shape;
   shape.AddDim(size);
   tf::TensorSlice slice(shape.dims());
-  tf::Status tf_status = slice_writer.Add(name, shape, slice, data);
-  return ConvertFromTensorFlowStatus(tf_status);
+  return slice_writer.Add(name, shape, slice, data);
 }
 
 // Returns a map of (vector name) -> tuple(output name, vector spec).
@@ -188,7 +186,7 @@ absl::Status WriteCheckpoint(
       }
     }
   }
-  return ConvertFromTensorFlowStatus(slice_writer.Finish());
+  return slice_writer.Finish();
 }
 
 // Converts example query results to client report wire format tensors. Example

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "absl/status/status.h"
 #include "fcp/tensorflow/tensor_crc32.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -40,7 +41,7 @@ REGISTER_OP("CRC32")
     .Output("checksum: uint32")
     .SetShapeFn([](InferenceContext* c) {
       c->set_output(0, c->Scalar());
-      return ::tensorflow::OkStatus();
+      return absl::OkStatus();
     });
 
 class CRC32Op : public OpKernel {

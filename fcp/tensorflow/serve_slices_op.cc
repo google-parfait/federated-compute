@@ -14,18 +14,28 @@
  * limitations under the License.
  */
 
+#include <cstdint>
+#include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/types/span.h"
+#include "fcp/base/random_token.h"
 #include "fcp/tensorflow/serve_slices_registry.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/op_requires.h"
+#include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/platform/errors.h"
-#include "tensorflow/core/platform/status.h"
 #include "tensorflow/core/platform/stringpiece.h"
+#include "tensorflow/core/platform/tstring.h"
+#include "tensorflow/tsl/platform/errors.h"
 
 namespace fcp {
 
@@ -49,16 +59,15 @@ REGISTER_OP("ServeSlices")
     .SetShapeFn(tensorflow::shape_inference::ScalarShape);
 
 template <class T>
-tensorflow::Status get_scalar_input(tensorflow::OpKernelContext* context,
-                                    tensorflow::StringPiece name,
-                                    T* scalar_out) {
+absl::Status get_scalar_input(tensorflow::OpKernelContext* context,
+                              tensorflow::StringPiece name, T* scalar_out) {
   const tensorflow::Tensor* tensor;
   TF_RETURN_IF_ERROR(context->input(name, &tensor));
   *scalar_out = tensor->scalar<T>()();
-  return tensorflow::OkStatus();
+  return absl::OkStatus();
 }
 
-tensorflow::Status get_arbitrary_input_list_as_tensor_vector(
+absl::Status get_arbitrary_input_list_as_tensor_vector(
     tensorflow::OpKernelContext* context, tensorflow::StringPiece name,
     std::vector<tensorflow::Tensor>* out) {
   tensorflow::OpInputList input_list;
@@ -67,19 +76,19 @@ tensorflow::Status get_arbitrary_input_list_as_tensor_vector(
   for (const tensorflow::Tensor& tensor : input_list) {
     out->push_back(tensor);
   }
-  return tensorflow::OkStatus();
+  return absl::OkStatus();
 }
 
-tensorflow::Status get_string_list_input(tensorflow::OpKernelContext* context,
-                                         tensorflow::StringPiece name,
-                                         std::vector<std::string>* out) {
+absl::Status get_string_list_input(tensorflow::OpKernelContext* context,
+                                   tensorflow::StringPiece name,
+                                   std::vector<std::string>* out) {
   tensorflow::OpInputList input_list;
   TF_RETURN_IF_ERROR(context->input_list(name, &input_list));
   out->reserve(input_list.size());
   for (const tensorflow::Tensor& tensor : input_list) {
     out->emplace_back(tensor.scalar<tensorflow::tstring>()());
   }
-  return tensorflow::OkStatus();
+  return absl::OkStatus();
 }
 
 // ServeSlices op-kernel.

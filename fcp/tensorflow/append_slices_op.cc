@@ -15,38 +15,46 @@
  */
 
 #include <algorithm>
-#include <functional>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <queue>
+#include <set>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/base/attributes.h"
 #include "absl/base/const_init.h"
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/synchronization/mutex.h"
 #include "tensorflow/core/framework/bounds_check.h"
-#include "tensorflow/core/framework/common_shape_fns.h"
+#include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/op_requires.h"
 #include "tensorflow/core/framework/register_types.h"
-#include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_slice.h"
+#include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/framework/types.pb.h"
 #include "tensorflow/core/framework/versions.pb.h"
 #include "tensorflow/core/lib/io/table.h"
 #include "tensorflow/core/lib/io/table_builder.h"
 #include "tensorflow/core/lib/io/table_options.h"
+#include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/errors.h"
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/platform/stringpiece.h"
+#include "tensorflow/core/platform/tstring.h"
 #include "tensorflow/core/protobuf/error_codes.pb.h"
 #include "tensorflow/core/public/version.h"
 #include "tensorflow/core/util/saved_tensor_slice.pb.h"
 #include "tensorflow/core/util/saved_tensor_slice_util.h"
-#include "tensorflow/core/util/tensor_slice_reader.h"
 #include "tensorflow/core/util/tensor_slice_writer.h"
+#include "tensorflow/tsl/platform/errors.h"
 
 namespace fcp {
 namespace {
@@ -127,7 +135,7 @@ void SaveTensors(
   tensorflow::checkpoint::TensorSliceWriter writer(filename,
                                                    std::move(builder_func));
 
-  tensorflow::Status s;
+  absl::Status s;
   auto tensor_names_flat = tensor_names_t.flat<tensorflow::tstring>();
 
   // Process tensors in sorted name order.  This allows us to avoid seeking
@@ -194,7 +202,7 @@ void SaveTensors(
 // `Seek`ing to modify an earlier position in the file.
 class AppendedFileWithStartPosFooter : public tensorflow::WritableFile {
  public:
-  static tensorflow::Status FromFile(
+  static absl::Status FromFile(
       std::unique_ptr<tensorflow::WritableFile> file,
       std::unique_ptr<tensorflow::WritableFile>& wrapped_file_out) {
     int64_t body_start;
@@ -203,22 +211,22 @@ class AppendedFileWithStartPosFooter : public tensorflow::WritableFile {
     // Note: cannot use `make_unique` due to private constructor.
     wrapped_file_out = std::unique_ptr<tensorflow::WritableFile>(
         new AppendedFileWithStartPosFooter(std::move(file), body_start));
-    return tensorflow::OkStatus();
+    return absl::OkStatus();
   }
-  tensorflow::Status Append(tensorflow::StringPiece data) override {
+  absl::Status Append(tensorflow::StringPiece data) override {
     return file_->Append(data);
   }
-  tensorflow::Status Close() override {
+  absl::Status Close() override {
     TF_RETURN_IF_ERROR(file_->Append(Int64ToHostEndianBytes(&body_start_)));
     return file_->Close();
   }
-  tensorflow::Status Flush() override { return file_->Flush(); }
-  tensorflow::Status Sync() override { return file_->Sync(); }
-  tensorflow::Status Tell(int64_t* position) override {
+  absl::Status Flush() override { return file_->Flush(); }
+  absl::Status Sync() override { return file_->Sync(); }
+  absl::Status Tell(int64_t* position) override {
     int64_t internal_position;
     TF_RETURN_IF_ERROR(file_->Tell(&internal_position));
     *position = internal_position - body_start_;
-    return tensorflow::OkStatus();
+    return absl::OkStatus();
   }
 
  private:
@@ -244,9 +252,9 @@ class TableBuilder : public tensorflow::checkpoint::TensorSliceWriter::Builder {
   void Add(tensorflow::StringPiece key, tensorflow::StringPiece val) override {
     builder_->Add(key, val);
   }
-  tensorflow::Status Finish(int64_t* file_size) override {
+  absl::Status Finish(int64_t* file_size) override {
     *file_size = -1;
-    tensorflow::Status s = builder_->Finish();
+    absl::Status s = builder_->Finish();
     if (s.ok()) {
       s = file_->Close();
       if (s.ok()) {
@@ -277,7 +285,7 @@ class TableBuilder : public tensorflow::checkpoint::TensorSliceWriter::Builder {
 //
 // If this method returns `OK`, `builder` will contain a new owned pointer to
 // a `TensorSliceWriter::Builder`.
-tensorflow::Status CreateAppendingTensorSliceBuilder(
+absl::Status CreateAppendingTensorSliceBuilder(
     const std::string& filename,
     tensorflow::checkpoint::TensorSliceWriter::Builder** builder) {
   *builder = nullptr;
@@ -297,7 +305,7 @@ tensorflow::Status CreateAppendingTensorSliceBuilder(
   TF_RETURN_IF_ERROR(
       AppendedFileWithStartPosFooter::FromFile(std::move(file), wrapped_file));
   *builder = new TableBuilder(filename, std::move(wrapped_file));
-  return tensorflow::OkStatus();
+  return absl::OkStatus();
 }
 
 // A `RandomAccessFile` which wraps another `RandomAccessFile`, providing access
@@ -312,9 +320,8 @@ class PartialRandomAccessFile : public tensorflow::RandomAccessFile {
                           int64_t end)
       : file_(file), start_(start), end_(end) {}
   ~PartialRandomAccessFile() override = default;
-  tensorflow::Status Read(uint64_t offset, size_t n,
-                          tensorflow::StringPiece* result,
-                          char* scratch) const override {
+  absl::Status Read(uint64_t offset, size_t n, tensorflow::StringPiece* result,
+                    char* scratch) const override {
     const size_t max_allowable_n = end_ - (start_ + offset);
     bool read_too_long = n > max_allowable_n;
     if (read_too_long) {
@@ -325,11 +332,10 @@ class PartialRandomAccessFile : public tensorflow::RandomAccessFile {
         absl::StrCat("Reading from PartialRandomAccessFile at offset ", offset,
                      " from start position ", start_));
     if (read_too_long) {
-      return tensorflow::Status(
-          static_cast<tensorflow::errors::Code>(absl::StatusCode::kOutOfRange),
-          "Attempted to read past end of file chunk.");
+      return absl::Status(absl::StatusCode::kOutOfRange,
+                          "Attempted to read past end of file chunk.");
     }
-    return tensorflow::OkStatus();
+    return absl::OkStatus();
   }
 
  private:
@@ -369,18 +375,18 @@ Element PopWithElement(
 }
 
 // Parses a `serialized` into a `SavedTensorSlices` stored in `meta_out`.
-tensorflow::Status MetadataFromString(absl::string_view serialized,
-                                      tensorflow::SavedTensorSlices& meta_out) {
+absl::Status MetadataFromString(absl::string_view serialized,
+                                tensorflow::SavedTensorSlices& meta_out) {
   // NOTE: The conversion to `std::string` is unfortunately necessary here
   // because the OSS version of `ParseFromString` takes a `const std::string&`
   // rather than a `absl::string_view`.
   if (!meta_out.ParseFromString(std::string(serialized))) {
-    return tensorflow::Status(
-        static_cast<tensorflow::errors::Code>(absl::StatusCode::kInternal),
+    return absl::Status(
+        absl::StatusCode::kInternal,
         absl::StrCat("Failed to parse table entry as `SavedTensorSlices`: ",
                      serialized));
   }
-  return tensorflow::OkStatus();
+  return absl::OkStatus();
 }
 
 // Merges appended checkpoints in `filename` into a single checkpoint.
@@ -389,14 +395,14 @@ tensorflow::Status MetadataFromString(absl::string_view serialized,
 // `string_view` because that is the type accepted by the functions it calls
 // (`GetFileSize` and `NewRandomAccessFile`). This avoids unnecessary
 // allocation.
-tensorflow::Status LoadAndMergeAppendedSlices(const std::string& filename) {
+absl::Status LoadAndMergeAppendedSlices(const std::string& filename) {
   tensorflow::Env* env = tensorflow::Env::Default();
   uint64_t file_size;
   TF_RETURN_IF_ERROR(env->GetFileSize(filename, &file_size));
   // Short-circuit on empty files so that we can assume at least a single entry
   // below.
   if (file_size == 0) {
-    return tensorflow::OkStatus();
+    return absl::OkStatus();
   }
   std::unique_ptr<tensorflow::RandomAccessFile> file;
   TF_RETURN_IF_ERROR(env->NewRandomAccessFile(filename, &file));
@@ -447,15 +453,14 @@ tensorflow::Status LoadAndMergeAppendedSlices(const std::string& filename) {
     std::unique_ptr<tensorflow::table::Iterator> iterator(raw_iterator);
     iterator->SeekToFirst();
     if (!iterator->Valid()) {
-      return tensorflow::Status(
-          static_cast<tensorflow::errors::Code>(absl::StatusCode::kInternal),
-          "Unexpected immediately-invalid iterator. "
-          "Expected table to iterator to have at least a "
-          "single entry (metadata)");
+      return absl::Status(absl::StatusCode::kInternal,
+                          "Unexpected immediately-invalid iterator. "
+                          "Expected table to iterator to have at least a "
+                          "single entry (metadata)");
     }
     if (iterator->key() != kSavedTensorSlicesKey) {
-      return tensorflow::Status(
-          static_cast<tensorflow::errors::Code>(absl::StatusCode::kInternal),
+      return absl::Status(
+          absl::StatusCode::kInternal,
           absl::StrCat("Expected table iterator to have an initial metadata "
                        "entry with key `",
                        kSavedTensorSlicesKey, "`, found key `", iterator->key(),
@@ -470,9 +475,8 @@ tensorflow::Status LoadAndMergeAppendedSlices(const std::string& filename) {
     }
     for (const tensorflow::SavedSliceMeta& slice_meta : sts.meta().tensor()) {
       if (slices_added.find(slice_meta.name()) != slices_added.end()) {
-        return tensorflow::Status(
-            // Remove the cast after TF 2.12 is released and used in FCP.
-            static_cast<tsl::errors::Code>(absl::StatusCode::kInvalidArgument),
+        return absl::Status(
+            absl::StatusCode::kInvalidArgument,
             absl::StrCat(
                 "Attempted to merge two checkpoint entries for slice name: `",
                 slice_meta.name(), "`. Only one entry per name is permitted."));
@@ -509,7 +513,7 @@ tensorflow::Status LoadAndMergeAppendedSlices(const std::string& filename) {
   int64_t resulting_file_size;
   TF_RETURN_WITH_CONTEXT_IF_ERROR(builder->Finish(&resulting_file_size),
                                   "Finishing TensorSliceWriter::Builder");
-  return tensorflow::OkStatus();
+  return absl::OkStatus();
 }
 
 ABSL_CONST_INIT absl::Mutex append_mutex(absl::kConstInit);
@@ -536,12 +540,12 @@ class AppendSlicesOp : public OpKernel {
           // into the temporary target location.
           tensorflow::tstring original_filename =
               context->input(0).scalar<tensorflow::tstring>()();
-          tensorflow::Status status = tensorflow::Env::Default()->RenameFile(
+          absl::Status status = tensorflow::Env::Default()->RenameFile(
               original_filename, target_filename);
           if (status.ok()) {
             VLOG(1) << "Appending to existing file " << original_filename
                     << " via move to temporary location " << target_filename;
-          } else if (status.code() == tensorflow::error::NOT_FOUND) {
+          } else if (status.code() == absl::StatusCode::kNotFound) {
             VLOG(1) << "Appending to new file " << original_filename
                     << " in temporary location " << target_filename;
           } else {

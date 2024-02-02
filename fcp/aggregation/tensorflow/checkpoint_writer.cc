@@ -16,17 +16,19 @@
 
 #include "fcp/aggregation/tensorflow/checkpoint_writer.h"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/tensorflow/status.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_slice.h"
 #include "tensorflow/core/platform/tstring.h"
+#include "tensorflow/core/util/tensor_slice_writer.h"
 
 namespace fcp::aggregation::tensorflow {
 
@@ -42,15 +44,17 @@ tf::TensorShape ConvertShape(const TensorShape& shape) {
 }
 
 template <typename T>
-tf::Status AddTensorSlice(tf::checkpoint::TensorSliceWriter* writer,
-                          const std::string& name, const tf::TensorShape& shape,
-                          const tf::TensorSlice& slice, const Tensor& tensor) {
+absl::Status AddTensorSlice(tf::checkpoint::TensorSliceWriter* writer,
+                            const std::string& name,
+                            const tf::TensorShape& shape,
+                            const tf::TensorSlice& slice,
+                            const Tensor& tensor) {
   return writer->Add<T>(name, shape, slice,
                         static_cast<const T*>(tensor.data().data()));
 }
 
 template <>
-tf::Status AddTensorSlice<string_view>(
+absl::Status AddTensorSlice<string_view>(
     tf::checkpoint::TensorSliceWriter* writer, const std::string& name,
     const tf::TensorShape& shape, const tf::TensorSlice& slice,
     const Tensor& tensor) {
@@ -78,15 +82,13 @@ absl::Status CheckpointWriter::Add(const std::string& tensor_name,
   tf::TensorSlice tf_slice(tf_shape.dims());
   FCP_CHECK(tensor.is_dense())
       << "Only dense tensors with one slice are supported";
-  tf::Status tf_status;
+  absl::Status tf_status;
   DTYPE_CASES(tensor.dtype(), T,
               tf_status = AddTensorSlice<T>(&tensorflow_writer_, tensor_name,
                                             tf_shape, tf_slice, tensor));
-  return ConvertFromTensorFlowStatus(tf_status);
+  return tf_status;
 }
 
-absl::Status CheckpointWriter::Finish() {
-  return ConvertFromTensorFlowStatus(tensorflow_writer_.Finish());
-}
+absl::Status CheckpointWriter::Finish() { return tensorflow_writer_.Finish(); }
 
 }  // namespace fcp::aggregation::tensorflow

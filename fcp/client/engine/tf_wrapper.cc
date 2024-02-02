@@ -19,13 +19,22 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "google/protobuf/any.pb.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/synchronization/mutex.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/interruptible_runner.h"
+#include "fcp/client/log_manager.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/public/session.h"
+#include "tensorflow/core/public/session_options.h"
 
 namespace fcp {
 namespace client {
@@ -92,8 +101,7 @@ absl::StatusOr<std::unique_ptr<TensorFlowWrapper>> TensorFlowWrapper::Create(
   FCP_ASSIGN_OR_RETURN(session_options.config,
                        InitializeConfigProto(config_proto));
 
-  tensorflow::Status status =
-      tensorflow::NewSession(session_options, &session_ptr);
+  absl::Status status = tensorflow::NewSession(session_options, &session_ptr);
   if (!status.ok()) {
     return ToFcpStatus(status, "Error in tensorflow::NewSession()");
   }
@@ -131,11 +139,11 @@ absl::StatusOr<std::unique_ptr<TensorFlowWrapper>> TensorFlowWrapper::Create(
 
 TensorFlowWrapper::~TensorFlowWrapper() { FCP_CHECK(CloseAndRelease().ok()); }
 
-absl::Status TensorFlowWrapper::ToFcpStatus(tensorflow::Status s,
+absl::Status TensorFlowWrapper::ToFcpStatus(const absl::Status& s,
                                             const std::string& message_prefix) {
   if (s.ok()) {
     return absl::OkStatus();
-  } else if (s.code() == tensorflow::error::OUT_OF_RANGE) {
+  } else if (s.code() == absl::StatusCode::kOutOfRange) {
     return absl::OutOfRangeError("");
   } else {
     return absl::InvalidArgumentError(
@@ -152,8 +160,8 @@ absl::Status TensorFlowWrapper::Run(
 
   auto tensorflow_runnable = [&inputs, &output_tensor_names, &target_node_names,
                               &outputs, this]() -> absl::Status {
-    tensorflow::Status status = this->session_->Run(inputs, output_tensor_names,
-                                                    target_node_names, outputs);
+    absl::Status status = this->session_->Run(inputs, output_tensor_names,
+                                              target_node_names, outputs);
     if (!status.ok()) {
       return ToFcpStatus(status, "Error in Session::Run()");
     }

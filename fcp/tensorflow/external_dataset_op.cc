@@ -14,18 +14,29 @@
  * limitations under the License.
  */
 
+#include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/types/span.h"
 #include "fcp/base/random_token.h"
 #include "fcp/tensorflow/external_dataset.h"
-#include "fcp/tensorflow/status.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/dataset.h"
 #include "tensorflow/core/framework/op.h"
-#include "tensorflow/core/framework/shape_inference.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/op_requires.h"
+#include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/platform/strcat.h"
+#include "tensorflow/core/platform/tstring.h"
 #include "tensorflow/core/public/version.h"
 
 namespace fcp {
@@ -74,11 +85,11 @@ class ExternalDatasetOp : public tensorflow::data::DatasetOpKernel {
 
     std::shared_ptr<ExternalDatasetProvider> provider =
         *std::move(maybe_provider);
-    StatusOr<std::unique_ptr<ExternalDataset>> maybe_dataset =
+    absl::StatusOr<std::unique_ptr<ExternalDataset>> maybe_dataset =
         provider->MakeDataset(selector_str);
     // The provider might not like the given selector.
     if (!maybe_dataset.ok()) {
-      ctx->SetStatus(ConvertToTensorFlowStatus(maybe_dataset.status()));
+      ctx->SetStatus(maybe_dataset.status());
       return;
     }
 
@@ -121,25 +132,25 @@ class ExternalDatasetOp : public tensorflow::data::DatasetOpKernel {
       return "ExternalDatasetOp::Dataset";
     }
 
-    tensorflow::Status InputDatasets(
+    absl::Status InputDatasets(
         std::vector<const DatasetBase*>* inputs) const override {
       // ExternalDatast has no input datasets, so just return OK.
-      return tensorflow::OkStatus();
+      return absl::OkStatus();
     }
 
 // The `DatasetBase::CheckExternalState()` method was introduced on 8/7/2019. We
 // use the `TF_GRAPH_DEF_VERSION` value (which is updated daily) to determine if
 // we should add its override.
 #if TF_GRAPH_DEF_VERSION > 125
-    tensorflow::Status CheckExternalState() const override {
-      return tensorflow::OkStatus();
+    absl::Status CheckExternalState() const override {
+      return absl::OkStatus();
     }
 #endif
 
    protected:
-    tensorflow::Status AsGraphDefInternal(
-        tensorflow::data::SerializationContext* ctx, DatasetGraphDefBuilder* b,
-        tensorflow::Node** output) const override {
+    absl::Status AsGraphDefInternal(tensorflow::data::SerializationContext* ctx,
+                                    DatasetGraphDefBuilder* b,
+                                    tensorflow::Node** output) const override {
       return ::tensorflow::errors::Unimplemented(
           DebugString(), " does not support serialization.");
     }
@@ -151,11 +162,10 @@ class ExternalDatasetOp : public tensorflow::data::DatasetOpKernel {
                         std::unique_ptr<ExternalDatasetIterator> stub)
           : DatasetIterator<Dataset>(params), stub_(std::move(stub)) {}
 
-      tensorflow::Status GetNextInternal(
-          tensorflow::data::IteratorContext* ctx,
-          std::vector<tensorflow::Tensor>* out_tensors,
-          bool* end_of_sequence) override {
-        StatusOr<std::string> maybe_element;
+      absl::Status GetNextInternal(tensorflow::data::IteratorContext* ctx,
+                                   std::vector<tensorflow::Tensor>* out_tensors,
+                                   bool* end_of_sequence) override {
+        absl::StatusOr<std::string> maybe_element;
         {
           absl::MutexLock _(&mu_);
           maybe_element = stub_->GetNext();
@@ -171,19 +181,19 @@ class ExternalDatasetOp : public tensorflow::data::DatasetOpKernel {
 
           *end_of_sequence = false;
           out_tensors->push_back(std::move(element_tensor));
-          return tensorflow::OkStatus();
+          return absl::OkStatus();
         } else {
           *end_of_sequence = true;
-          if (maybe_element.status().code() == StatusCode::kOutOfRange) {
-            return tensorflow::OkStatus();
+          if (maybe_element.status().code() == absl::StatusCode::kOutOfRange) {
+            return absl::OkStatus();
           } else {
-            return ConvertToTensorFlowStatus(maybe_element.status());
+            return maybe_element.status();
           }
         }
       }
 
      protected:
-      tensorflow::Status SaveInternal(
+      absl::Status SaveInternal(
 // `::tensorflow::data::SerializationContext` argument was added on
 // 2020-03-17 when `TF_GRAPH_DEF_VERSION` was defined to 343.
 #if TF_GRAPH_DEF_VERSION > 343
@@ -193,7 +203,7 @@ class ExternalDatasetOp : public tensorflow::data::DatasetOpKernel {
         return ::tensorflow::errors::Unimplemented(
             "Save / Restore of an ExternalDataset iterator is not supported");
       }
-      tensorflow::Status RestoreInternal(
+      absl::Status RestoreInternal(
           tensorflow::data::IteratorContext* ctx,
           tensorflow::data::IteratorStateReader* reader) override {
         return ::tensorflow::errors::Unimplemented(

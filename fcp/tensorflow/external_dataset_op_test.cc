@@ -29,23 +29,33 @@
 #include <fcntl.h>
 #include <stdint.h>
 
+#include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "fcp/base/monitoring.h"
+#include "fcp/base/random_token.h"
 #include "fcp/tensorflow/external_dataset.h"
 #include "fcp/tensorflow/test_selector.pb.h"
-#include "google/protobuf/io/zero_copy_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl.h"
+#include "google/protobuf/text_format.h"
 #include "tensorflow/core/example/example.pb.h"
 #include "tensorflow/core/example/feature_util.h"
 #include "tensorflow/core/framework/graph.pb.h"
 #include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_testutil.h"
+#include "tensorflow/core/platform/tstring.h"
 #include "tensorflow/core/protobuf/error_codes.pb.h"
 #include "tensorflow/core/public/session.h"
+#include "tensorflow/core/public/session_options.h"
+#include "tensorflow/tsl/platform/status.h"
 
 namespace fcp {
 
@@ -89,13 +99,13 @@ std::unique_ptr<tensorflow::Session> PrepareExampleGraphSession() {
   {
     tensorflow::SessionOptions options;
     tensorflow::Session* raw_session = nullptr;
-    tensorflow::Status session_new_status =
+    absl::Status session_new_status =
         tensorflow::NewSession(options, &raw_session);
     TF_CHECK_OK(session_new_status);
     session = std::unique_ptr<tensorflow::Session>(raw_session);
   }
 
-  tensorflow::Status graph_build_status = session->Create(graph);
+  absl::Status graph_build_status = session->Create(graph);
   TF_CHECK_OK(graph_build_status);
   return session;
 }
@@ -112,18 +122,16 @@ std::string SerializeExample(int64_t value) {
   return serialized;
 }
 
-tensorflow::Status RunSession(tensorflow::Session* session,
-                              RandomToken dataset_token,
-                              tensorflow::Tensor selector,
-                              tensorflow::Tensor* output) {
+absl::Status RunSession(tensorflow::Session* session, RandomToken dataset_token,
+                        tensorflow::Tensor selector,
+                        tensorflow::Tensor* output) {
   auto token_tensor =
       tensorflow::test::AsScalar<tensorflow::tstring>(dataset_token.ToString());
 
   std::vector<tensorflow::Tensor> outputs;
-  tensorflow::Status run_status =
-      session->Run({{kTokenPlaceholderName, token_tensor},
-                    {kSelectorPlaceholderName, selector}},
-                   {kOutputName}, {}, &outputs);
+  absl::Status run_status = session->Run({{kTokenPlaceholderName, token_tensor},
+                                          {kSelectorPlaceholderName, selector}},
+                                         {kOutputName}, {}, &outputs);
 
   if (run_status.ok() && output) {
     FCP_CHECK(outputs.size() == 1);
@@ -133,10 +141,9 @@ tensorflow::Status RunSession(tensorflow::Session* session,
   return run_status;
 }
 
-tensorflow::Status RunSession(tensorflow::Session* session,
-                              RandomToken dataset_token,
-                              TestSelector const& selector,
-                              tensorflow::Tensor* output) {
+absl::Status RunSession(tensorflow::Session* session, RandomToken dataset_token,
+                        TestSelector const& selector,
+                        tensorflow::Tensor* output) {
   std::string selector_str;
   FCP_CHECK(selector.SerializeToString(&selector_str));
   auto selector_tensor =
@@ -148,7 +155,7 @@ tensorflow::Tensor RunSessionAndGetOutput(tensorflow::Session* session,
                                           RandomToken dataset_token,
                                           TestSelector const& selector) {
   tensorflow::Tensor output;
-  tensorflow::Status run_status =
+  absl::Status run_status =
       RunSession(session, dataset_token, selector, &output);
   TF_CHECK_OK(run_status);
   return output;
@@ -240,7 +247,7 @@ TEST(ExternalDatasetOpTest, RunExampleGraph) {
   // Default selector (no filtering)
   TestSelector selector;
 
-  tensorflow::Tensor expected = tensorflow::test::AsTensor<tensorflow::int64>(
+  tensorflow::Tensor expected = tensorflow::test::AsTensor<int64_t>(
       {123 + 456 + 789}, tensorflow::TensorShape({1}));
 
   auto stub = std::make_shared<TestDatasetProvider>(std::move(examples));
@@ -250,7 +257,7 @@ TEST(ExternalDatasetOpTest, RunExampleGraph) {
   tensorflow::Tensor output =
       RunSessionAndGetOutput(session.get(), stub_reg.token(), selector);
 
-  tensorflow::test::ExpectTensorEqual<tensorflow::int64>(output, expected);
+  tensorflow::test::ExpectTensorEqual<int64_t>(output, expected);
 }
 
 TEST(ExternalDatasetOpTest, RunExampleGraph_SelectorFilter) {
@@ -261,7 +268,7 @@ TEST(ExternalDatasetOpTest, RunExampleGraph_SelectorFilter) {
   selector.mutable_upper_inclusive()->set_value(1023);
 
   // Expecting some of the examples to be skipped, due to the filter.
-  tensorflow::Tensor expected = tensorflow::test::AsTensor<tensorflow::int64>(
+  tensorflow::Tensor expected = tensorflow::test::AsTensor<int64_t>(
       {456 + 789}, tensorflow::TensorShape({1}));
 
   auto stub = std::make_shared<TestDatasetProvider>(std::move(examples));
@@ -271,18 +278,15 @@ TEST(ExternalDatasetOpTest, RunExampleGraph_SelectorFilter) {
   tensorflow::Tensor output =
       RunSessionAndGetOutput(session.get(), stub_reg.token(), selector);
 
-  tensorflow::test::ExpectTensorEqual<tensorflow::int64>(output, expected);
+  tensorflow::test::ExpectTensorEqual<int64_t>(output, expected);
 }
 
 TEST(ExternalDatasetOpTest, TokenNotFound) {
   TestSelector selector;
   auto session = PrepareExampleGraphSession();
-  tensorflow::Status status =
+  absl::Status status =
       RunSession(session.get(), RandomToken::Generate(), selector, nullptr);
-  // Remove the cast after TF 2.12 is released and used in FCP.
-  EXPECT_THAT(
-      status.code(),
-      Eq(static_cast<tsl::errors::Code>(absl::StatusCode::kInvalidArgument)));
+  EXPECT_THAT(status.code(), Eq(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(ExternalDatasetOpTest, FailingIterator) {
@@ -292,9 +296,9 @@ TEST(ExternalDatasetOpTest, FailingIterator) {
   TestSelector selector;
 
   auto session = PrepareExampleGraphSession();
-  tensorflow::Status status =
+  absl::Status status =
       RunSession(session.get(), stub_reg.token(), selector, nullptr);
-  EXPECT_THAT(status.code(), Eq(tensorflow::error::NOT_FOUND));
+  EXPECT_THAT(status.code(), Eq(absl::StatusCode::kNotFound));
 }
 
 TEST(ExternalDatasetOpTest, RunExampleGraph_InvalidSelector) {
@@ -309,12 +313,9 @@ TEST(ExternalDatasetOpTest, RunExampleGraph_InvalidSelector) {
   auto stub_reg = ExternalDatasetProviderRegistry::Register(stub);
 
   auto session = PrepareExampleGraphSession();
-  tensorflow::Status status =
+  absl::Status status =
       RunSession(session.get(), stub_reg.token(), bad_selector_tensor, nullptr);
-  // Remove the cast after TF 2.12 is released and used in FCP.
-  EXPECT_THAT(
-      status.code(),
-      Eq(static_cast<tsl::errors::Code>(absl::StatusCode::kInvalidArgument)));
+  EXPECT_THAT(status.code(), Eq(absl::StatusCode::kInvalidArgument));
 }
 
 }  // namespace fcp

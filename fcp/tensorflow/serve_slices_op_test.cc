@@ -20,6 +20,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "fcp/tensorflow/serve_slices_registry.h"
@@ -76,13 +77,13 @@ std::unique_ptr<tensorflow::Session> PrepareExampleGraphSession() {
   {
     tensorflow::SessionOptions options;
     tensorflow::Session* raw_session = nullptr;
-    tensorflow::Status session_new_status =
+    absl::Status session_new_status =
         tensorflow::NewSession(options, &raw_session);
     TF_CHECK_OK(session_new_status);
     session = std::unique_ptr<tensorflow::Session>(raw_session);
   }
 
-  tensorflow::Status graph_build_status = session->Create(graph);
+  absl::Status graph_build_status = session->Create(graph);
   TF_CHECK_OK(graph_build_status);
   return session;
 }
@@ -103,10 +104,10 @@ class ServeSlicesOpTest : public ::testing::Test {
   //
   // Outputs:
   //   The status of the `session.Run` invocation.
-  tensorflow::Status RunSession(tensorflow::Tensor callback_token,
-                                tensorflow::Tensor& served_at_id_out) {
+  absl::Status RunSession(tensorflow::Tensor callback_token,
+                          tensorflow::Tensor& served_at_id_out) {
     std::vector<tensorflow::Tensor> outputs;
-    tensorflow::Status run_status =
+    absl::Status run_status =
         session_->Run({{kCallbackTokenPlaceholderName, callback_token}},
                       {kServedAtTensorName}, {}, &outputs);
 
@@ -164,14 +165,11 @@ TEST_F(ServeSlicesOpTest, SessionRunFailsOnMissingCallback) {
   }
   tensorflow::Tensor callback_token_tensor(callback_token->ToString());
   tensorflow::Tensor served_at_id_out;
-  tensorflow::Status status =
-      RunSession(callback_token_tensor, served_at_id_out);
+  absl::Status status = RunSession(callback_token_tensor, served_at_id_out);
   // Remove the cast after TF 2.12 is released and used in FCP.
-  EXPECT_THAT(
-      status,
-      tensorflow::testing::StatusIs(
-          static_cast<tsl::errors::Code>(absl::StatusCode::kInvalidArgument),
-          HasSubstr("No `ServeSlices` callback found")));
+  EXPECT_THAT(status, tensorflow::testing::StatusIs(
+                          absl::StatusCode::kInvalidArgument,
+                          HasSubstr("No `ServeSlices` callback found")));
 }
 
 }  // namespace

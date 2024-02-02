@@ -16,13 +16,15 @@
 #include <string>
 
 #include "google/protobuf/any.pb.h"
+#include "absl/status/status.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/dataset.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/op_requires.h"
 #include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/platform/tstring.h"
 
 namespace fcp {
 
@@ -74,10 +76,8 @@ class ExampleSelectorFuserOp : public OpKernel {
     ExampleSelector example_selector;
     if (!example_selector.ParseFromString(
             std::string(example_selector_str.data()))) {
-      ctx->SetStatus(tensorflow::Status(
-          // Remove the cast after TF 2.12 is released and used in FCP.
-          static_cast<tsl::errors::Code>(absl::StatusCode::kInvalidArgument),
-          tensorflow::StringPiece("Cannot parse ExampleSelector")));
+      ctx->SetStatus(absl::Status(absl::StatusCode::kInvalidArgument,
+                                  "Cannot parse ExampleSelector"));
       return;
     }
     example_selector.mutable_resumption_token()->set_type_url(

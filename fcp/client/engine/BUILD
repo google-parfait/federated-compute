@@ -83,7 +83,6 @@ cc_library(
         "//fcp/client:simple_task_environment",
         "//fcp/client/opstats:opstats_logger",
         "//fcp/protos:plan_cc_proto",
-        "//fcp/tensorflow:status",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -139,11 +138,15 @@ cc_library(
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interfaces",
         "//fcp/client:interruptible_runner",
+        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
         "@org_tensorflow//tensorflow/core:core_cpu",
+        "@org_tensorflow//tensorflow/core:framework",
     ],
 )
 

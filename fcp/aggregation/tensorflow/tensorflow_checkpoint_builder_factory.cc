@@ -32,7 +32,6 @@
 #include "fcp/aggregation/protocol/checkpoint_builder.h"
 #include "fcp/aggregation/tensorflow/checkpoint_writer.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/tensorflow/status.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/platform/status.h"
@@ -62,20 +61,19 @@ class TensorflowCheckpointBuilder : public CheckpointBuilder {
 
     // Read the checkpoints contents from the file.
     std::unique_ptr<::tensorflow::RandomAccessFile> file;
-    FCP_RETURN_IF_ERROR(ConvertFromTensorFlowStatus(
-        Env::Default()->NewRandomAccessFile(filename_, &file)));
+    FCP_RETURN_IF_ERROR(Env::Default()->NewRandomAccessFile(filename_, &file));
 
     absl::Cord output;
     for (;;) {
       char scratch[4096];
       absl::string_view read_result;
-      ::tensorflow::Status status =
+      absl::Status status =
           file->Read(output.size(), sizeof(scratch), &read_result, scratch);
       output.Append(read_result);
-      if (status.code() == ::tensorflow::error::OUT_OF_RANGE) {
+      if (status.code() == absl::StatusCode::kOutOfRange) {
         return output;
       } else if (!status.ok()) {
-        return ConvertFromTensorFlowStatus(status);
+        return status;
       }
     }
   }

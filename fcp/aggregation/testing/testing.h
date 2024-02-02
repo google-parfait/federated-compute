@@ -28,6 +28,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "fcp/aggregation/core/agg_vector.h"
@@ -63,8 +64,8 @@ tf::Tensor CreateStringTfTensor(std::initializer_list<int64_t> dim_sizes,
                                 std::initializer_list<string_view> values);
 
 // Wrapper around tf::ops::Save that sets up and runs the op.
-tf::Status CreateTfCheckpoint(tf::Input filename, tf::Input tensor_names,
-                              tf::InputList tensors);
+absl::Status CreateTfCheckpoint(tf::Input filename, tf::Input tensor_names,
+                                tf::InputList tensors);
 
 // Returns a summary of the checkpoint as a map of tensor names and values.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>

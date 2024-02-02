@@ -26,6 +26,7 @@
 #include "gtest/gtest.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/memory/memory.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "fcp/aggregation/core/datatype.h"
@@ -35,7 +36,6 @@
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
-#include "fcp/tensorflow/status.h"
 #include "fcp/testing/testing.h"
 #include "tensorflow/c/checkpoint_reader.h"
 #include "tensorflow/c/tf_status.h"
@@ -140,8 +140,8 @@ tf::Tensor CreateStringTfTensor(std::initializer_list<int64_t> dim_sizes,
   return tensor;
 }
 
-tf::Status CreateTfCheckpoint(tf::Input filename, tf::Input tensor_names,
-                              tf::InputList tensors) {
+absl::Status CreateTfCheckpoint(tf::Input filename, tf::Input tensor_names,
+                                tf::InputList tensors) {
   tf::Scope scope = tf::Scope::NewRootScope();
 
   tf::ops::Save save(scope, std::move(filename), std::move(tensor_names),
@@ -162,15 +162,13 @@ SummarizeCheckpoint(const absl::Cord& checkpoint) {
 
   TF_StatusPtr tf_status(TF_NewStatus());
   auto reader = std::make_unique<CheckpointReader>(filename, tf_status.get());
-  FCP_RETURN_IF_ERROR(
-      ConvertFromTensorFlowStatus(StatusFromTF_Status(tf_status.get())));
+  FCP_RETURN_IF_ERROR(StatusFromTF_Status(tf_status.get()));
 
   absl::flat_hash_map<std::string, std::string> tensors;
   for (const auto& [name, shape] : reader->GetVariableToShapeMap()) {
     std::unique_ptr<::tensorflow::Tensor> tensor;
     reader->GetTensor(name, &tensor, tf_status.get());
-    FCP_RETURN_IF_ERROR(
-        ConvertFromTensorFlowStatus(StatusFromTF_Status(tf_status.get())));
+    FCP_RETURN_IF_ERROR(StatusFromTF_Status(tf_status.get()));
     tensors[name] = tensor->SummarizeValue(/*max_entries=*/10);
   }
   return tensors;

@@ -16,11 +16,16 @@
 
 #include "fcp/tensorflow/testing/tf_helper.h"
 
+#include "gtest/gtest.h"
+#include "absl/status/status.h"
+#include "absl/strings/cord.h"
+#include "tensorflow/cc/framework/scope.h"
+
 namespace fcp {
 
 absl::Cord CreateGraph(tensorflow::Scope* root) {
   tensorflow::GraphDef def;
-  tensorflow::Status to_graph_status = root->ToGraphDef(&def);
+  absl::Status to_graph_status = root->ToGraphDef(&def);
   EXPECT_TRUE(to_graph_status.ok()) << to_graph_status;
   // TODO(team): Use SerializeAsCord when available.
   return absl::Cord(def.SerializeAsString());

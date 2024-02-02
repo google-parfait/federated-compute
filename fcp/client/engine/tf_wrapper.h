@@ -90,7 +90,7 @@ class TensorFlowWrapper {
   //   that the plan decided to abort, e.g. because of convergence)
   // Other TensorFlow status -> absl INVALID_ARGUMENT status with error
   // message being message_prefix + TensorFlow status code + error message.
-  static absl::Status ToFcpStatus(tensorflow::Status s,
+  static absl::Status ToFcpStatus(const absl::Status& s,
                                   const std::string& message_prefix);
 
   std::unique_ptr<tensorflow::Session> session_;

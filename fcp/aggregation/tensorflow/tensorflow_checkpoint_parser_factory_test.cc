@@ -27,7 +27,6 @@
 #include "fcp/aggregation/protocol/checkpoint_parser.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/platform.h"
-#include "fcp/tensorflow/status.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp::aggregation::tensorflow {
@@ -35,8 +34,8 @@ namespace {
 
 TEST(TensorflowCheckpointParserFactoryTest, ReadCheckpoint) {
   std::string filename = TemporaryTestFile(".ckpt");
-  ASSERT_OK(ConvertFromTensorFlowStatus(CreateTfCheckpoint(
-      filename, {"t1", "t2"}, {{1.0f, 2.0f, 3.0f, 4.0f}, {5.0f, 6.0f}})));
+  ASSERT_OK(CreateTfCheckpoint(filename, {"t1", "t2"},
+                               {{1.0f, 2.0f, 3.0f, 4.0f}, {5.0f, 6.0f}}));
   absl::StatusOr<absl::Cord> checkpoint = ReadFileToCord(filename);
   ASSERT_OK(checkpoint.status());
 
