@@ -256,3 +256,12 @@ http_archive(
     strip_prefix = "oak-0acf3f6dc0af2035d40884fe1258b1e0e7db5488",
     url = "https://github.com/project-oak/oak/archive/0acf3f6dc0af2035d40884fe1258b1e0e7db5488.tar.gz",
 )
+
+http_archive(
+    name = "libcbor",
+    build_file = "//third_party:libcbor.BUILD.bzl",
+    patches = ["//fcp/patches:libcbor_configuration.patch"],
+    sha256 = "9fec8ce3071d5c7da8cda397fab5f0a17a60ca6cbaba6503a09a47056a53a4d7",
+    strip_prefix = "libcbor-0.10.2",
+    urls = ["https://github.com/PJK/libcbor/archive/refs/tags/v0.10.2.zip"],
+)
