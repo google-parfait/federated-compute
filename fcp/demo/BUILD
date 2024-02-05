@@ -43,8 +43,8 @@ py_library(
         "//fcp/aggregation/tensorflow/python:aggregation_protocols",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+        "@com_google_googleapis//google/longrunning:operations_py_proto",
         "@com_google_googleapis//google/rpc:code_py_proto",
-        "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
     ],
 )
 
@@ -293,7 +293,7 @@ py_test(
         "//fcp/protos:population_eligibility_spec_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
         "//fcp/tensorflow:external_dataset_py",
-        "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
+        "@com_google_googleapis//google/longrunning:operations_py_proto",
     ],
 )
 
@@ -306,8 +306,8 @@ py_library(
         ":http_actions",
         "//fcp/protos:population_eligibility_spec_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+        "@com_google_googleapis//google/longrunning:operations_py_proto",
         "@com_google_googleapis//google/rpc:code_py_proto",
-        "@googleapis_for_longrunning//google/longrunning:longrunning_py_proto",
     ],
 )
 

@@ -132,6 +132,9 @@ http_archive(
         # download versions of LLVM pointed to by non-HEAD TensorFlow.
         # TODO(team): Remove this patch when resolved.
         "//fcp/patches:tensorflow_llvm_url.patch",
+        # The version of googleapis imported by TensorFlow 2.14 doesn't provide
+        # `py_proto_library` targets for //google/longrunning.
+        "//fcp/patches:tensorflow_googleapis.patch",
         # This patch removes tf_custom_op_py_library's dependency on the Bazel
         # version of TensorFlow since for all of our Python code, we rely on a
         # system-provided TensorFlow.
@@ -236,18 +239,6 @@ maven_install(
         "https://maven.google.com",
         "https://repo1.maven.org/maven2",
     ],
-)
-
-# The version of googleapis imported by TensorFlow doesn't provide
-# `py_proto_library` targets for //google/longrunning.
-http_archive(
-    name = "googleapis_for_longrunning",
-    patches = [
-        "//fcp/patches:googleapis_longrunning.patch",
-    ],
-    sha256 = "c1db0b022cdfc5b5ce5f05b0f00568e2d927c9890429ec9c35bda12f52d93065",
-    strip_prefix = "googleapis-2d8030c4102f97bc6be4ddab74c7cbfe88d8c016",
-    url = "https://github.com/googleapis/googleapis/archive/2d8030c4102f97bc6be4ddab74c7cbfe88d8c016.tar.gz",
 )
 
 http_archive(
