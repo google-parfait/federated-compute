@@ -12,5 +12,10 @@ exports_files(["serve_slices_registry.cc"])
 py_test(
     name = "serve_slices_registry_test",
     srcs = ["serve_slices_registry_test.py"],
-    deps = ["//fcp/tensorflow:serve_slices_py"],
+    deps = [
+        "//fcp/tensorflow:serve_slices_py",
+        "@pypi_absl_py//:pkg",
+        "@pypi_numpy//:pkg",
+        "@pypi_tensorflow//:pkg",
+    ],
 )

@@ -93,6 +93,9 @@ build --javacopt="-verbose"
 # See https://github.com/bazelbuild/rules_python/issues/330.
 build --incompatible_default_to_explicit_init_py
 
+# TFF typechecks are currently failing when using the cpp implementation.
+test --test_env=PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+
 build:asan --compilation_mode=dbg
 build:asan --strip=never
 build:asan --copt=-fsanitize=address

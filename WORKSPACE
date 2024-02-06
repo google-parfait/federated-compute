@@ -60,6 +60,34 @@ load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
 bazel_skylib_workspace()
 
 http_archive(
+    name = "rules_python",
+    sha256 = "d71d2c67e0bce986e1c5a7731b4693226867c45bfe0b7c5e0067228a536fc580",
+    strip_prefix = "rules_python-0.29.0",
+    url = "https://github.com/bazelbuild/rules_python/releases/download/0.29.0/rules_python-0.29.0.tar.gz",
+)
+
+load("@rules_python//python:repositories.bzl", "py_repositories")
+
+py_repositories()
+
+load("@rules_python//python:pip.bzl", "package_annotation", "pip_parse")
+load("//fcp/tensorflow/pip_tf:defs.bzl", "TF_ADDITIVE_BUILD_CONTENT")
+
+pip_parse(
+    name = "pypi",
+    annotations = {
+        "tensorflow": package_annotation(
+            additive_build_content = TF_ADDITIVE_BUILD_CONTENT,
+        ),
+    },
+    requirements_lock = "//fcp:requirements.txt",
+)
+
+load("@pypi//:requirements.bzl", "install_deps")
+
+install_deps()
+
+http_archive(
     name = "com_github_grpc_grpc",
     sha256 = "76900ab068da86378395a8e125b5cc43dfae671e09ff6462ddfef18676e2165a",
     strip_prefix = "grpc-1.50.0",
@@ -135,10 +163,9 @@ http_archive(
         # The version of googleapis imported by TensorFlow 2.14 doesn't provide
         # `py_proto_library` targets for //google/longrunning.
         "//fcp/patches:tensorflow_googleapis.patch",
-        # This patch removes tf_custom_op_py_library's dependency on the Bazel
-        # version of TensorFlow since for all of our Python code, we rely on a
-        # system-provided TensorFlow.
-        "//fcp/patches:tensorflow_tf_custom_op_py_library.patch",
+        # This patch replaces tf_gen_op_wrapper_py's dependency on @tensorflow
+        # with @pypi_tensorflow.
+        "//fcp/patches:tensorflow_tf_gen_op_wrapper_py.patch",
         # gRPC v1.48.0-pre1 and later include zconf.h in addition to zlib.h;
         # TensorFlow's build rule for zlib only exports the latter.
         "//fcp/patches:tensorflow_zlib.patch",
@@ -174,13 +201,6 @@ tf_workspace1()
 load("@org_tensorflow//tensorflow:workspace0.bzl", "tf_workspace0")
 
 tf_workspace0()
-
-load("//fcp/tensorflow/system_provided_tf:system_provided_tf.bzl", "system_provided_tf")
-
-system_provided_tf(
-    name = "system_provided_tf",
-)
-
 
 # Cpp ProtoDataStore
 http_archive(

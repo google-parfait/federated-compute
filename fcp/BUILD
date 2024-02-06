@@ -3,6 +3,8 @@
 # which allows to orchestrate decentralized computations across
 # large set of dynamically available nodes (e.g. mobile devices).
 
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+
 package(
     default_visibility = [":internal"],
     licenses = ["notice"],  # Apache 2.0
@@ -19,4 +21,15 @@ package_group(
     packages = [
         "//fcp/...",
     ],
+)
+
+compile_pip_requirements(
+    name = "requirements",
+    timeout = "moderate",
+    src = "requirements.in",
+    extra_args = [
+        "--allow-unsafe",
+        "--resolver=backtracking",
+    ],
+    requirements_txt = "requirements.txt",
 )

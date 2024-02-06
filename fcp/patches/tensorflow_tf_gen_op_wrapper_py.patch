@@ -5,7 +5,7 @@
      if not generated_target_name:
          generated_target_name = name
 -    py_deps = [clean_dep("//tensorflow/python/framework:for_generated_wrappers_v2")]
-+    py_deps = []
++    py_deps = ["@pypi_tensorflow//:pkg"]
      if extra_py_deps:
          py_deps += extra_py_deps
      py_lib_rule(

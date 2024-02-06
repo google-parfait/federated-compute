@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
-load("@system_provided_tf//:system_provided_tf.bzl", "tf_custom_op_library")
+load("//fcp/tensorflow/pip_tf:defs.bzl", "tf_custom_op_library")
 load("@rules_python//python:defs.bzl", "py_binary", "py_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 load("//fcp/tracing:build_defs.bzl", "tracing_schema_cc_library")
@@ -45,6 +45,7 @@ py_test(
     name = "tf_py_smoke_test",
     srcs = ["tf_py_smoke_test.py"],
     python_version = "PY3",
+    deps = ["@pypi_tensorflow//:pkg"],
 )
 
 cc_library(
@@ -256,7 +257,10 @@ tf_custom_op_py_library(
         ":external_dataset_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [":gen_external_dataset_py"],
+    deps = [
+        ":gen_external_dataset_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 # The dataset API isn't really usable from C++, so we generate a GraphDef for
@@ -266,7 +270,10 @@ py_binary(
     testonly = True,
     srcs = ["make_external_dataset_test_graph.py"],
     python_version = "PY3",
-    deps = [":external_dataset_py"],
+    deps = [
+        ":external_dataset_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 genrule(
@@ -371,14 +378,20 @@ tf_custom_op_py_library(
     kernels = [
         ":crc32_op_lib",
     ],
-    deps = [":gen_crc32_py"],
+    deps = [
+        ":gen_crc32_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 py_test(
     name = "crc32_test",
     srcs = ["crc32_test.py"],
     python_version = "PY3",
-    deps = [":crc32_py"],
+    deps = [
+        ":crc32_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 EXAMPLE_SELECTOR_FUSER_OP_SRCS = ["example_selector_fuser_op.cc"]
@@ -427,7 +440,10 @@ tf_custom_op_py_library(
         ":example_selector_fuser_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [":gen_example_selector_fuser_op"],
+    deps = [
+        ":gen_example_selector_fuser_op",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 py_proto_library(
@@ -446,6 +462,7 @@ py_test(
         ":example_selector_fuser_py",
         ":test_selector_py_pb2",
         "//fcp/protos:plan_py_pb2",
+        "@pypi_tensorflow//:pkg",
     ],
 )
 
@@ -535,7 +552,10 @@ tf_custom_op_py_library(
         ":serve_slices_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [":gen_serve_slices_py"],
+    deps = [
+        ":gen_serve_slices_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 # Generate a GraphDef for testing `ServeSlices` using Python.
@@ -544,7 +564,11 @@ py_binary(
     testonly = True,
     srcs = ["make_serve_slices_test_graph.py"],
     python_version = "PY3",
-    deps = [":serve_slices_py"],
+    deps = [
+        ":serve_slices_py",
+        "@pypi_absl_py//:pkg",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 genrule(
@@ -629,7 +653,10 @@ tf_custom_op_py_library(
         ":make_slices_selector_example_selector_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [":gen_make_slices_selector_example_selector_py"],
+    deps = [
+        ":gen_make_slices_selector_example_selector_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 # Test `MakeSlicesSelectorExampleSelector` using Python.
@@ -641,6 +668,7 @@ py_test(
     deps = [
         ":make_slices_selector_example_selector_py",
         "//fcp/protos:plan_py_pb2",
+        "@pypi_tensorflow//:pkg",
     ],
 )
 
@@ -697,7 +725,10 @@ tf_custom_op_py_library(
         ":append_slices_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [":gen_append_slices_py"],
+    deps = [
+        ":gen_append_slices_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 # Test `AppendSlices` and `MergeAppendedSlices` using Python.
@@ -709,6 +740,7 @@ py_test(
     deps = [
         ":append_slices_py",
         ":delete_file_py",
+        "@pypi_tensorflow//:pkg",
     ],
 )
 
@@ -763,7 +795,10 @@ tf_custom_op_py_library(
         ":delete_file_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [":gen_delete_file_py"],
+    deps = [
+        ":gen_delete_file_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 # Test `DeleteFile` using Python.
@@ -772,7 +807,10 @@ py_test(
     testonly = True,
     srcs = ["delete_file_test.py"],
     python_version = "PY3",
-    deps = [":delete_file_py"],
+    deps = [
+        ":delete_file_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 TENSOR_NAME_OP_SRCS = ["tensor_name_op.cc"]
@@ -824,7 +862,10 @@ tf_custom_op_py_library(
         ":tensor_name_op_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [":gen_tensor_name_py"],
+    deps = [
+        ":gen_tensor_name_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 # Test `TensorName` using Python.
@@ -833,7 +874,10 @@ py_test(
     testonly = True,
     srcs = ["tensor_name_test.py"],
     python_version = "PY3",
-    deps = [":tensor_name_py"],
+    deps = [
+        ":tensor_name_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 TASK_ELIGIBILITY_INFO_OPS_SRCS = ["task_eligibility_info_ops.cc"]
@@ -883,7 +927,10 @@ tf_custom_op_py_library(
         ":task_eligibility_info_ops_lib",
     ],
     visibility = ["//visibility:public"],
-    deps = [":gen_task_eligibility_info_ops_py"],
+    deps = [
+        ":gen_task_eligibility_info_ops_py",
+        "@pypi_tensorflow//:pkg",
+    ],
 )
 
 py_test(
@@ -893,6 +940,7 @@ py_test(
     deps = [
         ":task_eligibility_info_ops_py",
         "//fcp/protos:federated_api_py_pb2",
+        "@pypi_tensorflow//:pkg",
     ],
 )
 
@@ -949,6 +997,7 @@ tf_custom_op_py_library(
     deps = [
         ":gen_dictionary_ops_py",
         "//fcp/dictionary:dictionary_py_pb2",
+        "@pypi_tensorflow//:pkg",
     ],
 )
 
@@ -959,5 +1008,8 @@ py_test(
     deps = [
         ":dictionary_ops_py",
         "//fcp/dictionary:dictionary_py_pb2",
+        "@com_google_protobuf//:protobuf_python",
+        "@pypi_absl_py//:pkg",
+        "@pypi_tensorflow//:pkg",
     ],
 )

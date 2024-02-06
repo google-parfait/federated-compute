@@ -34,5 +34,7 @@ py_test(
         "//fcp/aggregation/core:tensor_py_pb2",
         "//fcp/aggregation/protocol:configuration_py_pb2",
         "//fcp/aggregation/protocol:py_pb2",
+        "@pypi_absl_py//:pkg",
+        "@pypi_tensorflow//:pkg",
     ],
 )
