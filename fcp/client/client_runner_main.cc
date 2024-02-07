@@ -54,7 +54,6 @@ ABSL_FLAG(int, sleep_after_round_secs, 3,
 ABSL_FLAG(bool, use_http_federated_compute_protocol, false,
           "Whether to enable the HTTP FederatedCompute protocol instead "
           "of the gRPC FederatedTrainingApi protocol.");
-ABSL_FLAG(bool, use_tflite_training, false, "Whether use TFLite for training.");
 
 static constexpr char kUsageString[] =
     "Stand-alone Federated Client Executable.\n\n"
@@ -113,7 +112,6 @@ int main(int argc, char** argv) {
     fcp::client::FlagsImpl flags;
     flags.set_use_http_federated_compute_protocol(
         absl::GetFlag(FLAGS_use_http_federated_compute_protocol));
-    flags.set_use_tflite_training(absl::GetFlag(FLAGS_use_tflite_training));
 
     auto fl_runner_result = RunFederatedComputation(
         &federated_task_env_deps_impl, &event_publisher, &files_impl,

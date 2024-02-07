@@ -115,8 +115,9 @@ class Flags {
         static_cast<int32_t>(absl::StatusCode::kUnimplemented)};
   }
 
-  // Whether use TFLite for training.
-  virtual bool use_tflite_training() const { return false; }
+  // Whether use TFLite for training. True by default, but can be turned off to
+  // force the legacy TFMobile code path to be used instead.
+  virtual bool use_tflite_training() const { return true; }
 
   // Whether to enable support for downloading plan/initial checkpoint resources
   // via HTTP, while still using gRPC for the main protocol.
