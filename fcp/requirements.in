@@ -20,7 +20,7 @@
 absl-py~=1.4
 attrs~=23.1
 dm-tree~=0.1.8
-protobuf~=3.20
+protobuf>=4.23
 # The TensorFlow version should match what's specified in the WORKSPACE file for
 # C++ targets.
 tensorflow==2.14.0
