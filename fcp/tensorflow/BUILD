@@ -952,6 +952,8 @@ DICTIONARY_OPS_DEPS = [
     "//fcp/dictionary:dictionary_cc_proto",
     "@com_google_absl//absl/status",
     "@com_google_absl//absl/status:statusor",
+    "@com_google_absl//absl/strings",
+    "@org_tensorflow//tensorflow/tsl/platform:tstring",
 ]
 
 cc_library(

@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/dictionary/dictionary.h"
 #include "fcp/dictionary/dictionary.pb.h"
@@ -29,6 +30,7 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/public/version.h"
+#include "tensorflow/tsl/platform/tstring.h"
 
 namespace tf = tensorflow;
 
@@ -169,7 +171,15 @@ class DictionaryLookup : public AbstractDictionaryOp {
     auto ids_flat = ids_tensor->flat<int64_t>();
     const int64_t num_tokens = tokens_flat.size();
     for (int i = 0; i < num_tokens; ++i) {
-      ids_flat(i) = dictionary.TokenToId(tokens_flat(i));
+      tsl::tstring token = tokens_flat(i);
+      if (token.data() == nullptr) {
+        return absl::InternalError(absl::StrCat(
+            "Encountered token with nullptr data(), type: ", token.type(),
+            ", size: ", token.size(), ", capacity: ", token.capacity()));
+      }
+      // This implicitly converts `token` to an `std::string` using the implicit
+      // conversion operator.
+      ids_flat(i) = dictionary.TokenToId(token);
     }
     return absl::OkStatus();
   }
