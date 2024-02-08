@@ -15,13 +15,17 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "absl/cleanup/cleanup.h"
+#include "absl/functional/function_ref.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/confidentialcompute/cose.h"
 #include "openssl/aead.h"
 #include "openssl/base.h"
 #include "openssl/err.h"
@@ -49,17 +53,45 @@ MessageEncryptor::MessageEncryptor()
 absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
     absl::string_view plaintext, absl::string_view recipient_public_key,
     absl::string_view associated_data) const {
-  std::string symmetric_key(EVP_AEAD_key_length(aead_), '\0');
-  RAND_bytes(reinterpret_cast<uint8_t*>(symmetric_key.data()),
-             symmetric_key.size());
+  SymmetricKey symmetric_key{
+      .algorithm = crypto_internal::kAeadAes128GcmSivFixedNonce,
+      .k = std::string(EVP_AEAD_key_length(aead_), '\0'),
+  };
+  RAND_bytes(reinterpret_cast<uint8_t*>(symmetric_key.k.data()),
+             symmetric_key.k.size());
   // Cleanse the memory containing the symmetric key upon exiting the scope so
   // the key cannot be accessed outside this function.
   absl::Cleanup key_cleanup = [&symmetric_key]() {
-    OPENSSL_cleanse(symmetric_key.data(), symmetric_key.size());
+    OPENSSL_cleanse(symmetric_key.k.data(), symmetric_key.k.size());
   };
+
+  // If the recipient public key was a CWT (size > 32), extract the public key.
+  // Also, the full SymmetricKey should be serialized, not just its secret.
+  // TODO: b/313640181 - remove conditional once all keys are structured.
+  std::string wrapping_public_key;
+  std::string serialized_symmetric_key;
+  absl::Cleanup serialized_key_cleanup = [&serialized_symmetric_key]() {
+    OPENSSL_cleanse(serialized_symmetric_key.data(),
+                    serialized_symmetric_key.size());
+  };
+  if (recipient_public_key.size() > EVP_HPKE_MAX_PUBLIC_KEY_LENGTH) {
+    FCP_ASSIGN_OR_RETURN(OkpCwt cwt, OkpCwt::Decode(recipient_public_key));
+    if (!cwt.public_key ||
+        cwt.public_key->algorithm !=
+            crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm ||
+        cwt.public_key->curve != crypto_internal::kX25519) {
+      return absl::InvalidArgumentError("unsupported public key");
+    }
+    wrapping_public_key = std::move(cwt.public_key->x);
+    FCP_ASSIGN_OR_RETURN(serialized_symmetric_key, symmetric_key.Encode());
+  } else {
+    wrapping_public_key = std::string(recipient_public_key);
+    serialized_symmetric_key = symmetric_key.k;
+  }
+
   bssl::UniquePtr<EVP_AEAD_CTX> aead_ctx(EVP_AEAD_CTX_new(
-      aead_, reinterpret_cast<const uint8_t*>(symmetric_key.data()),
-      symmetric_key.size(), EVP_AEAD_DEFAULT_TAG_LENGTH));
+      aead_, reinterpret_cast<const uint8_t*>(symmetric_key.k.data()),
+      symmetric_key.k.size(), EVP_AEAD_DEFAULT_TAG_LENGTH));
   if (aead_ctx == nullptr) {
     return FCP_STATUS(fcp::INTERNAL)
            << "Failed to initialize EVP_AEAD_CTX: "
@@ -82,8 +114,8 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
   FCP_ASSIGN_OR_RETURN(
       crypto_internal::WrapSymmetricKeyResult wrap_symmetric_key_result,
       crypto_internal::WrapSymmetricKey(hpke_kem_, hpke_kdf_, hpke_aead_,
-                                        symmetric_key, recipient_public_key,
-                                        associated_data));
+                                        serialized_symmetric_key,
+                                        wrapping_public_key, associated_data));
 
   return EncryptMessageResult{
       .ciphertext = std::move(ciphertext),
@@ -104,18 +136,33 @@ MessageDecryptor::MessageDecryptor()
       << ERR_reason_error_string(ERR_get_error());
 }
 
-absl::StatusOr<std::string> MessageDecryptor::GetPublicKey() {
+absl::StatusOr<std::string> MessageDecryptor::GetPublicKey(
+    std::optional<absl::FunctionRef<std::string(absl::string_view)>> signer) {
+  OkpCwt cwt{
+      .public_key =
+          OkpKey{
+              .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+              .curve = crypto_internal::kX25519,
+              .x = std::string(EVP_HPKE_MAX_PUBLIC_KEY_LENGTH, '\0'),
+          },
+  };
   size_t public_key_len = 0;
-  std::string public_key(EVP_HPKE_MAX_PUBLIC_KEY_LENGTH, '\0');
-  if (EVP_HPKE_KEY_public_key(hpke_key_.get(),
-                              reinterpret_cast<uint8_t*>(public_key.data()),
-                              &public_key_len, public_key.size()) != 1) {
+  if (EVP_HPKE_KEY_public_key(
+          hpke_key_.get(), reinterpret_cast<uint8_t*>(cwt.public_key->x.data()),
+          &public_key_len, cwt.public_key->x.size()) != 1) {
     return FCP_STATUS(fcp::INTERNAL)
            << "Failed to obtain public key from HPKE public/private keypair: "
            << ERR_reason_error_string(ERR_get_error());
   }
-  public_key.resize(public_key_len);
-  return public_key;
+  cwt.public_key->x.resize(public_key_len);
+
+  if (signer) {
+    FCP_ASSIGN_OR_RETURN(std::string sig_structure,
+                         cwt.BuildSigStructure(/*aad=*/""));
+    cwt.signature = (*signer)(sig_structure);
+    return cwt.Encode();
+  }
+  return std::move(cwt.public_key->x);
 }
 
 absl::StatusOr<std::string> MessageDecryptor::Decrypt(
@@ -133,6 +180,20 @@ absl::StatusOr<std::string> MessageDecryptor::Decrypt(
   absl::Cleanup key_cleanup = [&symmetric_key]() {
     OPENSSL_cleanse(symmetric_key.data(), symmetric_key.size());
   };
+
+  // If the key is too large, assume it's an encoded SymmetricKey.
+  // TODO: b/313640181 - remove conditional once all keys are structured.
+  if (symmetric_key.size() > EVP_AEAD_key_length(aead_)) {
+    FCP_ASSIGN_OR_RETURN(SymmetricKey key, SymmetricKey::Decode(symmetric_key));
+    absl::Cleanup key_cleanup = [&key]() {
+      OPENSSL_cleanse(key.k.data(), key.k.size());
+    };
+    if (key.algorithm != crypto_internal::kAeadAes128GcmSivFixedNonce) {
+      return absl::InvalidArgumentError("unsupported symmetric key algorithm ");
+    }
+    std::swap(symmetric_key, key.k);
+  }
+
   bssl::UniquePtr<EVP_AEAD_CTX> aead_ctx(EVP_AEAD_CTX_new(
       aead_, reinterpret_cast<const uint8_t*>(symmetric_key.data()),
       symmetric_key.size(), EVP_AEAD_DEFAULT_TAG_LENGTH));

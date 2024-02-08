@@ -26,8 +26,10 @@
 #ifndef FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
 #define FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
 
+#include <optional>
 #include <string>
 
+#include "absl/functional/function_ref.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "openssl/base.h"
@@ -48,6 +50,10 @@ struct EncryptMessageResult {
 // symmetric key to be decrypted and used to decrypt the message, and the
 // encapsulated key, which along with the recipient's private key, can be used
 // for decrypting the encrypted symmetric key.
+//
+// IMPORTANT: This class DOES NOT validate the public key passed to Encrypt. If
+// the public key is a CWT, it's the caller's responsibility to verify the
+// signature and claims.
 class MessageEncryptor {
  public:
   MessageEncryptor();
@@ -80,8 +86,14 @@ class MessageDecryptor {
   // returns the key that was previously generated on the first call to this
   // method.
   //
+  // If `signer` is provided, the result will be a signed CBOR Web Token
+  // containing the public key. Otherwise, it'll be the raw public key.
+  // TODO: b/313640181 - make signer required once all keys are structured.
+  //
   // This function must be called before Decrypt.
-  absl::StatusOr<std::string> GetPublicKey();
+  absl::StatusOr<std::string> GetPublicKey(
+      std::optional<absl::FunctionRef<std::string(absl::string_view)>> signer =
+          std::nullopt);
 
   // Decrypts `ciphertext` using a symmetric key produced by decrypting
   // `encrypted_symmetric_key` with the `encapped_key` and the private key
@@ -115,6 +127,18 @@ class MessageDecryptor {
 
 // Helper functions exposed for testing purposes.
 namespace crypto_internal {
+
+// Supported COSE Algorithms; see ../protos/confidentialcompute/cbor_ids.md.
+enum CoseAlgorithm {
+  kHpkeBaseX25519Sha256Aes128Gcm = -65537,
+  kAeadAes128GcmSivFixedNonce = -65538,
+};
+
+// Supported COSE Elliptic Curves; see
+// https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves.
+enum CoseEllipticCurve {
+  kX25519 = 4,
+};
 
 struct WrapSymmetricKeyResult {
   std::string encapped_key;

@@ -77,9 +77,12 @@ cc_library(
     hdrs = ["crypto.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":cose",
         "//fcp/base",
         "@boringssl//:crypto",
         "@com_google_absl//absl/cleanup",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
@@ -89,11 +92,14 @@ cc_test(
     name = "crypto_test",
     srcs = ["crypto_test.cc"],
     deps = [
+        ":cose",
         ":crypto",
         "//fcp/base",
         "//fcp/testing",
         "@boringssl//:crypto",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )
