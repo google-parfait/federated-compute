@@ -6,14 +6,14 @@
 
 There are some basic tools and packages you will need on your machine:
 
-*   Git
-*   Python 3.9 or greater, including `numpy`
+*   Java Development Kit (JDK)
+*   Python 3
 *   libstdc++
 
 For example, on Debian:
 
 ```
-sudo apt install -y git python3 python3-dev python3-distutils python3-numpy libstdc++-10-dev
+sudo apt install -y default-jdk-headless python3 libstdc++-10-dev
 ```
 
 > ⚠️ The project maintainers internally test with Clang only, so support for

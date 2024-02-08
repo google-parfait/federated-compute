@@ -66,10 +66,17 @@ http_archive(
     url = "https://github.com/bazelbuild/rules_python/releases/download/0.29.0/rules_python-0.29.0.tar.gz",
 )
 
-load("@rules_python//python:repositories.bzl", "py_repositories")
+load("@rules_python//python:repositories.bzl", "py_repositories", "python_register_toolchains")
 
 py_repositories()
 
+python_register_toolchains(
+    name = "python",
+    ignore_root_user_error = True,
+    python_version = "3.9",
+)
+
+load("@python//:defs.bzl", "interpreter")
 load("@rules_python//python:pip.bzl", "package_annotation", "pip_parse")
 load("//fcp/tensorflow/pip_tf:defs.bzl", "TF_ADDITIVE_BUILD_CONTENT")
 
@@ -80,6 +87,7 @@ pip_parse(
             additive_build_content = TF_ADDITIVE_BUILD_CONTENT,
         ),
     },
+    python_interpreter_target = interpreter,
     requirements_lock = "//fcp:requirements.txt",
 )
 
@@ -151,7 +159,6 @@ com_google_api_gax_java_repositories()
 # Tensorflow v2.14.0
 http_archive(
     name = "org_tensorflow",
-    patch_tool = "patch",
     patches = [
         # This patch enables googleapi Java and Python proto rules such as
         # @com_google_googleapis//google/rpc:rpc_java_proto.
@@ -169,12 +176,6 @@ http_archive(
         # gRPC v1.48.0-pre1 and later include zconf.h in addition to zlib.h;
         # TensorFlow's build rule for zlib only exports the latter.
         "//fcp/patches:tensorflow_zlib.patch",
-        # TensorFlow has moved to using hermetic Python configs in their OSS
-        # builds (cl/546059481) and now requires a Python toolchain to be
-        # defined in our WORKSPACE file, rather than depending on the
-        # system-installed Python by default. Here we apply a patch to use
-        # system-installed Python instead.
-        "//fcp/patches:python_toolchain.patch",
     ],
     sha256 = "ce357fd0728f0d1b0831d1653f475591662ec5bca736a94ff789e6b1944df19f",
     strip_prefix = "tensorflow-2.14.0",
@@ -222,7 +223,6 @@ http_archive(
 # We use only the http test server.
 http_archive(
     name = "tensorflow_serving",
-    patch_tool = "patch",
     patches = [
         "//fcp/patches:tensorflow_serving.patch",
     ],

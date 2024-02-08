@@ -7,5 +7,5 @@
 -    hdrs = ["zlib.h"],
 +    hdrs = ["zconf.h", "zlib.h"],
      copts = select({
-         "@org_tensorflow//tensorflow:windows": [],
+         "@org_tensorflow//tensorflow/tsl:windows": [],
          "//conditions:default": [
