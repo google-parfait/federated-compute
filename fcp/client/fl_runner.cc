@@ -140,7 +140,9 @@ struct PlanResultAndCheckpointFile {
   explicit PlanResultAndCheckpointFile(engine::PlanResult plan_result)
       : plan_result(std::move(plan_result)) {}
   engine::PlanResult plan_result;
-  std::string checkpoint_file;
+  // The name of the output checkpoint file. Empty if the plan did not produce
+  // an output checkpoint.
+  std::string checkpoint_filename;
 
   PlanResultAndCheckpointFile(PlanResultAndCheckpointFile&&) = default;
   PlanResultAndCheckpointFile& operator=(PlanResultAndCheckpointFile&&) =
@@ -158,7 +160,8 @@ absl::StatusOr<ComputationResults> CreateComputationResults(
     const TensorflowSpec* tensorflow_spec,
     const PlanResultAndCheckpointFile& plan_result_and_checkpoint_file,
     const Flags* flags) {
-  const auto& [plan_result, checkpoint_file] = plan_result_and_checkpoint_file;
+  const auto& [plan_result, checkpoint_filename] =
+      plan_result_and_checkpoint_file;
   if (plan_result.outcome != engine::PlanOutcome::kSuccess) {
     return absl::InvalidArgumentError("Computation failed.");
   }
@@ -225,9 +228,9 @@ absl::StatusOr<ComputationResults> CreateComputationResults(
   } else {
     // Name of the TF checkpoint inside the aggregand map in the Checkpoint
     // protobuf. This field name is ignored by the server.
-    if (!checkpoint_file.empty()) {
+    if (!checkpoint_filename.empty()) {
       FCP_ASSIGN_OR_RETURN(std::string tf_checkpoint,
-                           fcp::ReadFileToString(checkpoint_file));
+                           fcp::ReadFileToString(checkpoint_filename));
       computation_results[std::string(kTensorflowCheckpointAggregand)] =
           std::move(tf_checkpoint);
     }
@@ -572,7 +575,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
         std::move(tflite_inputs), *output_names);
     PlanResultAndCheckpointFile result(std::move(plan_result));
-    result.checkpoint_file = checkpoint_output_filename;
+    result.checkpoint_filename = checkpoint_output_filename;
 
     return result;
   }
@@ -592,7 +595,7 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
       client_plan.tensorflow_config_proto(), std::move(inputs), *output_names);
 
   PlanResultAndCheckpointFile result(std::move(plan_result));
-  result.checkpoint_file = checkpoint_output_filename;
+  result.checkpoint_filename = checkpoint_output_filename;
 
   return result;
 #else
@@ -648,7 +651,7 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().example_query_spec(), checkpoint_output_filename);
   PlanResultAndCheckpointFile result(std::move(plan_result));
-  result.checkpoint_file = checkpoint_output_filename;
+  result.checkpoint_filename = checkpoint_output_filename;
   return result;
 }
 
@@ -1814,22 +1817,43 @@ RunPlanResults RunComputation(
   absl::Time run_plan_start_time = absl::Now();
   NetworkStats run_plan_start_network_stats =
       GetCumulativeNetworkStats(federated_protocol, fedselect_manager);
-  absl::StatusOr<std::string> checkpoint_output_filename =
-      files->CreateTempFile("output", ".ckp");
-  if (!checkpoint_output_filename.ok()) {
-    auto status = checkpoint_output_filename.status();
-    auto message = absl::StrCat(
-        "Could not create temporary output checkpoint file: code: ",
-        status.code(), ", message: ", status.message());
-    phase_logger.LogComputationIOError(
-        status, ExampleStats(),
-        GetNetworkStatsSince(federated_protocol, fedselect_manager,
-                             run_plan_start_network_stats),
-        run_plan_start_time);
-    return RunPlanResults{
-        .outcome = engine::PlanOutcome::kInvalidArgument,
-        .computation_results = absl::Status(status.code(), message),
-        .run_plan_start_time = run_plan_start_time};
+
+  std::string checkpoint_output_filename;
+  bool task_requires_output_checkpoint = true;
+  if (flags->skip_empty_output_checkpoints()) {
+    // A task does not require an output checkpoint if it is a lightweight task
+    // and the new client report format is enabled, or if all of the outputs are
+    // aggregated with secagg.
+    if (flags->enable_lightweight_client_report_wire_format() &&
+        checkin_result->plan.phase().has_example_query_spec()) {
+      task_requires_output_checkpoint = false;
+    } else if (checkin_result->plan.phase().has_federated_compute() &&
+               checkin_result->plan.phase()
+                   .federated_compute()
+                   .output_filepath_tensor_name()
+                   .empty()) {
+      task_requires_output_checkpoint = false;
+    }
+  }
+  if (task_requires_output_checkpoint) {
+    absl::StatusOr<std::string> output_filename =
+        files->CreateTempFile("output", ".ckp");
+    if (!output_filename.ok()) {
+      auto status = output_filename.status();
+      auto message = absl::StrCat(
+          "Could not create temporary output checkpoint file: code: ",
+          status.code(), ", message: ", status.message());
+      phase_logger.LogComputationIOError(
+          status, ExampleStats(),
+          GetNetworkStatsSince(federated_protocol, fedselect_manager,
+                               run_plan_start_network_stats),
+          run_plan_start_time);
+      return RunPlanResults{
+          .outcome = engine::PlanOutcome::kInvalidArgument,
+          .computation_results = absl::Status(status.code(), message),
+          .run_plan_start_time = run_plan_start_time};
+    }
+    checkpoint_output_filename = *output_filename;
   }
 
   // Regular plans can use example iterators from the SimpleTaskEnvironment,
@@ -1854,12 +1878,12 @@ RunPlanResults RunComputation(
           ? RunPlanWithExampleQuerySpec(
                 example_iterator_factories, opstats_logger, flags,
                 example_iterator_query_recorder, checkin_result->plan,
-                *checkpoint_output_filename)
+                checkpoint_output_filename)
           : RunPlanWithTensorflowSpec(
                 example_iterator_factories, should_abort, log_manager,
                 opstats_logger, flags, example_iterator_query_recorder,
                 checkin_result->plan, checkin_result->checkpoint_input_filename,
-                *checkpoint_output_filename, timing_config);
+                checkpoint_output_filename, timing_config);
   // Update the FLRunnerResult fields to account for any network usage during
   // the execution of the plan (e.g. due to Federated Select slices having been
   // fetched).
@@ -2309,7 +2333,7 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
                                   client_plan, checkpoint_input_filename,
                                   *checkpoint_output_filename, timing_config);
     result.set_checkpoint_output_filename(
-        plan_result_and_checkpoint_file.checkpoint_file);
+        plan_result_and_checkpoint_file.checkpoint_filename);
     plan_result = std::move(plan_result_and_checkpoint_file.plan_result);
   } else if (client_plan.phase().has_federated_compute_eligibility()) {
     // Eligibility eval plans.

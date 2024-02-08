@@ -246,6 +246,10 @@ class Flags {
   // interpreter on another thread. This is safer, and more in line with
   // TFLite's intended invocation patter.
   virtual bool use_thread_safe_tflite_wrapper() const { return false; }
+
+  // If true, the client will not create an output checkpoint temp file for
+  // tasks that do not use any output checkpoints.
+  virtual bool skip_empty_output_checkpoints() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
