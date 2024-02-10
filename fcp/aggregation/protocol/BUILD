@@ -187,7 +187,9 @@ cc_library(
     name = "federated_compute_checkpoint_builder",
     srcs = ["federated_compute_checkpoint_builder.cc"],
     hdrs = ["federated_compute_checkpoint_builder.h"],
-    visibility = ["//visibility:public"],
+    visibility = [
+        "//visibility:public",
+    ],
     deps = [
         ":checkpoint_builder",
         ":checkpoint_header",

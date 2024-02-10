@@ -72,7 +72,9 @@ cc_library(
         "tensor_spec.h",
     ],
     copts = FCP_COPTS,
-    visibility = ["//visibility:public"],
+    visibility = [
+        "//visibility:public",
+    ],
     deps = [
         ":tensor_cc_proto",
         "//fcp/base",
