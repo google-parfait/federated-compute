@@ -64,6 +64,7 @@ proto_library(
     srcs = ["pipeline_transform.proto"],
     deps = [
         "@com_google_protobuf//:any_proto",
+        "@oak//proto/attestation:evidence_proto",
     ],
 )
 

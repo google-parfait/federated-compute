@@ -137,7 +137,9 @@ MessageDecryptor::MessageDecryptor()
 }
 
 absl::StatusOr<std::string> MessageDecryptor::GetPublicKey(
-    std::optional<absl::FunctionRef<std::string(absl::string_view)>> signer) {
+    std::optional<
+        absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)>>
+        signer) {
   OkpCwt cwt{
       .public_key =
           OkpKey{
@@ -159,7 +161,7 @@ absl::StatusOr<std::string> MessageDecryptor::GetPublicKey(
   if (signer) {
     FCP_ASSIGN_OR_RETURN(std::string sig_structure,
                          cwt.BuildSigStructure(/*aad=*/""));
-    cwt.signature = (*signer)(sig_structure);
+    FCP_ASSIGN_OR_RETURN(cwt.signature, (*signer)(sig_structure));
     return cwt.Encode();
   }
   return std::move(cwt.public_key->x);

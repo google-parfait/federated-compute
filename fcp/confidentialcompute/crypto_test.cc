@@ -21,6 +21,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/log/check.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
@@ -56,7 +57,7 @@ void GenerateKeyPair(const EVP_HPKE_KEM& kem, std::string& public_key,
 }
 
 TEST(CryptoTest, GetPublicKeyCwt) {
-  testing::MockFunction<std::string(absl::string_view)> signer;
+  testing::MockFunction<absl::StatusOr<std::string>(absl::string_view)> signer;
   std::string sig_structure;
   EXPECT_CALL(signer, Call(_))
       .WillOnce(DoAll(SaveArg<0>(&sig_structure), Return("signature")));
@@ -78,6 +79,16 @@ TEST(CryptoTest, GetPublicKeyCwt) {
   // The signature structure is a COSE implementation detail, but it should at
   // least contain the public key.
   EXPECT_THAT(sig_structure, HasSubstr(cwt->public_key->x));
+}
+
+TEST(CryptoTest, GetPublicKeyCwtSigningError) {
+  testing::MockFunction<absl::StatusOr<std::string>(absl::string_view)> signer;
+  EXPECT_CALL(signer, Call(_))
+      .WillOnce(Return(absl::FailedPreconditionError("")));
+
+  MessageDecryptor decryptor;
+  EXPECT_THAT(decryptor.GetPublicKey(signer.AsStdFunction()),
+              IsCode(FAILED_PRECONDITION));
 }
 
 TEST(CryptoTest, EncryptAndDecrypt) {
