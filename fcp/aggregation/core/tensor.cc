@@ -239,6 +239,36 @@ StatusOr<std::unique_ptr<TensorData>> DecodeContent<string_view>(
   return tensor_data;
 }
 
+template <typename T>
+class VectorNumericData : public TensorData {
+ public:
+  explicit VectorNumericData(std::vector<T> values)
+      : values_(std::move(values)) {}
+  ~VectorNumericData() override = default;
+
+  // Implementation of TensorData methods.
+  size_t byte_size() const override { return values_.size() * sizeof(T); }
+  const void* data() const override { return values_.data(); }
+
+ private:
+  std::vector<T> values_;
+};
+
+template <typename T>
+Status CreateDataFromVector(DataType datatype_from_proto, std::vector<T> values,
+                            std::unique_ptr<TensorData>& data) {
+  if (data != nullptr) {
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "Tensor proto contains multiple representations of data.";
+  }
+  if (internal::TypeTraits<T>::kDataType != datatype_from_proto) {
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "Tensor proto contains data of unexpected data type.";
+  }
+  data = std::make_unique<VectorNumericData<T>>(std::move(values));
+  return FCP_STATUS(OK);
+}
+
 StatusOr<Tensor> Tensor::FromProto(const TensorProto& tensor_proto) {
   if (tensor_proto.dtype() == DT_INVALID) {
     return FCP_STATUS(INVALID_ARGUMENT) << "Invalid Tensor dtype.";
@@ -247,13 +277,45 @@ StatusOr<Tensor> Tensor::FromProto(const TensorProto& tensor_proto) {
                        TensorShape::FromProto(tensor_proto.shape()));
   // TODO(team): The num_values is valid only for dense tensors.
   FCP_ASSIGN_OR_RETURN(size_t num_values, shape.NumElements());
-  StatusOr<std::unique_ptr<TensorData>> data;
-  std::string content = AlignedCopyOf(tensor_proto.content());
-  DTYPE_CASES(tensor_proto.dtype(), T,
-              data = DecodeContent<T>(std::move(content), num_values));
-  FCP_RETURN_IF_ERROR(data);
-  return Create(tensor_proto.dtype(), std::move(shape),
-                std::move(data).value());
+  std::unique_ptr<TensorData> data;
+  if (!tensor_proto.content().empty()) {
+    std::string content = AlignedCopyOf(tensor_proto.content());
+    DTYPE_CASES(tensor_proto.dtype(), T,
+                FCP_ASSIGN_OR_RETURN(
+                    data, DecodeContent<T>(std::move(content), num_values)));
+  }
+  if (tensor_proto.float_val_size() > 0) {
+    FCP_RETURN_IF_ERROR(CreateDataFromVector(
+        tensor_proto.dtype(),
+        std::vector<float>(tensor_proto.float_val().begin(),
+                           tensor_proto.float_val().end()),
+        data));
+  }
+  if (tensor_proto.double_val_size() > 0) {
+    FCP_RETURN_IF_ERROR(CreateDataFromVector(
+        tensor_proto.dtype(),
+        std::vector<double>(tensor_proto.double_val().begin(),
+                            tensor_proto.double_val().end()),
+        data));
+  }
+  if (tensor_proto.int_val_size() > 0) {
+    FCP_RETURN_IF_ERROR(
+        CreateDataFromVector(tensor_proto.dtype(),
+                             std::vector<int>(tensor_proto.int_val().begin(),
+                                              tensor_proto.int_val().end()),
+                             data));
+  }
+  if (tensor_proto.int64_val_size() > 0) {
+    FCP_RETURN_IF_ERROR(CreateDataFromVector(
+        tensor_proto.dtype(),
+        std::vector<int64_t>(tensor_proto.int64_val().begin(),
+                             tensor_proto.int64_val().end()),
+        data));
+  }
+  if (data == nullptr) {
+    return FCP_STATUS(INVALID_ARGUMENT) << "Tensor proto contains no data.";
+  }
+  return Create(tensor_proto.dtype(), std::move(shape), std::move(data));
 }
 
 StatusOr<Tensor> Tensor::FromProto(TensorProto&& tensor_proto) {

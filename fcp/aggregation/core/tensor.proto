@@ -82,8 +82,9 @@ message TensorProto {
   // Optional descriptor of sparse index encoding.
   SparsityEncoding sparsity_encoding = 3;
 
-  // Serialized tensor values packed into a single blob.
-  // The exact format of the blob depends on dtype.
+  // Serialized tensor values packed into a single blob. The exact format of the
+  // blob depends on dtype. If this field is set, none of the repeated fields
+  // below should be set.
   //
   // For numeric data types, the following applies:
   // For a dense tensor, the content matches in-memory representation of a
@@ -93,4 +94,21 @@ message TensorProto {
   // the `sparsity_encoding`.
   // The values must be encoded using little-endian byte layout.
   bytes content = 4;
+
+  // The repeated fields below facilitate representing data in a alternate
+  // manner. They cannot be used at the same time as the content field above.
+  // At most one of the repeated fields below should be set, and the field that
+  // is set should correspond to the dtype field above.
+
+  // DT_FLOAT
+  repeated float float_val = 5;
+
+  // DT_DOUBLE
+  repeated double double_val = 6;
+
+  // DT_INT32
+  repeated int32 int_val = 7;
+
+  // DT_INT64
+  repeated int64 int64_val = 8;
 }

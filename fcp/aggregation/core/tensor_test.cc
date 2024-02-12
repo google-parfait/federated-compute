@@ -36,6 +36,7 @@ namespace aggregation {
 namespace {
 
 using testing::Eq;
+using testing::HasSubstr;
 
 TEST(TensorTest, Create_Dense) {
   auto t = Tensor::Create(DT_FLOAT, {3}, CreateTestData<float>({1, 2, 3}));
@@ -230,6 +231,33 @@ TEST(TensorTest, FromProto_String_Success) {
   EXPECT_THAT(*t, IsTensor({2, 2}, values));
 }
 
+TEST(TensorTest, FromProto_Int32_WithoutContent_Success) {
+  std::initializer_list<int32_t> values{5, 6, 7, 8, 9, 10};
+  TensorProto tensor_proto;
+  tensor_proto.set_dtype(DT_INT32);
+  tensor_proto.mutable_shape()->add_dim_sizes(2);
+  tensor_proto.mutable_shape()->add_dim_sizes(3);
+  for (int32_t v : values) {
+    tensor_proto.add_int_val(v);
+  }
+  auto t = Tensor::FromProto(tensor_proto);
+  EXPECT_THAT(t, IsOk());
+  EXPECT_THAT(*t, IsTensor({2, 3}, values));
+}
+
+TEST(TensorTest, FromProto_Float_WithoutContent_Success) {
+  std::initializer_list<float> values{1.2, 1.4, 1.6};
+  TensorProto tensor_proto;
+  tensor_proto.set_dtype(DT_FLOAT);
+  tensor_proto.mutable_shape()->add_dim_sizes(3);
+  for (auto v : values) {
+    tensor_proto.add_float_val(v);
+  }
+  auto t = Tensor::FromProto(tensor_proto);
+  EXPECT_THAT(t, IsOk());
+  EXPECT_THAT(*t, IsTensor({3}, values));
+}
+
 TEST(TensorTest, LargeStringValuesSerialization) {
   std::string s1(123456, 'a');
   std::string s2(7890, 'b');
@@ -263,12 +291,51 @@ TEST(TensorTest, FromProto_NegativeDimSize) {
   EXPECT_THAT(Tensor::FromProto(tensor_proto), IsCode(INVALID_ARGUMENT));
 }
 
+TEST(TensorTest, FromProto_MultipleFields) {
+  std::initializer_list<int32_t> values{5, 6, 7, 8, 9, 10};
+  TensorProto tensor_proto;
+  tensor_proto.set_dtype(DT_INT32);
+  tensor_proto.mutable_shape()->add_dim_sizes(2);
+  tensor_proto.mutable_shape()->add_dim_sizes(3);
+  tensor_proto.set_content(ToProtoContent(values));
+  for (int32_t v : values) {
+    tensor_proto.add_int_val(v);
+  }
+  Status s = Tensor::FromProto(tensor_proto).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(
+      s.message(),
+      HasSubstr("Tensor proto contains multiple representations of data"));
+}
+
+TEST(TensorTest, FromProto_MismatchedType) {
+  std::initializer_list<int32_t> values{5, 6, 7, 8, 9, 10};
+  TensorProto tensor_proto;
+  tensor_proto.set_dtype(DT_FLOAT);
+  tensor_proto.mutable_shape()->add_dim_sizes(2);
+  tensor_proto.mutable_shape()->add_dim_sizes(3);
+  for (int32_t v : values) {
+    tensor_proto.add_int_val(v);
+  }
+  Status s = Tensor::FromProto(tensor_proto).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(),
+              HasSubstr("Tensor proto contains data of unexpected data type"));
+}
+
+TEST(TensorTest, FromProto_NoData) {
+  TensorProto tensor_proto;
+  tensor_proto.set_dtype(DT_STRING);
+  tensor_proto.mutable_shape()->add_dim_sizes(1);
+  Status s = Tensor::FromProto(tensor_proto).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(), HasSubstr("Tensor proto contains no data"));
+}
+
 TEST(TensorTest, FromProto_InvalidStringContent) {
   TensorProto tensor_proto;
   tensor_proto.set_dtype(DT_STRING);
   tensor_proto.mutable_shape()->add_dim_sizes(1);
-  tensor_proto.set_content("");
-  EXPECT_THAT(Tensor::FromProto(tensor_proto), IsCode(INVALID_ARGUMENT));
 
   std::string content(1, '\5');
   tensor_proto.set_content(content);
