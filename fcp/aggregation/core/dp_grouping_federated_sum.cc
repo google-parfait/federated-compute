@@ -1,0 +1,217 @@
+/*
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#include <cmath>
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+#include "absl/container/flat_hash_map.h"
+#include "fcp/aggregation/core/agg_vector.h"
+#include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/one_dim_grouping_aggregator.h"
+#include "fcp/aggregation/core/tensor.pb.h"
+#include "fcp/aggregation/core/tensor_aggregator.h"
+#include "fcp/aggregation/core/tensor_aggregator_factory.h"
+#include "fcp/aggregation/core/tensor_aggregator_registry.h"
+#include "fcp/aggregation/core/tensor_spec.h"
+#include "fcp/base/monitoring.h"
+
+namespace fcp {
+namespace aggregation {
+
+// To do: update this string once GoogleSQL analyzer's output is known
+// (b/322987083).
+constexpr char kGoogleSqlDPSumUri[] = "GoogleSQL:dp_sum";
+
+// Below is an implementation of a sum grouping aggregator for numeric types,
+// with clipping of Linfinity, L1, and L2 norms as determined by the
+// parameters linfinity_bound_, l1_bound_, and l2_bound_.
+// l1_bound_ and l2_bound_ can take on values <= 0 (which happens when they are
+// not provided by the customer) in which case we do not make any adjustments
+// to data meant for aggregation.
+template <typename InputT, typename OutputT>
+class DPGroupingFederatedSum final
+    : public OneDimGroupingAggregator<InputT, OutputT> {
+ public:
+  using OneDimGroupingAggregator<InputT, OutputT>::OneDimGroupingAggregator;
+  using OneDimGroupingAggregator<InputT, OutputT>::data;
+
+  DPGroupingFederatedSum(InputT linfinity_bound, double l1_bound,
+                         double l2_bound)
+      : OneDimGroupingAggregator<InputT, OutputT>(),
+        linfinity_bound_(linfinity_bound),
+        l1_bound_(l1_bound),
+        l2_bound_(l2_bound) {}
+
+ private:
+  // The following method clamps the input value to the linfinity bound.
+  inline InputT Clamp(const InputT& input_value) {
+    return std::min(std::max(input_value, -linfinity_bound_), linfinity_bound_);
+  }
+
+  // The following method returns a scalar such that, when it is applied to
+  // the clamped version of local histogram, the l1 and l2 norms are at most
+  // l1_bound_ and l2_bound_.
+  inline double ComputeRescalingFactor(
+      const absl::flat_hash_map<int64_t, InputT>& local_histogram) {
+    // no re-scaling if norm bounds were not provided
+    if (l1_bound_ <= 0 && l2_bound_ <= 0) {
+      return 1.0;
+    }
+
+    // Compute norms after clamping magnitudes.
+    double l1 = 0;
+    double squared_l2 = 0;
+    for (const auto& [unused, raw_value] : local_histogram) {
+      // To do: optimize the number of Clamp calls. Currently called once in
+      // this function and again in the final loop of AggregateVectorByOrdinals.
+      InputT value = Clamp(raw_value);
+      l1 += (value < 0) ? -value : value;
+      squared_l2 += static_cast<double>(value) * static_cast<double>(value);
+    }
+    double l2 = sqrt(squared_l2);
+
+    // Compute rescaling factor based on the norms.
+    double rescaling_factor = 1.0;
+    if (l1_bound_ > 0 && l1 > 0 && l1_bound_ / l1 < 1.0) {
+      rescaling_factor = l1_bound_ / l1;
+    }
+    if (l2_bound_ > 0 && l2 > 0 && l2_bound_ / l2 < rescaling_factor) {
+      rescaling_factor = l2_bound_ / l2;
+    }
+    return rescaling_factor;
+  }
+
+  // The following method is very much the same as GroupingFederatedSum's
+  // except it clamps and rescales value_vector.
+  void AggregateVectorByOrdinals(
+      const AggVector<int64_t>& ordinals_vector,
+      const AggVector<InputT>& value_vector) override {
+    auto value_it = value_vector.begin();
+
+    // Create a local histogram from ordinals & values, aggregating when there
+    // are multiple values for the same ordinal.
+    absl::flat_hash_map<int64_t, InputT> local_histogram;
+    local_histogram.reserve(ordinals_vector.size());
+    for (const auto& [index, ordinal] : ordinals_vector) {
+      FCP_CHECK(value_it.index() == index)
+          << "Indices in AggVector of ordinals and AggVector of values "
+             "are mismatched.";
+
+      local_histogram[ordinal] += value_it.value();
+
+      value_it++;
+    }
+
+    double rescaling_factor = ComputeRescalingFactor(local_histogram);
+
+    // Propagate to the actual state
+    for (const auto& [ordinal, value] : local_histogram) {
+      // Compute the scaled value to satisfy the L1 and L2 constraints.
+      double scaled_value = Clamp(value) * rescaling_factor;
+
+      AggregateValue(ordinal, static_cast<OutputT>(scaled_value));
+    }
+  }
+
+  void AggregateVector(const AggVector<OutputT>& value_vector) override {
+    for (auto it : value_vector) {
+      AggregateValue(it.index, it.value);
+    }
+  }
+  inline void AggregateValue(int64_t i, OutputT value) { data()[i] += value; }
+  OutputT GetDefaultValue() override { return OutputT{0}; }
+
+  InputT linfinity_bound_;
+  double l1_bound_;
+  double l2_bound_;
+};
+
+// The following function creates a DPGFS with a specific input and output type.
+template <typename InputT>
+StatusOr<std::unique_ptr<TensorAggregator>> CreateDPGroupingFederatedSum(
+    InputT linfinity_bound, double l1_bound, double l2_bound) {
+  DataType input_type = internal::TypeTraits<InputT>::kDataType;
+  switch (input_type) {
+    case DT_INT32:
+    case DT_INT64:
+      return std::unique_ptr<TensorAggregator>(
+          new DPGroupingFederatedSum<InputT, int64_t>(linfinity_bound, l1_bound,
+                                                      l2_bound));
+    case DT_FLOAT:
+    case DT_DOUBLE:
+      return std::unique_ptr<TensorAggregator>(
+          new DPGroupingFederatedSum<InputT, double>(linfinity_bound, l1_bound,
+                                                     l2_bound));
+    default:
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "DPGroupingFederatedSumFactory: Unsupported input type "
+             << DataType_Name(input_type);
+  };
+}
+
+template <>
+StatusOr<std::unique_ptr<TensorAggregator>> CreateDPGroupingFederatedSum(
+    string_view linfinity_bound, double l1_bound, double l2_bound) {
+  return FCP_STATUS(INVALID_ARGUMENT)
+         << "DPGroupingFederatedSum isn't supported for DT_STRING datatype.";
+}
+
+// A factory class for the GroupingFederatedSum.
+// Permits parameters in the DPGroupingFederatedSum intrinsic,
+// unlike GroupingFederatedSumFactory.
+class DPGroupingFederatedSumFactory final : public TensorAggregatorFactory {
+ public:
+  DPGroupingFederatedSumFactory() = default;
+
+  // DPGroupingFederatedSumFactory is not copyable or moveable.
+  DPGroupingFederatedSumFactory(const DPGroupingFederatedSumFactory&) = delete;
+  DPGroupingFederatedSumFactory& operator=(
+      const DPGroupingFederatedSumFactory&) = delete;
+
+  StatusOr<std::unique_ptr<TensorAggregator>> Create(
+      const Intrinsic& intrinsic) const override {
+    // To do: copy checks from GroupingFederatedSumFactory
+    // (item 3 in b/322987083).
+
+    const TensorSpec& input_spec = intrinsic.inputs[0];
+
+    // Verify presence of Linfinity, L1, and L2 norm bounds
+    if (intrinsic.parameters.size() != 3) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "DPGroupingFederatedSumFactory: Linfinity, L1,"
+                " and L2 bounds are expected.";
+    }
+
+    // To do: use RetrieveDPHHParam, which has checks (item 6 in b/322987083)
+    double l1_bound = intrinsic.parameters[1].AsScalar<double>();
+    double l2_bound = intrinsic.parameters[2].AsScalar<double>();
+
+    DataType input_type = input_spec.dtype();
+
+    StatusOr<std::unique_ptr<TensorAggregator>> aggregator;
+    DTYPE_CASES(input_type, T,
+                aggregator = CreateDPGroupingFederatedSum<T>(
+                    intrinsic.parameters[0].AsScalar<T>(), l1_bound, l2_bound));
+    return aggregator;
+  }
+};
+
+REGISTER_AGGREGATOR_FACTORY(kGoogleSqlDPSumUri, DPGroupingFederatedSumFactory);
+
+}  // namespace aggregation
+}  // namespace fcp

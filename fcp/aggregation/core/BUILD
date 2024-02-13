@@ -112,6 +112,7 @@ cc_library(
     name = "aggregation_cores",
     srcs = [
         "composite_key_combiner.cc",
+        "dp_grouping_federated_sum.cc",
         "federated_mean.cc",
         "federated_sum.cc",
         "group_by_aggregator.cc",
@@ -130,6 +131,7 @@ cc_library(
         ":tensor_cc_proto",
         ":vector_string_data",
         "//fcp/base",
+        "@com_google_absl//absl/container:flat_hash_map",
     ],
     alwayslink = 1,
 )
@@ -343,5 +345,21 @@ cc_binary(
         ":aggregator",
         ":tensor",
         "@com_google_benchmark//:benchmark_main",
+    ],
+)
+
+cc_test(
+    name = "dp_grouping_federated_sum_test",
+    srcs = ["dp_grouping_federated_sum_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":aggregation_cores",
+        ":aggregator",
+        ":tensor",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
     ],
 )
