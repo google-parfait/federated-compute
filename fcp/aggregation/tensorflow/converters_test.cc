@@ -19,13 +19,18 @@
 #include <initializer_list>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "fcp/testing/parse_text_proto.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/core/tensor_spec.h"
+#include "fcp/aggregation/core/vector_string_data.h"
+#include "fcp/aggregation/testing/test_data.h"
 #include "fcp/aggregation/testing/testing.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
@@ -34,6 +39,7 @@
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/framework/types.pb.h"
+#include "tensorflow/core/platform/tstring.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 
 namespace fcp::aggregation::tensorflow {
@@ -43,7 +49,7 @@ namespace tf = ::tensorflow;
 
 tf::TensorShape CreateTfShape(std::initializer_list<int64_t> dim_sizes) {
   tf::TensorShape shape;
-  EXPECT_TRUE(tf::TensorShape::BuildTensorShape(dim_sizes, &shape).ok());
+  EXPECT_OK(tf::TensorShape::BuildTensorShape(dim_sizes, &shape));
   return shape;
 }
 
@@ -54,9 +60,8 @@ tf::PartialTensorShape CreatePartialTfShape(
   for (auto dim_size : dim_sizes) {
     shape_proto.add_dim()->set_size(dim_size);
   }
-  EXPECT_TRUE(
-      tf::PartialTensorShape::BuildPartialTensorShape(shape_proto, &shape)
-          .ok());
+  EXPECT_OK(
+      tf::PartialTensorShape::BuildPartialTensorShape(shape_proto, &shape));
   return shape;
 }
 
@@ -72,59 +77,58 @@ tf::TensorSpecProto CreateTfTensorSpec(
   return spec;
 }
 
-TEST(ConvertersTest, ConvertDataType_Success) {
-  EXPECT_EQ(*ConvertDataType(tf::DT_FLOAT), DT_FLOAT);
-  EXPECT_EQ(*ConvertDataType(tf::DT_DOUBLE), DT_DOUBLE);
-  EXPECT_EQ(*ConvertDataType(tf::DT_INT32), DT_INT32);
-  EXPECT_EQ(*ConvertDataType(tf::DT_INT64), DT_INT64);
-  EXPECT_EQ(*ConvertDataType(tf::DT_STRING), DT_STRING);
+TEST(ConvertersTest, ConvertsSupportedTfDataTypeToAggDataType) {
+  EXPECT_EQ(*ToAggDataType(tf::DT_FLOAT), DT_FLOAT);
+  EXPECT_EQ(*ToAggDataType(tf::DT_DOUBLE), DT_DOUBLE);
+  EXPECT_EQ(*ToAggDataType(tf::DT_INT32), DT_INT32);
+  EXPECT_EQ(*ToAggDataType(tf::DT_INT64), DT_INT64);
+  EXPECT_EQ(*ToAggDataType(tf::DT_STRING), DT_STRING);
 }
 
-TEST(ConvertersTest, ConvertDataType_Unsupported) {
-  EXPECT_THAT(ConvertDataType(tf::DT_VARIANT), IsCode(INVALID_ARGUMENT));
+TEST(ConvertersTest, CannotConvertUnsupportedTfDataTypeToAggDataType) {
+  EXPECT_THAT(ToAggDataType(tf::DT_VARIANT), IsCode(INVALID_ARGUMENT));
 }
 
-TEST(ConvertersTest, ConvertShape_Success) {
-  EXPECT_EQ(ConvertShape(CreateTfShape({})), TensorShape({}));
-  EXPECT_EQ(ConvertShape(CreateTfShape({1})), TensorShape({1}));
-  EXPECT_EQ(ConvertShape(CreateTfShape({2, 3})), TensorShape({2, 3}));
+TEST(ConvertersTest, ConvertsSupportedTfShapeToAggShape) {
+  EXPECT_EQ(ToAggShape(CreateTfShape({})), TensorShape({}));
+  EXPECT_EQ(ToAggShape(CreateTfShape({1})), TensorShape({1}));
+  EXPECT_EQ(ToAggShape(CreateTfShape({2, 3})), TensorShape({2, 3}));
 }
 
-TEST(ConvertersTest, ConvertPartialShape_Success) {
-  EXPECT_EQ(ConvertPartialShape(CreatePartialTfShape({})), TensorShape({}));
-  EXPECT_EQ(ConvertPartialShape(CreatePartialTfShape({-1})), TensorShape({-1}));
-  EXPECT_EQ(ConvertPartialShape(CreatePartialTfShape({2, -1})),
-            TensorShape({2, -1}));
+TEST(ConvertersTest, ConvertsSupportedTfPartialShapeToAggShape) {
+  EXPECT_EQ(ToAggShape(CreatePartialTfShape({})), TensorShape({}));
+  EXPECT_EQ(ToAggShape(CreatePartialTfShape({-1})), TensorShape({-1}));
+  EXPECT_EQ(ToAggShape(CreatePartialTfShape({2, -1})), TensorShape({2, -1}));
   // All negative dimensions are interpreted by tensorflow the same way as -1.
-  EXPECT_EQ(ConvertPartialShape(CreatePartialTfShape({2, -3})),
-            TensorShape({2, -1}));
+  EXPECT_EQ(ToAggShape(CreatePartialTfShape({2, -3})), TensorShape({2, -1}));
 }
 
-TEST(ConvertersTest, ConvertTensorSpec_Success) {
+TEST(ConvertersTest, ConvertsTfTensorSpecToAggTensorSpec) {
   auto tensor_spec =
-      ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_FLOAT, {1, 2, 3}));
+      ToAggTensorSpec(CreateTfTensorSpec("foo", tf::DT_FLOAT, {1, 2, 3}));
   ASSERT_THAT(tensor_spec, IsOk());
   EXPECT_EQ(tensor_spec->name(), "foo");
   EXPECT_EQ(tensor_spec->dtype(), DT_FLOAT);
   EXPECT_EQ(tensor_spec->shape(), TensorShape({1, 2, 3}));
 }
 
-TEST(ConvertersTest, ConvertTensorSpec_UnknownDimension_Success) {
+TEST(ConvertersTest, ConvertsTfTensorSpecWithUnknownDimensionToAggTensorSpec) {
   auto tensor_spec =
-      ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_FLOAT, {1, -1}));
+      ToAggTensorSpec(CreateTfTensorSpec("foo", tf::DT_FLOAT, {1, -1}));
   ASSERT_THAT(tensor_spec, IsOk());
   EXPECT_EQ(tensor_spec->name(), "foo");
   EXPECT_EQ(tensor_spec->dtype(), DT_FLOAT);
   EXPECT_EQ(tensor_spec->shape(), TensorShape({1, -1}));
 }
 
-TEST(ConvertersTest, ConvertTensorSpec_UnsupportedDataType) {
+TEST(ConvertersTest,
+     CannotConvertTfTensorSpecWithUnsupportedDataTypeToAggTensorSpec) {
   EXPECT_THAT(
-      ConvertTensorSpec(CreateTfTensorSpec("foo", tf::DT_VARIANT, {1, 2, 3})),
+      ToAggTensorSpec(CreateTfTensorSpec("foo", tf::DT_VARIANT, {1, 2, 3})),
       IsCode(INVALID_ARGUMENT));
 }
 
-TEST(ConvertersTest, ConvertTensor_Numeric) {
+TEST(ConvertersTest, ConvertsNumericTfTensorToAggTensor) {
   tf::TensorProto tensor_proto = PARSE_TEXT_PROTO(R"pb(
     dtype: DT_FLOAT
     tensor_shape {
@@ -140,13 +144,13 @@ TEST(ConvertersTest, ConvertTensor_Numeric) {
   )pb");
   auto tensor = std::make_unique<tf::Tensor>();
   ASSERT_TRUE(tensor->FromProto(tensor_proto));
-  EXPECT_THAT(*ConvertTensor(std::move(tensor)),
+  EXPECT_THAT(*ToAggTensor(std::move(tensor)),
               IsTensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
-  EXPECT_THAT(*ConvertTensorProto(tensor_proto),
+  EXPECT_THAT(*ToAggTensor(tensor_proto),
               IsTensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
 }
 
-TEST(ConvertersTest, ConvertTensor_String) {
+TEST(ConvertersTest, ConvertsTfStringTensorToAggTensor) {
   tf::TensorProto tensor_proto = PARSE_TEXT_PROTO(R"pb(
     dtype: DT_STRING
     tensor_shape { dim { size: 3 } }
@@ -156,13 +160,13 @@ TEST(ConvertersTest, ConvertTensor_String) {
   )pb");
   auto tensor = std::make_unique<tf::Tensor>();
   ASSERT_TRUE(tensor->FromProto(tensor_proto));
-  EXPECT_THAT(*ConvertTensor(std::move(tensor)),
+  EXPECT_THAT(*ToAggTensor(std::move(tensor)),
               IsTensor<string_view>({3}, {"abcd", "foobar", "zzzzzzzzzzzzzz"}));
-  EXPECT_THAT(*ConvertTensorProto(tensor_proto),
+  EXPECT_THAT(*ToAggTensor(tensor_proto),
               IsTensor<string_view>({3}, {"abcd", "foobar", "zzzzzzzzzzzzzz"}));
 }
 
-TEST(ConvertersTest, ConvertTensor_ScalarString) {
+TEST(ConvertersTest, ConvertsScalaarStringTfTensorToAggTensor) {
   tf::TensorProto tensor_proto = PARSE_TEXT_PROTO(R"pb(
     dtype: DT_STRING
     tensor_shape {}
@@ -170,15 +174,85 @@ TEST(ConvertersTest, ConvertTensor_ScalarString) {
   )pb");
   auto tensor = std::make_unique<tf::Tensor>();
   ASSERT_TRUE(tensor->FromProto(tensor_proto));
-  EXPECT_THAT(*ConvertTensor(std::move(tensor)),
+  EXPECT_THAT(*ToAggTensor(std::move(tensor)),
               IsTensor<string_view>({}, {"0123456789"}));
-  EXPECT_THAT(*ConvertTensorProto(tensor_proto),
+  EXPECT_THAT(*ToAggTensor(tensor_proto),
               IsTensor<string_view>({}, {"0123456789"}));
 }
 
-TEST(ConvertersTest, ConvertTensor_UnsupportedDataType) {
+TEST(ConvertersTest, CannotConvertTfTensorWithUnsupportedDataTypeToAggTensor) {
   auto tensor = std::make_unique<tf::Tensor>(tf::DT_VARIANT, CreateTfShape({}));
-  EXPECT_THAT(ConvertTensor(std::move(tensor)), IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(ToAggTensor(std::move(tensor)), IsCode(INVALID_ARGUMENT));
+}
+
+TEST(ConvertersTest, ConvertsAggDataTypeToTfDataType) {
+  EXPECT_EQ(*ToTfDataType(DT_FLOAT), tf::DT_FLOAT);
+  EXPECT_EQ(*ToTfDataType(DT_DOUBLE), tf::DT_DOUBLE);
+  EXPECT_EQ(*ToTfDataType(DT_INT32), tf::DT_INT32);
+  EXPECT_EQ(*ToTfDataType(DT_INT64), tf::DT_INT64);
+  EXPECT_EQ(*ToTfDataType(DT_STRING), tf::DT_STRING);
+}
+
+TEST(ConvertersTest, CannotConvertUnsupportedAggDataTypeToTfDataType) {
+  absl::StatusOr<tf::DataType> invalid = ToTfDataType(DT_INVALID);
+  EXPECT_FALSE(invalid.ok());
+}
+
+TEST(ConvertersTest, ConvertsAggShapeToTfShape) {
+  absl::StatusOr<tf::TensorShape> empty_tf_shape = ToTfShape(TensorShape({}));
+  ASSERT_OK(empty_tf_shape);
+  EXPECT_EQ(*empty_tf_shape, CreateTfShape({}));
+
+  absl::StatusOr<tf::TensorShape> vec_tf_shape = ToTfShape(TensorShape({1}));
+  ASSERT_OK(vec_tf_shape);
+  EXPECT_EQ(*vec_tf_shape, CreateTfShape({1}));
+
+  absl::StatusOr<tf::TensorShape> matrix_tf_shape =
+      ToTfShape(TensorShape({2, 3}));
+  ASSERT_OK(matrix_tf_shape);
+  EXPECT_EQ(*matrix_tf_shape, CreateTfShape({2, 3}));
+}
+
+TEST(ConvertersTest, ConvertsNumericAggTensorToTfTensor) {
+  auto tensor = Tensor::Create(DT_FLOAT, {2, 3},
+                               CreateTestData<float>({1, 2, 3, 4, 5, 6}));
+  absl::StatusOr<tf::Tensor> tf_tensor = ToTfTensor(std::move(*tensor));
+  ASSERT_OK(tf_tensor);
+  EXPECT_EQ(tf::DT_FLOAT, tf_tensor->dtype());
+  EXPECT_EQ(tf::TensorShape({2, 3}), tf_tensor->shape());
+  auto flat = tf_tensor->unaligned_flat<float>();
+  EXPECT_EQ(flat(0), 1);
+  EXPECT_EQ(flat(1), 2);
+  EXPECT_EQ(flat(2), 3);
+  EXPECT_EQ(flat(3), 4);
+  EXPECT_EQ(flat(4), 5);
+  EXPECT_EQ(flat(5), 6);
+}
+
+TEST(ConvertersTest, ConvertsAggStringTensorToTfTensor) {
+  auto tensor = Tensor::Create(
+      DT_STRING, {3},
+      std::make_unique<VectorStringData>(
+          std::vector<std::string>({"abcd", "whimsy", "zzzzz"})));
+  absl::StatusOr<tf::Tensor> tf_tensor = ToTfTensor(std::move(*tensor));
+  ASSERT_OK(tf_tensor);
+  EXPECT_EQ(tf::DT_STRING, tf_tensor->dtype());
+  EXPECT_EQ(tf::TensorShape({3}), tf_tensor->shape());
+  auto flat = tf_tensor->flat<tf::tstring>();
+  EXPECT_EQ(flat(0), "abcd");
+  EXPECT_EQ(flat(1), "whimsy");
+  EXPECT_EQ(flat(2), "zzzzz");
+}
+
+TEST(ConvertersTest, ConvertsAggScalartStringTensorToTfTensor) {
+  auto tensor = Tensor::Create(DT_STRING, {},
+                               CreateTestData<absl::string_view>({"whimsy"}));
+  absl::StatusOr<tf::Tensor> tf_tensor = ToTfTensor(std::move(*tensor));
+  ASSERT_OK(tf_tensor);
+  EXPECT_EQ(tf::DT_STRING, tf_tensor->dtype());
+  EXPECT_EQ(tf::TensorShape({}), tf_tensor->shape());
+  auto flat = tf_tensor->flat<tf::tstring>();
+  EXPECT_EQ(flat(0), "whimsy");
 }
 
 }  // namespace

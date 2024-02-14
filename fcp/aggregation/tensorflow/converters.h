@@ -34,33 +34,48 @@ namespace fcp::aggregation::tensorflow {
 // Converts Tensorflow DataType to Aggregation DataType.
 // Returns an error status if the input data type isn't supported by
 // the Aggregation Core.
-StatusOr<DataType> ConvertDataType(::tensorflow::DataType dtype);
+StatusOr<DataType> ToAggDataType(::tensorflow::DataType dtype);
 
 // Converts a PartialTensorShape, which may have unknown dimensions, to
 // Aggregation TensorShape.
 // Note that the Tensorflow partial shape is expected to be valid.
-TensorShape ConvertPartialShape(const ::tensorflow::PartialTensorShape& shape);
+TensorShape ToAggShape(const ::tensorflow::PartialTensorShape& shape);
 
 // Converts Tensorflow TensorShape to Aggregation TensorShape.
 // Note that the Tensorflow shape is expected to be valid (it seems impossible
 // to create an invalid shape).
-TensorShape ConvertShape(const ::tensorflow::TensorShape& shape);
+TensorShape ToAggShape(const ::tensorflow::TensorShape& shape);
 
 // Converts Tensorflow TensorSpecProto to Aggregation TensorSpec.
 // Returns an error status if supplied TensorSpecProto data type or shape isn't
 // supported by the Aggregation Core.
-StatusOr<TensorSpec> ConvertTensorSpec(
-    const ::tensorflow::TensorSpecProto& spec);
+StatusOr<TensorSpec> ToAggTensorSpec(const ::tensorflow::TensorSpecProto& spec);
 
 // Converts Tensorflow TensorProto to Aggregation Tensor.
-StatusOr<Tensor> ConvertTensorProto(
-    const ::tensorflow::TensorProto& tensor_proto);
+StatusOr<Tensor> ToAggTensor(const ::tensorflow::TensorProto& tensor_proto);
 
 // Converts Tensorflow Tensor to Aggregation Tensor.
 // Returns an error status if supplied Tensor data type or shape isn't
 // supported by the Aggregation Core.
 // Note that this function consumes the Tensorflow tensor.
-StatusOr<Tensor> ConvertTensor(std::unique_ptr<::tensorflow::Tensor> tensor);
+StatusOr<Tensor> ToAggTensor(std::unique_ptr<::tensorflow::Tensor> tensor);
+
+// Converts Aggregation DataType to TensorFlow DataType.
+// Returns an error status if the input data type isn't supported by
+// the Aggregation Core.
+StatusOr<::tensorflow::DataType> ToTfDataType(DataType dtype);
+
+// Converts an Aggregation TensorShape to a TensorFlow TensorShape.
+StatusOr<::tensorflow::TensorShape> ToTfShape(const TensorShape& shape);
+
+// Converts an Aggregation Tensor to a TensorFlow Tensor.
+// Resulting numeric tensors may not be properly aligned, as alignment depends
+// on the size of the buffer of the input tensor and TensorFlow has particular
+// requirements for alignment. The only way to guarantee proper alignment would
+// be to allocate a new buffer and copy data over, which we are not doing for
+// efficiency reasons. Use methods like tensorflow::Tensor->unaligned_flat to
+// retrieve data.
+StatusOr<::tensorflow::Tensor> ToTfTensor(Tensor tensor);
 
 }  // namespace fcp::aggregation::tensorflow
 

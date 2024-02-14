@@ -54,7 +54,7 @@ absl::StatusOr<std::unique_ptr<CheckpointReader>> CheckpointReader::Create(
   DataTypeMap data_type_map;
   for (const auto& [name, tf_dtype] :
        tf_checkpoint_reader->GetVariableToDataTypeMap()) {
-    FCP_ASSIGN_OR_RETURN(DataType dtype, ConvertDataType(tf_dtype));
+    FCP_ASSIGN_OR_RETURN(DataType dtype, ToAggDataType(tf_dtype));
     data_type_map.emplace(name, dtype);
   }
 
@@ -62,7 +62,7 @@ absl::StatusOr<std::unique_ptr<CheckpointReader>> CheckpointReader::Create(
   TensorShapeMap shape_map;
   for (const auto& [name, tf_shape] :
        tf_checkpoint_reader->GetVariableToShapeMap()) {
-    shape_map.emplace(name, ConvertShape(tf_shape));
+    shape_map.emplace(name, ToAggShape(tf_shape));
   }
 
   return std::unique_ptr<CheckpointReader>(
@@ -86,7 +86,7 @@ StatusOr<Tensor> CheckpointReader::GetTensor(const std::string& name) const {
     return absl::NotFoundError(
         absl::StrFormat("Checkpoint doesn't have tensor %s", name));
   }
-  return ConvertTensor(std::move(tensor));
+  return ToAggTensor(std::move(tensor));
 }
 
 }  // namespace fcp::aggregation::tensorflow

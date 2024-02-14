@@ -28,9 +28,13 @@ cc_library(
         "//fcp/aggregation/core:tensor",
         "//fcp/aggregation/core:tensor_cc_proto",
         "//fcp/base",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/core/platform:tstring",
+        "@org_tensorflow//tensorflow/tsl/platform:refcount",
     ],
 )
 
@@ -40,13 +44,17 @@ cc_test(
     deps = [
         ":converters",
         "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/core:vector_string_data",
         "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
         "//fcp/base",
         "//fcp/testing",
         "//fcp/testing:parse_text_proto",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/core/platform:tstring",
     ],
 )
 
