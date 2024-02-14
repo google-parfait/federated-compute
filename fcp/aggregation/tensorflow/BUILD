@@ -24,6 +24,7 @@ cc_library(
     srcs = ["converters.cc"],
     hdrs = ["converters.h"],
     copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         "//fcp/aggregation/core:tensor",
         "//fcp/aggregation/core:tensor_cc_proto",
