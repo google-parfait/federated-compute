@@ -228,9 +228,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     release_manager = tff.program.MemoryReleaseManager()
     with tff.framework.get_context_stack().install(ctx):
       state, _ = comp(3, DATA_SOURCE.iterator().select(10))
-      await release_manager.release(
-          state, tff.FederatedType(np.int32, tff.SERVER), key='result'
-      )
+      await release_manager.release(state, key='result')
 
     self.assertEqual(release_manager.values()['result'], 7)
 
@@ -267,9 +265,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     with tff.framework.get_context_stack().install(ctx):
       state, _ = comp(3, DATA_SOURCE.iterator().select(10))
       state, _ = comp(state, DATA_SOURCE.iterator().select(10))
-      await release_manager.release(
-          state, tff.FederatedType(np.int32, tff.SERVER), key='result'
-      )
+      await release_manager.release(state, key='result')
 
     self.assertEqual(release_manager.values()['result'], 5678)
 
@@ -306,9 +302,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     with tff.framework.get_context_stack().install(ctx):
       state, _ = comp(0, DATA_SOURCE.iterator().select(10))
       with self.assertRaisesRegex(ValueError, 'message'):
-        await release_manager.release(
-            state, tff.FederatedType(np.int32, tff.SERVER), key='result'
-        )
+        await release_manager.release(state, key='result')
 
 
 class FederatedContextPlanCachingTest(absltest.TestCase,
@@ -357,7 +351,6 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
     # Run (and therefore cache) count_clients_comp1 with data_source1.
     await self.release_manager.release(
         self.count_clients_comp1(0, self.data_source1.iterator().select(1)),
-        self.count_clients_comp1.type_signature.result,  # pytype: disable=attribute-error
         key='result',
     )
     self.build_plan.assert_called_once()
@@ -377,7 +370,6 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
   async def test_reuse_with_repeat_computation(self):
     await self.release_manager.release(
         self.count_clients_comp1(0, self.data_source1.iterator().select(1)),
-        self.count_clients_comp1.type_signature.result,  # pytype: disable=attribute-error
         key='result',
     )
     self.build_plan.assert_not_called()
@@ -386,7 +378,6 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
   async def test_reuse_with_changed_num_clients(self):
     await self.release_manager.release(
         self.count_clients_comp1(0, self.data_source1.iterator().select(10)),
-        self.count_clients_comp1.type_signature.result,  # pytype: disable=attribute-error
         key='result',
     )
     self.build_plan.assert_not_called()
@@ -395,7 +386,6 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
   async def test_reuse_with_changed_initial_state(self):
     await self.release_manager.release(
         self.count_clients_comp1(3, self.data_source1.iterator().select(1)),
-        self.count_clients_comp1.type_signature.result,  # pytype: disable=attribute-error
         key='result',
     )
     self.build_plan.assert_not_called()
@@ -404,7 +394,6 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
   async def test_reuse_with_equivalent_map_reduce_form(self):
     await self.release_manager.release(
         self.count_clients_comp2(0, self.data_source1.iterator().select(1)),
-        self.count_clients_comp2.type_signature.result,  # pytype: disable=attribute-error
         key='result',
     )
     self.build_plan.assert_not_called()
@@ -413,7 +402,6 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
   async def test_rebuild_with_different_computation(self):
     await self.release_manager.release(
         self.identity_comp(0, self.data_source1.iterator().select(1)),
-        self.identity_comp.type_signature.result,  # pytype: disable=attribute-error
         key='result',
     )
     self.build_plan.assert_called_once()
@@ -431,7 +419,6 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
   async def test_rebuild_with_different_data_source(self):
     await self.release_manager.release(
         self.count_clients_comp1(0, self.data_source2.iterator().select(1)),
-        self.count_clients_comp1.type_signature.result,  # pytype: disable=attribute-error
         key='result',
     )
     self.build_plan.assert_called_once()

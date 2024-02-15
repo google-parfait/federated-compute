@@ -106,21 +106,13 @@ async def program_logic(
     for i, (state, comp) in enumerate(zip(states, comp_fns)):
       states[i], metrics = comp(state, cohort_config)
       round_awaitables.append(
-          release_manager.release(
-              metrics,
-              comp.type_signature.result[1],  # pytype: disable=unsupported-operands
-              key=f'{i}/metrics/{rnd}',
-          )
+          release_manager.release(metrics, key=f'{i}/metrics/{rnd}')
       )
     await asyncio.gather(*round_awaitables)
-  for i, (state, comp) in enumerate(zip(states, comp_fns)):
+  for i, (state, _) in enumerate(zip(states, comp_fns)):
     # The last round should already complete, so there's no need to await the
     # results in parallel.
-    await release_manager.release(
-        state,
-        comp.type_signature.result[0],  # pytype: disable=unsupported-operands
-        key=f'{i}/result',
-    )
+    await release_manager.release(state, key=f'{i}/result')
 
 
 async def run_client(population_name: str, server_url: str, num_rounds: int,
