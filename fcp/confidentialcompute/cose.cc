@@ -28,14 +28,14 @@
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/confidentialcompute/cbor_utils.h"
-#include "cbor.h"
-#include "cbor/arrays.h"
-#include "cbor/bytestrings.h"
-#include "cbor/common.h"
-#include "cbor/data.h"
-#include "cbor/ints.h"
-#include "cbor/maps.h"
-#include "cbor/strings.h"
+#include "third_party/libcbor/src/cbor.h"
+#include "third_party/libcbor/src/cbor/arrays.h"
+#include "third_party/libcbor/src/cbor/bytestrings.h"
+#include "third_party/libcbor/src/cbor/common.h"
+#include "third_party/libcbor/src/cbor/data.h"
+#include "third_party/libcbor/src/cbor/ints.h"
+#include "third_party/libcbor/src/cbor/maps.h"
+#include "third_party/libcbor/src/cbor/strings.h"
 
 namespace fcp::confidential_compute {
 namespace {

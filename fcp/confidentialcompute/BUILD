@@ -22,9 +22,9 @@ cc_library(
     hdrs = ["cbor_utils.h"],
     visibility = ["//visibility:private"],
     deps = [
+        "//third_party/libcbor:cbor",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@libcbor//:cbor",
     ],
 )
 
@@ -34,11 +34,11 @@ cc_test(
     deps = [
         ":cbor_utils",
         "//fcp/testing",
+        "//third_party/libcbor:cbor",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
-        "@libcbor//:cbor",
     ],
 )
 
@@ -50,11 +50,11 @@ cc_library(
     deps = [
         ":cbor_utils",
         "//fcp/base",
+        "//third_party/libcbor:cbor",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
-        "@libcbor//:cbor",
     ],
 )
 

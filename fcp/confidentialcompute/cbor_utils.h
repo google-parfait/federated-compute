@@ -23,9 +23,9 @@
 #include <string>
 
 #include "absl/status/statusor.h"
-#include "cbor/common.h"
-#include "cbor/data.h"
-#include "cbor/ints.h"
+#include "third_party/libcbor/src/cbor/common.h"
+#include "third_party/libcbor/src/cbor/data.h"
+#include "third_party/libcbor/src/cbor/ints.h"
 
 namespace fcp::confidential_compute {
 namespace cbor_utils_internal {

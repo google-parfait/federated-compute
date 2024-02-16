@@ -26,10 +26,10 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "fcp/testing/testing.h"
-#include "cbor/bytestrings.h"
-#include "cbor/common.h"
-#include "cbor/data.h"
-#include "cbor/ints.h"
+#include "third_party/libcbor/src/cbor/bytestrings.h"
+#include "third_party/libcbor/src/cbor/common.h"
+#include "third_party/libcbor/src/cbor/data.h"
+#include "third_party/libcbor/src/cbor/ints.h"
 
 namespace fcp::confidential_compute {
 namespace {
