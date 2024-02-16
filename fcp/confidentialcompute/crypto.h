@@ -26,7 +26,6 @@
 #ifndef FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
 #define FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
 
-#include <optional>
 #include <string>
 
 #include "absl/functional/function_ref.h"
@@ -80,21 +79,16 @@ class MessageDecryptor {
   MessageDecryptor& operator=(const MessageDecryptor& other) = delete;
 
   // Obtain a public key that can be used to encrypt messages that this class
-  // can subsequently decrypt.
+  // can subsequently decrypt. The key will be a CBOR Web Token (CWT) signed by
+  // the provided signing function.
   //
   // Generates a new public key if the key has not yet been generated, otherwise
   // returns the key that was previously generated on the first call to this
   // method.
   //
-  // If `signer` is provided, the result will be a signed CBOR Web Token
-  // containing the public key. Otherwise, it'll be the raw public key.
-  // TODO: b/313640181 - make signer required once all keys are structured.
-  //
   // This function must be called before Decrypt.
   absl::StatusOr<std::string> GetPublicKey(
-      std::optional<
-          absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)>>
-          signer = std::nullopt);
+      absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer);
 
   // Decrypts `ciphertext` using a symmetric key produced by decrypting
   // `encrypted_symmetric_key` with the `encapped_key` and the private key

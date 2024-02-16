@@ -28,15 +28,6 @@ import "proto/attestation/evidence.proto";
 // definition is compatible with the Oak microRPC libraries:
 // https://github.com/project-oak/oak/tree/main/micro_rpc.
 service PipelineTransform {
-  // Performs one-time initialization of the service. This method
-  // must not be called more than once.
-  // TODO(team): Remove this method once callers are all updated to use
-  // the more flexible ConfigureAndAttest.
-  // method_id: 1
-  rpc Initialize(InitializeRequest) returns (InitializeResponse) {
-    option deprecated = true;
-  }
-
   // Performs configuration of the service that overwrites previous
   // configuration provided to Initialize or to this method, and attests the
   // configuration.
@@ -62,21 +53,6 @@ service PipelineTransform {
   rpc Transform(TransformRequest) returns (TransformResponse);
 }
 
-// A request to initialize the service.
-message InitializeRequest {
-  // One-time implementation-specific configuration (if any).
-  google.protobuf.Any configuration = 1;
-}
-
-// The result of initializing the service.
-message InitializeResponse {
-  // The serialized bytes of the enclave's Curve 25519 public key.
-  bytes public_key = 1;
-
-  // The attestation for the application supplying the public key.
-  bytes attestation = 2;
-}
-
 message ConfigureAndAttestRequest {
   // Implementation-specific configuration that will override any previous
   // configuration provided to this method.
@@ -95,16 +71,12 @@ message ConfigureAndAttestResponse {
   // 25519 public key.
   bytes public_key = 1;
 
-  // The attestation for the sealed application supplying the public key.
-  // The public key, the configuration with any proprietary fields omitted based
-  // on the provided field mask, and the hash of the full configuration will all
-  // be attested.
-  bytes attestation = 2 [deprecated = true];
-
   // For Oak Restricted Kernel applications, the application's attestation
   // evidence. This field should not be set for Oak Containers applications,
   // which can provide evidence through a separate RPC.
   oak.attestation.v1.Evidence attestation_evidence = 3;
+
+  reserved 2;
 }
 
 message GenerateNoncesRequest {
@@ -159,11 +131,6 @@ message Record {
     //   -65538: AEAD_AES_128_GCM_SIV (fixed nonce)
     bytes encrypted_symmetric_key = 3;
 
-    // The associated data for `encrypted_symmetric_key`. This field may be
-    // left unset if it's equal to `ciphertext_associated_data`.
-    optional bytes encrypted_symmetric_key_associated_data = 4
-        [deprecated = true];
-
     // The associated data for `encrypted_symmetric_key`.
     oneof symmetric_key_associated_data_components {
       LedgerAssociatedData ledger_symmetric_key_associated_data = 6;
@@ -205,5 +172,7 @@ message Record {
       // processing the data.
       bytes nonce = 2;
     }
+
+    reserved 4;
   }
 }

@@ -81,12 +81,9 @@ message CreateKeyRequest {
 message CreateKeyResponse {
   // The serialized bytes of the public key.
   //
-  // If `attestation_evidence` is unset, this field holds the key's raw bytes.
-  //
-  // If `attestation_evidence` is set, this field holds a CBOR Web Token (CWT;
-  // RFC 8392) signed by the application key in `attestation_evidence`. The CWT
-  // and COSE key (RFC 9052) will contain at least the following claims and
-  // parameters:
+  // This field holds a CBOR Web Token (CWT; RFC 8392) signed by the application
+  // key in `attestation_evidence`. The CWT and COSE key (RFC 9052) will contain
+  // at least the following claims and parameters:
   //
   // CWT Claims (https://www.iana.org/assignments/cwt/cwt.xhtml)
   //   -65537: COSE_Key containing the public key parameters (bstr)
@@ -102,46 +99,21 @@ message CreateKeyResponse {
   //   -65537: HPKE-Base-X25519-SHA256-AES128GCM
   bytes public_key = 1;
 
-  // A serialized PublicKeyDetails message providing additional information
-  // about the public key.
-  //
-  // This field will not be set if `attestation_evidence` is set.
-  bytes public_key_details = 2 [deprecated = true];
-
-  // The attestation for the application supplying the public key and details.
-  bytes attestation = 3 [deprecated = true];
-
   // The attestation evidence for the Ledger.
   oak.attestation.v1.Evidence attestation_evidence = 4;
 
   // The attestation endorsements for the Ledger.
   oak.attestation.v1.Endorsements attestation_endorsements = 5;
-}
 
-message PublicKeyDetails {
-  option deprecated = true;
-
-  // A unique identifier for the public key. This should be included in the
-  // header of any blobs encrypted using this key.
-  fixed32 public_key_id = 1;
-
-  // The time when the key was issued. Clients should not use the key if this
-  // time is in the future since it could indicate that the server is using
-  // the incorrect time.
-  google.protobuf.Timestamp issued = 2;
-
-  // The Ledger will not allow decryption using this key after this time.
-  // Clients should not encrypt data using an expired key.
-  google.protobuf.Timestamp expiration = 3;
+  reserved 2, 3;
 }
 
 message DeleteKeyRequest {
-  // The id of the public key to delete.
-  fixed32 public_key_id = 1 [deprecated = true];
-
   // The public key CWT of the key to delete. This should match
   // `CreateKeyResponse.public_key`.
   bytes public_key = 2;
+
+  reserved 1;
 }
 
 message DeleteKeyResponse {}
@@ -171,11 +143,7 @@ message AuthorizeAccessRequest {
 
   // The public key to use to encrypt the response.
   //
-  // If `recipient_attestation_evidence` is unset, this field holds the key's
-  // raw bytes.
-  //
-  // If `recipient_attestation_evidence` is set, this field holds a CBOR Web
-  // Token (CWT) signed by the application key in
+  // This field holds a CBOR Web Token (CWT) signed by the application key in
   // `recipient_attestation_evidence`. The CWT and COSE key (RFC 9052) will
   // contain at least the following claims and parameters:
   //
@@ -189,9 +157,6 @@ message AuthorizeAccessRequest {
   // Supported COSE Algorithms:
   //   -65537: HPKE-Base-X25519-SHA256-AES128GCM
   bytes recipient_public_key = 6;
-
-  // The attestation for the application supplying the public key.
-  bytes recipient_attestation = 7 [deprecated = true];
 
   // The attestation evidence for the application requesting access.
   oak.attestation.v1.Evidence recipient_attestation_evidence = 9;
@@ -211,6 +176,8 @@ message AuthorizeAccessRequest {
   // the symmetric key. This nonce must be appended to the associated data for
   // the symmetric key.
   bytes recipient_nonce = 10;
+
+  reserved 7;
 }
 
 message AuthorizeAccessResponse {
@@ -235,14 +202,13 @@ message AuthorizeAccessResponse {
 }
 
 message RevokeAccessRequest {
-  // The id of the public key used to encrypt the blob.
-  fixed32 public_key_id = 1 [deprecated = true];
-
   // The COSE "kid" property (RFC 9052) of the key used to encrypt the blob.
   bytes key_id = 3;
 
   // The id of the blob, matching the id in its header.
   bytes blob_id = 2;
+
+  reserved 1;
 }
 
 message RevokeAccessResponse {}
