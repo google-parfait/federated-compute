@@ -102,10 +102,7 @@ message CreateKeyResponse {
   // The attestation evidence for the Ledger.
   oak.attestation.v1.Evidence attestation_evidence = 4;
 
-  // The attestation endorsements for the Ledger.
-  oak.attestation.v1.Endorsements attestation_endorsements = 5;
-
-  reserved 2, 3;
+  reserved 2, 3, 5;
 }
 
 message DeleteKeyRequest {
