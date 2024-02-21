@@ -6,6 +6,7 @@
 
 There are some basic tools and packages you will need on your machine:
 
+*   Git
 *   Java Development Kit (JDK)
 *   Python 3
 *   libstdc++
@@ -13,7 +14,7 @@ There are some basic tools and packages you will need on your machine:
 For example, on Debian:
 
 ```
-sudo apt install -y default-jdk-headless python3 libstdc++-10-dev
+sudo apt install -y git default-jdk-headless python3 libstdc++-10-dev
 ```
 
 > ⚠️ The project maintainers internally test with Clang only, so support for

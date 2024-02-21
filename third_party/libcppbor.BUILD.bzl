@@ -13,18 +13,20 @@
 # limitations under the License.
 
 """
-A custom build file for libcbor
+A custom build file for libcppbor
 """
 
 licenses(["notice"])
 
-exports_files(["LICENSE.md"])
+exports_files(["LICENSE"])
 
 cc_library(
-    name = "cbor",
-    srcs = glob(["src/**/*.c", "src/**/*.h"]),
-    hdrs = ["src/cbor.h"] + glob(["src/cbor/*.h"]),
-    copts = ["-std=c99"],
-    includes = ["src"],
+    name = "libcppbor",
+    srcs = glob(["src/*.cpp"]),
+    hdrs = glob(["include/cppbor/*.h"]),
+    copts = ["-Iexternal/libcppbor/include/cppbor"],
+    include_prefix = "libcppbor",
+    local_defines = ["__TRUSTY__"],
     visibility = ["//visibility:public"],
+    deps = ["@boringssl//:crypto"],
 )

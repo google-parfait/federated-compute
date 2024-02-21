@@ -43,6 +43,7 @@
 
 workspace(name = "com_google_fcp")
 
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 # Needed for user-defined configs
@@ -268,13 +269,11 @@ http_archive(
     url = "https://github.com/project-oak/oak/archive/0acf3f6dc0af2035d40884fe1258b1e0e7db5488.tar.gz",
 )
 
-http_archive(
-    name = "libcbor",
-    build_file = "//third_party:libcbor.BUILD.bzl",
-    patches = ["//fcp/patches:libcbor_configuration.patch"],
-    sha256 = "9fec8ce3071d5c7da8cda397fab5f0a17a60ca6cbaba6503a09a47056a53a4d7",
-    strip_prefix = "libcbor-0.10.2",
-    urls = ["https://github.com/PJK/libcbor/archive/refs/tags/v0.10.2.zip"],
+git_repository(
+    name = "libcppbor",
+    build_file = "//third_party:libcppbor.BUILD.bzl",
+    commit = "20d2be8672d24bfb441d075f82cc317d17d601f8",
+    remote = "https://android.googlesource.com/platform/external/libcppbor",
 )
 
 # Register a clang C++ toolchain.

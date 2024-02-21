@@ -17,44 +17,17 @@ package(
 )
 
 cc_library(
-    name = "cbor_utils",
-    srcs = ["cbor_utils.cc"],
-    hdrs = ["cbor_utils.h"],
-    visibility = ["//visibility:private"],
-    deps = [
-        "//third_party/libcbor:cbor",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-    ],
-)
-
-cc_test(
-    name = "cbor_utils_test",
-    srcs = ["cbor_utils_test.cc"],
-    deps = [
-        ":cbor_utils",
-        "//fcp/testing",
-        "//third_party/libcbor:cbor",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
     name = "cose",
     srcs = ["cose.cc"],
     hdrs = ["cose.h"],
     visibility = ["//visibility:public"],
     deps = [
-        ":cbor_utils",
         "//fcp/base",
-        "//third_party/libcbor:cbor",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@libcppbor",
     ],
 )
 
