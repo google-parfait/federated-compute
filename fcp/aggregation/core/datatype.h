@@ -38,6 +38,9 @@ enum TypeKind {
   kString = 2,
 };
 
+// Returns the TypeKind for the given DataType.
+TypeKind GetTypeKind(DataType dtype);
+
 // This struct is used to map typename T to DataType and specify other traits
 // of typename T.
 template <typename T>

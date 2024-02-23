@@ -54,6 +54,7 @@ py_proto_library(
 cc_library(
     name = "tensor",
     srcs = [
+        "datatype.cc",
         "input_tensor_list.cc",
         "tensor.cc",
         "tensor_data.cc",
@@ -356,6 +357,7 @@ cc_test(
         ":aggregation_cores",
         ":aggregator",
         ":tensor",
+        ":tensor_cc_proto",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/base",

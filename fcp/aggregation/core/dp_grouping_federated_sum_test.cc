@@ -29,6 +29,7 @@
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/core/tensor_spec.h"
@@ -90,25 +91,84 @@ TensorSpec CreateTensorSpec(std::string name, DataType dtype) {
   return TensorSpec(name, dtype, {-1});
 }
 
-template <typename InputType>
-std::vector<Tensor> CreateDPGFSParameters(InputType linfinity_bound,
-                                          double l1_bound, double l2_bound) {
+template <typename LinfType, typename L1Type, typename L2Type>
+std::vector<Tensor> CreateGenericDPGFSParameters(LinfType linfinity_bound,
+                                                 L1Type l1_bound,
+                                                 L2Type l2_bound) {
   std::vector<Tensor> parameters;
 
   parameters.push_back(
-      Tensor::Create(internal::TypeTraits<InputType>::kDataType, {},
-                     CreateTestData<InputType>({linfinity_bound}))
+      Tensor::Create(internal::TypeTraits<LinfType>::kDataType, {},
+                     CreateTestData<LinfType>({linfinity_bound}))
           .value());
 
-  parameters.push_back(
-      Tensor::Create(DT_DOUBLE, {}, CreateTestData<double>({l1_bound}))
-          .value());
+  parameters.push_back(Tensor::Create(internal::TypeTraits<L1Type>::kDataType,
+                                      {}, CreateTestData<L1Type>({l1_bound}))
+                           .value());
 
-  parameters.push_back(
-      Tensor::Create(DT_DOUBLE, {}, CreateTestData<double>({l2_bound}))
-          .value());
+  parameters.push_back(Tensor::Create(internal::TypeTraits<L2Type>::kDataType,
+                                      {}, CreateTestData<L2Type>({l2_bound}))
+                           .value());
 
   return parameters;
+}
+
+template <typename InputType>
+std::vector<Tensor> CreateDPGFSParameters(InputType linfinity_bound,
+                                          double l1_bound, double l2_bound) {
+  return CreateGenericDPGFSParameters<InputType, double, double>(
+      linfinity_bound, l1_bound, l2_bound);
+}
+
+TEST(DPGroupingFederatedSumTest, CatchInvalidNormType) {
+  Intrinsic intrinsic1{
+      "GoogleSQL:dp_sum",
+      {CreateTensorSpec("value", DT_INT64)},
+      {CreateTensorSpec("value", DT_INT64)},
+      {CreateGenericDPGFSParameters<string_view, double, double>("x", -1, -1)},
+      {}};
+
+  auto aggregator_status1 = CreateTensorAggregator(intrinsic1);
+  EXPECT_THAT(aggregator_status1, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(aggregator_status1.status().message(),
+              HasSubstr("numerical Tensors"));
+
+  Intrinsic intrinsic2{
+      "GoogleSQL:dp_sum",
+      {CreateTensorSpec("value", DT_INT64)},
+      {CreateTensorSpec("value", DT_INT64)},
+      {CreateGenericDPGFSParameters<int64_t, string_view, double>(10, "x", -1)},
+      {}};
+
+  auto aggregator_status2 = CreateTensorAggregator(intrinsic2);
+  EXPECT_THAT(aggregator_status2, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(aggregator_status2.status().message(),
+              HasSubstr("numerical Tensors"));
+
+  Intrinsic intrinsic3{
+      "GoogleSQL:dp_sum",
+      {CreateTensorSpec("value", DT_INT64)},
+      {CreateTensorSpec("value", DT_INT64)},
+      {CreateGenericDPGFSParameters<int64_t, double, string_view>(10, -1, "x")},
+      {}};
+
+  auto aggregator_status3 = CreateTensorAggregator(intrinsic3);
+  EXPECT_THAT(aggregator_status3, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(aggregator_status3.status().message(),
+              HasSubstr("numerical Tensors"));
+}
+
+TEST(DPGroupingFederatedSumTest, CatchInvalidNormValues) {
+  Intrinsic intrinsic{"GoogleSQL:dp_sum",
+                      {CreateTensorSpec("value", DT_INT64)},
+                      {CreateTensorSpec("value", DT_INT64)},
+                      {CreateDPGFSParameters<int64_t>(-1, -1, -1)},
+                      {}};
+
+  auto aggregator_status = CreateTensorAggregator(intrinsic);
+  EXPECT_THAT(aggregator_status, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(aggregator_status.status().message(),
+              HasSubstr("must be positive"));
 }
 
 Intrinsic CreateDefaultIntrinsic() {
@@ -509,7 +569,114 @@ TEST(DPGroupingFederatedSumTest, VectorMergeSucceeds) {
   EXPECT_THAT(result.value()[0], IsTensor({4}, expected_sum));
 }
 
-TEST(DPGroupingFederatedSumTest, CatchUnsupportedTypes) {
+TEST(DPGroupingFederatedSumTest, CreateWrongUri) {
+  Intrinsic intrinsic =
+      Intrinsic{"wrong_uri",
+                {TensorSpec{"foo", DT_INT32, {}}},
+                {TensorSpec{"foo_out", DT_INT32, {}}},
+                {CreateDPGFSParameters<int64_t>(1000, -1, -1)},
+                {}};
+  EXPECT_DEATH(Status s = (*GetAggregatorFactory("GoogleSQL:dp_sum"))
+                              ->Create(intrinsic)
+                              .status(),
+               HasSubstr("Check failed: kGoogleSqlDPSumUri == intrinsic.uri."));
+}
+
+TEST(DPGroupingFederatedSumTest, CreateUnsupportedNumberOfInputs) {
+  Intrinsic intrinsic = Intrinsic{
+      "GoogleSQL:dp_sum",
+      {TensorSpec{"foo", DT_INT32, {}}, TensorSpec{"bar", DT_INT32, {}}},
+      {TensorSpec{"foo_out", DT_INT32, {}}},
+      {CreateDPGFSParameters<int64_t>(1000, -1, -1)},
+      {}};
+  Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(), HasSubstr("Exactly one input is expected"));
+}
+
+TEST(DPGroupingFederatedSumTest, CreateUnsupportedEmptyIntrinsic) {
+  Status s =
+      (*GetAggregatorFactory("GoogleSQL:dp_sum"))
+          ->Create(Intrinsic{"GoogleSQL:dp_sum",
+                             {},
+                             {},
+                             {CreateDPGFSParameters<int64_t>(1000, -1, -1)},
+                             {}})
+          .status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(), HasSubstr("Exactly one input is expected"));
+}
+
+TEST(DPGroupingFederatedSumTest, CreateUnsupportedNumberOfOutputs) {
+  Intrinsic intrinsic{"GoogleSQL:dp_sum",
+                      {TensorSpec{"foo", DT_INT32, {}}},
+                      {TensorSpec{"foo_out", DT_INT32, {}},
+                       TensorSpec{"bar_out", DT_INT32, {}}},
+                      {CreateDPGFSParameters<int64_t>(1000, -1, -1)},
+                      {}};
+  Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(), HasSubstr("Exactly one output tensor is expected"));
+}
+
+TEST(DPGroupingFederatedSumTest,
+     CreateUnsupportedUnmatchingInputAndOutputDataType) {
+  Intrinsic intrinsic{"GoogleSQL:dp_sum",
+                      {TensorSpec{"foo", DT_INT32, {}}},
+                      {TensorSpec{"foo_out", DT_FLOAT, {}}},
+                      {CreateDPGFSParameters<int64_t>(1000, -1, -1)},
+                      {}};
+
+  Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(), HasSubstr("mismatched dtypes"));
+}
+
+TEST(DPGroupingFederatedSumTest,
+     CreateUnsupportedUnmatchingInputAndOutputShape) {
+  Intrinsic intrinsic =
+      Intrinsic{"GoogleSQL:dp_sum",
+                {TensorSpec{"foo", DT_INT32, {1}}},
+                {TensorSpec{"foo", DT_INT32, {2}}},
+                {CreateDPGFSParameters<int64_t>(1000, -1, -1)},
+                {}};
+  Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(),
+              HasSubstr("Input and output tensors have mismatched shapes"));
+}
+
+TEST(DPGroupingFederatedSumTest, CreateUnsupportedNestedIntrinsic) {
+  Intrinsic inner = Intrinsic{"GoogleSQL:dp_sum",
+                              {TensorSpec{"foo", DT_INT32, {8}}},
+                              {TensorSpec{"foo_out", DT_INT32, {16}}},
+                              {CreateDPGFSParameters<int64_t>(1000, -1, -1)},
+                              {}};
+  Intrinsic intrinsic =
+      Intrinsic{"GoogleSQL:dp_sum",
+                {TensorSpec{"bar", DT_INT32, {1}}},
+                {TensorSpec{"bar_out", DT_INT32, {2}}},
+                {CreateDPGFSParameters<int64_t>(1000, -1, -1)},
+                {}};
+  intrinsic.nested_intrinsics.push_back(std::move(inner));
+  Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(),
+              HasSubstr("Not expected to have inner aggregations"));
+}
+
+TEST(DPGroupingFederatedSumTest, CatchUnsupportedStringType) {
+  Intrinsic intrinsic{"GoogleSQL:dp_sum",
+                      {CreateTensorSpec("value", DT_STRING)},
+                      {CreateTensorSpec("value", DT_STRING)},
+                      {CreateDPGFSParameters<string_view>("hello", -1, -1)},
+                      {}};
+  Status s = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(), HasSubstr("only supports numeric datatypes"));
+}
+
+TEST(DPGroupingFederatedSumTest, CatchUnsupportedNumericType) {
   Intrinsic intrinsic{"GoogleSQL:dp_sum",
                       {CreateTensorSpec("value", DT_UINT64)},
                       {CreateTensorSpec("value", DT_UINT64)},
@@ -517,7 +684,7 @@ TEST(DPGroupingFederatedSumTest, CatchUnsupportedTypes) {
                       {}};
   Status s = CreateTensorAggregator(intrinsic).status();
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
-  EXPECT_THAT(s.message(), HasSubstr("Unsupported input type"));
+  EXPECT_THAT(s.message(), HasSubstr("does not support"));
 }
 
 }  // namespace

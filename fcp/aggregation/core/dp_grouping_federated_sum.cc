@@ -141,10 +141,22 @@ class DPGroupingFederatedSum final
   double l2_bound_;
 };
 
-// The following function creates a DPGFS with a specific input and output type.
+// The following function creates a DPGFS object with a numerical input type.
+// When the input type is integral, the output type is always int64_t.
+// When the input type is floating point, the output type is always double.
 template <typename InputT>
 StatusOr<std::unique_ptr<TensorAggregator>> CreateDPGroupingFederatedSum(
     InputT linfinity_bound, double l1_bound, double l2_bound) {
+  if (internal::TypeTraits<InputT>::type_kind != internal::TypeKind::kNumeric) {
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "DPGroupingFederatedSum only supports numeric datatypes.";
+  }
+
+  if (linfinity_bound <= 0) {
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "DPGroupingFederatedSum: Linfinity bound must be positive.";
+  }
+
   DataType input_type = internal::TypeTraits<InputT>::kDataType;
   switch (input_type) {
     case DT_INT32:
@@ -159,7 +171,7 @@ StatusOr<std::unique_ptr<TensorAggregator>> CreateDPGroupingFederatedSum(
                                                      l2_bound));
     default:
       return FCP_STATUS(INVALID_ARGUMENT)
-             << "DPGroupingFederatedSumFactory: Unsupported input type "
+             << "DPGroupingFederatedSumFactory does not support "
              << DataType_Name(input_type);
   };
 }
@@ -168,7 +180,7 @@ template <>
 StatusOr<std::unique_ptr<TensorAggregator>> CreateDPGroupingFederatedSum(
     string_view linfinity_bound, double l1_bound, double l2_bound) {
   return FCP_STATUS(INVALID_ARGUMENT)
-         << "DPGroupingFederatedSum isn't supported for DT_STRING datatype.";
+         << "DPGroupingFederatedSum does not support DT_STRING.";
 }
 
 // A factory class for the GroupingFederatedSum.
@@ -185,28 +197,91 @@ class DPGroupingFederatedSumFactory final : public TensorAggregatorFactory {
 
   StatusOr<std::unique_ptr<TensorAggregator>> Create(
       const Intrinsic& intrinsic) const override {
-    // To do: copy checks from GroupingFederatedSumFactory
-    // (item 3 in b/322987083).
+    FCP_CHECK(kGoogleSqlDPSumUri == intrinsic.uri)
+        << "DPGroupingFederatedSumFactory: Expected intrinsic URI "
+        << kGoogleSqlDPSumUri << " but got uri " << intrinsic.uri;
+    // Check that the configuration is valid for grouping_federated_sum.
+    if (intrinsic.inputs.size() != 1) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "DPGroupingFederatedSumFactory: Exactly one input "
+                "is expected but got "
+             << intrinsic.inputs.size();
+    }
+
+    if (intrinsic.outputs.size() != 1) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "DPGroupingFederatedSumFactory: Exactly one output tensor is "
+                "expected but got "
+             << intrinsic.outputs.size();
+    }
+
+    if (!intrinsic.nested_intrinsics.empty()) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "DPGroupingFederatedSumFactory: Not expected to have inner "
+                "aggregations.";
+    }
 
     const TensorSpec& input_spec = intrinsic.inputs[0];
+    const TensorSpec& output_spec = intrinsic.outputs[0];
+    if (input_spec.shape() != output_spec.shape()) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "DPGroupingFederatedSumFactory: Input and output tensors have "
+                "mismatched shapes.";
+    }
 
-    // Verify presence of Linfinity, L1, and L2 norm bounds
-    if (intrinsic.parameters.size() != 3) {
+    const DataType input_type = input_spec.dtype();
+    const DataType output_type = output_spec.dtype();
+
+    if (input_type != output_type) {
+      // In the GoogleSQL spec, summing floats produces doubles and summing
+      // int32 produces int64. Disallow any other mixing of types.
+      bool ok_integer = (input_type == DataType::DT_INT32 &&
+                         output_type == DataType::DT_INT64);
+      bool ok_float = (input_type == DataType::DT_FLOAT &&
+                       output_type == DataType::DT_DOUBLE);
+      if (!ok_integer && !ok_float) {
+        return FCP_STATUS(INVALID_ARGUMENT)
+               << "DPGroupingFederatedSumFactory: Input & output tensors have "
+                  "mismatched dtypes: input tensor has dtype "
+               << DataType_Name(input_type) << " and output tensor has dtype "
+               << DataType_Name(output_type);
+      }
+    }
+    if (internal::GetTypeKind(input_type) != internal::TypeKind::kNumeric) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "DPGroupingFederatedSumFactory: DPGroupingFederatedSum only"
+                " supports numeric datatypes.";
+    }
+
+    // Verify presence of all norm bounds
+    constexpr int64_t kNumParameters = 3;
+    if (intrinsic.parameters.size() != kNumParameters) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "DPGroupingFederatedSumFactory: Linfinity, L1,"
                 " and L2 bounds are expected.";
     }
 
-    // To do: use RetrieveDPHHParam, which has checks (item 6 in b/322987083)
-    double l1_bound = intrinsic.parameters[1].AsScalar<double>();
-    double l2_bound = intrinsic.parameters[2].AsScalar<double>();
+    // Verify that the norm bounds are in numerical Tensors
+    for (const auto& parameter_tensor : intrinsic.parameters) {
+      if (internal::GetTypeKind(parameter_tensor.dtype()) !=
+          internal::TypeKind::kNumeric) {
+        return FCP_STATUS(INVALID_ARGUMENT)
+               << "DPGroupingFederatedSumFactory: Norm bounds must be stored in"
+                  " numerical Tensors.";
+      }
+    }
 
-    DataType input_type = input_spec.dtype();
+    constexpr int64_t kLinfinityIndex = 0;
+    constexpr int64_t kL1Index = 1;
+    constexpr int64_t kL2Index = 2;
+    const auto& linfinity_param = intrinsic.parameters[kLinfinityIndex];
+    const double l1 = intrinsic.parameters[kL1Index].AsScalar<double>();
+    const double l2 = intrinsic.parameters[kL2Index].AsScalar<double>();
 
     StatusOr<std::unique_ptr<TensorAggregator>> aggregator;
     DTYPE_CASES(input_type, T,
                 aggregator = CreateDPGroupingFederatedSum<T>(
-                    intrinsic.parameters[0].AsScalar<T>(), l1_bound, l2_bound));
+                    linfinity_param.AsScalar<T>(), l1, l2));
     return aggregator;
   }
 };
