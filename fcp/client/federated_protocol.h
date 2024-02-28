@@ -183,6 +183,14 @@ class FederatedProtocol {
     int32_t minimum_clients_in_server_visible_aggregate;
   };
 
+  // Metadata about the confidential aggregation method with which the task's
+  // result will be processed.
+  struct ConfidentialAggInfo {
+    // The serialized `fcp.confidentialcompute.DataAccessPolicy` proto that will
+    // apply to the client's contribution to this task.
+    absl::Cord data_access_policy;
+  };
+
   // A task assignment, consisting of task payloads, a URI template to download
   // federated select task slices with (if the plan uses federated select), a
   // session identifier, and SecAgg-related metadata.
@@ -190,7 +198,12 @@ class FederatedProtocol {
     PlanAndCheckpointPayloads payloads;
     std::string federated_select_uri_template;
     std::string aggregation_session_id;
+    // Only populated when the task will be aggregated using the secure
+    // aggregation protocol.
     std::optional<SecAggInfo> sec_agg_info;
+    // Only populated when the task will be aggregated using the confidential
+    // aggregation protocol.
+    std::optional<ConfidentialAggInfo> confidential_agg_info;
     std::string task_name;
   };
   // Checkin() returns either
@@ -300,32 +313,6 @@ class FederatedProtocol {
   //   - INTERNAL for other unexpected client-side errors.
   //   - any server-provided error code.
   virtual absl::Status ReportCompleted(
-      ComputationResults results, absl::Duration plan_duration,
-      std::optional<std::string> aggregation_session_id) = 0;
-
-  // Reports the result of a federated computation to the server using
-  // "confidential aggregation": uploads are encrypted with hardware-backed
-  // keys after performing remote attestation.
-  // @param results The result of the federated computation; must hold a single
-  //        FCCheckpoint.
-  // @param plan_duration The duration for executing the computation. Does not
-  //        include time spent on downloading the plan.
-  // @param aggregation_session_id An optional identifier supplied at task
-  //        assignment time.
-  // Returns:
-  // - On success, OK.
-  // - On error (e.g. an interruption, network error, or other unexpected
-  //   error):
-  //   - ABORTED when one of the I/O operations got aborted by the server.
-  //   - CANCELLED when one of the I/O operations was interrupted by the client
-  //     (possibly due to a positive result from the should_abort callback).
-  //   - UNIMPLEMENTED if the server responded with an unexpected response
-  //     message.
-  //   - INTERNAL for other unexpected client-side errors.
-  //   - any server-provided error code.
-  virtual absl::Status ReportViaConfidentialAggregation(
-      const google::internal::federatedcompute::v1::TaskAssignment::
-          ConfidentialAggregationInfo& agg_info,
       ComputationResults results, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) = 0;
 

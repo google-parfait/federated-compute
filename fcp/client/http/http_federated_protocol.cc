@@ -39,7 +39,9 @@
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
+#include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/base/random_token.h"
 #include "fcp/base/time_util.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/diag_codes.pb.h"
@@ -52,13 +54,19 @@
 #include "fcp/client/http/http_client_util.h"
 #include "fcp/client/http/http_secagg_send_to_server_impl.h"
 #include "fcp/client/http/in_memory_request_response.h"
+#include "fcp/client/http/protocol_request_helper.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/parsing_utils.h"
 #include "fcp/client/stats.h"
+#include "fcp/confidentialcompute/cose.h"
+#include "fcp/confidentialcompute/crypto.h"
+#include "fcp/protos/confidentialcompute/blob_header.pb.h"
+#include "fcp/protos/confidentialcompute/pipeline_transform.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
+#include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -72,11 +80,21 @@ namespace {
 using ::fcp::client::GenerateRetryWindowFromRetryTime;
 using ::fcp::client::GenerateRetryWindowFromTargetDelay;
 using ::fcp::client::PickRetryTimeFromRange;
+using ::fcp::confidential_compute::EncryptMessageResult;
+using ::fcp::confidential_compute::MessageEncryptor;
+using ::fcp::confidential_compute::OkpCwt;
+using ::fcp::confidential_compute::OkpKey;
+using ::fcp::confidentialcompute::BlobHeader;
+using ::fcp::confidentialcompute::Record;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::AbortAggregationRequest;
+using ::google::internal::federatedcompute::v1::
+    AbortConfidentialAggregationRequest;
 using ::google::internal::federatedcompute::v1::ClientStats;
+using ::google::internal::federatedcompute::v1::ConfidentialEncryptionConfig;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskRequest;
 using ::google::internal::federatedcompute::v1::EligibilityEvalTaskResponse;
+using ::google::internal::federatedcompute::v1::ForwardingInfo;
 using ::google::internal::federatedcompute::v1::
     PerformMultipleTaskAssignmentsRequest;
 using ::google::internal::federatedcompute::v1::
@@ -92,11 +110,17 @@ using ::google::internal::federatedcompute::v1::
     StartAggregationDataUploadRequest;
 using ::google::internal::federatedcompute::v1::
     StartAggregationDataUploadResponse;
+using ::google::internal::federatedcompute::v1::
+    StartConfidentialAggregationDataUploadRequest;
+using ::google::internal::federatedcompute::v1::
+    StartConfidentialAggregationDataUploadResponse;
 using ::google::internal::federatedcompute::v1::StartSecureAggregationRequest;
 using ::google::internal::federatedcompute::v1::StartSecureAggregationResponse;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentRequest;
 using ::google::internal::federatedcompute::v1::StartTaskAssignmentResponse;
 using ::google::internal::federatedcompute::v1::SubmitAggregationResultRequest;
+using ::google::internal::federatedcompute::v1::
+    SubmitConfidentialAggregationResultRequest;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 using ::google::longrunning::Operation;
 
@@ -178,6 +202,20 @@ absl::StatusOr<std::string> CreateStartAggregationDataUploadUriSuffix(
                           encoded_client_token);
 }
 
+absl::StatusOr<std::string>
+CreateStartConfidentialAggregationDataUploadUriSuffix(
+    absl::string_view aggregation_id, absl::string_view client_token) {
+  constexpr absl::string_view pattern =
+      "/v1/confidentialaggregations/$0/clients/$1:startdataupload";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                       EncodeUriSinglePathSegment(aggregation_id));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                       EncodeUriSinglePathSegment(client_token));
+  // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_aggregation_id,
+                          encoded_client_token);
+}
+
 absl::StatusOr<std::string> CreateSubmitAggregationResultUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern = "/v1/aggregations/$0/clients/$1:submit";
@@ -190,9 +228,35 @@ absl::StatusOr<std::string> CreateSubmitAggregationResultUriSuffix(
                           encoded_client_token);
 }
 
+absl::StatusOr<std::string> CreateSubmitConfidentialAggregationResultUriSuffix(
+    absl::string_view aggregation_id, absl::string_view client_token) {
+  constexpr absl::string_view pattern =
+      "/v1/confidentialaggregations/$0/clients/$1:submit";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                       EncodeUriSinglePathSegment(aggregation_id));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                       EncodeUriSinglePathSegment(client_token));
+  // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_aggregation_id,
+                          encoded_client_token);
+}
+
 absl::StatusOr<std::string> CreateAbortAggregationUriSuffix(
     absl::string_view aggregation_id, absl::string_view client_token) {
   constexpr absl::string_view pattern = "/v1/aggregations/$0/clients/$1:abort";
+  FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
+                       EncodeUriSinglePathSegment(aggregation_id));
+  FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
+                       EncodeUriSinglePathSegment(client_token));
+  // Construct the URI suffix.
+  return absl::Substitute(pattern, encoded_aggregation_id,
+                          encoded_client_token);
+}
+
+absl::StatusOr<std::string> CreateAbortConfidentialAggregationUriSuffix(
+    absl::string_view aggregation_id, absl::string_view client_token) {
+  constexpr absl::string_view pattern =
+      "/v1/confidentialaggregations/$0/clients/$1:abort";
   FCP_ASSIGN_OR_RETURN(std::string encoded_aggregation_id,
                        EncodeUriSinglePathSegment(aggregation_id));
   FCP_ASSIGN_OR_RETURN(std::string encoded_client_token,
@@ -304,30 +368,6 @@ std::unique_ptr<InterruptibleRunner> CreateDelayedInterruptibleRunner(
               BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_COMPLETED,
           .interrupt_timeout_extended = ProdDiagCode::
               BACKGROUND_TRAINING_INTERRUPT_HTTP_EXTENDED_TIMED_OUT});
-}
-
-absl::StatusOr<FederatedProtocol::PlanAndCheckpointPayloads>
-CreatePlanAndCheckpointPayloads(
-    absl::StatusOr<InMemoryHttpResponse>& plan_data_response,
-    absl::StatusOr<InMemoryHttpResponse>& checkpoint_data_response) {
-  // Note: we forward any error during the fetching of the plan/checkpoint
-  // resources resources to the caller, which means that these error codes
-  // will be checked against the set of 'permanent' error codes, just like the
-  // errors in response to the protocol request are.
-  if (!plan_data_response.ok()) {
-    return absl::Status(plan_data_response.status().code(),
-                        absl::StrCat("plan fetch failed: ",
-                                     plan_data_response.status().ToString()));
-  }
-  if (!checkpoint_data_response.ok()) {
-    return absl::Status(
-        checkpoint_data_response.status().code(),
-        absl::StrCat("checkpoint fetch failed: ",
-                     checkpoint_data_response.status().ToString()));
-  }
-
-  return FederatedProtocol::PlanAndCheckpointPayloads{
-      plan_data_response->body, checkpoint_data_response->body};
 }
 
 bool IsResourceEmpty(const Resource& resource) {
@@ -517,7 +557,9 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
            flags_->enable_native_eets())) {
         FCP_ASSIGN_OR_RETURN(
             PopulationEligibilitySpec population_eligibility_spec,
-            FetchPopulationEligibilitySpec(task.population_eligibility_spec()));
+            FetchProtoResource<PopulationEligibilitySpec>(
+                task.population_eligibility_spec(),
+                "PopulationEligibilitySpec"));
         if (IsResourceEmpty(task.plan()) &&
             IsResourceEmpty(task.init_checkpoint())) {
           // If both plan and initial checkpoint are empty, it means the
@@ -536,10 +578,17 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
       // Fetch the task resources, returning any errors that may be
       // encountered in the process.
       FCP_ASSIGN_OR_RETURN(
-          auto task_resources,
+          std::vector<absl::StatusOr<FetchedTaskResources>> task_resources,
           FetchTaskResources(
-              {{.plan = task.plan(), .checkpoint = task.init_checkpoint()}}));
-      FCP_ASSIGN_OR_RETURN(result.payloads, task_resources[0]);
+              {TaskResources{.plan = task.plan(),
+                             .checkpoint = task.init_checkpoint(),
+                             // Eligibility eval tasks have no confidential data
+                             // access policy to fetch.
+                             .confidential_data_access_policy = Resource()}}));
+      if (!task_resources[0].ok()) {
+        return task_resources[0].status();
+      }
+      result.payloads = task_resources[0]->plan_and_checkpoint_payloads;
 
       object_state_ = ObjectState::kEligibilityEvalEnabled;
       return std::move(result);
@@ -768,15 +817,26 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
 
   // Fetch the task resources, returning any errors that may be encountered in
   // the process.
-  FCP_ASSIGN_OR_RETURN(
-      auto task_resources,
-      FetchTaskResources({{.plan = task_assignment.plan(),
-                           .checkpoint = task_assignment.init_checkpoint()}}));
-  FCP_ASSIGN_OR_RETURN(result.payloads, task_resources[0]);
+  FCP_ASSIGN_OR_RETURN(auto task_resources,
+                       FetchTaskResources({TaskResources{
+                           .plan = task_assignment.plan(),
+                           .checkpoint = task_assignment.init_checkpoint(),
+                           .confidential_data_access_policy =
+                               task_assignment.confidential_aggregation_info()
+                                   .data_access_policy()}}));
+  if (!task_resources[0].ok()) {
+    return task_resources[0].status();
+  }
+  result.payloads = task_resources[0]->plan_and_checkpoint_payloads;
   FCP_ASSIGN_OR_RETURN(default_task_info_,
                        CreatePerTaskInfoFromTaskAssignment(
                            task_assignment, ObjectState::kCheckinAccepted));
-
+  if (result.confidential_agg_info.has_value()) {
+    result.confidential_agg_info->data_access_policy =
+        task_resources[0]->confidential_data_access_policy;
+    default_task_info_.confidential_data_access_policy =
+        result.confidential_agg_info->data_access_policy;
+  }
   object_state_ = ObjectState::kCheckinAccepted;
   return std::move(result);
 }
@@ -795,6 +855,14 @@ FederatedProtocol::TaskAssignment HttpFederatedProtocol::CreateTaskAssignment(
         SecAggInfo{.minimum_clients_in_server_visible_aggregate =
                        task_assignment.secure_aggregation_info()
                            .minimum_clients_in_server_visible_aggregate()};
+  }
+  if (flags_->enable_confidential_aggregation() &&
+      task_assignment.has_confidential_aggregation_info()) {
+    // The actual data access policy will be populated after it's been fetched,
+    // but we populate the struct so that the `payload_uris_received_callback`
+    // above can already determine that the task we got assigned but haven't
+    // fetched resources for is a confidential aggregation task.
+    result.confidential_agg_info = ConfidentialAggInfo{};
   }
   return result;
 }
@@ -816,6 +884,35 @@ HttpFederatedProtocol::CreatePerTaskInfoFromTaskAssignment(
   task_info.aggregation_authorization_token =
       task_assignment.authorization_token();
   task_info.task_name = task_assignment.task_name();
+  // If the confidential aggregation flag is not enabled, then we don't set the
+  // aggregation type based on the `TaskAssignment.aggregation_type` field,
+  // preserving previous behavior.
+  if (!flags_->enable_confidential_aggregation()) {
+    if (task_assignment.has_confidential_aggregation_info()) {
+      return absl::InvalidArgumentError(
+          "Confidential aggregation is not enabled");
+    }
+    task_info.aggregation_type = AggregationType::kUnknown;
+    return std::move(task_info);
+  }
+  switch (task_assignment.aggregation_type_case()) {
+    case ::google::internal::federatedcompute::v1::TaskAssignment::
+        AggregationTypeCase::kAggregationInfo:
+      task_info.aggregation_type = AggregationType::kSimpleAggregation;
+      break;
+    case ::google::internal::federatedcompute::v1::TaskAssignment::
+        AggregationTypeCase::kSecureAggregationInfo:
+      task_info.aggregation_type = AggregationType::kSecureAggregation;
+      break;
+    case ::google::internal::federatedcompute::v1::TaskAssignment::
+        AggregationTypeCase::kConfidentialAggregationInfo:
+      task_info.aggregation_type = AggregationType::kConfidentialAggregation;
+      break;
+    default:
+      return absl::InvalidArgumentError(
+          absl::StrCat("Unknown aggregation type: ",
+                       task_assignment.aggregation_type_case()));
+  }
   return std::move(task_info);
 }
 
@@ -937,13 +1034,16 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
     }
     TaskResources task_resources{
         .plan = task_assignment.plan(),
-        .checkpoint = task_assignment.init_checkpoint()};
+        .checkpoint = task_assignment.init_checkpoint(),
+        .confidential_data_access_policy =
+            task_assignment.confidential_aggregation_info()
+                .data_access_policy()};
     resources_to_fetch.push_back(task_resources);
 
-    pending_fetch_task_assignments.push_back(
-        CreateTaskAssignment(task_assignment));
-
-    task_info_map_[task_assignment.aggregation_id()] = std::move(*task_info);
+    auto pending_task_assignment = CreateTaskAssignment(task_assignment);
+    pending_fetch_task_assignments.push_back(pending_task_assignment);
+    task_info_map_[pending_task_assignment.aggregation_session_id] =
+        std::move(*task_info);
   }
 
   payload_uris_received_callback(pending_fetch_task_assignments.size());
@@ -965,7 +1065,17 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
     if (!payloads->ok()) {
       result.task_assignments[task_assignment.task_name] = payloads->status();
     } else {
-      task_assignment.payloads = std::move(**payloads);
+      task_assignment.payloads =
+          std::move((*payloads)->plan_and_checkpoint_payloads);
+      if (task_assignment.confidential_agg_info.has_value()) {
+        task_assignment.confidential_agg_info->data_access_policy =
+            std::move((*payloads)->confidential_data_access_policy);
+        // Store the serialized data access policy in the PerTaskInfo, since
+        // we need to calculate a hash over it at upload time.
+        task_info_map_[task_assignment.aggregation_session_id]
+            .confidential_data_access_policy =
+            task_assignment.confidential_agg_info->data_access_policy;
+      }
       result.task_assignments[task_assignment.task_name] =
           std::move(task_assignment);
     }
@@ -995,45 +1105,66 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
   auto find_secagg_tensor_lambda = [](const auto& item) {
     return std::holds_alternative<QuantizedTensor>(item.second);
   };
-  if (std::find_if(results.begin(), results.end(), find_secagg_tensor_lambda) ==
-      results.end()) {
-    return ReportViaSimpleAggregation(std::move(results), plan_duration,
-                                      *task_info);
+  if (!flags_->enable_confidential_aggregation()) {
+    if (std::find_if(results.begin(), results.end(),
+                     find_secagg_tensor_lambda) == results.end()) {
+      return ReportViaSimpleOrConfidentialAggregation(
+          std::move(results), plan_duration, *task_info);
+    } else {
+      return ReportViaSecureAggregation(std::move(results), plan_duration,
+                                        *task_info);
+    }
   } else {
-    return ReportViaSecureAggregation(std::move(results), plan_duration,
-                                      *task_info);
+    switch (task_info->aggregation_type) {
+      case AggregationType::kSimpleAggregation:
+        return ReportViaSimpleOrConfidentialAggregation(
+            std::move(results), plan_duration, *task_info);
+      case AggregationType::kConfidentialAggregation:
+        return ReportViaSimpleOrConfidentialAggregation(
+            std::move(results), plan_duration, *task_info);
+      case AggregationType::kSecureAggregation:
+        return ReportViaSecureAggregation(std::move(results), plan_duration,
+                                          *task_info);
+      case AggregationType::kUnknown:
+        // Once the Flags::enable_confidential_aggregation() flag is turned on
+        // we should never see kUnknown values anymore.
+        return absl::InternalError("Unexpected AggregationType::kUnknown");
+    }
   }
 }
 
-absl::Status HttpFederatedProtocol::ReportViaConfidentialAggregation(
-    const google::internal::federatedcompute::v1::TaskAssignment::
-        ConfidentialAggregationInfo& agg_info,
-    ComputationResults results, absl::Duration plan_duration,
-    std::optional<std::string> aggregation_session_id) {
-  return absl::UnimplementedError(
-      "Confidential Aggregation not yet implemented");
-}
-
-absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(
+absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
     ComputationResults results, absl::Duration plan_duration,
     PerTaskInfo& task_info) {
+  // TODO: b/307312707 -  Remove the kUnknown check once the
+  // Flags::enable_confidential_aggregation() flag is removed.
+  FCP_CHECK(task_info.aggregation_type == AggregationType::kUnknown ||
+            task_info.aggregation_type == AggregationType::kSimpleAggregation ||
+            task_info.aggregation_type ==
+                AggregationType::kConfidentialAggregation);
+  bool confidential_aggregation =
+      task_info.aggregation_type == AggregationType::kConfidentialAggregation;
+  const std::string aggregation_type_readable = confidential_aggregation
+                                                    ? "Confidential aggregation"
+                                                    : "Simple aggregation";
   if (results.size() != 1) {
     return absl::InternalError(
-        "Simple Aggregation aggregands have unexpected results size.");
+        absl::StrCat(aggregation_type_readable,
+                     " aggregands have unexpected results size."));
   }
   auto result = std::move(results.begin()->second);
   bool enable_lightweight_client_report_wire_format =
       flags_->enable_lightweight_client_report_wire_format();
   if (!enable_lightweight_client_report_wire_format &&
       !std::holds_alternative<TFCheckpoint>(result)) {
-    return absl::InternalError(
-        "Simple Aggregation aggregands have unexpected format.");
+    return absl::InternalError(absl::StrCat(
+        aggregation_type_readable, " aggregands have unexpected format."));
   }
   if (enable_lightweight_client_report_wire_format &&
       !std::holds_alternative<FCCheckpoint>(result)) {
     return absl::InternalError(
-        "Simple Aggregation aggregands have unexpected format for FC Wire "
-        "Format.");
+        absl::StrCat(aggregation_type_readable,
+                     " aggregands have unexpected format for FC Wire Format."));
   }
   auto start_upload_status = HandleStartDataAggregationUploadOperationResponse(
       PerformStartDataUploadRequestAndReportTaskResult(plan_duration,
@@ -1041,27 +1172,49 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(
       task_info);
   if (!start_upload_status.ok()) {
     task_info.state = ObjectState::kReportFailedPermanentError;
-    return start_upload_status;
+    return start_upload_status.status();
   }
+  std::optional<ConfidentialEncryptionConfig> encryption_config =
+      *start_upload_status;
+  // If we are doing a confidential aggregation we must have received an
+  // encryption config, and if we're doing simple aggregation we must not have
+  // received an encryption config.
+  FCP_CHECK(encryption_config.has_value() == confidential_aggregation)
+      << aggregation_type_readable;
 
-  std::string checkpoint;
+  std::string result_data;
   if (enable_lightweight_client_report_wire_format) {
     // TODO: b/300128447 - avoid copying serialized checkpoint once http
     // federated protocol supports absl::Cord
-    absl::CopyCordToString(std::get<FCCheckpoint>(result), &checkpoint);
+    absl::CopyCordToString(std::get<FCCheckpoint>(result), &result_data);
   } else {
-    checkpoint = std::get<TFCheckpoint>(result);
+    result_data = std::get<TFCheckpoint>(result);
   }
-  auto upload_status = UploadDataViaSimpleAgg(std::move(checkpoint), task_info);
+
+  std::string data_to_upload;
+  if (confidential_aggregation) {
+    // TODO: b/307312707 -  Compress the payload before encrypting.
+
+    FCP_ASSIGN_OR_RETURN(
+        OkpKey parsed_public_key,
+        ValidateConfidentialEncryptionConfig(task_info, *encryption_config));
+    FCP_ASSIGN_OR_RETURN(data_to_upload,
+                         EncryptPayloadForConfidentialAggregation(
+                             task_info, parsed_public_key,
+                             encryption_config->public_key(), result_data));
+  } else {
+    data_to_upload = std::move(result_data);
+  }
+
+  auto upload_status =
+      UploadDataViaByteStreamProtocol(std::move(data_to_upload), task_info);
   if (!upload_status.ok()) {
     task_info.state = ObjectState::kReportFailedPermanentError;
-    if (upload_status.code() != absl::StatusCode::kAborted &&
-        !AbortAggregation(upload_status,
-                          "Upload data via simple aggregation failed.",
-                          task_info)
-             .ok()) {
-      log_manager_->LogDiag(
-          ProdDiagCode::HTTP_CANCELLATION_OR_ABORT_REQUEST_FAILED);
+    if (upload_status.code() != absl::StatusCode::kAborted) {
+      AbortAggregation(upload_status,
+                       absl::StrCat("Upload data via ",
+                                    aggregation_type_readable, " failed."),
+                       task_info);
     }
     return upload_status;
   }
@@ -1071,6 +1224,8 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleAggregation(
 absl::StatusOr<InMemoryHttpResponse>
 HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
     absl::Duration plan_duration, PerTaskInfo& task_info) {
+  bool confidential_aggregation =
+      task_info.aggregation_type == AggregationType::kConfidentialAggregation;
   FCP_ASSIGN_OR_RETURN(
       ReportTaskResultRequest report_task_result_request,
       CreateReportTaskResultRequest(
@@ -1086,18 +1241,38 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
           report_task_result_request.SerializeAsString(),
           /*is_protobuf_encoded=*/true));
 
-  StartAggregationDataUploadRequest start_upload_request;
-  FCP_ASSIGN_OR_RETURN(std::string start_aggregation_data_upload_uri_suffix,
-                       CreateStartAggregationDataUploadUriSuffix(
-                           task_info.aggregation_session_id,
-                           task_info.aggregation_authorization_token));
+  // Note that the plain Aggregations protocol and ConfidentialAggregations
+  // protocol currently share the same request message structure, and hence we
+  // can use the same code to handle both protocols here. This may not remain
+  // the case in the future, at which point we will need to split these code
+  // paths up.
+  std::string start_upload_request;
+  std::string start_aggregation_data_upload_uri_suffix;
+  if (confidential_aggregation) {
+    start_upload_request =
+        StartConfidentialAggregationDataUploadRequest().SerializeAsString();
+    FCP_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
+                         CreateStartConfidentialAggregationDataUploadUriSuffix(
+                             task_info.aggregation_session_id,
+                             task_info.aggregation_authorization_token));
+  } else {
+    start_upload_request =
+        StartAggregationDataUploadRequest().SerializeAsString();
+    FCP_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
+                         CreateStartAggregationDataUploadUriSuffix(
+                             task_info.aggregation_session_id,
+                             task_info.aggregation_authorization_token));
+  }
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_start_aggregation_data_upload_request,
       task_info.aggregation_request_creator->CreateProtocolRequest(
           start_aggregation_data_upload_uri_suffix, {},
-          HttpRequest::Method::kPost, start_upload_request.SerializeAsString(),
+          HttpRequest::Method::kPost, start_upload_request,
           /*is_protobuf_encoded=*/true));
-  FCP_LOG(INFO) << "StartAggregationDataUpload request uri is: "
+  FCP_LOG(INFO) << (confidential_aggregation
+                        ? "StartAggregationDataUpload"
+                        : "StartConfidentialAggregationDataUpload")
+                << " request uri is : "
                 << http_start_aggregation_data_upload_request->uri();
   FCP_LOG(INFO) << "ReportTaskResult request uri is: "
                 << http_report_task_result_request->uri();
@@ -1111,20 +1286,22 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
   // We should have two responses, otherwise we have made a developer error.
   FCP_CHECK(responses.size() == 2);
   // The responses are returned in order so the first response will be the one
-  // for StartAggregationDataUpload request.  We only care about this response,
-  // the ReportTaskResult request is just a best effort to report client metrics
-  // to the server, and we don't want to abort the aggregation even if it
-  // failed.
+  // for StartAggregationDataUpload request.  We only care about this
+  // response, the ReportTaskResult request is just a best effort to report
+  // client metrics to the server, and we don't want to abort the aggregation
+  // even if it failed.
   if (!responses[1].ok()) {
     log_manager_->LogDiag(ProdDiagCode::HTTP_REPORT_TASK_RESULT_REQUEST_FAILED);
   }
   return responses[0];
 }
 
-absl::Status
+absl::StatusOr<std::optional<ConfidentialEncryptionConfig>>
 HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
     absl::StatusOr<InMemoryHttpResponse> http_response,
     PerTaskInfo& task_info) {
+  bool confidential_aggregation =
+      task_info.aggregation_type == AggregationType::kConfidentialAggregation;
   absl::StatusOr<Operation> operation =
       ParseOperationProtoFromHttpResponse(http_response);
   if (!operation.ok()) {
@@ -1135,8 +1312,9 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
     return absl::Status(
         operation.status().code(),
         absl::StrCat(
-            "StartAggregationDataUpload request failed during polling: ",
-            operation.status().ToString()));
+            (confidential_aggregation ? "StartConfidentialAggregationDataUpload"
+                                      : "StartAggregationDataUpload"),
+            " request failed during polling: ", operation.status().ToString()));
   }
   absl::StatusOr<Operation> response_operation_proto =
       protocol_request_helper_.PollOperationResponseUntilDone(
@@ -1145,8 +1323,10 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
   if (!response_operation_proto.ok()) {
     return absl::Status(
         response_operation_proto.status().code(),
-        absl::StrCat("StartAggregationDataUpload request failed: ",
-                     response_operation_proto.status().ToString()));
+        absl::StrCat(
+            (confidential_aggregation ? "StartConfidentialAggregationDataUpload"
+                                      : "StartAggregationDataUpload"),
+            " request failed: ", response_operation_proto.status().ToString()));
   }
 
   // The Operation has finished. Check if it resulted in an error, and if so
@@ -1163,37 +1343,148 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
   // Otherwise, handle the StartDataAggregationUploadResponse that should have
   // been returned by the Operation response proto.
 
-  StartAggregationDataUploadResponse response_proto;
-  if (!response_operation_proto->response().UnpackTo(&response_proto)) {
-    return absl::InvalidArgumentError(
-        "could not parse StartTaskAssignmentResponse proto");
+  ForwardingInfo aggregation_protocol_forwarding_info;
+  ForwardingInfo data_upload_forwarding_info;
+  std::string upload_resource_name;
+
+  std::optional<ConfidentialEncryptionConfig> confidential_encryption_config;
+  if (confidential_aggregation) {
+    StartConfidentialAggregationDataUploadResponse response_proto;
+    if (!response_operation_proto->response().UnpackTo(&response_proto)) {
+      return absl::InvalidArgumentError(
+          "could not parse StartConfidentialAggregationDataUploadResponse "
+          "proto");
+    }
+    aggregation_protocol_forwarding_info =
+        response_proto.aggregation_protocol_forwarding_info();
+    data_upload_forwarding_info =
+        response_proto.resource().data_upload_forwarding_info();
+    task_info.aggregation_resource_name =
+        response_proto.resource().resource_name();
+    task_info.aggregation_client_token = response_proto.client_token();
+
+    FCP_ASSIGN_OR_RETURN(confidential_encryption_config,
+                         FetchProtoResource<ConfidentialEncryptionConfig>(
+                             response_proto.encryption_config(),
+                             "ConfidentialEncryptionConfig"));
+  } else {
+    StartAggregationDataUploadResponse response_proto;
+    if (!response_operation_proto->response().UnpackTo(&response_proto)) {
+      return absl::InvalidArgumentError(
+          "could not parse StartAggregationDataUploadResponse proto");
+    }
+    aggregation_protocol_forwarding_info =
+        response_proto.aggregation_protocol_forwarding_info();
+    data_upload_forwarding_info =
+        response_proto.resource().data_upload_forwarding_info();
+    task_info.aggregation_resource_name =
+        response_proto.resource().resource_name();
+    // TODO: b/254919633 - Remove the authorization token fallback once
+    // client_token is always populated.
+    task_info.aggregation_client_token =
+        !response_proto.client_token().empty()
+            ? response_proto.client_token()
+            : task_info.aggregation_authorization_token;
   }
 
   // Note that we reassign `aggregation_request_creator_` because from this
   // point onwards, subsequent aggregation protocol requests should go to the
   // endpoint identified in the aggregation_protocol_forwarding_info.
-  FCP_ASSIGN_OR_RETURN(
-      task_info.aggregation_request_creator,
-      ProtocolRequestCreator::Create(
-          api_key_, response_proto.aggregation_protocol_forwarding_info(),
-          !flags_->disable_http_request_body_compression()));
-  auto upload_resource = response_proto.resource();
-  task_info.aggregation_resource_name = upload_resource.resource_name();
+  FCP_ASSIGN_OR_RETURN(task_info.aggregation_request_creator,
+                       ProtocolRequestCreator::Create(
+                           api_key_, aggregation_protocol_forwarding_info,
+                           !flags_->disable_http_request_body_compression()));
   FCP_ASSIGN_OR_RETURN(
       task_info.data_upload_request_creator,
       ProtocolRequestCreator::Create(
-          api_key_, upload_resource.data_upload_forwarding_info(),
-          !flags_->disable_http_request_body_compression()));
-  // TODO(team): Remove the authorization token fallback once
-  // client_token is always populated.
-  task_info.aggregation_client_token =
-      !response_proto.client_token().empty()
-          ? response_proto.client_token()
-          : task_info.aggregation_authorization_token;
-  return absl::OkStatus();
+          api_key_, data_upload_forwarding_info,
+          // Request body compression should be turned off for confidential
+          // aggregation payload uploads, since in that case we compress the
+          // unencrypted payload and then encrypt it, and we shouldn't try to
+          // re-compress the encrypted payload.
+          /*use_compression=*/
+          !flags_->disable_http_request_body_compression() &&
+              !confidential_aggregation));
+  return confidential_encryption_config;
 }
 
-absl::Status HttpFederatedProtocol::UploadDataViaSimpleAgg(
+absl::StatusOr<OkpKey>
+HttpFederatedProtocol::ValidateConfidentialEncryptionConfig(
+    PerTaskInfo& task_info,
+    const ConfidentialEncryptionConfig& encryption_config) {
+  FCP_CHECK(task_info.confidential_data_access_policy.has_value());
+
+  // TODO: b/307312707 -  Actually validate the attestation evidence in the
+  // ConfidentialEncryptionConfig, before proceeding to validate the public key
+  // provided in the ConfidentialEncryptionConfig.
+
+  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(encryption_config.public_key());
+  if (!cwt.ok()) {
+    task_info.state = ObjectState::kReportFailedPermanentError;
+    std::string server_error_msg =
+        "Parsing confidential aggregation public key failed.";
+    AbortAggregation(cwt.status(), server_error_msg, task_info);
+    return absl::Status(
+        cwt.status().code(),
+        absl::StrCat(server_error_msg, " (", cwt.status().ToString(), ")"));
+  }
+
+  // TODO: b/307312707 -  Validate that the public key we're about to return was
+  // actually signed by the application layer signing key from the (validated)
+  // attestation evidence.
+
+  return *cwt->public_key;
+}
+
+absl::StatusOr<std::string>
+HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
+    PerTaskInfo& task_info, const OkpKey& parsed_public_key,
+    const std::string& serialized_public_key, std::string payload) {
+  FCP_CHECK(task_info.confidential_data_access_policy.has_value());
+
+  BlobHeader blob_header;
+  blob_header.set_blob_id(fcp::RandomToken::Generate().ToString());
+  blob_header.set_access_policy_sha256(
+      ComputeSHA256(*task_info.confidential_data_access_policy));
+  blob_header.set_key_id(parsed_public_key.key_id);
+  std::string serialized_record_header = blob_header.SerializeAsString();
+
+  // TODO: b/307312707 -  Remove the need to parse the public key both in this
+  // file, as well as in MessageEncryptor::Encrypt. Perhaps we should be able to
+  // pass the already-parsed OkCwt struct to the Encrypt method instead?
+  absl::StatusOr<EncryptMessageResult> encryption_result =
+      MessageEncryptor().Encrypt(payload, serialized_public_key,
+                                 serialized_record_header);
+  if (!encryption_result.ok()) {
+    task_info.state = ObjectState::kReportFailedPermanentError;
+    std::string server_error_msg =
+        "Encrypting data for confidential aggregation failed.";
+    AbortAggregation(encryption_result.status(), server_error_msg, task_info);
+    return absl::Status(
+        encryption_result.status().code(),
+        absl::StrCat(server_error_msg, " (",
+                     encryption_result.status().ToString(), ")"));
+  }
+
+  // TODO: b/307312707 -  Use a format dedicated to passing encrypted data
+  // between client and server here, rather than reusing the Record proto, which
+  // is meant to pass data between two server-side transforms.
+  Record record;
+  Record::HpkePlusAeadData* hpke_plus_aead_data =
+      record.mutable_hpke_plus_aead_data();
+  hpke_plus_aead_data->set_ciphertext(encryption_result->ciphertext);
+  hpke_plus_aead_data->set_ciphertext_associated_data(serialized_record_header);
+  hpke_plus_aead_data->set_encrypted_symmetric_key(
+      encryption_result->encrypted_symmetric_key);
+  hpke_plus_aead_data->set_encapsulated_public_key(
+      encryption_result->encapped_key);
+  hpke_plus_aead_data->mutable_ledger_symmetric_key_associated_data()
+      ->set_record_header(serialized_record_header);
+
+  return record.SerializeAsString();
+}
+
+absl::Status HttpFederatedProtocol::UploadDataViaByteStreamProtocol(
     std::string tf_checkpoint, PerTaskInfo& task_info) {
   FCP_LOG(INFO) << "Uploading checkpoint with simple aggregation.";
   FCP_ASSIGN_OR_RETURN(
@@ -1203,7 +1494,8 @@ absl::Status HttpFederatedProtocol::UploadDataViaSimpleAgg(
       std::unique_ptr<HttpRequest> http_request,
       task_info.data_upload_request_creator->CreateProtocolRequest(
           uri_suffix, {{"upload_protocol", "raw"}}, HttpRequest::Method::kPost,
-          std::move(tf_checkpoint), /*is_protobuf_encoded=*/false));
+          std::move(tf_checkpoint),
+          /*is_protobuf_encoded=*/false));
   FCP_LOG(INFO) << "ByteStream.Write request URI is: " << http_request->uri();
   auto http_response = protocol_request_helper_.PerformProtocolRequest(
       std::move(http_request), *interruptible_runner_);
@@ -1219,50 +1511,95 @@ absl::Status HttpFederatedProtocol::UploadDataViaSimpleAgg(
 absl::Status HttpFederatedProtocol::SubmitAggregationResult(
     PerTaskInfo& task_info) {
   FCP_LOG(INFO) << "Notifying the server that data upload is complete.";
-  FCP_ASSIGN_OR_RETURN(std::string uri_suffix,
-                       CreateSubmitAggregationResultUriSuffix(
-                           task_info.aggregation_session_id,
-                           task_info.aggregation_client_token));
-  SubmitAggregationResultRequest request;
-  request.set_resource_name(task_info.aggregation_resource_name);
+  bool confidential_aggregation =
+      task_info.aggregation_type == AggregationType::kConfidentialAggregation;
+  std::string uri_suffix;
+  std::string request_proto;
+  if (confidential_aggregation) {
+    FCP_ASSIGN_OR_RETURN(uri_suffix,
+                         CreateSubmitConfidentialAggregationResultUriSuffix(
+                             task_info.aggregation_session_id,
+                             task_info.aggregation_client_token));
+    SubmitConfidentialAggregationResultRequest request;
+    request.set_resource_name(task_info.aggregation_resource_name);
+    request_proto = request.SerializeAsString();
+  } else {
+    FCP_ASSIGN_OR_RETURN(uri_suffix, CreateSubmitAggregationResultUriSuffix(
+                                         task_info.aggregation_session_id,
+                                         task_info.aggregation_client_token));
+    SubmitAggregationResultRequest request;
+    request.set_resource_name(task_info.aggregation_resource_name);
+    request_proto = request.SerializeAsString();
+  }
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       task_info.aggregation_request_creator->CreateProtocolRequest(
-          uri_suffix, {}, HttpRequest::Method::kPost,
-          request.SerializeAsString(), /*is_protobuf_encoded=*/true));
-  FCP_LOG(INFO) << "SubmitAggregationResult request URI is: "
-                << http_request->uri();
+          uri_suffix, {}, HttpRequest::Method::kPost, request_proto,
+          /*is_protobuf_encoded=*/true));
+  FCP_LOG(INFO) << (confidential_aggregation
+                        ? "SubmitConfidentialAggregationResult"
+                        : "SubmitAggregationResult")
+                << " request URI is: " << http_request->uri();
   auto http_response = protocol_request_helper_.PerformProtocolRequest(
       std::move(http_request), *interruptible_runner_);
   if (!http_response.ok()) {
     // If the request failed, we'll forward the error status.
-    return absl::Status(http_response.status().code(),
-                        absl::StrCat("SubmitAggregationResult failed: ",
-                                     http_response.status().ToString()));
+    return absl::Status(
+        http_response.status().code(),
+        absl::StrCat(confidential_aggregation
+                         ? "SubmitConfidentialAggregationResult"
+                         : "SubmitAggregationResult",
+                     " failed: ", http_response.status().ToString()));
   }
   return absl::OkStatus();
 }
 
-absl::Status HttpFederatedProtocol::AbortAggregation(
+void HttpFederatedProtocol::AbortAggregation(
+    absl::Status original_error_status,
+    absl::string_view error_message_for_server, PerTaskInfo& task_info) {
+  if (!AbortAggregationInner(original_error_status, error_message_for_server,
+                             task_info)
+           .ok()) {
+    log_manager_->LogDiag(
+        ProdDiagCode::HTTP_CANCELLATION_OR_ABORT_REQUEST_FAILED);
+  }
+}
+
+absl::Status HttpFederatedProtocol::AbortAggregationInner(
     absl::Status original_error_status,
     absl::string_view error_message_for_server, PerTaskInfo& task_info) {
   FCP_LOG(INFO) << "Aborting aggregation: " << original_error_status;
   FCP_CHECK(task_info.state == ObjectState::kReportFailedPermanentError)
       << "Invalid call sequence";
-  FCP_ASSIGN_OR_RETURN(
-      std::string uri_suffix,
-      CreateAbortAggregationUriSuffix(task_info.aggregation_session_id,
-                                      task_info.aggregation_client_token));
+  bool confidential_aggregation =
+      task_info.aggregation_type == AggregationType::kConfidentialAggregation;
   // We only provide the server with a simplified error message.
   absl::Status error_status(original_error_status.code(),
                             error_message_for_server);
-  AbortAggregationRequest request;
-  *request.mutable_status() = ConvertAbslStatusToRpcStatus(error_status);
+
+  std::string uri_suffix;
+  std::string request_proto;
+  if (confidential_aggregation) {
+    FCP_ASSIGN_OR_RETURN(uri_suffix,
+                         CreateAbortConfidentialAggregationUriSuffix(
+                             task_info.aggregation_session_id,
+                             task_info.aggregation_client_token));
+    AbortConfidentialAggregationRequest request;
+    *request.mutable_status() = ConvertAbslStatusToRpcStatus(error_status);
+    request_proto = request.SerializeAsString();
+  } else {
+    FCP_ASSIGN_OR_RETURN(uri_suffix, CreateAbortAggregationUriSuffix(
+                                         task_info.aggregation_session_id,
+                                         task_info.aggregation_client_token));
+    AbortAggregationRequest request;
+    *request.mutable_status() = ConvertAbslStatusToRpcStatus(error_status);
+    request_proto = request.SerializeAsString();
+  }
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
       task_info.aggregation_request_creator->CreateProtocolRequest(
-          uri_suffix, {}, HttpRequest::Method::kPost,
-          request.SerializeAsString(), /*is_protobuf_encoded=*/true));
+          uri_suffix, {}, HttpRequest::Method::kPost, request_proto,
+          /*is_protobuf_encoded=*/true));
   std::unique_ptr<InterruptibleRunner> cancellation_runner =
       CreateDelayedInterruptibleRunner(
           log_manager_, should_abort_, timing_config_,
@@ -1287,7 +1624,8 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
           ? response_proto.client_token()
           : task_info.aggregation_authorization_token;
 
-  // Move checkpoint out of ComputationResults, and put it into a std::optional.
+  // Move checkpoint out of ComputationResults, and put it into a
+  // std::optional.
   std::optional<TFCheckpoint> tf_checkpoint;
   for (auto& [k, v] : results) {
     if (std::holds_alternative<TFCheckpoint>(v)) {
@@ -1500,8 +1838,8 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
         return GenerateRetryWindowFromRetryTime(
             retry_times_->retry_time_if_rejected);
       }
-      // Otherwise, we generate a retry window using the flag-provided transient
-      // error retry period.
+      // Otherwise, we generate a retry window using the flag-provided
+      // transient error retry period.
       return GenerateRetryWindowFromTargetDelay(
           absl::Seconds(
               flags_->federated_training_transient_errors_retry_delay_secs()),
@@ -1516,10 +1854,10 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
     case ObjectState::kReportFailedPermanentError:
       // If we encountered a permanent error during the eligibility eval or
       // regular checkins, then we use the Flags-configured 'permanent error'
-      // retry period. Note that we do so regardless of whether the server had,
-      // by the time the permanent error was received, already returned a
-      // CheckinRequestAck containing a set of retry windows. See note on error
-      // handling at the top of this file.
+      // retry period. Note that we do so regardless of whether the server
+      // had, by the time the permanent error was received, already returned a
+      // CheckinRequestAck containing a set of retry windows. See note on
+      // error handling at the top of this file.
       return GenerateRetryWindowFromTargetDelay(
           absl::Seconds(
               flags_->federated_training_permanent_errors_retry_delay_secs()),
@@ -1532,11 +1870,10 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
 }
 
 absl::StatusOr<
-    std::vector<absl::StatusOr<FederatedProtocol::PlanAndCheckpointPayloads>>>
+    std::vector<absl::StatusOr<HttpFederatedProtocol::FetchedTaskResources>>>
 HttpFederatedProtocol::FetchTaskResources(
     std::vector<HttpFederatedProtocol::TaskResources> task_resources_list) {
-  std::vector<absl::StatusOr<FederatedProtocol::PlanAndCheckpointPayloads>>
-      results;
+  std::vector<absl::StatusOr<FetchedTaskResources>> results;
   std::vector<UriOrInlineData> uris_to_fetch;
   for (TaskResources task_resources : task_resources_list) {
     auto plan_uri_or_data =
@@ -1551,15 +1888,23 @@ HttpFederatedProtocol::FetchTaskResources(
       results.push_back(checkpoint_uri_or_data.status());
       continue;
     }
+    auto confidential_data_access_policy_uri_or_data =
+        ConvertResourceToUriOrInlineData(
+            task_resources.confidential_data_access_policy);
+    if (!confidential_data_access_policy_uri_or_data.ok()) {
+      results.push_back(confidential_data_access_policy_uri_or_data.status());
+      continue;
+    }
     // We still need to fetch the resources, push an empty
-    // PlanAndCheckpointPayload as placeholder to the result vector.
-    results.push_back(PlanAndCheckpointPayloads{});
+    // FetchedTaskResources as placeholder to the result vector.
+    results.push_back(FetchedTaskResources{});
     uris_to_fetch.push_back(*plan_uri_or_data);
     uris_to_fetch.push_back(*checkpoint_uri_or_data);
+    uris_to_fetch.push_back(*confidential_data_access_policy_uri_or_data);
   }
 
-  // Fetch the plan and init checkpoint resources if they need to be fetched
-  // (using the inline data instead if available).
+  // Fetch the task resources if they need to be fetched (using the inline data
+  // instead if available).
   absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
       resource_responses;
   {
@@ -1579,18 +1924,60 @@ HttpFederatedProtocol::FetchTaskResources(
     }
     auto plan_data_response = response_it++;
     auto checkpoint_data_response = response_it++;
-    pending_result = CreatePlanAndCheckpointPayloads(*plan_data_response,
-                                                     *checkpoint_data_response);
+    // The confidential data access policy resource is only specified for tasks
+    // using confidential aggregation, so we must only try and access it in
+    // those cases.
+    auto confidential_data_access_policy_response = response_it++;
+
+    pending_result = CreateFetchedTaskResources(
+        *plan_data_response, *checkpoint_data_response,
+        *confidential_data_access_policy_response);
   }
   return results;
 }
 
-absl::StatusOr<PopulationEligibilitySpec>
-HttpFederatedProtocol::FetchPopulationEligibilitySpec(
-    const Resource& population_eligibility_spec_resource) {
-  FCP_ASSIGN_OR_RETURN(
-      UriOrInlineData population_eligibility_spec_uri_or_data,
-      ConvertResourceToUriOrInlineData(population_eligibility_spec_resource));
+absl::StatusOr<HttpFederatedProtocol::FetchedTaskResources>
+HttpFederatedProtocol::CreateFetchedTaskResources(
+    absl::StatusOr<InMemoryHttpResponse>& plan_data_response,
+    absl::StatusOr<InMemoryHttpResponse>& checkpoint_data_response,
+    absl::StatusOr<InMemoryHttpResponse>&
+        confidential_data_access_policy_response) {
+  // Note: we forward any error during the fetching of the task resources to
+  // the caller, which means that these error codes will be checked against
+  // the set of 'permanent' error codes, just like the errors in response to
+  // the protocol request are.
+  if (!plan_data_response.ok()) {
+    return absl::Status(plan_data_response.status().code(),
+                        absl::StrCat("plan fetch failed: ",
+                                     plan_data_response.status().ToString()));
+  }
+  if (!checkpoint_data_response.ok()) {
+    return absl::Status(
+        checkpoint_data_response.status().code(),
+        absl::StrCat("checkpoint fetch failed: ",
+                     checkpoint_data_response.status().ToString()));
+  }
+  if (!confidential_data_access_policy_response.ok()) {
+    return absl::Status(
+        confidential_data_access_policy_response.status().code(),
+        absl::StrCat(
+            "confidential data access policy fetch failed: ",
+            confidential_data_access_policy_response.status().ToString()));
+  }
+
+  return FetchedTaskResources{
+      .plan_and_checkpoint_payloads =
+          FederatedProtocol::PlanAndCheckpointPayloads{
+              plan_data_response->body, checkpoint_data_response->body},
+      .confidential_data_access_policy =
+          confidential_data_access_policy_response->body};
+}
+
+template <typename T>
+absl::StatusOr<T> HttpFederatedProtocol::FetchProtoResource(
+    const Resource& resource, const absl::string_view readable_name) {
+  FCP_ASSIGN_OR_RETURN(UriOrInlineData uri_or_data,
+                       ConvertResourceToUriOrInlineData(resource));
 
   // Fetch the plan and init checkpoint resources if they need to be fetched
   // (using the inline data instead if available).
@@ -1599,29 +1986,27 @@ HttpFederatedProtocol::FetchPopulationEligibilitySpec(
   {
     auto started_stopwatch = network_stopwatch_->Start();
     resource_responses = FetchResourcesInMemory(
-        *http_client_, *interruptible_runner_,
-        {population_eligibility_spec_uri_or_data}, &bytes_downloaded_,
-        &bytes_uploaded_, resource_cache_);
+        *http_client_, *interruptible_runner_, {uri_or_data},
+        &bytes_downloaded_, &bytes_uploaded_, resource_cache_);
   }
   FCP_RETURN_IF_ERROR(resource_responses);
   auto& response = (*resource_responses)[0];
 
-  // Note: we forward any error during the fetching of the plan/checkpoint
-  // resources resources to the caller, which means that these error codes
-  // will be checked against the set of 'permanent' error codes, just like the
-  // errors in response to the protocol request are.
+  // Note: we forward any error during the fetching of resources to the caller,
+  // which means that these error codes will be checked against the set of
+  // 'permanent' error codes, just like the errors in response to the protocol
+  // request are.
   if (!response.ok()) {
-    return absl::Status(
-        response.status().code(),
-        absl::StrCat("population eligibility spec fetch failed: ",
-                     response.status().ToString()));
+    return absl::Status(response.status().code(),
+                        absl::StrCat(readable_name, " fetch failed: ",
+                                     response.status().ToString()));
   }
-  PopulationEligibilitySpec population_eligibility_spec;
-  if (!ParseFromStringOrCord(population_eligibility_spec, response->body)) {
+  T parsed_proto;
+  if (!ParseFromStringOrCord(parsed_proto, response->body)) {
     return absl::InvalidArgumentError(
-        "Unable to parse PopulationEligibilitySpec.");
+        absl::StrCat("Unable to parse ", readable_name, " resource."));
   }
-  return population_eligibility_spec;
+  return parsed_proto;
 }
 
 void HttpFederatedProtocol::UpdateObjectStateIfPermanentError(

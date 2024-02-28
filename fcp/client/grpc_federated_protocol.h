@@ -109,12 +109,6 @@ class GrpcFederatedProtocol : public ::fcp::client::FederatedProtocol {
       ComputationResults results, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) override;
 
-  absl::Status ReportViaConfidentialAggregation(
-      const google::internal::federatedcompute::v1::TaskAssignment::
-          ConfidentialAggregationInfo& agg_info,
-      ComputationResults results, absl::Duration plan_duration,
-      std::optional<std::string> aggregation_session_id) override;
-
   absl::Status ReportNotCompleted(
       engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) override;

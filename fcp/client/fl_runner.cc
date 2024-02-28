@@ -35,6 +35,7 @@
 #include "absl/strings/cord.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
+#include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/client/cache/file_backed_resource_cache.h"
@@ -1310,7 +1311,15 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
 
   std::string computation_id;
   if (flags->enable_computation_id()) {
-    computation_id = ComputeSHA256FromStringOrCord(plan_bytes);
+    if (flags->use_correct_sha256_impl_for_computation_id()) {
+      if (std::holds_alternative<std::string>(plan_bytes)) {
+        computation_id = ComputeSHA256(std::get<std::string>(plan_bytes));
+      } else {
+        computation_id = ComputeSHA256(std::get<absl::Cord>(plan_bytes));
+      }
+    } else {
+      computation_id = ComputeSHA256FromStringOrCord(plan_bytes);
+    }
   }
 
   int32_t minimum_clients_in_server_visible_aggregate = 0;

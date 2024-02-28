@@ -28,6 +28,7 @@
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
@@ -46,8 +47,10 @@
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/stats.h"
+#include "fcp/confidentialcompute/cose.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
+#include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/eligibility_eval_tasks.pb.h"
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
@@ -98,12 +101,6 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       ComputationResults results, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) override;
 
-  absl::Status ReportViaConfidentialAggregation(
-      const google::internal::federatedcompute::v1::TaskAssignment::
-          ConfidentialAggregationInfo& agg_info,
-      ComputationResults results, absl::Duration plan_duration,
-      std::optional<std::string> aggregation_session_id) override;
-
   absl::Status ReportNotCompleted(
       engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id) override;
@@ -114,6 +111,16 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   NetworkStats GetNetworkStats() override;
 
  private:
+  enum class AggregationType {
+    // Unknown aggregation type (in cases where the field simply isn't populated
+    // yet).
+    // TODO: b/307312707 -  Remove this value once the
+    // enable_confidential_aggregation() flag is removed.
+    kUnknown,
+    kSimpleAggregation,
+    kSecureAggregation,
+    kConfidentialAggregation,
+  };
   // Information for a given task.
   struct PerTaskInfo {
     std::unique_ptr<ProtocolRequestCreator> aggregation_request_creator;
@@ -129,8 +136,16 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     // Unique identifier for the client's participation in an aggregation
     // session.
     std::string aggregation_client_token;
-    // Resource name for the checkpoint in simple aggregation.
+    // Resource name for the result data to upload.
     std::string aggregation_resource_name;
+    // The type of aggregation to use when reporting results for this task.
+    // Only set when the enable_confidential_aggregation() flag is enabled. If
+    // the flag is disabled then this is unconditionally set to `kUnknown`.
+    AggregationType aggregation_type;
+    // The serialized data access policy that will be used to govern access to
+    // to the data uploaded via the ConfidentialAggregations protocol. Only set
+    // when aggregation_type == kConfidentialAggregation.
+    std::optional<absl::Cord> confidential_data_access_policy;
     // Each task's state is tracked individually starting from the end of
     // check-in or multiple task assignments. The states from all of the tasks
     // will be used collectively to determine which retry window to use.
@@ -191,10 +206,11 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::StatusOr<InMemoryHttpResponse> http_response,
       const std::function<void(size_t)>& payload_uris_received_callback);
 
-  // Helper function for reporting result via simple aggregation.
-  absl::Status ReportViaSimpleAggregation(ComputationResults results,
-                                          absl::Duration plan_duration,
-                                          PerTaskInfo& task_info);
+  // Helper function for reporting result via simple or confidential
+  // aggregation.
+  absl::Status ReportViaSimpleOrConfidentialAggregation(
+      ComputationResults results, absl::Duration plan_duration,
+      PerTaskInfo& task_info);
   // Helper function to perform a StartDataUploadRequest and a ReportTaskResult
   // request concurrently.
   // This method will only return the response from the StartDataUploadRequest.
@@ -202,24 +218,56 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   PerformStartDataUploadRequestAndReportTaskResult(absl::Duration plan_duration,
                                                    PerTaskInfo& task_info);
 
-  // Helper function for handling a longrunning operation returned by a
+  // Helper function for handling a `longrunning.Operation` returned by a
   // StartDataAggregationUpload request.
-  absl::Status HandleStartDataAggregationUploadOperationResponse(
+  //
+  // Returns an OK status when the response is successfully handled. If the
+  // confidential aggregation protocol is being used then the return value will
+  // also contain the ConfidentialEncryptionConfig proto describing the
+  // parameters used to encrypt the payload.
+  absl::StatusOr<std::optional<
+      ::google::internal::federatedcompute::v1::ConfidentialEncryptionConfig>>
+  HandleStartDataAggregationUploadOperationResponse(
       absl::StatusOr<InMemoryHttpResponse> http_response,
       PerTaskInfo& task_info);
 
-  // Helper function to perform data upload via simple aggregation.
-  absl::Status UploadDataViaSimpleAgg(std::string tf_checkpoint,
-                                      PerTaskInfo& task_info);
+  // Validates a given ConfidentialEncryptionConfig and returns the public key
+  // to encrypt the payload with, if the config validation was successful.
+  absl::StatusOr<fcp::confidential_compute::OkpKey>
+  ValidateConfidentialEncryptionConfig(
+      PerTaskInfo& task_info,
+      const ::google::internal::federatedcompute::v1::
+          ConfidentialEncryptionConfig& encryption_config);
+
+  // Encrypts the given payload using the given public key, and serializes the
+  // encrypted payload in a self-describing format suitable for upload to the
+  // server.
+  absl::StatusOr<std::string> EncryptPayloadForConfidentialAggregation(
+      PerTaskInfo& task_info,
+      const fcp::confidential_compute::OkpKey& parsed_public_key,
+      const std::string& serialized_public_key, std::string payload);
+
+  // Helper function to perform data upload using the ByteStream protocol, used
+  // during simple or confidential aggregation.
+  absl::Status UploadDataViaByteStreamProtocol(std::string tf_checkpoint,
+                                               PerTaskInfo& task_info);
 
   // Helper function to perform a SubmitAggregationResult request.
   absl::Status SubmitAggregationResult(PerTaskInfo& task_info);
 
   // Helper function to perform an AbortAggregation request.
   // We only provide the server with a simplified error message.
-  absl::Status AbortAggregation(absl::Status original_error_status,
-                                absl::string_view error_message_for_server,
-                                PerTaskInfo& task_info);
+  // This function will log a diag code if the abort request failed to be
+  // delivered to the server.
+  void AbortAggregation(absl::Status original_error_status,
+                        absl::string_view error_message_for_server,
+                        PerTaskInfo& task_info);
+  // The inner implementation that `AbortAggregation` wraps. Having
+  // `AbortAggregation` wrap this function makes it easier to ensure we log the
+  // diag code for all types of error we may encounter while issuing the abort.
+  absl::Status AbortAggregationInner(absl::Status original_error_status,
+                                     absl::string_view error_message_for_server,
+                                     PerTaskInfo& task_info);
 
   // Helper function for reporting via secure aggregation.
   absl::Status ReportViaSecureAggregation(ComputationResults results,
@@ -233,21 +281,57 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   StartSecureAggregationAndReportTaskResult(absl::Duration plan_duration,
                                             PerTaskInfo& task_info);
 
+  // Describes a set of resources that may need to be fetched for a given task.
+  // These resources are specified to us after a task is assigned, and should
+  // preferably all be downloaded concurrently since the task assignment cannot
+  // be returned to the caller until these resources have been fetched.
   struct TaskResources {
     const ::google::internal::federatedcompute::v1::Resource& plan;
     const ::google::internal::federatedcompute::v1::Resource& checkpoint;
+    // While all tasks can have a plan and checkpoint Resource, only tasks using
+    // the confidential aggregation method have a confidential data access
+    // policy (for all other tasks this Resource proto will simply be empty,
+    // meaning nothing will be fetched and an empty Cord will be returned).
+    const ::google::internal::federatedcompute::v1::Resource&
+        confidential_data_access_policy;
+  };
+
+  // Represents fetched task resources, separating plan-and-checkpoint from the
+  // confidential data access policy, since the latter is only conditionally
+  // available.
+  struct FetchedTaskResources {
+    PlanAndCheckpointPayloads plan_and_checkpoint_payloads;
+    // The serialized `fcp.confidentialcompute.DataAccessPolicy` proto, if the
+    // task has one, or an empty Cord if the task did not have one.
+    absl::Cord confidential_data_access_policy;
   };
 
   // Helper function for fetching the checkpoint/plan resources for a list of
   // eligibility eval tasks or regular tasks.
-  absl::StatusOr<std::vector<absl::StatusOr<PlanAndCheckpointPayloads>>>
+  //
+  // Returns an error if the fetch operation failed as a whole. Otherwise
+  // returns a list of fetch results for each of the specified TaskResources
+  // structs, in the same order those structs were passed in. If any of the
+  // resources for a specified TaskResources struct failed to be fetched, then
+  // an error will be returned in the output vector.
+  absl::StatusOr<std::vector<absl::StatusOr<FetchedTaskResources>>>
   FetchTaskResources(std::vector<TaskResources> task_resources_list);
 
-  // Helper function for fetching the PopulationEligibilitySpec.
-  absl::StatusOr<google::internal::federated::plan::PopulationEligibilitySpec>
-  FetchPopulationEligibilitySpec(
-      const ::google::internal::federatedcompute::v1::Resource&
-          population_eligibility_spec_resource);
+  // Helper function for turning a set of HTTP responses into a
+  // `FetchedTaskResources` proto.
+  static absl::StatusOr<FetchedTaskResources> CreateFetchedTaskResources(
+      absl::StatusOr<InMemoryHttpResponse>& plan_data_response,
+      absl::StatusOr<InMemoryHttpResponse>& checkpoint_data_response,
+      absl::StatusOr<InMemoryHttpResponse>&
+          confidential_data_access_policy_response);
+
+  // Helper function for fetching the Resources used by the protocol
+  // implementation itself, like PopulationEligibilitySpec or
+  // ConfidentialEncryptionConfig.
+  template <typename T>
+  absl::StatusOr<T> FetchProtoResource(
+      const ::google::internal::federatedcompute::v1::Resource& resource,
+      absl::string_view readable_name);
 
   // Helper that moves to the given object state if the given status represents
   // a permanent error.

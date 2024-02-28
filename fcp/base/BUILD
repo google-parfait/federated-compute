@@ -565,3 +565,33 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "digest",
+    srcs = [
+        "digest.cc",
+    ],
+    hdrs = [
+        "digest.h",
+    ],
+    copts = FCP_COPTS,
+    deps = [
+        ":base",
+        "@boringssl//:crypto",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+    ],
+)
+
+cc_test(
+    name = "digest_test",
+    srcs = ["digest_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":digest",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

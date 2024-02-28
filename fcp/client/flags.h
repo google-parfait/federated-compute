@@ -250,6 +250,13 @@ class Flags {
   // If true, the client will not create an output checkpoint temp file for
   // tasks that do not use any output checkpoints.
   virtual bool skip_empty_output_checkpoints() const { return false; }
+
+  // If true, the client will generate computation IDs by actually calculating a
+  // SHA256 hash correctly, whereas it calculated the hash only over the first 4
+  // bytes before this change.
+  virtual bool use_correct_sha256_impl_for_computation_id() const {
+    return false;
+  }
 };
 }  // namespace client
 }  // namespace fcp
