@@ -203,7 +203,7 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         )
         return_codes = (await asyncio.gather(program, *clients))[1:]
         # All clients should complete successfully.
-        self.assertListEqual(return_codes, [0] * len(client_counts))
+        self.assertListEqual(return_codes, [0] * len(client_counts))  # pytype: disable=wrong-arg-types
 
     self.assertEqual(
         release_manager.values()['0/result'],
@@ -258,7 +258,7 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         )
         return_codes = (await asyncio.gather(program, *clients))[1:]
         # All clients should complete successfully.
-        self.assertListEqual(return_codes, [0] * len(client_counts))
+        self.assertListEqual(return_codes, [0] * len(client_counts))  # pytype: disable=wrong-arg-types
 
     # With multiple assignment, clients should have contributed to both
     # computations.
