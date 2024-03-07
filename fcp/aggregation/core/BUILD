@@ -209,6 +209,9 @@ cc_library(
 cc_library(
     name = "mutable_string_data",
     hdrs = ["mutable_string_data.h"],
+    visibility = [
+        "//visibility:public",
+    ],
     deps = [":tensor"],
 )
 
