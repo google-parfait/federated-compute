@@ -207,6 +207,12 @@ cc_library(
 )
 
 cc_library(
+    name = "mutable_string_data",
+    hdrs = ["mutable_string_data.h"],
+    deps = [":tensor"],
+)
+
+cc_library(
     name = "fedsql_constants",
     hdrs = ["fedsql_constants.h"],
 )
@@ -284,6 +290,17 @@ cc_test(
     deps = [
         ":tensor",
         ":vector_string_data",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "mutable_string_data_test",
+    srcs = ["mutable_string_data_test.cc"],
+    deps = [
+        ":mutable_string_data",
+        ":tensor",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],
