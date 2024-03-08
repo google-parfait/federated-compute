@@ -35,6 +35,7 @@
 #include "fcp/client/phase_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
+#include "fcp/protos/population_eligibility_spec.pb.h"
 #include "tensorflow/core/framework/tensor.h"
 
 namespace fcp {
@@ -108,7 +109,10 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     const google::internal::federated::plan::ClientOnlyPlan& client_plan,
     const std::string& checkpoint_input_filename,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time run_plan_start_time, const absl::Time reference_time);
+    absl::Time run_plan_start_time, absl::Time reference_time,
+    std::optional<
+        ::google::internal::federated::plan::PopulationEligibilitySpec>
+        population_eligibility_spec);
 
 }  // namespace client
 }  // namespace fcp

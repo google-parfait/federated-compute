@@ -130,8 +130,7 @@ class OpStatsExampleStoreTest : public testing::Test {
   testing::StrictMock<MockOpStatsDb> mock_db_;
   testing::StrictMock<MockLogManager> mock_log_manager_;
   OpStatsExampleIteratorFactory iterator_factory_ =
-      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_,
-                                    /*neet_tf_custom_policy_support=*/false);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
 };
 
 TEST_F(OpStatsExampleStoreTest, TestInvalidCollectionUrl) {
@@ -244,7 +243,7 @@ TEST_F(OpStatsExampleStoreTest, Success) {
   iterator->Close();
 }
 
-TEST_F(OpStatsExampleStoreTest, EmptyData) {
+TEST_F(OpStatsExampleStoreTest, EmptyDataSupportsNeetContext) {
   EXPECT_CALL(mock_db_, Read())
       .WillOnce(Return(OpStatsSequence::default_instance()));
 
@@ -254,8 +253,15 @@ TEST_F(OpStatsExampleStoreTest, EmptyData) {
       iterator_factory_.CreateExampleIterator(selector);
   ASSERT_TRUE(iterator_or.ok());
   std::unique_ptr<ExampleIterator> iterator = std::move(iterator_or.value());
-  absl::StatusOr<std::string> status_or = iterator->Next();
-  EXPECT_THAT(status_or.status(), IsCode(absl::StatusCode::kOutOfRange));
+  absl::StatusOr<std::string> example_or = iterator->Next();
+  ASSERT_OK(example_or);
+  tensorflow::Example example;
+  example.ParseFromString(*example_or);
+  auto supports_neet_context =
+      ExtractSingleInt64(example, kSupportsNeetContext);
+  ASSERT_EQ(supports_neet_context, 1);
+  // We should have arrived at the end of the iterator.
+  EXPECT_THAT(iterator->Next().status(), IsCode(absl::StatusCode::kOutOfRange));
 }
 
 TEST_F(OpStatsExampleStoreTest, DataIsFilteredBySelectionCriteria) {
@@ -411,8 +417,7 @@ TEST_F(OpStatsExampleStoreTest, SelectionCriteriaOnlyContainsEndTime) {
 TEST_F(OpStatsExampleStoreTest,
        SelectionCriteriaLastSuccessfulContributionEnabledAndExists) {
   OpStatsExampleIteratorFactory iterator_factory =
-      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_,
-                                    /*neet_tf_custom_policy_support=*/false);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
   OperationalStats included;
   included.set_task_name(kTestTaskName);
   included.mutable_events()->Add(CreateEvent(
@@ -464,8 +469,7 @@ TEST_F(OpStatsExampleStoreTest,
 TEST_F(OpStatsExampleStoreTest,
        SelectionCriteriaLastSuccessfulContributionEnabledAndDoesNotExist) {
   OpStatsExampleIteratorFactory iterator_factory =
-      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_,
-                                    /*neet_tf_custom_policy_support=*/false);
+      OpStatsExampleIteratorFactory(&mock_opstats_logger_, &mock_log_manager_);
   OperationalStats non_matching;
   non_matching.set_task_name("non_matching_task_name");
   non_matching.mutable_events()->Add(CreateEvent(
@@ -494,7 +498,14 @@ TEST_F(OpStatsExampleStoreTest,
   EXPECT_OK(iterator_or);
   std::unique_ptr<ExampleIterator> iterator = std::move(iterator_or.value());
   absl::StatusOr<std::string> example_or = iterator->Next();
-  EXPECT_THAT(example_or.status(), IsCode(absl::StatusCode::kOutOfRange));
+  ASSERT_OK(example_or);
+  tensorflow::Example example;
+  example.ParseFromString(*example_or);
+  auto supports_neet_context =
+      ExtractSingleInt64(example, kSupportsNeetContext);
+  ASSERT_EQ(supports_neet_context, 1);
+  // We should have arrived at the end of the iterator.
+  EXPECT_THAT(iterator->Next().status(), IsCode(absl::StatusCode::kOutOfRange));
 }
 
 TEST_F(OpStatsExampleStoreTest, FullSerialization) {

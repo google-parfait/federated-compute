@@ -660,7 +660,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_example_query_plan_engine, (), (const, override));
   MOCK_METHOD(bool, http_protocol_supports_multiple_task_assignments, (),
               (const, override));
-  MOCK_METHOD(bool, enable_native_eets, (), (const, override));
   MOCK_METHOD(bool, enable_phase_stats_logging, (), (const, override));
   MOCK_METHOD(bool, enable_lightweight_client_report_wire_format, (),
               (const, override));

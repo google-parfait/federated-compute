@@ -349,8 +349,7 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
     LogManager& log_manager, PhaseLogger& phase_logger,
     const opstats::OpStatsSequence& opstats_sequence, Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
-    bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner,
-    const Flags* flags) {
+    EetPlanRunner& eet_plan_runner, const Flags* flags) {
   bool graceful_eligibility_policy_failure =
       flags->graceful_eligibility_policy_failure();
   // Initialize the TaskEligibilityInfo to return. If eligibility cannot be
@@ -398,11 +397,6 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
         }
         break;
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kTfCustomPolicy:
-        if (!neet_tf_custom_policy_support) {
-          // graceful_eligibility_policy_failure requires
-          // neet_tf_custom_policy_support to be true.
-          return eligibility_result;
-        }
         if (kTfCustomPolicyImplementationVersion < policy_spec.min_version()) {
           if (graceful_eligibility_policy_failure) {
             policy_implemented = false;

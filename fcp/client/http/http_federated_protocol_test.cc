@@ -337,6 +337,8 @@ EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest(
   request.mutable_eligibility_eval_task_capabilities()
       ->set_supports_multiple_task_assignment(
           supports_multiple_task_assignments);
+  request.mutable_eligibility_eval_task_capabilities()
+      ->set_supports_native_eets(true);
 
   return request;
 }
@@ -3896,6 +3898,8 @@ TEST_F(HttpFederatedProtocolTest,
           ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
   expected_eligibility_request.mutable_eligibility_eval_task_capabilities()
       ->set_supports_multiple_task_assignment(false);
+  expected_eligibility_request.mutable_eligibility_eval_task_capabilities()
+      ->set_supports_native_eets(true);
 
   // Issue an eligibility eval checkin so we can validate the field is set.
   Resource eligibility_plan_resource;

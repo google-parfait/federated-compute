@@ -62,8 +62,7 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
     PhaseLogger& phase_logger, const opstats::OpStatsSequence& opstats_sequence,
     Clock& clock,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
-    bool neet_tf_custom_policy_support, EetPlanRunner& eet_plan_runner,
-    const Flags* flags);
+    EetPlanRunner& eet_plan_runner, const Flags* flags);
 
 }  // namespace fcp::client
 

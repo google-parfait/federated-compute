@@ -78,8 +78,7 @@ tensorflow::Feature CreateFeatureFromIntVector(
 }
 
 std::string CreateExample(const OperationalStats& op_stats,
-                          int64_t earliest_trustworthy_time,
-                          bool neet_tf_custom_policy_support) {
+                          int64_t earliest_trustworthy_time) {
   tensorflow::Example example;
   auto* feature_map = example.mutable_features()->mutable_feature();
   (*feature_map)[kPopulationName] =
@@ -137,9 +136,7 @@ std::string CreateExample(const OperationalStats& op_stats,
   (*feature_map)[kEarliestTrustWorthyTimeMillis] =
       CreateFeatureFromInt(earliest_trustworthy_time);
 
-  if (neet_tf_custom_policy_support) {
-    (*feature_map)[kSupportsNeetContext] = CreateFeatureFromInt(1);
-  }
+  (*feature_map)[kSupportsNeetContext] = CreateFeatureFromInt(1);
 
   return example.SerializeAsString();
 }
@@ -147,30 +144,25 @@ std::string CreateExample(const OperationalStats& op_stats,
 class OpStatsExampleIterator : public fcp::client::ExampleIterator {
  public:
   explicit OpStatsExampleIterator(std::vector<OperationalStats> op_stats,
-                                  int64_t earliest_trustworthy_time,
-                                  bool neet_tf_custom_policy_support)
+                                  int64_t earliest_trustworthy_time)
       : next_(0),
         data_(std::move(op_stats)),
-        earliest_trustworthy_time_millis_(earliest_trustworthy_time),
-        neet_tf_custom_policy_support_(neet_tf_custom_policy_support) {}
+        earliest_trustworthy_time_millis_(earliest_trustworthy_time) {}
   absl::StatusOr<std::string> Next() override {
-    if (neet_tf_custom_policy_support_) {
-      if (data_.empty() && next_ == 0) {
-        // If there's no data, we still need to return an opstats example
-        // containing baseline info like the earliest trustworthy time, and
-        // NEET custom policy support. We'll increment next so we never hit this
-        // case again.
-        next_++;
-        return CreateExample(OperationalStats(),
-                             earliest_trustworthy_time_millis_,
-                             neet_tf_custom_policy_support_);
-      }
+    if (data_.empty() && next_ == 0) {
+      // If there's no data, we still need to return an opstats example
+      // containing baseline info like the earliest trustworthy time, and
+      // NEET custom policy support. We'll increment next so we never hit this
+      // case again.
+      next_++;
+      return CreateExample(OperationalStats(),
+                           earliest_trustworthy_time_millis_);
     }
+
     if (next_ < 0 || next_ >= data_.size()) {
       return absl::OutOfRangeError("The iterator is out of range.");
     }
-    return CreateExample(data_[next_++], earliest_trustworthy_time_millis_,
-                         neet_tf_custom_policy_support_);
+    return CreateExample(data_[next_++], earliest_trustworthy_time_millis_);
   }
 
   void Close() override {
@@ -183,7 +175,6 @@ class OpStatsExampleIterator : public fcp::client::ExampleIterator {
   int next_;
   std::vector<OperationalStats> data_;
   const int64_t earliest_trustworthy_time_millis_;
-  bool neet_tf_custom_policy_support_;
 };
 
 }  // anonymous namespace
@@ -247,8 +238,7 @@ OpStatsExampleIteratorFactory::CreateExampleIterator(
   }
   return std::make_unique<OpStatsExampleIterator>(
       std::move(selected_data),
-      TimeUtil::TimestampToMilliseconds(data.earliest_trustworthy_time()),
-      neet_tf_custom_policy_support_);
+      TimeUtil::TimestampToMilliseconds(data.earliest_trustworthy_time()));
 }
 
 }  // namespace opstats

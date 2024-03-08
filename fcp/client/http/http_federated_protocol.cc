@@ -476,7 +476,7 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
       ->set_supports_multiple_task_assignment(
           flags_->http_protocol_supports_multiple_task_assignments());
   request.mutable_eligibility_eval_task_capabilities()
-      ->set_supports_native_eets(flags_->enable_native_eets());
+      ->set_supports_native_eets(true);
 
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,
@@ -552,9 +552,7 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
       EligibilityEvalTask result{.execution_id = task.execution_id()};
       payload_uris_received_callback(result);
 
-      if (task.has_population_eligibility_spec() &&
-          (flags_->http_protocol_supports_multiple_task_assignments() ||
-           flags_->enable_native_eets())) {
+      if (task.has_population_eligibility_spec()) {
         FCP_ASSIGN_OR_RETURN(
             PopulationEligibilitySpec population_eligibility_spec,
             FetchProtoResource<PopulationEligibilitySpec>(
