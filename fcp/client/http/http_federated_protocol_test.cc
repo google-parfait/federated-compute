@@ -43,6 +43,7 @@
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
+#include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/cache/test_helpers.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -568,14 +569,14 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     federated_protocol_ = std::make_unique<HttpFederatedProtocol>(
         clock_, &mock_log_manager_, &mock_flags_, &mock_http_client_,
         absl::WrapUnique(mock_secagg_runner_factory_),
-        &mock_secagg_event_publisher_, kEntryPointUri, kApiKey, kPopulationName,
+        &mock_secagg_event_publisher_, &mock_resource_cache_,
+        &mock_attestation_verifier_, kEntryPointUri, kApiKey, kPopulationName,
         kRetryToken, kClientVersion, kAttestationMeasurement,
         mock_should_abort_.AsStdFunction(), absl::BitGen(),
         InterruptibleRunner::TimingConfig{
             .polling_period = absl::ZeroDuration(),
             .graceful_shutdown_period = absl::InfiniteDuration(),
-            .extended_shutdown_period = absl::InfiniteDuration()},
-        &mock_resource_cache_);
+            .extended_shutdown_period = absl::InfiniteDuration()});
   }
 
   void TearDown() override {
@@ -939,10 +940,14 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillOnce(Return(CreateEmptySuccessHttpResponse()));
   }
 
-  void ExpectSuccessfulAbortAggregationRequest(absl::string_view base_uri) {
+  void ExpectSuccessfulAbortAggregationRequest(
+      absl::string_view base_uri, bool confidential_aggregation = false) {
     EXPECT_CALL(mock_http_client_,
                 PerformSingleRequest(SimpleHttpRequestMatcher(
-                    absl::StrCat(base_uri, "/v1/aggregations/",
+                    absl::StrCat(base_uri,
+                                 confidential_aggregation
+                                     ? "/v1/confidentialaggregations/"
+                                     : "/v1/aggregations/",
                                  "AGGREGATION_SESSION_ID/clients/"
                                  "CLIENT_TOKEN:abort?%24alt=proto"),
                     HttpRequest::Method::kPost, _, _)))
@@ -957,6 +962,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   NiceMock<MockFlags> mock_flags_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
   StrictMock<cache::MockResourceCache> mock_resource_cache_;
+  StrictMock<MockAttestationVerifier> mock_attestation_verifier_;
   Clock* clock_ = Clock::RealClock();
   NiceMock<MockFunction<void(
       const ::fcp::client::FederatedProtocol::EligibilityEvalTask&)>>
@@ -987,14 +993,14 @@ TEST_F(HttpFederatedProtocolTest,
   federated_protocol_ = std::make_unique<HttpFederatedProtocol>(
       clock_, &mock_log_manager_, &mock_flags_, &mock_http_client_,
       absl::WrapUnique(mock_secagg_runner_factory_),
-      &mock_secagg_event_publisher_, kEntryPointUri, kApiKey, kPopulationName,
+      &mock_secagg_event_publisher_, &mock_resource_cache_,
+      &mock_attestation_verifier_, kEntryPointUri, kApiKey, kPopulationName,
       kRetryToken, kClientVersion, kAttestationMeasurement,
       mock_should_abort_.AsStdFunction(), absl::BitGen(),
       InterruptibleRunner::TimingConfig{
           .polling_period = absl::ZeroDuration(),
           .graceful_shutdown_period = absl::InfiniteDuration(),
-          .extended_shutdown_period = absl::InfiniteDuration()},
-      &mock_resource_cache_);
+          .extended_shutdown_period = absl::InfiniteDuration()});
 
   const ::google::internal::federatedml::v2::RetryWindow& retry_window2 =
       federated_protocol_->GetLatestRetryWindow();
@@ -3062,6 +3068,17 @@ TEST_F(HttpFederatedProtocolTest,
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.set_public_key(encoded_public_key);
 
+  // Ensure that the server's attestation evidence is considered valid.
+  EXPECT_CALL(
+      mock_attestation_verifier_,
+      Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
+      .WillRepeatedly(
+          [=](const absl::Cord& access_policy,
+              const ConfidentialEncryptionConfig& encryption_config) {
+            return attestation::AlwaysPassingAttestationVerifier().Verify(
+                access_policy, encryption_config);
+          });
+
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
@@ -3124,10 +3141,70 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_EQ(*decrypted_uploaded_data, checkpoint_str);
 }
 
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedViaConfidentialAggAttestationValidationFailure) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*support_multiple_task_assignments=*/false,
+      /*enable_confidential_aggregation*/ true));
+  std::string serialized_access_policy = "the access policy";
+  ASSERT_OK(RunSuccessfulCheckin(
+      /*report_eligibility_eval_result*/ true,
+      /*confidential_data_access_policy=*/serialized_access_policy));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  // We use an empty encryption config since we're just testing the attestation
+  // verification failure case, which doesn't need any real values in the
+  // config.
+  ConfidentialEncryptionConfig encryption_config;
+
+  // Ensure that the server's attestation evidence is considered invalid.
+  EXPECT_CALL(
+      mock_attestation_verifier_,
+      Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
+      .WillRepeatedly(
+          [=](const absl::Cord& access_policy,
+              const ConfidentialEncryptionConfig& encryption_config) {
+            return attestation::AlwaysFailingAttestationVerifier().Verify(
+                access_policy, encryption_config);
+          });
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri,
+      encryption_config);
+
+  // Attestation validation will fail after the
+  // StartConfidentialAggregationResponse, leading to the session being aborted
+  // and an error being returned by `ReportCompleted`.
+  //
+  // No further protocol requests are expected after this one.
+  ExpectSuccessfulAbortAggregationRequest("https://aggregation.second.uri",
+                                          /*confidential_aggregation=*/true);
+
+  absl::Status report_result = federated_protocol_->ReportCompleted(
+      std::move(results), plan_duration, std::nullopt);
+  EXPECT_THAT(report_result, IsCode(FAILED_PRECONDITION));
+  EXPECT_THAT(report_result.message(),
+              HasSubstr("attestation verification failed"));
+}
+
 // TODO: b/307312707 -  Add a test for confidential aggregation with multiple
 // task assignment.
-// TODO: b/307312707 -  Add tests for confidential aggregation failure
-// scenarios, in addition to the success scenario being tested above.
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
   absl::Duration plan_duration = absl::Minutes(5);

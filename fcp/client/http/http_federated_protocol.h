@@ -33,6 +33,7 @@
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
 #include "fcp/base/wall_clock_stopwatch.h"
+#include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
@@ -69,13 +70,14 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       HttpClient* http_client,
       std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
       SecAggEventPublisher* secagg_event_publisher,
+      cache::ResourceCache* resource_cache,
+      attestation::AttestationVerifier* attestation_verifier,
       absl::string_view entry_point_uri, absl::string_view api_key,
       absl::string_view population_name, absl::string_view retry_token,
       absl::string_view client_version,
-      absl::string_view attestation_measurement,
+      absl::string_view client_attestation_measurement,
       std::function<bool()> should_abort, absl::BitGen bit_gen,
-      const InterruptibleRunner::TimingConfig& timing_config,
-      cache::ResourceCache* resource_cache);
+      const InterruptibleRunner::TimingConfig& timing_config);
 
   ~HttpFederatedProtocol() override = default;
 
@@ -358,6 +360,12 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   HttpClient* const http_client_;
   std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory_;
   SecAggEventPublisher* secagg_event_publisher_;
+  // `nullptr` if the feature is disabled.
+  cache::ResourceCache* resource_cache_;
+  // A verifier which can be used to verify a ConfidentialAggregations service's
+  // attestation evidence.
+  attestation::AttestationVerifier& attestation_verifier_;
+
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
   std::unique_ptr<ProtocolRequestCreator> eligibility_eval_request_creator_;
   std::unique_ptr<ProtocolRequestCreator> task_assignment_request_creator_;
@@ -368,7 +376,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   const std::string population_name_;
   const std::string retry_token_;
   const std::string client_version_;
-  const std::string attestation_measurement_;
+  // A measurement with which the client's integrity can be attested to the
+  // server.
+  const std::string client_attestation_measurement_;
   std::function<bool()> should_abort_;
   absl::BitGen bit_gen_;
   const InterruptibleRunner::TimingConfig timing_config_;
@@ -405,8 +415,6 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   bool eligibility_eval_enabled_ = false;
   // Set this field to true if ReportEligibilityEvalResult has been called.
   bool report_eligibility_eval_result_called_ = false;
-  // `nullptr` if the feature is disabled.
-  cache::ResourceCache* resource_cache_;
 };
 
 }  // namespace http

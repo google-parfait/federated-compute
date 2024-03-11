@@ -32,7 +32,6 @@
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/ascii.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -44,6 +43,8 @@
 #include "fcp/base/random_token.h"
 #include "fcp/base/time_util.h"
 #include "fcp/base/wall_clock_stopwatch.h"
+#include "fcp/client/attestation/attestation_verifier.h"
+#include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
@@ -381,12 +382,14 @@ HttpFederatedProtocol::HttpFederatedProtocol(
     HttpClient* http_client,
     std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
     SecAggEventPublisher* secagg_event_publisher,
+    cache::ResourceCache* resource_cache,
+    attestation::AttestationVerifier* attestation_verifier,
     absl::string_view entry_point_uri, absl::string_view api_key,
     absl::string_view population_name, absl::string_view retry_token,
-    absl::string_view client_version, absl::string_view attestation_measurement,
+    absl::string_view client_version,
+    absl::string_view client_attestation_measurement,
     std::function<bool()> should_abort, absl::BitGen bit_gen,
-    const InterruptibleRunner::TimingConfig& timing_config,
-    cache::ResourceCache* resource_cache)
+    const InterruptibleRunner::TimingConfig& timing_config)
     : object_state_(ObjectState::kInitialized),
       clock_(*clock),
       log_manager_(log_manager),
@@ -394,6 +397,8 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       http_client_(http_client),
       secagg_runner_factory_(std::move(secagg_runner_factory)),
       secagg_event_publisher_(secagg_event_publisher),
+      resource_cache_(resource_cache),
+      attestation_verifier_(*attestation_verifier),
       interruptible_runner_(std::make_unique<InterruptibleRunner>(
           log_manager, should_abort, timing_config,
           InterruptibleRunner::DiagnosticsConfig{
@@ -415,13 +420,12 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       population_name_(population_name),
       retry_token_(retry_token),
       client_version_(client_version),
-      attestation_measurement_(attestation_measurement),
+      client_attestation_measurement_(client_attestation_measurement),
       should_abort_(std::move(should_abort)),
       bit_gen_(std::move(bit_gen)),
       timing_config_(timing_config),
       waiting_period_for_cancellation_(
-          absl::Seconds(flags->waiting_period_sec_for_cancellation())),
-      resource_cache_(resource_cache) {
+          absl::Seconds(flags->waiting_period_sec_for_cancellation())) {
   // Note that we could cast the provided error codes to absl::StatusCode
   // values here. However, that means we'd have to handle the case when
   // invalid integers that don't map to a StatusCode enum are provided in the
@@ -464,7 +468,7 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   EligibilityEvalTaskRequest request;
   request.mutable_client_version()->set_version_code(client_version_);
   request.mutable_attestation_measurement()->set_value(
-      attestation_measurement_);
+      client_attestation_measurement_);
   if (flags_->enable_confidential_aggregation()) {
     request.mutable_resource_capabilities()
         ->set_supports_confidential_aggregation(true);
@@ -1411,27 +1415,18 @@ HttpFederatedProtocol::ValidateConfidentialEncryptionConfig(
     PerTaskInfo& task_info,
     const ConfidentialEncryptionConfig& encryption_config) {
   FCP_CHECK(task_info.confidential_data_access_policy.has_value());
-
-  // TODO: b/307312707 -  Actually validate the attestation evidence in the
-  // ConfidentialEncryptionConfig, before proceeding to validate the public key
-  // provided in the ConfidentialEncryptionConfig.
-
-  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(encryption_config.public_key());
-  if (!cwt.ok()) {
+  auto result = attestation_verifier_.Verify(
+      *task_info.confidential_data_access_policy, encryption_config);
+  if (!result.ok()) {
     task_info.state = ObjectState::kReportFailedPermanentError;
     std::string server_error_msg =
-        "Parsing confidential aggregation public key failed.";
-    AbortAggregation(cwt.status(), server_error_msg, task_info);
+        "Confidential aggregation attestation verification failed.";
+    AbortAggregation(result.status(), server_error_msg, task_info);
     return absl::Status(
-        cwt.status().code(),
-        absl::StrCat(server_error_msg, " (", cwt.status().ToString(), ")"));
+        result.status().code(),
+        absl::StrCat(server_error_msg, " (", result.status().ToString(), ")"));
   }
-
-  // TODO: b/307312707 -  Validate that the public key we're about to return was
-  // actually signed by the application layer signing key from the (validated)
-  // attestation evidence.
-
-  return *cwt->public_key;
+  return result;
 }
 
 absl::StatusOr<std::string>

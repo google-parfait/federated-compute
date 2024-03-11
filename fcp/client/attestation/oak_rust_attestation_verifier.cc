@@ -53,7 +53,7 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
           public_key_reference_values_));
 
   if (attestation_results->status() != AttestationResults::STATUS_SUCCESS) {
-    return absl::InvalidArgumentError(absl::Substitute(
+    return absl::FailedPreconditionError(absl::Substitute(
         "Attestation verification failed (status: $0, reason: $1).",
         attestation_results->status(), attestation_results->reason()));
   }

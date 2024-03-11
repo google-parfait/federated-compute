@@ -30,8 +30,10 @@
 #include "gmock/gmock.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
+#include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
@@ -47,6 +49,8 @@
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/stats.h"
+#include "fcp/confidentialcompute/cose.h"
+#include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "tensorflow/core/example/example.pb.h"
 #include "tensorflow/core/example/feature.pb.h"
@@ -967,6 +971,15 @@ class MockSecAggProtocolDelegate : public SecAggProtocolDelegate {
   MOCK_METHOD(absl::StatusOr<secagg::ServerToClientWrapperMessage>,
               ReceiveServerMessage, (), (override));
   MOCK_METHOD(void, Abort, (), (override));
+};
+
+class MockAttestationVerifier : public attestation::AttestationVerifier {
+ public:
+  MOCK_METHOD(absl::StatusOr<fcp::confidential_compute::OkpKey>, Verify,
+              (const absl::Cord& access_policy,
+               const google::internal::federatedcompute::v1::
+                   ConfidentialEncryptionConfig& encryption_config),
+              (override));
 };
 
 }  // namespace client

@@ -16,12 +16,13 @@
 #ifndef FCP_CLIENT_SIMPLE_TASK_ENVIRONMENT_H_
 #define FCP_CLIENT_SIMPLE_TASK_ENVIRONMENT_H_
 
+#include <memory>
 #include <string>
-#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/task_result_info.pb.h"
@@ -83,6 +84,16 @@ class SimpleTaskEnvironment {
   // (although support for HTTP will become mandatory in the future).
   virtual std::unique_ptr<fcp::client::http::HttpClient> CreateHttpClient() {
     return nullptr;
+  }
+
+  // Creates a verifier which can be used to verify a ConfidentialAggregations
+  // service's attestation evidence. An AlwaysFailingAttestationVerifier will be
+  // used by default (effectively disabling support for the
+  // ConfidentialAggregations protocol). Must never return a nullptr.
+  virtual std::unique_ptr<fcp::client::attestation::AttestationVerifier>
+  CreateAttestationVerifier() {
+    return std::make_unique<
+        fcp::client::attestation::AlwaysFailingAttestationVerifier>();
   }
 
   // Checks whether the caller should abort computation. If less than

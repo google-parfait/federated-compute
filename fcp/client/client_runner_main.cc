@@ -41,7 +41,8 @@ ABSL_FLAG(std::string, session, "", "Session name");
 ABSL_FLAG(std::string, population, "", "Population name");
 ABSL_FLAG(std::string, retry_token, "", "Retry token");
 ABSL_FLAG(std::string, client_version, "", "Client version");
-ABSL_FLAG(std::string, attestation_string, "", "Attestation string");
+ABSL_FLAG(std::string, client_attestation_measurement, "",
+          "Client attestation measurement");
 ABSL_FLAG(std::string, example_data_path, "",
           "Path to a serialized ClientRunnerExampleData proto with client "
           "example data. Falls back to --num_empty_examples if unset.");
@@ -117,7 +118,7 @@ int main(int argc, char** argv) {
         &federated_task_env_deps_impl, &event_publisher, &files_impl,
         &log_manager_impl, &flags, server, absl::GetFlag(FLAGS_api_key),
         test_cert, session, population, absl::GetFlag(FLAGS_retry_token),
-        client_version, absl::GetFlag(FLAGS_attestation_string));
+        client_version, absl::GetFlag(FLAGS_client_attestation_measurement));
     if (fl_runner_result.ok()) {
       FCP_LOG(INFO) << "Run finished successfully; result: "
                     << fl_runner_result.value().DebugString();

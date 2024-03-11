@@ -71,9 +71,8 @@ inline constexpr absl::string_view kFederatedComputeCheckpoint =
 //     to serve versioned computations - that is, versions of a computation that
 //     have been tested and found to be compatible with this device's version -
 //     or reject the device.
-// - attestation_measurement: An opaque string from a "measurement" that can be
-// used
-//     by the server to attest the device integrity.
+// - client_attestation_measurement: An opaque string from a "measurement" that
+//     can be used by the server to attest the device integrity.
 //
 // Returns:
 // On success, the returned FLRunnerResult contains information on when the
@@ -85,7 +84,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     const std::string& test_cert_path, const std::string& session_name,
     const std::string& population_name, const std::string& retry_token,
     const std::string& client_version,
-    const std::string& attestation_measurement);
+    const std::string& client_attestation_measurement);
 
 // This is exposed for use in tests that require a mocked FederatedProtocol and
 // OpStatsLogger. Otherwise, this is used internally by the other

@@ -38,6 +38,7 @@
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
+#include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/cache/file_backed_resource_cache.h"
 #include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/engine/common.h"
@@ -1922,7 +1923,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     const std::string& test_cert_path, const std::string& session_name,
     const std::string& population_name, const std::string& retry_token,
     const std::string& client_version,
-    const std::string& attestation_measurement) {
+    const std::string& client_attestation_measurement) {
   auto opstats_logger =
       engine::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
                                   session_name, population_name);
@@ -1995,13 +1996,18 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           absl::StartsWith(federated_service_uri, "http://localhost"))) {
       return absl::InvalidArgumentError("The entry point uri is invalid.");
     }
+
+    std::unique_ptr<attestation::AttestationVerifier> attestation_verifier =
+        env_deps->CreateAttestationVerifier();
+
     federated_protocol = std::make_unique<http::HttpFederatedProtocol>(
         clock, log_manager, flags, http_client.get(),
         std::make_unique<SecAggRunnerFactoryImpl>(),
-        event_publisher->secagg_event_publisher(), federated_service_uri,
-        api_key, population_name, retry_token, client_version,
-        attestation_measurement, should_abort_protocol_callback, absl::BitGen(),
-        timing_config, resource_cache.get());
+        event_publisher->secagg_event_publisher(), resource_cache.get(),
+        attestation_verifier.get(), federated_service_uri, api_key,
+        population_name, retry_token, client_version,
+        client_attestation_measurement, should_abort_protocol_callback,
+        absl::BitGen(), timing_config);
   } else {
 #ifdef FCP_CLIENT_SUPPORT_GRPC
     // Check in with the server to either retrieve a plan + initial checkpoint,
@@ -2017,7 +2023,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         event_publisher, log_manager,
         std::make_unique<SecAggRunnerFactoryImpl>(), flags, http_client.get(),
         federated_service_uri, api_key, test_cert_path, population_name,
-        retry_token, client_version, attestation_measurement,
+        retry_token, client_version, client_attestation_measurement,
         should_abort_protocol_callback, timing_config, grpc_channel_deadline,
         resource_cache.get());
 #else

@@ -32,7 +32,7 @@ using ::google::internal::federatedcompute::v1::ConfidentialEncryptionConfig;
 absl::StatusOr<OkpKey> AlwaysFailingAttestationVerifier::Verify(
     const absl::Cord& access_policy,
     const ConfidentialEncryptionConfig& encryption_config) {
-  return absl::InvalidArgumentError(
+  return absl::FailedPreconditionError(
       "Attestation verification failed unconditionally.");
 }
 

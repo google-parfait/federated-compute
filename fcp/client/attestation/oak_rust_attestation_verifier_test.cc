@@ -58,7 +58,7 @@ TEST(OakRustAttestationTest, DefaultValuesDoNotVerifySuccessfully) {
   // The verification should fail, since neither reference values nor the
   // evidence are valid.
   auto result = verifier.Verify(absl::Cord(""), encryption_config);
-  EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(result.status().message(),
               HasSubstr("Attestation verification failed"));
 }
