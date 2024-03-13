@@ -111,8 +111,11 @@ message StartTaskAssignmentRequest {
   // `RequestEligibilityEvalTask` call.
   //
   // If this field is set, it describes to the server which tasks the client is
-  // (in)eligible. The server must take this information into account when
-  // deciding task to serve in response to this request.
+  // (in)eligible for, out of the set of tasks currently being served by the
+  // server. The server must only use this information to decide which task to
+  // serve to the client in response to this request, must use this information
+  // only during this specific protocol session, and must not persist this
+  // information in any way.
   //
   // If this field is unset, it may indicate that the client previously received
   // an `EligibilityEvalTask` without an `EligibilityEvalPayload` message (i.e.
