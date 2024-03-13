@@ -22,6 +22,7 @@
 #include <optional>
 #include <string>
 
+#include "google/protobuf/struct.pb.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
@@ -59,6 +60,7 @@ struct OkpCwt {
   std::optional<absl::Time> issued_at;
   std::optional<absl::Time> expiration_time;
   std::optional<OkpKey> public_key;
+  google::protobuf::Struct config_properties;
   std::string signature;
 
   // Returns the canonical Sig_structure object containing the protected

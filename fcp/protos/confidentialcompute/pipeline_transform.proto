@@ -64,11 +64,9 @@ message ConfigureAndAttestResponse {
   // CWT will contain all the claims and properties required by
   // `fcp.confidentialcompute.AuthorizeAccessRequest.recipient_public_key`. A
   // new keypair will be generated whenever the ConfigureAndAttest method is
-  // called with a new configuration.
-  // TODO: b/288331695 - Add a private claim for the configuration.
-  //
-  // Note: During the migration to CWTs, this may instead be a raw 32-byte Curve
-  // 25519 public key.
+  // called with a new configuration. The following additional CWT claims may be
+  // present:
+  //   -65538: google.protobuf.Struct containing app-specific config properties
   bytes public_key = 1;
 
   // For Oak Restricted Kernel applications, the application's attestation
@@ -161,9 +159,6 @@ message Record {
       // expiration time as the original data. This key can be ignored if the
       // application doesn't encrypt its outputs (e.g., because it produces
       // anonymized aggregate results).
-      //
-      // Note: During the migration to CWTs, this may instead be a raw 32-byte
-      // key.
       bytes reencryption_public_key = 1;
 
       // Unique nonce for this record to protect against replay attacks by an

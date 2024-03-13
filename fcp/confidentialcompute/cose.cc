@@ -48,8 +48,9 @@ enum CwtClaim {
   // this project and
   // https://github.com/project-oak/oak/blob/main/oak_dice/src/cert.rs for Oak
   // claims.
-  kPublicKey = -65537,       // Claim containing serialized public key.
-  kOakPublicKey = -4670552,  // Oak claim containing serialized public key.
+  kPublicKey = -65537,         // Claim containing serialized public key.
+  kConfigProperties = -65538,  // Claim containing configuration properties.
+  kOakPublicKey = -4670552,    // Oak claim containing serialized public key.
 };
 
 // COSE Key parameters; see https://www.iana.org/assignments/cose/cose.xhtml.
@@ -93,6 +94,10 @@ absl::StatusOr<std::vector<uint8_t>> BuildCwtPayload(const OkpCwt& cwt) {
     FCP_ASSIGN_OR_RETURN(std::string encoded_public_key,
                          cwt.public_key->Encode());
     map.add(CwtClaim::kPublicKey, Bstr(encoded_public_key));
+  }
+  if (!cwt.config_properties.fields().empty()) {
+    map.add(CwtClaim::kConfigProperties,
+            Bstr(cwt.config_properties.SerializeAsString()));
   }
   return map.encode();
 }
@@ -346,6 +351,18 @@ absl::StatusOr<OkpCwt> OkpCwt::Decode(absl::string_view encoded) {
                 value->asBstr()->value().size())));
         break;
       }
+
+      case CwtClaim::kConfigProperties:
+        if (value->type() != cppbor::BSTR) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("unsupported configuration type ", value->type()));
+        }
+        if (!cwt.config_properties.ParseFromArray(
+                value->asBstr()->value().data(),
+                static_cast<int>(value->asBstr()->value().size()))) {
+          return absl::InvalidArgumentError("failed to parse configuration");
+        }
+        break;
 
       default:
         break;

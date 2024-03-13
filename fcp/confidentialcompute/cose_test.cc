@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 
+#include "google/protobuf/struct.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
@@ -174,24 +175,36 @@ TEST(OkpCwtTest, EncodeEmpty) {
 }
 
 TEST(OkpCwtTest, EncodeFull) {
-  EXPECT_THAT((OkpCwt{
-                   .issued_at = absl::FromUnixSeconds(1000),
-                   .expiration_time = absl::FromUnixSeconds(2000),
-                   .public_key = OkpKey(),
-                   .signature = "signature",
-               })
-                  .Encode(),
-              IsOkAndHolds(absl::string_view(
-                  "\x84"      // array with 4 items:
-                  "\x41\xa0"  // bstr containing empty map (protected headers)
-                  "\xa0"      // empty map (unprotected headers)
-                  "\x52\xa3"  // bstr containing a map with 3 items: (claims)
-                  "\x04\x19\x07\xd0"  // expiration time (4) = 2000
-                  "\x06\x19\x03\xe8"  // issued at (6) = 1000
-                  "\x3a\x00\x01\x00\x00\x43\xa1\x01\x01"  // public key (-65537)
-                                                          // = empty OkpKey
-                  "\x49signature",                        // b"signature"
-                  33)));
+  google::protobuf::Struct config_properties;
+  (*config_properties.mutable_fields())["x"].set_bool_value(true);
+
+  EXPECT_THAT(
+      (OkpCwt{
+           .issued_at = absl::FromUnixSeconds(1000),
+           .expiration_time = absl::FromUnixSeconds(2000),
+           .public_key = OkpKey(),
+           .config_properties = config_properties,
+           .signature = "signature",
+       })
+          .Encode(),
+      IsOkAndHolds(absl::string_view(
+          "\x84"              // array with 4 items:
+          "\x41\xa0"          // bstr containing empty map (protected headers)
+          "\xa0"              // empty map (unprotected headers)
+          "\x58\x21\xa4"      // bstr containing a map with 4 items: (claims)
+          "\x04\x19\x07\xd0"  // expiration time (4) = 2000
+          "\x06\x19\x03\xe8"  // issued at (6) = 1000
+          "\x3a\x00\x01\x00\x00\x43\xa1\x01\x01"  // public key (-65537)
+                                                  // = empty OkpKey
+          "\x3a\x00\x01\x00\x01\x49"              // config (-65538) = {
+          "\x0a\x07"                              // fields (1) {
+          "\x0a\x01x"                             //   key (1): "x"
+          "\x12\x02"                              //   value (2): {
+          "\x20\x01"                              //     bool_value (4): true
+                                                  //   }
+                                                  // }
+          "\x49signature",
+          49)));
 }
 
 TEST(OkpCwtTest, DecodeEmpty) {
@@ -200,18 +213,26 @@ TEST(OkpCwtTest, DecodeEmpty) {
   EXPECT_EQ(key->issued_at, std::nullopt);
   EXPECT_EQ(key->expiration_time, std::nullopt);
   EXPECT_EQ(key->public_key, std::nullopt);
+  EXPECT_THAT(key->config_properties, EqualsProto(""));
   EXPECT_EQ(key->signature, "");
 }
 
 TEST(OkpCwtTest, DecodeFull) {
-  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(
-      absl::string_view("\x84\x41\xa0\xa0\x52\xa3\x04\x19\x07\xd0\x06\x19\x03"
-                        "\xe8\x3a\x00\x01\x00\x00\x43\xa1\x01\x01\x49signature",
-                        33));
+  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(absl::string_view(
+      "\x84\x41\xa0\xa0\x58\x21\xa4\x04\x19\x07\xd0\x06\x19\x03\xe8\x3a\x00\x01"
+      "\x00\x00\x43\xa1\x01\x01\x3a\x00\x01\x00\x01\x49\x0a\x07\x0a\x01x\x12"
+      "\x02\x20\x01\x49signature",
+      49));
   ASSERT_OK(cwt);
   EXPECT_EQ(cwt->issued_at, absl::FromUnixSeconds(1000));
   EXPECT_EQ(cwt->expiration_time, absl::FromUnixSeconds(2000));
   EXPECT_TRUE(cwt->public_key.has_value());
+  EXPECT_THAT(cwt->config_properties, EqualsProto(R"pb(
+                fields {
+                  key: "x"
+                  value { bool_value: true }
+                }
+              )pb"));
   EXPECT_EQ(cwt->signature, "signature");
 }
 

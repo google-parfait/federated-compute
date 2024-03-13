@@ -28,6 +28,7 @@
 
 #include <string>
 
+#include "google/protobuf/struct.pb.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -71,7 +72,9 @@ class MessageEncryptor {
 // Decrypts messages intended for this recipient.
 class MessageDecryptor {
  public:
-  MessageDecryptor();
+  // Constructs a new MessageDecryptor. If set, the provided config_properties
+  // will be included in the public key claims.
+  explicit MessageDecryptor(google::protobuf::Struct config_properties = {});
 
   // MessageDecryptor is not copyable or moveable due to the use of
   // bssl::ScopedEVP_HPKE_KEY.
@@ -113,6 +116,7 @@ class MessageDecryptor {
       absl::string_view encapped_key) const;
 
  private:
+  google::protobuf::Struct config_properties_;
   const EVP_HPKE_KEM* hpke_kem_;
   const EVP_HPKE_KDF* hpke_kdf_;
   const EVP_HPKE_AEAD* hpke_aead_;

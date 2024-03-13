@@ -75,6 +75,48 @@ message ApplicationMatcher {
   // Oak ReferenceValues specifying the binaries running at each layer of the
   // DICE attestation.
   oak.attestation.v1.ReferenceValues reference_values = 2;
+
+  // Matchers for the application's configuration-derived properties.
+  // Configuration checks are skipped if this field is not set.
+  StructMatcher config_properties = 3;
+}
+
+// Describes conditions on a google.protobuf.Struct.
+message StructMatcher {
+  repeated FieldMatcher fields = 1;
+
+  // Matcher for a field in a google.protobuf.Struct.
+  message FieldMatcher {
+    // The path to the field, with path segments separated by '.'.
+    string path = 1;
+
+    // A matcher for the value. The path must exist in the struct for the
+    // FieldMatcher to match -- even if the ValueMatcher would match any value.
+    ValueMatcher matcher = 2;
+  }
+}
+
+// Describes conditions on a google.protobuf.Value.
+// This message only contains currently-needed matchers; it should be extended
+// when necessary.
+message ValueMatcher {
+  // If unset, the matcher matches any value.
+  oneof kind {
+    // Matches a numeric value.
+    NumberMatcher number_value = 1;
+  }
+
+  // Matchers for a numeric value.
+  message NumberMatcher {
+    // If unset, the matcher matches any numeric value.
+    oneof kind {
+      double lt = 1;  // Matches values < the given value.
+      double le = 2;  // Matches values <= the given value.
+      double eq = 3;  // Matches values == the given value.
+      double ge = 4;  // Matches values >= the given value.
+      double gt = 5;  // Matches values > the given value.
+    }
+  }
 }
 
 // Defines limits on the accesses to a blob. This currently only supports

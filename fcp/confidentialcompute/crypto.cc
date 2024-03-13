@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 
+#include "google/protobuf/struct.pb.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
@@ -115,8 +116,9 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
   };
 }
 
-MessageDecryptor::MessageDecryptor()
-    : hpke_kem_(EVP_hpke_x25519_hkdf_sha256()),
+MessageDecryptor::MessageDecryptor(google::protobuf::Struct config_properties)
+    : config_properties_(std::move(config_properties)),
+      hpke_kem_(EVP_hpke_x25519_hkdf_sha256()),
       hpke_kdf_(EVP_hpke_hkdf_sha256()),
       hpke_aead_(EVP_hpke_aes_128_gcm()),
       hpke_key_(),
@@ -135,6 +137,7 @@ absl::StatusOr<std::string> MessageDecryptor::GetPublicKey(
               .curve = crypto_internal::kX25519,
               .x = std::string(EVP_HPKE_MAX_PUBLIC_KEY_LENGTH, '\0'),
           },
+      .config_properties = config_properties_,
   };
   size_t public_key_len = 0;
   if (EVP_HPKE_KEY_public_key(

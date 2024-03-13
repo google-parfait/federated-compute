@@ -13,6 +13,9 @@ value  | description
 
 ## CWT Claims
 
-key    | type | description
------- | ---- | ---------------------------------------------
--65537 | bstr | COSE_Key containing the public key parameters
+| key    | type | description                                                 |
+| ------ | ---- | ----------------------------------------------------------- |
+| -65537 | bstr | COSE_Key containing the public key parameters               |
+| -65538 | bstr | google.protobuf.Struct containing configuration-derived     |
+:        :      : properties. An absent claim should be treated like an empty :
+:        :      : Struct. Field names may not contain `.` or `*` characters.  :

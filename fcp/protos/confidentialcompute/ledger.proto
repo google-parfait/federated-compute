@@ -146,6 +146,7 @@ message AuthorizeAccessRequest {
   //
   // CWT Claims (https://www.iana.org/assignments/cwt/cwt.xhtml)
   //   -65537: COSE_Key containing the public key parameters (bstr)
+  //   -65538: google.protobuf.Struct containing app-specific config properties
   //
   // COSE Key Parameters (https://www.iana.org/assignments/cose/cose.xhtml)
   //        1: Key Type (int)

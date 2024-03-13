@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 
+#include "google/protobuf/struct.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/log/check.h"
@@ -61,7 +62,10 @@ TEST(CryptoTest, GetPublicKey) {
   EXPECT_CALL(signer, Call(_))
       .WillOnce(DoAll(SaveArg<0>(&sig_structure), Return("signature")));
 
-  MessageDecryptor decryptor;
+  google::protobuf::Struct config_properties;
+  (*config_properties.mutable_fields())["key"].set_string_value("value");
+
+  MessageDecryptor decryptor(config_properties);
   absl::StatusOr<std::string> recipient_public_key =
       decryptor.GetPublicKey(signer.AsStdFunction());
   ASSERT_OK(recipient_public_key);
@@ -73,6 +77,7 @@ TEST(CryptoTest, GetPublicKey) {
             crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm);
   EXPECT_EQ(cwt->public_key->curve, crypto_internal::kX25519);
   EXPECT_NE(cwt->public_key->x, "");
+  EXPECT_THAT(cwt->config_properties, EqualsProto(config_properties));
   EXPECT_EQ(cwt->signature, "signature");
 
   // The signature structure is a COSE implementation detail, but it should at
