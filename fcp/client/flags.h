@@ -190,10 +190,6 @@ class Flags {
     return false;
   }
 
-  // If true, failing to evaluate an eligibility policy will opt the device out
-  // of tasks using that policy instead of halting execution.
-  virtual bool graceful_eligibility_policy_failure() const { return false; }
-
   // If true, enables new client report wire format for lightweight client.
   virtual bool enable_lightweight_client_report_wire_format() const {
     return false;

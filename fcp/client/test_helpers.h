@@ -674,7 +674,6 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, enable_confidential_aggregation, (), (const, override));
   MOCK_METHOD(bool, enable_minimum_separation_policy, (), (const, override));
-  MOCK_METHOD(bool, graceful_eligibility_policy_failure, (), (const, override));
   MOCK_METHOD(bool, use_thread_safe_tflite_wrapper, (), (const, override));
   MOCK_METHOD(bool, skip_empty_output_checkpoints, (), (const, override));
 };
