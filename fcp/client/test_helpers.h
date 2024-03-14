@@ -675,7 +675,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_confidential_aggregation, (), (const, override));
   MOCK_METHOD(bool, enable_minimum_separation_policy, (), (const, override));
   MOCK_METHOD(bool, use_thread_safe_tflite_wrapper, (), (const, override));
-  MOCK_METHOD(bool, skip_empty_output_checkpoints, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

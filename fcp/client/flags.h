@@ -235,10 +235,6 @@ class Flags {
   // TFLite's intended invocation patter.
   virtual bool use_thread_safe_tflite_wrapper() const { return false; }
 
-  // If true, the client will not create an output checkpoint temp file for
-  // tasks that do not use any output checkpoints.
-  virtual bool skip_empty_output_checkpoints() const { return false; }
-
   // If true, the client will generate computation IDs by actually calculating a
   // SHA256 hash correctly, whereas it calculated the hash only over the first 4
   // bytes before this change.

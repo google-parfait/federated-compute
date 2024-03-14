@@ -1766,20 +1766,18 @@ RunPlanResults RunComputation(
 
   std::string checkpoint_output_filename;
   bool task_requires_output_checkpoint = true;
-  if (flags->skip_empty_output_checkpoints()) {
-    // A task does not require an output checkpoint if it is a lightweight task
-    // and the new client report format is enabled, or if all of the outputs are
-    // aggregated with secagg.
-    if (flags->enable_lightweight_client_report_wire_format() &&
-        checkin_result->plan.phase().has_example_query_spec()) {
-      task_requires_output_checkpoint = false;
-    } else if (checkin_result->plan.phase().has_federated_compute() &&
-               checkin_result->plan.phase()
-                   .federated_compute()
-                   .output_filepath_tensor_name()
-                   .empty()) {
-      task_requires_output_checkpoint = false;
-    }
+  // A task does not require an output checkpoint if it is a lightweight task
+  // and the new client report format is enabled, or if all of the outputs are
+  // aggregated with secagg.
+  if (flags->enable_lightweight_client_report_wire_format() &&
+      checkin_result->plan.phase().has_example_query_spec()) {
+    task_requires_output_checkpoint = false;
+  } else if (checkin_result->plan.phase().has_federated_compute() &&
+             checkin_result->plan.phase()
+                 .federated_compute()
+                 .output_filepath_tensor_name()
+                 .empty()) {
+    task_requires_output_checkpoint = false;
   }
   if (task_requires_output_checkpoint) {
     absl::StatusOr<std::string> output_filename =
