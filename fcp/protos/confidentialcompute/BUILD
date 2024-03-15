@@ -96,6 +96,7 @@ cc_proto_library(
 cc_grpc_library(
     name = "pipeline_transform_cc_grpc",
     srcs = [":pipeline_transform_proto"],
+    generate_mocks = True,
     grpc_only = True,
     deps = [":pipeline_transform_cc_proto"],
 )
