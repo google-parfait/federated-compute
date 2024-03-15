@@ -55,6 +55,7 @@ proto_library(
 
 cc_proto_library(
     name = "configuration_cc_proto",
+    visibility = ["//visibility:public"],
     deps = [
         ":configuration_proto",
     ],
@@ -125,6 +126,7 @@ cc_library(
     srcs = ["checkpoint_aggregator.cc"],
     hdrs = ["checkpoint_aggregator.h"],
     copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         ":checkpoint_builder",
         ":checkpoint_parser",
