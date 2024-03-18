@@ -383,7 +383,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
     std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
     SecAggEventPublisher* secagg_event_publisher,
     cache::ResourceCache* resource_cache,
-    attestation::AttestationVerifier* attestation_verifier,
+    std::unique_ptr<attestation::AttestationVerifier> attestation_verifier,
     absl::string_view entry_point_uri, absl::string_view api_key,
     absl::string_view population_name, absl::string_view retry_token,
     absl::string_view client_version,
@@ -398,7 +398,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       secagg_runner_factory_(std::move(secagg_runner_factory)),
       secagg_event_publisher_(secagg_event_publisher),
       resource_cache_(resource_cache),
-      attestation_verifier_(*attestation_verifier),
+      attestation_verifier_(std::move(attestation_verifier)),
       interruptible_runner_(std::make_unique<InterruptibleRunner>(
           log_manager, should_abort, timing_config,
           InterruptibleRunner::DiagnosticsConfig{
@@ -1415,7 +1415,7 @@ HttpFederatedProtocol::ValidateConfidentialEncryptionConfig(
     PerTaskInfo& task_info,
     const ConfidentialEncryptionConfig& encryption_config) {
   FCP_CHECK(task_info.confidential_data_access_policy.has_value());
-  auto result = attestation_verifier_.Verify(
+  auto result = attestation_verifier_->Verify(
       *task_info.confidential_data_access_policy, encryption_config);
   if (!result.ok()) {
     task_info.state = ObjectState::kReportFailedPermanentError;

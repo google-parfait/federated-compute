@@ -570,8 +570,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         clock_, &mock_log_manager_, &mock_flags_, &mock_http_client_,
         absl::WrapUnique(mock_secagg_runner_factory_),
         &mock_secagg_event_publisher_, &mock_resource_cache_,
-        &mock_attestation_verifier_, kEntryPointUri, kApiKey, kPopulationName,
-        kRetryToken, kClientVersion, kAttestationMeasurement,
+        absl::WrapUnique(mock_attestation_verifier_), kEntryPointUri, kApiKey,
+        kPopulationName, kRetryToken, kClientVersion, kAttestationMeasurement,
         mock_should_abort_.AsStdFunction(), absl::BitGen(),
         InterruptibleRunner::TimingConfig{
             .polling_period = absl::ZeroDuration(),
@@ -962,7 +962,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   NiceMock<MockFlags> mock_flags_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
   StrictMock<cache::MockResourceCache> mock_resource_cache_;
-  StrictMock<MockAttestationVerifier> mock_attestation_verifier_;
+  StrictMock<MockAttestationVerifier>* mock_attestation_verifier_ =
+      new StrictMock<MockAttestationVerifier>();
   Clock* clock_ = Clock::RealClock();
   NiceMock<MockFunction<void(
       const ::fcp::client::FederatedProtocol::EligibilityEvalTask&)>>
@@ -985,6 +986,7 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectTransientErrorRetryWindow(retry_window1);
   federated_protocol_.reset(nullptr);
   mock_secagg_runner_factory_ = new StrictMock<MockSecAggRunnerFactory>();
+  mock_attestation_verifier_ = new StrictMock<MockAttestationVerifier>();
 
   // Create a new HttpFederatedProtocol instance. It should not produce the same
   // retry window value as the one we just got. This is a simple correctness
@@ -994,8 +996,8 @@ TEST_F(HttpFederatedProtocolTest,
       clock_, &mock_log_manager_, &mock_flags_, &mock_http_client_,
       absl::WrapUnique(mock_secagg_runner_factory_),
       &mock_secagg_event_publisher_, &mock_resource_cache_,
-      &mock_attestation_verifier_, kEntryPointUri, kApiKey, kPopulationName,
-      kRetryToken, kClientVersion, kAttestationMeasurement,
+      absl::WrapUnique(mock_attestation_verifier_), kEntryPointUri, kApiKey,
+      kPopulationName, kRetryToken, kClientVersion, kAttestationMeasurement,
       mock_should_abort_.AsStdFunction(), absl::BitGen(),
       InterruptibleRunner::TimingConfig{
           .polling_period = absl::ZeroDuration(),
@@ -3070,7 +3072,7 @@ TEST_F(HttpFederatedProtocolTest,
 
   // Ensure that the server's attestation evidence is considered valid.
   EXPECT_CALL(
-      mock_attestation_verifier_,
+      *mock_attestation_verifier_,
       Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
       .WillRepeatedly(
           [=](const absl::Cord& access_policy,
@@ -3168,7 +3170,7 @@ TEST_F(HttpFederatedProtocolTest,
 
   // Ensure that the server's attestation evidence is considered invalid.
   EXPECT_CALL(
-      mock_attestation_verifier_,
+      *mock_attestation_verifier_,
       Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
       .WillRepeatedly(
           [=](const absl::Cord& access_policy,

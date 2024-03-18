@@ -71,7 +71,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       std::unique_ptr<SecAggRunnerFactory> secagg_runner_factory,
       SecAggEventPublisher* secagg_event_publisher,
       cache::ResourceCache* resource_cache,
-      attestation::AttestationVerifier* attestation_verifier,
+      std::unique_ptr<attestation::AttestationVerifier> attestation_verifier,
       absl::string_view entry_point_uri, absl::string_view api_key,
       absl::string_view population_name, absl::string_view retry_token,
       absl::string_view client_version,
@@ -364,7 +364,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   cache::ResourceCache* resource_cache_;
   // A verifier which can be used to verify a ConfidentialAggregations service's
   // attestation evidence.
-  attestation::AttestationVerifier& attestation_verifier_;
+  std::unique_ptr<attestation::AttestationVerifier> attestation_verifier_;
 
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
   std::unique_ptr<ProtocolRequestCreator> eligibility_eval_request_creator_;

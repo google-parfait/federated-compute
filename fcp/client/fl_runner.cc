@@ -1995,14 +1995,11 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       return absl::InvalidArgumentError("The entry point uri is invalid.");
     }
 
-    std::unique_ptr<attestation::AttestationVerifier> attestation_verifier =
-        env_deps->CreateAttestationVerifier();
-
     federated_protocol = std::make_unique<http::HttpFederatedProtocol>(
         clock, log_manager, flags, http_client.get(),
         std::make_unique<SecAggRunnerFactoryImpl>(),
         event_publisher->secagg_event_publisher(), resource_cache.get(),
-        attestation_verifier.get(), federated_service_uri, api_key,
+        env_deps->CreateAttestationVerifier(), federated_service_uri, api_key,
         population_name, retry_token, client_version,
         client_attestation_measurement, should_abort_protocol_callback,
         absl::BitGen(), timing_config);
