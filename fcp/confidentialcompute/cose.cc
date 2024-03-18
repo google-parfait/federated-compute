@@ -265,7 +265,7 @@ absl::StatusOr<std::string> SymmetricKey::Encode() const {
   return map.toString();
 }
 
-absl::StatusOr<std::string> OkpCwt::BuildSigStructure(
+absl::StatusOr<std::string> OkpCwt::BuildSigStructureForSigning(
     absl::string_view aad) const {
   // See RFC 9052 section 4.4 for the contents of the signature structure.
   FCP_ASSIGN_OR_RETURN(std::vector<uint8_t> protected_header,
@@ -273,6 +273,29 @@ absl::StatusOr<std::string> OkpCwt::BuildSigStructure(
   FCP_ASSIGN_OR_RETURN(std::vector<uint8_t> payload, BuildCwtPayload(*this));
   return Array("Signature1", std::move(protected_header),
                Bstr(aad.begin(), aad.end()), std::move(payload))
+      .toString();
+}
+
+absl::StatusOr<std::string> OkpCwt::GetSigStructureForVerifying(
+    absl::string_view encoded, absl::string_view aad) {
+  auto [item, end_pos, error] = cppbor::parse(
+      reinterpret_cast<const uint8_t*>(encoded.data()), encoded.size());
+  if (!error.empty()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("failed to decode CoseSign1: ", error));
+  } else if (end_pos != reinterpret_cast<const uint8_t*>(encoded.data()) +
+                            encoded.size()) {
+    return absl::InvalidArgumentError(
+        "failed to decode CoseSign1: input contained extra data");
+  } else if (auto array = item->asArray();
+             array == nullptr || array->size() != 4 ||
+             array->get(0)->type() != cppbor::BSTR ||
+             array->get(2)->type() != cppbor::BSTR) {
+    return absl::InvalidArgumentError("CoseSign1 is invalid");
+  }
+  return Array("Signature1", std::move(*item->asArray()->get(0)->asBstr()),
+               Bstr(aad.begin(), aad.end()),
+               std::move(*item->asArray()->get(2)->asBstr()))
       .toString();
 }
 

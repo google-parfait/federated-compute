@@ -130,8 +130,8 @@ TEST(SymmetricKeyTest, DecodeInvalid) {
               IsCode(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(OkpCwtTest, BuildSigStructureEmpty) {
-  EXPECT_THAT(OkpCwt().BuildSigStructure(""),
+TEST(OkpCwtTest, BuildSigStructureForSigningEmpty) {
+  EXPECT_THAT(OkpCwt().BuildSigStructureForSigning(""),
               IsOkAndHolds("\x84"            // array with 4 items:
                            "\x6aSignature1"  // "Signature1"
                            "\x41\xa0"        // protected headers
@@ -140,7 +140,7 @@ TEST(OkpCwtTest, BuildSigStructureEmpty) {
                            ));
 }
 
-TEST(OkpCwtTest, BuildSigStructureFull) {
+TEST(OkpCwtTest, BuildSigStructureForSigningFull) {
   EXPECT_THAT(
       (OkpCwt{
            .issued_at = absl::FromUnixSeconds(1000),
@@ -148,7 +148,7 @@ TEST(OkpCwtTest, BuildSigStructureFull) {
            .public_key = OkpKey(),
            .signature = "signature",
        })
-          .BuildSigStructure("aad"),
+          .BuildSigStructureForSigning("aad"),
       IsOkAndHolds(absl::string_view(
           "\x84"            // array with 4 items:
           "\x6aSignature1"  // "Signature1"
@@ -161,6 +161,83 @@ TEST(OkpCwtTest, BuildSigStructureFull) {
           "\x3a\x00\x01\x00\x00\x43\xa1\x01\x01",  // public key (-65537)
                                                    // = empty OkpKey
           37)));
+}
+
+TEST(OkpCwtTest, GetSigStructureForVerifyingMatchesStructureForSigning) {
+  OkpCwt cwt{
+      .issued_at = absl::FromUnixSeconds(1000),
+      .expiration_time = absl::FromUnixSeconds(2000),
+      .public_key = OkpKey(),
+      .signature = "signature",
+  };
+  absl::StatusOr<std::string> expected = cwt.BuildSigStructureForSigning("aad");
+  ASSERT_OK(expected);
+  absl::StatusOr<std::string> encoded = cwt.Encode();
+  ASSERT_OK(encoded);
+
+  absl::StatusOr<std::string> sig_structure =
+      OkpCwt::GetSigStructureForVerifying(*encoded, "aad");
+  ASSERT_OK(sig_structure);
+  EXPECT_EQ(*sig_structure, *expected);
+}
+
+TEST(OkpCwtTest, GetSigStructureForVerifyingInvalid) {
+  EXPECT_THAT(OkpCwt::GetSigStructureForVerifying("", ""),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(OkpCwt::GetSigStructureForVerifying("\xa3",  // map with 3 items
+                                                  ""),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(OkpCwt::GetSigStructureForVerifying(
+                  "\xa0 extra",  // map with 0 items + " extra"
+                  ""),
+              IsCode(absl::StatusCode::kInvalidArgument));
+
+  // Even if the CBOR is valid, the top-level structure must be a 4-element
+  // array.
+  EXPECT_THAT(
+      OkpCwt::GetSigStructureForVerifying("\xa0", ""),  // map with 0 items
+      IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      OkpCwt::GetSigStructureForVerifying("\x80", ""),  // array with 0 items
+      IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(OkpCwt::GetSigStructureForVerifying(
+                  "\x83\x41\xa0\xa0\x41\xa0",  // array with 3 items
+                  ""),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(OkpCwt::GetSigStructureForVerifying(
+                  "\x85\x41\xa0\xa0\x41\xa0\x40\x40",  // array with 5 items
+                  ""),
+              IsCode(absl::StatusCode::kInvalidArgument));
+
+  // The map entry types must be bstr, *, bstr, *.
+  // "\x84\x41\xa0\xa0\x41\xa0\x40" is valid.
+  EXPECT_THAT(OkpCwt::GetSigStructureForVerifying(
+                  "\x84\xa0\xa0\x41\xa0\x40",  // 1st not bstr
+                  ""),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(OkpCwt::GetSigStructureForVerifying(
+                  "\x84\x41\xa0\xa0\xa0\x40",  // 3rd not bstr
+                  ""),
+              IsCode(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(OkpCwtTest, GetSigStructureForVerifyingReferenceExample) {
+  // From RFC 8392 Section A.3, without the leading COSE_Sign1 tag "d2":
+  std::string encoded = absl::HexStringToBytes(
+      "8443a10126a104524173796d6d657472696345434453413235365850a701756"
+      "36f61703a2f2f61732e6578616d706c652e636f6d02656572696b77037818636f"
+      "61703a2f2f6c696768742e6578616d706c652e636f6d041a5612aeb0051a5610d"
+      "9f0061a5610d9f007420b7158405427c1ff28d23fbad1f29c4c7c6a555e601d6f"
+      "a29f9179bc3d7438bacaca5acd08c8d4d4f96131680c429a01f85951ecee743a5"
+      "2b9b63632c57209120e1c9e30");
+  absl::StatusOr<std::string> sig_structure =
+      OkpCwt::GetSigStructureForVerifying(encoded, "aad");
+  ASSERT_OK(sig_structure);
+  EXPECT_EQ(
+      absl::BytesToHexString(*sig_structure),
+      "846a5369676e61747572653143a10126436161645850a70175636f61703a2f2f61732e65"
+      "78616d706c652e636f6d02656572696b77037818636f61703a2f2f6c696768742e657861"
+      "6d706c652e636f6d041a5612aeb0051a5610d9f0061a5610d9f007420b71");
 }
 
 TEST(OkpCwtTest, EncodeEmpty) {

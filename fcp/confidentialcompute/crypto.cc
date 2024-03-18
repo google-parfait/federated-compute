@@ -150,7 +150,7 @@ absl::StatusOr<std::string> MessageDecryptor::GetPublicKey(
   cwt.public_key->x.resize(public_key_len);
 
   FCP_ASSIGN_OR_RETURN(std::string sig_structure,
-                       cwt.BuildSigStructure(/*aad=*/""));
+                       cwt.BuildSigStructureForSigning(/*aad=*/""));
   FCP_ASSIGN_OR_RETURN(cwt.signature, signer(sig_structure));
   return cwt.Encode();
 }

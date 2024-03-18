@@ -64,8 +64,19 @@ struct OkpCwt {
   std::string signature;
 
   // Returns the canonical Sig_structure object containing the protected
-  // portions of the CWT. This is the portion of the CWT that is signed.
-  absl::StatusOr<std::string> BuildSigStructure(absl::string_view aad) const;
+  // portions of the CWT. This is the portion of the CWT that should be signed.
+  // Note that this SHOULD NOT be used when verifying the signature of a CWT as
+  // it only includes the parameters and claims supported by OkpCwt; use
+  // GetSigStructureForVerifying instead.
+  absl::StatusOr<std::string> BuildSigStructureForSigning(
+      absl::string_view aad) const;
+
+  // Returns the canonical Sig_structure object containing the protected
+  // portions of a CWT. This is the portion of the CWT that is signed. This
+  // function does not perform validation of the CWT beyond what is needed to
+  // generate the Sig_structure.
+  static absl::StatusOr<std::string> GetSigStructureForVerifying(
+      absl::string_view encoded, absl::string_view aad);
 
   // CBOR-decodes a Cwt.
   static absl::StatusOr<OkpCwt> Decode(absl::string_view encoded);
