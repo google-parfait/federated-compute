@@ -23,8 +23,7 @@ namespace fcp::client::rust::oak_attestation_verification_ffi {
 // This function delegates the actual verification process to the Oak
 // Attestation Verification crate
 // https://github.com/project-oak/oak/tree/main/oak_attestation_verification.
-absl::StatusOr<std::unique_ptr<oak::attestation::v1::AttestationResults>>
-VerifyAttestation(
+absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
     absl::Time now, const oak::attestation::v1::Evidence& evidence,
     const oak::attestation::v1::Endorsements& endorsements,
     const oak::attestation::v1::ReferenceValues& reference_values);

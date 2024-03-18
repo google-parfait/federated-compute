@@ -34,8 +34,7 @@ fcp_rs_oak_attestation_verification_verify_attestation(
 extern "C" void fcp_rs_oak_attestation_verification_free_attestation_result(
     SerializedAttestationResults result);
 
-absl::StatusOr<std::unique_ptr<oak::attestation::v1::AttestationResults>>
-VerifyAttestation(
+absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
     absl::Time now, const oak::attestation::v1::Evidence& evidence,
     const oak::attestation::v1::Endorsements& endorsements,
     const oak::attestation::v1::ReferenceValues& reference_values) {
@@ -56,18 +55,19 @@ VerifyAttestation(
         attestation_result);
   };
 
-  auto result = std::make_unique<oak::attestation::v1::AttestationResults>();
   // Ensure the returned data fits within the `int` size type used by
   // `ParseFromArray`.
   if (attestation_result.size > std::numeric_limits<int>::max()) {
     return absl::InternalError("Unexpectedly large attestation result");
   }
+
+  oak::attestation::v1::AttestationResults result;
   // The result may have a size of 0 (e.g. in case of an
   // empty/default-initialized proto). We shouldn't try to parse the buffer in
   // that case, since the pointer will be null.
   if (attestation_result.size > 0 &&
-      !result->ParseFromArray(attestation_result.data,
-                              static_cast<int>(attestation_result.size))) {
+      !result.ParseFromArray(attestation_result.data,
+                             static_cast<int>(attestation_result.size))) {
     return absl::InternalError("Failed to parse AttestationResults");
   }
   return result;

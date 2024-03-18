@@ -46,16 +46,16 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
   // Validate the attestation evidence provided in the encryption config, using
   // the `public_key_reference_values_` provided to us at construction time.
   FCP_ASSIGN_OR_RETURN(
-      std::unique_ptr<AttestationResults> attestation_results,
+      AttestationResults attestation_results,
       fcp::client::rust::oak_attestation_verification_ffi::VerifyAttestation(
           absl::Now(), encryption_config.attestation_evidence(),
           encryption_config.attestation_endorsements(),
           public_key_reference_values_));
 
-  if (attestation_results->status() != AttestationResults::STATUS_SUCCESS) {
+  if (attestation_results.status() != AttestationResults::STATUS_SUCCESS) {
     return absl::FailedPreconditionError(absl::Substitute(
         "Attestation verification failed (status: $0, reason: $1).",
-        attestation_results->status(), attestation_results->reason()));
+        attestation_results.status(), attestation_results.reason()));
   }
 
   // TODO: b/307312707 -  Validate the data access policy, before proceeding to
