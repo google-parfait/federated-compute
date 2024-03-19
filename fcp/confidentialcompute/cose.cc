@@ -53,6 +53,11 @@ enum CwtClaim {
   kOakPublicKey = -4670552,    // Oak claim containing serialized public key.
 };
 
+// COSE Header parameters; see https://www.iana.org/assignments/cose/cose.xhtml.
+enum CoseHeaderParameter {
+  kHdrAlg = 1,
+};
+
 // COSE Key parameters; see https://www.iana.org/assignments/cose/cose.xhtml.
 enum CoseKeyParameter {
   // Common parameters.
@@ -74,10 +79,14 @@ enum CoseKeyType {
   kSymmetric = 4,
 };
 
-// Builds the protected header for a CWT, which is simply an empty map encoded
-// as a bstr.
-absl::StatusOr<std::vector<uint8_t>> BuildCwtProtectedHeader(const OkpCwt&) {
-  return Map().encode();
+// Builds the protected header for a CWT, which is a map encoded as a bstr.
+absl::StatusOr<std::vector<uint8_t>> BuildCwtProtectedHeader(
+    const OkpCwt& cwt) {
+  Map map;
+  if (cwt.algorithm) {
+    map.add(CoseHeaderParameter::kHdrAlg, *cwt.algorithm);
+  }
+  return map.encode();
 }
 
 // Builds the payload for a CWT, which is a map of CWT claims encoded as a bstr.
@@ -100,6 +109,108 @@ absl::StatusOr<std::vector<uint8_t>> BuildCwtPayload(const OkpCwt& cwt) {
             Bstr(cwt.config_properties.SerializeAsString()));
   }
   return map.encode();
+}
+
+// Parses a serialized CWT protected header and updates the OkpCwt.
+absl::Status ParseCwtProtectedHeader(
+    const std::vector<uint8_t>& serialized_header, OkpCwt& cwt) {
+  auto [payload, end_pos, error] =
+      cppbor::parse(serialized_header.data(), serialized_header.size());
+  if (!error.empty()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("failed to decode CWT protected header: ", error));
+  } else if (end_pos != serialized_header.data() + serialized_header.size()) {
+    return absl::InvalidArgumentError(
+        "failed to decode CWT protected header: input contained extra data");
+  } else if (payload->type() != cppbor::MAP) {
+    return absl::InvalidArgumentError("CWT protected header is invalid");
+  }
+
+  // Process the parameters map.
+  for (const auto& [key, value] : *payload->asMap()) {
+    if (key->asInt() == nullptr) continue;  // Ignore other key types.
+    switch (key->asInt()->value()) {
+      case CoseHeaderParameter::kHdrAlg:
+        if (value->asInt() == nullptr) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "unsupported algorithm parameter type ", value->type()));
+        }
+        cwt.algorithm = value->asInt()->value();
+        break;
+
+      default:
+        break;
+    }
+  }
+  return absl::OkStatus();
+}
+
+// Parses a serialized CWT payload and updated the OkpCwt.
+absl::Status ParseCwtPayload(const std::vector<uint8_t>& serialized_payload,
+                             OkpCwt& cwt) {
+  auto [payload, end_pos, error] =
+      cppbor::parse(serialized_payload.data(), serialized_payload.size());
+  if (!error.empty()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("failed to decode CWT payload: ", error));
+  } else if (end_pos != serialized_payload.data() + serialized_payload.size()) {
+    return absl::InvalidArgumentError(
+        "failed to decode CWT payload: input contained extra data");
+  } else if (payload->type() != cppbor::MAP) {
+    return absl::InvalidArgumentError("CWT payload is invalid");
+  }
+
+  // Process the claims map.
+  for (const auto& [key, value] : *payload->asMap()) {
+    if (key->asInt() == nullptr) continue;  // Ignore other key types.
+    switch (key->asInt()->value()) {
+      case CwtClaim::kExp:
+        if (value->asInt() == nullptr) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("unsupported exp type ", value->type()));
+        }
+        cwt.expiration_time = absl::FromUnixSeconds(value->asInt()->value());
+        break;
+
+      case CwtClaim::kIat:
+        if (value->asInt() == nullptr) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("unsupported iat type ", value->type()));
+        }
+        cwt.issued_at = absl::FromUnixSeconds(value->asInt()->value());
+        break;
+
+      case CwtClaim::kOakPublicKey:
+      case CwtClaim::kPublicKey: {
+        if (value->type() != cppbor::BSTR) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("unsupported public_key type ", value->type()));
+        }
+        FCP_ASSIGN_OR_RETURN(
+            cwt.public_key,
+            OkpKey::Decode(absl::string_view(
+                reinterpret_cast<const char*>(value->asBstr()->value().data()),
+                value->asBstr()->value().size())));
+        break;
+      }
+
+      case CwtClaim::kConfigProperties:
+        if (value->type() != cppbor::BSTR) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("unsupported configuration type ", value->type()));
+        }
+        if (!cwt.config_properties.ParseFromArray(
+                value->asBstr()->value().data(),
+                static_cast<int>(value->asBstr()->value().size()))) {
+          return absl::InvalidArgumentError("failed to parse configuration");
+        }
+        break;
+
+      default:
+        break;
+    }
+  }
+  return absl::OkStatus();
 }
 
 }  // namespace
@@ -325,72 +436,12 @@ absl::StatusOr<OkpCwt> OkpCwt::Decode(absl::string_view encoded) {
                       item->asArray()->get(3)->asBstr()->value().end()),
   };
 
-  // Parse the payload, which is a map of CWT claims.
-  const std::vector<uint8_t>& serialized_payload =
-      item->asArray()->get(2)->asBstr()->value();
-  std::unique_ptr<cppbor::Item> payload;
-  std::tie(payload, end_pos, error) =
-      cppbor::parse(serialized_payload.data(), serialized_payload.size());
-  if (!error.empty()) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("failed to decode CWT payload: ", error));
-  } else if (end_pos != serialized_payload.data() + serialized_payload.size()) {
-    return absl::InvalidArgumentError(
-        "failed to decode CWT payload: input contained extra data");
-  } else if (payload->type() != cppbor::MAP) {
-    return absl::InvalidArgumentError("CWT payload is invalid");
-  }
+  // Process the protected header and claims.
+  FCP_RETURN_IF_ERROR(
+      ParseCwtProtectedHeader(item->asArray()->get(0)->asBstr()->value(), cwt));
+  FCP_RETURN_IF_ERROR(
+      ParseCwtPayload(item->asArray()->get(2)->asBstr()->value(), cwt));
 
-  // Process the claims map.
-  for (const auto& [key, value] : *payload->asMap()) {
-    if (key->asInt() == nullptr) continue;  // Ignore other key types.
-    switch (key->asInt()->value()) {
-      case CwtClaim::kExp:
-        if (value->asInt() == nullptr) {
-          return absl::InvalidArgumentError(
-              absl::StrCat("unsupported exp type ", value->type()));
-        }
-        cwt.expiration_time = absl::FromUnixSeconds(value->asInt()->value());
-        break;
-
-      case CwtClaim::kIat:
-        if (value->asInt() == nullptr) {
-          return absl::InvalidArgumentError(
-              absl::StrCat("unsupported iat type ", value->type()));
-        }
-        cwt.issued_at = absl::FromUnixSeconds(value->asInt()->value());
-        break;
-
-      case CwtClaim::kOakPublicKey:
-      case CwtClaim::kPublicKey: {
-        if (value->type() != cppbor::BSTR) {
-          return absl::InvalidArgumentError(
-              absl::StrCat("unsupported public_key type ", value->type()));
-        }
-        FCP_ASSIGN_OR_RETURN(
-            cwt.public_key,
-            OkpKey::Decode(absl::string_view(
-                reinterpret_cast<const char*>(value->asBstr()->value().data()),
-                value->asBstr()->value().size())));
-        break;
-      }
-
-      case CwtClaim::kConfigProperties:
-        if (value->type() != cppbor::BSTR) {
-          return absl::InvalidArgumentError(
-              absl::StrCat("unsupported configuration type ", value->type()));
-        }
-        if (!cwt.config_properties.ParseFromArray(
-                value->asBstr()->value().data(),
-                static_cast<int>(value->asBstr()->value().size()))) {
-          return absl::InvalidArgumentError("failed to parse configuration");
-        }
-        break;
-
-      default:
-        break;
-    }
-  }
   return cwt;
 }
 

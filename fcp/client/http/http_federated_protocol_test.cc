@@ -3055,11 +3055,11 @@ TEST_F(HttpFederatedProtocolTest,
   // ConfidentialEncryptionConfig. We'll use the decryptor from which the public
   // key was generated to validate the encrypted payload at the end of the test.
   fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key = decryptor
-                                .GetPublicKey([](absl::string_view payload) {
-                                  return "fakesignature";
-                                })
-                                .value();
+  auto encoded_public_key =
+      decryptor
+          .GetPublicKey(
+              [](absl::string_view payload) { return "fakesignature"; }, 0)
+          .value();
   absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
   ASSERT_OK(parsed_public_key);
   ASSERT_TRUE(parsed_public_key->public_key.has_value());

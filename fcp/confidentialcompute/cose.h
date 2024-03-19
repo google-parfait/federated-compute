@@ -57,6 +57,7 @@ struct SymmetricKey {
 
 // A Cose_Sign1 struct for a CBOR Web Token (CWT) containing a OKP key.
 struct OkpCwt {
+  std::optional<int64_t> algorithm;
   std::optional<absl::Time> issued_at;
   std::optional<absl::Time> expiration_time;
   std::optional<OkpKey> public_key;

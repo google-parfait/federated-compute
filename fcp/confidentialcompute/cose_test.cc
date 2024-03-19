@@ -143,6 +143,7 @@ TEST(OkpCwtTest, BuildSigStructureForSigningEmpty) {
 TEST(OkpCwtTest, BuildSigStructureForSigningFull) {
   EXPECT_THAT(
       (OkpCwt{
+           .algorithm = 7,
            .issued_at = absl::FromUnixSeconds(1000),
            .expiration_time = absl::FromUnixSeconds(2000),
            .public_key = OkpKey(),
@@ -152,19 +153,21 @@ TEST(OkpCwtTest, BuildSigStructureForSigningFull) {
       IsOkAndHolds(absl::string_view(
           "\x84"            // array with 4 items:
           "\x6aSignature1"  // "Signature1"
-          "\x41\xa0"        // protected headers
-          "\x43"
-          "aad"               // b"aad"
+          "\x43\xa1"        // protected headers: bstr map w/ 1 item
+          "\x01\x07"        // alg: 7
+          "\x43"            // associated data: 3-byte string
+          "aad"
           "\x52\xa3"          // payload: bstr map w/ 3 items (claims)
           "\x04\x19\x07\xd0"  // expiration time (4) = 2000
           "\x06\x19\x03\xe8"  // issued at (6) = 1000
           "\x3a\x00\x01\x00\x00\x43\xa1\x01\x01",  // public key (-65537)
                                                    // = empty OkpKey
-          37)));
+          39)));
 }
 
 TEST(OkpCwtTest, GetSigStructureForVerifyingMatchesStructureForSigning) {
   OkpCwt cwt{
+      .algorithm = 7,
       .issued_at = absl::FromUnixSeconds(1000),
       .expiration_time = absl::FromUnixSeconds(2000),
       .public_key = OkpKey(),
@@ -257,6 +260,7 @@ TEST(OkpCwtTest, EncodeFull) {
 
   EXPECT_THAT(
       (OkpCwt{
+           .algorithm = 7,
            .issued_at = absl::FromUnixSeconds(1000),
            .expiration_time = absl::FromUnixSeconds(2000),
            .public_key = OkpKey(),
@@ -266,7 +270,7 @@ TEST(OkpCwtTest, EncodeFull) {
           .Encode(),
       IsOkAndHolds(absl::string_view(
           "\x84"              // array with 4 items:
-          "\x41\xa0"          // bstr containing empty map (protected headers)
+          "\x43\xa1\x01\x07"  // bstr containing { alg: 7 } (protected headers)
           "\xa0"              // empty map (unprotected headers)
           "\x58\x21\xa4"      // bstr containing a map with 4 items: (claims)
           "\x04\x19\x07\xd0"  // expiration time (4) = 2000
@@ -281,7 +285,7 @@ TEST(OkpCwtTest, EncodeFull) {
                                                   //   }
                                                   // }
           "\x49signature",
-          49)));
+          51)));
 }
 
 TEST(OkpCwtTest, DecodeEmpty) {
@@ -296,10 +300,10 @@ TEST(OkpCwtTest, DecodeEmpty) {
 
 TEST(OkpCwtTest, DecodeFull) {
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(absl::string_view(
-      "\x84\x41\xa0\xa0\x58\x21\xa4\x04\x19\x07\xd0\x06\x19\x03\xe8\x3a\x00\x01"
-      "\x00\x00\x43\xa1\x01\x01\x3a\x00\x01\x00\x01\x49\x0a\x07\x0a\x01x\x12"
-      "\x02\x20\x01\x49signature",
-      49));
+      "\x84\x43\xa1\x01\x07\xa0\x58\x21\xa4\x04\x19\x07\xd0\x06\x19\x03\xe8\x3a"
+      "\x00\x01\x00\x00\x43\xa1\x01\x01\x3a\x00\x01\x00\x01\x49\x0a\x07\x0a\x01"
+      "x\x12\x02\x20\x01\x49signature",
+      51));
   ASSERT_OK(cwt);
   EXPECT_EQ(cwt->issued_at, absl::FromUnixSeconds(1000));
   EXPECT_EQ(cwt->expiration_time, absl::FromUnixSeconds(2000));

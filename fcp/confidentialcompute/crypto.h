@@ -26,6 +26,7 @@
 #ifndef FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
 #define FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
 
+#include <cstdint>
 #include <string>
 
 #include "google/protobuf/struct.pb.h"
@@ -91,7 +92,8 @@ class MessageDecryptor {
   //
   // This function must be called before Decrypt.
   absl::StatusOr<std::string> GetPublicKey(
-      absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer);
+      absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer,
+      int64_t signer_algorithm);
 
   // Decrypts `ciphertext` using a symmetric key produced by decrypting
   // `encrypted_symmetric_key` with the `encapped_key` and the private key
