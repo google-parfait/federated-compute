@@ -96,6 +96,16 @@ load("@pypi//:requirements.bzl", "install_deps")
 
 install_deps()
 
+# Use a newer version of BoringSSL than what TF gives us, so we can use
+# functions like `EC_group_p256` (which was added in commit
+# 417069f8b2fd6dd4f8c2f5f69de7c038a2397050).
+http_archive(
+    name = "boringssl",
+    sha256 = "5d6be8b65198828b151e7e4a83c3e4d76b892c43c3fb01c63f03de62b420b70f",
+    strip_prefix = "boringssl-47e850c41f43350699e1325a134ec88269cabe6b",
+    urls = ["https://github.com/google/boringssl/archive/47e850c41f43350699e1325a134ec88269cabe6b.tar.gz"],
+)
+
 http_archive(
     name = "com_github_grpc_grpc",
     sha256 = "76900ab068da86378395a8e125b5cc43dfae671e09ff6462ddfef18676e2165a",

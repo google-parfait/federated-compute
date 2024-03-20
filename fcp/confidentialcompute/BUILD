@@ -55,6 +55,7 @@ cc_library(
     deps = [
         ":cose",
         "//fcp/base",
+        "//fcp/base:digest",
         "@boringssl//:crypto",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/functional:function_ref",

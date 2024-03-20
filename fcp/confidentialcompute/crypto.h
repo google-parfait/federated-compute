@@ -31,9 +31,11 @@
 
 #include "google/protobuf/struct.pb.h"
 #include "absl/functional/function_ref.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "openssl/base.h"
+#include "openssl/ec_key.h"  // // IWYU pragma: keep, needed for bssl::UniquePtr<EC_KEY>
 #include "openssl/hpke.h"
 
 namespace fcp {
@@ -124,6 +126,73 @@ class MessageDecryptor {
   const EVP_HPKE_AEAD* hpke_aead_;
   bssl::ScopedEVP_HPKE_KEY hpke_key_;
   const EVP_AEAD* aead_;
+};
+
+// Calculates ECDSA signatures using the P-256 (a.k.a. secp256r1) curve, using
+// SHA-256 digests.
+class EcdsaP256R1Signer {
+ public:
+  // Returns an instance of this class after generating a new public/private key
+  // pair, or an INTERNAL error.
+  static EcdsaP256R1Signer Create();
+
+  // Not copyable due to bssl::UniquePtr<EC_KEY> member field.
+  EcdsaP256R1Signer(const EcdsaP256R1Signer& other) = delete;
+  EcdsaP256R1Signer(EcdsaP256R1Signer&& other) = default;
+
+  // Returns the public key that can be used to verify signatures generated with
+  // the private key for this instance.
+  //
+  // The key will be an X9.62 (a.k.a. SEC1) encoded public key, in uncompressed
+  // format.
+  std::string GetPublicKey() const;
+
+  // Signs `data` with this instance's private key. Note that `data` must be the
+  // actual data, and not just a digest of the data. The function will calculate
+  // the correct digest over the data.
+  //
+  // Returns a signature encoded as per RFC 8152 section 8.1, which can be
+  // verified by `EcdsaP256R1SignatureVerifier::Verify` below.
+  std::string Sign(absl::string_view data) const;
+
+ private:
+  EcdsaP256R1Signer(bssl::UniquePtr<EC_KEY> key,
+                    std::string encoded_public_key);
+  bssl::UniquePtr<EC_KEY> key_;
+  std::string encoded_public_key_;
+};
+
+// Verifies ECDSA signatures using the P-256 (a.k.a. secp256r1) curve, using
+// SHA-256 digests.
+class EcdsaP256R1SignatureVerifier {
+ public:
+  // Creates a new verifier for the given X9.62 (a.k.a. SEC1) octet-encoded
+  // public key.
+  //
+  // Returns an INVALID_ARGUMENT error if the key is invalid.
+  static absl::StatusOr<EcdsaP256R1SignatureVerifier> Create(
+      absl::string_view public_key);
+
+  // Not copyable due to bssl::UniquePtr<EC_KEY> member field.
+  EcdsaP256R1SignatureVerifier(const EcdsaP256R1SignatureVerifier& other) =
+      delete;
+  EcdsaP256R1SignatureVerifier(EcdsaP256R1SignatureVerifier&& other) = default;
+
+  // Verifies whether that `signature` constitutes a valid signature `data` by
+  // this instance's public key.
+  //
+  // - `data` should be the actual data to sign, not a digest of the data, since
+  //   the function will calculate the digest over the data itself.
+  // - `signature` should contain a signature encoded as per RFC 8152
+  //   section 8.1. I.e. a 64 byte long signature, consisting of the
+  //   concatenation of the R and S components encoded as big endian integers of
+  //   32 bytes long (with zero padding as needed).
+  absl::Status Verify(absl::string_view data,
+                      absl::string_view signature) const;
+
+ private:
+  EcdsaP256R1SignatureVerifier(bssl::UniquePtr<EC_KEY> public_key);
+  bssl::UniquePtr<EC_KEY> public_key_;
 };
 
 // Helper functions exposed for testing purposes.

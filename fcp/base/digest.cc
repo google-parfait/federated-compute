@@ -45,7 +45,7 @@ static std::string ComputeSHA256(
 }
 }  // namespace
 
-std::string ComputeSHA256(const std::string& data) {
+std::string ComputeSHA256(absl::string_view data) {
   return ComputeSHA256([&data](EVP_MD_CTX* mdctx) {
     FCP_CHECK(EVP_DigestUpdate(mdctx, data.data(), data.length()));
   });
