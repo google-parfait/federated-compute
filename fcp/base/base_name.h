@@ -18,10 +18,7 @@
 #define FCP_BASE_BASE_NAME_H_
 
 #include <string>
-
-#ifndef FCP_BAREMETAL
 #include "absl/strings/string_view.h"
-#endif
 
 namespace fcp {
 
@@ -30,7 +27,6 @@ namespace fcp {
  */
 std::string BaseName(const std::string& path);
 
-#ifndef FCP_BAREMETAL
 inline std::string BaseName(const char* path) {
   return BaseName(std::string(path));
 }
@@ -38,7 +34,6 @@ inline std::string BaseName(const char* path) {
 inline std::string BaseName(absl::string_view path) {
   return BaseName(std::string(path));
 }
-#endif
 
 }  // namespace fcp
 

@@ -43,28 +43,9 @@ MATCHER_P(IsOkAndHolds, m, "") {
          testing::ExplainMatchResult(m, arg.value(), result_listener);
 }
 
-#ifdef FCP_BAREMETAL
-class BaremetalLogger final : public internal::Logger {
- public:
-  void Log(const char* file, int line, LogSeverity severity,
-           const char* message) override {
-    absl::FPrintF(stderr, "%c %s:%d %s\n",
-                  absl::LogSeverityName(static_cast<absl::LogSeverity>(
-                      static_cast<int>(severity)))[0],
-                  BaseName(file), line, message);
-  }
-};
-#endif
-
 class MonitoringTest : public ::testing::TestWithParam<bool> {
  public:
   void SetUp() override {
-#ifdef FCP_BAREMETAL
-    if (replace_logger_) {
-      prev_logger_ = internal::logger();
-      internal::set_logger(&logger_);
-    }
-#else // !FCP_BAREMETAL
     // The first log message will make Absl print a warning about how all logs
     // are routed to stderr until absl::InitializeLog is called. We do want the
     // logs to go to stderr for this test, but we do not want this warning
@@ -72,155 +53,60 @@ class MonitoringTest : public ::testing::TestWithParam<bool> {
     // log an initial message here to trigger the warning early, before any
     // tests actually run.
     FCP_LOG(INFO) << "Test log message. You can ignore this.";
-#endif  // FCP_BAREMETAL
   }
-
-#ifdef FCP_BAREMETAL
-  void TearDown() override {
-    if (replace_logger_) {
-      internal::set_logger(prev_logger_);
-    }
-  }
-
- private:
-  const bool replace_logger_ = GetParam();
-  internal::Logger* prev_logger_ = nullptr;
-  BaremetalLogger logger_;
-#endif
 };
 
-#ifdef FCP_BAREMETAL
-INSTANTIATE_TEST_SUITE_P(Baremetal, MonitoringTest, testing::Values(true));
-#else
-INSTANTIATE_TEST_SUITE_P(Base, MonitoringTest, testing::Values(false));
-#endif
-
-TEST_P(MonitoringTest, LogInfo) {
+TEST_F(MonitoringTest, LogInfo) {
   testing::internal::CaptureStderr();
   FCP_LOG(INFO) << "info log of something happening";
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("I.*info log of something happening\n"));
 }
 
-TEST_P(MonitoringTest, LogWarning) {
+TEST_F(MonitoringTest, LogWarning) {
   testing::internal::CaptureStderr();
   FCP_LOG(WARNING) << "warning log of something happening";
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("W.*warning log of something happening\n"));
 }
 
-TEST_P(MonitoringTest, LogError) {
+TEST_F(MonitoringTest, LogError) {
   testing::internal::CaptureStderr();
   FCP_LOG(ERROR) << "error log of something happening";
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("E.*error log of something happening\n"));
 }
 
-TEST_P(MonitoringTest, LogFatal) {
+TEST_F(MonitoringTest, LogFatal) {
   ASSERT_DEATH({ FCP_LOG(FATAL) << "fatal log"; }, "fatal log");
 }
 
-TEST_P(MonitoringTest, LogIfTrue) {
+TEST_F(MonitoringTest, LogIfTrue) {
   testing::internal::CaptureStderr();
   FCP_LOG_IF(INFO, true) << "some log";
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_THAT(output, MatchesRegex("I.*some log\n"));
 }
 
-TEST_P(MonitoringTest, LogIfFalse) {
+TEST_F(MonitoringTest, LogIfFalse) {
   testing::internal::CaptureStderr();
   FCP_LOG_IF(INFO, false) << "some log";
   std::string output = testing::internal::GetCapturedStderr();
   ASSERT_EQ(output, "");
 }
 
-TEST_P(MonitoringTest, CheckSucceeds) { FCP_CHECK(1 < 2); }
+TEST_F(MonitoringTest, CheckSucceeds) { FCP_CHECK(1 < 2); }
 
-TEST_P(MonitoringTest, CheckFails) {
+TEST_F(MonitoringTest, CheckFails) {
   ASSERT_DEATH({ FCP_CHECK(1 < 0); }, "Check failed: 1 < 0.");
 }
 
-TEST_P(MonitoringTest, StatusOr) {
-  StatusOr<int> default_constructed_status;
-  ASSERT_FALSE(default_constructed_status.ok());
-  ASSERT_EQ(default_constructed_status.status().code(), UNKNOWN);
-
-  StatusOr<int> fail_status = FCP_STATUS(ABORTED) << "operation aborted";
-  ASSERT_FALSE(fail_status.ok());
-  ASSERT_EQ(fail_status.status().code(), ABORTED);
-  // TODO(team): Port StatusIs matcher to avoid casting message(),
-  // which is string_view, to std::string.
-  ASSERT_THAT(fail_status.status().message(),
-              MatchesRegex(".*operation aborted"));
-}
-
-TEST_P(MonitoringTest, StatusOrCopyAssignment) {
-  StatusOr<int> fail_status = FCP_STATUS(ABORTED) << "operation aborted";
-  StatusOr<int> copy_of_fail_status(fail_status);
-  ASSERT_FALSE(copy_of_fail_status.ok());
-  ASSERT_EQ(copy_of_fail_status.status().code(), ABORTED);
-  ASSERT_THAT(copy_of_fail_status.status().message(),
-              MatchesRegex(".*operation aborted"));
-
-  StatusOr<int> ok_status = 42;
-  StatusOr<int> copy_of_ok_status(ok_status);
-  ASSERT_THAT(copy_of_ok_status, IsOkAndHolds(Eq(42)));
-  ASSERT_EQ(copy_of_ok_status.value(), 42);
-}
-
-TEST_P(MonitoringTest, StatusOrMoveAssignment) {
-  StatusOr<std::unique_ptr<std::string>> fail_status = FCP_STATUS(ABORTED)
-                                                       << "operation aborted";
-  StatusOr<std::unique_ptr<std::string>> moved_fail_status(
-      std::move(fail_status));
-  ASSERT_FALSE(moved_fail_status.ok());
-  ASSERT_EQ(moved_fail_status.status().code(), ABORTED);
-  ASSERT_THAT(moved_fail_status.status().message(),
-              MatchesRegex(".*operation aborted"));
-
-  auto value = std::make_unique<std::string>("foobar");
-  StatusOr<std::unique_ptr<std::string>> ok_status = std::move(value);
-  StatusOr<std::unique_ptr<std::string>> moved_ok_status(std::move(ok_status));
-  ASSERT_TRUE(moved_ok_status.ok());
-  ASSERT_EQ(*moved_ok_status.value(), "foobar");
-}
-
-TEST_P(MonitoringTest, StatusOrCopying) {
-  StatusOr<int> fail_status = FCP_STATUS(ABORTED) << "operation aborted";
-  StatusOr<int> copy_of_status = fail_status;
-  ASSERT_FALSE(copy_of_status.ok());
-  ASSERT_EQ(copy_of_status.status().code(), ABORTED);
-  ASSERT_THAT(copy_of_status.status().message(),
-              MatchesRegex(".*operation aborted"));
-
-  StatusOr<int> ok_status = 42;
-  copy_of_status = ok_status;
-  ASSERT_THAT(copy_of_status, IsOkAndHolds(Eq(42)));
-  ASSERT_EQ(copy_of_status.value(), 42);
-}
-
-TEST_P(MonitoringTest, StatusOrMoving) {
-  StatusOr<std::unique_ptr<std::string>> fail_status = FCP_STATUS(ABORTED)
-                                                       << "operation aborted";
-  StatusOr<std::unique_ptr<std::string>> moved_status = std::move(fail_status);
-  ASSERT_FALSE(moved_status.ok());
-  ASSERT_EQ(moved_status.status().code(), ABORTED);
-  ASSERT_THAT(moved_status.status().message(),
-              MatchesRegex(".*operation aborted"));
-
-  auto value = std::make_unique<std::string>("foobar");
-  StatusOr<std::unique_ptr<std::string>> ok_status = std::move(value);
-  moved_status = std::move(ok_status);
-  ASSERT_TRUE(moved_status.ok());
-  ASSERT_EQ(*moved_status.value(), "foobar");
-}
-
-TEST_P(MonitoringTest, StatusBuilder) {
+TEST_F(MonitoringTest, StatusBuilder) {
   ASSERT_FALSE(FCP_STATUS(ABORTED).ok());
   ASSERT_EQ(FCP_STATUS(ABORTED).code(), ABORTED);
 }
 
-TEST_P(MonitoringTest, FcpReturnIfError) {
+TEST_F(MonitoringTest, FcpReturnIfError) {
   ASSERT_THAT(
       []() -> StatusOr<int> {
         Status fail_status = FCP_STATUS(ABORTED);

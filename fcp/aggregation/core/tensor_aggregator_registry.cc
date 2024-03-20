@@ -19,12 +19,8 @@
 
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 
-#ifdef FCP_BAREMETAL
-#include <unordered_map>
-#else
 #include "absl/container/flat_hash_map.h"
 #include "absl/synchronization/mutex.h"
-#endif
 
 namespace fcp {
 namespace aggregation {
@@ -37,9 +33,7 @@ class Registry final {
                                  const TensorAggregatorFactory* factory) {
     FCP_CHECK(factory != nullptr);
 
-#ifndef FCP_BAREMETAL
     absl::MutexLock lock(&mutex_);
-#endif
     FCP_CHECK(map_.find(intrinsic_uri) == map_.end())
         << "A factory for intrinsic_uri '" << intrinsic_uri
         << "' is already registered.";
@@ -50,9 +44,7 @@ class Registry final {
 
   StatusOr<const TensorAggregatorFactory*> GetAggregatorFactory(
       const std::string& intrinsic_uri) {
-#ifndef FCP_BAREMETAL
     absl::MutexLock lock(&mutex_);
-#endif
     auto it = map_.find(intrinsic_uri);
     if (it == map_.end()) {
       return FCP_STATUS(NOT_FOUND)
@@ -62,39 +54,13 @@ class Registry final {
   }
 
  private:
-#ifdef FCP_BAREMETAL
-  std::unordered_map<std::string, const TensorAggregatorFactory*> map_;
-#else
-  // Synchronization of potentially concurrent registry calls is done only in
-  // the non-baremetal environment. In the baremetal environment, since there is
-  // no OS, a single thread execution environment is expected and the
-  // synchronization primitives aren't available.
   absl::Mutex mutex_;
   absl::flat_hash_map<std::string, const TensorAggregatorFactory*> map_
       ABSL_GUARDED_BY(mutex_);
-#endif
 };
-
-#ifdef FCP_BAREMETAL
-// TODO(team): Revise the registration mechanism below.
-// In a baremetal build the static initialization mechanism isn't available
-// which means that all the aggregation intrinsics need to be explicitly
-// registered below.
-extern "C" void RegisterFederatedSum();
-
-void RegisterAll() { RegisterFederatedSum(); }
-#endif  // FCP_BAREMETAL
 
 Registry* GetRegistry() {
   static Registry* global_registry = new Registry();
-#ifdef FCP_BAREMETAL
-  // TODO(team): Revise the registration mechanism below.
-  static bool registration_done = false;
-  if (!registration_done) {
-    registration_done = true;
-    RegisterAll();
-  }
-#endif
   return global_registry;
 }
 

@@ -16,6 +16,7 @@
 
 #include "fcp/base/monitoring.h"
 
+#include <sstream>
 #include <string>
 
 #include "fcp/base/base_name.h"
@@ -23,24 +24,6 @@
 namespace fcp {
 
 namespace internal {
-
-#ifdef FCP_BAREMETAL
-// Provides safe static initialization of the default global logger instance.
-// TODO(team): Improve the logger registration mechanism.
-Logger*& GetGlobalLogger() {
-  static Logger* global_logger = new Logger();
-  return global_logger;
-}
-
-Logger* logger() { return GetGlobalLogger(); }
-void set_logger(Logger* logger) { GetGlobalLogger() = logger; }
-
-void Logger::Log(const char* file, int line, LogSeverity severity,
-                 const char* message) {
-  // By default we just ignore all logs. Another Logger can be registered to do
-  // something with them, however.
-}
-#endif  // FCP_BAREMETAL
 
 StatusBuilder::StatusBuilder(StatusCode code, const char* file, int line)
     : file_(file), line_(line), code_(code), message_() {}
@@ -54,7 +37,7 @@ StatusBuilder::StatusBuilder(StatusBuilder const& other)
 StatusBuilder::operator Status() {
   auto message_str = message_.str();
   if (code_ != OK) {
-    StringStream status_message;
+    std::ostringstream status_message;
     status_message << "(at " << BaseName(file_) << ":" << line_ << message_str;
     message_str = status_message.str();
   }

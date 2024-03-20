@@ -16,13 +16,6 @@
 #ifndef FCP_BASE_MONITORING_H_
 #define FCP_BASE_MONITORING_H_
 
-#ifdef FCP_BAREMETAL
-#include <string>
-#include <utility>
-
-#include "fcp/base/new.h"
-#include "fcp/base/string_stream.h"
-#else
 #include <sstream>
 
 #include "absl/base/attributes.h"
@@ -30,7 +23,6 @@
 #include "absl/log/absl_log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#endif  // FCP_BAREMETAL
 
 namespace fcp {
 
@@ -46,8 +38,7 @@ namespace fcp {
  *
  * These macros should be preferred over using Absl's log macros directly, since
  * they are compatible with the different environments some of the FCP code is
- * used in. E.g. they support being used in 'bare metal' environments that don't
- * support Absl. They also reduce the logging verbosity on Android, to ensure
+ * used in. They also reduce the logging verbosity on Android, to ensure
  * that INFO or VLOG logs are not logged to logcat unless
  * FCP_VERBOSE_ANDROID_LOGCAT is defined at build time.
  *
@@ -58,17 +49,14 @@ namespace fcp {
  */
 
 #define FCP_LOG(severity) _FCP_LOG_##severity
-#ifndef FCP_BAREMETAL
 #define FCP_LOG_IF(severity, condition) _FCP_LOG_IF_##severity(condition)
-#endif  // FCP_BAREMETAL
 // An FCP_VLOG is also defined (below), but note that these log statements may
 // be evaluated regardless of whether the binary's verbosity level is set high
 // enough for them to be included in the actual logs, so be careful when using
 // it with expensive-to-evaluate log statements.
 
-#if !defined(__ANDROID__) && !defined(FCP_BAREMETAL)
-// On regular (non-Android, non-bare metal) builds we forward all logs to Absl
-// as-is.
+#if !defined(__ANDROID__)
+// On regular (non-Android) builds we forward all logs to Absl as-is.
 #define _FCP_LOG_INFO ABSL_LOG(INFO)
 #define _FCP_LOG_WARNING ABSL_LOG(WARNING)
 #define _FCP_LOG_ERROR ABSL_LOG(ERROR)
@@ -79,7 +67,9 @@ namespace fcp {
 #define _FCP_LOG_IF_FATAL(condition) ABSL_LOG_IF(FATAL, condition)
 #define FCP_VLOG(verbosity) ABSL_LOG(INFO).WithVerbosity(verbosity)
 
-#elif defined(__ANDROID__)
+#endif  // !defined(__ANDROID__)
+
+#if defined(__ANDROID__)
 // On Android we prepend "fcp: " to all logs, since Absl will set the log tag
 // for all process-wide logs to a generic "native". Prefixing by "fcp" helps us
 // find FCP-related logs in the logcat more easily.
@@ -108,27 +98,10 @@ namespace fcp {
 #define FCP_VLOG(verbosity) ABSL_LOG_IF(INFO, false)
 #endif  // FCP_VERBOSE_ANDROID_LOGCAT
 
-#elif defined(FCP_BAREMETAL)
-#define _FCP_LOG_INFO \
-  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kInfo)
-#define _FCP_LOG_WARNING \
-  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kWarning)
-#define _FCP_LOG_ERROR \
-  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kError)
-#define _FCP_LOG_FATAL \
-  ::fcp::internal::LogMessage(__FILE__, __LINE__, ::fcp::LogSeverity::kFatal)
-#define FCP_LOG_IF(severity, condition) \
-  !(condition) ? (void)0                \
-               : ::fcp::internal::LogMessageVoidify() & _FCP_LOG_##severity
-#endif  // FCP_BAREMETAL
+#endif  // defined(__ANDROID__)
 
-#ifdef FCP_BAREMETAL
-#define FCP_PREDICT_FALSE(x) (x)
-#define FCP_PREDICT_TRUE(x) (x)
-#else
 #define FCP_PREDICT_FALSE(x) ABSL_PREDICT_FALSE(x)
 #define FCP_PREDICT_TRUE(x) ABSL_PREDICT_TRUE(x)
-#endif
 
 /**
  * Check that the condition holds, otherwise die. Any additional messages can
@@ -150,91 +123,6 @@ namespace fcp {
   FCP_LOG_IF(FATAL, __check_status.code() != ::fcp::StatusCode::kOk) \
       << "status not OK: " << __check_status
 
-#ifdef FCP_BAREMETAL
-// Bare Metal Logging Implementation Details
-// =========================================
-// When building for bare metal, we cannot use any existing logging library
-// directly. Instead, we introduce a Logger class of which one global instance
-// can be registered to handle log messages.
-
-enum class LogSeverity : int {
-  kInfo = 0,
-  kWarning = 1,
-  kError = 2,
-  kFatal = 3,
-};
-
-namespace internal {
-
-/**
- * An object which implements a logger sink. The default sink sends log
- * messages to stderr.
- */
-class Logger {
- public:
-  virtual ~Logger() = default;
-
-  /**
-   * Basic log function.
-   *
-   * @param file The name of the associated file.
-   * @param line  The line in this file.
-   * @param severity  Severity of the log message.
-   * @param message  The message to log.
-   */
-  virtual void Log(const char* file, int line, LogSeverity severity,
-                   const char* message);
-};
-
-/**
- * Gets/sets the active logger object.
- */
-Logger* logger();
-void set_logger(Logger* logger);
-
-/**
- * Object allowing to construct a log message by streaming into it. This is
- * used by the macro LOG(severity).
- */
-class LogMessage {
- public:
-  LogMessage(const char* file, int line, LogSeverity severity)
-      : file_(file), line_(line), severity_(severity) {}
-
-  template <typename T>
-  LogMessage& operator<<(const T& x) {
-    message_ << x;
-    return *this;
-  }
-
-  ~LogMessage() {
-    logger()->Log(file_, line_, severity_, message_.str().c_str());
-    if (severity_ == LogSeverity::kFatal) {
-      abort();
-    }
-  }
-
- private:
-  const char* file_;
-  int line_;
-  LogSeverity severity_;
-  StringStream message_;
-};
-
-/**
- * This class is used to cast a LogMessage instance to void within a ternary
- * expression in the expansion of FCP_LOG_IF.  The cast is necessary so
- * that the types of the expressions on either side of the : match, and the &
- * operator is used because its precedence is lower than << but higher than
- * ?:.
- */
-class LogMessageVoidify {
- public:
-  void operator&(LogMessage&) {}  // NOLINT
-};
-}  // namespace internal
-#endif  // FCP_BAREMETAL
-
 // Status and StatusOr
 // ===================
 
@@ -254,201 +142,12 @@ class LogMessageVoidify {
 #define FCP_STATUS(code) \
   ::fcp::internal::MakeStatusBuilder(code, __FILE__, __LINE__)
 
-#ifdef FCP_BAREMETAL
-#define FCP_MUST_USE_RESULT __attribute__((warn_unused_result))
-#else
 #define FCP_MUST_USE_RESULT ABSL_MUST_USE_RESULT
-#endif
 
-#ifdef FCP_BAREMETAL
-// The bare-metal implementation doesn't depend on Abseil library and
-// provides its own implementations of StatusCode, Status and StatusOr that are
-// source code compatible with absl::StatusCode, absl::Status,
-// and absl::StatusOr.
-
-// See absl::StatusCode for details.
-enum StatusCode : int {
-  kOk = 0,
-  kCancelled = 1,
-  kUnknown = 2,
-  kInvalidArgument = 3,
-  kDeadlineExceeded = 4,
-  kNotFound = 5,
-  kAlreadyExists = 6,
-  kPermissionDenied = 7,
-  kResourceExhausted = 8,
-  kFailedPrecondition = 9,
-  kAborted = 10,
-  kOutOfRange = 11,
-  kUnimplemented = 12,
-  kInternal = 13,
-  kUnavailable = 14,
-  kDataLoss = 15,
-  kUnauthenticated = 16,
-};
-
-class FCP_MUST_USE_RESULT Status final {
- public:
-  Status() : code_(StatusCode::kOk) {}
-  Status(StatusCode code, const std::string& message)
-      : code_(code), message_(message) {}
-
-  // Status is copyable and moveable.
-  Status(const Status&) = default;
-  Status& operator=(const Status&) = default;
-  Status(Status&&) = default;
-  Status& operator=(Status&&) = default;
-
-  // Tests whether this status is OK.
-  bool ok() const { return code_ == StatusCode::kOk; }
-
-  // Gets this status code.
-  StatusCode code() const { return code_; }
-
-  // Gets this status message.
-  const std::string& message() const { return message_; }
-
- private:
-  StatusCode code_;
-  std::string message_;
-};
-
-template <typename T>
-class FCP_MUST_USE_RESULT StatusOr final {
- public:
-  // Default constructor initializes StatusOr with kUnknown code.
-  explicit StatusOr() : StatusOr(StatusCode::kUnknown) {}
-
-  // Constructs a StatusOr from a failed status. The passed status must not be
-  // OK. This constructor is expected to be implicitly called.
-  StatusOr(Status status)  // NOLINT
-      : status_(std::move(status)) {
-    FCP_CHECK(!this->status().ok());
-  }
-
-  // Constructs a StatusOr from a status code.
-  explicit StatusOr(StatusCode code) : StatusOr(code, "") {}
-
-  // Constructs a StatusOr from a status code and a message.
-  StatusOr(StatusCode code, const std::string& message)
-      : status_(Status(code, message)) {
-    FCP_CHECK(!this->status().ok());
-  }
-
-  // Construct a StatusOr from a value.
-  StatusOr(const T& value)  // NOLINT
-      : value_(value) {}
-
-  // Construct a StatusOr from an R-value.
-  StatusOr(T&& value)  // NOLINT
-      : value_(std::move(value)) {}
-
-  // StatusOr is copyable and moveable.
-  StatusOr(const StatusOr& other) : status_(other.status_) {
-    if (ok()) {
-      AssignValue(other.value_);
-    }
-  }
-
-  StatusOr(StatusOr&& other) : status_(std::move(other.status_)) {
-    if (ok()) {
-      AssignValue(std::move(other.value_));
-    }
-  }
-
-  StatusOr& operator=(const StatusOr& other) {
-    if (this != &other) {
-      ClearValue();
-      if (other.ok()) {
-        AssignValue(other.value_);
-      }
-      status_ = other.status_;
-    }
-    return *this;
-  }
-
-  StatusOr& operator=(StatusOr&& other) {
-    if (this != &other) {
-      ClearValue();
-      if (other.ok()) {
-        AssignValue(std::move(other.value_));
-      }
-      status_ = std::move(other.status_);
-    }
-    return *this;
-  }
-
-  ~StatusOr() { ClearValue(); }
-
-  // Tests whether this StatusOr is OK and has a value.
-  bool ok() const { return status_.ok(); }
-
-  // Returns the status.
-  const Status& status() const { return status_; }
-
-  // Returns the value if the StatusOr is OK.
-  const T& value() const& {
-    CheckOk();
-    return value_;
-  }
-  T& value() & {
-    CheckOk();
-    return value_;
-  }
-  T&& value() && {
-    CheckOk();
-    return std::move(value_);
-  }
-
-  // Operator *
-  const T& operator*() const& { return value(); }
-  T& operator*() & { return value(); }
-  T&& operator*() && { return std::move(value()); }
-
-  // Operator ->
-  const T* operator->() const { return &value(); }
-  T* operator->() { return &value(); }
-
-  // Used to explicitly ignore a StatusOr (avoiding unused-result warnings).
-  void Ignore() const {}
-
- private:
-  void CheckOk() const { FCP_CHECK(ok()) << "StatusOr has no value"; }
-
-  // This is used to assign the value in place without invoking the assignment
-  // operator. Using the assignment operator wouldn't work in case the value_
-  // wasn't previously initialized. For example the value_ object might try
-  // to clear its previous value.
-  template <typename Arg>
-  void AssignValue(Arg&& arg) {
-    new (&unused_) T(std::forward<Arg>(arg));
-  }
-
-  // Destroy the current value if it was initialized.
-  void ClearValue() {
-    if (ok()) value_.~T();
-  }
-
-  Status status_;
-
-  // Using the union allows to avoid initializing the value_ field when
-  // StatusOr is constructed with Status.
-  struct Unused {};
-  union {
-    Unused unused_;
-    T value_;
-  };
-};
-
-#else
-
-// By default absl::Status and absl::StatusOr classes are used.
 using Status = absl::Status;
 using StatusCode = absl::StatusCode;
 template <typename T>
 using StatusOr = absl::StatusOr<T>;
-
-#endif  // FCP_BAREMETAL
 
 constexpr auto OK = StatusCode::kOk;
 constexpr auto CANCELLED = StatusCode::kCancelled;
@@ -570,10 +269,7 @@ class FCP_MUST_USE_RESULT StatusBuilder {
   const int line_;
   const StatusCode code_;
 
-#ifndef FCP_BAREMETAL
-  using StringStream = std::ostringstream;
-#endif  // FCP_BAREMETAL
-  StringStream message_;
+  std::ostringstream message_;
 };
 
 inline StatusBuilder MakeStatusBuilder(StatusCode code, const char* file,

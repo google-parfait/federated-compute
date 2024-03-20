@@ -15,7 +15,7 @@
 # Description:
 # Base component, containing common functionality used by other FCP components.
 
-load("//fcp:config.bzl", "FCP_BAREMETAL_COPTS", "FCP_COPTS")
+load("//fcp:config.bzl", "FCP_COPTS")
 load("//fcp/tracing:build_defs.bzl", "tracing_schema_cc_library")
 
 package(
@@ -47,7 +47,6 @@ cc_library(
         "base_name.h",
         "monitoring.h",
         "move_to_lambda.h",
-        "new.h",
         "platform.h",
     ],
     copts = FCP_COPTS,
@@ -60,25 +59,6 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
     ],
-)
-
-# TODO(team): Consider using configuration profiles to merge "base_baremetal" with "base"
-cc_library(
-    name = "baremetal_base",
-    srcs = [
-        "base_name.cc",
-        "monitoring.cc",
-        "string_stream.cc",
-    ],
-    hdrs = [
-        "base_name.h",
-        "monitoring.h",
-        "new.h",
-        "string_stream.h",
-    ],
-    copts = FCP_BAREMETAL_COPTS,
-    features = ["-use_header_modules"],
-    linkstatic = True,
 )
 
 cc_library(
@@ -228,36 +208,6 @@ cc_test(
         ":base",
         "@com_google_absl//absl/base:log_severity",
         "@com_google_absl//absl/strings:str_format",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_test(
-    name = "baremetal_monitoring_test",
-    size = "small",
-    srcs = [
-        "monitoring_test.cc",
-    ],
-    copts = FCP_COPTS,
-    local_defines = ["FCP_BAREMETAL"],
-    deps = [
-        ":baremetal_base",
-        "@com_google_absl//absl/base:log_severity",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_test(
-    name = "baremetal_string_stream_test",
-    size = "small",
-    srcs = [
-        "string_stream_test.cc",
-    ],
-    copts = FCP_COPTS,
-    local_defines = ["FCP_BAREMETAL"],
-    deps = [
-        ":baremetal_base",
         "@com_google_googletest//:gtest_main",
     ],
 )

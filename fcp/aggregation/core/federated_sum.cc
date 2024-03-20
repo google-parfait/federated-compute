@@ -100,14 +100,7 @@ class FederatedSumFactory final : public TensorAggregatorFactory {
   }
 };
 
-// TODO(team): Revise the registration mechanism below.
-#ifdef FCP_BAREMETAL
-extern "C" void RegisterFederatedSum() {
-  RegisterAggregatorFactory(kFederatedSumUri, new FederatedSumFactory());
-}
-#else
 REGISTER_AGGREGATOR_FACTORY(kFederatedSumUri, FederatedSumFactory);
-#endif
 
 }  // namespace aggregation
 }  // namespace fcp

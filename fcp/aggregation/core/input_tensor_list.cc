@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "fcp/aggregation/core/tensor.h"
-#include "fcp/base/new.h"
 
 namespace fcp {
 namespace aggregation {
