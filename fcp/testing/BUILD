@@ -59,6 +59,7 @@ cc_library(
     srcs = ["testing.cc"],
     hdrs = ["testing.h"],
     copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         ":parse_text_proto",
         ":result_matchers",
