@@ -1437,6 +1437,7 @@ HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
 
   BlobHeader blob_header;
   blob_header.set_blob_id(fcp::RandomToken::Generate().ToString());
+  // TODO: b/307312707 - Remove the need to compute the SHA256 hash twice.
   blob_header.set_access_policy_sha256(
       ComputeSHA256(*task_info.confidential_data_access_policy));
   blob_header.set_key_id(parsed_public_key.key_id);
