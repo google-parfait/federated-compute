@@ -284,9 +284,36 @@ TEST(OakRustAttestationTest,
   auto access_policy_bytes = access_policy.SerializeAsString();
 
   // This verifier will not accept the encryption config provided, due to the
-  // mismatching digest. evidence matching the reference
+  // mismatching digest.
   OakRustAttestationVerifier verifier(
       reference_values,
+      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))});
+
+  // Ensure that the verification *does not* succeed.
+  auto result =
+      verifier.Verify(absl::Cord(access_policy_bytes), encryption_config);
+  EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kFailedPrecondition));
+  EXPECT_THAT(result.status().message(),
+              HasSubstr("Attestation verification failed"));
+}
+
+TEST(OakRustAttestationTest, KnownEncryptionConfigAndEmptyReferencevalues) {
+  ConfidentialEncryptionConfig encryption_config =
+      GetKnownValidEncryptionConfig();
+
+  // Create a valid access policy proto with some non-default content.
+  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
+    transforms {
+      src: 0
+      application { tag: "bar" }
+    }
+  )pb");
+  auto access_policy_bytes = access_policy.SerializeAsString();
+
+  // This verifier will not accept the encryption config provided, due to the
+  // reference values being invalid (an empty, uninitialized proto).
+  OakRustAttestationVerifier verifier(
+      ReferenceValues(),
       {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))});
 
   // Ensure that the verification *does not* succeed.
