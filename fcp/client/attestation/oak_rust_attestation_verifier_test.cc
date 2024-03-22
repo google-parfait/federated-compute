@@ -97,9 +97,17 @@ ConfidentialEncryptionConfig GetKnownValidEncryptionConfig() {
 ReferenceValues GetKnownValidReferenceValues() {
   return PARSE_TEXT_PROTO(R"pb(
     oak_restricted_kernel {
-      # This verifies the AMD-SEV root layer, but skips the stage0 validation
-      # since that isn't supported yet (see http://b/327069120)
-      root_layer { amd_sev { stage0 { skip {} } } }
+      root_layer {
+        amd_sev {
+          stage0 {
+            digests {
+              digests {
+                sha2_384: "\xf6\xdf\x20\x54\xa3\x87\xf3\xf8\x29\x91\x41\x96\x08\x6d\x59\x92\x64\x6b\x7c\xbd\x83\x42\x70\xc4\xdb\x20\x5c\xd3\x68\x79\x97\x7e\xe0\x60\x16\xc1\xe6\x5c\x9e\xc4\x53\xe3\x34\xa1\x35\x3e\x93\x3a"
+              }
+            }
+          }
+        }
+      }
       kernel_layer {
         kernel {
           digests {
