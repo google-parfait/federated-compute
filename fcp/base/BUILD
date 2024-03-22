@@ -344,6 +344,7 @@ cc_test(
         ":unique_value",
         "//fcp/testing",
         "//fcp/testing:result_matchers",
+        "//fcp/testing:tracing",
         "//fcp/tracing:test_tracing_recorder",
         "@com_google_googletest//:gtest_main",
     ],
@@ -393,6 +394,7 @@ cc_test(
         ":result",
         "//fcp/testing",
         "//fcp/testing:result_matchers",
+        "//fcp/testing:tracing",
         "@com_google_googletest//:gtest_main",
     ],
 )

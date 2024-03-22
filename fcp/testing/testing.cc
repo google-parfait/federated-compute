@@ -31,8 +31,6 @@
 #include "fcp/base/base_name.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
-#include "fcp/testing/tracing_schema.h"
-#include "fcp/tracing/tracing_span.h"
 
 namespace fcp {
 
@@ -256,9 +254,5 @@ StatusOr<std::string> VerifyAgainstBaseline(absl::string_view baseline_file,
 
 StatusMatcher IsCode(StatusCode code) { return StatusMatcher(code); }
 StatusMatcher IsOk() { return IsCode(OK); }
-
-Error TraceTestError(SourceLocation loc) {
-  return TraceError<TestError>(loc.file_name(), loc.line());
-}
 
 }  // namespace fcp

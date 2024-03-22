@@ -25,6 +25,7 @@
 #include "fcp/base/result.h"
 #include "fcp/testing/result_matchers.h"
 #include "fcp/testing/testing.h"
+#include "fcp/testing/tracing.h"
 
 namespace fcp {
 

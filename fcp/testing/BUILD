@@ -63,17 +63,27 @@ cc_library(
     deps = [
         ":parse_text_proto",
         ":result_matchers",
-        ":tracing_schema",
         "//fcp/base",
-        "//fcp/base:error",
         "//fcp/base:result",
-        "//fcp/base:source_location",
-        "//fcp/tracing",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "tracing",
+    testonly = 1,
+    srcs = ["tracing.cc"],
+    hdrs = ["tracing.h"],
+    copts = FCP_COPTS,
+    deps = [
+        ":tracing_schema",
+        "//fcp/base:error",
+        "//fcp/base:source_location",
+        "//fcp/tracing",
     ],
 )
 
@@ -86,6 +96,7 @@ cc_test(
     deps = [
         ":result_matchers",
         ":testing",
+        ":tracing",
         "//fcp/base:error",
         "//fcp/base:result",
         "//fcp/base:tracing_schema",

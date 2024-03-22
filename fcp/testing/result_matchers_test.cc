@@ -21,6 +21,7 @@
 #include "fcp/base/result.h"
 #include "fcp/base/tracing_schema.h"
 #include "fcp/testing/testing.h"
+#include "fcp/testing/tracing.h"
 #include "fcp/tracing/test_tracing_recorder.h"
 
 namespace fcp {

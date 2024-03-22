@@ -27,11 +27,9 @@
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "fcp/base/error.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/base/result.h"
-#include "fcp/base/source_location.h"
 #include "fcp/testing/result_matchers.h"
 
 #include "fcp/testing/parse_text_proto.h"
@@ -231,9 +229,6 @@ inline ProtoMatcher<T> EqualsProto(const T& arg) {
 inline ProtoMatcher<std::string> EqualsProto(const std::string& arg) {
   return ProtoMatcher<std::string>(arg);
 }
-
-// Utility function which creates and traces an instance of test error
-Error TraceTestError(SourceLocation loc = SourceLocation::current());
 
 }  // namespace fcp
 
