@@ -113,6 +113,7 @@ cc_library(
     name = "aggregation_cores",
     srcs = [
         "composite_key_combiner.cc",
+        "dp_composite_key_combiner.cc",
         "dp_grouping_federated_sum.cc",
         "federated_mean.cc",
         "federated_sum.cc",
@@ -121,6 +122,7 @@ cc_library(
     ],
     hdrs = [
         "composite_key_combiner.h",
+        "dp_composite_key_combiner.h",
         "group_by_aggregator.h",
         "one_dim_grouping_aggregator.h",
     ],
@@ -133,6 +135,7 @@ cc_library(
         ":vector_string_data",
         "//fcp/base",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/random",
     ],
     alwayslink = 1,
 )
@@ -273,6 +276,23 @@ cc_test(
         "//fcp/aggregation/testing:test_data",
         "//fcp/base",
         "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "dp_composite_key_combiner_test",
+    srcs = ["dp_composite_key_combiner_test.cc"],
+    deps = [
+        ":aggregation_cores",
+        ":aggregator",
+        ":tensor",
+        ":tensor_cc_proto",
+        "//fcp/aggregation/testing",
+        "//fcp/aggregation/testing:test_data",
+        "//fcp/base",
+        "//fcp/testing",
+        "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest_main",
     ],
 )

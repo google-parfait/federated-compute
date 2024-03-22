@@ -17,14 +17,18 @@
 #ifndef FCP_AGGREGATION_CORE_COMPOSITE_KEY_COMBINER_H_
 #define FCP_AGGREGATION_CORE_COMPOSITE_KEY_COMBINER_H_
 
+#include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
+#include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
@@ -100,16 +104,42 @@ class CompositeKeyCombiner {
   // Gets a reference to the expected types for this CompositeKeyCombiner.
   const std::vector<DataType>& dtypes() const { return dtypes_; }
 
- private:
+ protected:
+  // Creates ordinals for composite keys spread across input tensors.
+  // Specifically, the i-th entry of the output is the ordinal for the composite
+  // key made by combining the i-th entry of the first tensor, the i-th entry of
+  // the second tensor, ...
+  //
+  // In a nested for loop, transfer the bytes into a string composite_key. For
+  // each composite_key, call SaveCompositeKeyAndGetOrdinal to update
+  // data structures with the composite_key and obtain a possibly new ordinal.
+  // (refer to the end of this file for the definition of that function)
+  //
+  // The data structures for SaveCompositeKeyAndGetOrdinal are explicitly given
+  // to this function. Allows for the use of temporary data structures in
+  // DPCompositeKeyCombiner::AccumulateWithBound.
+  std::unique_ptr<MutableVectorData<int64_t>> CreateOrdinals(
+      const InputTensorList& tensors, size_t num_elements,
+      std::unordered_map<std::string, int64_t>& composite_key_map,
+      int64_t& current_ordinal, std::vector<string_view>& vector_of_keys);
+
   // Checks that the provided InputTensorList can be accumulated into this
   // CompositeKeyCombiner.
   StatusOr<TensorShape> CheckValidAndGetShape(const InputTensorList& tensors);
 
+  // Functions to grant access to members
+  inline std::unordered_map<std::string, int64_t>& GetCompositeKeys() {
+    return composite_keys_;
+  }
+  inline int64_t& GetCompositeKeyNext() { return composite_key_next_; }
+  inline std::vector<string_view>& GetKeyVec() { return key_vec_; }
+
+ private:
   // The data types of the tensors in valid inputs to Accumulate, in this exact
   // order.
   // TODO(team): Use inlined vector to store the DataTypes instead.
   std::vector<DataType> dtypes_;
-  // String views of the composite keys in the order the keys will appear in the
+  // String views of the composite keys in the order they will appear in the
   // output tensors returned by GetOutputKeys.
   std::vector<string_view> key_vec_;
   // Set of unique strings encountered in tensors of type DT_STRING on calls to
@@ -126,6 +156,29 @@ class CompositeKeyCombiner {
   // Accumulate.
   int64_t composite_key_next_ = 0;
 };
+
+// If composite_key is not in a mapping from composite keys to ordinals, the
+// following function maps it to a new ordinal and adds a view of composite_key
+// to a dedicated vector. Otherwise, the function retrieves the ordinal assigned
+// to it. In either case, returns the ordinal that the composite_key has been
+// mapped to.
+inline int64_t SaveCompositeKeyAndGetOrdinal(
+    std::string&& composite_key,
+    std::unordered_map<std::string, int64_t>& composite_key_map,
+    int64_t& current_ordinal, std::vector<string_view>& vector_of_keys) {
+  auto [it, inserted] =
+      composite_key_map.insert({composite_key, current_ordinal});
+  if (inserted) {
+    // This is the first time this CompositeKeyCombiner has encountered this
+    // particular composite key.
+    current_ordinal++;
+    // Save the composite key in the dedicated vector so we can recover it
+    // when GetOutputKeys is called.
+    vector_of_keys.push_back(it->first);
+  }
+  // return the ordinal associated with the composite key
+  return it->second;
+}
 
 }  // namespace aggregation
 }  // namespace fcp

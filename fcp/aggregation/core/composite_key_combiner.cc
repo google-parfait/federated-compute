@@ -76,7 +76,6 @@ void CopyToDest(const void*& source_ptr, uint64_t* dest_ptr,
   // an array of T.
   source_ptr = static_cast<const void*>(++typed_source_ptr);
 }
-
 // Specialization of CopyToDest for DT_STRING data type that interns the
 // string_view pointed to by value_ptr. The address of the string in the
 // intern pool is then converted to a 64 bit integer and copied to the
@@ -179,49 +178,62 @@ CompositeKeyCombiner::CompositeKeyCombiner(std::vector<DataType> dtypes)
 StatusOr<Tensor> CompositeKeyCombiner::Accumulate(
     const InputTensorList& tensors) {
   FCP_ASSIGN_OR_RETURN(TensorShape shape, CheckValidAndGetShape(tensors));
+  FCP_ASSIGN_OR_RETURN(size_t num_elements, shape.NumElements());
+
+  return Tensor::Create(internal::TypeTraits<int64_t>::kDataType, shape,
+                        CreateOrdinals(tensors, num_elements, composite_keys_,
+                                       composite_key_next_, key_vec_));
+}
+
+// Creates ordinals for composite keys spread across input tensors: in a nested
+// for loop, transfer the bytes into a string composite_key, then call
+// SaveCompositeKeyAndGetOrdinal on each.
+std::unique_ptr<MutableVectorData<int64_t>>
+CompositeKeyCombiner::CreateOrdinals(
+    const InputTensorList& tensors, size_t num_elements,
+    std::unordered_map<std::string, int64_t>& composite_key_map,
+    int64_t& current_ordinal, std::vector<string_view>& vector_of_keys) {
+  // Initialize the ordinals vector
+  auto ordinals = std::make_unique<MutableVectorData<int64_t>>();
+  ordinals->reserve(num_elements);
 
   // Determine the serialized size of the composite keys.
   size_t composite_key_size = sizeof(uint64_t) * tensors.size();
 
+  // To set up the creation of composite keys, make a vector of pointers to the
+  // data held in the tensors.
   std::vector<const void*> iterators;
   iterators.reserve(tensors.size());
   for (const Tensor* t : tensors) {
     iterators.push_back(t->data().data());
   }
 
-  // Iterate over all the TensorDataIterators at once to get the value for the
-  // composite key.
-  auto ordinals = std::make_unique<MutableVectorData<int64_t>>();
-  FCP_ASSIGN_OR_RETURN(size_t num_elements, shape.NumElements());
   for (int i = 0; i < num_elements; ++i) {
-    // Create a string with the correct amount of memory to store an int64
-    // representation of the element in each input tensor at the current
-    // index.
-    std::string composite_key_data(composite_key_size, '\0');
-    uint64_t* key_ptr = reinterpret_cast<uint64_t*>(composite_key_data.data());
+    // Iterate over all the TensorDataIterators at once to get the value for the
+    // composite key.
+    std::string composite_key(composite_key_size, '\0');
+    uint64_t* key_ptr = reinterpret_cast<uint64_t*>(composite_key.data());
 
+    // Construct a composite key by iterating through tensors and copying the
+    // 64-bit representation of data elements.
     for (int j = 0; j < tensors.size(); ++j) {
       // Copy the 64-bit representation of the element into the position in the
       // composite key data corresponding to this tensor.
-      DTYPE_CASES(dtypes_[j], T,
+      DTYPE_CASES(dtypes()[j], T,
                   CopyToDest<T>(iterators[j], key_ptr++, intern_pool_));
     }
-    auto [it, inserted] = composite_keys_.insert(
-        {std::move(composite_key_data), composite_key_next_});
-    if (inserted) {
-      // This is the first time this CompositeKeyCombiner has encountered this
-      // particular composite key.
-      composite_key_next_++;
-      // Save the string representation of the key in order to recover the
-      // elements of the key when GetOutputKeys is called.
-      key_vec_.push_back(it->first);
-    }
+
+    // Get the ordinal associated with the composite key
+    // (or make new mapping if none exists)
+    auto ordinal = SaveCompositeKeyAndGetOrdinal(
+        std::move(composite_key), composite_key_map, current_ordinal,
+        vector_of_keys);
+
     // Insert the ordinal representing the composite key into the
     // correct position in the output tensor.
-    ordinals->push_back(it->second);
+    ordinals->push_back(ordinal);
   }
-  return Tensor::Create(internal::TypeTraits<int64_t>::kDataType, shape,
-                        std::move(ordinals));
+  return ordinals;
 }
 
 OutputTensorList CompositeKeyCombiner::GetOutputKeys() const {
@@ -232,7 +244,7 @@ OutputTensorList CompositeKeyCombiner::GetOutputKeys() const {
   output_keys.reserve(dtypes_.size());
   std::vector<const uint64_t*> key_iters;
   key_iters.reserve(key_vec_.size());
-  for (string_view s : key_vec_) {
+  for (const auto& s : key_vec_) {
     key_iters.push_back(reinterpret_cast<const uint64_t*>(s.data()));
   }
   for (DataType dtype : dtypes_) {
@@ -284,6 +296,8 @@ StatusOr<TensorShape> CompositeKeyCombiner::CheckValidAndGetShape(
              << expected_dtype << " and instead had dtype " << t->dtype();
     }
   }
+  FCP_CHECK(shape != nullptr)
+      << "All tensors in the InputTensorList must have shape.";
   return *shape;
 }
 
