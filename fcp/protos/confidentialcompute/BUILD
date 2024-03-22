@@ -51,6 +51,7 @@ proto_library(
         "@com_google_protobuf//:timestamp_proto",
         "@oak//proto/attestation:endorsement_proto",
         "@oak//proto/attestation:evidence_proto",
+        "@oak//proto/micro_rpc:options_proto",
     ],
 )
 
