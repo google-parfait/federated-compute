@@ -66,6 +66,7 @@ proto_library(
     deps = [
         "@com_google_protobuf//:any_proto",
         "@oak//proto/attestation:evidence_proto",
+        "@oak//proto/micro_rpc:options_proto",
     ],
 )
 
