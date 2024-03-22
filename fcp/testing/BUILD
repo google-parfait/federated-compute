@@ -62,9 +62,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":parse_text_proto",
-        ":result_matchers",
         "//fcp/base",
-        "//fcp/base:result",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",

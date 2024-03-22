@@ -29,8 +29,6 @@
 #include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
-#include "fcp/base/result.h"
-#include "fcp/testing/result_matchers.h"
 
 #include "fcp/testing/parse_text_proto.h"
 
@@ -38,31 +36,6 @@
 // based on the public version of googletest.
 
 namespace fcp {
-
-// A macro for use inside a GTest test that executes the provided code as a
-// function returning a Result and asserts that the return value is not an
-// Error.
-//
-// The code provided to the macro will be much like the code one would write in
-// the body of a regular test, with the differences being that the code must
-// return Result<Unit>, and only EXPECT_* statements are allowed, not ASSERT_*.
-//
-// This makes it possible to greatly simplify the test body by using FCP_TRY(),
-// rather than having to check in the test body that every return value of
-// Result type is not an error.
-//
-// Example:
-//
-//   TEST(FooTest, GetFoo) {
-//     FCP_EXPECT_NO_ERROR(
-//       Foo foo = FCP_TRY(GetFoo());
-//       EXPECT_TRUE(foo.HasBar());
-//       return Unit{};
-//     );
-//   }
-#define FCP_EXPECT_NO_ERROR(test_contents)           \
-  auto test_fn = []() -> Result<Unit> test_contents; \
-  ASSERT_THAT(test_fn(), testing::Not(IsError()))
 
 // Convenience macros for `EXPECT_THAT(s, IsOk())`, where `s` is either
 // a `Status` or a `StatusOr<T>`.
