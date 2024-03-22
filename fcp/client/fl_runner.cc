@@ -16,12 +16,14 @@
 #include "fcp/client/fl_runner.h"
 
 #include <fcntl.h>
+#include <openssl/base.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <functional>
-#include <map>
+#include <ios>
 #include <memory>
 #include <optional>
 #include <string>
@@ -30,26 +32,36 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
-#include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/cache/file_backed_resource_cache.h"
 #include "fcp/client/cache/resource_cache.h"
+#include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/example_query_plan_engine.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+#include "fcp/client/federated_select.h"
+#include "fcp/client/http/http_client.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/opstats/opstats_utils.h"
 #include "fcp/client/parsing_utils.h"
 #include "fcp/client/phase_logger.h"
+#include "fcp/client/stats.h"
+#include "tensorflow/core/platform/tstring.h"
+#include "tensorflow/core/platform/types.h"
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
 #include "fcp/client/engine/simple_plan_engine.h"
@@ -60,7 +72,6 @@
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/federated_protocol.h"
-#include "fcp/client/federated_protocol_util.h"
 #include "fcp/client/files.h"
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/flags.h"
@@ -83,7 +94,6 @@
 #include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "openssl/digest.h"
-#include "openssl/evp.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"

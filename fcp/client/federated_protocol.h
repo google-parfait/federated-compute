@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_FEDERATED_PROTOCOL_H_
 #define FCP_CLIENT_FEDERATED_PROTOCOL_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>

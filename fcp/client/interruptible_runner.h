@@ -22,7 +22,6 @@
 #include "absl/status/status.h"
 #include "absl/time/time.h"
 #include "fcp/base/future.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/base/scheduler.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/log_manager.h"

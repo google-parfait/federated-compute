@@ -21,7 +21,6 @@
 
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/selector_context.pb.h"

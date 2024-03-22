@@ -17,16 +17,20 @@
 #ifndef FCP_CLIENT_CACHE_FILE_BACKED_RESOURCE_CACHE_H_
 #define FCP_CLIENT_CACHE_FILE_BACKED_RESOURCE_CACHE_H_
 
-#include <filesystem>
+#include <cstdint>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <memory>
 #include <optional>
-#include <string>
 #include <utility>
 
 #include "google/protobuf/any.pb.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 #include "fcp/base/clock.h"
 #include "fcp/client/cache/cache_manifest.pb.h"
 #include "fcp/client/cache/resource_cache.h"

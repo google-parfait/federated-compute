@@ -36,5 +36,6 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_googleapis//google/longrunning:longrunning_cc_proto",
         "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
     ],
 )

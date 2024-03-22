@@ -29,6 +29,7 @@
 #include "absl/strings/string_view.h"
 #include "fcp/base/platform.h"
 #include "fcp/client/files.h"
+#include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"

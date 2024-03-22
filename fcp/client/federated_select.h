@@ -16,15 +16,19 @@
 #ifndef FCP_CLIENT_FEDERATED_SELECT_H_
 #define FCP_CLIENT_FEDERATED_SELECT_H_
 
+#include <atomic>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <memory>
 #include <string>
 #include <utility>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
-#include "absl/time/time.h"
+#include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/files.h"

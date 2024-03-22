@@ -21,20 +21,24 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <cerrno>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
 
-#include "absl/base/attributes.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "fcp/base/monitoring.h"
-#include "grpcpp/channel.h"
+#include "grpc/grpc.h"
+#include "grpcpp/channel.h"  // IWYU pragma: keep
 #include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
+#include "grpcpp/support/channel_arguments.h"
 
 namespace fcp {
 namespace client {

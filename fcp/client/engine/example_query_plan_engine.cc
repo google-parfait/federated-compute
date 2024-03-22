@@ -35,6 +35,7 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/client/converters.h"
 #include "fcp/client/engine/common.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/example_query_result.pb.h"

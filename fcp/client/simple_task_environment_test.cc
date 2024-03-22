@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fcp/client/simple_task_environment.h"
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/client/test_helpers.h"
-#include "fcp/testing/testing.h"
 
 namespace fcp {
 namespace client {

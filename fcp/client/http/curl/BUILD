@@ -40,6 +40,9 @@ cc_library(
         "//fcp/base",
         "//fcp/client/http:http_client",
         "//fcp/client/http:http_client_util",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@libcurl//:curl",
@@ -54,7 +57,6 @@ cc_test(
     deps = [
         ":curl_http_client",
         "//fcp/client/http:http_client_util",
-        "//fcp/testing",
         "@com_google_googletest//:gtest_main",
     ],
 )

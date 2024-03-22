@@ -21,8 +21,12 @@
 #include <utility>
 #include <vector>
 
-#include "absl/synchronization/mutex.h"
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
+#include "curl/curl.h"
+#include "curl/multi.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/http/curl/curl_api.h"
 #include "fcp/client/http/curl/curl_http_request_handle.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"

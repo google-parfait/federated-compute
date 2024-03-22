@@ -22,6 +22,7 @@
 #include "absl/status/status.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/time/time.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/testing/testing.h"

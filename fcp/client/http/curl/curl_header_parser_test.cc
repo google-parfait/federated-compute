@@ -16,8 +16,9 @@
 
 #include "fcp/client/http/curl/curl_header_parser.h"
 
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "fcp/client/http/http_client_util.h"
-#include "fcp/testing/testing.h"
 
 namespace fcp::client::http::curl {
 namespace {

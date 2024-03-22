@@ -18,7 +18,7 @@
 
 #include <utility>
 
-#include "fcp/base/monitoring.h"
+#include "fcp/client/http/http_client.h"
 
 namespace fcp::client::http::curl {
 CurlHttpResponse::CurlHttpResponse(int status_code, HeaderList header_list)

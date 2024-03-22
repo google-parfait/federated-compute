@@ -33,6 +33,7 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
+#include "google/protobuf/message.h"
 
 namespace fcp {
 namespace client {

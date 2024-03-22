@@ -16,16 +16,20 @@
 #ifndef FCP_CLIENT_HTTP_HTTP_SECAGG_SEND_TO_SERVER_IMPL_H_
 #define FCP_CLIENT_HTTP_HTTP_SECAGG_SEND_TO_SERVER_IMPL_H_
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/time.h"
+#include "fcp/base/clock.h"
 #include "fcp/client/http/protocol_request_helper.h"
-#include "fcp/client/secagg_event_publisher.h"
+#include "fcp/client/interruptible_runner.h"
 #include "fcp/client/secagg_runner.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"

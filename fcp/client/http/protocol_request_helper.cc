@@ -15,10 +15,31 @@
  */
 #include "fcp/client/http/protocol_request_helper.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <iterator>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "google/protobuf/any.pb.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/time.h"
+#include "fcp/base/clock.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
+#include "fcp/base/wall_clock_stopwatch.h"
+#include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
+#include "fcp/client/http/in_memory_request_response.h"
+#include "fcp/client/interruptible_runner.h"
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 

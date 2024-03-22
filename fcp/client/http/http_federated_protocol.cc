@@ -16,6 +16,7 @@
 #include "fcp/client/http/http_federated_protocol.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -36,6 +37,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
 #include "fcp/base/digest.h"
@@ -59,6 +61,8 @@
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/parsing_utils.h"
+#include "fcp/client/secagg_event_publisher.h"
+#include "fcp/client/secagg_runner.h"
 #include "fcp/client/stats.h"
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"

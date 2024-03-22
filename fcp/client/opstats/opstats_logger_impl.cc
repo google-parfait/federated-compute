@@ -22,14 +22,17 @@
 
 #include "google/protobuf/util/time_util.h"
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/time_util.h"
+#include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/flags.h"
+#include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"
-#include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 

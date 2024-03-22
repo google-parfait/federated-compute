@@ -28,7 +28,7 @@
 #include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "fcp/base/monitoring.h"
+#include "absl/strings/string_view.h"
 #include "fcp/client/http/http_client.h"
 
 namespace fcp {

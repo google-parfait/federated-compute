@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <memory>
 #include <string>
 
 #include "absl/cleanup/cleanup.h"

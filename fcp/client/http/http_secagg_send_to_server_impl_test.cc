@@ -15,6 +15,7 @@
  */
 #include "fcp/client/http/http_secagg_send_to_server_impl.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -22,11 +23,25 @@
 
 #include "google/longrunning/operations.pb.h"
 #include "google/rpc/code.pb.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "fcp/base/clock.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/base/simulated_clock.h"
+#include "fcp/base/wall_clock_stopwatch.h"
+#include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/http/http_client.h"
+#include "fcp/client/http/protocol_request_helper.h"
 #include "fcp/client/http/testing/test_helpers.h"
+#include "fcp/client/interruptible_runner.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
+#include "fcp/secagg/shared/secagg_messages.pb.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp {

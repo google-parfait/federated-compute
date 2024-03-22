@@ -19,8 +19,9 @@
 #include <cstdint>
 #include <optional>
 
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "fcp/client/opstats/opstats_logger.h"
+#include "absl/time/time.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 

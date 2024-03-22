@@ -20,8 +20,11 @@
 #include <string>
 #include <type_traits>
 
+#include "absl/base/attributes.h"
 #include "absl/synchronization/mutex.h"
 #include "curl/curl.h"
+#include "curl/multi.h"
+#include "curl/system.h"
 
 namespace fcp::client::http::curl {
 // An RAII wrapper around the libcurl easy handle, which works with one request.

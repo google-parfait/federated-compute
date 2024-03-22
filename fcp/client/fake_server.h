@@ -17,19 +17,18 @@
 #ifndef FCP_CLIENT_FAKE_SERVER_H_
 #define FCP_CLIENT_FAKE_SERVER_H_
 
-#include <cstddef>
+#include <cstdint>
+#include <map>
 #include <string>
-#include <tuple>
 
-#include "grpcpp/impl/codegen/status.h"
 #include "absl/status/status.h"
 #include "absl/synchronization/notification.h"
-#include "fcp/base/monitoring.h"
-#include "fcp/client/grpc_bidi_stream.h"
 #include "fcp/protocol/grpc_chunked_bidi_stream.h"
 #include "fcp/protos/federated_api.grpc.pb.h"
 #include "fcp/protos/federated_api.pb.h"
-#include "grpcpp/impl/codegen/server_context.h"
+#include "grpcpp/server_context.h"
+#include "grpcpp/support/status.h"
+#include "grpcpp/support/sync_stream.h"
 
 namespace fcp {
 namespace client {

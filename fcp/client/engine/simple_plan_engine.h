@@ -16,26 +16,25 @@
 #ifndef FCP_CLIENT_ENGINE_SIMPLE_PLAN_ENGINE_H_
 #define FCP_CLIENT_ENGINE_SIMPLE_PLAN_ENGINE_H_
 
+#include <atomic>
+#include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "google/protobuf/any.pb.h"
 #include "absl/status/statusor.h"
-#include "absl/time/time.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/tf_wrapper.h"
-#include "fcp/client/event_publisher.h"
-#include "fcp/client/flags.h"
+#include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
-#include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/tensor.h"
 

@@ -16,11 +16,13 @@
 #ifndef FCP_CLIENT_FL_RUNNER_H_
 #define FCP_CLIENT_FL_RUNNER_H_
 
+#include <optional>
 #include <string>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "fcp/base/clock.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/federated_protocol.h"
@@ -28,7 +30,6 @@
 #include "fcp/client/files.h"
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/flags.h"
-#include "fcp/client/http/http_client.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -36,7 +37,6 @@
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
-#include "tensorflow/core/framework/tensor.h"
 
 namespace fcp {
 namespace client {

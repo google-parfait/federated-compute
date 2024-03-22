@@ -17,12 +17,10 @@
 #define FCP_CLIENT_OPSTATS_OPSTATS_EXAMPLE_STORE_H_
 
 #include <memory>
-#include <string>
-#include <utility>
 
+#include "absl/status/statusor.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/log_manager.h"
-#include "fcp/client/opstats/opstats_db.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"

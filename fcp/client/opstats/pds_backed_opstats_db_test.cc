@@ -16,19 +16,34 @@
 
 #include "fcp/client/opstats/pds_backed_opstats_db.h"
 
-#include <filesystem>
+#include <cstdint>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <functional>
+#include <memory>
+#include <set>
 #include <string>
 #include <thread>  // NOLINT(build/c++11)
 #include <utility>
+#include <vector>
 
 #include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
+#include "fcp/base/monitoring.h"
+#include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/engine/engine.pb.h"
+#include "fcp/client/histogram_counters.pb.h"
+#include "fcp/client/opstats/opstats_db.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/testing/testing.h"
+#include "protostore/file-storage.h"
 
 namespace fcp {
 namespace client {

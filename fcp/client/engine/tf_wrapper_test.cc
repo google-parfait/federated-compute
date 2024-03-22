@@ -16,10 +16,12 @@
 #include "fcp/client/engine/tf_wrapper.h"
 
 #include "google/protobuf/any.pb.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
+#include "tensorflow/core/protobuf/config.pb.h"
 
 namespace fcp {
 namespace client {

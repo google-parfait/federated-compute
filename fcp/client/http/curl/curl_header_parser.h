@@ -18,6 +18,7 @@
 
 #include <string>
 
+#include "absl/base/attributes.h"
 #include "fcp/client/http/http_client.h"
 
 namespace fcp::client::http::curl {

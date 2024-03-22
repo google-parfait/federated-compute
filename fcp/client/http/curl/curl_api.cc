@@ -18,6 +18,11 @@
 #include <memory>
 #include <string>
 
+#include "absl/synchronization/mutex.h"
+#include "curl/curl.h"
+#include "curl/easy.h"
+#include "curl/multi.h"
+#include "curl/system.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp::client::http::curl {

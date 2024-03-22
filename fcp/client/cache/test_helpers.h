@@ -15,8 +15,15 @@
 #ifndef FCP_CLIENT_CACHE_TEST_HELPERS_H_
 #define FCP_CLIENT_CACHE_TEST_HELPERS_H_
 
+#include <optional>
+
+#include "google/protobuf/any.pb.h"
 #include "gmock/gmock.h"
-#include "gtest/gtest.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "fcp/client/cache/resource_cache.h"
 
 namespace fcp {

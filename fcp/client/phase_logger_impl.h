@@ -20,12 +20,16 @@
 #include <optional>
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/flags.h"
+#include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/phase_logger.h"
+#include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 
 namespace fcp {

@@ -14,16 +14,19 @@
 
 #include "fcp/client/fake_server.h"
 
+#include <cstdint>
+#include <map>
 #include <string>
 #include <utility>
 
-#include "gtest/gtest.h"
 #include "absl/status/status.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/status_converters.h"
-#include "fcp/client/grpc_bidi_stream.h"
 #include "fcp/protocol/grpc_chunked_bidi_stream.h"
 #include "fcp/protos/federated_api.pb.h"
+#include "grpcpp/server_context.h"
+#include "grpcpp/support/status.h"
+#include "grpcpp/support/sync_stream.h"
 
 namespace fcp {
 namespace client {

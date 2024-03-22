@@ -15,16 +15,29 @@
  */
 #include "fcp/client/engine/tflite_plan_engine.h"
 
+#include <atomic>
+#include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "fcp/base/monitoring.h"
+#include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/engine/common.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/tflite_wrapper.h"
+#include "fcp/client/flags.h"
 #include "fcp/protos/plan.pb.h"
+#include "fcp/tensorflow/host_object.h"
 #include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor.pb.h"
+#include "tensorflow/core/platform/tstring.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 
 namespace fcp {

@@ -16,16 +16,20 @@
 #ifndef FCP_CLIENT_SECAGG_RUNNER_H_
 #define FCP_CLIENT_SECAGG_RUNNER_H_
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/interruptible_runner.h"
+#include "fcp/client/log_manager.h"
 #include "fcp/client/secagg_event_publisher.h"
 #include "fcp/secagg/client/secagg_client.h"
-#include "fcp/secagg/shared/input_vector_specification.h"
+#include "fcp/secagg/client/send_to_server_interface.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
-#include "fcp/secagg/shared/secagg_vector.h"
 
 namespace fcp {
 namespace client {

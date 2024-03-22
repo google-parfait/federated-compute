@@ -16,7 +16,12 @@
 #include "fcp/client/engine/common.h"
 
 #include <string>
+#include <utility>
+#include <vector>
 
+#include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 

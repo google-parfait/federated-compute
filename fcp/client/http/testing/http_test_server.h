@@ -21,8 +21,7 @@
 #include <string>
 
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
-#include "tensorflow_serving/util/net_http/server/public/httpserver.h"
+#include "tensorflow_serving/util/net_http/server/public/httpserver_interface.h"
 
 namespace fcp {
 namespace client {

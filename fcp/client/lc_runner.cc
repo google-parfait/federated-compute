@@ -16,7 +16,6 @@
 #include "fcp/client/lc_runner.h"
 
 #include <functional>
-#include <map>
 #include <memory>
 #include <string>
 #include <utility>
@@ -25,11 +24,24 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
+#include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+#include "fcp/client/event_publisher.h"
+#include "fcp/client/flags.h"
+#include "fcp/client/interruptible_runner.h"
+#include "fcp/client/log_manager.h"
+#include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/phase_logger.h"
+#include "fcp/client/simple_task_environment.h"
+#include "fcp/client/stats.h"
+#include "tensorflow/core/platform/tstring.h"
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
 #include "fcp/client/engine/simple_plan_engine.h"

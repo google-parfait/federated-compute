@@ -18,7 +18,7 @@
 #include <fcntl.h>
 
 #include <cstdint>
-#include <filesystem>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <functional>
 #include <memory>
 #include <string>
@@ -40,10 +40,12 @@
 #include "fcp/aggregation/testing/test_data.h"
 #include "fcp/client/client_runner.h"
 #include "fcp/client/engine/common.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_query_result.pb.h"
+#include "fcp/client/simple_task_environment.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/plan.pb.h"
-#include "fcp/testing/testing.h"
+#include "fcp/testing/testing.h"  // IWYU pragma: keep
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "tensorflow/c/checkpoint_reader.h"
@@ -52,6 +54,7 @@
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.pb.h"
+#include "tensorflow/core/platform/tstring.h"
 
 namespace fcp {
 namespace client {

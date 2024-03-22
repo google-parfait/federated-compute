@@ -17,7 +17,10 @@
 
 #include <stdio.h>
 
+#include <cstdarg>
 #include <string>
+
+#include "absl/synchronization/mutex.h"
 
 namespace fcp {
 namespace client {

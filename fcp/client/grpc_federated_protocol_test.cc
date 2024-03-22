@@ -17,15 +17,12 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <vector>
 
-#include "google/protobuf/text_format.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/memory/memory.h"
@@ -48,11 +45,7 @@
 #include "fcp/client/stats.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
-#include "fcp/secagg/client/secagg_client.h"
-#include "fcp/secagg/shared/aes_ctr_prng_factory.h"
-#include "fcp/secagg/testing/fake_prng.h"
-#include "fcp/secagg/testing/mock_send_to_server_interface.h"
-#include "fcp/secagg/testing/mock_state_transition_listener.h"
+#include "fcp/secagg/shared/secagg_messages.pb.h"
 #include "fcp/testing/testing.h"
 #include "google/protobuf/text_format.h"
 

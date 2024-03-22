@@ -27,6 +27,7 @@ cc_library(
     deps = [
         "//fcp/base",
         "//fcp/client:interfaces",
+        "//fcp/client:selector_context_cc_proto",
         "//fcp/client:simple_task_environment",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_proto_cc",

@@ -16,13 +16,17 @@
 #ifndef FCP_CLIENT_OPSTATS_PDS_BACKED_OPSTATS_DB_H_
 #define FCP_CLIENT_OPSTATS_PDS_BACKED_OPSTATS_DB_H_
 
+#include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 
-#include "absl/container/flat_hash_set.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"
 #include "fcp/protos/opstats.pb.h"

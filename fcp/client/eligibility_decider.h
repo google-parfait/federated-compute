@@ -17,7 +17,6 @@
 #ifndef FCP_CLIENT_ELIGIBILITY_DECIDER_H_
 #define FCP_CLIENT_ELIGIBILITY_DECIDER_H_
 
-#include <functional>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -30,6 +29,7 @@
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
+#include "tensorflow/core/framework/tensor.h"
 
 namespace fcp::client {
 

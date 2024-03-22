@@ -22,7 +22,7 @@
 #include <utility>
 #include <vector>
 
-#include "absl/synchronization/mutex.h"
+#include "absl/status/status.h"
 #include "fcp/client/http/curl/curl_api.h"
 #include "fcp/client/http/http_client.h"
 

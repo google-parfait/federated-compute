@@ -18,9 +18,11 @@
 #include <string>
 #include <utility>
 
+#include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_split.h"
-#include "fcp/base/monitoring.h"
+#include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
 
 namespace fcp::client::http::curl {

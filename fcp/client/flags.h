@@ -17,6 +17,7 @@
 #define FCP_CLIENT_FLAGS_H_
 
 #include <cstdint>
+#include <vector>
 
 #include "absl/status/status.h"
 

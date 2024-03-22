@@ -16,11 +16,8 @@
 #ifndef FCP_CLIENT_EVENT_PUBLISHER_H_
 #define FCP_CLIENT_EVENT_PUBLISHER_H_
 
-#include <cstdint>
 #include <string>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "fcp/client/stats.h"

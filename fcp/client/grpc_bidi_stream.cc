@@ -16,13 +16,19 @@
 
 #include "fcp/client/grpc_bidi_stream.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 
 #include "absl/status/status.h"
+#include "absl/synchronization/mutex.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/base/status_converters.h"
 #include "fcp/client/grpc_bidi_channel.h"
+#include "fcp/protocol/grpc_chunked_bidi_stream.h"
+#include "fcp/protos/federated_api.pb.h"
+#include "grpcpp/channel.h"  // IWYU pragma: keep
 #include "grpcpp/support/time.h"
 
 namespace fcp {

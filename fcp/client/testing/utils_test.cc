@@ -21,7 +21,7 @@
 #include "gtest/gtest.h"
 #include "absl/status/statusor.h"
 #include "fcp/protos/plan.pb.h"
-#include "fcp/testing/testing.h"
+#include "fcp/testing/testing.h"  // IWYU pragma: keep
 
 namespace fcp::client::testing {
 namespace {

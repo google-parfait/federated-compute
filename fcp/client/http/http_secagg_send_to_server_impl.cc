@@ -15,6 +15,8 @@
  */
 #include "fcp/client/http/http_secagg_send_to_server_impl.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -24,8 +26,20 @@
 
 #include "google/protobuf/any.pb.h"
 #include "google/rpc/code.pb.h"
+#include "absl/memory/memory.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/time.h"
+#include "fcp/base/clock.h"
+#include "fcp/base/monitoring.h"
+#include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
+#include "fcp/client/http/in_memory_request_response.h"
+#include "fcp/client/http/protocol_request_helper.h"
+#include "fcp/client/interruptible_runner.h"
 #include "fcp/protos/federatedcompute/secure_aggregations.pb.h"
 
 namespace fcp {

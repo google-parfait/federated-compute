@@ -16,13 +16,10 @@
 #ifndef FCP_CLIENT_FEDERATED_PROTOCOL_UTIL_H_
 #define FCP_CLIENT_FEDERATED_PROTOCOL_UTIL_H_
 
-#include <string>
 
 #include "google/protobuf/duration.pb.h"
 #include "absl/random/random.h"
-#include "absl/status/statusor.h"
 #include "absl/time/time.h"
-#include "fcp/client/log_manager.h"
 #include "fcp/protos/federated_api.pb.h"
 
 namespace fcp {

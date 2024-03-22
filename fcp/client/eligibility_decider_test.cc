@@ -16,6 +16,7 @@
 
 #include "fcp/client/eligibility_decider.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -28,6 +29,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/time/time.h"
 #include "fcp/base/simulated_clock.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/common.h"
@@ -35,6 +37,7 @@
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
+#include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/testing/testing.h"
 #include "tensorflow/core/example/example.pb.h"

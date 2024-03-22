@@ -15,14 +15,29 @@
  */
 #include "fcp/client/secagg_runner.h"
 
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/types/span.h"
+#include "fcp/base/monitoring.h"
+#include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/federated_protocol.h"
+#include "fcp/client/interruptible_runner.h"
+#include "fcp/client/log_manager.h"
+#include "fcp/client/secagg_event_publisher.h"
+#include "fcp/secagg/client/secagg_client.h"
+#include "fcp/secagg/client/state_transition_listener_interface.h"
 #include "fcp/secagg/shared/aes_ctr_prng_factory.h"
 #include "fcp/secagg/shared/crypto_rand_prng.h"
 #include "fcp/secagg/shared/input_vector_specification.h"
+#include "fcp/secagg/shared/secagg_vector.h"
 
 namespace fcp {
 namespace client {

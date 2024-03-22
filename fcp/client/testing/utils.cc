@@ -16,6 +16,14 @@
 
 #include "fcp/client/testing/utils.h"
 
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "absl/status/statusor.h"
+#include "fcp/client/selector_context.pb.h"
+#include "fcp/client/simple_task_environment.h"
+
 namespace fcp::client::testing {
 
 TestTaskEnvironment::TestTaskEnvironment(const Dataset::ClientDataset* dataset,

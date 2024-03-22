@@ -51,7 +51,6 @@ cc_library(
         "//fcp/jni:jni_util",
         "@bazel_tools//tools/jdk:jni",
         "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

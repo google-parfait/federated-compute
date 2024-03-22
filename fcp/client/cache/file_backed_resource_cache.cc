@@ -18,10 +18,8 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <filesystem>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <fstream>
-#include <functional>
-#include <map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -33,16 +31,21 @@
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/timestamp.pb.h"
 #include "absl/cleanup/cleanup.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
+#include "fcp/base/clock.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/base/time_util.h"
 #include "fcp/client/cache/cache_manifest.pb.h"
 #include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/log_manager.h"
 #include "protostore/file-storage.h"
 #include "protostore/proto-data-store.h"
 

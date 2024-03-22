@@ -17,19 +17,21 @@
 #include "fcp/client/eligibility_decider.h"
 
 #include <cstdint>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "google/protobuf/duration.pb.h"
+#include "google/protobuf/timestamp.pb.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
+#include "fcp/base/clock.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"

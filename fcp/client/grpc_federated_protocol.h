@@ -16,23 +16,21 @@
 #ifndef FCP_CLIENT_GRPC_FEDERATED_PROTOCOL_H_
 #define FCP_CLIENT_GRPC_FEDERATED_PROTOCOL_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
-#include <utility>
-#include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
-#include "absl/container/node_hash_map.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -48,10 +46,8 @@
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/stats.h"
-#include "fcp/protocol/grpc_chunked_bidi_stream.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
-#include "fcp/secagg/client/secagg_client.h"
 
 namespace fcp {
 namespace client {

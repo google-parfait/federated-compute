@@ -17,8 +17,13 @@
 #ifndef FCP_CLIENT_FAKE_LOG_MANAGER_H_
 #define FCP_CLIENT_FAKE_LOG_MANAGER_H_
 
+#include <cstdint>
+#include <string>
+
 #include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/engine/engine.pb.h"
+#include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/log_manager.h"
 
 namespace fcp {

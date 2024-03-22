@@ -24,6 +24,8 @@
 #include <utility>
 #include <vector>
 
+#include "google/protobuf/any.pb.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -33,6 +35,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/http/http_client.h"

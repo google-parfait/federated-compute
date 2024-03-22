@@ -16,9 +16,11 @@
 #ifndef FCP_CLIENT_ENGINE_CACHING_ERROR_REPORTER_H_
 #define FCP_CLIENT_ENGINE_CACHING_ERROR_REPORTER_H_
 
+#include <cstdarg>
 #include <string>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/synchronization/mutex.h"
 #include "tensorflow/lite/core/api/error_reporter.h"
 

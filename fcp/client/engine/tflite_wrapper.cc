@@ -16,10 +16,12 @@
 #include "fcp/client/engine/tflite_wrapper.h"
 
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "google/protobuf/any.pb.h"
 #include "absl/container/flat_hash_map.h"
@@ -28,6 +30,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/caching_error_reporter.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
@@ -38,6 +41,7 @@
 #include "tensorflow/lite/delegates/utils/simple_delegate.h"
 #include "tensorflow/lite/interpreter.h"
 #include "tensorflow/lite/interpreter_builder.h"
+#include "tensorflow/lite/interpreter_options.h"
 #include "tensorflow/lite/kernels/register.h"
 #include "tensorflow/lite/model_builder.h"
 #include "tensorflow/lite/string_util.h"

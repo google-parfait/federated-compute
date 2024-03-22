@@ -17,9 +17,13 @@
 #define FCP_CLIENT_OPSTATS_OPSTATS_LOGGER_IMPL_H_
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "fcp/client/flags.h"

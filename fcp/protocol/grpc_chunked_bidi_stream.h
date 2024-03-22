@@ -20,17 +20,19 @@
 #include <stddef.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <deque>
 #include <memory>
 #include <string>
 
 #include "absl/base/attributes.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/protos/federated_api.grpc.pb.h"
-#include "grpcpp/impl/codegen/call_op_set.h"
-#include "grpcpp/impl/codegen/sync_stream.h"
+#include "fcp/protos/federated_api.pb.h"
+#include "grpcpp/support/sync_stream.h"
 #include "google/protobuf/io/gzip_stream.h"
+#include "google/protobuf/io/zero_copy_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 
 namespace fcp {

@@ -19,7 +19,6 @@
 #include <functional>
 #include <optional>
 #include <string>
-#include <vector>
 
 #include "google/rpc/status.pb.h"
 #include "absl/status/status.h"

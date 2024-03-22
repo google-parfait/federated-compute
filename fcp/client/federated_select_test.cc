@@ -15,6 +15,7 @@
  */
 #include "fcp/client/federated_select.h"
 
+#include <cstdint>
 #include <fstream>
 #include <memory>
 #include <sstream>
@@ -22,11 +23,10 @@
 #include <vector>
 
 #include "google/protobuf/any.pb.h"
-#include "google/protobuf/text_format.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
-#include "absl/synchronization/blocking_counter.h"
+#include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/client_runner.h"
@@ -36,6 +36,7 @@
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
+#include "fcp/client/simple_task_environment.h"
 #include "fcp/client/stats.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/plan.pb.h"

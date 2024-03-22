@@ -16,17 +16,24 @@
 #include "fcp/client/phase_logger_impl.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
-#include <tuple>
 
 #include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/engine/engine.pb.h"
+#include "fcp/client/histogram_counters.pb.h"
+#include "fcp/client/stats.h"
 #include "fcp/client/test_helpers.h"
+#include "fcp/protos/federated_api.pb.h"
+#include "fcp/protos/opstats.pb.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp {

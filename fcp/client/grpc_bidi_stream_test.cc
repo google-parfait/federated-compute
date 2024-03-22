@@ -28,8 +28,9 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/base/scheduler.h"
 #include "fcp/client/fake_server.h"
-#include "fcp/client/test_helpers.h"
+#include "fcp/protos/federated_api.pb.h"
 #include "fcp/testing/testing.h"
+#include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server_builder.h"
 
 namespace fcp {
@@ -97,7 +98,7 @@ TEST_F(GrpcBidiStreamTest, CancellationDuringBlockingOp) {
   CreateClient();
   auto pool = CreateThreadPoolScheduler(1);
   pool->Schedule([this]() {
-    sleep(1);
+    absl::SleepFor(absl::Seconds(1));
     client_stream_->Close();
   });
   ServerStreamMessage reply;

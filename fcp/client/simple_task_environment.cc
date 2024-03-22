@@ -15,6 +15,8 @@
  */
 #include "fcp/client/simple_task_environment.h"
 
+#include "absl/time/time.h"
+
 namespace fcp {
 namespace client {
 

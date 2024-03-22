@@ -17,11 +17,16 @@
 #ifndef FCP_CLIENT_HTTP_CURL_CURL_HTTP_REQUEST_HANDLE_H_
 #define FCP_CLIENT_HTTP_CURL_CURL_HTTP_REQUEST_HANDLE_H_
 
+#include <cstddef>
 #include <memory>
 #include <string>
 
+#include "absl/base/attributes.h"
+#include "absl/base/thread_annotations.h"
+#include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
 #include "curl/curl.h"
+#include "curl/system.h"
 #include "fcp/client/http/curl/curl_api.h"
 #include "fcp/client/http/curl/curl_header_parser.h"
 #include "fcp/client/http/http_client.h"

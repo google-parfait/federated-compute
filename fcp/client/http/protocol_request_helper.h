@@ -16,14 +16,20 @@
 #ifndef FCP_CLIENT_HTTP_PROTOCOL_REQUEST_HELPER_H_
 #define FCP_CLIENT_HTTP_PROTOCOL_REQUEST_HELPER_H_
 
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "google/longrunning/operations.pb.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/status/status.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "fcp/base/clock.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/in_memory_request_response.h"
+#include "fcp/client/interruptible_runner.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 
 namespace fcp {

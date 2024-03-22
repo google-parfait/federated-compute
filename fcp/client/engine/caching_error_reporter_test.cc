@@ -17,9 +17,9 @@
 
 #include <string>
 
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/strings/str_cat.h"
-#include "fcp/testing/testing.h"
 #include "tensorflow/lite/core/api/error_reporter.h"
 
 namespace fcp {

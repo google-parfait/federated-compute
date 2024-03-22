@@ -17,6 +17,7 @@
 #ifndef FCP_CLIENT_GRPC_BIDI_STREAM_H_
 #define FCP_CLIENT_GRPC_BIDI_STREAM_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -24,11 +25,12 @@
 #include "absl/base/thread_annotations.h"
 #include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/protocol/grpc_chunked_bidi_stream.h"
 #include "fcp/protos/federated_api.grpc.pb.h"
-#include "grpcpp/impl/codegen/channel_interface.h"
-#include "grpcpp/impl/codegen/client_context.h"
+#include "fcp/protos/federated_api.pb.h"
+#include "grpcpp/channel.h"  // IWYU pragma: keep
+#include "grpcpp/client_context.h"
+#include "grpcpp/support/sync_stream.h"
 
 namespace fcp {
 namespace client {

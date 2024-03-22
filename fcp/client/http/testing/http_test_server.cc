@@ -16,13 +16,20 @@
 
 #include "fcp/client/http/testing/http_test_server.h"
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
 #include <utility>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "fcp/base/scheduler.h"
+#include "tensorflow_serving/util/net_http/server/public/httpserver.h"
+#include "tensorflow_serving/util/net_http/server/public/httpserver_interface.h"
+#include "tensorflow_serving/util/net_http/server/public/server_request_interface.h"
 
 namespace fcp {
 namespace client {

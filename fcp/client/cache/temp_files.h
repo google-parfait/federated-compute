@@ -17,11 +17,10 @@
 #ifndef FCP_CLIENT_CACHE_TEMP_FILES_H_
 #define FCP_CLIENT_CACHE_TEMP_FILES_H_
 
-#include <filesystem>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <memory>
 #include <string>
 
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/client/files.h"
 #include "fcp/client/log_manager.h"

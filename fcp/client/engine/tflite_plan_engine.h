@@ -17,6 +17,7 @@
 #define FCP_CLIENT_ENGINE_TFLITE_PLAN_ENGINE_H_
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 

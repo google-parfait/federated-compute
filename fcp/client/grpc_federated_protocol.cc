@@ -15,21 +15,31 @@
  */
 #include "fcp/client/grpc_federated_protocol.h"
 
-#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "google/protobuf/duration.pb.h"
+#include "google/rpc/code.pb.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "absl/types/span.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
+#include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/event_publisher.h"
@@ -42,21 +52,11 @@
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
-#include "fcp/client/opstats/opstats_logger.h"
-#include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
-#include "fcp/secagg/client/secagg_client.h"
-#include "fcp/secagg/client/send_to_server_interface.h"
-#include "fcp/secagg/client/state_transition_listener_interface.h"
-#include "fcp/secagg/shared/aes_ctr_prng_factory.h"
-#include "fcp/secagg/shared/crypto_rand_prng.h"
-#include "fcp/secagg/shared/input_vector_specification.h"
-#include "fcp/secagg/shared/math.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
-#include "fcp/secagg/shared/secagg_vector.h"
 
 namespace fcp {
 namespace client {

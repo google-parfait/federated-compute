@@ -15,8 +15,10 @@
  */
 #include "fcp/client/federated_select.h"
 
+#include <atomic>
+#include <cstdint>
 #include <deque>
-#include <filesystem>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <fstream>
 #include <functional>
 #include <ios>
@@ -26,20 +28,23 @@
 #include <vector>
 
 #include "google/protobuf/any.pb.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_replace.h"
-#include "fcp/base/monitoring.h"
+#include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/files.h"
 #include "fcp/client/http/http_client.h"
-#include "fcp/client/http/http_client_util.h"
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
-#include "fcp/client/stats.h"
+#include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp {

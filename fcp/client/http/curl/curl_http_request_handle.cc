@@ -16,17 +16,28 @@
 
 #include "fcp/client/http/curl/curl_http_request_handle.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "curl/curl.h"
+#include "curl/multi.h"
+#include "curl/system.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/http/curl/curl_api.h"
 #include "fcp/client/http/curl/curl_header_parser.h"
 #include "fcp/client/http/curl/curl_http_response.h"
+#include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
 
 namespace fcp::client::http::curl {

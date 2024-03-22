@@ -16,7 +16,9 @@
 
 #include "fcp/client/opstats/opstats_logger_impl.h"
 
-#include <filesystem>
+#include <cstdint>
+#include <filesystem>  // NOLINT(build/c++17)
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -28,11 +30,15 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
 #include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/histogram_counters.pb.h"
+#include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/opstats/pds_backed_opstats_db.h"
+#include "fcp/client/stats.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/testing/testing.h"
+#include "protostore/file-storage.h"
 
 namespace fcp {
 namespace client {

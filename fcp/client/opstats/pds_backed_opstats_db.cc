@@ -18,17 +18,33 @@
 #include <fcntl.h>
 #include <sys/file.h>
 
-#include <filesystem>
+#include <algorithm>
+#include <cstdint>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <functional>
+#include <memory>
 #include <string>
+#include <system_error>  // NOLINT(build/c++11)
 #include <utility>
 
+#include "google/protobuf/timestamp.pb.h"
 #include "google/protobuf/util/time_util.h"
+#include "absl/base/attributes.h"
+#include "absl/base/const_init.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/memory/memory.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/opstats/opstats_db.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "protostore/file-storage.h"
 #include "protostore/proto-data-store.h"
 

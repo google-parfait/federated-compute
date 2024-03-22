@@ -20,12 +20,13 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "google/protobuf/timestamp.pb.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
-#include "fcp/base/monitoring.h"
-#include "fcp/client/opstats/opstats_db.h"
+#include "absl/time/time.h"
+#include "fcp/protos/opstats.pb.h"
 #include "re2/re2.h"
 
 namespace fcp {

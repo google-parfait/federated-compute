@@ -15,7 +15,10 @@
  */
 #include "fcp/client/engine/simple_plan_engine.h"
 
+#include <atomic>
+#include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -26,9 +29,15 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/engine/common.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+#include "fcp/client/engine/tf_wrapper.h"
 #include "fcp/client/example_iterator_query_recorder.h"
-#include "fcp/client/simple_task_environment.h"
+#include "fcp/client/interruptible_runner.h"
+#include "fcp/client/log_manager.h"
+#include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/tensorflow/host_object.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/protobuf/struct.pb.h"

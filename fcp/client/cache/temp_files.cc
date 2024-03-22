@@ -19,15 +19,20 @@
 #include <sys/file.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdlib>
-#include <filesystem>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <fstream>
 #include <memory>
 #include <string>
 #include <system_error>  // NOLINT
 
-#include "fcp/base/monitoring.h"
+#include "absl/memory/memory.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/log_manager.h"
 
 namespace fcp {
 namespace client {

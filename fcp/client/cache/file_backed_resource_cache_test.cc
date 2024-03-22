@@ -16,20 +16,20 @@
 
 #include "fcp/client/cache/file_backed_resource_cache.h"
 
-#include <cstddef>
-#include <filesystem>
+#include <cstdint>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <fstream>
-#include <functional>
 #include <optional>
 #include <string>
-#include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/simulated_clock.h"
+#include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/testing/testing.h"

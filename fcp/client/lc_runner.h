@@ -20,7 +20,6 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"

@@ -16,6 +16,7 @@
 #include "fcp/client/http/in_memory_request_response.h"
 
 #include <cstdint>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <memory>
 #include <optional>
 #include <string>
@@ -28,7 +29,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
-#include "absl/strings/escaping.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/synchronization/notification.h"
@@ -45,8 +46,6 @@
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/testing/testing.h"
-#include "google/protobuf/io/gzip_stream.h"
-#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 
 namespace fcp::client::http {
 namespace {

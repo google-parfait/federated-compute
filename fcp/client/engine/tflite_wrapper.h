@@ -16,17 +16,20 @@
 #ifndef FCP_CLIENT_ENGINE_TFLITE_WRAPPER_H_
 #define FCP_CLIENT_ENGINE_TFLITE_WRAPPER_H_
 
+#include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "fcp/client/engine/caching_error_reporter.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
-#include "fcp/client/simple_task_environment.h"
-#include "tensorflow/lite/delegates/flex/delegate.h"
+#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/lite/delegates/utils/simple_delegate.h"
 #include "tensorflow/lite/interpreter.h"
 #include "tensorflow/lite/model_builder.h"

@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#include <memory>
 #include <string>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
 #include "fcp/client/grpc_bidi_stream.h"
-#include "fcp/protos/federated_api.grpc.pb.h"
+#include "fcp/protos/federated_api.pb.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp {

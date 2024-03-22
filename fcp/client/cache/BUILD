@@ -24,11 +24,12 @@ cc_library(
     srcs = ["temp_files.cc"],
     hdrs = ["temp_files.h"],
     deps = [
-        "//fcp/base",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interfaces",
+        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -37,9 +38,12 @@ cc_test(
     srcs = ["temp_files_test.cc"],
     deps = [
         ":temp_files",
+        "//fcp/base",
+        "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:test_helpers",
         "//fcp/testing",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -64,7 +68,9 @@ cc_library(
     deps = [
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -85,11 +91,14 @@ cc_library(
         "//fcp/base:time_util",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interfaces",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/cleanup",
+        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
         "@protodatastore_cpp//protostore:file-storage",
@@ -104,10 +113,12 @@ cc_test(
         ":file_backed_resource_cache",
         "//fcp/base",
         "//fcp/base:simulated_clock",
+        "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:selector_context_cc_proto",
         "//fcp/client:test_helpers",
         "//fcp/testing",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
     ],
@@ -119,6 +130,12 @@ cc_library(
     hdrs = ["test_helpers.h"],
     deps = [
         ":resource_cache",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
     ],
 )

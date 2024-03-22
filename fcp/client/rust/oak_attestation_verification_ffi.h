@@ -1,8 +1,6 @@
 #ifndef FCP_CLIENT_RUST_OAK_ATTESTATION_VERIFICATION_FFI_H_
 #define FCP_CLIENT_RUST_OAK_ATTESTATION_VERIFICATION_FFI_H_
 
-#include <memory>
-
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "third_party/oak/proto/attestation/endorsement.pb.h"

@@ -16,16 +16,26 @@
 #include "fcp/client/opstats/opstats_example_store.h"
 
 #include <cstdint>
+#include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "google/protobuf/any.pb.h"
+#include "google/protobuf/timestamp.pb.h"
 #include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/simple_task_environment.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
+#include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"
 #include "tensorflow/core/example/example.pb.h"

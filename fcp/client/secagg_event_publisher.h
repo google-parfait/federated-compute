@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_SECAGG_EVENT_PUBLISHER_H_
 #define FCP_CLIENT_SECAGG_EVENT_PUBLISHER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 

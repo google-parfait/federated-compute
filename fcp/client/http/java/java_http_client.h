@@ -18,17 +18,13 @@
 
 #include <jni.h>
 
-#include <cstdint>
 #include <memory>
-#include <optional>
-#include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/base/attributes.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/java/jni.pb.h"

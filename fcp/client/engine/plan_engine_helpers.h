@@ -17,18 +17,21 @@
 #define FCP_CLIENT_ENGINE_PLAN_ENGINE_HELPERS_H_
 
 #include <atomic>
-#include <functional>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/base/optimization.h"
+#include "absl/base/thread_annotations.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "fcp/base/monitoring.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
-#include "fcp/client/event_publisher.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"

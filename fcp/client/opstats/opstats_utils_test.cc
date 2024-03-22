@@ -16,15 +16,19 @@
 
 #include "fcp/client/opstats/opstats_utils.h"
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
 
+#include "google/protobuf/timestamp.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/flat_hash_map.h"
-#include "fcp/client/test_helpers.h"
+#include "absl/time/time.h"
+#include "fcp/protos/opstats.pb.h"
 #include "fcp/testing/testing.h"
+#include "re2/re2.h"
 
 namespace fcp {
 namespace client {

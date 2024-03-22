@@ -17,13 +17,21 @@
 
 #include <fcntl.h>
 
+#include <cstdint>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "fcp/base/monitoring.h"
+#include "fcp/protos/plan.pb.h"
+#include "google/protobuf/message_lite.h"
+#include "google/protobuf/repeated_field.h"
+#include "google/protobuf/repeated_ptr_field.h"
 
 namespace fcp {
 namespace client {

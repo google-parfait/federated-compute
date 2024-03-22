@@ -17,6 +17,11 @@
 #ifndef FCP_CLIENT_EXAMPLE_ITERATOR_QUERY_RECORDER_H_
 #define FCP_CLIENT_EXAMPLE_ITERATOR_QUERY_RECORDER_H_
 
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+#include "absl/base/thread_annotations.h"
 #include "absl/synchronization/mutex.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/task_result_info.pb.h"

@@ -17,18 +17,18 @@
 #define FCP_CLIENT_ENGINE_TF_WRAPPER_H_
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "google/protobuf/any.pb.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/time/time.h"
-#include "fcp/base/future.h"
-#include "fcp/base/monitoring.h"
-#include "fcp/base/scheduler.h"
+#include "absl/synchronization/mutex.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
+#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/public/session.h"
 
 namespace fcp {

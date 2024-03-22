@@ -17,8 +17,7 @@
 #ifndef FCP_CLIENT_HTTP_CURL_CURL_HTTP_RESPONSE_H_
 #define FCP_CLIENT_HTTP_CURL_CURL_HTTP_RESPONSE_H_
 
-#include <utility>
-
+#include "absl/base/attributes.h"
 #include "fcp/client/http/http_client.h"
 
 namespace fcp::client::http::curl {

@@ -19,10 +19,16 @@
 #include <optional>
 #include <string>
 
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/histogram_counters.pb.h"
+#include "fcp/client/stats.h"
+#include "fcp/protos/opstats.pb.h"
 
 namespace fcp {
 namespace client {

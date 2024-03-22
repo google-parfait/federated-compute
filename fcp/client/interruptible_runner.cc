@@ -15,10 +15,14 @@
  */
 #include "fcp/client/interruptible_runner.h"
 
+#include <cstdlib>
 #include <functional>
+#include <optional>
 #include <utility>
 
 #include "absl/status/status.h"
+#include "fcp/base/future.h"
+#include "fcp/base/monitoring.h"
 
 namespace fcp {
 namespace client {

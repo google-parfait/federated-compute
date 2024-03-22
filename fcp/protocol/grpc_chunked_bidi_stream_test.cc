@@ -17,6 +17,9 @@
 #include "fcp/protocol/grpc_chunked_bidi_stream.h"
 
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <tuple>
 

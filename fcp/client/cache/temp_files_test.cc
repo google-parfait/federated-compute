@@ -16,15 +16,16 @@
 
 #include "fcp/client/cache/temp_files.h"
 
-#include <filesystem>
+#include <filesystem>  // NOLINT(build/c++17)
 #include <fstream>
-#include <functional>
 #include <string>
-#include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "fcp/base/monitoring.h"
+#include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/testing/testing.h"
 

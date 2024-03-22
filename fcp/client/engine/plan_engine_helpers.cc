@@ -16,20 +16,33 @@
 #include "fcp/client/engine/plan_engine_helpers.h"
 
 #include <atomic>
-#include <functional>
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/engine/common.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_iterator_query_recorder.h"
+#include "fcp/client/flags.h"
+#include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/opstats/opstats_logger_impl.h"
 #include "fcp/client/opstats/pds_backed_opstats_db.h"
+#include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/tensorflow/external_dataset.h"
+#include "fcp/tensorflow/host_object.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/platform/tstring.h"
 
 namespace fcp {
 namespace client {
