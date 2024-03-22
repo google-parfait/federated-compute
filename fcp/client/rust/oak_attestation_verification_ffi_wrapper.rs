@@ -3,7 +3,6 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use core::ptr::NonNull;
 use oak_proto_rust::oak::attestation::v1::{
     AttestationResults, Endorsements, Evidence, ReferenceValues,
 };
