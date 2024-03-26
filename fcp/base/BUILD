@@ -547,3 +547,32 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "compression",
+    srcs = [
+        "compression.cc",
+    ],
+    hdrs = [
+        "compression.h",
+    ],
+    copts = FCP_COPTS,
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "compression_test",
+    srcs = ["compression_test.cc"],
+    copts = FCP_COPTS,
+    deps = [
+        ":compression",
+        "//fcp/testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

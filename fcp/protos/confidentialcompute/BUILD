@@ -44,6 +44,16 @@ cc_proto_library(
 )
 
 proto_library(
+    name = "aggregation_client_payload_proto",
+    srcs = ["aggregation_client_payload.proto"],
+)
+
+cc_proto_library(
+    name = "aggregation_client_payload_cc_proto",
+    deps = [":aggregation_client_payload_proto"],
+)
+
+proto_library(
     name = "ledger_proto",
     srcs = ["ledger.proto"],
     deps = [

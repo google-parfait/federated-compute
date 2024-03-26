@@ -40,6 +40,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
+#include "fcp/base/compression.h"
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/random_token.h"
@@ -64,10 +65,10 @@
 #include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/stats.h"
+#include "fcp/confidentialcompute/client_payload.h"
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
-#include "fcp/protos/confidentialcompute/pipeline_transform.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
@@ -87,10 +88,8 @@ using ::fcp::client::GenerateRetryWindowFromTargetDelay;
 using ::fcp::client::PickRetryTimeFromRange;
 using ::fcp::confidential_compute::EncryptMessageResult;
 using ::fcp::confidential_compute::MessageEncryptor;
-using ::fcp::confidential_compute::OkpCwt;
 using ::fcp::confidential_compute::OkpKey;
 using ::fcp::confidentialcompute::BlobHeader;
-using ::fcp::confidentialcompute::Record;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::AbortAggregationRequest;
 using ::google::internal::federatedcompute::v1::
@@ -1436,7 +1435,7 @@ HttpFederatedProtocol::ValidateConfidentialEncryptionConfig(
 absl::StatusOr<std::string>
 HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
     PerTaskInfo& task_info, const OkpKey& parsed_public_key,
-    const std::string& serialized_public_key, std::string payload) {
+    const std::string& serialized_public_key, std::string inner_payload) {
   FCP_CHECK(task_info.confidential_data_access_policy.has_value());
 
   BlobHeader blob_header;
@@ -1445,14 +1444,29 @@ HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
   blob_header.set_access_policy_sha256(
       ComputeSHA256(*task_info.confidential_data_access_policy));
   blob_header.set_key_id(parsed_public_key.key_id);
-  std::string serialized_record_header = blob_header.SerializeAsString();
+  std::string serialized_blob_header = blob_header.SerializeAsString();
 
+  // Compress the payload before we encrypt it.
+  absl::StatusOr<std::string> compressed_payload =
+      CompressWithGzip(inner_payload);
+  if (!compressed_payload.ok()) {
+    task_info.state = ObjectState::kReportFailedPermanentError;
+    std::string server_error_msg =
+        "Compressing payload for confidential aggregation failed.";
+    AbortAggregation(compressed_payload.status(), server_error_msg, task_info);
+    return absl::Status(
+        compressed_payload.status().code(),
+        absl::StrCat(server_error_msg, " (",
+                     compressed_payload.status().ToString(), ")"));
+  }
+
+  // Now encrypt the compressed data.
   // TODO: b/307312707 -  Remove the need to parse the public key both in this
   // file, as well as in MessageEncryptor::Encrypt. Perhaps we should be able to
   // pass the already-parsed OkCwt struct to the Encrypt method instead?
   absl::StatusOr<EncryptMessageResult> encryption_result =
-      MessageEncryptor().Encrypt(payload, serialized_public_key,
-                                 serialized_record_header);
+      MessageEncryptor().Encrypt(*compressed_payload, serialized_public_key,
+                                 serialized_blob_header);
   if (!encryption_result.ok()) {
     task_info.state = ObjectState::kReportFailedPermanentError;
     std::string server_error_msg =
@@ -1464,22 +1478,17 @@ HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
                      encryption_result.status().ToString(), ")"));
   }
 
-  // TODO: b/307312707 -  Use a format dedicated to passing encrypted data
-  // between client and server here, rather than reusing the Record proto, which
-  // is meant to pass data between two server-side transforms.
-  Record record;
-  Record::HpkePlusAeadData* hpke_plus_aead_data =
-      record.mutable_hpke_plus_aead_data();
-  hpke_plus_aead_data->set_ciphertext(encryption_result->ciphertext);
-  hpke_plus_aead_data->set_ciphertext_associated_data(serialized_record_header);
-  hpke_plus_aead_data->set_encrypted_symmetric_key(
-      encryption_result->encrypted_symmetric_key);
-  hpke_plus_aead_data->set_encapsulated_public_key(
-      encryption_result->encapped_key);
-  hpke_plus_aead_data->mutable_ledger_symmetric_key_associated_data()
-      ->set_record_header(serialized_record_header);
-
-  return record.SerializeAsString();
+  // Lastly, encode the ciphertext as well as the keys and blob header into a
+  // single string, to be uploaded via the protocol.
+  return confidential_compute::EncodeClientPayload(
+      confidential_compute::ClientPayloadHeader{
+          .encrypted_symmetric_key =
+              std::move(encryption_result->encrypted_symmetric_key),
+          .encapsulated_public_key = std::move(encryption_result->encapped_key),
+          .serialized_blob_header = std::move(serialized_blob_header),
+          .is_gzip_compressed = true,
+      },
+      encryption_result->ciphertext);
 }
 
 absl::Status HttpFederatedProtocol::UploadDataViaByteStreamProtocol(

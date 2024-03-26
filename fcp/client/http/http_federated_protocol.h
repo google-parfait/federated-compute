@@ -248,7 +248,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   absl::StatusOr<std::string> EncryptPayloadForConfidentialAggregation(
       PerTaskInfo& task_info,
       const fcp::confidential_compute::OkpKey& parsed_public_key,
-      const std::string& serialized_public_key, std::string payload);
+      const std::string& serialized_public_key, std::string inner_payload);
 
   // Helper function to perform data upload using the ByteStream protocol, used
   // during simple or confidential aggregation.

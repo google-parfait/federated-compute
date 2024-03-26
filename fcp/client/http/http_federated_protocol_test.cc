@@ -40,6 +40,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
+#include "fcp/base/compression.h"
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
@@ -49,15 +50,14 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/http/http_client.h"
-#include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/http/testing/test_helpers.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/stats.h"
 #include "fcp/client/test_helpers.h"
+#include "fcp/confidentialcompute/client_payload.h"
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
-#include "fcp/protos/confidentialcompute/pipeline_transform.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
@@ -1393,8 +1393,7 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalCheckinEnabledWithCompression) {
   std::string expected_plan = kPlan;
-  absl::StatusOr<std::string> compressed_plan =
-      internal::CompressWithGzip(expected_plan);
+  absl::StatusOr<std::string> compressed_plan = CompressWithGzip(expected_plan);
   ASSERT_OK(compressed_plan);
   Resource plan_resource;
   plan_resource.mutable_inline_resource()->set_data(*compressed_plan);
@@ -1402,7 +1401,7 @@ TEST_F(HttpFederatedProtocolTest,
       ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
   std::string expected_checkpoint = kInitCheckpoint;
   absl::StatusOr<std::string> compressed_checkpoint =
-      internal::CompressWithGzip(expected_checkpoint);
+      CompressWithGzip(expected_checkpoint);
   Resource checkpoint_resource;
   checkpoint_resource.mutable_inline_resource()->set_data(
       *compressed_checkpoint);
@@ -3112,35 +3111,45 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
                                                  plan_duration, std::nullopt));
 
-  // Validate that the encrypted payload can be parsed, has the expected header
-  // data, and can be decrypted using the decryptor that generated the public
-  // encryption key.
-  ::fcp::confidentialcompute::Record record;
-  ASSERT_TRUE(record.ParseFromString(uploaded_data));
-  EXPECT_EQ(record.hpke_plus_aead_data().ciphertext_associated_data(),
-            record.hpke_plus_aead_data()
-                .ledger_symmetric_key_associated_data()
-                .record_header());
+  // Validate that the payload can be parsed and that the ciphertext can be
+  // decrypted using the decryptor that generated the public encryption key.
+  absl::StatusOr<confidential_compute::ClientPayloadHeader> payload_header;
+  absl::string_view ciphertext;
+  {
+    absl::string_view uploaded_data_view(uploaded_data);
+    payload_header =
+        fcp::confidential_compute::DecodeAndConsumeClientPayloadHeader(
+            uploaded_data_view);
+    ASSERT_OK(payload_header);
+    // The uploaded_data_view now contains just the ciphertext.
+    ciphertext = uploaded_data_view;
+  }
 
+  // Validate the payload header values.
+  EXPECT_TRUE(payload_header->is_gzip_compressed);
   ::fcp::confidentialcompute::BlobHeader blob_header;
-  ASSERT_TRUE(blob_header.ParseFromString(
-      record.hpke_plus_aead_data().ciphertext_associated_data()));
+  ASSERT_TRUE(
+      blob_header.ParseFromString(payload_header->serialized_blob_header));
   EXPECT_EQ(blob_header.access_policy_sha256(),
             ComputeSHA256(serialized_access_policy));
   EXPECT_EQ(blob_header.access_policy_node_id(), 0);
   EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
   EXPECT_EQ(blob_header.key_id(), parsed_public_key->public_key->key_id);
 
-  auto decrypted_uploaded_data = decryptor.Decrypt(
-      record.hpke_plus_aead_data().ciphertext(),
-      record.hpke_plus_aead_data().ciphertext_associated_data(),
-      record.hpke_plus_aead_data().encrypted_symmetric_key(),
-      record.hpke_plus_aead_data()
-          .ledger_symmetric_key_associated_data()
-          .record_header(),
-      record.hpke_plus_aead_data().encapsulated_public_key());
+  // Ensure that the ciphertext can be decrypted.
+  auto decrypted_uploaded_data =
+      decryptor.Decrypt(ciphertext, payload_header->serialized_blob_header,
+                        payload_header->encrypted_symmetric_key,
+                        payload_header->serialized_blob_header,
+                        payload_header->encapsulated_public_key);
   ASSERT_OK(decrypted_uploaded_data);
-  EXPECT_EQ(*decrypted_uploaded_data, checkpoint_str);
+
+  // The ciphertext contains compressed data, so we must decompress it before
+  // comparing it with the expected checkpoint.
+  auto decompressed_uploaded_data =
+      UncompressWithGzip(*decrypted_uploaded_data);
+  ASSERT_OK(decompressed_uploaded_data);
+  EXPECT_EQ(*decompressed_uploaded_data, checkpoint_str);
 }
 
 TEST_F(HttpFederatedProtocolTest,

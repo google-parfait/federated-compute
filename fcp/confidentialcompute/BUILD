@@ -17,6 +17,33 @@ package(
 )
 
 cc_library(
+    name = "client_payload",
+    srcs = ["client_payload.cc"],
+    hdrs = ["client_payload.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//fcp/protos/confidentialcompute:aggregation_client_payload_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "client_payload_test",
+    srcs = ["client_payload_test.cc"],
+    deps = [
+        ":client_payload",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "cose",
     srcs = ["cose.cc"],
     hdrs = ["cose.h"],

@@ -36,14 +36,13 @@
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
+#include "fcp/base/compression.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_client_util.h"
 #include "fcp/client/http/http_resource_metadata.pb.h"
 #include "fcp/client/interruptible_runner.h"
-#include "google/protobuf/io/gzip_stream.h"
-#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 
 namespace fcp {
 namespace client {
@@ -66,8 +65,8 @@ absl::StatusOr<absl::Cord> TryGetResourceFromCache(
   absl::Cord cached_resource = cached_resource_and_metadata.resource;
   if (metadata.compression_format() ==
       ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP) {
-    FCP_ASSIGN_OR_RETURN(cached_resource, internal::UncompressWithGzip(
-                                              std::string(cached_resource)));
+    FCP_ASSIGN_OR_RETURN(cached_resource,
+                         UncompressWithGzip(std::string(cached_resource)));
   }
   return cached_resource;
 }
@@ -95,11 +94,6 @@ absl::Status TryPutResourceInCache(absl::string_view client_cache_id,
 
 }  // namespace
 
-using ::google::protobuf::io::ArrayInputStream;
-using ::google::protobuf::io::GzipInputStream;
-using ::google::protobuf::io::GzipOutputStream;
-using ::google::protobuf::io::StringOutputStream;
-
 using CompressionFormat =
     ::fcp::client::http::UriOrInlineData::InlineData::CompressionFormat;
 
@@ -117,7 +111,7 @@ absl::StatusOr<std::unique_ptr<HttpRequest>> InMemoryHttpRequest::Create(
         absl::StrCat("Non-HTTPS URIs are not supported: ", uri));
   }
   if (use_compression) {
-    FCP_ASSIGN_OR_RETURN(body, internal::CompressWithGzip(body));
+    FCP_ASSIGN_OR_RETURN(body, CompressWithGzip(body));
     extra_headers.push_back({kContentEncodingHdr, kGzipEncodingHdrValue});
   }
   std::optional<std::string> content_length_hdr =
@@ -509,102 +503,34 @@ FetchResourcesInMemory(HttpClient& http_client,
   for (const auto& response_accessor : response_accessors) {
     absl::StatusOr<InMemoryHttpResponse> response =
         response_accessor.accessor();
-      if (response.ok()) {
-        bool encoded_with_gzip = absl::EndsWithIgnoreCase(
-            response->content_type, kClientDecodedGzipSuffix);
-        if (!response_accessor.client_cache_id.empty()) {
-          TryPutResourceInCache(response_accessor.client_cache_id,
-                                response->body, encoded_with_gzip,
-                                response_accessor.max_age, *resource_cache)
-              .IgnoreError();
-        }
-        if (encoded_with_gzip) {
-          std::string response_body_temp(response->body);
-          // We're going to overwrite the response body with the decoded
-          // contents shortly, no need to keep an extra copy of it in memory.
-          response->body.Clear();
-          absl::StatusOr<absl::Cord> decoded_response_body =
-              internal::UncompressWithGzip(response_body_temp);
-          if (!decoded_response_body.ok()) {
-            response = decoded_response_body.status();
-          } else {
-            response->body = *std::move(decoded_response_body);
-          }
+    if (response.ok()) {
+      bool encoded_with_gzip = absl::EndsWithIgnoreCase(
+          response->content_type, kClientDecodedGzipSuffix);
+      if (!response_accessor.client_cache_id.empty()) {
+        TryPutResourceInCache(response_accessor.client_cache_id, response->body,
+                              encoded_with_gzip, response_accessor.max_age,
+                              *resource_cache)
+            .IgnoreError();
+      }
+      if (encoded_with_gzip) {
+        std::string response_body_temp(response->body);
+        // We're going to overwrite the response body with the decoded
+        // contents shortly, no need to keep an extra copy of it in memory.
+        response->body.Clear();
+        absl::StatusOr<absl::Cord> decoded_response_body =
+            UncompressWithGzip(response_body_temp);
+        if (!decoded_response_body.ok()) {
+          response = decoded_response_body.status();
+        } else {
+          response->body = *std::move(decoded_response_body);
         }
       }
-      result.push_back(response);
     }
+    result.push_back(response);
+  }
   return result;
 }
 
-namespace internal {
-absl::StatusOr<std::string> CompressWithGzip(
-    const std::string& uncompressed_data) {
-  int starting_pos = 0;
-  size_t str_size = uncompressed_data.length();
-  size_t in_size = str_size;
-  std::string output;
-  StringOutputStream string_output_stream(&output);
-  GzipOutputStream::Options options;
-  options.format = GzipOutputStream::GZIP;
-  GzipOutputStream compressed_stream(&string_output_stream, options);
-  void* out;
-  int out_size;
-  while (starting_pos < str_size) {
-    if (!compressed_stream.Next(&out, &out_size) || out_size <= 0) {
-      return absl::InternalError(
-          absl::StrCat("An error has occurred during compression: ",
-                       compressed_stream.ZlibErrorMessage()));
-    }
-
-    if (in_size <= out_size) {
-      uncompressed_data.copy(static_cast<char*>(out), in_size, starting_pos);
-      // Ensure that the stream's output buffer is truncated to match the total
-      // amount of data.
-      compressed_stream.BackUp(out_size - static_cast<int>(in_size));
-      break;
-    }
-    uncompressed_data.copy(static_cast<char*>(out), out_size, starting_pos);
-    starting_pos += out_size;
-    in_size -= out_size;
-  }
-
-  if (!compressed_stream.Close()) {
-    return absl::InternalError(absl::StrCat(
-        "Failed to close the stream: ", compressed_stream.ZlibErrorMessage()));
-  }
-  return output;
-}
-
-absl::StatusOr<absl::Cord> UncompressWithGzip(
-    const std::string& compressed_data) {
-  absl::Cord out;
-  const void* buffer;
-  int size;
-  ArrayInputStream sub_stream(compressed_data.data(),
-                              static_cast<int>(compressed_data.size()));
-  GzipInputStream input_stream(&sub_stream, GzipInputStream::GZIP);
-
-  while (input_stream.Next(&buffer, &size)) {
-    if (size <= -1) {
-      return absl::InternalError(
-          "Uncompress failed: invalid input size returned by the "
-          "GzipInputStream.");
-    }
-    out.Append(absl::string_view(reinterpret_cast<const char*>(buffer), size));
-  }
-
-  if (input_stream.ZlibErrorMessage() != nullptr) {
-    // Some real error happened during decompression.
-    return absl::InternalError(
-        absl::StrCat("An error has occurred during decompression:",
-                     input_stream.ZlibErrorMessage()));
-  }
-
-  return out;
-}
-
-}  // namespace internal
 }  // namespace http
 }  // namespace client
 }  // namespace fcp
