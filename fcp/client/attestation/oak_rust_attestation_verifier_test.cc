@@ -133,7 +133,7 @@ ReferenceValues GetKnownValidReferenceValues() {
         # The hardcoded attestation evidence in this test does not yet contain
         # the raw kernel command line value, so we must explicitly skip the
         # kernel_cmd_line_regex check for now.
-        kernel_cmd_line_regex { skip {} }
+        kernel_cmd_line_text { skip {} }
         init_ram_fs {
           digests {
             digests {
