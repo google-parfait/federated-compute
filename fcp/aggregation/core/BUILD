@@ -14,8 +14,8 @@
 
 # Aggregation Core API
 
-load("//fcp:config.bzl", "FCP_COPTS")
 load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
+load("//fcp:config.bzl", "FCP_COPTS")
 
 package(
     default_visibility = [
@@ -134,7 +134,9 @@ cc_library(
         ":tensor_cc_proto",
         ":vector_string_data",
         "//fcp/base",
+        "@com_google_absl//absl/container:fixed_array",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/random",
     ],
     alwayslink = 1,

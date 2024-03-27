@@ -13,9 +13,9 @@
 # limitations under the License.
 
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
-load("//fcp:config.bzl", "FCP_COPTS")
-load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
 load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
+load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
+load("//fcp:config.bzl", "FCP_COPTS")
 
 package(
     default_visibility = [

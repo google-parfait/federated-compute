@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//fcp:config.bzl", "FCP_COPTS")
 load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
+load("//fcp:config.bzl", "FCP_COPTS")
 
 default_visibility = [
     "//fcp:internal",

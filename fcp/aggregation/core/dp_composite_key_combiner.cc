@@ -20,11 +20,10 @@
 #include <cstring>
 #include <iterator>
 #include <memory>
-#include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "absl/container/node_hash_map.h"
 #include "absl/random/random.h"
 #include "fcp/aggregation/core/composite_key_combiner.h"
 #include "fcp/aggregation/core/datatype.h"
@@ -65,9 +64,9 @@ class LocalToGlobalInserter
 
   // An r-value assignment operator suffices for our purposes: the input will
   // provided by std::sample, which iterates through an
-  // std::unordered_map<std::string, int64_t>. The string is a composite key and
-  // the int is its local ordinal
-  LocalToGlobalInserter& operator=(std::pair<std::string, int64_t>&& p) {
+  // absl::node_hash_map<CompositeKey, int64_t>. The
+  // FixedArray<uint64_t> is a composite key and the int is its local ordinal
+  LocalToGlobalInserter& operator=(std::pair<CompositeKey, int64_t>&& p) {
     // Map the local ordinal to the ordinal produced by
     // SaveCompositeKeyAndGetOrdinal. Give that function access to the members
     // of key_combiner_ so that novel composite keys will be assigned ordinals
@@ -108,11 +107,11 @@ StatusOr<Tensor> DPCompositeKeyCombiner::AccumulateWithBound(
   // The following contains unique composite keys in the order they were first
   // created. We call the index of a composite key in this vector its "local
   // ordinal," as it is only meaningful within one Accumulate call.
-  std::vector<string_view> local_key_vec;
+  std::vector<const uint64_t*> local_key_vec;
   local_key_vec.reserve(num_elements);
 
   // The following maps a view of a composite key to its local ordinal.
-  std::unordered_map<std::string, int64_t> composite_keys_to_local_ordinal;
+  absl::node_hash_map<CompositeKey, int64_t> composite_keys_to_local_ordinal;
   composite_keys_to_local_ordinal.reserve(num_elements);
 
   int64_t local_ordinal = 0;

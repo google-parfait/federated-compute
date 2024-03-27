@@ -13,8 +13,8 @@
 # limitations under the License.
 
 load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
-load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
 load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
+load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
 
 default_visibility = [
     "//visibility:public",
