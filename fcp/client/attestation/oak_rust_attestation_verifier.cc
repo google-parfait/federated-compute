@@ -123,7 +123,7 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
 
   // Now verify the CWT signature.
   auto signature_verifier = EcdsaP256R1SignatureVerifier::Create(
-      attestation_results.signing_public_key());
+      attestation_results.extracted_evidence().signing_public_key());
   if (!signature_verifier.ok()) {
     return absl::Status(
         signature_verifier.status().code(),
