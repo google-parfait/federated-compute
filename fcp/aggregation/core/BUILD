@@ -375,20 +375,6 @@ cc_test(
     ],
 )
 
-cc_binary(
-    name = "federated_sum_bench",
-    testonly = 1,
-    srcs = ["federated_sum_bench.cc"],
-    copts = FCP_COPTS,
-    linkstatic = 1,
-    deps = [
-        ":aggregation_cores",
-        ":aggregator",
-        ":tensor",
-        "@com_google_benchmark//:benchmark_main",
-    ],
-)
-
 cc_test(
     name = "dp_grouping_federated_sum_test",
     srcs = ["dp_grouping_federated_sum_test.cc"],
@@ -403,5 +389,35 @@ cc_test(
         "//fcp/base",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "federated_sum_bench",
+    testonly = 1,
+    srcs = ["federated_sum_bench.cc"],
+    copts = FCP_COPTS,
+    linkstatic = 1,
+    deps = [
+        ":aggregation_cores",
+        ":aggregator",
+        ":tensor",
+        "@com_google_benchmark//:benchmark_main",
+    ],
+)
+
+cc_binary(
+    name = "group_by_bench",
+    testonly = 1,
+    srcs = ["group_by_bench.cc"],
+    copts = FCP_COPTS,
+    linkstatic = 1,
+    deps = [
+        ":aggregation_cores",
+        ":aggregator",
+        ":mutable_string_data",
+        ":tensor",
+        ":tensor_cc_proto",
+        "@com_google_benchmark//:benchmark_main",
     ],
 )
