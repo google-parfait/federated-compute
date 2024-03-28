@@ -19,12 +19,12 @@
 
 #include <cstddef>
 #include <memory>
-#include <optional>
 #include <vector>
 
 #include "fcp/aggregation/core/composite_key_combiner.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
@@ -72,11 +72,6 @@ class GroupByAggregator : public TensorAggregator {
 
   // Constructs a GroupByAggregator.
   //
-  // This constructor is meant for use by the GroupByFactory; most callers
-  // should instead create a GroupByAggregator from an intrinsic using the
-  // factory, i.e.
-  // `(*GetAggregatorFactory("fedsql_group_by"))->Create(intrinsic)`
-  //
   // Takes in the following inputs:
   //
   // input_key_specs: A vector of TensorSpecs for the tensors that this
@@ -103,12 +98,36 @@ class GroupByAggregator : public TensorAggregator {
   // The number of tensors in each InputTensorList provided to Accumulate must
   // match the number of TensorSpecs in input_key_specs plus the number of
   // Intrinsics in this vector.
+  //
+  // key_combiner: either nullptr or a smart pointer to a CompositeKeyCombiner.
+  //
+  // aggregators: a vector of unique_ptrs to TensorAggregators made by the
+  // factory. Used to perform the inner aggregations.
+  //
   // This class takes ownership of the intrinsics vector and the aggregators
   // vector.
   GroupByAggregator(const std::vector<TensorSpec>& input_key_specs,
                     const std::vector<TensorSpec>* output_key_specs,
                     const std::vector<Intrinsic>* intrinsics,
+                    std::unique_ptr<CompositeKeyCombiner> key_combiner,
                     std::vector<std::unique_ptr<TensorAggregator>> aggregators);
+
+  // This constructor is meant for use by the GroupByFactory; most callers
+  // should instead create a GroupByAggregator from an intrinsic using the
+  // factory, i.e.
+  // `(*GetAggregatorFactory("fedsql_group_by"))->Create(intrinsic)`
+  //
+  // Does not have a key_combiner argument. Relies upon CreateKeyCombiner.
+  GroupByAggregator(const std::vector<TensorSpec>& input_key_specs,
+                    const std::vector<TensorSpec>* output_key_specs,
+                    const std::vector<Intrinsic>* intrinsics,
+                    std::vector<std::unique_ptr<TensorAggregator>> aggregators);
+
+  // Creates a vector of DataTypes that describe the keys in the input & output.
+  // A pre-processing function that sets the stage for CompositeKeyCombiners.
+  static std::vector<DataType> CreateKeyTypes(
+      size_t num_keys_per_input, const std::vector<TensorSpec>& input_key_specs,
+      const std::vector<TensorSpec>& output_key_specs);
 
   // Perform aggregation of the tensors in a single InputTensorList into the
   // state of this GroupByAggregator and increment the count of aggregated
@@ -138,6 +157,12 @@ class GroupByAggregator : public TensorAggregator {
   OutputTensorList TakeOutputs() && override;
 
  private:
+  // Returns either nullptr or a unique_ptr to a CompositeKeyCombiner, depending
+  // on the input specification. Relies on CreateKeyTypes.
+  static std::unique_ptr<CompositeKeyCombiner> CreateKeyCombiner(
+      const std::vector<TensorSpec>& input_key_specs,
+      const std::vector<TensorSpec>* output_key_specs);
+
   // Internal implementation of performing aggregation of the tensors in a
   // single InputTensorList into the state of this GroupByAggregator.
   Status AggregateTensorsInternal(InputTensorList tensors);
@@ -167,7 +192,7 @@ class GroupByAggregator : public TensorAggregator {
   int num_inputs_;
   const size_t num_keys_per_input_;
   size_t num_tensors_per_input_;
-  std::optional<CompositeKeyCombiner> key_combiner_ = std::nullopt;
+  std::unique_ptr<CompositeKeyCombiner> key_combiner_;
   const std::vector<Intrinsic>& intrinsics_;
   const std::vector<TensorSpec>& output_key_specs_;
   std::vector<std::unique_ptr<TensorAggregator>> aggregators_;
@@ -184,6 +209,13 @@ class GroupByFactory final : public TensorAggregatorFactory {
 
   StatusOr<std::unique_ptr<TensorAggregator>> Create(
       const Intrinsic& intrinsic) const override;
+
+  // Check that the configuration is valid for SQL grouping aggregators.
+  static Status CheckIntrinsic(const Intrinsic& intrinsic, const char* uri);
+
+  // Create a vector of TensorAggregators based upon nested intrinsics
+  static StatusOr<std::vector<std::unique_ptr<TensorAggregator>>>
+  CreateAggregators(const Intrinsic& intrinsic);
 };
 
 }  // namespace aggregation

@@ -79,7 +79,7 @@ using CompositeKeyOrderedVector = std::vector<const uint64_t*>;
 // This class is not thread safe.
 class CompositeKeyCombiner {
  public:
-  ~CompositeKeyCombiner() = default;
+  virtual ~CompositeKeyCombiner() = default;
 
   // CompositeKeyCombiner is not copyable or moveable.
   CompositeKeyCombiner(const CompositeKeyCombiner&) = delete;
@@ -103,7 +103,7 @@ class CompositeKeyCombiner {
   //
   // The returned tensor is of data type DT_INT64 and the same shape that was
   // provided to the constructor.
-  StatusOr<Tensor> Accumulate(const InputTensorList& tensors);
+  virtual StatusOr<Tensor> Accumulate(const InputTensorList& tensors);
 
   // Obtains the vector of output keys ordered by their representative ordinal.
   //

@@ -40,8 +40,6 @@ namespace aggregation {
 // This class is not thread safe.
 class DPCompositeKeyCombiner : public CompositeKeyCombiner {
  public:
-  ~DPCompositeKeyCombiner() = default;
-
   // DPCompositeKeyCombiner is not copyable or moveable.
   DPCompositeKeyCombiner(const DPCompositeKeyCombiner&) = delete;
   DPCompositeKeyCombiner& operator=(const DPCompositeKeyCombiner&) = delete;
@@ -56,7 +54,7 @@ class DPCompositeKeyCombiner : public CompositeKeyCombiner {
   // If the number of contributions is <= l0_bound_, it will call the parent
   // Accumulate. Otherwise, it calls AccumulateWithBound which will ensure there
   // are <= l0_bound_ contributions.
-  StatusOr<Tensor> Accumulate(const InputTensorList& tensors);
+  StatusOr<Tensor> Accumulate(const InputTensorList& tensors) override;
 
   // AccumulateWithBound will first create the set of unique composite keys in
   // the input, in parallel with a vector of composite keys. Then it samples a

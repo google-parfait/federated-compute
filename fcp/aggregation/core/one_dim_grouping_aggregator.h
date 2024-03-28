@@ -136,8 +136,8 @@ class OneDimGroupingAggregator : public TensorAggregator {
              << "OneDimGroupingAggregator::AggregateTensors: tensor shape "
                 "mismatch. Shape of both tensors must be the same.";
     }
-    int num_dimensions = tensor->shape().dim_sizes().size();
-    if (num_dimensions > 1) {
+    size_t num_dimensions = tensor->shape().dim_sizes().size();
+    if (num_dimensions > (size_t)1) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "OneDimGroupingAggregator::AggregateTensors: Only 1 "
                 "dimensional tensors supported. Input tensor has "
@@ -151,9 +151,10 @@ class OneDimGroupingAggregator : public TensorAggregator {
     num_inputs_++;
     AggVector<InputT> value_vector = tensor->AsAggVector<InputT>();
     AggVector<int64_t> ordinals_vector = ordinals->AsAggVector<int64_t>();
+
     size_t final_size = data_vector_->size();
     for (auto o : ordinals_vector) {
-      if (o.value >= final_size) {
+      if (o.value >= static_cast<int64_t>(final_size)) {
         final_size = o.value + 1;
       }
     }

@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/check.h"
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/intrinsic.h"
@@ -112,7 +113,10 @@ class DPGroupingFederatedSum final
           << "Indices in AggVector of ordinals and AggVector of values "
              "are mismatched.";
 
-      local_histogram[ordinal] += value_it.value();
+      // Only aggregate values of valid ordinals.
+      if (ordinal >= 0) {
+        local_histogram[ordinal] += value_it.value();
+      }
 
       value_it++;
     }
@@ -123,7 +127,8 @@ class DPGroupingFederatedSum final
     for (const auto& [ordinal, value] : local_histogram) {
       // Compute the scaled value to satisfy the L1 and L2 constraints.
       double scaled_value = Clamp(value) * rescaling_factor;
-
+      DCHECK(ordinal < data().size())
+          << "Ordinal too big: " << ordinal << " vs. " << data().size();
       AggregateValue(ordinal, static_cast<OutputT>(scaled_value));
     }
   }

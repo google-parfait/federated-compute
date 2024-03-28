@@ -24,6 +24,7 @@ namespace aggregation {
 // Ideally these would be marked inline to ensure a single copy of each variable
 // but this requires c++17 which is not available when building for bare metal.
 constexpr char kGroupByUri[] = "fedsql_group_by";
+constexpr char kDPGroupByUri[] = "fedsql_dp_group_by";
 constexpr char kFedSqlPrefix[] = "GoogleSQL:";
 
 }  // namespace aggregation
