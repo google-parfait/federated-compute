@@ -34,6 +34,21 @@ cc_proto_library(
 )
 
 proto_library(
+    name = "verification_record_proto",
+    srcs = ["verification_record.proto"],
+    deps = [
+        ":access_policy_proto",
+        "@oak//proto/attestation:endorsement_proto",
+        "@oak//proto/attestation:evidence_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "verification_record_cc_proto",
+    deps = [":verification_record_proto"],
+)
+
+proto_library(
     name = "blob_header_proto",
     srcs = ["blob_header.proto"],
 )

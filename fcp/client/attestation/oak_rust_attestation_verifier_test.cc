@@ -1,5 +1,9 @@
 #include "fcp/client/attestation/oak_rust_attestation_verifier.h"
 
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
@@ -7,10 +11,14 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "fcp/base/compression.h"
 #include "fcp/base/digest.h"
+#include "fcp/client/rust/oak_attestation_verification_ffi.h"
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"
 #include "fcp/protos/confidentialcompute/access_policy.pb.h"
+#include "fcp/protos/confidentialcompute/verification_record.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "fcp/testing/testing.h"
 #include "third_party/oak/proto/attestation/endorsement.pb.h"
@@ -24,7 +32,12 @@ namespace {
 using ::fcp::confidential_compute::OkpCwt;
 using ::google::internal::federatedcompute::v1::ConfidentialEncryptionConfig;
 using ::oak::attestation::v1::ReferenceValues;
+using ::testing::_;
+using ::testing::Each;
+using ::testing::FieldsAre;
+using ::testing::Gt;
 using ::testing::HasSubstr;
+using ::testing::SizeIs;
 
 // Tests the case where default values are given to the verifier. Verification
 // should not succeed in this case, since the Rust Oak Attestation Verification
@@ -57,7 +70,8 @@ TEST(OakRustAttestationTest, DefaultValuesDoNotVerifySuccessfully) {
 
   // Use an empty ReferenceValues input.
   ReferenceValues reference_values;
-  OakRustAttestationVerifier verifier(reference_values, {});
+  OakRustAttestationVerifier verifier(reference_values, {},
+                                      LogPrettyPrintedVerificationRecord);
 
   // The verification should fail, since neither reference values nor the
   // evidence are valid.
@@ -161,6 +175,25 @@ ReferenceValues GetKnownValidReferenceValues() {
   )pb");
 }
 
+ReferenceValues GetSkipAllReferenceValues() {
+  return PARSE_TEXT_PROTO(R"pb(
+    oak_restricted_kernel {
+      root_layer { amd_sev { stage0 { skip {} } } }
+      kernel_layer {
+        kernel { skip {} }
+        kernel_cmd_line_text { skip {} }
+        init_ram_fs { skip {} }
+        memory_map { skip {} }
+        acpi { skip {} }
+      }
+      application_layer {
+        binary { skip {} }
+        configuration { skip {} }
+      }
+    }
+  )pb");
+}
+
 TEST(OakRustAttestationTest,
      KnownValidEncryptionConfigAndValidPolicyInAllowlist) {
   ConfidentialEncryptionConfig encryption_config =
@@ -180,7 +213,8 @@ TEST(OakRustAttestationTest,
   // values defined above, and will only accept the given access policy.
   OakRustAttestationVerifier verifier(
       reference_values,
-      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))});
+      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
+      LogPrettyPrintedVerificationRecord);
 
   // Ensure that the verification succeeds.
   auto result =
@@ -207,7 +241,8 @@ TEST(OakRustAttestationTest, KnownValidEncryptionConfigAndMismatchingPolicy) {
   // This verifier will not accept any inputs, since the policy allowlist
   // doesn't match the actual policy.
   OakRustAttestationVerifier verifier(reference_values,
-                                      {"mismatching policy hash"});
+                                      {"mismatching policy hash"},
+                                      LogPrettyPrintedVerificationRecord);
 
   // Ensure that the verification *does not* succeed.
   auto result = verifier.Verify(absl::Cord(disallowed_access_policy_bytes),
@@ -234,7 +269,8 @@ TEST(OakRustAttestationTest,
 
   // This verifier will not accept any inputs, since the policy allowlist is
   // empty.
-  OakRustAttestationVerifier verifier(reference_values, {});
+  OakRustAttestationVerifier verifier(reference_values, {},
+                                      LogPrettyPrintedVerificationRecord);
 
   // Ensure that the verification *does not* succeed.
   auto result =
@@ -252,7 +288,8 @@ TEST(OakRustAttestationTest,
 
   // This verifier will not accept any inputs, since the policy allowlist is
   // empty.
-  OakRustAttestationVerifier verifier(reference_values, {});
+  OakRustAttestationVerifier verifier(reference_values, {},
+                                      LogPrettyPrintedVerificationRecord);
 
   // Ensure that the verification *does not* succeed, since an empty access
   // policy string still has to match an allowlist entry.
@@ -289,7 +326,8 @@ TEST(OakRustAttestationTest,
   // mismatching digest.
   OakRustAttestationVerifier verifier(
       reference_values,
-      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))});
+      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
+      LogPrettyPrintedVerificationRecord);
 
   // Ensure that the verification *does not* succeed.
   auto result =
@@ -316,7 +354,8 @@ TEST(OakRustAttestationTest, KnownEncryptionConfigAndEmptyReferencevalues) {
   // reference values being invalid (an empty, uninitialized proto).
   OakRustAttestationVerifier verifier(
       ReferenceValues(),
-      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))});
+      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
+      LogPrettyPrintedVerificationRecord);
 
   // Ensure that the verification *does not* succeed.
   auto result =
@@ -324,6 +363,262 @@ TEST(OakRustAttestationTest, KnownEncryptionConfigAndEmptyReferencevalues) {
   EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(result.status().message(),
               HasSubstr("Attestation verification failed"));
+}
+
+// Tests whether the AttestationVerificationRecord emitted by the
+// OakRustAttestationVerifier contains sufficient information to allow someone
+// to re-do the verification (e.g. on their computer, by calling into the Oak
+// Attestation Verification library themselves).
+TEST(OakRustAttestationTest,
+     AttestationVerificationRecordContainsEnoughInfoToReplayVerification) {
+  // First, perform a normal verification pass using known-good values.
+  ConfidentialEncryptionConfig encryption_config =
+      GetKnownValidEncryptionConfig();
+  ReferenceValues reference_values = GetKnownValidReferenceValues();
+
+  // Create a valid access policy proto with some non-default content.
+  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
+    transforms {
+      src: 0
+      application { tag: "foo" }
+    }
+  )pb");
+  auto access_policy_bytes = access_policy.SerializeAsString();
+
+  confidentialcompute::AttestationVerificationRecord verification_record;
+  // This verifier will only accept attestation evidence matching the reference
+  // values defined above, and will only accept the given access policy.
+  OakRustAttestationVerifier verifier(
+      reference_values,
+      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
+      [&verification_record](
+          confidentialcompute::AttestationVerificationRecord record) {
+        verification_record = record;
+      });
+
+  // Ensure that the verification succeeds.
+  auto result =
+      verifier.Verify(absl::Cord(access_policy_bytes), encryption_config);
+  ASSERT_OK(result);
+
+  // Ensure that the verification record logger was called and provided the
+  // relevant information.
+  EXPECT_THAT(verification_record.attestation_evidence(),
+              EqualsProto(encryption_config.attestation_evidence()));
+  EXPECT_THAT(verification_record.attestation_endorsements(),
+              EqualsProto(encryption_config.attestation_endorsements()));
+  EXPECT_THAT(verification_record.data_access_policy(),
+              EqualsProto(access_policy));
+
+  // Now, let's act like we're re-verifying the information in the
+  // AttestationVerificationRecord in an offline fashion, by calling directly
+  // into the Rust-based Oak Attestation Verification library.
+
+  // First, we'll pass the attestation evidence to the verification library
+  // using a ReferenceValues proto that skips all actual checks. This allows us
+  // to access the information embedded within the attestation evidence more
+  // easily.
+  absl::StatusOr<oak::attestation::v1::AttestationResults>
+      raw_attestation_results = fcp::client::rust::
+          oak_attestation_verification_ffi::VerifyAttestation(
+              absl::Now(), verification_record.attestation_evidence(),
+              verification_record.attestation_endorsements(),
+              GetSkipAllReferenceValues());
+  ASSERT_OK(raw_attestation_results);
+  ASSERT_EQ(raw_attestation_results->status(),
+            oak::attestation::v1::AttestationResults::STATUS_SUCCESS)
+      << raw_attestation_results->reason();
+
+  // Then, let's create a ReferenceValues proto that requires the attestation
+  // evidence to be rooted in the AMD SEV-SNP hardware root of trust, and which
+  // requires each layer of the attestation evidence to match the exact binary
+  // digests that were earlier reported in the `AttestationResults`.
+  ReferenceValues reference_values_from_extracted_evidence;
+  // Populate root layer values.
+  *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+       ->mutable_root_layer()
+       ->mutable_amd_sev()
+       ->mutable_stage0()
+       ->mutable_digests()
+       ->add_digests()
+       ->mutable_sha2_384() = raw_attestation_results->extracted_evidence()
+                                  .oak_restricted_kernel()
+                                  .root_layer()
+                                  .sev_snp()
+                                  .initial_measurement();
+  // Populate kernel layer values.
+  *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+       ->mutable_kernel_layer()
+       ->mutable_kernel()
+       ->mutable_digests()
+       ->mutable_image()
+       ->add_digests() = raw_attestation_results->extracted_evidence()
+                             .oak_restricted_kernel()
+                             .kernel_layer()
+                             .kernel_image();
+  *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+       ->mutable_kernel_layer()
+       ->mutable_kernel()
+       ->mutable_digests()
+       ->mutable_setup_data()
+       ->add_digests() = raw_attestation_results->extracted_evidence()
+                             .oak_restricted_kernel()
+                             .kernel_layer()
+                             .kernel_setup_data();
+  *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+       ->mutable_kernel_layer()
+       ->mutable_kernel_cmd_line_text()
+       ->mutable_string_literals()
+       ->add_value() = raw_attestation_results->extracted_evidence()
+                           .oak_restricted_kernel()
+                           .kernel_layer()
+                           .kernel_raw_cmd_line();
+  *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+       ->mutable_kernel_layer()
+       ->mutable_init_ram_fs()
+       ->mutable_digests()
+       ->add_digests() = raw_attestation_results->extracted_evidence()
+                             .oak_restricted_kernel()
+                             .kernel_layer()
+                             .init_ram_fs();
+  *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+       ->mutable_kernel_layer()
+       ->mutable_memory_map()
+       ->mutable_digests()
+       ->add_digests() = raw_attestation_results->extracted_evidence()
+                             .oak_restricted_kernel()
+                             .kernel_layer()
+                             .memory_map();
+  *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+       ->mutable_kernel_layer()
+       ->mutable_acpi()
+       ->mutable_digests()
+       ->add_digests() = raw_attestation_results->extracted_evidence()
+                             .oak_restricted_kernel()
+                             .kernel_layer()
+                             .acpi();
+  // Populate application layer values.
+  *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+       ->mutable_application_layer()
+       ->mutable_binary()
+       ->mutable_digests()
+       ->add_digests() = raw_attestation_results->extracted_evidence()
+                             .oak_restricted_kernel()
+                             .application_layer()
+                             .binary();
+  // Add a digest for the application layer config, if the extracted evidence
+  // indicates there was an application layer config, otherwise skip the
+  // application layer config check since the application doesn't have a config.
+  if (raw_attestation_results->extracted_evidence()
+          .oak_restricted_kernel()
+          .application_layer()
+          .config()
+          .ByteSizeLong() > 0) {
+    *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+         ->mutable_application_layer()
+         ->mutable_configuration()
+         ->mutable_digests()
+         ->add_digests() = raw_attestation_results->extracted_evidence()
+                               .oak_restricted_kernel()
+                               .application_layer()
+                               .config();
+  } else {
+    reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+        ->mutable_application_layer()
+        ->mutable_configuration()
+        ->mutable_skip();
+  }
+
+  // Lastly, let's verify that verifying the attestation evidence reported in
+  // the AttestationVerificationRecord using the now fully-specified
+  // ReferenceValues still results in a successful verification.
+  //
+  // This shows that the data in the AttestationVerificationRecord was indeed
+  // valid (as long as we can assume that the Oak Attestation Verification
+  // library is implemented correctly).
+  raw_attestation_results =
+      fcp::client::rust::oak_attestation_verification_ffi::VerifyAttestation(
+          absl::Now(), verification_record.attestation_evidence(),
+          verification_record.attestation_endorsements(),
+          reference_values_from_extracted_evidence);
+  ASSERT_OK(raw_attestation_results);
+  EXPECT_EQ(raw_attestation_results->status(),
+            oak::attestation::v1::AttestationResults::STATUS_SUCCESS)
+      << raw_attestation_results->reason();
+
+  // The attestation verification passed, as expected. We can also show that the
+  // ReferenceValues proto we constructed from the extracted attestation
+  // evidence is effectively the same as the "known good ReferenceValues" we use
+  // in the other tests.
+  EXPECT_THAT(reference_values_from_extracted_evidence,
+              EqualsProto(GetKnownValidReferenceValues()));
+
+  // At this point someone performing an offline re-verification could start
+  // looking at the specific binaries that the attestation evidence attested to,
+  // by looking them up using the binary digests in the ReferenceValues we
+  // constructed above.
+}
+
+// Verifies that the LogSerializedVerificationRecord correctly chunks up and
+// encodes the serialized record data.
+TEST(LogSerializedVerificationRecordTest,
+     DecodingChunkedMessagesResultsInOriginalRecord) {
+  // Create a verification record with a good amount of data in it.
+  confidentialcompute::AttestationVerificationRecord record;
+  auto encryption_config = GetKnownValidEncryptionConfig();
+  *record.mutable_attestation_evidence() =
+      encryption_config.attestation_evidence();
+  *record.mutable_attestation_endorsements() =
+      encryption_config.attestation_endorsements();
+  *record.mutable_data_access_policy()
+       ->add_transforms()
+       ->mutable_application()
+       ->mutable_tag() = "some tag";
+
+  // Call the LogSerializedVerificationRecord function (or rather, the internal
+  // variant which allows us to inspect each of the chunks it would log), which
+  // is expected to emit a number of chunks.
+  std::vector<std::pair<std::string, bool>> encoded_record_data;
+  internal::LogSerializedVerificationRecordWith(
+      record, [&encoded_record_data](absl::string_view message_chunk,
+                                     bool enclose_with_brackets) {
+        encoded_record_data.push_back(
+            std::make_pair(std::string(message_chunk), enclose_with_brackets));
+      });
+
+  // We expect to see at least 15 log message chunks.
+  EXPECT_THAT(encoded_record_data, SizeIs(Gt(15)));
+  // The first message chunk is expected to contain the following unenclosed
+  // string.
+  EXPECT_THAT(
+      encoded_record_data.front(),
+      FieldsAre(
+          "This device is contributing data via the confidential aggregation "
+          "protocol. The attestation verification record follows.",
+          false));
+  // The last chunk is expected to be an empty enclosed string, unambiguously
+  // indicating the end of verification record stream.
+  EXPECT_THAT(encoded_record_data.back(), FieldsAre("", true));
+  encoded_record_data.erase(encoded_record_data.begin());
+  encoded_record_data.erase(encoded_record_data.end() - 1);
+
+  // The chunks in between are expected to contain enclosed data. Let's verify
+  // that, and extract the inner data.
+  std::string base64_record_data;
+  EXPECT_THAT(encoded_record_data, Each(FieldsAre(_, true)));
+  for (const auto& message_chunk : encoded_record_data) {
+    base64_record_data += message_chunk.first;
+  }
+
+  // Now let's base64-decode that data, and verify that it can be parsed and
+  // results in the record we started with at the top of the test.
+  std::string decoded_record_data;
+  ASSERT_TRUE(absl::Base64Unescape(base64_record_data, &decoded_record_data));
+  absl::StatusOr<absl::Cord> uncompressed_record_data =
+      UncompressWithGzip(decoded_record_data);
+  confidentialcompute::AttestationVerificationRecord decoded_record;
+  ASSERT_TRUE(decoded_record.ParseFromCord(*uncompressed_record_data));
+  EXPECT_THAT(decoded_record, EqualsProto(record));
 }
 
 }  // namespace

@@ -17,8 +17,18 @@
 #include "fcp/client/attestation/oak_rust_attestation_verifier.h"
 
 #include <cstdint>
+#include <ostream>
 #include <string>
 #include <utility>
+
+#include "absl/functional/function_ref.h"
+#include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
+#include "fcp/base/compression.h"
+
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -32,6 +42,7 @@
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"
 #include "fcp/protos/confidentialcompute/access_policy.pb.h"
+#include "fcp/protos/confidentialcompute/verification_record.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "third_party/oak/proto/attestation/endorsement.pb.h"
 #include "third_party/oak/proto/attestation/evidence.pb.h"
@@ -123,7 +134,7 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
 
   // Now verify the CWT signature.
   auto signature_verifier = EcdsaP256R1SignatureVerifier::Create(
-      attestation_results.extracted_evidence().signing_public_key());
+      attestation_results.signing_public_key());
   if (!signature_verifier.ok()) {
     return absl::Status(
         signature_verifier.status().code(),
@@ -141,11 +152,98 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
   // Verification of the attestation evidence, the access policy, and the public
   // encryption key's signature succeeded!
 
-  // Return the public key with which the caller can now safely encrypt data to
-  // be uploaded. Only the attested server binary will have access to the
-  // decryption key, and the it will only allow the decryption key to be used by
-  // binaries/applications allowed by the data access policy.
+  // We now log the key information we used to perform the verification to the
+  // provided logger. This allows someone observing these logs to replay the
+  // same verification, as well as look up the binaries that will process the
+  // encrypted data. See the
+  // AttestationVerificationRecordContainsEnoughInfoToReplayVerification test in
+  // oak_rust_attestation_verifier_test.cc for an example of how this
+  // information can be used for that purpose.
+  confidentialcompute::AttestationVerificationRecord verification_record;
+  *verification_record.mutable_attestation_evidence() =
+      encryption_config.attestation_evidence();
+  *verification_record.mutable_attestation_endorsements() =
+      encryption_config.attestation_endorsements();
+  *verification_record.mutable_data_access_policy() =
+      std::move(parsed_access_policy);
+  record_logger_(verification_record);
+
+  // Return the public key with which the caller can now safely encrypt data
+  // to be uploaded. Only the attested server binary will have access to the
+  // decryption key, and the it will only allow the decryption key to be
+  // used by binaries/applications allowed by the data access policy.
   return *std::move(cwt->public_key);
 }
+
+inline constexpr char kVerificationRecordLogInfoMessage[] =
+    "This device is contributing data via the confidential aggregation "
+    "protocol. The attestation verification record follows.";
+inline constexpr char kSerializedVerificationRecordLogTag[] = "fcp.attest";
+
+void LogPrettyPrintedVerificationRecord(
+    const confidentialcompute::AttestationVerificationRecord& record) {
+  FCP_LOG(INFO) << kVerificationRecordLogInfoMessage << std::endl << record;
+}
+
+// When printing a serialized verification record, we split it up into equal
+// chunks of this length. This ensures that if we print to, Android logcat,
+// we never go above per-log-message length limit of around 4000 characters.
+inline constexpr int kMaxSerializedVerificationChunkLength = 200;
+
+void LogSerializedVerificationRecord(
+    const confidentialcompute::AttestationVerificationRecord& record) {
+  // By default we use FCP_VLOG(1) to log messages, unless we're on Android
+  // where we log directly to logcat instead.
+  auto logger = [](absl::string_view message, bool enclose_with_brackets) {
+#ifndef __ANDROID__
+    FCP_LOG(INFO) << kSerializedVerificationRecordLogTag << ": "
+                  << (enclose_with_brackets ? "<" : "") << message
+                  << (enclose_with_brackets ? ">" : "");
+#else
+    // We log at DEBUG log level, which means that the log will not actually be
+    // emitted unless the user calls `adb shell setprop log.tag.fcp.infra D`.
+    // See https://developer.android.com/tools/logcat#Overview for more info.
+    //
+    // This is important because a serialized verification record could measure
+    // multiple kilobytes in size, the system-wide logcat buffer has a limited
+    // capacity, and hence we don't want to spam the logcat buffer
+    // unnecessarily.
+    __android_log_print(ANDROID_LOG_DEBUG, kSerializedVerificationRecordLogTag,
+                        enclose_with_brackets ? "<%*s>" : "%*s", message.size(),
+                        message.data());
+#endif
+  };
+
+  // Do the actual logging of the record, using the logger above to log
+  // individual messages.
+  internal::LogSerializedVerificationRecordWith(record, logger);
+}
+
+namespace internal {
+void LogSerializedVerificationRecordWith(
+    const confidentialcompute::AttestationVerificationRecord& record,
+    absl::FunctionRef<void(absl::string_view, bool)> logger) {
+  absl::StatusOr<std::string> compressed_record =
+      CompressWithGzip(record.SerializeAsString());
+  // If we fail to compress the record then something must've gone horribly
+  // wrong, and we should just bail.
+  FCP_CHECK_STATUS(compressed_record.status());
+  // We base64-encode the record to ensure it's easily printable.
+  std::string encoded_record = absl::Base64Escape(*compressed_record);
+
+  logger(kVerificationRecordLogInfoMessage, /*enclose_with_brackets=*/false);
+  for (absl::string_view chunk :
+       absl::StrSplit(encoded_record,
+                      absl::ByLength(kMaxSerializedVerificationChunkLength))) {
+    // Note: base64-encoding is guaranteed to not have any '<' or '>' characters
+    // in it. By surrounding the chunks in these angle brackets one can more
+    // easily reconstruct the full string from a series of log entries.
+    logger(chunk, /*enclose_with_brackets=*/true);
+  }
+  // Emit one last "empty" chunk to the logs. This will make it easier to
+  // separate sequential serialized attestation records in a single log stream.
+  logger("", /*enclose_with_brackets=*/true);
+}
+}  // namespace internal
 
 }  // namespace fcp::client::attestation
