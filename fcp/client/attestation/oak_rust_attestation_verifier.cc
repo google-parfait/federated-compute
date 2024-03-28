@@ -209,8 +209,8 @@ void LogSerializedVerificationRecord(
     // capacity, and hence we don't want to spam the logcat buffer
     // unnecessarily.
     __android_log_print(ANDROID_LOG_DEBUG, kSerializedVerificationRecordLogTag,
-                        enclose_with_brackets ? "<%*s>" : "%*s", message.size(),
-                        message.data());
+                        enclose_with_brackets ? "<%*s>" : "%*s",
+                        static_cast<int>(message.size()), message.data());
 #endif
   };
 
