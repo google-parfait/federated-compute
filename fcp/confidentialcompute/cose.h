@@ -79,7 +79,8 @@ struct OkpCwt {
   static absl::StatusOr<std::string> GetSigStructureForVerifying(
       absl::string_view encoded, absl::string_view aad);
 
-  // CBOR-decodes a Cwt.
+  // CBOR-decodes a Cwt. Both COSE_Sign and COSE_Sign1 structures are supported;
+  // if a COSE_Sign structure is provided, the first signature is used.
   static absl::StatusOr<OkpCwt> Decode(absl::string_view encoded);
 
   // CBOR-encodes a Cwt.

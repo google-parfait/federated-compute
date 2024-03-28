@@ -393,21 +393,42 @@ absl::StatusOr<std::string> OkpCwt::GetSigStructureForVerifying(
       reinterpret_cast<const uint8_t*>(encoded.data()), encoded.size());
   if (!error.empty()) {
     return absl::InvalidArgumentError(
-        absl::StrCat("failed to decode CoseSign1: ", error));
+        absl::StrCat("failed to decode CWT: ", error));
   } else if (end_pos != reinterpret_cast<const uint8_t*>(encoded.data()) +
                             encoded.size()) {
     return absl::InvalidArgumentError(
-        "failed to decode CoseSign1: input contained extra data");
+        "failed to decode CWT: input contained extra data");
   } else if (auto array = item->asArray();
              array == nullptr || array->size() != 4 ||
              array->get(0)->type() != cppbor::BSTR ||
              array->get(2)->type() != cppbor::BSTR) {
-    return absl::InvalidArgumentError("CoseSign1 is invalid");
+    return absl::InvalidArgumentError("CWT is invalid");
   }
-  return Array("Signature1", std::move(*item->asArray()->get(0)->asBstr()),
-               Bstr(aad.begin(), aad.end()),
-               std::move(*item->asArray()->get(2)->asBstr()))
-      .toString();
+
+  // If the 4th element is an array, we're verifying a COSE_Sign structure, not
+  // a COSE_Sign1 structure. Include the protected header from the first
+  // COSE_Signature in the signature structure.
+  std::optional<Bstr> sign_protected;
+  if (item->asArray()->get(3)->type() == cppbor::ARRAY) {
+    if (cppbor::Array* sigs = item->asArray()->get(3)->asArray();
+        sigs->size() > 0 && sigs->get(0)->type() == cppbor::ARRAY &&
+        sigs->get(0)->asArray()->size() == 3 &&
+        sigs->get(0)->asArray()->get(0)->type() == cppbor::BSTR) {
+      sign_protected = std::move(*sigs->get(0)->asArray()->get(0)->asBstr());
+    } else {
+      return absl::InvalidArgumentError("CWT is invalid");
+    }
+  }
+
+  Array sig_structure;
+  sig_structure.add(sign_protected ? "Signature" : "Signature1");
+  sig_structure.add(std::move(*item->asArray()->get(0)->asBstr()));
+  if (sign_protected) {
+    sig_structure.add(std::move(*sign_protected));
+  }
+  sig_structure.add(Bstr(aad.begin(), aad.end()));
+  sig_structure.add(std::move(*item->asArray()->get(2)->asBstr()));
+  return sig_structure.toString();
 }
 
 absl::StatusOr<OkpCwt> OkpCwt::Decode(absl::string_view encoded) {
@@ -424,21 +445,49 @@ absl::StatusOr<OkpCwt> OkpCwt::Decode(absl::string_view encoded) {
              array == nullptr || array->size() != 4 ||
              array->get(0)->type() != cppbor::BSTR ||
              array->get(1)->type() != cppbor::MAP ||
-             array->get(2)->type() != cppbor::BSTR ||
-             array->get(3)->type() != cppbor::BSTR) {
+             array->get(2)->type() != cppbor::BSTR) {
     return absl::InvalidArgumentError("CWT is invalid");
   }
 
-  // Extract the signature.
-  OkpCwt cwt{
-      .signature =
-          std::string(item->asArray()->get(3)->asBstr()->value().begin(),
-                      item->asArray()->get(3)->asBstr()->value().end()),
-  };
+  // Extract the signature and protected header.
+  OkpCwt cwt;
+  bool parsed_signature_and_protected_header = false;
+  switch (auto& component = item->asArray()->get(3); component->type()) {
+    case cppbor::BSTR: {
+      // If the 4th element is a bstr, we're decoding a COSE_Sign1 structure.
+      parsed_signature_and_protected_header = true;
+      FCP_RETURN_IF_ERROR(ParseCwtProtectedHeader(
+          item->asArray()->get(0)->asBstr()->value(), cwt));
+      cwt.signature = std::string(component->asBstr()->value().begin(),
+                                  component->asBstr()->value().end());
+      break;
+    }
 
-  // Process the protected header and claims.
-  FCP_RETURN_IF_ERROR(
-      ParseCwtProtectedHeader(item->asArray()->get(0)->asBstr()->value(), cwt));
+    case cppbor::ARRAY:
+      // If the 4th element is an array, we're decoding a COSE_Sign structure.
+      // Use the signature and protected header from the first COSE_Signature,
+      // which is a (protected header, unprotected header, signature) tuple.
+      if (cppbor::Array* sigs = component->asArray(); sigs->size() > 0) {
+        if (cppbor::Array* sig = sigs->get(0)->asArray();
+            sig->size() == 3 && sig->get(0)->type() == cppbor::BSTR &&
+            sig->get(0)->type() == cppbor::BSTR) {
+          parsed_signature_and_protected_header = true;
+          FCP_RETURN_IF_ERROR(
+              ParseCwtProtectedHeader(sig->get(0)->asBstr()->value(), cwt));
+          cwt.signature = std::string(sig->get(2)->asBstr()->value().begin(),
+                                      sig->get(2)->asBstr()->value().end());
+        }
+      }
+      break;
+
+    default:
+      break;
+  }
+  if (!parsed_signature_and_protected_header) {
+    return absl::InvalidArgumentError("CWT is invalid");
+  }
+
+  // Process the claims.
   FCP_RETURN_IF_ERROR(
       ParseCwtPayload(item->asArray()->get(2)->asBstr()->value(), cwt));
 

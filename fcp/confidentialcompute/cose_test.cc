@@ -348,7 +348,7 @@ TEST(OkpCwtTest, DecodeInvalid) {
               IsCode(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(OkpCwtTest, DecodeReferenceExample) {
+TEST(OkpCwtTest, DecodeCoseSign1ReferenceExample) {
   // From RFC 8392 Section A.3, without the leading COSE_Sign1 tag "d2":
   std::string encoded = absl::HexStringToBytes(
       "8443a10126a104524173796d6d657472696345434453413235365850a701756"
@@ -367,6 +367,37 @@ TEST(OkpCwtTest, DecodeReferenceExample) {
       absl::HexStringToBytes(
           "5427c1ff28d23fbad1f29c4c7c6a555e601d6fa29f9179bc3d7438bacaca5acd08c8"
           "d4d4f96131680c429a01f85951ecee743a52b9b63632c57209120e1c9e30"));
+}
+
+TEST(OkpCwtTest, VerifyAndDecodeCoseSign) {
+  // The encoded CWT and signature structure were generated using the Rust coset
+  // crate.
+  std::string encoded = absl::HexStringToBytes(
+      "8440a05846a30419162e061904d23a000100005836a5010102466b65792d6964033a0001"
+      "000020042158204850e21e94eb470337fd46a401f4c8b46150195732fb47d53fa0533f59"
+      "4cb342828343a10126a058208dfb544c010408b5c24eeaf67e2ff89b98dcab365d50b244"
+      "7d569c1561540bc28344a101382ea058206b33008400add41a3b82ef4bf4bb85fcf8d2d5"
+      "7d2f453bcddb277cf3fa3880d6");
+
+  absl::StatusOr<std::string> sig_structure =
+      OkpCwt::GetSigStructureForVerifying(encoded, "");
+  ASSERT_OK(sig_structure);
+  EXPECT_EQ(
+      absl::BytesToHexString(*sig_structure),
+      "85695369676e61747572654043a10126405846a30419162e061904d23a000100005836a5"
+      "010102466b65792d6964033a0001000020042158204850e21e94eb470337fd46a401f4c8"
+      "b46150195732fb47d53fa0533f594cb342");
+
+  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(encoded);
+  ASSERT_OK(cwt);
+  EXPECT_EQ(cwt->algorithm, -7);
+  EXPECT_EQ(cwt->issued_at, absl::FromUnixSeconds(1234));
+  EXPECT_EQ(cwt->expiration_time, absl::FromUnixSeconds(5678));
+  ASSERT_TRUE(cwt->public_key.has_value());
+  EXPECT_EQ(cwt->public_key->key_id, "key-id");
+  EXPECT_EQ(cwt->public_key->algorithm, -65537);
+  EXPECT_EQ(cwt->public_key->curve, 4);
+  EXPECT_NE(cwt->public_key->x, "");
 }
 
 }  // namespace
