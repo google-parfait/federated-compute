@@ -201,7 +201,7 @@ void LogSerializedVerificationRecord(
                   << (enclose_with_brackets ? ">" : "");
 #else
     // We log at DEBUG log level, which means that the log will not actually be
-    // emitted unless the user calls `adb shell setprop log.tag.fcp.infra D`.
+    // emitted unless the user calls `adb shell setprop log.tag.fcp.attest D`.
     // See https://developer.android.com/tools/logcat#Overview for more info.
     //
     // This is important because a serialized verification record could measure
