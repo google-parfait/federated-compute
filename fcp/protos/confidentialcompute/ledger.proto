@@ -203,8 +203,6 @@ message AuthorizeAccessResponse {
   // ensures that derived objects have the same expiration time as the original
   // data. This key can be ignored if the application doesn't encrypt its
   // outputs (e.g., because it produces anonymized aggregate results).
-  //
-  // Note: During the migration to CWTs, this may instead be a raw 32-byte key.
   bytes reencryption_public_key = 3;
 }
 
