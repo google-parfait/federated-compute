@@ -80,8 +80,9 @@ TfLiteInterpreterOptions CreateOptions(const Flags& flags) {
           flags.ensure_dynamic_tensors_are_released(),
       .large_tensor_threshold_for_dynamic_allocation =
           flags.large_tensor_threshold_for_dynamic_allocation(),
-      .disable_delegate_clustering =
-          flags.disable_tflite_delegate_clustering()};
+      .disable_delegate_clustering = flags.disable_tflite_delegate_clustering(),
+      .use_builtin_op_resolver_with_default_delegates =
+          flags.tflite_use_builtin_op_resolver_with_default_delegates()};
 }
 }  // namespace
 

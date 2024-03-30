@@ -54,6 +54,9 @@ struct TfLiteInterpreterOptions {
   // Whether to disable the graph-reordering optimization that clusters delegate
   // ops together.
   bool disable_delegate_clustering = false;
+  // Whether to use TFLite's BuiltinOpResolver (as opposed to
+  // BuiltinOpResolverWithoutDefaultDelegates).
+  bool use_builtin_op_resolver_with_default_delegates = false;
 };
 
 // A class to call into TFLite.

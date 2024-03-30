@@ -146,6 +146,12 @@ class Flags {
   // delegate nodes together is disabled.
   virtual bool disable_tflite_delegate_clustering() const { return false; }
 
+  // When true, we'll use  use TFLite's BuiltinOpResolver (as opposed to
+  // BuiltinOpResolverWithoutDefaultDelegates).
+  virtual bool tflite_use_builtin_op_resolver_with_default_delegates() const {
+    return false;
+  }
+
   // When true, http request body won't be compressed.
   virtual bool disable_http_request_body_compression() const { return false; }
 

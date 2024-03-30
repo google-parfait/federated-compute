@@ -95,9 +95,15 @@ absl::StatusOr<TfLiteInterpreterWithDeps> InitializeInterpreter(
   auto error_reporter = std::make_unique<CachingErrorReporter>();
   auto interpreter = std::make_unique<tflite::Interpreter>();
 
-  tflite::ops::builtin::BuiltinOpResolver resolver;
+  std::unique_ptr<tflite::ops::builtin::BuiltinOpResolver> resolver;
+  if (interpreter_options.use_builtin_op_resolver_with_default_delegates) {
+    resolver = std::make_unique<tflite::ops::builtin::BuiltinOpResolver>();
+  } else {
+    resolver = std::make_unique<
+        tflite::ops::builtin::BuiltinOpResolverWithoutDefaultDelegates>();
+  }
 
-  if (tflite::InterpreterBuilder(flat_buffer_model->GetModel(), resolver,
+  if (tflite::InterpreterBuilder(flat_buffer_model->GetModel(), *resolver,
                                  error_reporter.get())(&interpreter) !=
       kTfLiteOk) {
     return absl::InvalidArgumentError(
