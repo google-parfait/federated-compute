@@ -1198,8 +1198,6 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
 
   std::string data_to_upload;
   if (confidential_aggregation) {
-    // TODO: b/307312707 -  Compress the payload before encrypting.
-
     FCP_ASSIGN_OR_RETURN(
         OkpKey parsed_public_key,
         ValidateConfidentialEncryptionConfig(task_info, *encryption_config));
