@@ -28,6 +28,7 @@
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/one_dim_grouping_aggregator.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
@@ -514,15 +515,24 @@ TEST(DPGroupingFederatedSumTest, ScalarMergeSucceeds) {
   auto aggregator1 = CreateTensorAggregator(CreateDefaultIntrinsic()).value();
   auto aggregator2 = CreateTensorAggregator(CreateDefaultIntrinsic()).value();
   Tensor ordinal =
-      Tensor::Create(DT_INT64, {}, CreateTestData<int64_t>({0})).value();
-  Tensor t1 = Tensor::Create(DT_INT32, {}, CreateTestData({1})).value();
-  Tensor t2 = Tensor::Create(DT_INT32, {}, CreateTestData({2})).value();
-  Tensor t3 = Tensor::Create(DT_INT32, {}, CreateTestData({3})).value();
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({0})).value();
+  Tensor t1 = Tensor::Create(DT_INT32, {1}, CreateTestData({1})).value();
+  Tensor t2 = Tensor::Create(DT_INT32, {1}, CreateTestData({2})).value();
+  Tensor t3 = Tensor::Create(DT_INT32, {1}, CreateTestData({3})).value();
   EXPECT_THAT(aggregator1->Accumulate({&ordinal, &t1}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t2}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t3}), IsOk());
 
-  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  int aggregator2_num_inputs = aggregator2->GetNumInputs();
+  auto aggregator2_result =
+      std::move(std::move(*aggregator2).Report().value()[0]);
+  auto ordinals_for_merge =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({0})).value();
+  EXPECT_THAT((dynamic_cast<OneDimGroupingAggregator<int32_t, int64_t>*>(
+                   aggregator1.get()))
+                  ->MergeTensors({&ordinals_for_merge, &aggregator2_result},
+                                 aggregator2_num_inputs),
+              IsOk());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
   EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
 
@@ -530,6 +540,47 @@ TEST(DPGroupingFederatedSumTest, ScalarMergeSucceeds) {
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result.value().size(), Eq(1));
   int64_t expected_sum = 6;
+  EXPECT_THAT(result.value()[0], IsTensor({1}, {expected_sum}));
+}
+
+// Test merge w/ scalar input ignores norm bounding.
+TEST(DPGroupingFederatedSumTest, ScalarMergeIgnoresNormBounding) {
+  Intrinsic intrinsic_with_norm_bounding =
+      Intrinsic{"GoogleSQL:dp_sum",
+                {CreateTensorSpec("value", DT_INT32)},
+                {CreateTensorSpec("value", DT_INT64)},
+                {CreateDPGFSParameters<int32_t>(10, -1, -1)},
+                {}};
+  auto aggregator1 =
+      CreateTensorAggregator(intrinsic_with_norm_bounding).value();
+  auto aggregator2 =
+      CreateTensorAggregator(intrinsic_with_norm_bounding).value();
+  Tensor ordinal =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({0})).value();
+  Tensor t1 = Tensor::Create(DT_INT32, {1}, CreateTestData({12})).value();
+  Tensor t2 = Tensor::Create(DT_INT32, {1}, CreateTestData({5})).value();
+  Tensor t3 = Tensor::Create(DT_INT32, {1}, CreateTestData({11})).value();
+  EXPECT_THAT(aggregator1->Accumulate({&ordinal, &t1}), IsOk());
+  EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t2}), IsOk());
+  EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t3}), IsOk());
+
+  int aggregator2_num_inputs = aggregator2->GetNumInputs();
+  auto aggregator2_result =
+      std::move(std::move(*aggregator2).Report().value()[0]);
+  auto ordinals_for_merge =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({0})).value();
+  EXPECT_THAT((dynamic_cast<OneDimGroupingAggregator<int32_t, int64_t>*>(
+                   aggregator1.get()))
+                  ->MergeTensors({&ordinals_for_merge, &aggregator2_result},
+                                 aggregator2_num_inputs),
+              IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(1));
+  int64_t expected_sum = 25;
   EXPECT_THAT(result.value()[0], IsTensor({1}, {expected_sum}));
 }
 
@@ -547,7 +598,9 @@ TEST(DPGroupingFederatedSumTest, VectorMergeSucceeds) {
   Tensor bob_values =
       Tensor::Create(DT_INT32, {3}, CreateTestData<int32_t>({9, -12, 2}))
           .value();
+  // After accumulating Alice's data: [3, 5, 4]
   EXPECT_THAT(aggregator1->Accumulate({&alice_ordinal, &alice_values}), IsOk());
+  // After accumulating Bob's data: [3, -5, 13]
   EXPECT_THAT(aggregator1->Accumulate({&bob_ordinal, &bob_values}), IsOk());
 
   auto aggregator2 = CreateTensorAggregator(CreateDefaultIntrinsic()).value();
@@ -556,17 +609,28 @@ TEST(DPGroupingFederatedSumTest, VectorMergeSucceeds) {
   Tensor cindy_values =
       Tensor::Create(DT_INT32, {3}, CreateTestData<int32_t>({11, -5, 5}))
           .value();
+  // After accumulating Cindy's data: [5, -5, 0, 11]
   EXPECT_THAT(aggregator2->Accumulate({&cindy_ordinal, &cindy_values}), IsOk());
 
-  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  int aggregator2_num_inputs = aggregator2->GetNumInputs();
+  auto aggregator2_result =
+      std::move(std::move(*aggregator2).Report().value()[0]);
+  auto ordinals_for_merge =
+      Tensor::Create(DT_INT64, {4}, CreateTestData<int64_t>({1, 4, 2, 0}))
+          .value();
+  EXPECT_THAT((dynamic_cast<OneDimGroupingAggregator<int32_t, int64_t>*>(
+                   aggregator1.get()))
+                  ->MergeTensors({&ordinals_for_merge, &aggregator2_result},
+                                 aggregator2_num_inputs),
+              IsOk());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
   EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
 
   auto result = std::move(*aggregator1).Report();
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result.value().size(), Eq(1));
-  std::initializer_list<int64_t> expected_sum = {8, -10, 13, 11};
-  EXPECT_THAT(result.value()[0], IsTensor({4}, expected_sum));
+  std::initializer_list<int64_t> expected_sum = {14, 0, 13, 0, -5};
+  EXPECT_THAT(result.value()[0], IsTensor({5}, expected_sum));
 }
 
 TEST(DPGroupingFederatedSumTest, CreateWrongUri) {

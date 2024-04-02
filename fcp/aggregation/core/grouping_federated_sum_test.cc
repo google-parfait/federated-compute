@@ -20,6 +20,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/one_dim_grouping_aggregator.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
@@ -42,7 +43,7 @@ Intrinsic GetDefaultIntrinsic() {
   // One "GoogleSQL:sum" intrinsic with a single int32 tensor of unknown size.
   return Intrinsic{"GoogleSQL:sum",
                    {TensorSpec{"foo", DT_INT32, {-1}}},
-                   {TensorSpec{"foo_out", DT_INT32, {-1}}},
+                   {TensorSpec{"foo_out", DT_INT64, {-1}}},
                    {},
                    {}};
 }
@@ -63,7 +64,7 @@ TEST(GroupingFederatedSumTest, ScalarAggregationSucceeds) {
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result.value().size(), Eq(1));
   // Verify the resulting tensor.
-  EXPECT_THAT(result.value()[0], IsTensor({1}, {6}));
+  EXPECT_THAT(result.value()[0], IsTensor<int64_t>({1}, {6}));
 }
 
 TEST(GroupingFederatedSumTest, DenseAggregationSucceeds) {
@@ -88,7 +89,7 @@ TEST(GroupingFederatedSumTest, DenseAggregationSucceeds) {
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result->size(), Eq(1));
   // Verify the resulting tensor.
-  EXPECT_THAT(result.value()[0], IsTensor(shape, {14, 19, 23, 49}));
+  EXPECT_THAT(result.value()[0], IsTensor<int64_t>(shape, {14, 19, 23, 49}));
   // Also ensure that the resulting tensor is dense.
   EXPECT_TRUE(result.value()[0].is_dense());
 }
@@ -166,42 +167,24 @@ TEST(GroupingFederatedSumTest, MergeSucceeds) {
   auto aggregator1 = CreateTensorAggregator(GetDefaultIntrinsic()).value();
   auto aggregator2 = CreateTensorAggregator(GetDefaultIntrinsic()).value();
   Tensor ordinal =
-      Tensor::Create(DT_INT64, {}, CreateTestData<int64_t>({0})).value();
-  Tensor t1 = Tensor::Create(DT_INT32, {}, CreateTestData({1})).value();
-  Tensor t2 = Tensor::Create(DT_INT32, {}, CreateTestData({2})).value();
-  Tensor t3 = Tensor::Create(DT_INT32, {}, CreateTestData({3})).value();
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({0})).value();
+  Tensor t1 = Tensor::Create(DT_INT32, {1}, CreateTestData({1})).value();
+  Tensor t2 = Tensor::Create(DT_INT32, {1}, CreateTestData({2})).value();
+  Tensor t3 = Tensor::Create(DT_INT32, {1}, CreateTestData({3})).value();
   EXPECT_THAT(aggregator1->Accumulate({&ordinal, &t1}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t2}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t3}), IsOk());
 
-  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
-  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
-  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
-
-  auto result = std::move(*aggregator1).Report();
-  EXPECT_THAT(result, IsOk());
-  EXPECT_THAT(result.value().size(), Eq(1));
-  EXPECT_THAT(result.value()[0], IsTensor({1}, {6}));
-}
-
-TEST(GroupingFederatedSumTest, MergeInputTypeDiffersFromOutputTypeSucceeds) {
-  Intrinsic intrinsic{"GoogleSQL:sum",
-                      {TensorSpec{"foo", DT_INT32, {-1}}},
-                      {TensorSpec{"foo_out", DT_INT64, {-1}}},
-                      {},
-                      {}};
-  auto aggregator1 = CreateTensorAggregator(intrinsic).value();
-  auto aggregator2 = CreateTensorAggregator(intrinsic).value();
-  Tensor ordinal =
-      Tensor::Create(DT_INT64, {}, CreateTestData<int64_t>({0})).value();
-  Tensor t1 = Tensor::Create(DT_INT32, {}, CreateTestData({1})).value();
-  Tensor t2 = Tensor::Create(DT_INT32, {}, CreateTestData({2})).value();
-  Tensor t3 = Tensor::Create(DT_INT32, {}, CreateTestData({3})).value();
-  EXPECT_THAT(aggregator1->Accumulate({&ordinal, &t1}), IsOk());
-  EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t2}), IsOk());
-  EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t3}), IsOk());
-
-  EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
+  int aggregator2_num_inputs = aggregator2->GetNumInputs();
+  auto aggregator2_result =
+      std::move(std::move(*aggregator2).Report().value()[0]);
+  auto ordinals_for_merge =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({0})).value();
+  EXPECT_THAT((dynamic_cast<OneDimGroupingAggregator<int32_t, int64_t>*>(
+                   aggregator1.get()))
+                  ->MergeTensors({&ordinals_for_merge, &aggregator2_result},
+                                 aggregator2_num_inputs),
+              IsOk());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
   EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
 
@@ -209,6 +192,37 @@ TEST(GroupingFederatedSumTest, MergeInputTypeDiffersFromOutputTypeSucceeds) {
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result.value().size(), Eq(1));
   EXPECT_THAT(result.value()[0], IsTensor<int64_t>({1}, {6}));
+}
+
+TEST(GroupingFederatedSumTest, MergeSucceedsWithNonSharedOrdinals) {
+  auto aggregator1 = CreateTensorAggregator(GetDefaultIntrinsic()).value();
+  auto aggregator2 = CreateTensorAggregator(GetDefaultIntrinsic()).value();
+  Tensor ordinal =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({0})).value();
+  Tensor t1 = Tensor::Create(DT_INT32, {1}, CreateTestData({1})).value();
+  Tensor t2 = Tensor::Create(DT_INT32, {1}, CreateTestData({2})).value();
+  Tensor t3 = Tensor::Create(DT_INT32, {1}, CreateTestData({3})).value();
+  EXPECT_THAT(aggregator1->Accumulate({&ordinal, &t1}), IsOk());
+  EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t2}), IsOk());
+  EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t3}), IsOk());
+
+  int aggregator2_num_inputs = aggregator2->GetNumInputs();
+  auto aggregator2_result =
+      std::move(std::move(*aggregator2).Report().value()[0]);
+  auto ordinals_for_merge =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({2})).value();
+  EXPECT_THAT((dynamic_cast<OneDimGroupingAggregator<int32_t, int64_t>*>(
+                   aggregator1.get()))
+                  ->MergeTensors({&ordinals_for_merge, &aggregator2_result},
+                                 aggregator2_num_inputs),
+              IsOk());
+  EXPECT_THAT(aggregator1->CanReport(), IsTrue());
+  EXPECT_THAT(aggregator1->GetNumInputs(), Eq(3));
+
+  auto result = std::move(*aggregator1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor<int64_t>({3}, {1, 0, 5}));
 }
 
 TEST(GroupingFederatedSumTest, CreateWrongUri) {

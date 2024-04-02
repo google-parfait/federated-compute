@@ -120,6 +120,7 @@ cc_library(
         "federated_sum.cc",
         "group_by_aggregator.cc",
         "grouping_federated_sum.cc",
+        "one_dim_grouping_aggregator.cc",
     ],
     hdrs = [
         "composite_key_combiner.h",

@@ -133,11 +133,21 @@ class DPGroupingFederatedSum final
     }
   }
 
-  void AggregateVector(const AggVector<OutputT>& value_vector) override {
-    for (auto it : value_vector) {
-      AggregateValue(it.index, it.value);
+  // Norm bounds should not be applied when merging, since this input data
+  // represents the pre-accumulated (and already per-client bounded) data from
+  // multiple clients.
+  void MergeVectorByOrdinals(const AggVector<int64_t>& ordinals_vector,
+                             const AggVector<OutputT>& value_vector) override {
+    auto value_it = value_vector.begin();
+    for (auto o : ordinals_vector) {
+      int64_t output_index = o.value;
+      FCP_CHECK(value_it.index() == o.index)
+          << "Indices in AggVector of ordinals and AggVector of values "
+             "are mismatched.";
+      AggregateValue(output_index, value_it++.value());
     }
   }
+
   inline void AggregateValue(int64_t i, OutputT value) { data()[i] += value; }
   OutputT GetDefaultValue() override { return OutputT{0}; }
 

@@ -68,9 +68,18 @@ class GroupingFederatedSum final
     }
   }
 
-  void AggregateVector(const AggVector<OutputT>& value_vector) override {
-    for (auto it : value_vector) {
-      AggregateValue(it.index, it.value);
+  // The Merge implementation for GroupingFederatedSum is the same as the
+  // Accumulate implementation above, except that the type of input values in
+  // the Merge case matches OutputT rather than InputT.
+  void MergeVectorByOrdinals(const AggVector<int64_t>& ordinals_vector,
+                             const AggVector<OutputT>& value_vector) override {
+    auto value_it = value_vector.begin();
+    for (auto o : ordinals_vector) {
+      int64_t output_index = o.value;
+      FCP_CHECK(value_it.index() == o.index)
+          << "Indices in AggVector of ordinals and AggVector of values "
+             "are mismatched.";
+      AggregateValue(output_index, value_it++.value());
     }
   }
 

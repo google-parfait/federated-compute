@@ -27,6 +27,7 @@
 #include "fcp/aggregation/core/fedsql_constants.h"
 #include "fcp/aggregation/core/group_by_aggregator.h"
 #include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/one_dim_grouping_aggregator.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
@@ -62,7 +63,7 @@ class DPGroupByAggregator : public GroupByAggregator {
       const std::vector<TensorSpec>& input_key_specs,
       const std::vector<TensorSpec>* output_key_specs,
       const std::vector<Intrinsic>* intrinsics,
-      std::vector<std::unique_ptr<TensorAggregator>> aggregators,
+      std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators,
       int64_t l0_bound);
 
  private:
@@ -77,7 +78,7 @@ DPGroupByAggregator::DPGroupByAggregator(
     const std::vector<TensorSpec>& input_key_specs,
     const std::vector<TensorSpec>* output_key_specs,
     const std::vector<Intrinsic>* intrinsics,
-    std::vector<std::unique_ptr<TensorAggregator>> aggregators,
+    std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators,
     int64_t l0_bound)
     : GroupByAggregator(
           input_key_specs, output_key_specs, intrinsics,
@@ -160,7 +161,7 @@ StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
   }
 
   // Create nested aggregators.
-  std::vector<std::unique_ptr<TensorAggregator>> nested_aggregators;
+  std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> nested_aggregators;
   FCP_ASSIGN_OR_RETURN(nested_aggregators,
                        GroupByFactory::CreateAggregators(intrinsic));
 
