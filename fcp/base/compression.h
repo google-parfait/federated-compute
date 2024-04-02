@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef FCP_BASE_COMPRESION_H_
-#define FCP_BASE_COMPRESION_H_
+#ifndef FCP_BASE_COMPRESSION_H_
+#define FCP_BASE_COMPRESSION_H_
 
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
@@ -30,4 +30,4 @@ absl::StatusOr<absl::Cord> UncompressWithGzip(
 
 }  // namespace fcp
 
-#endif  // FCP_BASE_COMPRESION_H_
+#endif  // FCP_BASE_COMPRESSION_H_
