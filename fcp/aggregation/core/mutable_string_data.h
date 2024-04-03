@@ -16,23 +16,29 @@
 #ifndef FCP_AGGREGATION_CORE_MUTABLE_STRING_DATA_H_
 #define FCP_AGGREGATION_CORE_MUTABLE_STRING_DATA_H_
 
+#include <algorithm>
 #include <cstddef>
+#include <list>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/container/fixed_array.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/tensor_data.h"
 
 namespace fcp {
 namespace aggregation {
 
+inline constexpr size_t kMinGrowthSize = 128;
+
 // MutableStringData owns its string values and allows string values to be added
 // one by one.
 class MutableStringData : public TensorData {
  public:
   explicit MutableStringData(size_t expected_size) {
-    strings_.reserve(expected_size);
+    growth_size_ = std::max(kMinGrowthSize, expected_size);
+    strings_.emplace_back(absl::FixedArray<std::string>(growth_size_));
     string_views_.reserve(expected_size);
   }
   ~MutableStringData() override = default;
@@ -44,13 +50,22 @@ class MutableStringData : public TensorData {
   const void* data() const override { return string_views_.data(); }
 
   void Add(std::string&& string) {
-    strings_.emplace_back(std::move(string));
-    string_views_.emplace_back(strings_.back());
+    strings_.back()[fixed_array_index_] = std::move(string);
+    string_views_.emplace_back(strings_.back()[fixed_array_index_]);
+    fixed_array_index_++;
+    if (fixed_array_index_ >= growth_size_) {
+      fixed_array_index_ = 0;
+      strings_.emplace_back(absl::FixedArray<std::string>(growth_size_));
+    }
   }
 
  private:
-  std::vector<std::string> strings_;
+  std::list<absl::FixedArray<std::string>> strings_;
   std::vector<string_view> string_views_;
+  // Size of each FixedArray held by `strings_`. `strings_` is a linked list of
+  // FixedArrays to provide pointer stability for `string_views`.
+  size_t growth_size_;
+  size_t fixed_array_index_ = 0;
 };
 
 }  // namespace aggregation

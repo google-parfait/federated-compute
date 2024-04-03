@@ -221,7 +221,10 @@ cc_library(
     visibility = [
         "//visibility:public",
     ],
-    deps = [":tensor"],
+    deps = [
+        ":tensor",
+        "@com_google_absl//absl/container:fixed_array",
+    ],
 )
 
 cc_library(
@@ -331,6 +334,7 @@ cc_test(
         ":mutable_string_data",
         ":tensor",
         "//fcp/testing",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )

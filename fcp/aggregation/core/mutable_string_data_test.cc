@@ -19,6 +19,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/strings/string_view.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/testing/testing.h"
 
@@ -35,6 +36,16 @@ TEST(MutableStringDataTest, ValidAfterAddingValue) {
   MutableStringData string_data(1);
   string_data.Add("added-string");
   EXPECT_THAT(string_data.CheckValid<string_view>(), IsOk());
+}
+
+TEST(MutableStringDataTest, ValidAfterAddingValuePastExpectedSize) {
+  MutableStringData string_data(1);
+  string_data.Add("added-string");
+  string_data.Add("more-than-expected-size");
+  EXPECT_THAT(string_data.CheckValid<string_view>(), IsOk());
+  const absl::string_view* first_element =
+      static_cast<const absl::string_view*>(string_data.data());
+  EXPECT_EQ(*first_element, "added-string");
 }
 
 }  // namespace
