@@ -121,6 +121,18 @@ message Record {
     HpkePlusAeadData hpke_plus_aead_data = 2;
   }
 
+  // Describes the type of data-unaware compression that has been applied prior
+  // to any encryption.
+  enum CompressionType {
+    COMPRESSION_TYPE_UNSPECIFIED = 0;
+    // No compression was applied.
+    COMPRESSION_TYPE_NONE = 1;
+    // GZIP compression was applied.
+    COMPRESSION_TYPE_GZIP = 2;
+  }
+
+  CompressionType compression_type = 3;
+
   // Information about plaintext encrypted with AEAD, with the symmetric key
   // then encrypted with HPKE.
   message HpkePlusAeadData {
