@@ -32,7 +32,6 @@
 namespace fcp {
 namespace {
 
-using ::testing::Eq;
 using ::testing::MatchesRegex;
 using ::testing::Not;
 
