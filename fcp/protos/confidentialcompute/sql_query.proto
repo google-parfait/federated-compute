@@ -68,6 +68,11 @@ message SqlQuery {
 
   // Schema information for the client SQL query output columns.
   repeated ColumnSchema output_columns = 4;
+
+  // The numerical identifier for the result blob of the SQL query. This field
+  // is only used by trusted services. If this field is empty then the trusted
+  // SQL service will not encrypt its outputs.
+  optional uint32 output_blob_id = 5;
 }
 
 // A set of SQL queries that are executed on the same inputs.
