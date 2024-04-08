@@ -171,7 +171,7 @@ class DictionaryLookup : public AbstractDictionaryOp {
     auto ids_flat = ids_tensor->flat<int64_t>();
     const int64_t num_tokens = tokens_flat.size();
     for (int i = 0; i < num_tokens; ++i) {
-      tsl::tstring token = tokens_flat(i);
+      const tsl::tstring& token = tokens_flat(i);
       if (token.data() == nullptr) {
         return absl::InternalError(absl::StrCat(
             "Encountered token with nullptr data(), type: ", token.type(),
