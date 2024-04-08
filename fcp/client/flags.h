@@ -208,19 +208,6 @@ class Flags {
   // If true, log the first access time for each collection to opstats.
   virtual bool log_collection_first_access_time() const { return false; }
 
-  // If true, issue single task assignment only when the
-  // EligibilityPopulationSpec indicates the population supports single task
-  // assignment, or when the EligibilityPopulationSpec is missing.
-  virtual bool check_eligibility_population_spec_before_checkin() const {
-    return false;
-  }
-
-  // If true, then TASK_ASSIGNMENT_MODE_UNSPECIFIED will be treated as
-  // TASK_ASSIGNMENT_MODE_SINGLE.
-  virtual bool task_assignment_mode_treat_unspecified_as_single() const {
-    return false;
-  }
-
   // If true, example query recording will happen in the native code. But if
   // enable_task_completion_callback is false, the recorded data won't be used.
   virtual bool enable_native_example_query_recording() const { return false; }

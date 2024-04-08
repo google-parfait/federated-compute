@@ -986,8 +986,7 @@ struct EligibilityEvalResult {
 // and a vector of task names for multiple task assignment.
 EligibilityEvalResult CreateEligibilityEvalResult(
     const std::optional<TaskEligibilityInfo>& task_eligibility_info,
-    const std::optional<PopulationEligibilitySpec>& population_spec,
-    bool task_assignment_mode_treat_unspecified_as_single) {
+    const std::optional<PopulationEligibilitySpec>& population_spec) {
   EligibilityEvalResult result;
   std::vector<std::string> task_names_for_multiple_task_assignments;
   if (population_spec.has_value()) {
@@ -999,10 +998,9 @@ EligibilityEvalResult CreateEligibilityEvalResult(
       } else if (task_info.task_assignment_mode() ==
                      PopulationEligibilitySpec::TaskInfo::
                          TASK_ASSIGNMENT_MODE_SINGLE ||
-                 (task_assignment_mode_treat_unspecified_as_single &&
-                  task_info.task_assignment_mode() ==
-                      PopulationEligibilitySpec::TaskInfo::
-                          TASK_ASSIGNMENT_MODE_UNSPECIFIED)) {
+                 task_info.task_assignment_mode() ==
+                     PopulationEligibilitySpec::TaskInfo::
+                         TASK_ASSIGNMENT_MODE_UNSPECIFIED) {
         result.population_supports_single_task_assignment = true;
       }
     }
@@ -1189,9 +1187,7 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
             *eligibility_checkin_result);
     return CreateEligibilityEvalResult(
         /*task_eligibility_info=*/std::nullopt,
-        eligibility_eval_disabled.population_eligibility_spec,
-        /* task_assignment_mode_treat_unspecified_as_single=*/
-        flags->task_assignment_mode_treat_unspecified_as_single());
+        eligibility_eval_disabled.population_eligibility_spec);
   }
 
   auto eligibility_eval_task = std::get<FederatedProtocol::EligibilityEvalTask>(
@@ -1225,9 +1221,8 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
     return task_eligibility_info.status();
   }
   return CreateEligibilityEvalResult(
-      *task_eligibility_info, eligibility_eval_task.population_eligibility_spec,
-      /* task_assignment_mode_treat_unspecified_as_single=*/
-      flags->task_assignment_mode_treat_unspecified_as_single());
+      *task_eligibility_info,
+      eligibility_eval_task.population_eligibility_spec);
 }
 
 struct CheckinResult {
@@ -2153,8 +2148,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         timing_config, reference_time);
   }
 
-  if (!flags->check_eligibility_population_spec_before_checkin() ||
-      eligibility_eval_result->population_supports_single_task_assignment) {
+  if (eligibility_eval_result->population_supports_single_task_assignment) {
     // Run single task assignment.
 
     // We increment expected_num_tasks because we expect the server to assign a
