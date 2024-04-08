@@ -679,7 +679,6 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, check_eligibility_population_spec_before_checkin, (),
               (const, override));
-  MOCK_METHOD(bool, enable_task_completion_callback, (), (const, override));
   MOCK_METHOD(bool, enable_native_example_query_recording, (),
               (const, override));
   MOCK_METHOD(bool, enable_confidential_aggregation, (), (const, override));

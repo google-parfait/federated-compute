@@ -1910,14 +1910,12 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     } else {
       task_result_info.set_result(false);
     }
-    if (flags->enable_task_completion_callback()) {
-      if (flags->enable_native_example_query_recording() &&
-          example_iterator_query_recorder) {
-        *task_result_info.mutable_example_iterator_queries() =
-            example_iterator_query_recorder->StopRecordingAndGetQueries();
-      }
-      env_deps->OnTaskCompleted(std::move(task_result_info));
+    if (flags->enable_native_example_query_recording() &&
+        example_iterator_query_recorder) {
+      *task_result_info.mutable_example_iterator_queries() =
+          example_iterator_query_recorder->StopRecordingAndGetQueries();
     }
+    env_deps->OnTaskCompleted(std::move(task_result_info));
   }
   return successful_task_names;
 }
@@ -2202,14 +2200,12 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       } else {
         task_result_info.set_result(false);
       }
-      if (flags->enable_task_completion_callback()) {
-        if (flags->enable_native_example_query_recording() &&
-            example_iterator_query_recorder) {
-          *task_result_info.mutable_example_iterator_queries() =
-              example_iterator_query_recorder->StopRecordingAndGetQueries();
-        }
-        env_deps->OnTaskCompleted(std::move(task_result_info));
+      if (flags->enable_native_example_query_recording() &&
+          example_iterator_query_recorder) {
+        *task_result_info.mutable_example_iterator_queries() =
+            example_iterator_query_recorder->StopRecordingAndGetQueries();
       }
+      env_deps->OnTaskCompleted(std::move(task_result_info));
     }
   }
 
