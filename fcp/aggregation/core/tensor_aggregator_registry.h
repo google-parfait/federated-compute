@@ -38,6 +38,11 @@ StatusOr<const TensorAggregatorFactory*> GetAggregatorFactory(
 StatusOr<std::unique_ptr<TensorAggregator>> CreateTensorAggregator(
     const Intrinsic& intrinsic);
 
+// Creates a TensorAggregator with the given internal state via the factory
+// registered for the given intrinsic
+StatusOr<std::unique_ptr<TensorAggregator>> DeserializeTensorAggregator(
+    const Intrinsic& intrinsic, std::string serialized_state);
+
 namespace internal {
 
 template <typename FactoryType>

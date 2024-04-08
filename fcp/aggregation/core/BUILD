@@ -51,6 +51,16 @@ py_proto_library(
     ],
 )
 
+proto_library(
+    name = "agg_core_proto",
+    srcs = ["agg_core.proto"],
+)
+
+cc_proto_library(
+    name = "agg_core_cc_proto",
+    deps = [":agg_core_proto"],
+)
+
 cc_library(
     name = "tensor",
     srcs = [
@@ -102,9 +112,12 @@ cc_library(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":agg_core_cc_proto",
         ":tensor",
+        ":tensor_cc_proto",
         "//fcp/base",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/synchronization",
     ],
 )
@@ -131,6 +144,7 @@ cc_library(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":agg_core_cc_proto",
         ":aggregator",
         ":fedsql_constants",
         ":tensor",
@@ -184,6 +198,7 @@ cc_test(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":agg_core_cc_proto",
         ":aggregator",
         ":tensor",
         ":tensor_cc_proto",
@@ -253,6 +268,7 @@ cc_test(
     srcs = ["federated_sum_test.cc"],
     copts = FCP_COPTS,
     deps = [
+        ":agg_core_cc_proto",
         ":aggregation_cores",
         ":aggregator",
         ":tensor",

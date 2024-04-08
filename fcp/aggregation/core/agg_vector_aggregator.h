@@ -17,18 +17,21 @@
 #ifndef FCP_AGGREGATION_CORE_AGG_VECTOR_AGGREGATOR_H_
 #define FCP_AGGREGATION_CORE_AGG_VECTOR_AGGREGATOR_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
+#include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor.h"
+#include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
-#include "fcp/aggregation/core/tensor_data.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
 
@@ -41,10 +44,21 @@ template <typename T>
 class AggVectorAggregator : public TensorAggregator {
  public:
   AggVectorAggregator(DataType dtype, TensorShape shape)
-      : AggVectorAggregator(dtype, shape, CreateData(shape)) {}
+      : AggVectorAggregator(dtype, shape, CreateData(shape), 0) {}
+
+  AggVectorAggregator(DataType dtype, TensorShape shape,
+                      std::unique_ptr<MutableVectorData<T>> data,
+                      int num_inputs)
+      : dtype_(dtype),
+        shape_(std::move(shape)),
+        data_vector_(std::move(data)),
+        num_inputs_(num_inputs) {
+    FCP_CHECK(internal::TypeTraits<T>::kDataType == dtype)
+        << "Incompatible dtype";
+  }
 
   // Provides mutable access to the aggregator data as a vector<T>
-  inline std::vector<T>& data() { return data_vector_; }
+  inline std::vector<T>& data() { return *data_vector_; }
 
   int GetNumInputs() const override { return num_inputs_; }
 
@@ -58,7 +72,7 @@ class AggVectorAggregator : public TensorAggregator {
         << "AggVectorAggregator::MergeOutputTensors: AggVectorAggregator "
            "should produce a single output tensor";
     const Tensor& output = output_tensors[0];
-    if (output.shape() != result_tensor_.shape()) {
+    if (output.shape() != shape_) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "AggVectorAggregator::MergeOutputTensors: tensor shape "
                 "mismatch";
@@ -68,6 +82,13 @@ class AggVectorAggregator : public TensorAggregator {
     AggregateVector(output.AsAggVector<T>());
     num_inputs_ += other_num_inputs;
     return FCP_STATUS(OK);
+  }
+
+  StatusOr<std::string> Serialize() && override {
+    AggVectorAggregatorState aggregator_state;
+    aggregator_state.set_num_inputs(num_inputs_);
+    *(aggregator_state.mutable_vector_data()) = data_vector_->EncodeContent();
+    return aggregator_state.SerializeAsString();
   }
 
  protected:
@@ -81,7 +102,7 @@ class AggVectorAggregator : public TensorAggregator {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "AggVectorAggregator::AggregateTensors: dtype mismatch";
     }
-    if (tensor->shape() != result_tensor_.shape()) {
+    if (tensor->shape() != shape_) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "AggVectorAggregator::AggregateTensors: tensor shape mismatch";
     }
@@ -92,11 +113,19 @@ class AggVectorAggregator : public TensorAggregator {
     return FCP_STATUS(OK);
   }
 
-  Status CheckValid() const override { return result_tensor_.CheckValid(); }
+  Status CheckValid() const override {
+    if (data_vector_ == nullptr) {
+      return FCP_STATUS(FAILED_PRECONDITION)
+             << "AggVectorAggregator::CheckValid: Output has already been "
+             << "consumed.";
+    }
+    return FCP_STATUS(OK);
+  }
 
   OutputTensorList TakeOutputs() && override {
     OutputTensorList outputs = std::vector<Tensor>();
-    outputs.push_back(std::move(result_tensor_));
+    outputs.push_back(
+        Tensor::Create(dtype_, shape_, std::move(data_vector_)).value());
     return outputs;
   }
 
@@ -104,22 +133,12 @@ class AggVectorAggregator : public TensorAggregator {
   virtual void AggregateVector(const AggVector<T>& agg_vector) = 0;
 
  private:
-  AggVectorAggregator(DataType dtype, TensorShape shape,
-                      MutableVectorData<T>* data)
-      : result_tensor_(
-            Tensor::Create(dtype, shape, std::unique_ptr<TensorData>(data))
-                .value()),
-        data_vector_(*data),
-        num_inputs_(0) {
-    FCP_CHECK(internal::TypeTraits<T>::kDataType == dtype)
-        << "Incompatible dtype";
-  }
-
-  static MutableVectorData<T>* CreateData(const TensorShape& shape) {
+  static std::unique_ptr<MutableVectorData<T>> CreateData(
+      const TensorShape& shape) {
     StatusOr<size_t> num_elements = shape.NumElements();
     FCP_CHECK(num_elements.ok()) << "AggVectorAggregator: All dimensions of "
                                     "tensor shape must be known in advance.";
-    return new MutableVectorData<T>(num_elements.value());
+    return std::make_unique<MutableVectorData<T>>(num_elements.value());
   }
 
   StatusOr<AggVectorAggregator<T>*> CastOther(TensorAggregator& other) {
@@ -134,8 +153,9 @@ class AggVectorAggregator : public TensorAggregator {
     return other_ptr;
   }
 
-  Tensor result_tensor_;
-  std::vector<T>& data_vector_;
+  const DataType dtype_;
+  const TensorShape shape_;
+  std::unique_ptr<MutableVectorData<T>> data_vector_;
   int num_inputs_;
 };
 

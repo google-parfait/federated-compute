@@ -19,6 +19,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
@@ -107,6 +108,31 @@ TEST(FederatedSumTest, Merge_Succeeds) {
 
   auto result = std::move(*aggregator1).Report();
   EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(1));
+  EXPECT_THAT(result.value()[0], IsTensor({}, {6}));
+}
+
+TEST(FederatedSumTest, SerializeDeserialize_Succeeds) {
+  auto aggregator = CreateTensorAggregator(GetDefaultIntrinsic()).value();
+  Tensor t1 = Tensor::Create(DT_INT32, {}, CreateTestData({1})).value();
+  Tensor t2 = Tensor::Create(DT_INT32, {}, CreateTestData({2})).value();
+  Tensor t3 = Tensor::Create(DT_INT32, {}, CreateTestData({3})).value();
+  EXPECT_THAT(aggregator->Accumulate(t1), IsOk());
+  EXPECT_THAT(aggregator->Accumulate(t2), IsOk());
+  EXPECT_THAT(aggregator->CanReport(), IsTrue());
+
+  auto serialized_state = std::move(*aggregator).Serialize();
+  auto deserialized_aggregator =
+      DeserializeTensorAggregator(GetDefaultIntrinsic(),
+                                  serialized_state.value())
+          .value();
+
+  EXPECT_THAT(deserialized_aggregator->Accumulate(t3), IsOk());
+  EXPECT_THAT(deserialized_aggregator->GetNumInputs(), Eq(3));
+  EXPECT_THAT(deserialized_aggregator->CanReport(), IsTrue());
+
+  auto result = std::move(*deserialized_aggregator).Report();
+  // Verify the resulting tensor.
   EXPECT_THAT(result.value().size(), Eq(1));
   EXPECT_THAT(result.value()[0], IsTensor({}, {6}));
 }

@@ -17,10 +17,13 @@
 #include "fcp/aggregation/core/agg_vector_aggregator.h"
 
 #include <cstdint>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
@@ -164,6 +167,34 @@ TEST(AggVectorAggregationTest, FailsAfterBeingConsumed) {
 
 TEST(AggVectorAggregatorTest, TypeCheckFailure) {
   EXPECT_DEATH(new SumAggregator<float>(DT_INT32, {}), "Incompatible dtype");
+}
+
+TEST(AggVectorAggregatorTest, Serialization_Succeeds) {
+  const TensorShape shape = {4};
+  SumAggregator<int32_t> aggregator(DT_INT32, shape);
+  Tensor t1 =
+      Tensor::Create(DT_INT32, shape, CreateTestData({1, 3, 15, 27})).value();
+  Tensor t2 =
+      Tensor::Create(DT_INT32, shape, CreateTestData({10, 5, 1, 2})).value();
+  Tensor t3 =
+      Tensor::Create(DT_INT32, shape, CreateTestData({3, 11, 7, 20})).value();
+  EXPECT_THAT(aggregator.Accumulate(t1), IsOk());
+  EXPECT_THAT(aggregator.Accumulate(t2), IsOk());
+  EXPECT_THAT(aggregator.Accumulate(t3), IsOk());
+  EXPECT_THAT(aggregator.CanReport(), IsTrue());
+  EXPECT_THAT(aggregator.GetNumInputs(), Eq(3));
+
+  auto serialized_state = std::move(aggregator).Serialize();
+
+  AggVectorAggregatorState aggregator_state;
+  aggregator_state.ParseFromString(serialized_state.value());
+  EXPECT_THAT(aggregator_state.num_inputs(), Eq(3));
+  const int32_t* vector_data =
+      reinterpret_cast<const int32_t*>(aggregator_state.vector_data().data());
+  std::vector<int32_t> data(
+      vector_data,
+      vector_data + aggregator_state.vector_data().size() / sizeof(int32_t));
+  EXPECT_EQ(data, std::vector<int32_t>({14, 19, 23, 49}));
 }
 
 }  // namespace

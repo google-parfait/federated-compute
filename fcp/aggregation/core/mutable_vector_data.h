@@ -18,6 +18,8 @@
 #define FCP_AGGREGATION_CORE_MUTABLE_VECTOR_DATA_H_
 
 #include <cstddef>
+#include <memory>
+#include <string>
 #include <vector>
 
 #include "fcp/aggregation/core/tensor_data.h"
@@ -39,6 +41,21 @@ class MutableVectorData : public std::vector<T>, public TensorData {
   // Implementation of the base class methods.
   size_t byte_size() const override { return this->size() * sizeof(T); }
   const void* data() const override { return this->std::vector<T>::data(); }
+
+  // Copy the MutableVectorData into a string.
+  std::string EncodeContent() {
+    return std::string(reinterpret_cast<const char*>(this->data()),
+                       this->byte_size());
+  }
+
+  // Create and return a new MutableVectorData populated with the data from
+  // content.
+  static std::unique_ptr<MutableVectorData<T>> CreateFromEncodedContent(
+      const std::string& content) {
+    const T* data = reinterpret_cast<const T*>(content.data());
+    return std::make_unique<MutableVectorData<T>>(
+        data, data + content.size() / sizeof(T));
+  }
 };
 
 }  // namespace aggregation

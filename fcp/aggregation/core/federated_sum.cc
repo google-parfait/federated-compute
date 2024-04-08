@@ -18,9 +18,11 @@
 #include <string>
 #include <utility>
 
+#include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/agg_vector_aggregator.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
@@ -59,6 +61,24 @@ class FederatedSumFactory final : public TensorAggregatorFactory {
 
   StatusOr<std::unique_ptr<TensorAggregator>> Create(
       const Intrinsic& intrinsic) const override {
+    return CreateInternal(intrinsic, nullptr);
+  }
+
+  StatusOr<std::unique_ptr<TensorAggregator>> Deserialize(
+      const Intrinsic& intrinsic, std::string serialized_state) const override {
+    AggVectorAggregatorState aggregator_state;
+    if (!aggregator_state.ParseFromString(serialized_state)) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "FederatedSumFactory: Failed to deserialize the "
+                "AggVectorAggregatorState.";
+    }
+    return CreateInternal(intrinsic, &aggregator_state);
+  };
+
+ private:
+  StatusOr<std::unique_ptr<TensorAggregator>> CreateInternal(
+      const Intrinsic& intrinsic,
+      const AggVectorAggregatorState* aggregator_state) const {
     // Check that the configuration is valid for federated_sum.
     if (kFederatedSumUri != intrinsic.uri) {
       return FCP_STATUS(INVALID_ARGUMENT)
@@ -92,10 +112,21 @@ class FederatedSumFactory final : public TensorAggregatorFactory {
                 "specs.";
     }
     std::unique_ptr<TensorAggregator> aggregator;
+    if (aggregator_state == nullptr) {
+      NUMERICAL_ONLY_DTYPE_CASES(
+          input_spec.dtype(), T,
+          aggregator = std::make_unique<FederatedSum<T>>(
+              input_spec.dtype(), std::move(input_spec.shape())));
+      return aggregator;
+    }
+
     NUMERICAL_ONLY_DTYPE_CASES(
         input_spec.dtype(), T,
         aggregator = std::make_unique<FederatedSum<T>>(
-            input_spec.dtype(), std::move(input_spec.shape())));
+            input_spec.dtype(), std::move(input_spec.shape()),
+            MutableVectorData<T>::CreateFromEncodedContent(
+                aggregator_state->vector_data()),
+            aggregator_state->num_inputs()));
     return aggregator;
   }
 };

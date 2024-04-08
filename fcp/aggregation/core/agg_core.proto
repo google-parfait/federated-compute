@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package fcp.aggregation;
+
+// Internal state representation of an AggVectorAggregator.
+message AggVectorAggregatorState {
+  uint64 num_inputs = 1;
+  bytes vector_data = 2;
+}

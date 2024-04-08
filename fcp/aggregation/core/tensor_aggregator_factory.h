@@ -18,6 +18,7 @@
 #define FCP_AGGREGATION_CORE_TENSOR_AGGREGATOR_FACTORY_H_
 
 #include <memory>
+#include <string>
 
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
@@ -39,6 +40,17 @@ class TensorAggregatorFactory {
   // hold pointers referring to the Intrinsic.
   virtual StatusOr<std::unique_ptr<TensorAggregator>> Create(
       const Intrinsic& intrinsic) const = 0;
+
+  // Creates an instance of a specific aggregator for the specified type of the
+  // aggregation intrinsic and serialized aggregator state.
+  // The lifetime of the provided Intrinsic must outlast that of the returned
+  // TensorAggregator as it is valid for the TensorAggregator implementation to
+  // hold pointers referring to the Intrinsic.
+  // TODO: b/331978180 - Make pure virtual once all derived classes implement.
+  virtual StatusOr<std::unique_ptr<TensorAggregator>> Deserialize(
+      const Intrinsic& intrinsic, std::string serialized_state) const {
+    return FCP_STATUS(UNIMPLEMENTED);
+  };
 };
 
 }  // namespace aggregation

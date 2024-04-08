@@ -16,6 +16,8 @@
 #include "fcp/aggregation/core/mutable_vector_data.h"
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -31,6 +33,20 @@ TEST(MutableVectorDataTest, MutableVectorDataValid) {
   vector_data.push_back(2);
   vector_data.push_back(3);
   EXPECT_THAT(vector_data.CheckValid<int64_t>(), IsOk());
+}
+
+TEST(MutableVectorDataTest, EncodeDecodeSucceeds) {
+  MutableVectorData<int64_t> vector_data;
+  vector_data.push_back(1);
+  vector_data.push_back(2);
+  vector_data.push_back(3);
+  std::string encoded_vector_data = vector_data.EncodeContent();
+  EXPECT_THAT(vector_data.CheckValid<int64_t>(), IsOk());
+  auto decoded_vector_data =
+      MutableVectorData<int64_t>::CreateFromEncodedContent(encoded_vector_data);
+  EXPECT_THAT(decoded_vector_data->CheckValid<int64_t>(), IsOk());
+  EXPECT_EQ(std::vector<int64_t>(*decoded_vector_data),
+            std::vector<int64_t>({1, 2, 3}));
 }
 
 }  // namespace
