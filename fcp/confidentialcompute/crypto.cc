@@ -139,7 +139,7 @@ MessageDecryptor::MessageDecryptor(google::protobuf::Struct config_properties)
 
 absl::StatusOr<std::string> MessageDecryptor::GetPublicKey(
     absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer,
-    int64_t signer_algorithm) {
+    int64_t signer_algorithm) const {
   OkpCwt cwt{
       .algorithm = signer_algorithm,
       .public_key =

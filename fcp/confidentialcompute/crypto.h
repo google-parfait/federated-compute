@@ -57,6 +57,8 @@ struct EncryptMessageResult {
 // IMPORTANT: This class DOES NOT validate the public key passed to Encrypt. If
 // the public key is a CWT, it's the caller's responsibility to verify the
 // signature and claims.
+//
+// This class is thread-safe.
 class MessageEncryptor {
  public:
   MessageEncryptor();
@@ -73,6 +75,8 @@ class MessageEncryptor {
 };
 
 // Decrypts messages intended for this recipient.
+//
+// This class is thread-safe.
 class MessageDecryptor {
  public:
   // Constructs a new MessageDecryptor. If set, the provided config_properties
@@ -88,14 +92,14 @@ class MessageDecryptor {
   // can subsequently decrypt. The key will be a CBOR Web Token (CWT) signed by
   // the provided signing function.
   //
-  // Generates a new public key if the key has not yet been generated, otherwise
-  // returns the key that was previously generated on the first call to this
-  // method.
-  //
-  // This function must be called before Decrypt.
+  // The key material is generated in the constructor so the same key material
+  // will be included in the CWT even if this function is called multiple times.
+  // The CWT returned by this function may differ between function calls if
+  // different signing functions or algorithm identifiers are used, or if the
+  // provided signing function is non-deterministic.
   absl::StatusOr<std::string> GetPublicKey(
       absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer,
-      int64_t signer_algorithm);
+      int64_t signer_algorithm) const;
 
   // Decrypts `ciphertext` using a symmetric key produced by decrypting
   // `encrypted_symmetric_key` with the `encapped_key` and the private key
@@ -120,7 +124,7 @@ class MessageDecryptor {
       absl::string_view encapped_key) const;
 
  private:
-  google::protobuf::Struct config_properties_;
+  const google::protobuf::Struct config_properties_;
   const EVP_HPKE_KEM* hpke_kem_;
   const EVP_HPKE_KDF* hpke_kdf_;
   const EVP_HPKE_AEAD* hpke_aead_;
