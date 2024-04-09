@@ -15,10 +15,12 @@
  */
 
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator_factory.h"
@@ -38,8 +40,11 @@ using testing::Eq;
 using testing::HasSubstr;
 using testing::IsFalse;
 using testing::IsTrue;
+using testing::TestWithParam;
 
-TEST(FederatedMeanTest, ScalarAggregation_Succeeds) {
+using FederatedMeanTest = TestWithParam<bool>;
+
+TEST_P(FederatedMeanTest, ScalarAggregation_Succeeds) {
   Intrinsic federated_mean_intrinsic{"federated_mean",
                                      {TensorSpec{"foo", DT_FLOAT, {}}},
                                      {TensorSpec{"foo_out", DT_FLOAT, {}}},
@@ -51,6 +56,14 @@ TEST(FederatedMeanTest, ScalarAggregation_Succeeds) {
   Tensor v3 = Tensor::Create(DT_FLOAT, {}, CreateTestData<float>({3})).value();
   EXPECT_THAT(aggregator->Accumulate(v1), IsOk());
   EXPECT_THAT(aggregator->Accumulate(v2), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*aggregator).Serialize();
+    aggregator = DeserializeTensorAggregator(federated_mean_intrinsic,
+                                             serialized_state.value())
+                     .value();
+  }
+
   EXPECT_THAT(aggregator->Accumulate(v3), IsOk());
   EXPECT_THAT(aggregator->CanReport(), IsTrue());
   EXPECT_THAT(aggregator->GetNumInputs(), Eq(3));
@@ -64,7 +77,7 @@ TEST(FederatedMeanTest, ScalarAggregation_Succeeds) {
   EXPECT_THAT(result.value()[0], IsTensor<float>({}, {2}));
 }
 
-TEST(FederatedMeanTest, WeightedScalarAggregation_Succeeds) {
+TEST_P(FederatedMeanTest, WeightedScalarAggregation_Succeeds) {
   Intrinsic federated_mean_intrinsic{
       "federated_weighted_mean",
       {TensorSpec{"foo", DT_FLOAT, {}}, TensorSpec{"bar", DT_FLOAT, {}}},
@@ -80,6 +93,14 @@ TEST(FederatedMeanTest, WeightedScalarAggregation_Succeeds) {
   Tensor w3 = Tensor::Create(DT_FLOAT, {}, CreateTestData<float>({5})).value();
   EXPECT_THAT(aggregator->Accumulate({&v1, &w1}), IsOk());
   EXPECT_THAT(aggregator->Accumulate({&v2, &w2}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*aggregator).Serialize();
+    aggregator = DeserializeTensorAggregator(federated_mean_intrinsic,
+                                             serialized_state.value())
+                     .value();
+  }
+
   EXPECT_THAT(aggregator->Accumulate({&v3, &w3}), IsOk());
   EXPECT_THAT(aggregator->CanReport(), IsTrue());
   EXPECT_THAT(aggregator->GetNumInputs(), Eq(3));
@@ -95,7 +116,7 @@ TEST(FederatedMeanTest, WeightedScalarAggregation_Succeeds) {
   EXPECT_THAT(result.value()[0], IsTensor<float>({}, {expected_value}));
 }
 
-TEST(FederatedMeanTest, DenseAggregation_Succeeds) {
+TEST_P(FederatedMeanTest, DenseAggregation_Succeeds) {
   Intrinsic federated_mean_intrinsic{"federated_mean",
                                      {TensorSpec{"foo", DT_FLOAT, {4}}},
                                      {TensorSpec{"foo_out", DT_FLOAT, {4}}},
@@ -113,6 +134,14 @@ TEST(FederatedMeanTest, DenseAggregation_Succeeds) {
           .value();
   EXPECT_THAT(aggregator->Accumulate(v1), IsOk());
   EXPECT_THAT(aggregator->Accumulate(v2), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*aggregator).Serialize();
+    aggregator = DeserializeTensorAggregator(federated_mean_intrinsic,
+                                             serialized_state.value())
+                     .value();
+  }
+
   EXPECT_THAT(aggregator->Accumulate(v3), IsOk());
   EXPECT_THAT(aggregator->CanReport(), IsTrue());
   EXPECT_THAT(aggregator->GetNumInputs(), Eq(3));
@@ -127,7 +156,7 @@ TEST(FederatedMeanTest, DenseAggregation_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(FederatedMeanTest, WeightedDenseAggregation_Succeeds) {
+TEST_P(FederatedMeanTest, WeightedDenseAggregation_Succeeds) {
   Intrinsic federated_mean_intrinsic{
       "federated_weighted_mean",
       {TensorSpec{"foo", DT_FLOAT, {4}}, TensorSpec{"bar", DT_FLOAT, {}}},
@@ -149,6 +178,14 @@ TEST(FederatedMeanTest, WeightedDenseAggregation_Succeeds) {
   Tensor w3 = Tensor::Create(DT_FLOAT, {}, CreateTestData<float>({5})).value();
   EXPECT_THAT(aggregator->Accumulate({&v1, &w1}), IsOk());
   EXPECT_THAT(aggregator->Accumulate({&v2, &w2}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*aggregator).Serialize();
+    aggregator = DeserializeTensorAggregator(federated_mean_intrinsic,
+                                             serialized_state.value())
+                     .value();
+  }
+
   EXPECT_THAT(aggregator->Accumulate({&v3, &w3}), IsOk());
   EXPECT_THAT(aggregator->CanReport(), IsTrue());
   EXPECT_THAT(aggregator->GetNumInputs(), Eq(3));
@@ -167,7 +204,7 @@ TEST(FederatedMeanTest, WeightedDenseAggregation_Succeeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(FederatedMeanTest, Merge_Succeeds) {
+TEST_P(FederatedMeanTest, Merge_Succeeds) {
   Intrinsic federated_mean_intrinsic{"federated_mean",
                                      {TensorSpec{"foo", DT_FLOAT, {}}},
                                      {TensorSpec{"foo_out", DT_FLOAT, {}}},
@@ -182,6 +219,17 @@ TEST(FederatedMeanTest, Merge_Succeeds) {
   EXPECT_THAT(aggregator2->Accumulate(v2), IsOk());
   EXPECT_THAT(aggregator2->Accumulate(v3), IsOk());
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator1 = DeserializeTensorAggregator(federated_mean_intrinsic,
+                                              serialized_state1.value())
+                      .value();
+    aggregator2 = DeserializeTensorAggregator(federated_mean_intrinsic,
+                                              serialized_state2.value())
+                      .value();
+  }
+
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   EXPECT_THAT(aggregator2->CanReport(), IsFalse());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
@@ -193,7 +241,7 @@ TEST(FederatedMeanTest, Merge_Succeeds) {
   EXPECT_THAT(result.value()[0], IsTensor<float>({}, {2}));
 }
 
-TEST(FederatedMeanTest, WeightedDenseMerge_Succeeds) {
+TEST_P(FederatedMeanTest, WeightedDenseMerge_Succeeds) {
   Intrinsic federated_mean_intrinsic{
       "federated_weighted_mean",
       {TensorSpec{"foo", DT_FLOAT, {4}}, TensorSpec{"bar", DT_FLOAT, {}}},
@@ -217,6 +265,17 @@ TEST(FederatedMeanTest, WeightedDenseMerge_Succeeds) {
   EXPECT_THAT(aggregator1->Accumulate({&v1, &w1}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&v2, &w2}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&v3, &w3}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator1 = DeserializeTensorAggregator(federated_mean_intrinsic,
+                                              serialized_state1.value())
+                      .value();
+    aggregator2 = DeserializeTensorAggregator(federated_mean_intrinsic,
+                                              serialized_state2.value())
+                      .value();
+  }
 
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   EXPECT_THAT(aggregator2->CanReport(), IsFalse());
@@ -398,6 +457,27 @@ TEST(FederatedMeanTest, Create_UnsupportedNestedIntrinsic) {
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(s.message(), HasSubstr("Expected no nested intrinsics"));
 }
+
+TEST(FederatedMeanTest, Deserialize_FailToParseProto) {
+  Intrinsic federated_mean_intrinsic{"federated_mean",
+                                     {TensorSpec{"foo", DT_FLOAT, {}}},
+                                     {TensorSpec{"foo_out", DT_FLOAT, {}}},
+                                     {},
+                                     {}};
+  std::string invalid_state("invalid_state");
+  Status s =
+      DeserializeTensorAggregator(federated_mean_intrinsic, invalid_state)
+          .status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(), HasSubstr("Failed to parse"));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    FederatedMeanTestInstantiation, FederatedMeanTest,
+    testing::ValuesIn<bool>({false, true}),
+    [](const testing::TestParamInfo<FederatedMeanTest::ParamType>& info) {
+      return info.param ? "SerializeDeserialize" : "None";
+    });
 
 }  // namespace
 }  // namespace aggregation

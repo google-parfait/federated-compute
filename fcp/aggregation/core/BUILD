@@ -252,6 +252,7 @@ cc_test(
     srcs = ["federated_mean_test.cc"],
     copts = FCP_COPTS,
     deps = [
+        ":agg_core_cc_proto",
         ":aggregation_cores",
         ":aggregator",
         ":tensor",
