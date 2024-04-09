@@ -1800,8 +1800,15 @@ def build_aggregations(
   # a specific structure. It is a lambda computation whose result block contains
   # locals that are exclusively aggregation-type intrinsics.
   aggregations_bb = daf.client_to_server_aggregation.to_building_block()
-  aggregations_bb.check_lambda()
-  aggregations_bb.result.check_block()  # pytype: disable=attribute-error
+  if not isinstance(aggregations_bb, tff.framework.Lambda):
+    raise ValueError(
+        f'Expected a `tff.framework.Lambda`, found {type(aggregations_bb)}.'
+    )
+  aggregations_result = aggregations_bb.result
+  if not isinstance(aggregations_result, tff.framework.Block):
+    raise ValueError(
+        f'Expected a `tff.framework.Block`, found {type(aggregations_result)}.'
+    )
 
   # Get lists of the TensorSpecProtos for the inputs and outputs of all
   # intrinsic calls. These lists are formatted such that the ith entry
@@ -1822,8 +1829,8 @@ def build_aggregations(
   assert len(grouped_input_tensor_specs) == len(grouped_output_tensor_specs)
 
   intrinsic_uris = [
-      local_value.function.intrinsic_def().uri
-      for _, local_value in aggregations_bb.result.locals  # pytype: disable=attribute-error
+      local_value.function.intrinsic_def().uri  # pytype: disable=attribute-error
+      for _, local_value in aggregations_result.locals
   ]
   assert len(intrinsic_uris) == len(grouped_output_tensor_specs)
 

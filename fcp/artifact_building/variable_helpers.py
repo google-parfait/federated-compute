@@ -353,7 +353,10 @@ def get_grouped_input_tensor_specs_for_aggregations(
     # selection path.
     tensor_specs = []
     for inner_value in inner_values:
-      inner_value.check_selection()
+      if not isinstance(inner_value, tff.framework.Selection):
+        raise ValueError(
+            f'Expected a `tff.framework.Selection`, found {type(inner_value)}.'
+        )
       path = _get_selection_path(inner_value)
       arg_index = path[0]
       if arg_index in names:
@@ -370,17 +373,24 @@ def get_grouped_input_tensor_specs_for_aggregations(
   grouped_input_tensor_specs = []
 
   for _, local_value in aggregation_comp.result.locals:  # pytype: disable=attribute-error
-    local_value.check_call()
-    local_value.function.check_intrinsic()
-    assert local_value.function.intrinsic_def().aggregation_kind
+    if not isinstance(local_value, tff.framework.Call):
+      raise ValueError(
+          f'Expected a `tff.framework.Call`, found {type(local_value)}.'
+      )
+    local_fn = local_value.function
+    if not isinstance(local_fn, tff.framework.Intrinsic):
+      raise ValueError(
+          f'Expected a `tff.framework.Intrinsic`, found {type(local_value)}.'
+      )
+    assert local_fn.intrinsic_def().aggregation_kind
 
     # Collect the input TensorFlowSpecs for each argument for this intrinsic.
     input_tensor_specs_for_intrinsic = []
     if isinstance(
-        local_value.function.intrinsic_def().type_signature.parameter,
+        local_fn.intrinsic_def().type_signature.parameter,  # pytype: disable=attribute-error
         tff.StructType,
     ):
-      for element in local_value.argument.children():
+      for element in local_value.argument.children():  # pytype: disable=attribute-error
         input_tensor_specs_for_intrinsic.append(
             _get_input_tensor_specs_for_aggregation_arg(element, names)
         )
@@ -435,19 +445,25 @@ def get_grouped_output_tensor_specs_for_aggregations(
   grouped_output_tensor_specs = []
 
   for _, local_value in aggregation_comp.result.locals:  # pytype: disable=attribute-error
-    local_value.check_call()
-    local_value.function.check_intrinsic()
-    assert local_value.function.intrinsic_def().aggregation_kind
-    if not isinstance(local_value.type_signature, tff.FederatedType):
+    if not isinstance(local_value, tff.framework.Call):
       raise ValueError(
-          f'Expected a `tff.FederatedType`, found {local_value.type_signature}.'
+          f'Expected a `tff.framework.Call`, found {type(local_value)}.'
       )
+    local_fn = local_value.function
+    if not isinstance(local_fn, tff.framework.Intrinsic):
+      raise ValueError(
+          f'Expected a `tff.framework.Intrinsic`, found {type(local_value)}.'
+      )
+    assert local_fn.intrinsic_def().aggregation_kind
+    local_type = local_value.type_signature
+    if not isinstance(local_type, tff.FederatedType):
+      raise ValueError(f'Expected a `tff.FederatedType`, found {local_type}.')
 
     tensor_specs = []
     # If the output is a struct, select the appropriate number of
     # TensorflowSpecs.
-    if isinstance(local_value.type_signature.member, tff.StructType):
-      num_specs = len(tff.structure.flatten(local_value.type_signature.member))
+    if isinstance(local_type.member, tff.StructType):
+      num_specs = len(tff.structure.flatten(local_type.member))
       tensor_specs = output_tensor_specs[
           output_tensor_spec_index : output_tensor_spec_index + num_specs
       ]
