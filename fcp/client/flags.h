@@ -218,13 +218,6 @@ class Flags {
   // If true, enables MinimumSeparationPolicy for clients.
   virtual bool enable_minimum_separation_policy() const { return false; }
 
-  // If true, then TfLitePlanEngine will invoke TFLite in a thread safe manner.
-  // That is, it will only invoke TFLite APIs from a single thread, rather than
-  // calling some initialization APIs from one thread and then invoking the
-  // interpreter on another thread. This is safer, and more in line with
-  // TFLite's intended invocation patter.
-  virtual bool use_thread_safe_tflite_wrapper() const { return false; }
-
   // If true, the client will generate computation IDs by actually calculating a
   // SHA256 hash correctly, whereas it calculated the hash only over the first 4
   // bytes before this change.

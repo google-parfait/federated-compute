@@ -248,62 +248,6 @@ absl::StatusOr<OutputTensors> RunTfLiteModelInternal(
 
 }  // anonymous namespace
 
-absl::StatusOr<std::unique_ptr<TfLiteWrapper>> TfLiteWrapper::Create(
-    const std::string& model, std::function<bool()> should_abort,
-    const InterruptibleRunner::TimingConfig& timing_config,
-    LogManager* log_manager,
-    std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
-    std::vector<std::string> output_names,
-    const TfLiteInterpreterOptions& interpreter_options, int32_t num_threads) {
-  FCP_ASSIGN_OR_RETURN(TfLiteInterpreterWithDeps interpreter_with_deps,
-                       InitializeInterpreter(model, *inputs, output_names,
-                                             interpreter_options, num_threads));
-
-  // Create an InterruptibleRunner to execute TF calls in a background thread,
-  // allowing us to abort them if need be.
-  auto runner = std::make_unique<InterruptibleRunner>(
-      log_manager, should_abort, timing_config,
-      InterruptibleRunner::DiagnosticsConfig{
-          .interrupted =
-              ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_TF_EXECUTION,
-          .interrupt_timeout = ProdDiagCode::
-              BACKGROUND_TRAINING_INTERRUPT_TF_EXECUTION_TIMED_OUT,
-          .interrupted_extended = ProdDiagCode::
-              BACKGROUND_TRAINING_INTERRUPT_TF_EXTENDED_EXECUTION_COMPLETED,
-          .interrupt_timeout_extended = ProdDiagCode::
-              BACKGROUND_TRAINING_INTERRUPT_TF_EXTENDED_EXECUTION_TIMED_OUT});
-  return absl::WrapUnique(
-      new TfLiteWrapper(std::move(interpreter_with_deps.model),
-                        std::move(interpreter_with_deps.error_reporter),
-                        std::move(interpreter_with_deps.delegate),
-                        std::move(interpreter_with_deps.interpreter),
-                        std::move(runner), std::move(output_names)));
-}
-
-absl::StatusOr<OutputTensors> TfLiteWrapper::Run() {
-  auto* interpreter_raw_pointer = interpreter_.get();
-  auto tflite_runnable = [interpreter_raw_pointer, this]() {
-    return ConvertTfLiteStatus(interpreter_raw_pointer->Invoke());
-  };
-  auto* delegate_raw_pointer =
-      static_cast<tflite::FlexDelegate*>(delegate_->data_);
-  auto abort_tflite = [delegate_raw_pointer]() {
-    delegate_raw_pointer->Cancel();
-  };
-  FCP_RETURN_IF_ERROR(
-      interruptible_runner_->Run(tflite_runnable, abort_tflite));
-  // handles output tensors
-  return ConstructOutputs();
-}
-
-absl::Status TfLiteWrapper::ConvertTfLiteStatus(TfLiteStatus status) {
-  return ConvertTfLiteStatusInternal(status, *delegate_, *error_reporter_);
-}
-
-absl::StatusOr<OutputTensors> TfLiteWrapper::ConstructOutputs() {
-  return ConstructOutputsInternal(*interpreter_, output_names_);
-}
-
 absl::StatusOr<OutputTensors> RunTfLiteModelThreadSafe(
     const std::string& model, std::function<bool()> should_abort,
     const InterruptibleRunner::TimingConfig& timing_config,
