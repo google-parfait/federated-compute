@@ -285,7 +285,8 @@ Status GroupByAggregator::MergeTensorsInternal(InputTensorList tensors,
     }
   }
 
-  FCP_ASSIGN_OR_RETURN(Tensor ordinals, CreateOrdinalsByGroupingKeys(tensors));
+  FCP_ASSIGN_OR_RETURN(Tensor ordinals,
+                       CreateOrdinalsByGroupingKeysForMerge(tensors));
 
   input_index = num_keys_per_input_;
   for (int i = 0; i < intrinsics_.size(); ++i) {
@@ -343,6 +344,12 @@ StatusOr<Tensor> GroupByAggregator::CreateOrdinalsByGroupingKeys(
       std::make_unique<MutableVectorData<int64_t>>(inputs[0]->num_elements());
   return Tensor::Create(internal::TypeTraits<int64_t>::kDataType,
                         inputs[0]->shape(), std::move(ordinals));
+}
+StatusOr<Tensor> GroupByAggregator::CreateOrdinalsByGroupingKeysForMerge(
+    const InputTensorList& inputs) {
+  // In this base class, ordinals are made the same way for MergeTensorsInternal
+  // as for AggregateTensorsInternal.
+  return CreateOrdinalsByGroupingKeys(inputs);
 }
 
 Status GroupByAggregator::IsCompatible(const GroupByAggregator& other) const {

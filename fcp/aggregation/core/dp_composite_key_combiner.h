@@ -51,8 +51,8 @@ class DPCompositeKeyCombiner : public CompositeKeyCombiner {
       const std::vector<DataType>& dtypes,
       int64_t l0_bound = std::numeric_limits<int64_t>::max());
 
-  // If the number of contributions is <= l0_bound_, it will call the parent
-  // Accumulate. Otherwise, it calls AccumulateWithBound which will ensure there
+  // If the number of contributions is <= l0_bound_, call the parent
+  // Accumulate. Otherwise, call AccumulateWithBound which will ensure there
   // are <= l0_bound_ contributions.
   StatusOr<Tensor> Accumulate(const InputTensorList& tensors) override;
 

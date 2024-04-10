@@ -573,6 +573,139 @@ TEST(DPGroupByAggregatorTest, NoKeyTripleAggWithAllBounds) {
   EXPECT_THAT(result.value()[2], IsTensor<int64_t>({1}, {11}));
 }
 
+// Finally, test merge: intermediary aggregates should not be clipped or noised
+
+TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_SingleKey) {
+  // For any single user's data we will give to the aggregators, the norm bounds
+  // below do nothing: each Accumulate call has 1 distinct key and a value of 1,
+  // which satisfies the L0 bound and Linfinity bound constraints.
+  Intrinsic intrinsic = CreateIntrinsic<int64_t>(100, 0.001, 1, 1, -1, -1);
+  auto agg1 = CreateTensorAggregator(intrinsic).value();
+  auto agg2 = CreateTensorAggregator(intrinsic).value();
+
+  // agg1 gets one person's data, mapping "key" to 1
+  Tensor key1 =
+      Tensor::Create(DT_STRING, {1}, CreateTestData<string_view>({"key"}))
+          .value();
+  Tensor data1 =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({1})).value();
+  EXPECT_THAT(agg1->Accumulate({&key1, &data1}), IsOk());
+
+  // agg2 gets data from a lot more people. At the end, it will map "other key"
+  // to 1000 and "yet another key" to 1000.
+  for (int i = 0; i < 1000; i++) {
+    Tensor key_a = Tensor::Create(DT_STRING, {1},
+                                  CreateTestData<string_view>({"other key"}))
+                       .value();
+    Tensor data_a =
+        Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({1})).value();
+    EXPECT_THAT(agg2->Accumulate({&key_a, &data_a}), IsOk());
+
+    Tensor key_b =
+        Tensor::Create(DT_STRING, {1},
+                       CreateTestData<string_view>({"yet another key"}))
+            .value();
+    Tensor data_b =
+        Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({1})).value();
+    EXPECT_THAT(agg2->Accumulate({&key_b, &data_b}), IsOk());
+  }
+
+  // Merge the aggregators. The result should contain the 3 different keys.
+  // "key" should map to 1 while the other two keys should map to 1000.
+  // If we wrote merge wrong, the code might do the following to agg2:
+  // (1) pick one of "other key" or "yet another key" at random (l0_bound = 1),
+  // or (2) force one of the sums from 1000 to 1 (linfinity_bound_ = 1)
+  // or both
+  auto merge_status = agg1->MergeWith(std::move(*agg2));
+  EXPECT_THAT(merge_status, IsOk());
+  auto result = std::move(*agg1).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value()[0].num_elements(), Eq(3));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({3}, {1, 1000, 1000}));
+}
+
+TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_MultiKey) {
+  Intrinsic intrinsic = CreateIntrinsic3<int64_t>(100, 0.001, 1, 1, -1, -1);
+  auto agg1 = CreateTensorAggregator(intrinsic).value();
+  auto agg2 = CreateTensorAggregator(intrinsic).value();
+
+  // agg1 gets one person's data, mapping "red apple" to 1,1
+  Tensor red =
+      Tensor::Create(DT_STRING, {1}, CreateTestData<string_view>({"red"}))
+          .value();
+  Tensor apple =
+      Tensor::Create(DT_STRING, {1}, CreateTestData<string_view>({"apple"}))
+          .value();
+  Tensor data1 =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({1})).value();
+  Tensor data2 =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({1})).value();
+  EXPECT_THAT(agg1->Accumulate({&red, &apple, &data1, &data2}), IsOk());
+
+  // agg2 gets data from a lot more people. At the end, it will map "red apple"
+  // to 1000,1000 and "white grape" to 1000,1000.
+  for (int i = 0; i < 1000; i++) {
+    EXPECT_THAT(agg2->Accumulate({&red, &apple, &data1, &data2}), IsOk());
+
+    Tensor white =
+        Tensor::Create(DT_STRING, {1}, CreateTestData<string_view>({"white"}))
+            .value();
+    Tensor grape =
+        Tensor::Create(DT_STRING, {1}, CreateTestData<string_view>({"grape"}))
+            .value();
+    EXPECT_THAT(agg2->Accumulate({&white, &grape, &data1, &data2}), IsOk());
+  }
+  // Merge the aggregators. The result should contain two different keys.
+  // "red apple" should map to 1001, 1001 while "white grape" should map to
+  // 1000, 1000.
+  auto merge_status = agg1->MergeWith(std::move(*agg2));
+  EXPECT_THAT(merge_status, IsOk());
+  auto result = std::move(*agg1).Report();
+  ASSERT_THAT(result, IsOk());
+  ASSERT_THAT(result.value()[0].num_elements(), Eq(2));
+  EXPECT_THAT(result.value()[0], IsTensor<string_view>({2}, {"red", "white"}));
+  EXPECT_THAT(result.value()[1],
+              IsTensor<string_view>({2}, {"apple", "grape"}));
+  EXPECT_THAT(result.value()[2], IsTensor<int64_t>({2}, {1001, 1000}));
+}
+
+TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_NoKeys) {
+  Intrinsic intrinsic{"fedsql_dp_group_by",
+                      {},
+                      {},
+                      {CreateTopLevelParameters(100, 0.01, 100)},
+                      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateInnerIntrinsic<int64_t>(10, 9, 8));
+  intrinsic.nested_intrinsics.push_back(
+      CreateInnerIntrinsic<int64_t>(100, 9, -1));
+  auto agg1 = CreateTensorAggregator(intrinsic).value();
+  auto agg2 = CreateTensorAggregator(intrinsic).value();
+  Tensor data1 =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({1})).value();
+  Tensor data2 =
+      Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({1})).value();
+  EXPECT_OK(agg1->Accumulate({&data1, &data2}));
+  // Aggregate should be 1, 1
+
+  for (int i = 0; i < 1000; i++) {
+    Tensor data3 =
+        Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({10})).value();
+    Tensor data4 =
+        Tensor::Create(DT_INT64, {1}, CreateTestData<int64_t>({10})).value();
+    EXPECT_OK(agg2->Accumulate({&data3, &data4}));
+  }
+  // Aggregate should be 8000, 9000 due to contribution bounding.
+
+  auto merge_status = agg1->MergeWith(std::move(*agg2));
+  EXPECT_OK(merge_status);
+  auto result = std::move(*agg1).Report();
+  ASSERT_OK(result);
+  ASSERT_EQ(result.value().size(), 2);
+  EXPECT_THAT(result.value()[0], IsTensor<int64_t>({1}, {8001}));
+  EXPECT_THAT(result.value()[1], IsTensor<int64_t>({1}, {9001}));
+}
+
 }  // namespace
 }  // namespace aggregation
 }  // namespace fcp

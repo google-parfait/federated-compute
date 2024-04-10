@@ -22,12 +22,16 @@
 #include <utility>
 #include <vector>
 
+#include "fcp/aggregation/core/composite_key_combiner.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/dp_composite_key_combiner.h"
 #include "fcp/aggregation/core/fedsql_constants.h"
 #include "fcp/aggregation/core/group_by_aggregator.h"
+#include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/one_dim_grouping_aggregator.h"
+#include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
@@ -72,6 +76,12 @@ class DPGroupByAggregator : public GroupByAggregator {
   static std::unique_ptr<DPCompositeKeyCombiner> CreateDPKeyCombiner(
       const std::vector<TensorSpec>& input_key_specs,
       const std::vector<TensorSpec>* output_key_specs, int64_t l0_bound);
+
+  // When merging two DPGroupByAggregators, norm bounding the aggregates will
+  // destroy accuracy and is not needed for privacy. Hence, this function calls
+  // CompositeKeyCombiner::Accumulate, which has no L0 norm bounding.
+  StatusOr<Tensor> CreateOrdinalsByGroupingKeysForMerge(
+      const InputTensorList& inputs) override;
 };
 
 DPGroupByAggregator::DPGroupByAggregator(
@@ -102,6 +112,25 @@ DPGroupByAggregator::CreateDPKeyCombiner(
       GroupByAggregator::CreateKeyTypes(input_key_specs.size(), input_key_specs,
                                         *output_key_specs),
       l0_bound);
+}
+
+StatusOr<Tensor> DPGroupByAggregator::CreateOrdinalsByGroupingKeysForMerge(
+    const InputTensorList& inputs) {
+  if (num_keys_per_input() > 0) {
+    InputTensorList keys(num_keys_per_input());
+    for (int i = 0; i < num_keys_per_input(); ++i) {
+      keys[i] = inputs[i];
+    }
+    // Call the version of Accumulate that has no L0 bounding
+    return key_combiner()->CompositeKeyCombiner::Accumulate(std::move(keys));
+  }
+  // If there are no keys, we should aggregate all elements in a column into one
+  // element, as if there were an imaginary key column with identical values for
+  // all rows.
+  auto ordinals =
+      std::make_unique<MutableVectorData<int64_t>>(inputs[0]->num_elements());
+  return Tensor::Create(internal::TypeTraits<int64_t>::kDataType,
+                        inputs[0]->shape(), std::move(ordinals));
 }
 
 StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(

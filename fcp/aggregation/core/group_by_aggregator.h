@@ -160,6 +160,17 @@ class GroupByAggregator : public TensorAggregator {
   // Once this function is called, CheckValid will return false.
   OutputTensorList TakeOutputs() && override;
 
+  // The virtual function below enables a distinction between creating ordinals
+  // within MergeTensorsInternal and within AggregateTensorsInternal.
+  // Refer to CreateOrdinalsByGroupingKeys for the latter.
+  virtual StatusOr<Tensor> CreateOrdinalsByGroupingKeysForMerge(
+      const InputTensorList& inputs);
+
+  inline size_t num_keys_per_input() const { return num_keys_per_input_; }
+  inline std::unique_ptr<CompositeKeyCombiner>& key_combiner() {
+    return key_combiner_;
+  }
+
  private:
   // Returns either nullptr or a unique_ptr to a CompositeKeyCombiner, depending
   // on the input specification. Relies on CreateKeyTypes.
