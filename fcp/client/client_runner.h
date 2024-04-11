@@ -204,10 +204,6 @@ class LogManagerImpl : public LogManager {
 
 class FlagsImpl : public Flags {
  public:
-  void set_use_http_federated_compute_protocol(bool value) {
-    use_http_federated_compute_protocol_ = value;
-  }
-
   int64_t condition_polling_period_millis() const override { return 1000; }
   int64_t tf_execution_teardown_grace_period_millis() const override {
     return 1000;
@@ -215,17 +211,10 @@ class FlagsImpl : public Flags {
   int64_t tf_execution_teardown_extended_period_millis() const override {
     return 2000;
   }
-  int64_t grpc_channel_deadline_seconds() const override { return 0; }
   bool log_tensorflow_error_messages() const override { return true; }
-  bool use_http_federated_compute_protocol() const override {
-    return use_http_federated_compute_protocol_;
-  }
   bool http_protocol_supports_multiple_task_assignments() const override {
     return true;
   }
-
- private:
-  bool use_http_federated_compute_protocol_ = false;
 };
 
 }  // namespace fcp::client

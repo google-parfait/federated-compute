@@ -45,10 +45,6 @@ class Flags {
   // running native execution to be forcibly resolved or continue indefinitely.
   virtual int64_t tf_execution_teardown_extended_period_millis() const = 0;
 
-  // The deadline in seconds for the gRPC channel used for communication
-  // between the client and server.
-  virtual int64_t grpc_channel_deadline_seconds() const = 0;
-
   // Whether to log the error message strings from TensorFlow exceptions.
   virtual bool log_tensorflow_error_messages() const = 0;
 
@@ -120,17 +116,6 @@ class Flags {
   // force the legacy TFMobile code path to be used instead.
   virtual bool use_tflite_training() const { return true; }
 
-  // Whether to enable support for downloading plan/initial checkpoint resources
-  // via HTTP, while still using gRPC for the main protocol.
-  virtual bool enable_grpc_with_http_resource_support() const { return false; }
-
-  // Whether to enable support for downloading eligibility eval plan/initial
-  // checkpoint resources via HTTP, while still using gRPC for the main
-  // protocol.
-  virtual bool enable_grpc_with_eligibility_eval_http_resource_support() const {
-    return false;
-  }
-
   // When true, TFLite interpreter will use dynamic memory allocation, and
   // release the memory for tensors that are no longer needed.
   virtual bool ensure_dynamic_tensors_are_released() const { return true; }
@@ -155,9 +140,6 @@ class Flags {
   // When true, http request body won't be compressed.
   virtual bool disable_http_request_body_compression() const { return false; }
 
-  // When true, HTTP Federated Compute protocol is used.
-  virtual bool use_http_federated_compute_protocol() const { return false; }
-
   // When true, the client computes the task identity to pass in
   // SelectorContext.
   virtual bool enable_computation_id() const { return false; }
@@ -171,11 +153,10 @@ class Flags {
   virtual bool enable_federated_select() const { return false; }
 
   // The max size in bytes of resources that the ResourceCache is allowed to
-  // store. If greater than 0, the client will attempt to cache resources sent
-  // by uri via the hybrid grpc-with-http-resources and the full http stack. If
-  // this value is reduced from some previous greater value, the cache dir will
-  // be reduced appropriately the next time it is initialized at the start of
-  // the next run.
+  // store. If greater than 0, the client will attempt to cache resources that
+  // it downloads via HTTP URIs. If this value is reduced from some previous
+  // greater value, the cache dir will be reduced appropriately the next time it
+  // is initialized at the start of the next run.
   virtual int64_t max_resource_cache_size_bytes() const { return 0; }
 
   // If true, an error during the initialization of the resource cache will

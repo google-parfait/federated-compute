@@ -34,10 +34,9 @@
 #include "fcp/client/fl_runner.h"
 
 ABSL_FLAG(std::string, server, "",
-          "Federated Server URI (supports https+test:// and https:// URIs");
+          "Federated Server URI (supports https:// URIs");
 ABSL_FLAG(std::string, api_key, "", "API Key");
-ABSL_FLAG(std::string, test_cert, "",
-          "Path to test CA certificate PEM file; used for https+test:// URIs");
+ABSL_FLAG(std::string, test_cert, "", "Path to test CA certificate PEM file");
 ABSL_FLAG(std::string, session, "", "Session name");
 ABSL_FLAG(std::string, population, "", "Population name");
 ABSL_FLAG(std::string, retry_token, "", "Retry token");
@@ -53,9 +52,6 @@ ABSL_FLAG(int, num_empty_examples, 0,
 ABSL_FLAG(int, num_rounds, 1, "Number of rounds to train");
 ABSL_FLAG(int, sleep_after_round_secs, 3,
           "Number of seconds to sleep after each round.");
-ABSL_FLAG(bool, use_http_federated_compute_protocol, false,
-          "Whether to enable the HTTP FederatedCompute protocol instead "
-          "of the gRPC FederatedTrainingApi protocol.");
 
 static constexpr char kUsageString[] =
     "Stand-alone Federated Client Executable.\n\n"
@@ -112,8 +108,6 @@ int main(int argc, char** argv) {
     fcp::client::FilesImpl files_impl;
     fcp::client::LogManagerImpl log_manager_impl;
     fcp::client::FlagsImpl flags;
-    flags.set_use_http_federated_compute_protocol(
-        absl::GetFlag(FLAGS_use_http_federated_compute_protocol));
 
     auto fl_runner_result = RunFederatedComputation(
         &federated_task_env_deps_impl, &event_publisher, &files_impl,

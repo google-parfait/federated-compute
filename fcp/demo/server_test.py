@@ -337,10 +337,12 @@ class ServerTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     clients = []
     for num_examples in examples_per_client:
       subprocess = asyncio.create_subprocess_exec(
-          client_runner, f'--server={server_url}',
+          client_runner,
+          f'--server={server_url}',
           f'--population={POPULATION_NAME}',
-          f'--num_empty_examples={num_examples}', '--sleep_after_round_secs=0',
-          '--use_http_federated_compute_protocol')
+          f'--num_empty_examples={num_examples}',
+          '--sleep_after_round_secs=0',
+      )
       clients.append(asyncio.create_task((await subprocess).wait()))
 
     # Wait for the computation to complete.

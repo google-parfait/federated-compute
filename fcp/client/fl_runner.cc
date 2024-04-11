@@ -31,6 +31,7 @@
 #include <variant>
 #include <vector>
 
+#include "google/protobuf/duration.pb.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -48,46 +49,34 @@
 #include "fcp/client/cache/file_backed_resource_cache.h"
 #include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/eligibility_decider.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/example_query_plan_engine.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
-#include "fcp/client/federated_select.h"
-#include "fcp/client/http/http_client.h"
-#include "fcp/client/opstats/opstats_logger.h"
-#include "fcp/client/opstats/opstats_utils.h"
-#include "fcp/client/parsing_utils.h"
-#include "fcp/client/phase_logger.h"
-#include "fcp/client/stats.h"
-#include "tensorflow/core/platform/tstring.h"
-#include "tensorflow/core/platform/types.h"
-
-#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
-#include "fcp/client/engine/simple_plan_engine.h"
-#endif
-
-#include "fcp/client/eligibility_decider.h"
 #include "fcp/client/engine/tflite_plan_engine.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/federated_protocol.h"
+#include "fcp/client/federated_select.h"
 #include "fcp/client/files.h"
 #include "fcp/client/fl_runner.pb.h"
 #include "fcp/client/flags.h"
+#include "fcp/client/http/http_client.h"
 #include "fcp/client/http/http_federated_protocol.h"
-
-#ifdef FCP_CLIENT_SUPPORT_GRPC
-#include "fcp/client/grpc_federated_protocol.h"
-#endif
-
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_example_store.h"
+#include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/opstats/opstats_utils.h"
+#include "fcp/client/parsing_utils.h"
+#include "fcp/client/phase_logger.h"
 #include "fcp/client/phase_logger_impl.h"
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
+#include "fcp/client/stats.h"
 #include "fcp/client/task_result_info.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
@@ -97,7 +86,13 @@
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
+#include "tensorflow/core/platform/tstring.h"
+#include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
+
+#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
+#include "fcp/client/engine/simple_plan_engine.h"
+#endif
 
 namespace fcp {
 namespace client {
@@ -1982,54 +1977,27 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     }
   }
 
-  std::unique_ptr<::fcp::client::http::HttpClient> http_client =
-      flags->enable_grpc_with_http_resource_support() ||
-              flags->use_http_federated_compute_protocol()
-          ? env_deps->CreateHttpClient()
-          : nullptr;
-
-  std::unique_ptr<FederatedProtocol> federated_protocol;
-  if (flags->use_http_federated_compute_protocol()) {
-    log_manager->LogDiag(ProdDiagCode::HTTP_FEDERATED_PROTOCOL_USED);
-    // Verify the entry point uri starts with "https://" or "http://localhost".
-    // Note "http://localhost" is allowed for testing purpose.
-    if (!(absl::StartsWith(federated_service_uri, "https://") ||
-          absl::StartsWith(federated_service_uri, "http://localhost"))) {
-      return absl::InvalidArgumentError("The entry point uri is invalid.");
-    }
-
-    federated_protocol = std::make_unique<http::HttpFederatedProtocol>(
-        clock, log_manager, flags, http_client.get(),
-        std::make_unique<SecAggRunnerFactoryImpl>(),
-        event_publisher->secagg_event_publisher(), resource_cache.get(),
-        env_deps->CreateAttestationVerifier(), federated_service_uri, api_key,
-        population_name, retry_token, client_version,
-        client_attestation_measurement, should_abort_protocol_callback,
-        absl::BitGen(), timing_config);
-  } else {
-#ifdef FCP_CLIENT_SUPPORT_GRPC
-    // Check in with the server to either retrieve a plan + initial checkpoint,
-    // or get rejected with a RetryWindow.
-    auto grpc_channel_deadline = flags->grpc_channel_deadline_seconds();
-    if (grpc_channel_deadline <= 0) {
-      grpc_channel_deadline = 600;
-      FCP_LOG(INFO) << "Using default channel deadline of "
-                    << grpc_channel_deadline << " seconds.";
-    }
-
-    federated_protocol = std::make_unique<GrpcFederatedProtocol>(
-        event_publisher, log_manager,
-        std::make_unique<SecAggRunnerFactoryImpl>(), flags, http_client.get(),
-        federated_service_uri, api_key, test_cert_path, population_name,
-        retry_token, client_version, client_attestation_measurement,
-        should_abort_protocol_callback, timing_config, grpc_channel_deadline,
-        resource_cache.get());
-#else
-    return absl::InternalError("No FederatedProtocol enabled.");
-#endif
+  // Verify the entry point uri starts with "https://" or "http://localhost".
+  // Note "http://localhost" is allowed for testing purpose.
+  if (!(absl::StartsWith(federated_service_uri, "https://") ||
+        absl::StartsWith(federated_service_uri, "http://localhost"))) {
+    return absl::InvalidArgumentError("The entry point uri is invalid.");
   }
+
+  std::unique_ptr<::fcp::client::http::HttpClient> http_client =
+      env_deps->CreateHttpClient();
+  std::unique_ptr<FederatedProtocol> federated_protocol =
+      std::make_unique<http::HttpFederatedProtocol>(
+          clock, log_manager, flags, http_client.get(),
+          std::make_unique<SecAggRunnerFactoryImpl>(),
+          event_publisher->secagg_event_publisher(), resource_cache.get(),
+          env_deps->CreateAttestationVerifier(), federated_service_uri, api_key,
+          population_name, retry_token, client_version,
+          client_attestation_measurement, should_abort_protocol_callback,
+          absl::BitGen(), timing_config);
+
   std::unique_ptr<FederatedSelectManager> federated_select_manager;
-  if (http_client != nullptr && flags->enable_federated_select()) {
+  if (flags->enable_federated_select()) {
     federated_select_manager = std::make_unique<HttpFederatedSelectManager>(
         log_manager, files, http_client.get(), should_abort_protocol_callback,
         timing_config);
@@ -2129,8 +2097,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   std::vector<std::string> successful_task_names;
 
   // Run multiple task assignments first if enabled.
-  if (flags->use_http_federated_compute_protocol() &&
-      flags->http_protocol_supports_multiple_task_assignments() &&
+  if (flags->http_protocol_supports_multiple_task_assignments() &&
       !eligibility_eval_result->task_names_for_multiple_task_assignments
            .empty()) {
     expected_num_tasks = eligibility_eval_result

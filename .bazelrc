@@ -34,10 +34,6 @@ build --define=no_ignite_support=true
 build --define=no_kafka_support=true
 build --define=no_nccl_support=true
 
-# Prevent gRPC from depending on c-ares. TF's bazelrc sets this. We also don't
-# have a recent-enough version of the library in our build container.
-build --define=grpc_no_ares=true
-
 # googletest requires absl flags.
 build --define=absl=1
 

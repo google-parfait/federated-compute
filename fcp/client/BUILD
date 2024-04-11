@@ -24,89 +24,6 @@ package(
     licenses = ["notice"],  # Apache 2.0
 )
 
-cc_library(
-    name = "grpc_bidi_channel",
-    hdrs = ["grpc_bidi_channel.h"],
-    copts = FCP_COPTS,
-    deps = [
-        "//fcp/base",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_github_grpc_grpc//:grpc_security_base",
-        "@com_google_absl//absl/strings",
-    ],
-)
-
-cc_test(
-    name = "grpc_bidi_channel_test",
-    srcs = ["grpc_bidi_channel_test.cc"],
-    copts = FCP_COPTS,
-    tags = ["local"],  # The certificate path is not accessible from a sandbox.
-    deps = [
-        ":grpc_bidi_stream",
-        "//fcp/protos:federated_api_cc_proto",
-        "//fcp/testing",
-        "@com_google_absl//absl/status",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "grpc_bidi_stream",
-    srcs = ["grpc_bidi_stream.cc"],
-    hdrs = ["grpc_bidi_stream.h"],
-    copts = FCP_COPTS,
-    deps = [
-        ":grpc_bidi_channel",
-        "//fcp/base",
-        "//fcp/base:status_converters",
-        "//fcp/protocol:grpc_chunked_bidi_stream",
-        "//fcp/protos:cc_grpc",
-        "//fcp/protos:federated_api_cc_proto",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/synchronization",
-    ],
-)
-
-cc_test(
-    name = "grpc_bidi_stream_test",
-    srcs = ["grpc_bidi_stream_test.cc"],
-    copts = FCP_COPTS,
-    deps = [
-        ":fake_server",
-        ":grpc_bidi_stream",
-        "//fcp/base",
-        "//fcp/base:scheduler",
-        "//fcp/protos:federated_api_cc_proto",
-        "//fcp/testing",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "fake_server",
-    testonly = 1,
-    srcs = ["fake_server.cc"],
-    hdrs = ["fake_server.h"],
-    copts = FCP_COPTS,
-    visibility = ["//visibility:public"],
-    deps = [
-        "//fcp/base",
-        "//fcp/base:status_converters",
-        "//fcp/protocol:grpc_chunked_bidi_stream",
-        "//fcp/protos:cc_grpc",
-        "//fcp/protos:federated_api_cc_proto",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/synchronization",
-    ],
-)
-
 # Interfaces used by the engine & protocol. These require platform specific
 # implementations.
 cc_library(
@@ -166,77 +83,6 @@ cc_library(
 )
 
 cc_library(
-    name = "grpc_federated_protocol",
-    srcs = ["grpc_federated_protocol.cc"],
-    hdrs = [
-        "grpc_federated_protocol.h",
-    ],
-    deps = [
-        ":diag_codes_cc_proto",
-        ":federated_protocol",
-        ":federated_protocol_util",
-        ":fl_runner_cc_proto",
-        ":grpc_bidi_stream",
-        ":interfaces",
-        ":interruptible_runner",
-        ":secagg_runner",
-        ":selector_context_cc_proto",
-        "//fcp/base",
-        "//fcp/base:time_util",
-        "//fcp/base:wall_clock_stopwatch",
-        "//fcp/client/cache:resource_cache",
-        "//fcp/client/engine:engine_cc_proto",
-        "//fcp/client/http:http_client",
-        "//fcp/client/http:in_memory_request_response",
-        "//fcp/protos:federated_api_cc_proto",
-        "//fcp/protos:plan_cc_proto",
-        "//fcp/secagg/shared:cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/random",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:cord",
-        "@com_google_absl//absl/time",
-        "@com_google_googleapis//google/rpc:code_cc_proto",
-        "@com_google_protobuf//:protobuf",
-    ],
-)
-
-cc_test(
-    name = "grpc_federated_protocol_test",
-    srcs = ["grpc_federated_protocol_test.cc"],
-    deps = [
-        ":diag_codes_cc_proto",
-        ":federated_protocol",
-        ":grpc_bidi_stream",
-        ":grpc_federated_protocol",
-        ":interfaces",
-        ":interruptible_runner",
-        ":test_helpers",
-        "//fcp/base",
-        "//fcp/client/cache:test_helpers",
-        "//fcp/client/engine:engine_cc_proto",
-        "//fcp/client/http:http_client",
-        "//fcp/client/http/testing:test_helpers",
-        "//fcp/protos:federated_api_cc_proto",
-        "//fcp/secagg/shared:cc_proto",
-        "//fcp/testing",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/random",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:cord",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
-    ],
-)
-
-cc_library(
     name = "simple_task_environment",
     srcs = ["simple_task_environment.cc"],
     hdrs = ["simple_task_environment.h"],
@@ -268,19 +114,9 @@ bool_flag(
     build_setting_default = True,
 )
 
-bool_flag(
-    name = "support_grpc",
-    build_setting_default = True,
-)
-
 config_setting(
     name = "client_support_tfmobile",
     flag_values = {":support_tfmobile": "True"},
-)
-
-config_setting(
-    name = "client_support_grpc",
-    flag_values = {":support_grpc": "True"},
 )
 
 TF_OPTIONAL_DEPS = select({
@@ -297,20 +133,6 @@ TF_OPTIONAL_DEFINES = select({
     "//conditions:default": [],
 })
 
-GRPC_OPTIONAL_DEFINES = select(
-    {
-        ":client_support_grpc": ["FCP_CLIENT_SUPPORT_GRPC"],
-        "//conditions:default": [],
-    },
-)
-
-GRPC_OPTIONAL_DEPS = select(
-    {
-        ":client_support_grpc": [":grpc_federated_protocol"],
-        "//conditions:default": [],
-    },
-)
-
 cc_library(
     name = "fl_runner",
     srcs = ["fl_runner.cc"],
@@ -318,7 +140,7 @@ cc_library(
         "fl_runner.h",
     ],
     copts = FCP_COPTS,
-    defines = TF_OPTIONAL_DEFINES + GRPC_OPTIONAL_DEFINES,
+    defines = TF_OPTIONAL_DEFINES,
     visibility = ["//visibility:public"],
     deps = [
         ":diag_codes_cc_proto",
@@ -368,11 +190,12 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/time",
+        "@com_google_protobuf//:protobuf",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@org_tensorflow//tensorflow/core/platform:tstring",
         "@org_tensorflow//tensorflow/core/platform:types",
-    ] + TF_OPTIONAL_DEPS + GRPC_OPTIONAL_DEPS,
+    ] + TF_OPTIONAL_DEPS,
 )
 
 cc_library(

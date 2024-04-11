@@ -639,7 +639,6 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(int64_t, tf_execution_teardown_extended_period_millis, (),
               (const, override));
-  MOCK_METHOD(int64_t, grpc_channel_deadline_seconds, (), (const, override));
   MOCK_METHOD(bool, log_tensorflow_error_messages, (), (const, override));
   MOCK_METHOD(int64_t, opstats_ttl_days, (), (const, override));
   MOCK_METHOD(int64_t, opstats_db_size_limit_bytes, (), (const, override));
@@ -655,16 +654,11 @@ class MockFlags : public Flags {
               (), (const, override));
   MOCK_METHOD(std::vector<int32_t>, federated_training_permanent_error_codes,
               (), (const, override));
-  MOCK_METHOD(bool, enable_grpc_with_http_resource_support, (),
-              (const, override));
-  MOCK_METHOD(bool, enable_grpc_with_eligibility_eval_http_resource_support, (),
-              (const, override));
   MOCK_METHOD(bool, ensure_dynamic_tensors_are_released, (), (const, override));
   MOCK_METHOD(int32_t, large_tensor_threshold_for_dynamic_allocation, (),
               (const, override));
   MOCK_METHOD(bool, disable_http_request_body_compression, (),
               (const, override));
-  MOCK_METHOD(bool, use_http_federated_compute_protocol, (), (const, override));
   MOCK_METHOD(bool, enable_computation_id, (), (const, override));
   MOCK_METHOD(int32_t, waiting_period_sec_for_cancellation, (),
               (const, override));

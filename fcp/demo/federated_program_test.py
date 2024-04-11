@@ -153,7 +153,6 @@ async def run_client(population_name: str, server_url: str, num_rounds: int,
         f'--example_data_path={tmpfile.name}',
         f'--num_rounds={num_rounds}',
         '--sleep_after_round_secs=1',
-        '--use_http_federated_compute_protocol',
     )
     return await subprocess.wait()
 
