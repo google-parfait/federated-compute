@@ -34,7 +34,7 @@ SingleExampleIteratorQuery
 SingleExampleIteratorQueryRecorderImpl::FinishRecordingAndGet() {
   absl::MutexLock lock(&mutex_);
   SingleExampleIteratorQuery query;
-  query.set_collection_name(selector_.collection_uri());
+  query.set_collection_uri(selector_.collection_uri());
   *query.mutable_criteria() = selector_.criteria();
   query.set_example_count(example_count_);
   // Reset the example count in case the recorder is reused after

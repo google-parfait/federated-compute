@@ -68,7 +68,7 @@ TEST(ExampleIteratorQueryRecorderTest, StartedQueryWithOnlyCollectionUri) {
   *expected_queries.mutable_selector_context() = selector_context;
   auto* expected_single_query = expected_queries.mutable_query()->Add();
   expected_single_query->set_example_count(2);
-  expected_single_query->set_collection_name(std::string(kCollectionUri));
+  expected_single_query->set_collection_uri(std::string(kCollectionUri));
   // We will have an empty criteria field.
   *expected_single_query->mutable_criteria() = selector.criteria();
   EXPECT_THAT(recorder.StopRecordingAndGetQueries(),
@@ -95,7 +95,7 @@ TEST(ExampleIteratorQueryRecorderTest, StartedQuery) {
   *expected_queries.mutable_selector_context() = selector_context;
   auto* expected_single_query = expected_queries.mutable_query()->Add();
   expected_single_query->set_example_count(2);
-  expected_single_query->set_collection_name(std::string(kCollectionUri));
+  expected_single_query->set_collection_uri(std::string(kCollectionUri));
   // We will have an empty criteria field.
   *expected_single_query->mutable_criteria() = selector.criteria();
   EXPECT_THAT(recorder.StopRecordingAndGetQueries(),
@@ -118,7 +118,7 @@ TEST(ExampleIteratorQueryRecorderTest, StartedQueryNoExamples) {
   *expected_queries.mutable_selector_context() = selector_context;
   auto* expected_single_query = expected_queries.mutable_query()->Add();
   expected_single_query->set_example_count(0);
-  expected_single_query->set_collection_name(std::string(kCollectionUri));
+  expected_single_query->set_collection_uri(std::string(kCollectionUri));
   *expected_single_query->mutable_criteria() = selector.criteria();
   EXPECT_THAT(recorder.StopRecordingAndGetQueries(),
               EqualsProto(expected_queries));
@@ -155,12 +155,12 @@ TEST(ExampleIteratorQueryRecorderTest, StartedTwoQuery) {
   *expected_queries.mutable_selector_context() = selector_context;
   auto* first_single_query = expected_queries.mutable_query()->Add();
   first_single_query->set_example_count(2);
-  first_single_query->set_collection_name(std::string(kCollectionUri));
+  first_single_query->set_collection_uri(std::string(kCollectionUri));
   *first_single_query->mutable_criteria() = selector.criteria();
 
   auto* second_single_query = expected_queries.mutable_query()->Add();
   second_single_query->set_example_count(3);
-  second_single_query->set_collection_name(selector_2.collection_uri());
+  second_single_query->set_collection_uri(selector_2.collection_uri());
   *second_single_query->mutable_criteria() = selector_2.criteria();
 
   EXPECT_THAT(recorder.StopRecordingAndGetQueries(),
@@ -189,7 +189,7 @@ TEST(ExampleIteratorQueryRecorderTest, RecordStopThenRecordAgain) {
   *expected_queries.mutable_selector_context() = selector_context;
   auto* first_single_query = expected_queries.mutable_query()->Add();
   first_single_query->set_example_count(2);
-  first_single_query->set_collection_name(std::string(kCollectionUri));
+  first_single_query->set_collection_uri(std::string(kCollectionUri));
   *first_single_query->mutable_criteria() = selector.criteria();
   EXPECT_THAT(recorder.StopRecordingAndGetQueries(),
               EqualsProto(expected_queries));
@@ -209,7 +209,7 @@ TEST(ExampleIteratorQueryRecorderTest, RecordStopThenRecordAgain) {
   *another_expected_queries.mutable_selector_context() = selector_context;
   auto* second_single_query = another_expected_queries.mutable_query()->Add();
   second_single_query->set_example_count(3);
-  second_single_query->set_collection_name(selector_2.collection_uri());
+  second_single_query->set_collection_uri(selector_2.collection_uri());
   *second_single_query->mutable_criteria() = selector_2.criteria();
   EXPECT_THAT(recorder.StopRecordingAndGetQueries(),
               EqualsProto(another_expected_queries));
