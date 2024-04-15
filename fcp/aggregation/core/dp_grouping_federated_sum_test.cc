@@ -87,6 +87,9 @@ namespace {
 using ::testing::Eq;
 using ::testing::HasSubstr;
 using ::testing::IsTrue;
+using testing::TestWithParam;
+
+using DPGroupingFederatedSumTest = TestWithParam<bool>;
 
 TensorSpec CreateTensorSpec(std::string name, DataType dtype) {
   return TensorSpec(name, dtype, {-1});
@@ -511,7 +514,7 @@ TEST_F(ContributionBoundingTester, AllBoundingSucceeds) {
 }
 
 // Test merge w/ scalar input (duplicated from grouping_federated_sum_test.cc).
-TEST(DPGroupingFederatedSumTest, ScalarMergeSucceeds) {
+TEST_P(DPGroupingFederatedSumTest, ScalarMergeSucceeds) {
   auto aggregator1 = CreateTensorAggregator(CreateDefaultIntrinsic()).value();
   auto aggregator2 = CreateTensorAggregator(CreateDefaultIntrinsic()).value();
   Tensor ordinal =
@@ -522,6 +525,21 @@ TEST(DPGroupingFederatedSumTest, ScalarMergeSucceeds) {
   EXPECT_THAT(aggregator1->Accumulate({&ordinal, &t1}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t2}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t3}), IsOk());
+
+  if (GetParam()) {
+    auto factory = dynamic_cast<const OneDimBaseGroupingAggregatorFactory*>(
+        GetAggregatorFactory(CreateDefaultIntrinsic().uri).value());
+    auto one_dim_base_aggregator1 =
+        std::unique_ptr<OneDimBaseGroupingAggregator>(
+            dynamic_cast<OneDimBaseGroupingAggregator*>(aggregator1.release()));
+    auto state = std::move(*(one_dim_base_aggregator1)).ToProto();
+    aggregator1 = factory->FromProto(CreateDefaultIntrinsic(), state).value();
+    auto one_dim_base_aggregator2 =
+        std::unique_ptr<OneDimBaseGroupingAggregator>(
+            dynamic_cast<OneDimBaseGroupingAggregator*>(aggregator2.release()));
+    auto state2 = std::move(*(one_dim_base_aggregator2)).ToProto();
+    aggregator2 = factory->FromProto(CreateDefaultIntrinsic(), state2).value();
+  }
 
   int aggregator2_num_inputs = aggregator2->GetNumInputs();
   auto aggregator2_result =
@@ -544,7 +562,7 @@ TEST(DPGroupingFederatedSumTest, ScalarMergeSucceeds) {
 }
 
 // Test merge w/ scalar input ignores norm bounding.
-TEST(DPGroupingFederatedSumTest, ScalarMergeIgnoresNormBounding) {
+TEST_P(DPGroupingFederatedSumTest, ScalarMergeIgnoresNormBounding) {
   Intrinsic intrinsic_with_norm_bounding =
       Intrinsic{"GoogleSQL:dp_sum",
                 {CreateTensorSpec("value", DT_INT32)},
@@ -563,6 +581,23 @@ TEST(DPGroupingFederatedSumTest, ScalarMergeIgnoresNormBounding) {
   EXPECT_THAT(aggregator1->Accumulate({&ordinal, &t1}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t2}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&ordinal, &t3}), IsOk());
+
+  if (GetParam()) {
+    auto factory = dynamic_cast<const OneDimBaseGroupingAggregatorFactory*>(
+        GetAggregatorFactory(intrinsic_with_norm_bounding.uri).value());
+    auto one_dim_base_aggregator1 =
+        std::unique_ptr<OneDimBaseGroupingAggregator>(
+            dynamic_cast<OneDimBaseGroupingAggregator*>(aggregator1.release()));
+    auto state = std::move(*(one_dim_base_aggregator1)).ToProto();
+    aggregator1 =
+        factory->FromProto(intrinsic_with_norm_bounding, state).value();
+    auto one_dim_base_aggregator2 =
+        std::unique_ptr<OneDimBaseGroupingAggregator>(
+            dynamic_cast<OneDimBaseGroupingAggregator*>(aggregator2.release()));
+    auto state2 = std::move(*(one_dim_base_aggregator2)).ToProto();
+    aggregator2 =
+        factory->FromProto(intrinsic_with_norm_bounding, state2).value();
+  }
 
   int aggregator2_num_inputs = aggregator2->GetNumInputs();
   auto aggregator2_result =
@@ -585,7 +620,7 @@ TEST(DPGroupingFederatedSumTest, ScalarMergeIgnoresNormBounding) {
 }
 
 // Test merge w/ vector input
-TEST(DPGroupingFederatedSumTest, VectorMergeSucceeds) {
+TEST_P(DPGroupingFederatedSumTest, VectorMergeSucceeds) {
   auto aggregator1 = CreateTensorAggregator(CreateDefaultIntrinsic()).value();
   Tensor alice_ordinal =
       Tensor::Create(DT_INT64, {4}, CreateTestData<int64_t>({0, 1, 2, 1}))
@@ -611,6 +646,21 @@ TEST(DPGroupingFederatedSumTest, VectorMergeSucceeds) {
           .value();
   // After accumulating Cindy's data: [5, -5, 0, 11]
   EXPECT_THAT(aggregator2->Accumulate({&cindy_ordinal, &cindy_values}), IsOk());
+
+  if (GetParam()) {
+    auto factory = dynamic_cast<const OneDimBaseGroupingAggregatorFactory*>(
+        GetAggregatorFactory(CreateDefaultIntrinsic().uri).value());
+    auto one_dim_base_aggregator1 =
+        std::unique_ptr<OneDimBaseGroupingAggregator>(
+            dynamic_cast<OneDimBaseGroupingAggregator*>(aggregator1.release()));
+    auto state = std::move(*(one_dim_base_aggregator1)).ToProto();
+    aggregator1 = factory->FromProto(CreateDefaultIntrinsic(), state).value();
+    auto one_dim_base_aggregator2 =
+        std::unique_ptr<OneDimBaseGroupingAggregator>(
+            dynamic_cast<OneDimBaseGroupingAggregator*>(aggregator2.release()));
+    auto state2 = std::move(*(one_dim_base_aggregator2)).ToProto();
+    aggregator2 = factory->FromProto(CreateDefaultIntrinsic(), state2).value();
+  }
 
   int aggregator2_num_inputs = aggregator2->GetNumInputs();
   auto aggregator2_result =
@@ -750,6 +800,17 @@ TEST(DPGroupingFederatedSumTest, CatchUnsupportedNumericType) {
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(s.message(), HasSubstr("does not support"));
 }
+
+TEST(DPGroupingFederatedSumTest, Deserialize_Unimplemented) {
+  Status s = DeserializeTensorAggregator(CreateDefaultIntrinsic(), "").status();
+  EXPECT_THAT(s, IsCode(UNIMPLEMENTED));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    DPGroupingFederatedSumTestInstantiation, DPGroupingFederatedSumTest,
+    testing::ValuesIn<bool>({false, true}),
+    [](const testing::TestParamInfo<DPGroupingFederatedSumTest::ParamType>&
+           info) { return info.param ? "SerializeDeserialize" : "None"; });
 
 }  // namespace
 }  // namespace aggregation

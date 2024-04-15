@@ -18,9 +18,11 @@
 #include <memory>
 #include <string>
 
+#include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/intrinsic.h"
+#include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/one_dim_grouping_aggregator.h"
 #include "fcp/aggregation/core/tensor.pb.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
@@ -89,26 +91,33 @@ class GroupingFederatedSum final
 };
 
 template <typename OutputT>
-StatusOr<std::unique_ptr<TensorAggregator>> CreateGroupingFederatedSum() {
+StatusOr<std::unique_ptr<TensorAggregator>> CreateGroupingFederatedSum(
+    const OneDimGroupingAggregatorState* aggregator_state) {
   if (internal::TypeTraits<OutputT>::type_kind !=
       internal::TypeKind::kNumeric) {
     // Ensure the type is numeric in case new non-numeric types are added.
     return FCP_STATUS(INVALID_ARGUMENT)
            << "GroupingFederatedSum is only supported for numeric datatypes.";
   }
-  return std::unique_ptr<TensorAggregator>(
-      new GroupingFederatedSum<OutputT, OutputT>());
+  return aggregator_state == nullptr
+             ? std::make_unique<GroupingFederatedSum<OutputT, OutputT>>()
+             : std::make_unique<GroupingFederatedSum<OutputT, OutputT>>(
+                   MutableVectorData<OutputT>::CreateFromEncodedContent(
+                       aggregator_state->vector_data()),
+                   aggregator_state->num_inputs());
 }
 
 template <>
 StatusOr<std::unique_ptr<TensorAggregator>>
-CreateGroupingFederatedSum<string_view>() {
+CreateGroupingFederatedSum<string_view>(
+    const OneDimGroupingAggregatorState* aggregator_state) {
   return FCP_STATUS(INVALID_ARGUMENT)
          << "GroupingFederatedSum isn't supported for DT_STRING datatype.";
 }
 
 // Factory class for the GroupingFederatedSum.
-class GroupingFederatedSumFactory final : public TensorAggregatorFactory {
+class GroupingFederatedSumFactory final
+    : public OneDimBaseGroupingAggregatorFactory {
  public:
   GroupingFederatedSumFactory() = default;
 
@@ -117,8 +126,10 @@ class GroupingFederatedSumFactory final : public TensorAggregatorFactory {
   GroupingFederatedSumFactory& operator=(const GroupingFederatedSumFactory&) =
       delete;
 
-  StatusOr<std::unique_ptr<TensorAggregator>> Create(
-      const Intrinsic& intrinsic) const override {
+ private:
+  StatusOr<std::unique_ptr<TensorAggregator>> CreateInternal(
+      const Intrinsic& intrinsic,
+      const OneDimGroupingAggregatorState* aggregator_state) const override {
     if (kGoogleSqlSumUri != intrinsic.uri) {
       return FCP_STATUS(INVALID_ARGUMENT)
              << "GroupingFederatedSumFactory: Expected intrinsic URI "
@@ -166,12 +177,20 @@ class GroupingFederatedSumFactory final : public TensorAggregatorFactory {
       // case.
       if (input_spec.dtype() == DataType::DT_INT32 &&
           output_spec.dtype() == DataType::DT_INT64) {
-        return std::unique_ptr<TensorAggregator>(
-            new GroupingFederatedSum<int32_t, int64_t>());
+        return aggregator_state == nullptr
+                   ? std::make_unique<GroupingFederatedSum<int32_t, int64_t>>()
+                   : std::make_unique<GroupingFederatedSum<int32_t, int64_t>>(
+                         MutableVectorData<int64_t>::CreateFromEncodedContent(
+                             aggregator_state->vector_data()),
+                         aggregator_state->num_inputs());
       } else if (input_spec.dtype() == DataType::DT_FLOAT &&
                  output_spec.dtype() == DataType::DT_DOUBLE) {
-        return std::unique_ptr<TensorAggregator>(
-            new GroupingFederatedSum<float, double>());
+        return aggregator_state == nullptr
+                   ? std::make_unique<GroupingFederatedSum<float, double>>()
+                   : std::make_unique<GroupingFederatedSum<float, double>>(
+                         MutableVectorData<double>::CreateFromEncodedContent(
+                             aggregator_state->vector_data()),
+                         aggregator_state->num_inputs());
       } else {
         return FCP_STATUS(INVALID_ARGUMENT)
                << "GroupingFederatedSumFactory: Input and output tensors have "
@@ -181,9 +200,11 @@ class GroupingFederatedSumFactory final : public TensorAggregatorFactory {
                << DataType_Name(output_spec.dtype());
       }
     }
+
     StatusOr<std::unique_ptr<TensorAggregator>> aggregator;
-    DTYPE_CASES(output_spec.dtype(), OutputT,
-                aggregator = CreateGroupingFederatedSum<OutputT>());
+    DTYPE_CASES(
+        output_spec.dtype(), OutputT,
+        aggregator = CreateGroupingFederatedSum<OutputT>(aggregator_state));
     return aggregator;
   }
 };

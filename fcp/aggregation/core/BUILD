@@ -360,6 +360,7 @@ cc_test(
     name = "one_dim_grouping_aggregator_test",
     srcs = ["one_dim_grouping_aggregator_test.cc"],
     deps = [
+        ":agg_core_cc_proto",
         ":aggregation_cores",
         ":tensor",
         "//fcp/aggregation/testing",

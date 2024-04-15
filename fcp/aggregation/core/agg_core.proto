@@ -14,3 +14,9 @@ message FederatedMeanAggregatorState {
   bytes weights_sum = 2;
   bytes weighted_values_sum = 3;
 }
+
+// Internal state representation of a OneDimGroupingAggregator.
+message OneDimGroupingAggregatorState {
+  uint64 num_inputs = 1;
+  bytes vector_data = 2;
+}

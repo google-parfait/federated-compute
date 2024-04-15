@@ -20,15 +20,19 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
+#include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
+#include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor.h"
 #include "fcp/aggregation/core/tensor_aggregator.h"
+#include "fcp/aggregation/core/tensor_aggregator_factory.h"
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/base/monitoring.h"
 
@@ -50,6 +54,15 @@ class OneDimBaseGroupingAggregator : public TensorAggregator {
  public:
   Status MergeWith(TensorAggregator&& other) override;
 
+  StatusOr<std::string> Serialize() && override {
+    // OneDimBaseGroupingAggregators are always nested within an outer
+    // aggregator. Use ToProto to get intermediate state and then serialize the
+    // outer aggregator state instead.
+    return FCP_STATUS(UNIMPLEMENTED)
+           << "OneDimBaseGroupingAggregator::Serialize is not supported. Use "
+              "ToProto to store intermediate state.";
+  }
+
   // Merges intermediate aggregates contained in the tensors param into the
   // current Aggregator instance. Expects a tensors param of size 2, where the
   // first tensor contains ordinals and the second tensor contains values. The
@@ -66,9 +79,45 @@ class OneDimBaseGroupingAggregator : public TensorAggregator {
   // derived class.
   virtual Status MergeTensors(InputTensorList tensors, int num_inputs) = 0;
 
+  // Stores the intermediate state of the OneDimBaseGroupingAggregator as a
+  // proto.
+  virtual OneDimGroupingAggregatorState ToProto() = 0;
+
  protected:
   // Checks that the input tensors param is valid.
   Status ValidateTensorInputs(const InputTensorList& tensors);
+};
+
+class OneDimBaseGroupingAggregatorFactory : public TensorAggregatorFactory {
+ public:
+  StatusOr<std::unique_ptr<TensorAggregator>> Create(
+      const Intrinsic& intrinsic) const override {
+    return CreateInternal(intrinsic, nullptr);
+  }
+
+  StatusOr<std::unique_ptr<TensorAggregator>> Deserialize(
+      const Intrinsic& intrinsic, std::string serialized_state) const override {
+    OneDimGroupingAggregatorState aggregator_state;
+    // OneDimGroupingAggregators are always nested within an outer aggregator.
+    // Use FromProto to create the aggregator from intermediate state stored by
+    // the outer aggregator.
+    return FCP_STATUS(UNIMPLEMENTED)
+           << "OneDimBaseGroupingAggregatorFactory::Deserialize is not "
+              "supported. Use FromProto to create an aggregator from "
+              "intermediate state.";
+  }
+
+  // Creates a OneDimBaseGroupingAggregator from intermediate state.
+  StatusOr<std::unique_ptr<TensorAggregator>> FromProto(
+      const Intrinsic& intrinsic,
+      const OneDimGroupingAggregatorState& aggregator_state) const {
+    return CreateInternal(intrinsic, &aggregator_state);
+  }
+
+ private:
+  virtual StatusOr<std::unique_ptr<TensorAggregator>> CreateInternal(
+      const Intrinsic& intrinsic,
+      const OneDimGroupingAggregatorState* aggregator_state) const = 0;
 };
 
 // OneDimGroupingAggregator class is a specialization of
@@ -88,8 +137,12 @@ class OneDimGroupingAggregator : public OneDimBaseGroupingAggregator {
   // to the ordinal tensor) should be known in advance and thus this constructor
   // should take in a shape with a single unknown dimension.
   OneDimGroupingAggregator()
-      : data_vector_(std::make_unique<MutableVectorData<OutputT>>()),
-        num_inputs_(0) {}
+      : OneDimGroupingAggregator(std::make_unique<MutableVectorData<OutputT>>(),
+                                 0) {}
+
+  OneDimGroupingAggregator(std::unique_ptr<MutableVectorData<OutputT>> data,
+                           int num_inputs)
+      : data_vector_(std::move(data)), num_inputs_(num_inputs) {}
 
   // Implementation of the tensor merge operation.
   Status MergeTensors(InputTensorList tensors, int num_inputs) override {
@@ -119,6 +172,13 @@ class OneDimGroupingAggregator : public OneDimBaseGroupingAggregator {
                 "consumed.";
     }
     return FCP_STATUS(OK);
+  }
+
+  OneDimGroupingAggregatorState ToProto() override {
+    OneDimGroupingAggregatorState aggregator_state;
+    aggregator_state.set_num_inputs(num_inputs_);
+    *(aggregator_state.mutable_vector_data()) = data_vector_->EncodeContent();
+    return aggregator_state;
   }
 
  protected:
