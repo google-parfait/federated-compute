@@ -46,6 +46,7 @@ java_proto_library(
 
 py_proto_library(
     name = "tensor_py_pb2",
+    visibility = ["//visibility:public"],
     deps = [
         ":tensor_proto",
     ],
