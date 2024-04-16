@@ -64,7 +64,9 @@ service Ledger {
   // access is authorized by the blob's policy and the remaining access budget,
   // the Ledger will decrypt and return the blob's symmetric key (re-encrypted
   // so that only the enclave can read it).
-  // TODO(team): Link to documentation about the blob encryption.
+  //
+  // For more information about blob encryption and access policies, see
+  // https://github.com/google-parfait/confidential-federated-compute/tree/main/ledger_enclave_app#readme.
   // method_id: 3
   rpc AuthorizeAccess(AuthorizeAccessRequest)
       returns (AuthorizeAccessResponse) {

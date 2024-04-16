@@ -22,6 +22,9 @@
 // Separating the step of encrypting the symmetric key from encrypting the
 // message allows the AEAD symmetric key to be passed off to another party to
 // be used to decrypt, without sharing the private key between the two parties.
+//
+// This is a C++ port of the Rust encryption implementation in
+// https://github.com/google-parfait/confidential-federated-compute/tree/main/cfc_crypto.
 
 #ifndef FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
 #define FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
