@@ -155,6 +155,7 @@ cc_test(
         ":configuration_cc_proto",
         "//fcp/aggregation/core:aggregator",
         "//fcp/aggregation/core:tensor",
+        "//fcp/aggregation/core:tensor_cc_proto",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:mocks",
         "//fcp/aggregation/testing:test_data",

@@ -67,11 +67,14 @@ absl::Status CheckpointAggregator::ValidateConfig(
 
 absl::StatusOr<std::unique_ptr<CheckpointAggregator>>
 CheckpointAggregator::Create(const Configuration& configuration) {
-  FCP_RETURN_IF_ERROR(ValidateConfig(configuration));
-
   FCP_ASSIGN_OR_RETURN(std::vector<Intrinsic> intrinsics,
                        ParseFromConfig(configuration));
 
+  return Create(std::move(intrinsics));
+}
+
+absl::StatusOr<std::unique_ptr<CheckpointAggregator>>
+CheckpointAggregator::Create(std::vector<Intrinsic> intrinsics) {
   std::vector<std::unique_ptr<TensorAggregator>> aggregators;
   for (const Intrinsic& intrinsic : intrinsics) {
     FCP_ASSIGN_OR_RETURN(std::unique_ptr<TensorAggregator> aggregator,

@@ -49,9 +49,21 @@ class CheckpointAggregator {
   // Returns INVALID_ARGUMENT if the configuration is invalid.
   static absl::Status ValidateConfig(const Configuration& configuration);
 
+  // Validates the Intrinsics that will subsequently be used to create an
+  // instance of CheckpointAggregator.
+  // Returns INVALID_ARGUMENT if the configuration is invalid.
+  static absl::Status ValidateIntrinsics(
+      const std::vector<Intrinsic>& intrinsics);
+
   // Creates an instance of CheckpointAggregator.
   static absl::StatusOr<std::unique_ptr<CheckpointAggregator>> Create(
       const Configuration& configuration);
+
+  // Creates an instance of CheckpointAggregator.
+  // The `intrinsics` are expected to be created using `ParseFromConfig` which
+  // validates the configuration.
+  static absl::StatusOr<std::unique_ptr<CheckpointAggregator>> Create(
+      std::vector<Intrinsic> intrinsics);
 
   // Accumulates a checkpoint via nested tensor aggregators. The tensors are
   // provided by the CheckpointParser instance.
