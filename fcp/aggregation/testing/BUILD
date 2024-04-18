@@ -33,7 +33,7 @@ cc_library(
     ],
     copts = FCP_COPTS,
     deps = [
-        "//fcp/aggregation/core:aggregator",
+        "//fcp/aggregation/core:intrinsic",
         "//fcp/aggregation/core:tensor",
         "//fcp/base",
         "//fcp/testing",

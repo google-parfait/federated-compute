@@ -105,7 +105,6 @@ cc_library(
     hdrs = [
         "agg_vector_aggregator.h",
         "aggregator.h",
-        "intrinsic.h",
         "one_dim_grouping_aggregator.h",
         "tensor_aggregator.h",
         "tensor_aggregator_factory.h",
@@ -114,12 +113,26 @@ cc_library(
     copts = FCP_COPTS,
     deps = [
         ":agg_core_cc_proto",
+        ":intrinsic",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/base",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/synchronization",
+    ],
+)
+
+cc_library(
+    name = "intrinsic",
+    hdrs = [
+        "intrinsic.h",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+    deps = [
+        ":tensor",
     ],
 )
 
@@ -149,6 +162,7 @@ cc_library(
         ":aggregator",
         ":dp_fedsql_constants",
         ":fedsql_constants",
+        ":intrinsic",
         ":tensor",
         ":tensor_cc_proto",
         ":vector_string_data",
@@ -225,6 +239,7 @@ cc_test(
     copts = FCP_COPTS,
     deps = [
         ":aggregator",
+        ":intrinsic",
         "//fcp/base",
         "//fcp/testing",
         "@com_google_googletest//:gtest_main",
@@ -267,6 +282,7 @@ cc_test(
         ":agg_core_cc_proto",
         ":aggregation_cores",
         ":aggregator",
+        ":intrinsic",
         ":tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
@@ -389,6 +405,7 @@ cc_test(
     deps = [
         ":aggregation_cores",
         ":aggregator",
+        ":intrinsic",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",
@@ -406,6 +423,7 @@ cc_test(
         ":aggregation_cores",
         ":aggregator",
         ":dp_fedsql_constants",
+        ":intrinsic",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",
@@ -423,6 +441,7 @@ cc_test(
     deps = [
         ":aggregation_cores",
         ":aggregator",
+        ":intrinsic",
         ":tensor",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
@@ -440,6 +459,7 @@ cc_test(
         ":aggregation_cores",
         ":aggregator",
         ":dp_fedsql_constants",
+        ":intrinsic",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",
@@ -460,6 +480,7 @@ cc_binary(
     deps = [
         ":aggregation_cores",
         ":aggregator",
+        ":intrinsic",
         ":tensor",
         "@com_google_benchmark//:benchmark_main",
     ],
@@ -474,6 +495,7 @@ cc_binary(
     deps = [
         ":aggregation_cores",
         ":aggregator",
+        ":intrinsic",
         ":mutable_string_data",
         ":tensor",
         ":tensor_cc_proto",

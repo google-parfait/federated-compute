@@ -83,6 +83,7 @@ cc_library(
         ":cancelable_callback",
         ":latency_aggregator",
         "//fcp/aggregation/core:aggregator",
+        "//fcp/aggregation/core:intrinsic",
         "//fcp/aggregation/protocol:aggregation_protocol",
         "//fcp/aggregation/protocol:cc_proto",
         "//fcp/aggregation/protocol:checkpoint_aggregator",
@@ -113,6 +114,7 @@ cc_test(
     deps = [
         ":simple_aggregation",
         "//fcp/aggregation/core:aggregator",
+        "//fcp/aggregation/core:intrinsic",
         "//fcp/aggregation/core:tensor",
         "//fcp/aggregation/core:tensor_cc_proto",
         "//fcp/aggregation/protocol:cc_proto",
