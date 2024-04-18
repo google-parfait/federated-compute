@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "fcp/aggregation/core/dp_group_by_aggregator.h"
+
+#include <cmath>
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
@@ -25,6 +28,7 @@
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/agg_vector_aggregator.h"
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/dp_fedsql_constants.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/tensor.h"
@@ -43,6 +47,7 @@ namespace aggregation {
 namespace {
 
 using testing::Eq;
+using testing::Gt;
 using testing::HasSubstr;
 using testing::IsTrue;
 
@@ -94,8 +99,9 @@ std::vector<Tensor> CreateTopLevelParameters(EpsilonType epsilon,
   return parameters;
 }
 
-std::vector<Tensor> CreateTopLevelParameters(double epsilon, double delta,
-                                             int64_t l0_bound) {
+std::vector<Tensor> CreateTopLevelParameters(double epsilon = 1000.0,
+                                             double delta = 0.001,
+                                             int64_t l0_bound = 100) {
   return CreateTopLevelParameters<double, double, int64_t>(epsilon, delta,
                                                            l0_bound);
 }
@@ -142,35 +148,36 @@ std::vector<Tensor> CreateNestedParameters(InputType linfinity_bound,
   return parameters;
 }
 
-template <typename InputType>
+template <typename InputType, typename OutputType>
 Intrinsic CreateInnerIntrinsic(InputType linfinity_bound, double l1_bound,
                                double l2_bound) {
   return Intrinsic{
-      "GoogleSQL:dp_sum",
+      kDPSumUri,
       {CreateTensorSpec("value", internal::TypeTraits<InputType>::kDataType)},
-      {CreateTensorSpec("value", internal::TypeTraits<InputType>::kDataType)},
+      {CreateTensorSpec("value", internal::TypeTraits<OutputType>::kDataType)},
       {CreateNestedParameters<InputType>(linfinity_bound, l1_bound, l2_bound)},
       {}};
 }
 
-template <typename InputType>
-Intrinsic CreateIntrinsic(double epsilon = 100.0, double delta = 0.001,
+template <typename InputType, typename OutputType>
+Intrinsic CreateIntrinsic(double epsilon = 1000.0, double delta = 0.001,
                           int64_t l0_bound = 100,
                           InputType linfinity_bound = 100, double l1_bound = -1,
                           double l2_bound = -1) {
-  Intrinsic intrinsic{"fedsql_dp_group_by",
+  Intrinsic intrinsic{kDPGroupByUri,
                       {CreateTensorSpec("key", DT_STRING)},
                       {CreateTensorSpec("key_out", DT_STRING)},
                       {CreateTopLevelParameters(epsilon, delta, l0_bound)},
                       {}};
   intrinsic.nested_intrinsics.push_back(
-      CreateInnerIntrinsic<InputType>(linfinity_bound, l1_bound, l2_bound));
+      CreateInnerIntrinsic<InputType, OutputType>(linfinity_bound, l1_bound,
+                                                  l2_bound));
   return intrinsic;
 }
 
-// First batch of tests are about the parameters in the intrinsic
+// First batch of tests validate the intrinsic(s)
 TEST(DPGroupByAggregatorTest, CatchWrongNumberOfParameters) {
-  Intrinsic too_few{"fedsql_dp_group_by",
+  Intrinsic too_few{kDPGroupByUri,
                     {CreateTensorSpec("key", DT_STRING)},
                     {CreateTensorSpec("key_out", DT_STRING)},
                     {CreateFewTopLevelParameters()},
@@ -181,7 +188,7 @@ TEST(DPGroupByAggregatorTest, CatchWrongNumberOfParameters) {
               HasSubstr("Expected 3 parameters but got 1 of them"));
 
   // Too many parameters
-  Intrinsic too_many{"fedsql_dp_group_by",
+  Intrinsic too_many{kDPGroupByUri,
                      {CreateTensorSpec("key", DT_STRING)},
                      {CreateTensorSpec("key_out", DT_STRING)},
                      {CreateManyTopLevelParameters()},
@@ -194,7 +201,7 @@ TEST(DPGroupByAggregatorTest, CatchWrongNumberOfParameters) {
 
 TEST(DPGroupByAggregatorTest, CatchInvalidParameterTypes) {
   Intrinsic intrinsic0{
-      "fedsql_dp_group_by",
+      kDPGroupByUri,
       {CreateTensorSpec("key", DT_STRING)},
       {CreateTensorSpec("key_out", DT_STRING)},
       {CreateTopLevelParameters<string_view, double, int64_t>("x", 0.1, 10)},
@@ -204,7 +211,7 @@ TEST(DPGroupByAggregatorTest, CatchInvalidParameterTypes) {
   EXPECT_THAT(bad_epsilon.message(), HasSubstr("must be numerical"));
 
   Intrinsic intrinsic1{
-      "fedsql_dp_group_by",
+      kDPGroupByUri,
       {CreateTensorSpec("key", DT_STRING)},
       {CreateTensorSpec("key_out", DT_STRING)},
       {CreateTopLevelParameters<double, string_view, int64_t>(1.0, "x", 10)},
@@ -214,7 +221,7 @@ TEST(DPGroupByAggregatorTest, CatchInvalidParameterTypes) {
   EXPECT_THAT(bad_delta.message(), HasSubstr("must be numerical"));
 
   Intrinsic intrinsic2{
-      "fedsql_dp_group_by",
+      kDPGroupByUri,
       {CreateTensorSpec("key", DT_STRING)},
       {CreateTensorSpec("key_out", DT_STRING)},
       {CreateTopLevelParameters<double, double, string_view>(1.0, 0.1, "x")},
@@ -225,24 +232,39 @@ TEST(DPGroupByAggregatorTest, CatchInvalidParameterTypes) {
 }
 
 TEST(DPGroupByAggregatorTest, CatchInvalidParameterValues) {
-  Intrinsic intrinsic0 = CreateIntrinsic<int64_t>(-1, 0.001, 10);
+  Intrinsic intrinsic0 = CreateIntrinsic<int64_t, int64_t>(-1, 0.001, 10);
   auto bad_epsilon = CreateTensorAggregator(intrinsic0).status();
   EXPECT_THAT(bad_epsilon, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(bad_epsilon.message(), HasSubstr("Epsilon must be positive"));
 
-  Intrinsic intrinsic1 = CreateIntrinsic<int64_t>(1.0, -1, 10);
+  Intrinsic intrinsic1 = CreateIntrinsic<int64_t, int64_t>(1.0, -1, 10);
   auto bad_delta = CreateTensorAggregator(intrinsic1).status();
   EXPECT_THAT(bad_delta, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(bad_delta.message(), HasSubstr("Delta must lie between 0 and 1"));
 
-  Intrinsic intrinsic2 = CreateIntrinsic<int64_t>(1.0, 0.001, -1);
+  Intrinsic intrinsic2 = CreateIntrinsic<int64_t, int64_t>(1.0, 0.001, -1);
   auto bad_l0_bound = CreateTensorAggregator(intrinsic2).status();
   EXPECT_THAT(bad_l0_bound, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(bad_l0_bound.message(), HasSubstr("L0 bound must be positive"));
 }
 
-// Second batch of tests are dedicated to norm bounding, when there is only one
-// inner aggregation (GROUP BY key, SUM(value))
+TEST(DPGroupByAggregatorTest, CatchUnsupportedNestedIntrinsic) {
+  Intrinsic intrinsic = {kDPGroupByUri,
+                         {CreateTensorSpec("key", DT_STRING)},
+                         {CreateTensorSpec("key_out", DT_STRING)},
+                         {CreateTopLevelParameters()},
+                         {}};
+  intrinsic.nested_intrinsics.push_back(Intrinsic{
+      "GoogleSQL:$not_differential_privacy_sum",
+      {CreateTensorSpec("value", internal::TypeTraits<int32_t>::kDataType)},
+      {CreateTensorSpec("value", internal::TypeTraits<int32_t>::kDataType)},
+      {CreateNestedParameters<int32_t>(1000, -1, -1)},
+      {}});
+  auto aggregator_status = CreateTensorAggregator(intrinsic).status();
+  EXPECT_THAT(aggregator_status, IsCode(UNIMPLEMENTED));
+  EXPECT_THAT(aggregator_status.message(), HasSubstr("Currently, only nested "
+                                                     "DP sums are supported"));
+}
 
 // Function to execute the DPGroupByAggregator on one input where there is just
 // one key per contribution and each contribution is to one aggregation
@@ -269,10 +291,12 @@ StatusOr<OutputTensorList> SingleKeySingleAgg(
   return std::move(*group_by_aggregator).Report();
 }
 
+// Second batch of tests are dedicated to norm bounding when there is only one
+// inner aggregation (GROUP BY key, SUM(value))
 TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithL0Bound) {
   // L0 bounding involves randomness so we should repeat things to catch errors.
   for (int i = 0; i < 9; i++) {
-    auto intrinsic = CreateIntrinsic<int64_t>(100, 0.01, 1);
+    auto intrinsic = CreateIntrinsic<int64_t, int64_t>(100, 0.01, 1);
     auto result = SingleKeySingleAgg<int64_t>(
         intrinsic, {4}, {"zero", "one", "two", "zero"}, {1, 3, 15, 27});
     EXPECT_THAT(result, IsOk());
@@ -308,7 +332,7 @@ TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithL0Bound) {
 TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithL0LinfinityBounds) {
   for (int i = 0; i < 9; i++) {
     // Use the same setup as before but now impose a maximum magnitude of 12
-    auto intrinsic = CreateIntrinsic<int64_t>(100, 0.01, 1, 12);
+    auto intrinsic = CreateIntrinsic<int64_t, int64_t>(100, 0.01, 1, 12);
     auto result = SingleKeySingleAgg<int64_t>(
         intrinsic, {4}, {"zero", "one", "two", "zero"}, {1, 3, 15, 27});
     EXPECT_THAT(result, IsOk());
@@ -345,7 +369,7 @@ TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithL0LinfinityL1Bounds) {
   for (int i = 0; i < 9; i++) {
     // L0 bound is 4 (four keys), Linfinity bound is 50 (|value| <= 50),
     // and L1 bound is 100 (sum over |value| is <= 100)
-    auto intrinsic = CreateIntrinsic<int64_t>(100, 0.01, 4, 50, 100);
+    auto intrinsic = CreateIntrinsic<int64_t, int64_t>(100, 0.01, 4, 50, 100);
     auto result = SingleKeySingleAgg<int64_t>(
         intrinsic, {5}, {"zero", "one", "two", "three", "four"},
         {60, 60, 60, 60, 60});
@@ -365,7 +389,8 @@ TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithAllBounds) {
   for (int i = 0; i < 9; i++) {
     // L0 bound is 4 (four keys), Linfinity bound is 50 (|value| <= 50),
     // L1 bound is 100 (sum over |value| is <= 100), and L2 bound is 10
-    auto intrinsic = CreateIntrinsic<int64_t>(100, 0.01, 4, 50, 100, 10);
+    auto intrinsic =
+        CreateIntrinsic<int64_t, int64_t>(100, 0.01, 4, 50, 100, 10);
     auto result = SingleKeySingleAgg<int64_t>(
         intrinsic, {5}, {"zero", "one", "two", "three", "four"},
         {60, 60, 60, 60, 60});
@@ -381,24 +406,26 @@ TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithAllBounds) {
   }
 }
 
-// Third: test norm bounding when there are > 1 inner aggregations
-// (SUM(value1), SUM(value2) \\ GROUP BY key)
-template <typename InputType>
-Intrinsic CreateIntrinsic2(double epsilon = 100.0, double delta = 0.001,
-                           int64_t l0_bound = 100,
-                           InputType linfinity_bound1 = 100,
-                           double l1_bound1 = -1, double l2_bound1 = -1,
-                           InputType linfinity_bound2 = 100,
-                           double l1_bound2 = -1, double l2_bound2 = -1) {
-  Intrinsic intrinsic{"fedsql_dp_group_by",
+// Third: test norm bounding when there are multiple inner aggregations
+// (SUM(value1), SUM(value2)  GROUP BY key)
+template <typename InputType, typename OutputType>
+Intrinsic CreateIntrinsic2Agg(double epsilon = 1000.0, double delta = 0.001,
+                              int64_t l0_bound = 100,
+                              InputType linfinity_bound1 = 100,
+                              double l1_bound1 = -1, double l2_bound1 = -1,
+                              InputType linfinity_bound2 = 100,
+                              double l1_bound2 = -1, double l2_bound2 = -1) {
+  Intrinsic intrinsic{kDPGroupByUri,
                       {CreateTensorSpec("key", DT_STRING)},
                       {CreateTensorSpec("key_out", DT_STRING)},
                       {CreateTopLevelParameters(epsilon, delta, l0_bound)},
                       {}};
   intrinsic.nested_intrinsics.push_back(
-      CreateInnerIntrinsic<InputType>(linfinity_bound1, l1_bound1, l2_bound1));
+      CreateInnerIntrinsic<InputType, OutputType>(linfinity_bound1, l1_bound1,
+                                                  l2_bound1));
   intrinsic.nested_intrinsics.push_back(
-      CreateInnerIntrinsic<InputType>(linfinity_bound2, l1_bound2, l2_bound2));
+      CreateInnerIntrinsic<InputType, OutputType>(linfinity_bound2, l1_bound2,
+                                                  l2_bound2));
   return intrinsic;
 }
 
@@ -438,8 +465,8 @@ TEST(DPGroupByAggregatorTest, SingleKeyDoubleAggWithAllBounds) {
     // L0 bound is 4.
     // For agg 1, Linfinity bound is 20 and no other bounds provided.
     // For agg 2, Linfinity bound is 50, L1 bound is 100, L2 bound is 10.
-    auto intrinsic =
-        CreateIntrinsic2<int64_t>(100, 0.01, 4, 20, -1, -1, 50, 100, 10);
+    auto intrinsic = CreateIntrinsic2Agg<int64_t, int64_t>(1000, 0.01, 4, 20,
+                                                           -1, -1, 50, 100, 10);
     auto result = SingleKeyDoubleAgg<int64_t>(
         intrinsic, {5}, {"zero", "one", "two", "three", "four"},
         {60, 60, 60, 60, 60}, {60, 60, 60, 60, 60});
@@ -459,16 +486,17 @@ TEST(DPGroupByAggregatorTest, SingleKeyDoubleAggWithAllBounds) {
   }
 }
 
-// Fourth: test norm bounding, when there are > 1 keys and > 1 inner
-// aggregations. (SUM(value1), SUM(value2) \\ GROUP BY key1, key 2)
-template <typename InputType>
-Intrinsic CreateIntrinsic3(double epsilon = 100.0, double delta = 0.001,
-                           int64_t l0_bound = 100,
-                           InputType linfinity_bound1 = 100,
-                           double l1_bound1 = -1, double l2_bound1 = -1,
-                           InputType linfinity_bound2 = 100,
-                           double l1_bound2 = -1, double l2_bound2 = -1) {
-  Intrinsic intrinsic{"fedsql_dp_group_by",
+// Fourth: test norm bounding, when there are multiple keys and multiple inner
+// aggregations. (SUM(value1), SUM(value2)  GROUP BY key1, key 2)
+template <typename InputType, typename OutputType>
+Intrinsic CreateIntrinsic2Key2Agg(double epsilon = 100.0, double delta = 0.001,
+                                  int64_t l0_bound = 100,
+                                  InputType linfinity_bound1 = 100,
+                                  double l1_bound1 = -1, double l2_bound1 = -1,
+                                  InputType linfinity_bound2 = 100,
+                                  double l1_bound2 = -1,
+                                  double l2_bound2 = -1) {
+  Intrinsic intrinsic{kDPGroupByUri,
                       {CreateTensorSpec("key1", DT_STRING),
                        CreateTensorSpec("key2", DT_STRING)},
                       {CreateTensorSpec("key1_out", DT_STRING),
@@ -476,9 +504,11 @@ Intrinsic CreateIntrinsic3(double epsilon = 100.0, double delta = 0.001,
                       {CreateTopLevelParameters(epsilon, delta, l0_bound)},
                       {}};
   intrinsic.nested_intrinsics.push_back(
-      CreateInnerIntrinsic<InputType>(linfinity_bound1, l1_bound1, l2_bound1));
+      CreateInnerIntrinsic<InputType, OutputType>(linfinity_bound1, l1_bound1,
+                                                  l2_bound1));
   intrinsic.nested_intrinsics.push_back(
-      CreateInnerIntrinsic<InputType>(linfinity_bound2, l1_bound2, l2_bound2));
+      CreateInnerIntrinsic<InputType, OutputType>(linfinity_bound2, l1_bound2,
+                                                  l2_bound2));
   return intrinsic;
 }
 
@@ -520,8 +550,8 @@ TEST(DPGroupByAggregatorTest, DoubleKeyDoubleAggWithAllBounds) {
     // L0 bound is 4.
     // For agg 1, Linfinity bound is 20 and no other bounds provided.
     // For agg 2, Linfinity bound is 50, L1 bound is 100, L2 bound is 10.
-    auto intrinsic =
-        CreateIntrinsic3<int64_t>(100, 0.01, 4, 20, -1, -1, 50, 100, 10);
+    auto intrinsic = CreateIntrinsic2Key2Agg<int64_t, int64_t>(
+        1000, 0.01, 4, 20, -1, -1, 50, 100, 10);
     auto result = DoubleKeyDoubleAgg<int64_t>(
         intrinsic, {5}, {"red", "green", "green", "blue", "gray"},
         {"zero", "one", "two", "three", "four"}, {60, 60, 60, 60, 60},
@@ -544,18 +574,38 @@ TEST(DPGroupByAggregatorTest, DoubleKeyDoubleAggWithAllBounds) {
 }
 
 // Fifth: test norm bounding on key-less data (norm bound = magnitude bound)
-TEST(DPGroupByAggregatorTest, NoKeyTripleAggWithAllBounds) {
-  Intrinsic intrinsic{"fedsql_dp_group_by",
+template <typename InputType, typename OutputType>
+Intrinsic CreateIntrinsicNoKeys(double epsilon = 100.0, double delta = 0.001,
+                                int64_t l0_bound = 100,
+                                InputType linfinity_bound1 = 100,
+                                double l1_bound1 = -1, double l2_bound1 = -1,
+                                InputType linfinity_bound2 = 100,
+                                double l1_bound2 = -1, double l2_bound2 = -1,
+                                InputType linfinity_bound3 = 100,
+                                double l1_bound3 = -1, double l2_bound3 = -1) {
+  Intrinsic intrinsic{kDPGroupByUri,
                       {},
                       {},
-                      {CreateTopLevelParameters(100, 0.01, 100)},
+                      {CreateTopLevelParameters(epsilon, delta, l0_bound)},
                       {}};
   intrinsic.nested_intrinsics.push_back(
-      CreateInnerIntrinsic<int32_t>(10, 9, 8));
+      CreateInnerIntrinsic<InputType, OutputType>(linfinity_bound1, l1_bound1,
+                                                  l2_bound1));
   intrinsic.nested_intrinsics.push_back(
-      CreateInnerIntrinsic<int32_t>(100, 9, -1));
+      CreateInnerIntrinsic<InputType, OutputType>(linfinity_bound2, l1_bound2,
+                                                  l2_bound2));
   intrinsic.nested_intrinsics.push_back(
-      CreateInnerIntrinsic<int32_t>(100, -1, -1));
+      CreateInnerIntrinsic<InputType, OutputType>(linfinity_bound3, l1_bound3,
+                                                  l2_bound3));
+
+  return intrinsic;
+}
+
+TEST(DPGroupByAggregatorTest, NoKeyTripleAggWithAllBounds) {
+  Intrinsic intrinsic = CreateIntrinsicNoKeys<int32_t, int64_t>(
+      1000, 0.01, 100, 10, 9, 8,  // limit to 8
+      100, 9, -1,                 // limit to 9
+      100, -1, -1);               // 100
 
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
   Tensor t1 = Tensor::Create(DT_INT32, {}, CreateTestData({11})).value();
@@ -567,10 +617,235 @@ TEST(DPGroupByAggregatorTest, NoKeyTripleAggWithAllBounds) {
   auto result = std::move(*group_by_aggregator).Report();
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result.value().size(), Eq(3));
-  // Verify the resulting tensor.
   EXPECT_THAT(result.value()[0], IsTensor<int64_t>({1}, {8}));
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({1}, {9}));
   EXPECT_THAT(result.value()[2], IsTensor<int64_t>({1}, {11}));
+}
+
+// Sixth: check for proper noise addition.
+
+// Check that noise is added at all: the noised sum should not be the same as
+// the unnoised sum. The chance of a false negative shrinks with epsilon.
+TEST(DPGroupByAggregatorTest, NoiseAddedForSmallEpsilons) {
+  Intrinsic intrinsic = CreateIntrinsic<int32_t, int64_t>(0.05, 1e-8, 2, 1);
+  auto dpgba = CreateTensorAggregator(intrinsic).value();
+  int num_inputs = 1000;
+  for (int i = 0; i < num_inputs; i++) {
+    Tensor keys = Tensor::Create(DT_STRING, {2},
+                                 CreateTestData<string_view>({"key0", "key1"}))
+                      .value();
+    Tensor values =
+        Tensor::Create(DT_INT32, {2}, CreateTestData<int32_t>({1, 1})).value();
+    auto acc_status = dpgba->Accumulate({&keys, &values});
+    EXPECT_THAT(acc_status, IsOk());
+  }
+  EXPECT_EQ(dpgba->GetNumInputs(), num_inputs);
+  EXPECT_TRUE(dpgba->CanReport());
+  auto report = std::move(*dpgba).Report();
+  EXPECT_THAT(report, IsOk());
+  EXPECT_EQ(report->size(), 2);
+  const auto& values = report.value()[1].AsSpan<int64_t>();
+  ASSERT_THAT(values.size(), Eq(2));
+  EXPECT_TRUE(values[0] != num_inputs || values[1] != num_inputs);
+}
+
+// Check that SetupNoiseAndThreshold is capable of switching between
+// distributions
+TEST(DPGroupByAggregatorTest, SetupNoiseAndThreshold_CorrectDistribution) {
+  // "Baseline" intrinsic where Laplace was chosen
+  Intrinsic intrinsic1 =
+      CreateIntrinsic<int32_t, int64_t>(1.0, 1e-6, 1, 5, -1, -1);
+  auto agg1 = CreateTensorAggregator(intrinsic1).value();
+  auto report1 = std::move(*agg1).Report();
+  auto laplace_was_used =
+      dynamic_cast<DPGroupByAggregator&>(*agg1).laplace_was_used();
+  ASSERT_EQ(laplace_was_used.size(), 1);
+  EXPECT_TRUE(laplace_was_used[0]);
+
+  // If a user can contribute to L0 = x groups and there is only an L_inf bound,
+  // Laplace noise is linear in x while Gaussian noise scales with sqrt(x).
+  // Hence, we should use Gaussian for large-enough x (here, 10)
+  Intrinsic intrinsic2 =
+      CreateIntrinsic<int32_t, int64_t>(1.0, 1e-6, 10, 5, -1, -1);
+  auto agg2 = CreateTensorAggregator(intrinsic2).value();
+  auto report2 = std::move(*agg2).Report();
+  laplace_was_used =
+      dynamic_cast<DPGroupByAggregator&>(*agg2).laplace_was_used();
+  ASSERT_EQ(laplace_was_used.size(), 1);
+  EXPECT_FALSE(laplace_was_used[0]);
+
+  // The Gaussian should also be chosen if we give an L2 bound that is
+  // sufficiently smaller than computed L1 sensitivity (here, 1 < 5).
+  Intrinsic intrinsic3 =
+      CreateIntrinsic<int32_t, int64_t>(1.0, 1e-6, 1, 5, -1, 1);
+  auto agg3 = CreateTensorAggregator(intrinsic3).value();
+  auto report3 = std::move(*agg3).Report();
+  laplace_was_used =
+      dynamic_cast<DPGroupByAggregator&>(*agg3).laplace_was_used();
+  ASSERT_EQ(laplace_was_used.size(), 1);
+  EXPECT_FALSE(laplace_was_used[0]);
+}
+
+// Seventh: check that the right groups get dropped
+
+// Test that we will drop groups with any small aggregate and keep groups with
+// large aggregates. The surviving aggregates should have noise in them.
+// This test has a small probability of failing due to false positives: noise
+// could push the 0 past the threshold. It also has a small probability of
+// failing due to false negatives: noise could push the 100 below the threshold.
+TEST(DPGroupByAggregatorTest, SingleKeyDropAggregatesWithValueZero) {
+  // epsilon = 1, delta= 1e-8, L0 bound = 2, Linfinity bound = 1
+  Intrinsic intrinsic =
+      CreateIntrinsic2Agg<int32_t, int64_t>(1.0, 1e-8, 2, 1, -1, -1, 1, -1, -1);
+  auto dpgba = CreateTensorAggregator(intrinsic).value();
+  // Simulate many clients where they contribute
+  // aggregation 1: zeroes to key0 and ones to key1
+  // aggregation 2: ones to both
+  std::string key0 = "drop me";
+  std::string key1 = "keep me";
+  int num_inputs = 400;
+  for (int i = 0; i < num_inputs; i++) {
+    Tensor keys = Tensor::Create(DT_STRING, {2},
+                                 CreateTestData<string_view>({key0, key1}))
+                      .value();
+
+    Tensor value_tensor1 =
+        Tensor::Create(DT_INT32, {2}, CreateTestData<int32_t>({0, 1})).value();
+    Tensor value_tensor2 =
+        Tensor::Create(DT_INT32, {2}, CreateTestData<int32_t>({1, 1})).value();
+
+    auto acc_status =
+        dpgba->Accumulate({&keys, &value_tensor1, &value_tensor2});
+    EXPECT_THAT(acc_status, IsOk());
+  }
+
+  EXPECT_THAT(dpgba->GetNumInputs(), Eq(num_inputs));
+  EXPECT_THAT(dpgba->CanReport(), IsTrue());
+  auto report = std::move(*dpgba).Report();
+  EXPECT_THAT(report, IsOk());
+  EXPECT_THAT(report->size(), Eq(3));
+
+  // The report should not include key0 because it has an aggregate of 0
+  // and a key survives only when *all* its values are above their thresholds
+  EXPECT_THAT(report.value()[0], IsTensor<string_view>({1}, {key1}));
+
+  // The values associated with the surviving key (key1) must be large
+  int64_t threshold = static_cast<int64_t>(ceil(1 + 2 * std::log(1e8)));
+  EXPECT_THAT(report.value()[1].AsScalar<int64_t>(), Gt(threshold));
+  EXPECT_THAT(report.value()[2].AsScalar<int64_t>(), Gt(threshold));
+  // We expect them to be different from their original values
+}
+
+// When there are no grouping keys, aggregation will be scalar. Hence, the sole
+// "group" does not need to be dropped for DP (because it exists whether or not
+// a given client contributed data)
+// This test should never fail because DPGroupByAggregator & its factory check
+// for the no key case and force aggregates to survive.
+TEST(DPGroupByAggregatorTest, NoKeyNoDrop) {
+  Intrinsic intrinsic = CreateIntrinsicNoKeys<int32_t, int64_t>(
+      1.0, 1e-8, 3, 10, 9, 8,  // limit to 8
+      100, 9, -1,              // limit to 9
+      10, -1, -1);             // limit to 10
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  for (int i = 0; i < 100; i++) {
+    Tensor t1 = Tensor::Create(DT_INT32, {}, CreateTestData({11})).value();
+    Tensor t2 = Tensor::Create(DT_INT32, {}, CreateTestData({11})).value();
+    Tensor t3 = Tensor::Create(DT_INT32, {}, CreateTestData({11})).value();
+    EXPECT_THAT(group_by_aggregator->Accumulate({&t1, &t2, &t3}), IsOk());
+  }
+
+  EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(result.value().size(), Eq(3));
+
+  // report should have all the noisy data (one number per Tensor)
+  EXPECT_THAT(result.value()[0].num_elements(), 1);  // 800 + noise
+  EXPECT_THAT(result.value()[1].num_elements(), 1);  // 900 + noise
+  EXPECT_THAT(result.value()[2].num_elements(), 1);  // 1000 + noise
+}
+
+// Test to verify that Report() still drops key columns that were given empty
+// labels.
+TEST(DPGroupByAggregatorTest,
+     Accumulate_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
+  const TensorShape shape = {4};
+  Intrinsic intrinsic{
+      kDPGroupByUri,
+      {CreateTensorSpec("key1", DT_STRING),
+       CreateTensorSpec("key2", DT_STRING)},
+      // An empty string in the output keys means that the key should not be
+      // included in the output.
+      {CreateTensorSpec("", DT_STRING), CreateTensorSpec("animals", DT_STRING)},
+      {CreateTopLevelParameters(1.0, 1e-8, 3)},
+      {}};
+  intrinsic.nested_intrinsics.push_back(
+      CreateInnerIntrinsic<int32_t, int64_t>(4, 8, -1));
+  // L0 = 3, Linf = 4, L1 = 8
+  // These bounds should not affect any individual input data below
+
+  auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
+  constexpr int num_inputs = 200;
+  for (int i = 0; i < num_inputs; i++) {
+    Tensor sizeKeys1 =
+        Tensor::Create(
+            DT_STRING, shape,
+            CreateTestData<string_view>({"large", "large", "small", "large"}))
+            .value();
+    Tensor animalKeys1 =
+        Tensor::Create(
+            DT_STRING, shape,
+            CreateTestData<string_view>({"cat", "cat", "cat", "dog"}))
+            .value();
+    Tensor t1 =
+        Tensor::Create(DT_INT32, shape, CreateTestData({1, 2, 1, 4})).value();
+    EXPECT_THAT(
+        group_by_aggregator->Accumulate({&sizeKeys1, &animalKeys1, &t1}),
+        IsOk());
+    // Totals: [3, 1, 4]
+    Tensor sizeKeys2 =
+        Tensor::Create(
+            DT_STRING, shape,
+            CreateTestData<string_view>({"small", "large", "small", "small"}))
+            .value();
+    Tensor animalKeys2 =
+        Tensor::Create(
+            DT_STRING, shape,
+            CreateTestData<string_view>({"cat", "cat", "cat", "dog"}))
+            .value();
+    Tensor t2 =
+        Tensor::Create(DT_INT32, shape, CreateTestData({2, 0, 2, 4})).value();
+    EXPECT_THAT(
+        group_by_aggregator->Accumulate({&sizeKeys2, &animalKeys2, &t2}),
+        IsOk());
+    // Totals: [3, 5, 4, 4]
+    EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2 * (i + 1)));
+  }
+  // Totals: [600, 1000, 800, 800]
+  ASSERT_THAT(group_by_aggregator->CanReport(), IsTrue());
+  auto result = std::move(*group_by_aggregator).Report();
+  EXPECT_THAT(result, IsOk());
+  // Verify the resulting tensors.
+  // Only the second key tensor should be included in the output.
+  EXPECT_EQ(result.value().size(), 2);
+
+  // That tensor should have all animal keys because the threshold is less than
+  // the noised values.
+  ASSERT_EQ(result.value()[0].num_elements(), 4);
+
+  // The order of the keys may differ from what is output by GroupByAggregator
+  // ("cat", "cat", "dog", "dog"). This is because DPCompositeKeyCombiner's
+  // AccumulateWithBound function samples l0_bound_ keys from its input; in our
+  // case, sampling 3 keys from 3 keys results in a random permutation.
+  int num_cat = 0;
+  int num_dog = 0;
+  for (int i = 0; i < 4; i++) {
+    auto key = result.value()[0].AsSpan<string_view>()[i];
+    num_cat += (key == "cat") ? 1 : 0;
+    num_dog += (key == "dog") ? 1 : 0;
+  }
+  EXPECT_EQ(num_cat, 2);
+  EXPECT_EQ(num_dog, 2);
 }
 
 // Finally, test merge: intermediary aggregates should not be clipped or noised
@@ -579,7 +854,8 @@ TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_SingleKey) {
   // For any single user's data we will give to the aggregators, the norm bounds
   // below do nothing: each Accumulate call has 1 distinct key and a value of 1,
   // which satisfies the L0 bound and Linfinity bound constraints.
-  Intrinsic intrinsic = CreateIntrinsic<int64_t>(100, 0.001, 1, 1, -1, -1);
+  Intrinsic intrinsic =
+      CreateIntrinsic<int64_t, int64_t>(100, 0.001, 1, 1, -1, -1);
   auto agg1 = CreateTensorAggregator(intrinsic).value();
   auto agg2 = CreateTensorAggregator(intrinsic).value();
 
@@ -625,7 +901,8 @@ TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_SingleKey) {
 }
 
 TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_MultiKey) {
-  Intrinsic intrinsic = CreateIntrinsic3<int64_t>(100, 0.001, 1, 1, -1, -1);
+  Intrinsic intrinsic =
+      CreateIntrinsic2Key2Agg<int64_t, int64_t>(100, 0.001, 1, 1, -1, -1);
   auto agg1 = CreateTensorAggregator(intrinsic).value();
   auto agg2 = CreateTensorAggregator(intrinsic).value();
 
@@ -676,9 +953,9 @@ TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_NoKeys) {
                       {CreateTopLevelParameters(100, 0.01, 100)},
                       {}};
   intrinsic.nested_intrinsics.push_back(
-      CreateInnerIntrinsic<int64_t>(10, 9, 8));
+      CreateInnerIntrinsic<int64_t, int64_t>(10, 9, 8));
   intrinsic.nested_intrinsics.push_back(
-      CreateInnerIntrinsic<int64_t>(100, 9, -1));
+      CreateInnerIntrinsic<int64_t, int64_t>(100, 9, -1));
   auto agg1 = CreateTensorAggregator(intrinsic).value();
   auto agg2 = CreateTensorAggregator(intrinsic).value();
   Tensor data1 =

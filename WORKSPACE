@@ -308,3 +308,18 @@ llvm_toolchain(
 load("@llvm_toolchain//:toolchains.bzl", "llvm_register_toolchains")
 
 llvm_register_toolchains()
+
+# The following enables the use of the library functions in the differential-
+# privacy github repo
+http_archive(
+  name = "com_google_cc_differential_privacy",
+  url = "https://github.com/google/differential-privacy/archive/refs/tags/v3.0.0.tar.gz",
+  sha256 = "6e6e1cd7a819695caae408f4fa938129ab7a86e83fe2410137c85e50131abbe0",
+  strip_prefix = "differential-privacy-3.0.0/cc",
+)
+http_archive(
+  name = "com_google_differential_privacy",
+  url = "https://github.com/google/differential-privacy/archive/refs/tags/v3.0.0.tar.gz",
+  sha256 = "6e6e1cd7a819695caae408f4fa938129ab7a86e83fe2410137c85e50131abbe0",
+  strip_prefix = "differential-privacy-3.0.0",
+)

@@ -16,16 +16,25 @@
 
 #include "fcp/aggregation/core/dp_group_by_aggregator.h"
 
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
+#include "absl/log/check.h"
+#include "absl/types/span.h"
+#include "algorithms/numerical-mechanisms.h"
+#include "algorithms/partition-selection.h"
 #include "fcp/aggregation/core/composite_key_combiner.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/dp_composite_key_combiner.h"
-#include "fcp/aggregation/core/fedsql_constants.h"
+#include "fcp/aggregation/core/dp_fedsql_constants.h"
 #include "fcp/aggregation/core/group_by_aggregator.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/intrinsic.h"
@@ -36,64 +45,239 @@
 #include "fcp/aggregation/core/tensor_aggregator.h"
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 #include "fcp/aggregation/core/tensor_spec.h"
+#include "fcp/aggregation/core/vector_string_data.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
 namespace aggregation {
+using ::differential_privacy::GaussianMechanism;
+using ::differential_privacy::GaussianPartitionSelection;
+using ::differential_privacy::LaplaceMechanism;
+using ::differential_privacy::LaplacePartitionSelection;
+using ::differential_privacy::NumericalMechanism;
+using ::differential_privacy::SafeAdd;
+using ::differential_privacy::SafeSubtract;
+using ::differential_privacy::sign;
 
-// DPGroupByAggregator is a child class of GroupByAggregator.
-// ::AggregateTensorsInternal enforces a bound on the number of composite keys
-// (ordinals) that any one aggregation can contribute to.
-// ::Report adds noise to aggregates and removes composite keys that have value
-// below a threshold.
-// This class is not thread safe.
-class DPGroupByAggregator : public GroupByAggregator {
- protected:
-  friend class DPGroupByFactory;
+namespace internal {
+// The epsilon beyond which we will not use DP noise
+constexpr double kEpsilonThreshold = 20.0;
 
-  // Constructs a DPGroupByAggregator.
-  // This constructor is meant for use by the DPGroupByFactory; most callers
-  // should instead create a DPGroupByAggregator from an intrinsic using the
-  // factory, i.e.
-  // `(*GetAggregatorFactory("fedsql_dp_group_by"))->Create(intrinsic)`
-  //
-  // Takes the same inputs as GroupByAggregator, in addition to:
-  // * epsilon_per_agg: the privacy budget per nested intrinsic.
-  // * delta_per_agg: the privacy failure parameter per nested intrinsic.
-  // * l0_bound: the maximum number of composite keys one user can contribute to
-  //   (assuming each DPGroupByAggregator::AggregateTensorsInternal call
-  //    contains data from a unique user)
-  DPGroupByAggregator(
-      const std::vector<TensorSpec>& input_key_specs,
-      const std::vector<TensorSpec>* output_key_specs,
-      const std::vector<Intrinsic>* intrinsics,
-      std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators,
-      int64_t l0_bound);
-
- private:
-  // Returns either nullptr or a unique_ptr to a CompositeKeyCombiner, depending
-  // on the input specification
-  static std::unique_ptr<DPCompositeKeyCombiner> CreateDPKeyCombiner(
-      const std::vector<TensorSpec>& input_key_specs,
-      const std::vector<TensorSpec>* output_key_specs, int64_t l0_bound);
-
-  // When merging two DPGroupByAggregators, norm bounding the aggregates will
-  // destroy accuracy and is not needed for privacy. Hence, this function calls
-  // CompositeKeyCombiner::Accumulate, which has no L0 norm bounding.
-  StatusOr<Tensor> CreateOrdinalsByGroupingKeysForMerge(
-      const InputTensorList& inputs) override;
+// Struct to contain the two components of the noise and threshold algorithm:
+// - A pointer to a NumericalMechanism object which introduces DP noise for one
+//   summation that satisfies add-remove DP. The distribution will either be
+//   Laplace or Gaussian, whichever has less variance for the same DP parameters
+// - A threshold below which noisy sums will be erased. The thresholding step
+//   consumes some or all of the delta that a customer provides.
+// Also holds a boolean to indicate which noise is used.
+template <typename OutputType>
+struct NoiseAndThresholdBundle {
+  std::unique_ptr<NumericalMechanism> mechanism;
+  OutputType threshold;
+  bool use_laplace;
 };
+
+// Derive NoiseAndThresholdBundle from privacy parameters and clipping norms.
+template <typename OutputType>
+StatusOr<NoiseAndThresholdBundle<OutputType>> SetupNoiseAndThreshold(
+    double epsilon, double delta, int64_t l0_bound, OutputType linfinity_bound,
+    double l1_bound, double l2_bound) {
+  // The following constraints on DP parameters should be caught beforehand in
+  // factory code.
+  CHECK(epsilon > 0 && delta > 0 && l0_bound > 0 && linfinity_bound > 0)
+      << "epsilon, delta, l0_bound, and linfinity_bound must be greater than 0";
+  CHECK(delta < 1) << "delta must be less than 1";
+
+  // For Gaussian noise, the following parameter determines how much of delta is
+  // consumed for thresholding. Currently set to 1/2 of delta, but this could be
+  // optimized down the line.
+  constexpr double kFractionForThresholding = 0.5;
+  double delta_for_thresholding = delta * kFractionForThresholding;
+  double delta_for_noising = delta - delta_for_thresholding;
+
+  // Compute L1 sensitivity from the L0 and Linfinity bounds
+  double l1_sensitivity = l0_bound * linfinity_bound;
+  // If an L1 bound was given and it is tighter than the above, use it.
+  if (l1_bound > 0 && l1_bound < l1_sensitivity) {
+    l1_sensitivity = l1_bound;
+  }
+  // Repeat for L2
+  double l2_sensitivity = sqrt(l0_bound) * linfinity_bound;
+  // If a tighter L2 bound was given, go with that.
+  if (l2_bound > 0 && l2_bound < l2_sensitivity) {
+    l2_sensitivity = l2_bound;
+  }
+
+  NoiseAndThresholdBundle<OutputType> output;
+
+  // Pick the mechanism that will add noise with smaller standard deviation.
+  FCP_CHECK(epsilon > 0) << "epsilon must be greater than 0";
+  double laplace_scale = (1.0 / epsilon) * l1_sensitivity;
+  double laplace_stdev = sqrt(2) * laplace_scale;
+  double gaussian_stdev = GaussianMechanism::CalculateStddev(
+      epsilon, delta_for_noising, l2_sensitivity);
+  if (laplace_stdev < gaussian_stdev) {
+    output.use_laplace = true;
+
+    // Use the library function for computing threshold
+    FCP_ASSIGN_OR_RETURN(double library_threshold,
+                         LaplacePartitionSelection::CalculateThreshold(
+                             epsilon, delta, l0_bound));
+    // Use ceil to err on the side of caution:
+    // if noisy_val is an integer less than (double) library_threshold,
+    // a cast of library_threshold may make them appear equal
+    if (std::is_integral<OutputType>::value) {
+      library_threshold = ceil(library_threshold);
+    }
+
+    // The library function assumes that linfinity_bound = 1.
+    // Compensate by subtracting off 1 and adding back linfinity_bound.
+    output.threshold =
+        SafeSubtract<OutputType>(static_cast<OutputType>(library_threshold), 1)
+            .value;
+    output.threshold =
+        SafeAdd<OutputType>(linfinity_bound, output.threshold).value;
+
+    LaplaceMechanism::Builder laplace_builder;
+    laplace_builder.SetL1Sensitivity(l1_sensitivity).SetEpsilon(epsilon);
+    FCP_ASSIGN_OR_RETURN(output.mechanism, laplace_builder.Build());
+    return output;
+  }
+
+  // Steps are nearly identical for Gaussian noise
+  output.use_laplace = false;
+  FCP_ASSIGN_OR_RETURN(double library_threshold,
+                       GaussianPartitionSelection::CalculateThresholdFromStddev(
+                           gaussian_stdev, delta_for_thresholding, l0_bound));
+  // Use ceil to err on the side of caution:
+  // if noisy_val is an integer less than (double) library_threshold,
+  // a cast of library_threshold may make them appear equal
+  if (std::is_integral<OutputType>::value) {
+    library_threshold = ceil(library_threshold);
+  }
+
+  // The library function assumes that linfinity_bound = 1.
+  // Compensate by subtracting off 1 and adding back linfinity_bound.
+  output.threshold =
+      SafeSubtract<OutputType>(static_cast<OutputType>(library_threshold), 1)
+          .value;
+  output.threshold =
+      SafeAdd<OutputType>(linfinity_bound, output.threshold).value;
+  GaussianMechanism::Builder gaussian_builder;
+  gaussian_builder.SetL2Sensitivity(l2_sensitivity)
+      .SetEpsilon(epsilon)
+      .SetDelta(delta_for_noising);
+  FCP_ASSIGN_OR_RETURN(output.mechanism, gaussian_builder.Build());
+  return output;
+}
+
+// Noise is added to each value stored in a column tensor. If the noised value
+// falls below a given threshold, then the index of that value is removed from a
+// set of survivors.
+// NoiseAndThreshold will be run on multiple tensors: upon completion, copies
+// will be made of those tensors such that only data in the surviving indices
+// will be copied.
+// NB: It is possible to write NoiseAndThreshold to cull values that lie below
+// a threshold, but the i-th item of column 1 might not correspond to the i-th
+// item of column 2. So we defer the culling step until we know all indices of
+// the survivors.
+// References: The document Delta_For_Thresholding.pdf found in
+// https://github.com/google/differential-privacy/blob/main/common_docs/ has a
+// proof for the case where inputs are positive; our use of sign() generalizes
+// the analysis to the non-positive case.
+template <typename OutputType>
+StatusOr<Tensor> NoiseAndThreshold(
+    double epsilon, double delta, int64_t l0_bound, OutputType linfinity_bound,
+    double l1_bound, double l2_bound, const Tensor& column_tensor,
+    absl::flat_hash_set<size_t>& survivor_indices,
+    std::vector<bool>& laplace_was_used) {
+  FCP_ASSIGN_OR_RETURN(
+      auto bundle, SetupNoiseAndThreshold(epsilon, delta, l0_bound,
+                                          linfinity_bound, l1_bound, l2_bound));
+  laplace_was_used.push_back(bundle.use_laplace);
+
+  OutputType threshold = bundle.threshold;
+
+  auto column_span = column_tensor.AsSpan<OutputType>();
+  auto noisy_values = std::make_unique<MutableVectorData<OutputType>>();
+  noisy_values->reserve(column_span.size());
+
+  // For every value in the column,
+  for (size_t i = 0; i < column_span.size(); i++) {
+    OutputType value = column_span[i];
+
+    // Add noise and store noisy value
+    OutputType noisy_value = (bundle.mechanism)->AddNoise(value);
+    noisy_values->push_back(noisy_value);
+
+    // If threshold is not crossed, index does not belong in survivor_indices
+    OutputType sign_of_value = sign<OutputType>(value);
+    if (sign_of_value * noisy_value < threshold) {
+      survivor_indices.erase(i);
+    }
+  }
+  return Tensor::Create(internal::TypeTraits<OutputType>::kDataType,
+                        {static_cast<int64_t>(column_span.size())},
+                        std::move(noisy_values));
+}
+
+// Given a column tensor, copy elements whose indices belong to a set of
+// survivors to a new tensor.
+template <typename OutputType>
+StatusOr<Tensor> CopyOnlySurvivors(
+    const Tensor& column_tensor,
+    const absl::flat_hash_set<size_t>& survivor_indices) {
+  auto column_span = column_tensor.AsSpan<OutputType>();
+  std::unique_ptr<MutableVectorData<OutputType>> dest =
+      std::make_unique<MutableVectorData<OutputType>>();
+  dest->reserve(survivor_indices.size());
+  for (size_t i = 0; i < column_span.size(); i++) {
+    if (!survivor_indices.contains(i)) {
+      continue;
+    }
+    dest->push_back(column_span[i]);
+  }
+  return Tensor::Create(internal::TypeTraits<OutputType>::kDataType,
+                        {static_cast<int64_t>(survivor_indices.size())},
+                        std::move(dest));
+}
+// Specialization for string_view. First make a vector of surviving std::strings
+// from the string_views and survivor_indices, then create a Tensor by moving
+// the contents to an intermediate VectorStringData object.
+template <>
+StatusOr<Tensor> CopyOnlySurvivors<string_view>(
+    const Tensor& column_tensor,
+    const absl::flat_hash_set<size_t>& survivor_indices) {
+  auto column_span = column_tensor.AsSpan<string_view>();
+  std::vector<std::string> strings_for_output;
+  strings_for_output.reserve(survivor_indices.size());
+  for (size_t i = 0; i < column_span.size(); i++) {
+    if (!survivor_indices.contains(i)) {
+      continue;
+    }
+    strings_for_output.push_back(std::string(column_span[i]));
+  }
+
+  return Tensor::Create(
+      DT_STRING, {static_cast<int64_t>(survivor_indices.size())},
+      std::make_unique<VectorStringData>(std::move(strings_for_output)));
+}
+}  // namespace internal
 
 DPGroupByAggregator::DPGroupByAggregator(
     const std::vector<TensorSpec>& input_key_specs,
     const std::vector<TensorSpec>* output_key_specs,
     const std::vector<Intrinsic>* intrinsics,
     std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators,
-    int64_t l0_bound)
+    double epsilon_per_agg, double delta_per_agg, int64_t l0_bound)
     : GroupByAggregator(
           input_key_specs, output_key_specs, intrinsics,
           CreateDPKeyCombiner(input_key_specs, output_key_specs, l0_bound),
-          std::move(aggregators)) {}
+          std::move(aggregators)),
+      epsilon_per_agg_(epsilon_per_agg),
+      delta_per_agg_(delta_per_agg),
+      l0_bound_(l0_bound),
+      laplace_was_used_() {}
 
 std::unique_ptr<DPCompositeKeyCombiner>
 DPGroupByAggregator::CreateDPKeyCombiner(
@@ -133,6 +317,82 @@ StatusOr<Tensor> DPGroupByAggregator::CreateOrdinalsByGroupingKeysForMerge(
                         inputs[0]->shape(), std::move(ordinals));
 }
 
+StatusOr<OutputTensorList> DPGroupByAggregator::Report() && {
+  FCP_RETURN_IF_ERROR(CheckValid());
+  if (!CanReport()) {
+    return FCP_STATUS(FAILED_PRECONDITION)
+           << "DPGroupByAggregator::Report: the report goal isn't met";
+  }
+  // Compute the noiseless aggregate.
+  OutputTensorList noiseless_aggregate = std::move(*this).TakeOutputs();
+
+  // We skip noise addition if epsilon is too large to be meaningful
+  if (epsilon_per_agg_ > internal::kEpsilonThreshold) {
+    return noiseless_aggregate;
+  }
+
+  size_t num_aggregations = intrinsics().size();
+
+  // TakeOutputs only includes a key if its name is in output_key_spec
+  size_t num_output_keys = 0;
+  for (int i = 0; i < output_key_specs().size(); ++i) {
+    if (output_key_specs()[i].name().empty()) continue;
+    num_output_keys++;
+  }
+
+  // Create a set of indices, one for each composite key in the histogram.
+  absl::flat_hash_set<size_t> survivor_indices;
+  for (size_t i = 0; i < noiseless_aggregate[0].num_elements(); i++) {
+    survivor_indices.insert(i);
+  }
+
+  // For each aggregation, run NoiseAndThreshold to populate a list of Tensors
+  OutputTensorList noisy_values;
+  noisy_values.reserve(num_aggregations);
+  for (int j = 0; j < num_aggregations; ++j) {
+    const auto& inner_parameters = intrinsics()[j].parameters;
+    const Tensor& linfinity_tensor = inner_parameters[kLinfinityIndex];
+    double l1_bound = inner_parameters[kL1Index].AsScalar<double>();
+    double l2_bound = inner_parameters[kL2Index].AsScalar<double>();
+    size_t column = num_output_keys + j;
+    StatusOr<Tensor> tensor;
+    NUMERICAL_ONLY_DTYPE_CASES(
+        noiseless_aggregate[column].dtype(), OutputType,
+        FCP_ASSIGN_OR_RETURN(
+            tensor, internal::NoiseAndThreshold<OutputType>(
+                        epsilon_per_agg_, delta_per_agg_, l0_bound_,
+                        linfinity_tensor.AsScalar<OutputType>(), l1_bound,
+                        l2_bound, noiseless_aggregate[column], survivor_indices,
+                        laplace_was_used_)));
+    noisy_values.push_back(std::move(tensor.value()));
+  }
+
+  // When there are no grouping keys, aggregation will be scalar. Hence, the
+  // sole "group" does not need to be dropped for DP (because it exists whether
+  // or not a given client contributed data)
+  if (num_keys_per_input() == 0) {
+    survivor_indices.insert(0);
+  }
+
+  // Produce a new list of tensors containing only the survivors of
+  // thresholding
+  OutputTensorList final_histogram;
+  final_histogram.reserve(noiseless_aggregate.size());
+  for (size_t j = 0; j < noiseless_aggregate.size(); j++) {
+    // First batch of Tensors are for keys, second are for the values
+    const Tensor& column_tensor = (j < num_output_keys)
+                                      ? noiseless_aggregate[j]
+                                      : noisy_values[j - num_output_keys];
+    StatusOr<Tensor> tensor;
+    DTYPE_CASES(
+        column_tensor.dtype(), OutputType,
+        FCP_ASSIGN_OR_RETURN(tensor, internal::CopyOnlySurvivors<OutputType>(
+                                         column_tensor, survivor_indices)));
+    final_histogram.push_back(std::move(tensor.value()));
+  }
+  return final_histogram;
+}
+
 StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
     const Intrinsic& intrinsic) const {
   // Check if the intrinsic is well-formed.
@@ -142,12 +402,12 @@ StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
   constexpr int64_t kEpsilonIndex = 0;
   constexpr int64_t kDeltaIndex = 1;
   constexpr int64_t kL0Index = 2;
-  constexpr int kNumParameters = 3;
+  constexpr int kNumInnerParameters = 3;
 
   // Ensure that the parameters list is valid and retrieve the values if so.
-  if (intrinsic.parameters.size() != kNumParameters) {
+  if (intrinsic.parameters.size() != kNumInnerParameters) {
     return FCP_STATUS(INVALID_ARGUMENT)
-           << "DPGroupByFactory: Expected " << kNumParameters
+           << "DPGroupByFactory: Expected " << kNumInnerParameters
            << " parameters"
               " but got "
            << intrinsic.parameters.size() << " of them.";
@@ -164,6 +424,7 @@ StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
     return FCP_STATUS(INVALID_ARGUMENT)
            << "DPGroupByFactory: Epsilon must be positive.";
   }
+  double epsilon_per_agg = epsilon / intrinsic.nested_intrinsics.size();
 
   // Delta must be a number between 0 and 1
   if (internal::GetTypeKind(intrinsic.parameters[kDeltaIndex].dtype()) !=
@@ -176,6 +437,7 @@ StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
     return FCP_STATUS(INVALID_ARGUMENT)
            << "DPGroupByFactory: Delta must lie between 0 and 1.";
   }
+  double delta_per_agg = delta / intrinsic.nested_intrinsics.size();
 
   // L0 bound must be a positive number
   if (internal::GetTypeKind(intrinsic.parameters[kL0Index].dtype()) !=
@@ -188,6 +450,20 @@ StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
     return FCP_STATUS(INVALID_ARGUMENT)
            << "DPGroupByFactory: L0 bound must be positive.";
   }
+  // If no keys are given, scalar aggregation will occur. There is exactly one
+  // "group" in that case.
+  if (intrinsic.inputs.empty()) {
+    l0_bound = 1;
+  }
+
+  // Currently, we only support nested sums.
+  // The following check will be Updated when this changes.
+  for (const auto& intrinsic : intrinsic.nested_intrinsics) {
+    if (intrinsic.uri != kDPSumUri) {
+      return FCP_STATUS(UNIMPLEMENTED) << "DPGroupByFactory: Currently, only "
+                                          "nested DP sums are supported.";
+    }
+  }
 
   // Create nested aggregators.
   std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> nested_aggregators;
@@ -198,8 +474,8 @@ StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
   // a non-public constructor can't use std::make_unique, and we don't want to
   // add a dependency on absl::WrapUnique.
   return std::unique_ptr<DPGroupByAggregator>(new DPGroupByAggregator(
-      intrinsic.inputs, &intrinsic.outputs, &intrinsic.nested_intrinsics,
-      std::move(nested_aggregators), l0_bound));
+      intrinsic.inputs, &intrinsic.outputs, &(intrinsic.nested_intrinsics),
+      std::move(nested_aggregators), epsilon_per_agg, delta_per_agg, l0_bound));
 }
 
 REGISTER_AGGREGATOR_FACTORY(std::string(kDPGroupByUri), DPGroupByFactory);

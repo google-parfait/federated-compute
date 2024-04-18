@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Google LLC
+ * Copyright 2024 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef FCP_AGGREGATION_CORE_FEDSQL_CONSTANTS_H_
-#define FCP_AGGREGATION_CORE_FEDSQL_CONSTANTS_H_
+#ifndef FCP_AGGREGATION_CORE_DP_FEDSQL_CONSTANTS_H_
+#define FCP_AGGREGATION_CORE_DP_FEDSQL_CONSTANTS_H_
 
 namespace fcp {
 namespace aggregation {
 
-// Constants related to intrinsic definitions that are used in multiple files.
+// Constants related to intrinsic definitions that are used in DP-related files.
 // Ideally these would be marked inline to ensure a single copy of each variable
 // but this requires c++17 which is not available when building for bare metal.
 
-// URI of GroupByAggregator
-constexpr char kGroupByUri[] = "fedsql_group_by";
+// URI of DPGroupByAggregator
+constexpr char kDPGroupByUri[] = "fedsql_dp_group_by";
 
-// URI prefix of inner intrinsics
-constexpr char kFedSqlPrefix[] = "GoogleSQL:";
+// URI of DPGroupingFederatedSum
+constexpr char kDPSumUri[] = "GoogleSQL:$differential_privacy_sum";
+
+// In the DPGroupingFederatedSum intrinsic, the following are the indices of
+// the norm bound parameters.
+constexpr int kLinfinityIndex = 0;
+constexpr int kL1Index = 1;
+constexpr int kL2Index = 2;
 
 }  // namespace aggregation
 }  // namespace fcp
 
-#endif  // FCP_AGGREGATION_CORE_FEDSQL_CONSTANTS_H_
+#endif  // FCP_AGGREGATION_CORE_DP_FEDSQL_CONSTANTS_H_

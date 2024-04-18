@@ -171,6 +171,13 @@ class GroupByAggregator : public TensorAggregator {
     return key_combiner_;
   }
 
+  inline const std::vector<Intrinsic>& intrinsics() const {
+    return intrinsics_;
+  }
+  inline const std::vector<TensorSpec>& output_key_specs() const {
+    return output_key_specs_;
+  }
+
  private:
   // Returns either nullptr or a unique_ptr to a CompositeKeyCombiner, depending
   // on the input specification. Relies on CreateKeyTypes.

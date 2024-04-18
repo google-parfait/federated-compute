@@ -147,6 +147,7 @@ cc_library(
     deps = [
         ":agg_core_cc_proto",
         ":aggregator",
+        ":dp_fedsql_constants",
         ":fedsql_constants",
         ":tensor",
         ":tensor_cc_proto",
@@ -154,9 +155,14 @@ cc_library(
         "//fcp/base",
         "@com_google_absl//absl/container:fixed_array",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/random",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@com_google_cc_differential_privacy//algorithms:numerical-mechanisms",
+        "@com_google_cc_differential_privacy//algorithms:partition-selection",
     ],
     alwayslink = 1,
 )
@@ -246,6 +252,11 @@ cc_library(
 cc_library(
     name = "fedsql_constants",
     hdrs = ["fedsql_constants.h"],
+)
+
+cc_library(
+    name = "dp_fedsql_constants",
+    hdrs = ["dp_fedsql_constants.h"],
 )
 
 cc_test(
@@ -394,6 +405,7 @@ cc_test(
     deps = [
         ":aggregation_cores",
         ":aggregator",
+        ":dp_fedsql_constants",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",
@@ -427,12 +439,14 @@ cc_test(
     deps = [
         ":aggregation_cores",
         ":aggregator",
+        ":dp_fedsql_constants",
         ":tensor",
         ":tensor_cc_proto",
         "//fcp/aggregation/testing",
         "//fcp/aggregation/testing:test_data",
         "//fcp/base",
         "//fcp/testing",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )

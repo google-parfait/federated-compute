@@ -24,6 +24,7 @@
 #include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/dp_fedsql_constants.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/mutable_vector_data.h"
 #include "fcp/aggregation/core/one_dim_grouping_aggregator.h"
@@ -35,10 +36,6 @@
 
 namespace fcp {
 namespace aggregation {
-
-// To do: update this string once GoogleSQL analyzer's output is known
-// (b/322987083).
-constexpr char kGoogleSqlDPSumUri[] = "GoogleSQL:dp_sum";
 
 // Below is an implementation of a sum grouping aggregator for numeric types,
 // with clipping of Linfinity, L1, and L2 norms as determined by the
@@ -238,9 +235,9 @@ class DPGroupingFederatedSumFactory final
   StatusOr<std::unique_ptr<TensorAggregator>> CreateInternal(
       const Intrinsic& intrinsic,
       const OneDimGroupingAggregatorState* aggregator_state) const override {
-    FCP_CHECK(kGoogleSqlDPSumUri == intrinsic.uri)
-        << "DPGroupingFederatedSumFactory: Expected intrinsic URI "
-        << kGoogleSqlDPSumUri << " but got uri " << intrinsic.uri;
+    FCP_CHECK(kDPSumUri == intrinsic.uri)
+        << "DPGroupingFederatedSumFactory: Expected intrinsic URI " << kDPSumUri
+        << " but got uri " << intrinsic.uri;
     // Check that the configuration is valid for grouping_federated_sum.
     if (intrinsic.inputs.size() != 1) {
       return FCP_STATUS(INVALID_ARGUMENT)
@@ -312,9 +309,6 @@ class DPGroupingFederatedSumFactory final
       }
     }
 
-    constexpr int64_t kLinfinityIndex = 0;
-    constexpr int64_t kL1Index = 1;
-    constexpr int64_t kL2Index = 2;
     const auto& linfinity_param = intrinsic.parameters[kLinfinityIndex];
     const double l1 = intrinsic.parameters[kL1Index].AsScalar<double>();
     const double l2 = intrinsic.parameters[kL2Index].AsScalar<double>();
@@ -327,7 +321,7 @@ class DPGroupingFederatedSumFactory final
   }
 };
 
-REGISTER_AGGREGATOR_FACTORY(kGoogleSqlDPSumUri, DPGroupingFederatedSumFactory);
+REGISTER_AGGREGATOR_FACTORY(kDPSumUri, DPGroupingFederatedSumFactory);
 
 }  // namespace aggregation
 }  // namespace fcp

@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/strings/match.h"
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/composite_key_combiner.h"
 #include "fcp/aggregation/core/datatype.h"
@@ -437,15 +438,6 @@ GroupByFactory::CreateAggregators(const Intrinsic& intrinsic) {
   std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> nested_aggregators;
   int num_value_inputs = 0;
   for (const Intrinsic& nested : intrinsic.nested_intrinsics) {
-    // Disable lint checks recommending use of absl::StrContains() here, because
-    // we don't want to take a dependency on absl libraries in the aggregation
-    // core implementations.
-    if (nested.uri.find(kFedSqlPrefix)  // NOLINT
-        == std::string::npos) {         // NOLINT
-      return FCP_STATUS(INVALID_ARGUMENT)
-             << "GroupByFactory: Nested intrinsic URIs must start with "
-                "'GoogleSQL:'.";
-    }
     // Resolve the intrinsic_uri to the registered TensorAggregatorFactory.
     FCP_ASSIGN_OR_RETURN(const TensorAggregatorFactory* factory,
                          GetAggregatorFactory(nested.uri));
@@ -473,6 +465,15 @@ StatusOr<std::unique_ptr<TensorAggregator>> GroupByFactory::Create(
   if (!intrinsic.parameters.empty()) {
     return FCP_STATUS(INVALID_ARGUMENT)
            << "GroupByFactory: No input parameters expected.";
+  }
+
+  // The nested intrinsics' URIs should begin with kFedSqlPrefix
+  for (const Intrinsic& nested : intrinsic.nested_intrinsics) {
+    if (!absl::StartsWith(nested.uri, kFedSqlPrefix)) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "GroupByFactory: Nested intrinsic URIs must start with '"
+             << kFedSqlPrefix << "'.";
+    }
   }
 
   // Create nested aggregators.
