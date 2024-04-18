@@ -176,6 +176,7 @@ cc_library(
     deps = [
         ":configuration_cc_proto",
         "//fcp/aggregation/core:aggregator",
+        "//fcp/aggregation/core:dp_fedsql_constants",
         "//fcp/aggregation/core:fedsql_constants",
         "//fcp/aggregation/core:tensor",
         "//fcp/base",

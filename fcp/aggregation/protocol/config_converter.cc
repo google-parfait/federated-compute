@@ -23,6 +23,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "fcp/aggregation/core/datatype.h"
+#include "fcp/aggregation/core/dp_fedsql_constants.h"
 #include "fcp/aggregation/core/fedsql_constants.h"
 #include "fcp/aggregation/core/intrinsic.h"
 #include "fcp/aggregation/core/tensor.h"
@@ -92,10 +93,15 @@ StatusOr<std::vector<Intrinsic>> ParseFromConfig(
   // added to wrap the FedSQL intrinsic. For efficiency, use the same
   // fedsql_group_by to wrap multiple fedsql intrinsics rather than wrapping
   // each with a separate fedsql_group_by.
+  //
+  // For cases that involve DP, a wrapping fedsql_dp_group_by intrinsic is
+  // guaranteed to always be already present because it holds required DP
+  // parameters.
+  //
   // TODO: b/285201184 - Revisit the design decision to perform this
   // transformation in this location; as it requires this class to have special
   // knowledge about FedSQL intrinsics.
-  if (parent_uri != kGroupByUri) {
+  if (parent_uri != kGroupByUri && parent_uri != kDPGroupByUri) {
     need_fedsql_wrapper = true;
   }
   for (const Configuration::IntrinsicConfig& intrinsic_config :
@@ -111,6 +117,11 @@ StatusOr<std::vector<Intrinsic>> ParseFromConfig(
       TransformFedSqlSpecs(intrinsic);
     }
     if (is_fedsql && need_fedsql_wrapper) {
+      if (intrinsic.uri == kDPSumUri) {
+        return FCP_STATUS(INVALID_ARGUMENT)
+               << "Inner DP SQL intrinsics must already be wrapped with an "
+                  "outer DP SQL intrinsic.";
+      }
       wrapped_fedsql_intrinsics.push_back(std::move(intrinsic));
     } else {
       intrinsics.push_back(std::move(intrinsic));

@@ -56,8 +56,11 @@ class ConfigConverterTest : public ::testing::Test {
       RegisterAggregatorFactory("outer_intrinsic", &mock_factory);
       RegisterAggregatorFactory("other_intrinsic", &mock_factory);
       RegisterAggregatorFactory("fedsql_group_by", &mock_factory);
+      RegisterAggregatorFactory("fedsql_dp_group_by", &mock_factory);
       RegisterAggregatorFactory("GoogleSQL:sum", &mock_factory);
       RegisterAggregatorFactory("GoogleSQL:max", &mock_factory);
+      RegisterAggregatorFactory("GoogleSQL:$differential_privacy_sum",
+                                &mock_factory);
       is_registered_ = true;
     }
   }
@@ -432,6 +435,103 @@ TEST_F(ConfigConverterTest, ConvertFedSql_WrapWhenGroupByNotPresent_Nested) {
   expected_outer.nested_intrinsics.push_back(std::move(expected_groupby));
   ASSERT_THAT(parsed_intrinsics.value()[0],
               EqIntrinsic(std::move(expected_outer)));
+}
+
+TEST_F(ConfigConverterTest, ConvertFedSqlDp_GroupByAlreadyPresent) {
+  Configuration config = PARSE_TEXT_PROTO(R"pb(
+    intrinsic_configs: {
+      intrinsic_uri: "fedsql_dp_group_by"
+      intrinsic_args {
+        input_tensor {
+          name: "foo"
+          dtype: DT_INT32
+          shape { dim_sizes: -1 }
+        }
+      }
+      output_tensors {
+        name: "foo_out"
+        dtype: DT_INT32
+        shape { dim_sizes: -1 }
+      }
+      inner_intrinsics {
+        intrinsic_uri: "GoogleSQL:$differential_privacy_sum"
+        intrinsic_args {
+          input_tensor {
+            name: "bar"
+            dtype: DT_INT32
+            shape {}
+          }
+        }
+        output_tensors {
+          name: "bar_out"
+          dtype: DT_INT64
+          shape {}
+        }
+      }
+      inner_intrinsics {
+        intrinsic_uri: "GoogleSQL:$differential_privacy_sum"
+        intrinsic_args {
+          input_tensor {
+            name: "baz"
+            dtype: DT_INT32
+            shape {}
+          }
+        }
+        output_tensors {
+          name: "baz_out"
+          dtype: DT_INT64
+          shape {}
+        }
+      }
+    }
+  )pb");
+  StatusOr<std::vector<Intrinsic>> parsed_intrinsics = ParseFromConfig(config);
+  ASSERT_THAT(parsed_intrinsics, IsOk());
+  ASSERT_THAT(parsed_intrinsics.value(), SizeIs(1));
+  Intrinsic expected_sum_1 = Intrinsic{"GoogleSQL:$differential_privacy_sum",
+                                       {TensorSpec{"bar", DT_INT32, {-1}}},
+                                       {TensorSpec{"bar_out", DT_INT64, {-1}}},
+                                       {},
+                                       {}};
+  Intrinsic expected_sum_2 = Intrinsic{"GoogleSQL:$differential_privacy_sum",
+                                       {TensorSpec{"baz", DT_INT32, {-1}}},
+                                       {TensorSpec{"baz_out", DT_INT64, {-1}}},
+                                       {},
+                                       {}};
+
+  Intrinsic expected{"fedsql_dp_group_by",
+                     {TensorSpec{"foo", DT_INT32, {-1}}},
+                     {TensorSpec{"foo_out", DT_INT32, {-1}}},
+                     {},
+                     {}};
+  expected.nested_intrinsics.push_back(std::move(expected_sum_1));
+  expected.nested_intrinsics.push_back(std::move(expected_sum_2));
+  ASSERT_THAT(parsed_intrinsics.value()[0], EqIntrinsic(std::move(expected)));
+}
+
+TEST_F(ConfigConverterTest, ConvertFedSqlDp_GroupByNotPresent) {
+  Configuration config = PARSE_TEXT_PROTO(R"pb(
+    intrinsic_configs {
+      intrinsic_uri: "GoogleSQL:$differential_privacy_sum"
+      intrinsic_args {
+        input_tensor {
+          name: "bar"
+          dtype: DT_INT32
+          shape {}
+        }
+      }
+      output_tensors {
+        name: "bar_out"
+        dtype: DT_INT64
+        shape {}
+      }
+    }
+  )pb");
+  Status s = ParseFromConfig(config).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(),
+              testing::HasSubstr("Inner DP SQL intrinsics must already be "
+                                 "wrapped with an outer DP SQL intrinsic"));
 }
 
 }  // namespace
