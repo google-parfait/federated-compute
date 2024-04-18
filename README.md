@@ -57,8 +57,28 @@ The best way to get started is to run the end-to-end demo
 clients, and run a federated program; this test will cover the majority of the
 code in this repository.
 
-This is not an officially supported Google product.
+## Remote attestation of server-side, TEE-hosted applications
+
+As described in the
+[Confidential Federated Computations paper](https://arxiv.org/abs/2404.10764),
+this repository hosts a client-side implementation of the
+`ConfidentialAggregations` protocol, which uses remotely attested server-side
+applications that run in a Trusted Execution Environment (TEE).
+
+Clients using this library and which participate in this protocol will verify
+attestation evidence for the ledger application hosted in the
+[Confidential Federated Compute](https://github.com/google-parfait/confidential-federated-compute)
+repository. They will also verify the data access policy that the ledger will
+enforce, which will specify one or more allowed data transformation applications
+which are built from that same repository.
+
+Please see [fcp/client/attestation/README.md](fcp/client/attestation/README.md)
+for more details on this process.
 
 ## Getting Started
 
 Please refer to the instructions in GETTING_STARTED.md.
+
+## Disclaimer
+
+This is not an officially supported Google product.
