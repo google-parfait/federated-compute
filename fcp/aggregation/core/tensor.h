@@ -17,6 +17,7 @@
 #ifndef FCP_AGGREGATION_CORE_TENSOR_H_
 #define FCP_AGGREGATION_CORE_TENSOR_H_
 
+#include <cmath>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -106,13 +107,26 @@ class Tensor final {
     return AggVector<T>(data_.get());
   }
 
-  // Provides access to the (numerical) tensor data as a scalar. Values are
-  // automatically casted to the requested type.
-  template <typename T, typename std::enable_if<!std::is_same<
-                            string_view, T>::value>::type* = nullptr>
-  T AsScalar() const {
+  // Provides access to the (numerical) tensor data as an integral scalar.
+  // Values are automatically casted and rounded.
+  template <typename T, typename std::enable_if<
+                            std::is_integral<T>::value>::type* = nullptr>
+  T CastToScalar() const {
     FCP_CHECK(num_elements() == 1)
-        << "AsScalar should only be used on scalar tensors";
+        << "CastToScalar should only be used on scalar tensors";
+    T scalar_val;
+    NUMERICAL_ONLY_DTYPE_CASES(
+        dtype_, K, scalar_val = static_cast<T>(std::round(*GetData<K>())));
+    return scalar_val;
+  }
+
+  // Provides access to the (numerical) tensor data as a non-integral scalar.
+  // Values are automatically casted to the requested type.
+  template <typename T, typename std::enable_if<
+                            std::is_floating_point<T>::value>::type* = nullptr>
+  T CastToScalar() const {
+    FCP_CHECK(num_elements() == 1)
+        << "CastToScalar should only be used on scalar tensors";
     T scalar_val;
     NUMERICAL_ONLY_DTYPE_CASES(dtype_, K,
                                scalar_val = static_cast<T>(*GetData<K>()));
@@ -122,6 +136,14 @@ class Tensor final {
   // Provides access to the (string) tensor data as a scalar.
   template <typename T, typename std::enable_if<std::is_same<
                             string_view, T>::value>::type* = nullptr>
+  T CastToScalar() const {
+    FCP_CHECK(num_elements() == 1)
+        << "CastToScalar should only be used on scalar tensors";
+    return *GetData<T>();
+  }
+
+  // Provides access to the tensor data as a scalar.
+  template <typename T>
   T AsScalar() const {
     FCP_CHECK(num_elements() == 1)
         << "AsScalar should only be used on scalar tensors";

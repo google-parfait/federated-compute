@@ -310,13 +310,14 @@ class DPGroupingFederatedSumFactory final
     }
 
     const auto& linfinity_param = intrinsic.parameters[kLinfinityIndex];
-    const double l1 = intrinsic.parameters[kL1Index].AsScalar<double>();
-    const double l2 = intrinsic.parameters[kL2Index].AsScalar<double>();
+    const double l1 = intrinsic.parameters[kL1Index].CastToScalar<double>();
+    const double l2 = intrinsic.parameters[kL2Index].CastToScalar<double>();
 
     StatusOr<std::unique_ptr<TensorAggregator>> aggregator;
-    DTYPE_CASES(input_type, T,
-                aggregator = CreateDPGroupingFederatedSum<T>(
-                    linfinity_param.AsScalar<T>(), l1, l2, aggregator_state));
+    DTYPE_CASES(
+        input_type, T,
+        aggregator = CreateDPGroupingFederatedSum<T>(
+            linfinity_param.CastToScalar<T>(), l1, l2, aggregator_state));
     return aggregator;
   }
 };

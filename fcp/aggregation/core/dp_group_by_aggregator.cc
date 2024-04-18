@@ -352,8 +352,8 @@ StatusOr<OutputTensorList> DPGroupByAggregator::Report() && {
   for (int j = 0; j < num_aggregations; ++j) {
     const auto& inner_parameters = intrinsics()[j].parameters;
     const Tensor& linfinity_tensor = inner_parameters[kLinfinityIndex];
-    double l1_bound = inner_parameters[kL1Index].AsScalar<double>();
-    double l2_bound = inner_parameters[kL2Index].AsScalar<double>();
+    double l1_bound = inner_parameters[kL1Index].CastToScalar<double>();
+    double l2_bound = inner_parameters[kL2Index].CastToScalar<double>();
     size_t column = num_output_keys + j;
     StatusOr<Tensor> tensor;
     NUMERICAL_ONLY_DTYPE_CASES(
@@ -361,7 +361,7 @@ StatusOr<OutputTensorList> DPGroupByAggregator::Report() && {
         FCP_ASSIGN_OR_RETURN(
             tensor, internal::NoiseAndThreshold<OutputType>(
                         epsilon_per_agg_, delta_per_agg_, l0_bound_,
-                        linfinity_tensor.AsScalar<OutputType>(), l1_bound,
+                        linfinity_tensor.CastToScalar<OutputType>(), l1_bound,
                         l2_bound, noiseless_aggregate[column], survivor_indices,
                         laplace_was_used_)));
     noisy_values.push_back(std::move(tensor.value()));
@@ -419,7 +419,7 @@ StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
     return FCP_STATUS(INVALID_ARGUMENT)
            << "DPGroupByFactory: Epsilon must be numerical.";
   }
-  double epsilon = intrinsic.parameters[kEpsilonIndex].AsScalar<double>();
+  double epsilon = intrinsic.parameters[kEpsilonIndex].CastToScalar<double>();
   if (epsilon <= 0) {
     return FCP_STATUS(INVALID_ARGUMENT)
            << "DPGroupByFactory: Epsilon must be positive.";
@@ -432,7 +432,7 @@ StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
     return FCP_STATUS(INVALID_ARGUMENT)
            << "DPGroupByFactory: Delta must be numerical.";
   }
-  double delta = intrinsic.parameters[kDeltaIndex].AsScalar<double>();
+  double delta = intrinsic.parameters[kDeltaIndex].CastToScalar<double>();
   if (delta <= 0 || delta >= 1) {
     return FCP_STATUS(INVALID_ARGUMENT)
            << "DPGroupByFactory: Delta must lie between 0 and 1.";
@@ -445,7 +445,7 @@ StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
     return FCP_STATUS(INVALID_ARGUMENT)
            << "DPGroupByFactory: L0 bound must be numerical.";
   }
-  int64_t l0_bound = intrinsic.parameters[kL0Index].AsScalar<int64_t>();
+  int64_t l0_bound = intrinsic.parameters[kL0Index].CastToScalar<int64_t>();
   if (l0_bound <= 0) {
     return FCP_STATUS(INVALID_ARGUMENT)
            << "DPGroupByFactory: L0 bound must be positive.";
