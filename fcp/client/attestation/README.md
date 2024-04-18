@@ -80,7 +80,7 @@ binary protos in the future.
 
 Once you have gathered one or more such records, you can follow the instructions
 in the
-[Confidential Federated Compute](https://github.com/google-parfait/confidential-federated-compute/inspecting_attestion_records/README.md)
+[Confidential Federated Compute](https://github.com/google-parfait/confidential-federated-compute/blob/main/inspecting_attestation_records/README.md)
 repository to inspect the information contained in those records, and to
 identify and inspect the TEE-attested binaries that were allowed to process the
 data that was uploaded by this device during the session in which the
