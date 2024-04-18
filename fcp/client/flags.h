@@ -205,6 +205,12 @@ class Flags {
   virtual bool use_correct_sha256_impl_for_computation_id() const {
     return false;
   }
+
+  // If true, and if a population has tasks which only use native policies and
+  // no TensorFlow-based eligibility eval plan is deployed,
+  // HandleEligibilityEvalTaskResponse will return an EligibilityEvalTask
+  // instead of an EligibilityEvalDisabled result to fl_runner.
+  virtual bool native_only_eligibility_config_support() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

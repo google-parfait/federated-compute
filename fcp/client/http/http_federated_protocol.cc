@@ -565,11 +565,22 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
             FetchProtoResource<PopulationEligibilitySpec>(
                 task.population_eligibility_spec(),
                 "PopulationEligibilitySpec"));
-        if (IsResourceEmpty(task.plan()) &&
-            IsResourceEmpty(task.init_checkpoint())) {
+        // A population may have no TensorFlow-based eligibility eval tasks
+        // configured, but still use native eligibility policies as indicated
+        // by the `population_eligibility_spec.eligibility_policies` field being
+        // nonempty. In this case, we should return an EligibilityEvalTask
+        // instead of an EligibilityEvalDisabled so that the client will still
+        // evaluate native policies. If the flag is disabled, we'll still return
+        // EligibilityEvalDisabled.
+        if ((flags_->native_only_eligibility_config_support() &&
+             population_eligibility_spec.eligibility_policies_size() == 0) ||
+            (!flags_->native_only_eligibility_config_support() &&
+             (IsResourceEmpty(task.plan()) &&
+              IsResourceEmpty(task.init_checkpoint())))) {
           // If both plan and initial checkpoint are empty, it means the
-          // population has no eligibility eval task configured. We'll return a
-          // EligibilityEvalTask with only population_eligibility_spec.
+          // population has no TensorFlow-based eligibility eval task
+          // configured. We'll return a kEligibilityEvalDisabled with only
+          // population_eligibility_spec.
           object_state_ = ObjectState::kEligibilityEvalDisabled;
           return EligibilityEvalDisabled{
               .population_eligibility_spec =
@@ -580,20 +591,27 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
         }
       }
 
-      // Fetch the task resources, returning any errors that may be
-      // encountered in the process.
-      FCP_ASSIGN_OR_RETURN(
-          std::vector<absl::StatusOr<FetchedTaskResources>> task_resources,
-          FetchTaskResources(
-              {TaskResources{.plan = task.plan(),
-                             .checkpoint = task.init_checkpoint(),
-                             // Eligibility eval tasks have no confidential data
-                             // access policy to fetch.
-                             .confidential_data_access_policy = Resource()}}));
-      if (!task_resources[0].ok()) {
-        return task_resources[0].status();
+      // If we are using the native eligibility policy stack, we may not need to
+      // fetch any TensorFlow-based eligibility eval task resources due to all
+      // policies used by the population having native implementations.
+      if (!flags_->native_only_eligibility_config_support() ||
+          (!IsResourceEmpty(task.plan()) &&
+           !IsResourceEmpty(task.init_checkpoint()))) {
+        // If set, fetch the eligibility eval task resources, returning any
+        // errors that may be encountered in the process.
+        FCP_ASSIGN_OR_RETURN(
+            std::vector<absl::StatusOr<FetchedTaskResources>> task_resources,
+            FetchTaskResources({TaskResources{
+                .plan = task.plan(),
+                .checkpoint = task.init_checkpoint(),
+                // Eligibility eval tasks have no confidential data
+                // access policy to fetch.
+                .confidential_data_access_policy = Resource()}}));
+        if (!task_resources[0].ok()) {
+          return task_resources[0].status();
+        }
+        result.payloads = task_resources[0]->plan_and_checkpoint_payloads;
       }
-      result.payloads = task_resources[0]->plan_and_checkpoint_payloads;
 
       object_state_ = ObjectState::kEligibilityEvalEnabled;
       return std::move(result);
