@@ -239,6 +239,12 @@ StatusOr<std::unique_ptr<TensorData>> DecodeContent<string_view>(
   return tensor_data;
 }
 
+class ZeroTensorData : public TensorData {
+ public:
+  const void* data() const override { return this; }
+  size_t byte_size() const override { return 0; }
+};
+
 template <typename T>
 class VectorNumericData : public TensorData {
  public:
@@ -313,7 +319,12 @@ StatusOr<Tensor> Tensor::FromProto(const TensorProto& tensor_proto) {
         data));
   }
   if (data == nullptr) {
-    return FCP_STATUS(INVALID_ARGUMENT) << "Tensor proto contains no data.";
+    if (shape.NumElements().value() != 0) {
+      return FCP_STATUS(INVALID_ARGUMENT)
+             << "Tensor proto contains no data but the shape indicates it is "
+                "non-empty.";
+    }
+    data = std::make_unique<ZeroTensorData>();
   }
   return Create(tensor_proto.dtype(), std::move(shape), std::move(data));
 }

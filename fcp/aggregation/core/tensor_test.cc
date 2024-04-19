@@ -381,10 +381,21 @@ TEST(TensorTest, FromProto_MismatchedType) {
 TEST(TensorTest, FromProto_NoData) {
   TensorProto tensor_proto;
   tensor_proto.set_dtype(DT_STRING);
-  tensor_proto.mutable_shape()->add_dim_sizes(1);
+  tensor_proto.mutable_shape()->add_dim_sizes(0);
+  auto t = Tensor::FromProto(tensor_proto);
+  EXPECT_THAT(t, IsOk());
+  EXPECT_THAT(t->shape().dim_sizes().size(), 1);
+  EXPECT_THAT(t->shape().dim_sizes()[0], 0);
+}
+
+TEST(TensorTest, FromProto_NoData_MismatchShape) {
+  TensorProto tensor_proto;
+  tensor_proto.set_dtype(DT_STRING);
+  tensor_proto.mutable_shape()->add_dim_sizes(2);
   Status s = Tensor::FromProto(tensor_proto).status();
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
-  EXPECT_THAT(s.message(), HasSubstr("Tensor proto contains no data"));
+  EXPECT_THAT(s.message(), HasSubstr("Tensor proto contains no data but the "
+                                     "shape indicates it is non-empty"));
 }
 
 TEST(TensorTest, FromProto_InvalidStringContent) {
@@ -399,6 +410,61 @@ TEST(TensorTest, FromProto_InvalidStringContent) {
   content.append("abc");
   tensor_proto.set_content(content);
   EXPECT_THAT(Tensor::FromProto(tensor_proto), IsCode(INVALID_ARGUMENT));
+}
+
+TEST(TensorTest, RoundTrip_Data_Int) {
+  std::initializer_list<int32_t> values{1, 2, 3, 4};
+  auto t = Tensor::Create(DT_INT32, {2, 2}, CreateTestData(values));
+
+  auto p = t->ToProto();
+  EXPECT_THAT(p.shape().dim_sizes_size(), 2);
+  EXPECT_THAT(p.shape().dim_sizes(0), 2);
+  EXPECT_THAT(p.shape().dim_sizes(1), 2);
+
+  auto result = Tensor::FromProto(p);
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(*result, IsTensor({2, 2}, values));
+}
+
+TEST(TensorTest, RoundTrip_Data_String) {
+  std::initializer_list<string_view> values{"abc",  "de",    "",
+                                            "fghi", "jklmn", "o"};
+  auto t = Tensor::Create(DT_STRING, {2, 3}, CreateTestData(values));
+
+  auto p = t->ToProto();
+  EXPECT_THAT(p.shape().dim_sizes_size(), 2);
+  EXPECT_THAT(p.shape().dim_sizes(0), 2);
+  EXPECT_THAT(p.shape().dim_sizes(1), 3);
+
+  auto result = Tensor::FromProto(p);
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(*result, IsTensor({2, 3}, values));
+}
+
+TEST(TensorTest, RoundTrip_NoData_Int) {
+  std::initializer_list<int32_t> values{};
+  auto t = Tensor::Create(DT_INT32, {0}, CreateTestData(values));
+
+  auto p = t->ToProto();
+  EXPECT_THAT(p.shape().dim_sizes_size(), 1);
+  EXPECT_THAT(p.shape().dim_sizes(0), 0);
+
+  auto result = Tensor::FromProto(p);
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(*result, IsTensor({0}, values));
+}
+
+TEST(TensorTest, RoundTrip_NoData_String) {
+  std::initializer_list<string_view> values{};
+  auto t = Tensor::Create(DT_STRING, {0}, CreateTestData(values));
+
+  auto p = t->ToProto();
+  EXPECT_THAT(p.shape().dim_sizes_size(), 1);
+  EXPECT_THAT(p.shape().dim_sizes(0), 0);
+
+  auto result = Tensor::FromProto(p);
+  EXPECT_THAT(result, IsOk());
+  EXPECT_THAT(*result, IsTensor({0}, values));
 }
 
 }  // namespace

@@ -75,9 +75,11 @@ SummarizeCheckpoint(const absl::Cord& checkpoint);
 template <typename T>
 std::vector<T> TensorValuesToVector(const Tensor& arg) {
   std::vector<T> vec(arg.num_elements());
-  AggVector<T> agg_vector = arg.AsAggVector<T>();
-  for (auto [i, v] : agg_vector) {
-    vec[i] = v;
+  if (arg.num_elements() > 0) {
+    AggVector<T> agg_vector = arg.AsAggVector<T>();
+    for (auto [i, v] : agg_vector) {
+      vec[i] = v;
+    }
   }
   return vec;
 }
