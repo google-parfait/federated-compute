@@ -21,8 +21,10 @@
 
 #include <atomic>
 #include <memory>
+#include <optional>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -55,9 +57,10 @@ class CheckpointAggregator {
 
   // Creates an instance of CheckpointAggregator.
   // The `intrinsics` are expected to be created using `ParseFromConfig` which
-  // validates the configuration.
+  // validates the configuration. CheckpointAggregator does not take any
+  // ownership, and `intrinsics` must outlive it.
   static absl::StatusOr<std::unique_ptr<CheckpointAggregator>> Create(
-      std::vector<Intrinsic> intrinsics);
+      const std::vector<Intrinsic>* intrinsics ABSL_ATTRIBUTE_LIFETIME_BOUND);
 
   // Accumulates a checkpoint via nested tensor aggregators. The tensors are
   // provided by the CheckpointParser instance.
@@ -75,6 +78,10 @@ class CheckpointAggregator {
 
  private:
   CheckpointAggregator(
+      const std::vector<Intrinsic>* intrinsics ABSL_ATTRIBUTE_LIFETIME_BOUND,
+      std::vector<std::unique_ptr<TensorAggregator>> aggregators);
+
+  CheckpointAggregator(
       std::vector<Intrinsic> intrinsics,
       std::vector<std::unique_ptr<TensorAggregator>> aggregators);
 
@@ -88,9 +95,13 @@ class CheckpointAggregator {
   // Protects calls into the aggregators.
   mutable absl::Mutex aggregation_mu_;
 
+  // Intrinsics owned by the CheckpointAggregator. These should not be used
+  // directly, and instead should be accessed through `intrinsics_` which will
+  // point to `owned_intrinsics_` if it is present.
+  std::optional<std::vector<Intrinsic>> const owned_intrinsics_;
   // The intrinsics vector need not be guarded by the mutex, as accessing
   // immutable state can happen concurrently.
-  std::vector<Intrinsic> const intrinsics_;
+  const std::vector<Intrinsic>& intrinsics_;
   // TensorAggregators are not thread safe and must be protected by a mutex.
   std::vector<std::unique_ptr<TensorAggregator>> aggregators_
       ABSL_GUARDED_BY(aggregation_mu_);

@@ -134,7 +134,7 @@ TEST(CheckpointAggregatorTest, CreateFromIntrinsicsSuccess) {
                         {TensorSpec("foo_out", DT_INT32, {})},
                         {},
                         {}});
-  EXPECT_OK(CheckpointAggregator::Create(std::move(intrinsics)));
+  EXPECT_OK(CheckpointAggregator::Create(&intrinsics));
 }
 
 TEST(CheckpointAggregatorTest, CreateFromIntrinsicsUnsupportedNumberOfInputs) {
@@ -145,7 +145,7 @@ TEST(CheckpointAggregatorTest, CreateFromIntrinsicsUnsupportedNumberOfInputs) {
        {TensorSpec("foo_out", DT_INT32, {})},
        {},
        {}});
-  EXPECT_THAT(CheckpointAggregator::Create(std::move(intrinsics)),
+  EXPECT_THAT(CheckpointAggregator::Create(&intrinsics),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -157,7 +157,7 @@ TEST(CheckpointAggregatorTest, CreateFromIntrinsicsUnsupportedNumberOfOutputs) {
                          TensorSpec("bar_out", DT_INT32, {})},
                         {},
                         {}});
-  EXPECT_THAT(CheckpointAggregator::Create(std::move(intrinsics)),
+  EXPECT_THAT(CheckpointAggregator::Create(&intrinsics),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -184,7 +184,7 @@ TEST(CheckpointAggregatorTest, CreateFromIntrinsicsUnsupportedInputType) {
     }
   )pb");
 
-  EXPECT_THAT(CheckpointAggregator::Create(std::move(intrinsics)),
+  EXPECT_THAT(CheckpointAggregator::Create(&intrinsics),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -195,8 +195,7 @@ TEST(CheckpointAggregatorTest, CreateFromIntrinsicsUnsupportedIntrinsicUri) {
                         {TensorSpec("foo_out", DT_INT32, {})},
                         {},
                         {}});
-  EXPECT_THAT(CheckpointAggregator::Create(std::move(intrinsics)),
-              IsCode(NOT_FOUND));
+  EXPECT_THAT(CheckpointAggregator::Create(&intrinsics), IsCode(NOT_FOUND));
 }
 
 TEST(CheckpointAggregatorTest, CreateFromIntrinsicsUnsupportedInputSpec) {
@@ -206,7 +205,7 @@ TEST(CheckpointAggregatorTest, CreateFromIntrinsicsUnsupportedInputSpec) {
                         {TensorSpec("foo_out", DT_INT32, {})},
                         {},
                         {}});
-  EXPECT_THAT(CheckpointAggregator::Create(std::move(intrinsics)),
+  EXPECT_THAT(CheckpointAggregator::Create(&intrinsics),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -218,7 +217,7 @@ TEST(CheckpointAggregatorTest,
                         {TensorSpec("foo_out", DT_FLOAT, {})},
                         {},
                         {}});
-  EXPECT_THAT(CheckpointAggregator::Create(std::move(intrinsics)),
+  EXPECT_THAT(CheckpointAggregator::Create(&intrinsics),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -230,7 +229,7 @@ TEST(CheckpointAggregatorTest,
                         {TensorSpec("foo_out", DT_INT32, {2})},
                         {},
                         {}});
-  EXPECT_THAT(CheckpointAggregator::Create(std::move(intrinsics)),
+  EXPECT_THAT(CheckpointAggregator::Create(&intrinsics),
               IsCode(INVALID_ARGUMENT));
 }
 
@@ -396,6 +395,21 @@ TEST(CheckpointAggregatorTest, CreateMismatchingInputAndOutputShape) {
   )pb");
   EXPECT_THAT(CheckpointAggregator::Create(config_message),
               IsCode(INVALID_ARGUMENT));
+}
+
+TEST(CheckpointAggregatorTest, CreateFromIntrinsicsAccumulateSuccess) {
+  std::vector<Intrinsic> intrinsics;
+  intrinsics.push_back({"federated_sum",
+                        {TensorSpec("foo", DT_INT32, {})},
+                        {TensorSpec("foo_out", DT_INT32, {})},
+                        {},
+                        {}});
+  auto aggregator = CheckpointAggregator::Create(&intrinsics);
+  MockCheckpointParser parser;
+  EXPECT_CALL(parser, GetTensor(StrEq("foo"))).WillOnce(Invoke([] {
+    return Tensor::Create(DT_INT32, {}, CreateTestData({2}));
+  }));
+  EXPECT_OK((*aggregator)->Accumulate(parser));
 }
 
 TEST(CheckpointAggregatorTest, AccumulateMissingTensor) {

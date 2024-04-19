@@ -70,11 +70,6 @@ CheckpointAggregator::Create(const Configuration& configuration) {
   FCP_ASSIGN_OR_RETURN(std::vector<Intrinsic> intrinsics,
                        ParseFromConfig(configuration));
 
-  return Create(std::move(intrinsics));
-}
-
-absl::StatusOr<std::unique_ptr<CheckpointAggregator>>
-CheckpointAggregator::Create(std::vector<Intrinsic> intrinsics) {
   std::vector<std::unique_ptr<TensorAggregator>> aggregators;
   for (const Intrinsic& intrinsic : intrinsics) {
     FCP_ASSIGN_OR_RETURN(std::unique_ptr<TensorAggregator> aggregator,
@@ -86,10 +81,29 @@ CheckpointAggregator::Create(std::vector<Intrinsic> intrinsics) {
       new CheckpointAggregator(std::move(intrinsics), std::move(aggregators)));
 }
 
+absl::StatusOr<std::unique_ptr<CheckpointAggregator>>
+CheckpointAggregator::Create(const std::vector<Intrinsic>* intrinsics) {
+  std::vector<std::unique_ptr<TensorAggregator>> aggregators;
+  for (const Intrinsic& intrinsic : *intrinsics) {
+    FCP_ASSIGN_OR_RETURN(std::unique_ptr<TensorAggregator> aggregator,
+                         CreateAggregator(intrinsic));
+    aggregators.push_back(std::move(aggregator));
+  }
+
+  return absl::WrapUnique(
+      new CheckpointAggregator(intrinsics, std::move(aggregators)));
+}
+
+CheckpointAggregator::CheckpointAggregator(
+    const std::vector<Intrinsic>* intrinsics,
+    std::vector<std::unique_ptr<TensorAggregator>> aggregators)
+    : intrinsics_(*intrinsics), aggregators_(std::move(aggregators)) {}
+
 CheckpointAggregator::CheckpointAggregator(
     std::vector<Intrinsic> intrinsics,
     std::vector<std::unique_ptr<TensorAggregator>> aggregators)
-    : intrinsics_(std::move(intrinsics)),
+    : owned_intrinsics_(std::move(intrinsics)),
+      intrinsics_(*owned_intrinsics_),
       aggregators_(std::move(aggregators)) {}
 
 CheckpointAggregator::~CheckpointAggregator() {
