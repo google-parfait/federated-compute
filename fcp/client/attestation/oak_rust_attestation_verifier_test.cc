@@ -113,6 +113,7 @@ ReferenceValues GetKnownValidReferenceValues() {
     oak_restricted_kernel {
       root_layer {
         amd_sev {
+          min_tcb_version {}
           stage0 {
             digests {
               digests {
@@ -178,7 +179,12 @@ ReferenceValues GetKnownValidReferenceValues() {
 ReferenceValues GetSkipAllReferenceValues() {
   return PARSE_TEXT_PROTO(R"pb(
     oak_restricted_kernel {
-      root_layer { amd_sev { stage0 { skip {} } } }
+      root_layer {
+        amd_sev {
+          min_tcb_version {}
+          stage0 { skip {} }
+        }
+      }
       kernel_layer {
         kernel { skip {} }
         kernel_cmd_line_text { skip {} }
@@ -435,6 +441,10 @@ TEST(OakRustAttestationTest,
   // digests that were earlier reported in the `AttestationResults`.
   ReferenceValues reference_values_from_extracted_evidence;
   // Populate root layer values.
+  reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
+      ->mutable_root_layer()
+      ->mutable_amd_sev()
+      ->mutable_min_tcb_version();
   *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
        ->mutable_root_layer()
        ->mutable_amd_sev()
