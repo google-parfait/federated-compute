@@ -147,15 +147,9 @@ def generate_and_add_flat_buffer_to_plan(plan: _PlanT) -> _PlanT:
     plan.client_tflite_graph_bytes = convert(
         client_graph_def, plan.phase[0].client_phase.tensorflow_spec
     )
-    # The TFLite flatbuffer replaces the legacy TF GraphDef, so we clear out the
-    # client_graph_bytes field.
-    plan.ClearField('client_graph_bytes')
   elif isinstance(plan, plan_pb2.ClientOnlyPlan):
     client_graph_def = tf.compat.v1.GraphDef.FromString(plan.graph)
     plan.tflite_graph = convert(client_graph_def, plan.phase.tensorflow_spec)
-    # The TFLite flatbuffer replaces the legacy TF GraphDef, so we clear out the
-    # graph field.
-    plan.ClearField('graph')
   else:
     raise NotImplementedError(f'Unsupported _PlanT {type(plan)}')
   return plan
