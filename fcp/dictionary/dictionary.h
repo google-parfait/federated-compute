@@ -37,7 +37,7 @@ class Dictionary {
   virtual int32_t Size() const = 0;
 
   // Returns the index of token in the dictionary or kNotFound if not found.
-  virtual int32_t TokenToId(const std::string& token) const = 0;
+  virtual int32_t TokenToId(absl::string_view token) const = 0;
 
   // Maps an ID to a string if the ID represents a valid token.
   // Returns "" on error.

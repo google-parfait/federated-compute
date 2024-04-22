@@ -42,7 +42,7 @@ namespace {
 
 // Map a string to an ID, using a bidirectional map (an std::pair containing
 // two data structures for string -> int and for int -> string lookups).
-int32_t MapLookup(const HashVectorBimap& bimap, const std::string& tag) {
+int32_t MapLookup(const HashVectorBimap& bimap, const absl::string_view tag) {
   auto map_idx = bimap.first.find(tag);
   return map_idx == bimap.first.end() ? Dictionary::kNotFound : map_idx->second;
 }
@@ -98,7 +98,7 @@ class DictionaryImpl : public Dictionary {
     return GetSize(*bimap_) + max_special_id_ + 1;
   }
 
-  int32_t TokenToId(const std::string& tag) const override {
+  int32_t TokenToId(const absl::string_view tag) const override {
     int32_t id = MapLookup(*bimap_, tag);
     if (id == kNotFound) {
       return special_ids_.unk();
@@ -167,10 +167,10 @@ absl::StatusOr<std::unique_ptr<Dictionary>> Dictionary::Create(
     auto bimap = std::make_unique<HashVectorBimap>();
     int i = 0;
     bimap->second.reserve(description.vocabulary().index().token_size());
-    for (const std::string& token : description.vocabulary().index().token()) {
+    for (absl::string_view token : description.vocabulary().index().token()) {
       FCP_CHECK(!token.empty());
       bimap->first[token] = i++;
-      bimap->second.push_back(token);
+      bimap->second.emplace_back(token);
     }
     return std::unique_ptr<Dictionary>(new DictionaryImpl<HashVectorBimap>(
         std::move(bimap), description.special_ids(),

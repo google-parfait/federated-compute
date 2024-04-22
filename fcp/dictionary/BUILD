@@ -62,6 +62,7 @@ cc_test(
         "//fcp/base",
         "//fcp/testing:parse_text_proto",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )
