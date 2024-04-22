@@ -685,6 +685,27 @@ TEST_P(DPGroupingFederatedSumTest, VectorMergeSucceeds) {
   EXPECT_THAT(result.value()[0], IsTensor({5}, expected_sum));
 }
 
+// The tests so far have set (input type, output type) to (int32, int64) or
+// (float, double) or (int64, int64) or (double, double). Now we ensure that we
+// can create aggregators for (int32, int32) and (float, float)
+TEST(DPGroupingFederatedSumTest, CreateMatchingInputAndOutputDataType) {
+  Intrinsic intrinsic_int32{kDPSumUri,
+                            {TensorSpec{"foo", DT_INT32, {}}},
+                            {TensorSpec{"foo_out", DT_INT32, {}}},
+                            {CreateDPGFSParameters<int32_t>(1000, -1, -1)},
+                            {}};
+  Status s = CreateTensorAggregator(intrinsic_int32).status();
+  EXPECT_OK(s);
+
+  Intrinsic intrinsic_float{kDPSumUri,
+                            {TensorSpec{"foo", DT_FLOAT, {}}},
+                            {TensorSpec{"foo_out", DT_FLOAT, {}}},
+                            {CreateDPGFSParameters<float>(1000, -1, -1)},
+                            {}};
+  s = CreateTensorAggregator(intrinsic_float).status();
+  EXPECT_OK(s);
+}
+
 TEST(DPGroupingFederatedSumTest, CreateWrongUri) {
   Intrinsic intrinsic =
       Intrinsic{"wrong_uri",
@@ -785,22 +806,11 @@ TEST(DPGroupingFederatedSumTest, CatchUnsupportedStringType) {
   Intrinsic intrinsic{kDPSumUri,
                       {CreateTensorSpec("value", DT_STRING)},
                       {CreateTensorSpec("value", DT_STRING)},
-                      {CreateDPGFSParameters<string_view>("hello", -1, -1)},
+                      {CreateDPGFSParameters<int64_t>(1000, -1, -1)},
                       {}};
   Status s = CreateTensorAggregator(intrinsic).status();
   EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(s.message(), HasSubstr("only supports numeric datatypes"));
-}
-
-TEST(DPGroupingFederatedSumTest, CatchUnsupportedNumericType) {
-  Intrinsic intrinsic{kDPSumUri,
-                      {CreateTensorSpec("value", DT_UINT64)},
-                      {CreateTensorSpec("value", DT_UINT64)},
-                      {CreateDPGFSParameters<uint64_t>(1000, -1, -1)},
-                      {}};
-  Status s = CreateTensorAggregator(intrinsic).status();
-  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
-  EXPECT_THAT(s.message(), HasSubstr("does not support"));
 }
 
 TEST(DPGroupingFederatedSumTest, Deserialize_Unimplemented) {
