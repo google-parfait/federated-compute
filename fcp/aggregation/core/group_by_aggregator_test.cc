@@ -46,6 +46,9 @@ using testing::Eq;
 using testing::HasSubstr;
 using testing::IsFalse;
 using testing::IsTrue;
+using testing::TestWithParam;
+
+using GroupByAggregatorTest = TestWithParam<bool>;
 
 TensorSpec CreateTensorSpec(std::string name, DataType dtype) {
   return TensorSpec(name, dtype, {-1});
@@ -86,11 +89,18 @@ Intrinsic CreateDefaultIntrinsic() {
   return intrinsic;
 }
 
-TEST(GroupByAggregatorTest, EmptyReport) {
+TEST_P(GroupByAggregatorTest, EmptyReport) {
   // Intrinsic lifetime must outlast that of the TensorAggregator.
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
 
   auto result = std::move(*group_by_aggregator).Report();
   EXPECT_THAT(result, IsOk());
@@ -100,7 +110,7 @@ TEST(GroupByAggregatorTest, EmptyReport) {
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({0}, {}));
 }
 
-TEST(GroupByAggregatorTest, ScalarAggregation_Succeeds) {
+TEST_P(GroupByAggregatorTest, ScalarAggregation_Succeeds) {
   // Intrinsic lifetime must outlast that of the TensorAggregator.
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
@@ -112,6 +122,14 @@ TEST(GroupByAggregatorTest, ScalarAggregation_Succeeds) {
   Tensor t3 = Tensor::Create(DT_INT32, {}, CreateTestData({3})).value();
   EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
   EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t2}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t3}), IsOk());
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
 
@@ -123,7 +141,7 @@ TEST(GroupByAggregatorTest, ScalarAggregation_Succeeds) {
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({1}, {6}));
 }
 
-TEST(GroupByAggregatorTest, AggregateOnlyEmptyTensorsSucceeds) {
+TEST_P(GroupByAggregatorTest, AggregateOnlyEmptyTensorsSucceeds) {
   // Intrinsic lifetime must outlast that of the TensorAggregator.
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
@@ -133,6 +151,14 @@ TEST(GroupByAggregatorTest, AggregateOnlyEmptyTensorsSucceeds) {
       Tensor::Create(DT_INT32, {0}, CreateTestData<int32_t>({})).value();
   EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
   EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   EXPECT_THAT(group_by_aggregator->Accumulate({&key, &t1}), IsOk());
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(3));
@@ -145,7 +171,7 @@ TEST(GroupByAggregatorTest, AggregateOnlyEmptyTensorsSucceeds) {
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({0}, {}));
 }
 
-TEST(GroupByAggregatorTest, DenseAggregation_Succeeds) {
+TEST_P(GroupByAggregatorTest, DenseAggregation_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
@@ -162,6 +188,14 @@ TEST(GroupByAggregatorTest, DenseAggregation_Succeeds) {
       Tensor::Create(DT_INT32, shape, CreateTestData({3, 11, 7, 20})).value();
   EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t1}), IsOk());
   EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t2}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   EXPECT_THAT(group_by_aggregator->Accumulate({&keys, &t3}), IsOk());
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(3));
@@ -178,7 +212,7 @@ TEST(GroupByAggregatorTest, DenseAggregation_Succeeds) {
   EXPECT_TRUE(result.value()[1].is_dense());
 }
 
-TEST(GroupByAggregatorTest, AccumulateEmptyInputDoesNotAffectResult) {
+TEST_P(GroupByAggregatorTest, AccumulateEmptyInputDoesNotAffectResult) {
   const TensorShape shape = {4};
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
@@ -209,6 +243,13 @@ TEST(GroupByAggregatorTest, AccumulateEmptyInputDoesNotAffectResult) {
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(4));
 
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   auto result = std::move(*group_by_aggregator).Report();
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result->size(), Eq(2));
@@ -221,7 +262,7 @@ TEST(GroupByAggregatorTest, AccumulateEmptyInputDoesNotAffectResult) {
   EXPECT_TRUE(result.value()[1].is_dense());
 }
 
-TEST(GroupByAggregatorTest, DifferentKeysPerAccumulate_Succeeds) {
+TEST_P(GroupByAggregatorTest, DifferentKeysPerAccumulate_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
@@ -243,6 +284,14 @@ TEST(GroupByAggregatorTest, DifferentKeysPerAccumulate_Succeeds) {
       Tensor::Create(DT_INT32, shape, CreateTestData({10, 5, 1, 2})).value();
   EXPECT_THAT(group_by_aggregator->Accumulate({&keys2, &t2}), IsOk());
   // Totals: [9, 26, 27, 2]
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   Tensor keys3 =
       Tensor::Create(DT_STRING, shape,
                      CreateTestData<string_view>({"two", "two", "four", "one"}))
@@ -264,7 +313,7 @@ TEST(GroupByAggregatorTest, DifferentKeysPerAccumulate_Succeeds) {
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({5}, {9, 46, 41, 2, 7}));
 }
 
-TEST(GroupByAggregatorTest, DifferentShapesPerAccumulate_Succeeds) {
+TEST_P(GroupByAggregatorTest, DifferentShapesPerAccumulate_Succeeds) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
 
@@ -283,6 +332,14 @@ TEST(GroupByAggregatorTest, DifferentShapesPerAccumulate_Succeeds) {
                   .value();
   EXPECT_THAT(group_by_aggregator->Accumulate({&keys2, &t2}), IsOk());
   // Totals: [2, 10, 19, 4]
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   Tensor keys3 =
       Tensor::Create(
           DT_STRING, {5},
@@ -305,7 +362,7 @@ TEST(GroupByAggregatorTest, DifferentShapesPerAccumulate_Succeeds) {
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({5}, {8, 17, 33, 4, 3}));
 }
 
-TEST(GroupByAggregatorTest, Accumulate_MultipleValueTensors_Succeeds) {
+TEST_P(GroupByAggregatorTest, Accumulate_MultipleValueTensors_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic{"fedsql_group_by",
                       {CreateTensorSpec("key", DT_STRING)},
@@ -343,6 +400,13 @@ TEST(GroupByAggregatorTest, Accumulate_MultipleValueTensors_Succeeds) {
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2));
 
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   auto result = std::move(*group_by_aggregator).Report();
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result.value().size(), Eq(3));
@@ -353,7 +417,7 @@ TEST(GroupByAggregatorTest, Accumulate_MultipleValueTensors_Succeeds) {
   EXPECT_THAT(result.value()[2], IsTensor<int64_t>({4}, {28, 10, 14, 8}));
 }
 
-TEST(GroupByAggregatorTest, Accumulate_NoValueTensors_Succeeds) {
+TEST_P(GroupByAggregatorTest, Accumulate_NoValueTensors_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic{"fedsql_group_by",
                       {CreateTensorSpec("key", DT_STRING)},
@@ -377,6 +441,13 @@ TEST(GroupByAggregatorTest, Accumulate_NoValueTensors_Succeeds) {
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2));
 
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   auto result = std::move(*group_by_aggregator).Report();
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result.value().size(), Eq(1));
@@ -385,7 +456,7 @@ TEST(GroupByAggregatorTest, Accumulate_NoValueTensors_Succeeds) {
               IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
 }
 
-TEST(GroupByAggregatorTest, Accumulate_MultipleKeyTensors_Succeeds) {
+TEST_P(GroupByAggregatorTest, Accumulate_MultipleKeyTensors_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic{"fedsql_group_by",
                       {CreateTensorSpec("key1", DT_STRING),
@@ -425,6 +496,14 @@ TEST(GroupByAggregatorTest, Accumulate_MultipleKeyTensors_Succeeds) {
   EXPECT_THAT(group_by_aggregator->Accumulate({&sizeKeys2, &animalKeys2, &t2}),
               IsOk());
   // Totals: [9, 26, 27, 2]
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   Tensor sizeKeys3 =
       Tensor::Create(
           DT_STRING, shape,
@@ -456,8 +535,8 @@ TEST(GroupByAggregatorTest, Accumulate_MultipleKeyTensors_Succeeds) {
   EXPECT_THAT(result.value()[2], IsTensor<int64_t>({5}, {9, 46, 41, 2, 7}));
 }
 
-TEST(GroupByAggregatorTest,
-     Accumulate_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
+TEST_P(GroupByAggregatorTest,
+       Accumulate_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic{
       "fedsql_group_by",
@@ -503,6 +582,13 @@ TEST(GroupByAggregatorTest,
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2));
 
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   auto result = std::move(*group_by_aggregator).Report();
   EXPECT_THAT(result, IsOk());
   // Verify the resulting tensors.
@@ -513,8 +599,8 @@ TEST(GroupByAggregatorTest,
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({4}, {9, 26, 27, 2}));
 }
 
-TEST(GroupByAggregatorTest,
-     MultipleKeyTensorsSomeKeysNotInOutputSucceedsWhenAllInputsEmpty) {
+TEST_P(GroupByAggregatorTest,
+       MultipleKeyTensorsSomeKeysNotInOutputSucceedsWhenAllInputsEmpty) {
   const TensorShape shape = {0};
   Intrinsic intrinsic{
       "fedsql_group_by",
@@ -541,6 +627,13 @@ TEST(GroupByAggregatorTest,
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2));
 
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   auto result = std::move(*group_by_aggregator).Report();
   EXPECT_THAT(result, IsOk());
   // Verify the resulting tensors, which should be empty.
@@ -550,7 +643,7 @@ TEST(GroupByAggregatorTest,
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({0}, {}));
 }
 
-TEST(GroupByAggregatorTest, Accumulate_NoKeyTensors) {
+TEST_P(GroupByAggregatorTest, Accumulate_NoKeyTensors) {
   Intrinsic intrinsic{"fedsql_group_by", {}, {}, {}, {}};
   intrinsic.nested_intrinsics.push_back(
       CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
@@ -561,6 +654,14 @@ TEST(GroupByAggregatorTest, Accumulate_NoKeyTensors) {
   EXPECT_THAT(group_by_aggregator->Accumulate({&t1}), IsOk());
   Tensor t2 = Tensor::Create(DT_INT32, {3}, CreateTestData({10, 5, 1})).value();
   EXPECT_THAT(group_by_aggregator->Accumulate({&t2}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   Tensor t3 =
       Tensor::Create(DT_INT32, {5}, CreateTestData({3, 11, 7, 20, 5})).value();
   EXPECT_THAT(group_by_aggregator->Accumulate({&t3}), IsOk());
@@ -575,7 +676,7 @@ TEST(GroupByAggregatorTest, Accumulate_NoKeyTensors) {
   EXPECT_THAT(result.value()[0], IsTensor<int64_t>({1}, {108}));
 }
 
-TEST(GroupByAggregatorTest, Merge_Succeeds) {
+TEST_P(GroupByAggregatorTest, Merge_Succeeds) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto aggregator1 = CreateTensorAggregator(intrinsic).value();
   auto aggregator2 = CreateTensorAggregator(intrinsic).value();
@@ -594,6 +695,17 @@ TEST(GroupByAggregatorTest, Merge_Succeeds) {
   EXPECT_THAT(aggregator2->Accumulate({&key, &t4}), IsOk());
   EXPECT_THAT(aggregator2->Accumulate({&key, &t5}), IsOk());
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
   EXPECT_THAT(aggregator1->GetNumInputs(), Eq(5));
@@ -605,7 +717,7 @@ TEST(GroupByAggregatorTest, Merge_Succeeds) {
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({1}, {15}));
 }
 
-TEST(GroupByAggregatorTest, Merge_MultipleValueTensors_Succeeds) {
+TEST_P(GroupByAggregatorTest, Merge_MultipleValueTensors_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic{"fedsql_group_by",
                       {CreateTensorSpec("key", DT_STRING)},
@@ -656,6 +768,17 @@ TEST(GroupByAggregatorTest, Merge_MultipleValueTensors_Succeeds) {
       Tensor::Create(DT_INT32, shape, CreateTestData({6, 1, 4, 12})).value();
   EXPECT_THAT(aggregator2->Accumulate({&keys3, &tA3, &tB3}), IsOk());
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
   // Merge the two aggregators together.
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
@@ -670,7 +793,7 @@ TEST(GroupByAggregatorTest, Merge_MultipleValueTensors_Succeeds) {
   EXPECT_THAT(result.value()[2], IsTensor<int64_t>({4}, {28, 10, 27, 18}));
 }
 
-TEST(GroupByAggregatorTest, Merge_NoValueTensors_Succeeds) {
+TEST_P(GroupByAggregatorTest, Merge_NoValueTensors_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic{"fedsql_group_by",
                       {CreateTensorSpec("key", DT_STRING)},
@@ -703,6 +826,17 @@ TEST(GroupByAggregatorTest, Merge_NoValueTensors_Succeeds) {
           .value();
   EXPECT_THAT(aggregator2->Accumulate({&keys3}), IsOk());
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
   // Merge the two aggregators together.
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
@@ -715,7 +849,7 @@ TEST(GroupByAggregatorTest, Merge_NoValueTensors_Succeeds) {
               IsTensor<string_view>({4}, {"zero", "one", "two", "three"}));
 }
 
-TEST(GroupByAggregatorTest, Merge_MultipleKeyTensors_Succeeds) {
+TEST_P(GroupByAggregatorTest, Merge_MultipleKeyTensors_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic{"fedsql_group_by",
                       {CreateTensorSpec("key1", DT_STRING),
@@ -770,6 +904,17 @@ TEST(GroupByAggregatorTest, Merge_MultipleKeyTensors_Succeeds) {
       Tensor::Create(DT_INT32, shape, CreateTestData({3, 11, 7, 20})).value();
   EXPECT_THAT(aggregator2->Accumulate({&sizeKeys3, &animalKeys3, &t3}), IsOk());
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
   // Merge the two aggregators together.
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   // Merged totals: [9, 46, 41, 2, 7]
@@ -789,8 +934,8 @@ TEST(GroupByAggregatorTest, Merge_MultipleKeyTensors_Succeeds) {
   EXPECT_THAT(result.value()[2], IsTensor<int64_t>({5}, {9, 46, 41, 2, 7}));
 }
 
-TEST(GroupByAggregatorTest,
-     Merge_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
+TEST_P(GroupByAggregatorTest,
+       Merge_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic{
       "fedsql_group_by",
@@ -846,6 +991,17 @@ TEST(GroupByAggregatorTest,
       Tensor::Create(DT_INT32, shape, CreateTestData({3, 11, 7, 20})).value();
   EXPECT_THAT(aggregator2->Accumulate({&sizeKeys3, &animalKeys3, &t3}), IsOk());
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
   // Merge the two aggregators together.
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   // Merged totals: [9, 46, 41, 2, 7]
@@ -863,7 +1019,7 @@ TEST(GroupByAggregatorTest,
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({5}, {9, 46, 41, 2, 7}));
 }
 
-TEST(GroupByAggregatorTest, Merge_NoKeyTensors) {
+TEST_P(GroupByAggregatorTest, Merge_NoKeyTensors) {
   Intrinsic intrinsic{"fedsql_group_by", {}, {}, {}, {}};
   intrinsic.nested_intrinsics.push_back(
       CreateDefaultInnerIntrinsic(DT_INT32, DT_INT64));
@@ -880,6 +1036,17 @@ TEST(GroupByAggregatorTest, Merge_NoKeyTensors) {
       Tensor::Create(DT_INT32, {5}, CreateTestData({3, 11, 7, 20, 5})).value();
   EXPECT_THAT(aggregator2->Accumulate({&t3}), IsOk());
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
   // Merge the two aggregators together.
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
@@ -892,7 +1059,7 @@ TEST(GroupByAggregatorTest, Merge_NoKeyTensors) {
   EXPECT_THAT(result.value()[0], IsTensor<int64_t>({1}, {108}));
 }
 
-TEST(GroupByAggregatorTest, MergeThisOutputReceivedNoInputsSucceeds) {
+TEST_P(GroupByAggregatorTest, MergeThisOutputReceivedNoInputsSucceeds) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto aggregator1 = CreateTensorAggregator(intrinsic).value();
   auto aggregator2 = CreateTensorAggregator(intrinsic).value();
@@ -913,6 +1080,17 @@ TEST(GroupByAggregatorTest, MergeThisOutputReceivedNoInputsSucceeds) {
   EXPECT_THAT(aggregator2->Accumulate({&keys2, &t2}), IsOk());
   // aggregator2 totals: [2, 10, 19, 4]
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
   // Merge aggregator2 into aggregator1 which has not received any inputs.
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
@@ -929,7 +1107,7 @@ TEST(GroupByAggregatorTest, MergeThisOutputReceivedNoInputsSucceeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupByAggregatorTest, MergeThisOutputReceivedOnlyEmptyInputsSucceeds) {
+TEST_P(GroupByAggregatorTest, MergeThisOutputReceivedOnlyEmptyInputsSucceeds) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto aggregator1 = CreateTensorAggregator(intrinsic).value();
   auto aggregator2 = CreateTensorAggregator(intrinsic).value();
@@ -957,6 +1135,17 @@ TEST(GroupByAggregatorTest, MergeThisOutputReceivedOnlyEmptyInputsSucceeds) {
       Tensor::Create(DT_INT32, {0}, CreateTestData<int32_t>({})).value();
   EXPECT_THAT(aggregator1->Accumulate({&empty_keys, &empty_tensor}), IsOk());
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
   // Merge aggregator2 into aggregator1 which has not received any inputs.
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
@@ -973,7 +1162,7 @@ TEST(GroupByAggregatorTest, MergeThisOutputReceivedOnlyEmptyInputsSucceeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupByAggregatorTest, MergeOtherAggregatorReceivedNoInputsSucceeds) {
+TEST_P(GroupByAggregatorTest, MergeOtherAggregatorReceivedNoInputsSucceeds) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto aggregator1 = CreateTensorAggregator(intrinsic).value();
   auto aggregator2 = CreateTensorAggregator(intrinsic).value();
@@ -994,6 +1183,17 @@ TEST(GroupByAggregatorTest, MergeOtherAggregatorReceivedNoInputsSucceeds) {
   EXPECT_THAT(aggregator1->Accumulate({&keys2, &t2}), IsOk());
   // aggregator1 totals: [2, 10, 19, 4]
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
+
   // Merge with aggregator2 which has not received any inputs.
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
   EXPECT_THAT(aggregator1->CanReport(), IsTrue());
@@ -1010,8 +1210,8 @@ TEST(GroupByAggregatorTest, MergeOtherAggregatorReceivedNoInputsSucceeds) {
   EXPECT_TRUE(result.value()[0].is_dense());
 }
 
-TEST(GroupByAggregatorTest,
-     MergeOtherAggregatorReceivedOnlyEmptyInputsSucceeds) {
+TEST_P(GroupByAggregatorTest,
+       MergeOtherAggregatorReceivedOnlyEmptyInputsSucceeds) {
   Intrinsic intrinsic = CreateDefaultIntrinsic();
   auto aggregator1 = CreateTensorAggregator(intrinsic).value();
   auto aggregator2 = CreateTensorAggregator(intrinsic).value();
@@ -1038,6 +1238,17 @@ TEST(GroupByAggregatorTest,
   Tensor empty_tensor =
       Tensor::Create(DT_INT32, {0}, CreateTestData<int32_t>({})).value();
   EXPECT_THAT(aggregator2->Accumulate({&empty_keys, &empty_tensor}), IsOk());
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*aggregator1).Serialize();
+    aggregator1 =
+        DeserializeTensorAggregator(intrinsic, serialized_state1.value())
+            .value();
+    auto serialized_state2 = std::move(*aggregator2).Serialize();
+    aggregator2 =
+        DeserializeTensorAggregator(intrinsic, serialized_state2.value())
+            .value();
+  }
 
   // Merge with aggregator2 which has only received empty inputs.
   EXPECT_THAT(aggregator1->MergeWith(std::move(*aggregator2)), IsOk());
@@ -1490,6 +1701,21 @@ TEST(GroupByFactoryTest, SubIntrinsicNotGroupingAggregator) {
   EXPECT_THAT(s.message(),
               HasSubstr("Nested intrinsic URIs must start with 'GoogleSQL:'"));
 }
+
+TEST(GroupByAggregatorTest, Deserialize_FailToParseProto) {
+  Intrinsic intrinsic = CreateDefaultIntrinsic();
+  std::string invalid_state("invalid_state");
+  Status s = DeserializeTensorAggregator(intrinsic, invalid_state).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(), HasSubstr("Failed to parse"));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    GroupByAggregatorTestInstantiation, GroupByAggregatorTest,
+    testing::ValuesIn<bool>({false, true}),
+    [](const testing::TestParamInfo<GroupByAggregatorTest::ParamType>& info) {
+      return info.param ? "SerializeDeserialize" : "None";
+    });
 
 }  // namespace
 }  // namespace aggregation

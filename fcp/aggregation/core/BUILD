@@ -55,6 +55,7 @@ py_proto_library(
 proto_library(
     name = "agg_core_proto",
     srcs = ["agg_core.proto"],
+    deps = [":tensor_proto"],
 )
 
 cc_proto_library(
@@ -177,6 +178,7 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_cc_differential_privacy//algorithms:numerical-mechanisms",
         "@com_google_cc_differential_privacy//algorithms:partition-selection",
+        "@com_google_protobuf//:protobuf",
     ],
     alwayslink = 1,
 )

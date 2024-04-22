@@ -50,6 +50,9 @@ using testing::Eq;
 using testing::Gt;
 using testing::HasSubstr;
 using testing::IsTrue;
+using testing::TestWithParam;
+
+using DPGroupByAggregatorTest = TestWithParam<bool>;
 
 TensorSpec CreateTensorSpec(std::string name, DataType dtype) {
   return TensorSpec(name, dtype, {-1});
@@ -248,6 +251,14 @@ TEST(DPGroupByAggregatorTest, CatchInvalidParameterValues) {
   EXPECT_THAT(bad_l0_bound.message(), HasSubstr("L0 bound must be positive"));
 }
 
+TEST(DPGroupByAggregatorTest, Deserialize_FailToParseProto) {
+  auto intrinsic = CreateIntrinsic<int64_t, int64_t>(100, 0.01, 1);
+  std::string invalid_state("invalid_state");
+  Status s = DeserializeTensorAggregator(intrinsic, invalid_state).status();
+  EXPECT_THAT(s, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(s.message(), HasSubstr("Failed to parse"));
+}
+
 TEST(DPGroupByAggregatorTest, CatchUnsupportedNestedIntrinsic) {
   Intrinsic intrinsic = {kDPGroupByUri,
                          {CreateTensorSpec("key", DT_STRING)},
@@ -272,7 +283,7 @@ template <typename InputType>
 StatusOr<OutputTensorList> SingleKeySingleAgg(
     const Intrinsic& intrinsic, const TensorShape shape,
     std::initializer_list<string_view> key_list,
-    std::initializer_list<InputType> value_list) {
+    std::initializer_list<InputType> value_list, bool serialize_deserialize) {
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
   Tensor keys =
       Tensor::Create(DT_STRING, shape, CreateTestData<string_view>(key_list))
@@ -284,6 +295,13 @@ StatusOr<OutputTensorList> SingleKeySingleAgg(
           .value();
   auto acc_status = group_by_aggregator->Accumulate({&keys, &value_tensor});
 
+  if (serialize_deserialize) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   EXPECT_THAT(acc_status, IsOk());
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(1));
@@ -293,12 +311,13 @@ StatusOr<OutputTensorList> SingleKeySingleAgg(
 
 // Second batch of tests are dedicated to norm bounding when there is only one
 // inner aggregation (GROUP BY key, SUM(value))
-TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithL0Bound) {
+TEST_P(DPGroupByAggregatorTest, SingleKeySingleAggWithL0Bound) {
   // L0 bounding involves randomness so we should repeat things to catch errors.
   for (int i = 0; i < 9; i++) {
     auto intrinsic = CreateIntrinsic<int64_t, int64_t>(100, 0.01, 1);
-    auto result = SingleKeySingleAgg<int64_t>(
-        intrinsic, {4}, {"zero", "one", "two", "zero"}, {1, 3, 15, 27});
+    auto result = SingleKeySingleAgg<int64_t>(intrinsic, {4},
+                                              {"zero", "one", "two", "zero"},
+                                              {1, 3, 15, 27}, GetParam());
     EXPECT_THAT(result, IsOk());
     EXPECT_THAT(result->size(), Eq(2));
 
@@ -329,12 +348,13 @@ TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithL0Bound) {
   }
 }
 
-TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithL0LinfinityBounds) {
+TEST_P(DPGroupByAggregatorTest, SingleKeySingleAggWithL0LinfinityBounds) {
   for (int i = 0; i < 9; i++) {
     // Use the same setup as before but now impose a maximum magnitude of 12
     auto intrinsic = CreateIntrinsic<int64_t, int64_t>(100, 0.01, 1, 12);
-    auto result = SingleKeySingleAgg<int64_t>(
-        intrinsic, {4}, {"zero", "one", "two", "zero"}, {1, 3, 15, 27});
+    auto result = SingleKeySingleAgg<int64_t>(intrinsic, {4},
+                                              {"zero", "one", "two", "zero"},
+                                              {1, 3, 15, 27}, GetParam());
     EXPECT_THAT(result, IsOk());
     EXPECT_THAT(result->size(), Eq(2));
 
@@ -365,14 +385,14 @@ TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithL0LinfinityBounds) {
   }
 }
 
-TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithL0LinfinityL1Bounds) {
+TEST_P(DPGroupByAggregatorTest, SingleKeySingleAggWithL0LinfinityL1Bounds) {
   for (int i = 0; i < 9; i++) {
     // L0 bound is 4 (four keys), Linfinity bound is 50 (|value| <= 50),
     // and L1 bound is 100 (sum over |value| is <= 100)
     auto intrinsic = CreateIntrinsic<int64_t, int64_t>(100, 0.01, 4, 50, 100);
     auto result = SingleKeySingleAgg<int64_t>(
         intrinsic, {5}, {"zero", "one", "two", "three", "four"},
-        {60, 60, 60, 60, 60});
+        {60, 60, 60, 60, 60}, GetParam());
     EXPECT_THAT(result, IsOk());
     EXPECT_THAT(result->size(), Eq(2));
 
@@ -385,7 +405,7 @@ TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithL0LinfinityL1Bounds) {
   }
 }
 
-TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithAllBounds) {
+TEST_P(DPGroupByAggregatorTest, SingleKeySingleAggWithAllBounds) {
   for (int i = 0; i < 9; i++) {
     // L0 bound is 4 (four keys), Linfinity bound is 50 (|value| <= 50),
     // L1 bound is 100 (sum over |value| is <= 100), and L2 bound is 10
@@ -393,7 +413,7 @@ TEST(DPGroupByAggregatorTest, SingleKeySingleAggWithAllBounds) {
         CreateIntrinsic<int64_t, int64_t>(100, 0.01, 4, 50, 100, 10);
     auto result = SingleKeySingleAgg<int64_t>(
         intrinsic, {5}, {"zero", "one", "two", "three", "four"},
-        {60, 60, 60, 60, 60});
+        {60, 60, 60, 60, 60}, GetParam());
     EXPECT_THAT(result, IsOk());
     EXPECT_THAT(result->size(), Eq(2));
 
@@ -436,7 +456,7 @@ StatusOr<OutputTensorList> SingleKeyDoubleAgg(
     const Intrinsic& intrinsic, const TensorShape shape,
     std::initializer_list<string_view> key_list,
     std::initializer_list<InputType> value_list1,
-    std::initializer_list<InputType> value_list2) {
+    std::initializer_list<InputType> value_list2, bool serialize_deserialize) {
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
   Tensor keys =
       Tensor::Create(DT_STRING, shape, CreateTestData<string_view>(key_list))
@@ -453,6 +473,13 @@ StatusOr<OutputTensorList> SingleKeyDoubleAgg(
   auto acc_status =
       group_by_aggregator->Accumulate({&keys, &value_tensor1, &value_tensor2});
 
+  if (serialize_deserialize) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   EXPECT_THAT(acc_status, IsOk());
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(1));
@@ -460,7 +487,7 @@ StatusOr<OutputTensorList> SingleKeyDoubleAgg(
   return std::move(*group_by_aggregator).Report();
 }
 
-TEST(DPGroupByAggregatorTest, SingleKeyDoubleAggWithAllBounds) {
+TEST_P(DPGroupByAggregatorTest, SingleKeyDoubleAggWithAllBounds) {
   for (int i = 0; i < 9; i++) {
     // L0 bound is 4.
     // For agg 1, Linfinity bound is 20 and no other bounds provided.
@@ -469,7 +496,7 @@ TEST(DPGroupByAggregatorTest, SingleKeyDoubleAggWithAllBounds) {
                                                            -1, -1, 50, 100, 10);
     auto result = SingleKeyDoubleAgg<int64_t>(
         intrinsic, {5}, {"zero", "one", "two", "three", "four"},
-        {60, 60, 60, 60, 60}, {60, 60, 60, 60, 60});
+        {60, 60, 60, 60, 60}, {60, 60, 60, 60, 60}, GetParam());
     EXPECT_THAT(result, IsOk());
     EXPECT_THAT(result->size(), Eq(3));
 
@@ -518,7 +545,7 @@ StatusOr<OutputTensorList> DoubleKeyDoubleAgg(
     std::initializer_list<string_view> key_list1,
     std::initializer_list<string_view> key_list2,
     std::initializer_list<InputType> value_list1,
-    std::initializer_list<InputType> value_list2) {
+    std::initializer_list<InputType> value_list2, bool serialize_deserialize) {
   auto group_by_aggregator = CreateTensorAggregator(intrinsic).value();
   Tensor keys1 =
       Tensor::Create(DT_STRING, shape, CreateTestData<string_view>(key_list1))
@@ -538,6 +565,13 @@ StatusOr<OutputTensorList> DoubleKeyDoubleAgg(
   auto acc_status = group_by_aggregator->Accumulate(
       {&keys1, &keys2, &value_tensor1, &value_tensor2});
 
+  if (serialize_deserialize) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   EXPECT_THAT(acc_status, IsOk());
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
   EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(1));
@@ -545,7 +579,7 @@ StatusOr<OutputTensorList> DoubleKeyDoubleAgg(
   return std::move(*group_by_aggregator).Report();
 }
 
-TEST(DPGroupByAggregatorTest, DoubleKeyDoubleAggWithAllBounds) {
+TEST_P(DPGroupByAggregatorTest, DoubleKeyDoubleAggWithAllBounds) {
   for (int i = 0; i < 9; i++) {
     // L0 bound is 4.
     // For agg 1, Linfinity bound is 20 and no other bounds provided.
@@ -555,7 +589,7 @@ TEST(DPGroupByAggregatorTest, DoubleKeyDoubleAggWithAllBounds) {
     auto result = DoubleKeyDoubleAgg<int64_t>(
         intrinsic, {5}, {"red", "green", "green", "blue", "gray"},
         {"zero", "one", "two", "three", "four"}, {60, 60, 60, 60, 60},
-        {60, 60, 60, 60, 60});
+        {60, 60, 60, 60, 60}, GetParam());
     EXPECT_THAT(result, IsOk());
     EXPECT_THAT(result->size(), Eq(4));
 
@@ -601,7 +635,7 @@ Intrinsic CreateIntrinsicNoKeys(double epsilon = 100.0, double delta = 0.001,
   return intrinsic;
 }
 
-TEST(DPGroupByAggregatorTest, NoKeyTripleAggWithAllBounds) {
+TEST_P(DPGroupByAggregatorTest, NoKeyTripleAggWithAllBounds) {
   Intrinsic intrinsic = CreateIntrinsicNoKeys<int32_t, int64_t>(
       1000, 0.01, 100, 10, 9, 8,  // limit to 8
       100, 9, -1,                 // limit to 9
@@ -613,6 +647,13 @@ TEST(DPGroupByAggregatorTest, NoKeyTripleAggWithAllBounds) {
   Tensor t3 = Tensor::Create(DT_INT32, {}, CreateTestData({11})).value();
   EXPECT_THAT(group_by_aggregator->Accumulate({&t1, &t2, &t3}), IsOk());
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
 
   auto result = std::move(*group_by_aggregator).Report();
   EXPECT_THAT(result, IsOk());
@@ -626,7 +667,7 @@ TEST(DPGroupByAggregatorTest, NoKeyTripleAggWithAllBounds) {
 
 // Check that noise is added at all: the noised sum should not be the same as
 // the unnoised sum. The chance of a false negative shrinks with epsilon.
-TEST(DPGroupByAggregatorTest, NoiseAddedForSmallEpsilons) {
+TEST_P(DPGroupByAggregatorTest, NoiseAddedForSmallEpsilons) {
   Intrinsic intrinsic = CreateIntrinsic<int32_t, int64_t>(0.05, 1e-8, 2, 1);
   auto dpgba = CreateTensorAggregator(intrinsic).value();
   int num_inputs = 1000;
@@ -641,6 +682,13 @@ TEST(DPGroupByAggregatorTest, NoiseAddedForSmallEpsilons) {
   }
   EXPECT_EQ(dpgba->GetNumInputs(), num_inputs);
   EXPECT_TRUE(dpgba->CanReport());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*dpgba).Serialize();
+    dpgba = DeserializeTensorAggregator(intrinsic, serialized_state.value())
+                .value();
+  }
+
   auto report = std::move(*dpgba).Report();
   EXPECT_THAT(report, IsOk());
   EXPECT_EQ(report->size(), 2);
@@ -651,7 +699,7 @@ TEST(DPGroupByAggregatorTest, NoiseAddedForSmallEpsilons) {
 
 // Check that SetupNoiseAndThreshold is capable of switching between
 // distributions
-TEST(DPGroupByAggregatorTest, SetupNoiseAndThreshold_CorrectDistribution) {
+TEST_P(DPGroupByAggregatorTest, SetupNoiseAndThreshold_CorrectDistribution) {
   // "Baseline" intrinsic where Laplace was chosen
   Intrinsic intrinsic1 =
       CreateIntrinsic<int32_t, int64_t>(1.0, 1e-6, 1, 5, -1, -1);
@@ -693,7 +741,7 @@ TEST(DPGroupByAggregatorTest, SetupNoiseAndThreshold_CorrectDistribution) {
 // This test has a small probability of failing due to false positives: noise
 // could push the 0 past the threshold. It also has a small probability of
 // failing due to false negatives: noise could push the 100 below the threshold.
-TEST(DPGroupByAggregatorTest, SingleKeyDropAggregatesWithValueZero) {
+TEST_P(DPGroupByAggregatorTest, SingleKeyDropAggregatesWithValueZero) {
   // epsilon = 1, delta= 1e-8, L0 bound = 2, Linfinity bound = 1
   Intrinsic intrinsic =
       CreateIntrinsic2Agg<int32_t, int64_t>(1.0, 1e-8, 2, 1, -1, -1, 1, -1, -1);
@@ -721,6 +769,13 @@ TEST(DPGroupByAggregatorTest, SingleKeyDropAggregatesWithValueZero) {
 
   EXPECT_THAT(dpgba->GetNumInputs(), Eq(num_inputs));
   EXPECT_THAT(dpgba->CanReport(), IsTrue());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*dpgba).Serialize();
+    dpgba = DeserializeTensorAggregator(intrinsic, serialized_state.value())
+                .value();
+  }
+
   auto report = std::move(*dpgba).Report();
   EXPECT_THAT(report, IsOk());
   EXPECT_THAT(report->size(), Eq(3));
@@ -741,7 +796,7 @@ TEST(DPGroupByAggregatorTest, SingleKeyDropAggregatesWithValueZero) {
 // a given client contributed data)
 // This test should never fail because DPGroupByAggregator & its factory check
 // for the no key case and force aggregates to survive.
-TEST(DPGroupByAggregatorTest, NoKeyNoDrop) {
+TEST_P(DPGroupByAggregatorTest, NoKeyNoDrop) {
   Intrinsic intrinsic = CreateIntrinsicNoKeys<int32_t, int64_t>(
       1.0, 1e-8, 3, 10, 9, 8,  // limit to 8
       100, 9, -1,              // limit to 9
@@ -755,6 +810,14 @@ TEST(DPGroupByAggregatorTest, NoKeyNoDrop) {
   }
 
   EXPECT_THAT(group_by_aggregator->CanReport(), IsTrue());
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   auto result = std::move(*group_by_aggregator).Report();
   EXPECT_THAT(result, IsOk());
   EXPECT_THAT(result.value().size(), Eq(3));
@@ -767,8 +830,8 @@ TEST(DPGroupByAggregatorTest, NoKeyNoDrop) {
 
 // Test to verify that Report() still drops key columns that were given empty
 // labels.
-TEST(DPGroupByAggregatorTest,
-     Accumulate_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
+TEST_P(DPGroupByAggregatorTest,
+       Accumulate_MultipleKeyTensors_SomeKeysNotInOutput_Succeeds) {
   const TensorShape shape = {4};
   Intrinsic intrinsic{
       kDPGroupByUri,
@@ -821,6 +884,14 @@ TEST(DPGroupByAggregatorTest,
     // Totals: [3, 5, 4, 4]
     EXPECT_THAT(group_by_aggregator->GetNumInputs(), Eq(2 * (i + 1)));
   }
+
+  if (GetParam()) {
+    auto serialized_state = std::move(*group_by_aggregator).Serialize();
+    group_by_aggregator =
+        DeserializeTensorAggregator(intrinsic, serialized_state.value())
+            .value();
+  }
+
   // Totals: [600, 1000, 800, 800]
   ASSERT_THAT(group_by_aggregator->CanReport(), IsTrue());
   auto result = std::move(*group_by_aggregator).Report();
@@ -850,7 +921,7 @@ TEST(DPGroupByAggregatorTest,
 
 // Finally, test merge: intermediary aggregates should not be clipped or noised
 
-TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_SingleKey) {
+TEST_P(DPGroupByAggregatorTest, MergeDoesNotDistortData_SingleKey) {
   // For any single user's data we will give to the aggregators, the norm bounds
   // below do nothing: each Accumulate call has 1 distinct key and a value of 1,
   // which satisfies the L0 bound and Linfinity bound constraints.
@@ -886,6 +957,13 @@ TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_SingleKey) {
     EXPECT_THAT(agg2->Accumulate({&key_b, &data_b}), IsOk());
   }
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*agg1).Serialize().value();
+    auto serialized_state2 = std::move(*agg2).Serialize().value();
+    agg1 = DeserializeTensorAggregator(intrinsic, serialized_state1).value();
+    agg2 = DeserializeTensorAggregator(intrinsic, serialized_state2).value();
+  }
+
   // Merge the aggregators. The result should contain the 3 different keys.
   // "key" should map to 1 while the other two keys should map to 1000.
   // If we wrote merge wrong, the code might do the following to agg2:
@@ -900,7 +978,7 @@ TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_SingleKey) {
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({3}, {1, 1000, 1000}));
 }
 
-TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_MultiKey) {
+TEST_P(DPGroupByAggregatorTest, MergeDoesNotDistortData_MultiKey) {
   Intrinsic intrinsic =
       CreateIntrinsic2Key2Agg<int64_t, int64_t>(100, 0.001, 1, 1, -1, -1);
   auto agg1 = CreateTensorAggregator(intrinsic).value();
@@ -932,6 +1010,14 @@ TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_MultiKey) {
             .value();
     EXPECT_THAT(agg2->Accumulate({&white, &grape, &data1, &data2}), IsOk());
   }
+
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*agg1).Serialize().value();
+    auto serialized_state2 = std::move(*agg2).Serialize().value();
+    agg1 = DeserializeTensorAggregator(intrinsic, serialized_state1).value();
+    agg2 = DeserializeTensorAggregator(intrinsic, serialized_state2).value();
+  }
+
   // Merge the aggregators. The result should contain two different keys.
   // "red apple" should map to 1001, 1001 while "white grape" should map to
   // 1000, 1000.
@@ -946,7 +1032,7 @@ TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_MultiKey) {
   EXPECT_THAT(result.value()[2], IsTensor<int64_t>({2}, {1001, 1000}));
 }
 
-TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_NoKeys) {
+TEST_P(DPGroupByAggregatorTest, MergeDoesNotDistortData_NoKeys) {
   Intrinsic intrinsic{"fedsql_dp_group_by",
                       {},
                       {},
@@ -974,6 +1060,13 @@ TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_NoKeys) {
   }
   // Aggregate should be 8000, 9000 due to contribution bounding.
 
+  if (GetParam()) {
+    auto serialized_state1 = std::move(*agg1).Serialize().value();
+    auto serialized_state2 = std::move(*agg2).Serialize().value();
+    agg1 = DeserializeTensorAggregator(intrinsic, serialized_state1).value();
+    agg2 = DeserializeTensorAggregator(intrinsic, serialized_state2).value();
+  }
+
   auto merge_status = agg1->MergeWith(std::move(*agg2));
   EXPECT_OK(merge_status);
   auto result = std::move(*agg1).Report();
@@ -982,6 +1075,13 @@ TEST(DPGroupByAggregatorTest, MergeDoesNotDistortData_NoKeys) {
   EXPECT_THAT(result.value()[0], IsTensor<int64_t>({1}, {8001}));
   EXPECT_THAT(result.value()[1], IsTensor<int64_t>({1}, {9001}));
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    DPGroupByAggregatorTestInstantiation, DPGroupByAggregatorTest,
+    testing::ValuesIn<bool>({false, true}),
+    [](const testing::TestParamInfo<DPGroupByAggregatorTest::ParamType>& info) {
+      return info.param ? "SerializeDeserialize" : "None";
+    });
 
 }  // namespace
 }  // namespace aggregation

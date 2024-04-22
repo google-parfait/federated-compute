@@ -68,7 +68,7 @@ class DPCompositeKeyCombiner : public CompositeKeyCombiner {
                                        TensorShape& shape, size_t num_elements);
 
  private:
-  int64_t l0_bound_;
+  const int64_t l0_bound_;
   absl::BitGen bitgen_;
 
   // Friend class that supports the operations done in

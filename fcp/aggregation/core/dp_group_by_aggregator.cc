@@ -31,6 +31,7 @@
 #include "absl/types/span.h"
 #include "algorithms/numerical-mechanisms.h"
 #include "algorithms/partition-selection.h"
+#include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/composite_key_combiner.h"
 #include "fcp/aggregation/core/datatype.h"
 #include "fcp/aggregation/core/dp_composite_key_combiner.h"
@@ -268,16 +269,16 @@ DPGroupByAggregator::DPGroupByAggregator(
     const std::vector<TensorSpec>& input_key_specs,
     const std::vector<TensorSpec>* output_key_specs,
     const std::vector<Intrinsic>* intrinsics,
+    std::unique_ptr<CompositeKeyCombiner> key_combiner,
     std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators,
-    double epsilon_per_agg, double delta_per_agg, int64_t l0_bound)
-    : GroupByAggregator(
-          input_key_specs, output_key_specs, intrinsics,
-          CreateDPKeyCombiner(input_key_specs, output_key_specs, l0_bound),
-          std::move(aggregators)),
+    double epsilon_per_agg, double delta_per_agg, int64_t l0_bound,
+    int num_inputs)
+    : GroupByAggregator(input_key_specs, output_key_specs, intrinsics,
+                        std::move(key_combiner), std::move(aggregators),
+                        num_inputs),
       epsilon_per_agg_(epsilon_per_agg),
       delta_per_agg_(delta_per_agg),
-      l0_bound_(l0_bound),
-      laplace_was_used_() {}
+      l0_bound_(l0_bound) {}
 
 std::unique_ptr<DPCompositeKeyCombiner>
 DPGroupByAggregator::CreateDPKeyCombiner(
@@ -395,6 +396,22 @@ StatusOr<OutputTensorList> DPGroupByAggregator::Report() && {
 
 StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
     const Intrinsic& intrinsic) const {
+  return CreateInternal(intrinsic, nullptr);
+}
+
+StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Deserialize(
+    const Intrinsic& intrinsic, std::string serialized_state) const {
+  GroupByAggregatorState aggregator_state;
+  if (!aggregator_state.ParseFromString(serialized_state)) {
+    return FCP_STATUS(INVALID_ARGUMENT) << "DPGroupByFactory::Deserialize: "
+                                           "Failed to parse serialized state.";
+  }
+  return CreateInternal(intrinsic, &aggregator_state);
+}
+
+StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::CreateInternal(
+    const Intrinsic& intrinsic,
+    const GroupByAggregatorState* aggregator_state) const {
   // Check if the intrinsic is well-formed.
   FCP_RETURN_IF_ERROR(GroupByFactory::CheckIntrinsic(intrinsic, kDPGroupByUri));
 
@@ -467,15 +484,27 @@ StatusOr<std::unique_ptr<TensorAggregator>> DPGroupByFactory::Create(
 
   // Create nested aggregators.
   std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> nested_aggregators;
-  FCP_ASSIGN_OR_RETURN(nested_aggregators,
-                       GroupByFactory::CreateAggregators(intrinsic));
+  FCP_ASSIGN_OR_RETURN(nested_aggregators, GroupByFactory::CreateAggregators(
+                                               intrinsic, aggregator_state));
+
+  // Create the DP key combiner, and only populate the key combiner with state
+  // if there are keys.
+  auto key_combiner = DPGroupByAggregator::CreateDPKeyCombiner(
+      intrinsic.inputs, &intrinsic.outputs, l0_bound);
+  if (aggregator_state != nullptr && key_combiner != nullptr) {
+    FCP_RETURN_IF_ERROR(GroupByFactory::PopulateKeyCombinerFromState(
+        *key_combiner, *aggregator_state));
+  }
+
+  int num_inputs = aggregator_state ? aggregator_state->num_inputs() : 0;
 
   // Use new rather than make_unique here because the factory function that uses
   // a non-public constructor can't use std::make_unique, and we don't want to
   // add a dependency on absl::WrapUnique.
   return std::unique_ptr<DPGroupByAggregator>(new DPGroupByAggregator(
       intrinsic.inputs, &intrinsic.outputs, &(intrinsic.nested_intrinsics),
-      std::move(nested_aggregators), epsilon_per_agg, delta_per_agg, l0_bound));
+      std::move(key_combiner), std::move(nested_aggregators), epsilon_per_agg,
+      delta_per_agg, l0_bound, num_inputs));
 }
 
 REGISTER_AGGREGATOR_FACTORY(std::string(kDPGroupByUri), DPGroupByFactory);

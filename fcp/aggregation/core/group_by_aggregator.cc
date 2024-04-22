@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "absl/strings/match.h"
+#include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/agg_vector.h"
 #include "fcp/aggregation/core/composite_key_combiner.h"
 #include "fcp/aggregation/core/datatype.h"
@@ -40,6 +41,7 @@
 #include "fcp/aggregation/core/tensor_shape.h"
 #include "fcp/aggregation/core/tensor_spec.h"
 #include "fcp/base/monitoring.h"
+#include "google/protobuf/repeated_ptr_field.h"
 
 namespace fcp {
 namespace aggregation {
@@ -49,8 +51,9 @@ GroupByAggregator::GroupByAggregator(
     const std::vector<TensorSpec>* output_key_specs,
     const std::vector<Intrinsic>* intrinsics,
     std::unique_ptr<CompositeKeyCombiner> key_combiner,
-    std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators)
-    : num_inputs_(0),
+    std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators,
+    int num_inputs)
+    : num_inputs_(num_inputs),
       num_keys_per_input_(input_key_specs.size()),
       key_combiner_(std::move(key_combiner)),
       intrinsics_(*intrinsics),
@@ -72,15 +75,6 @@ GroupByAggregator::GroupByAggregator(
       << "GroupByAggregator: Size of input_key_specs must match size of "
          "output_key_specs.";
 }
-
-GroupByAggregator::GroupByAggregator(
-    const std::vector<TensorSpec>& input_key_specs,
-    const std::vector<TensorSpec>* output_key_specs,
-    const std::vector<Intrinsic>* intrinsics,
-    std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators)
-    : GroupByAggregator(input_key_specs, output_key_specs, intrinsics,
-                        CreateKeyCombiner(input_key_specs, output_key_specs),
-                        std::move(aggregators)) {}
 
 std::unique_ptr<CompositeKeyCombiner> GroupByAggregator::CreateKeyCombiner(
     const std::vector<TensorSpec>& input_key_specs,
@@ -202,6 +196,28 @@ inline Status GroupByAggregator::ValidateInputTensor(
            << "GroupByAggregator: Only dense tensors are supported.";
   }
   return FCP_STATUS(OK);
+}
+
+StatusOr<std::string> GroupByAggregator::Serialize() && {
+  GroupByAggregatorState state;
+  state.set_num_inputs(num_inputs_);
+  // If keys are being used, store the current list of output keys into state.
+  if (key_combiner_ != nullptr) {
+    OutputTensorList keys = key_combiner_->GetOutputKeys();
+    google::protobuf::RepeatedPtrField<TensorProto>* keys_proto = state.mutable_keys();
+    keys_proto->Reserve(keys.size());
+    for (int i = 0; i < keys.size(); ++i) {
+      keys_proto->Add(keys[i].ToProto());
+    }
+  }
+  // Store the state of the nested aggregators.
+  google::protobuf::RepeatedPtrField<OneDimGroupingAggregatorState>*
+      nested_aggregators_proto = state.mutable_nested_aggregators();
+  nested_aggregators_proto->Reserve(aggregators_.size());
+  for (auto const& nested_aggregator : aggregators_) {
+    nested_aggregators_proto->Add(nested_aggregator->ToProto());
+  }
+  return state.SerializeAsString();
 }
 
 Status GroupByAggregator::AggregateTensorsInternal(InputTensorList tensors) {
@@ -434,16 +450,31 @@ Status GroupByFactory::CheckIntrinsic(const Intrinsic& intrinsic,
 
 // Create a vector of OneDimBaseGroupingAggregators based upon nested intrinsics
 StatusOr<std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>>>
-GroupByFactory::CreateAggregators(const Intrinsic& intrinsic) {
+GroupByFactory::CreateAggregators(
+    const Intrinsic& intrinsic,
+    const GroupByAggregatorState* aggregator_state) {
   std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> nested_aggregators;
   int num_value_inputs = 0;
-  for (const Intrinsic& nested : intrinsic.nested_intrinsics) {
+  for (int i = 0; i < intrinsic.nested_intrinsics.size(); ++i) {
+    const Intrinsic& nested = intrinsic.nested_intrinsics[i];
+    const OneDimGroupingAggregatorState* nested_state =
+        aggregator_state == nullptr ? nullptr
+                                    : &aggregator_state->nested_aggregators(i);
     // Resolve the intrinsic_uri to the registered TensorAggregatorFactory.
     FCP_ASSIGN_OR_RETURN(const TensorAggregatorFactory* factory,
                          GetAggregatorFactory(nested.uri));
 
-    // Use the factory to create the TensorAggregator instance.
-    FCP_ASSIGN_OR_RETURN(auto nested_aggregator, factory->Create(nested));
+    // Use the factory to create or deserialize the TensorAggregator instance.
+    std::unique_ptr<TensorAggregator> nested_aggregator;
+    if (nested_state == nullptr) {
+      FCP_ASSIGN_OR_RETURN(nested_aggregator, factory->Create(nested));
+    } else {
+      auto one_dim_base_factory =
+          dynamic_cast<const OneDimBaseGroupingAggregatorFactory*>(factory);
+      FCP_CHECK(one_dim_base_factory != nullptr);
+      FCP_ASSIGN_OR_RETURN(nested_aggregator, one_dim_base_factory->FromProto(
+                                                  nested, *nested_state));
+    }
     nested_aggregators.push_back(std::unique_ptr<OneDimBaseGroupingAggregator>(
         dynamic_cast<OneDimBaseGroupingAggregator*>(
             nested_aggregator.release())));
@@ -456,8 +487,39 @@ GroupByFactory::CreateAggregators(const Intrinsic& intrinsic) {
   return nested_aggregators;
 }
 
+Status GroupByFactory::PopulateKeyCombinerFromState(
+    CompositeKeyCombiner& key_combiner,
+    const GroupByAggregatorState& aggregator_state) {
+  if (aggregator_state.num_inputs() == 0) {
+    return FCP_STATUS(OK);
+  }
+  std::vector<Tensor> key_tensors(aggregator_state.keys().size());
+  InputTensorList keys(aggregator_state.keys().size());
+  for (int i = 0; i < aggregator_state.keys().size(); ++i) {
+    key_tensors[i] = Tensor::FromProto(aggregator_state.keys(i)).value();
+    keys[i] = &(key_tensors[i]);
+  }
+  return key_combiner.CompositeKeyCombiner::Accumulate(keys).status();
+}
+
 StatusOr<std::unique_ptr<TensorAggregator>> GroupByFactory::Create(
     const Intrinsic& intrinsic) const {
+  return CreateInternal(intrinsic, nullptr);
+}
+
+StatusOr<std::unique_ptr<TensorAggregator>> GroupByFactory::Deserialize(
+    const Intrinsic& intrinsic, std::string serialized_state) const {
+  GroupByAggregatorState aggregator_state;
+  if (!aggregator_state.ParseFromString(serialized_state)) {
+    return FCP_STATUS(INVALID_ARGUMENT)
+           << "GroupByFactory: Failed to parse serialized aggregator.";
+  }
+  return CreateInternal(intrinsic, &aggregator_state);
+}
+
+StatusOr<std::unique_ptr<TensorAggregator>> GroupByFactory::CreateInternal(
+    const Intrinsic& intrinsic,
+    const GroupByAggregatorState* aggregator_state) const {
   // Check that the configuration is valid for fedsql_group_by.
   FCP_RETURN_IF_ERROR(CheckIntrinsic(intrinsic, kGroupByUri));
 
@@ -478,14 +540,26 @@ StatusOr<std::unique_ptr<TensorAggregator>> GroupByFactory::Create(
 
   // Create nested aggregators.
   std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> nested_aggregators;
-  FCP_ASSIGN_OR_RETURN(nested_aggregators, CreateAggregators(intrinsic));
+  FCP_ASSIGN_OR_RETURN(nested_aggregators,
+                       CreateAggregators(intrinsic, aggregator_state));
+
+  // Create the key combiner, and only populate the key combiner with state if
+  // there are keys.
+  auto key_combiner = GroupByAggregator::CreateKeyCombiner(intrinsic.inputs,
+                                                           &intrinsic.outputs);
+  if (aggregator_state != nullptr && key_combiner != nullptr) {
+    FCP_RETURN_IF_ERROR(
+        PopulateKeyCombinerFromState(*key_combiner, *aggregator_state));
+  }
+
+  int num_inputs = aggregator_state ? aggregator_state->num_inputs() : 0;
 
   // Use new rather than make_unique here because the factory function that uses
   // a non-public constructor can't use std::make_unique, and we don't want to
   // add a dependency on absl::WrapUnique.
   return std::unique_ptr<GroupByAggregator>(new GroupByAggregator(
       intrinsic.inputs, &intrinsic.outputs, &intrinsic.nested_intrinsics,
-      std::move(nested_aggregators)));
+      std::move(key_combiner), std::move(nested_aggregators), num_inputs));
 }
 
 // TODO(team): Revise the registration mechanism below.

@@ -19,8 +19,10 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
+#include "fcp/aggregation/core/agg_core.pb.h"
 #include "fcp/aggregation/core/dp_composite_key_combiner.h"
 #include "fcp/aggregation/core/group_by_aggregator.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
@@ -74,8 +76,10 @@ class DPGroupByAggregator : public GroupByAggregator {
       const std::vector<TensorSpec>& input_key_specs,
       const std::vector<TensorSpec>* output_key_specs,
       const std::vector<Intrinsic>* intrinsics,
+      std::unique_ptr<CompositeKeyCombiner> key_combiner,
       std::vector<std::unique_ptr<OneDimBaseGroupingAggregator>> aggregators,
-      double epsilon_per_agg, double delta_per_agg, int64_t l0_bound);
+      double epsilon_per_agg, double delta_per_agg, int64_t l0_bound,
+      int num_inputs);
 
  private:
   // Returns either nullptr or a unique_ptr to a CompositeKeyCombiner, depending
@@ -111,6 +115,14 @@ class DPGroupByFactory final : public TensorAggregatorFactory {
 
   StatusOr<std::unique_ptr<TensorAggregator>> Create(
       const Intrinsic& intrinsic) const override;
+
+  StatusOr<std::unique_ptr<TensorAggregator>> Deserialize(
+      const Intrinsic& intrinsic, std::string serialized_state) const override;
+
+ private:
+  StatusOr<std::unique_ptr<TensorAggregator>> CreateInternal(
+      const Intrinsic& intrinsic,
+      const GroupByAggregatorState* aggregator_state) const;
 };
 
 }  // namespace aggregation
