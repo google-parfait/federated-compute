@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/dictionary/dictionary.h"
 #include "fcp/dictionary/dictionary.pb.h"
@@ -171,14 +172,13 @@ class DictionaryLookup : public AbstractDictionaryOp {
     auto ids_flat = ids_tensor->flat<int64_t>();
     const int64_t num_tokens = tokens_flat.size();
     for (int i = 0; i < num_tokens; ++i) {
-      const tsl::tstring& token = tokens_flat(i);
-      if (token.data() == nullptr) {
-        return absl::InternalError(absl::StrCat(
-            "Encountered token with nullptr data(), type: ", token.type(),
-            ", size: ", token.size(), ", capacity: ", token.capacity()));
+      const absl::string_view token = tokens_flat(i);
+      if (token.data() == nullptr && !token.empty()) {
+        return absl::InternalError(
+            absl::StrCat("Encountered token with nullptr data(), type: ",
+                         tokens_flat(i).type(), ", size: ", token.size(),
+                         ", capacity: ", tokens_flat(i).capacity()));
       }
-      // This implicitly converts `token` to an `std::string` using the implicit
-      // conversion operator.
       ids_flat(i) = dictionary.TokenToId(token);
     }
     return absl::OkStatus();
