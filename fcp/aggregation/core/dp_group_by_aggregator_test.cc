@@ -670,7 +670,7 @@ TEST_P(DPGroupByAggregatorTest, NoKeyTripleAggWithAllBounds) {
 TEST_P(DPGroupByAggregatorTest, NoiseAddedForSmallEpsilons) {
   Intrinsic intrinsic = CreateIntrinsic<int32_t, int64_t>(0.05, 1e-8, 2, 1);
   auto dpgba = CreateTensorAggregator(intrinsic).value();
-  int num_inputs = 1000;
+  int num_inputs = 4000;
   for (int i = 0; i < num_inputs; i++) {
     Tensor keys = Tensor::Create(DT_STRING, {2},
                                  CreateTestData<string_view>({"key0", "key1"}))
@@ -700,21 +700,33 @@ TEST_P(DPGroupByAggregatorTest, NoiseAddedForSmallEpsilons) {
 // Check that SetupNoiseAndThreshold is capable of switching between
 // distributions
 TEST_P(DPGroupByAggregatorTest, SetupNoiseAndThreshold_CorrectDistribution) {
-  // "Baseline" intrinsic where Laplace was chosen
-  Intrinsic intrinsic1 =
-      CreateIntrinsic<int32_t, int64_t>(1.0, 1e-6, 1, 5, -1, -1);
+  Intrinsic intrinsic1{kDPGroupByUri,
+                       {CreateTensorSpec("key", DT_STRING)},
+                       {CreateTensorSpec("key_out", DT_STRING)},
+                       {CreateTopLevelParameters(1.0, 1e-10, 2)},
+                       {}};
+  // "Baseline" aggregation where Laplace was chosen
+  intrinsic1.nested_intrinsics.push_back(
+      CreateInnerIntrinsic<int32_t, int64_t>(10, -1, -1));
+
+  // Aggregation where a given L2 norm bound is sufficiently smaller than L_0 *
+  // L_inf, which means Gaussian is preferred.
+  intrinsic1.nested_intrinsics.push_back(
+      CreateInnerIntrinsic<int32_t, int64_t>(10, -1, 2));
+
   auto agg1 = CreateTensorAggregator(intrinsic1).value();
-  auto report1 = std::move(*agg1).Report();
+  auto report = std::move(*agg1).Report();
   auto laplace_was_used =
       dynamic_cast<DPGroupByAggregator&>(*agg1).laplace_was_used();
-  ASSERT_EQ(laplace_was_used.size(), 1);
+  ASSERT_EQ(laplace_was_used.size(), 2);
   EXPECT_TRUE(laplace_was_used[0]);
+  EXPECT_FALSE(laplace_was_used[1]);
 
   // If a user can contribute to L0 = x groups and there is only an L_inf bound,
   // Laplace noise is linear in x while Gaussian noise scales with sqrt(x).
-  // Hence, we should use Gaussian for large-enough x (here, 10)
+  // Hence, we should use Gaussian when we loosen x (from 2 to 20)
   Intrinsic intrinsic2 =
-      CreateIntrinsic<int32_t, int64_t>(1.0, 1e-6, 10, 5, -1, -1);
+      CreateIntrinsic<int32_t, int64_t>(1.0, 1e-10, 20, 10, -1, -1);
   auto agg2 = CreateTensorAggregator(intrinsic2).value();
   auto report2 = std::move(*agg2).Report();
   laplace_was_used =
@@ -722,16 +734,51 @@ TEST_P(DPGroupByAggregatorTest, SetupNoiseAndThreshold_CorrectDistribution) {
   ASSERT_EQ(laplace_was_used.size(), 1);
   EXPECT_FALSE(laplace_was_used[0]);
 
-  // The Gaussian should also be chosen if we give an L2 bound that is
-  // sufficiently smaller than computed L1 sensitivity (here, 1 < 5).
+  // Gaussian noise should also be used if delta was loosened enough
   Intrinsic intrinsic3 =
-      CreateIntrinsic<int32_t, int64_t>(1.0, 1e-6, 1, 5, -1, 1);
+      CreateIntrinsic<int32_t, int64_t>(1.0, 1e-3, 2, 10, -1, -1);
   auto agg3 = CreateTensorAggregator(intrinsic3).value();
   auto report3 = std::move(*agg3).Report();
   laplace_was_used =
       dynamic_cast<DPGroupByAggregator&>(*agg3).laplace_was_used();
   ASSERT_EQ(laplace_was_used.size(), 1);
   EXPECT_FALSE(laplace_was_used[0]);
+}
+
+// Check that CalculateLaplaceThreshold computes the right threshold
+TEST(DPGroupByAggregatorTest, CalculateLaplaceThreshold_Succeeds) {
+  // Case 1: adjusted delta less than 1/2
+  double delta = 0.468559;  // = 1-(9/10)^6
+  double linfinity_bound = 1;
+  int64_t l0_bound = 1;
+
+  // under replacement DP:
+  int64_t l0_sensitivity = 2 * l0_bound;
+  double l1_sensitivity = 2;  // = min(2 * l0_bound * linf_bound, 2 * l1_bound)
+
+  // We'll work with eps = 1 for simplicity
+  auto threshold_wrapper = internal::CalculateLaplaceThreshold<double>(
+      1.0, delta, l0_sensitivity, linfinity_bound, l1_sensitivity);
+  ASSERT_OK(threshold_wrapper.status());
+
+  double laplace_tail_bound = 1.22497855;
+  // = -(l1_sensitivity / 1.0) * std::log(2.0 * adjusted_delta),
+  // where adjusted_delta = 1 - sqrt(1-delta) = 1 - (9/10)^3 = 1 - 0.729 = 0.271
+
+  EXPECT_NEAR(threshold_wrapper.value(), linfinity_bound + laplace_tail_bound,
+              1e-5);
+
+  // Case 2: adjusted delta greater than 1/2
+  delta = 0.77123207545039;  // 1-(9/10)^14
+  threshold_wrapper = internal::CalculateLaplaceThreshold<double>(
+      1.0, delta, l0_sensitivity, linfinity_bound, l1_sensitivity);
+  ASSERT_OK(threshold_wrapper.status());
+
+  laplace_tail_bound = -0.0887529;
+  // = (l1_sensitivity / 1.0) * std::log(2.0 - 2.0 * adjusted_delta),
+  // where adjusted_delta = 1 - sqrt(1-delta) = 1 - (9/10)^7 = 0.5217031
+  EXPECT_NEAR(threshold_wrapper.value(), linfinity_bound + laplace_tail_bound,
+              1e-5);
 }
 
 // Seventh: check that the right groups get dropped
@@ -788,7 +835,6 @@ TEST_P(DPGroupByAggregatorTest, SingleKeyDropAggregatesWithValueZero) {
   int64_t threshold = static_cast<int64_t>(ceil(1 + 2 * std::log(1e8)));
   EXPECT_THAT(report.value()[1].AsScalar<int64_t>(), Gt(threshold));
   EXPECT_THAT(report.value()[2].AsScalar<int64_t>(), Gt(threshold));
-  // We expect them to be different from their original values
 }
 
 // When there are no grouping keys, aggregation will be scalar. Hence, the sole

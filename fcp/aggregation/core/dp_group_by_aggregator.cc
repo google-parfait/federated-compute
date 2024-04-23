@@ -51,26 +51,25 @@
 
 namespace fcp {
 namespace aggregation {
-using ::differential_privacy::GaussianMechanism;
-using ::differential_privacy::GaussianPartitionSelection;
-using ::differential_privacy::LaplaceMechanism;
-using ::differential_privacy::LaplacePartitionSelection;
+
 using ::differential_privacy::NumericalMechanism;
-using ::differential_privacy::SafeAdd;
-using ::differential_privacy::SafeSubtract;
 using ::differential_privacy::sign;
 
 namespace internal {
 // The epsilon beyond which we will not use DP noise
 constexpr double kEpsilonThreshold = 20.0;
+using ::differential_privacy::GaussianMechanism;
+using ::differential_privacy::GaussianPartitionSelection;
+using ::differential_privacy::LaplaceMechanism;
+using ::differential_privacy::SafeAdd;
 
-// Struct to contain the two components of the noise and threshold algorithm:
+// Struct to contain the components of the noise and threshold algorithm:
 // - A pointer to a NumericalMechanism object which introduces DP noise for one
-//   summation that satisfies add-remove DP. The distribution will either be
+//   summation that satisfies replacement DP. The distribution will either be
 //   Laplace or Gaussian, whichever has less variance for the same DP parameters
 // - A threshold below which noisy sums will be erased. The thresholding step
 //   consumes some or all of the delta that a customer provides.
-// Also holds a boolean to indicate which noise is used.
+// - Also holds a boolean to indicate which noise is used.
 template <typename OutputType>
 struct NoiseAndThresholdBundle {
   std::unique_ptr<NumericalMechanism> mechanism;
@@ -85,9 +84,9 @@ StatusOr<NoiseAndThresholdBundle<OutputType>> SetupNoiseAndThreshold(
     double l1_bound, double l2_bound) {
   // The following constraints on DP parameters should be caught beforehand in
   // factory code.
-  CHECK(epsilon > 0 && delta > 0 && l0_bound > 0 && linfinity_bound > 0)
+  FCP_CHECK(epsilon > 0 && delta > 0 && l0_bound > 0 && linfinity_bound > 0)
       << "epsilon, delta, l0_bound, and linfinity_bound must be greater than 0";
-  CHECK(delta < 1) << "delta must be less than 1";
+  FCP_CHECK(delta < 1) << "delta must be less than 1";
 
   // For Gaussian noise, the following parameter determines how much of delta is
   // consumed for thresholding. Currently set to 1/2 of delta, but this could be
@@ -96,17 +95,24 @@ StatusOr<NoiseAndThresholdBundle<OutputType>> SetupNoiseAndThreshold(
   double delta_for_thresholding = delta * kFractionForThresholding;
   double delta_for_noising = delta - delta_for_thresholding;
 
-  // Compute L1 sensitivity from the L0 and Linfinity bounds
-  double l1_sensitivity = l0_bound * linfinity_bound;
+  // Compute L1 sensitivity from the L0 and Linfinity bounds.
+  // We target replacement DP, which means L1 sensitivity is twice the maximum
+  // L1 norm of any contribution. The maximum L1 norm of any contribution can
+  // be derived from l0_bound and linfinity_bound (or l1_bound if provided).
+  double l1_sensitivity = 2.0 * l0_bound * linfinity_bound;
   // If an L1 bound was given and it is tighter than the above, use it.
-  if (l1_bound > 0 && l1_bound < l1_sensitivity) {
-    l1_sensitivity = l1_bound;
+  if (l1_bound > 0 && 2.0 * l1_bound < l1_sensitivity) {
+    l1_sensitivity = 2.0 * l1_bound;
   }
-  // Repeat for L2
-  double l2_sensitivity = sqrt(l0_bound) * linfinity_bound;
-  // If a tighter L2 bound was given, go with that.
-  if (l2_bound > 0 && l2_bound < l2_sensitivity) {
-    l2_sensitivity = l2_bound;
+
+  // Repeat for L2 sensitivity. To derive the expression, consider two
+  // neighboring user inputs (1, 1, 1, 0, 0, 0, 0) and (0, 0, 0, 0, 1, 1, 1)
+  // and fix linfinity_bound = 1 & l0_bound = 3. The L2 distance between these
+  // vectors---and therefore the L2 sensitivity of the sum of vectors---is
+  // sqrt(6 = 2 * l0_bound * linfinity_bound)
+  double l2_sensitivity = sqrt(2.0 * l0_bound) * linfinity_bound;
+  if (l2_bound > 0 && 2.0 * l2_bound < l2_sensitivity) {
+    l2_sensitivity = 2.0 * l2_bound;
   }
 
   NoiseAndThresholdBundle<OutputType> output;
@@ -117,39 +123,52 @@ StatusOr<NoiseAndThresholdBundle<OutputType>> SetupNoiseAndThreshold(
   double laplace_stdev = sqrt(2) * laplace_scale;
   double gaussian_stdev = GaussianMechanism::CalculateStddev(
       epsilon, delta_for_noising, l2_sensitivity);
+
   if (laplace_stdev < gaussian_stdev) {
+    // If we are going to use Laplace noise,
+    // 1. record that fact
     output.use_laplace = true;
 
-    // Use the library function for computing threshold
-    FCP_ASSIGN_OR_RETURN(double library_threshold,
-                         LaplacePartitionSelection::CalculateThreshold(
-                             epsilon, delta, l0_bound));
+    // 2. use our parameters to create an object that will add that noise.
+    LaplaceMechanism::Builder laplace_builder;
+    laplace_builder.SetL1Sensitivity(l1_sensitivity).SetEpsilon(epsilon);
+    FCP_ASSIGN_OR_RETURN(output.mechanism, laplace_builder.Build());
+
+    // 3. Calculate the threshold which we will impose on noisy sums.
+    // Note that l0_sensitivity = 2 * l0_bound because we target replacement DP.
+    FCP_ASSIGN_OR_RETURN(
+        double library_threshold,
+        CalculateLaplaceThreshold<OutputType>(epsilon, delta, 2 * l0_bound,
+                                              linfinity_bound, l1_sensitivity));
     // Use ceil to err on the side of caution:
     // if noisy_val is an integer less than (double) library_threshold,
     // a cast of library_threshold may make them appear equal
     if (std::is_integral<OutputType>::value) {
       library_threshold = ceil(library_threshold);
     }
+    output.threshold = static_cast<OutputType>(library_threshold);
 
-    // The library function assumes that linfinity_bound = 1.
-    // Compensate by subtracting off 1 and adding back linfinity_bound.
-    output.threshold =
-        SafeSubtract<OutputType>(static_cast<OutputType>(library_threshold), 1)
-            .value;
-    output.threshold =
-        SafeAdd<OutputType>(linfinity_bound, output.threshold).value;
-
-    LaplaceMechanism::Builder laplace_builder;
-    laplace_builder.SetL1Sensitivity(l1_sensitivity).SetEpsilon(epsilon);
-    FCP_ASSIGN_OR_RETURN(output.mechanism, laplace_builder.Build());
     return output;
   }
 
-  // Steps are nearly identical for Gaussian noise
+  // If we are going to use Gaussian noise,
+  // 1. record that fact
   output.use_laplace = false;
-  FCP_ASSIGN_OR_RETURN(double library_threshold,
-                       GaussianPartitionSelection::CalculateThresholdFromStddev(
-                           gaussian_stdev, delta_for_thresholding, l0_bound));
+
+  // 2. use our parameters to create an object that will add that noise.
+  GaussianMechanism::Builder gaussian_builder;
+  gaussian_builder.SetStandardDeviation(gaussian_stdev);
+  FCP_ASSIGN_OR_RETURN(output.mechanism, gaussian_builder.Build());
+
+  // 3. Calculate the threshold which we will impose on noisy sums. We use
+  // GaussianPartitionSelection::CalculateThresholdFromStddev. It assumes that
+  // linfinity_bound = 1 but the only role linfinity_bound plays is as an
+  // additive offset. So we can simply shift the number it produces to compute
+  // the threshold.
+  FCP_ASSIGN_OR_RETURN(
+      double library_threshold,
+      GaussianPartitionSelection::CalculateThresholdFromStddev(
+          gaussian_stdev, delta_for_thresholding, 2 * l0_bound));
   // Use ceil to err on the side of caution:
   // if noisy_val is an integer less than (double) library_threshold,
   // a cast of library_threshold may make them appear equal
@@ -157,27 +176,20 @@ StatusOr<NoiseAndThresholdBundle<OutputType>> SetupNoiseAndThreshold(
     library_threshold = ceil(library_threshold);
   }
 
-  // The library function assumes that linfinity_bound = 1.
-  // Compensate by subtracting off 1 and adding back linfinity_bound.
   output.threshold =
-      SafeSubtract<OutputType>(static_cast<OutputType>(library_threshold), 1)
+      SafeAdd<OutputType>(linfinity_bound - 1,
+                          static_cast<OutputType>(library_threshold))
           .value;
-  output.threshold =
-      SafeAdd<OutputType>(linfinity_bound, output.threshold).value;
-  GaussianMechanism::Builder gaussian_builder;
-  gaussian_builder.SetL2Sensitivity(l2_sensitivity)
-      .SetEpsilon(epsilon)
-      .SetDelta(delta_for_noising);
-  FCP_ASSIGN_OR_RETURN(output.mechanism, gaussian_builder.Build());
+
   return output;
 }
 
 // Noise is added to each value stored in a column tensor. If the noised value
 // falls below a given threshold, then the index of that value is removed from a
 // set of survivors.
-// NoiseAndThreshold will be run on multiple tensors: upon completion, copies
-// will be made of those tensors such that only data in the surviving indices
-// will be copied.
+// NoiseAndThreshold will be called by DPGroupByAggregator::Report on multiple
+// tensors. Upon completion, Report will copy a value at index i in an output
+// tensor of NoiseAndThreshold if i is in the set of survivors.
 // NB: It is possible to write NoiseAndThreshold to cull values that lie below
 // a threshold, but the i-th item of column 1 might not correspond to the i-th
 // item of column 2. So we defer the culling step until we know all indices of
@@ -229,8 +241,7 @@ StatusOr<Tensor> CopyOnlySurvivors(
     const Tensor& column_tensor,
     const absl::flat_hash_set<size_t>& survivor_indices) {
   auto column_span = column_tensor.AsSpan<OutputType>();
-  std::unique_ptr<MutableVectorData<OutputType>> dest =
-      std::make_unique<MutableVectorData<OutputType>>();
+  auto dest = std::make_unique<MutableVectorData<OutputType>>();
   dest->reserve(survivor_indices.size());
   for (size_t i = 0; i < column_span.size(); i++) {
     if (!survivor_indices.contains(i)) {
