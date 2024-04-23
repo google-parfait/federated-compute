@@ -136,8 +136,7 @@ class FederatedProtocol {
   //    continue the protocol by calling the `Checkin(...)` method without
   //    providing a `TaskEligibilityInfo` value.
   // 3. a `Rejection` if the server rejected this device. In this case the
-  // caller
-  //    should end its protocol interaction.
+  //    caller should end its protocol interaction.
   using EligibilityEvalCheckinResult =
       std::variant<EligibilityEvalTask, EligibilityEvalDisabled, Rejection>;
 
