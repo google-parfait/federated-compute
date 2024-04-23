@@ -592,6 +592,11 @@ class CannotReportAggregatorFactory : public TensorAggregatorFactory {
     return std::make_unique<CannotReportAggregator>(
         intrinsic.inputs[0].dtype(), intrinsic.inputs[0].shape());
   }
+
+  absl::StatusOr<std::unique_ptr<TensorAggregator>> Deserialize(
+      const Intrinsic& intrinsic, std::string serialized_state) const override {
+    return FCP_STATUS(UNIMPLEMENTED);
+  }
 };
 
 TEST(CheckpointAggregatorTest, ReportWithFailedCanReportPrecondition) {
@@ -855,6 +860,11 @@ class FunctionAggregatorFactory final : public TensorAggregatorFactory {
     return std::make_unique<FunctionAggregator>(intrinsic.inputs[0].dtype(),
                                                 intrinsic.inputs[0].shape(),
                                                 agg_function_);
+  }
+
+  absl::StatusOr<std::unique_ptr<TensorAggregator>> Deserialize(
+      const Intrinsic& intrinsic, std::string serialized_state) const override {
+    return FCP_STATUS(UNIMPLEMENTED);
   }
 
   const FunctionAggregator::Func agg_function_;

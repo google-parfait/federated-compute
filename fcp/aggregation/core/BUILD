@@ -119,7 +119,6 @@ cc_library(
         ":tensor_cc_proto",
         "//fcp/base",
         "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/synchronization",
     ],
 )

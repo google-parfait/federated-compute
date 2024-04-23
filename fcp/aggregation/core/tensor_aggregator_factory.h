@@ -46,11 +46,8 @@ class TensorAggregatorFactory {
   // The lifetime of the provided Intrinsic must outlast that of the returned
   // TensorAggregator as it is valid for the TensorAggregator implementation to
   // hold pointers referring to the Intrinsic.
-  // TODO: b/331978180 - Make pure virtual once all derived classes implement.
   virtual StatusOr<std::unique_ptr<TensorAggregator>> Deserialize(
-      const Intrinsic& intrinsic, std::string serialized_state) const {
-    return FCP_STATUS(UNIMPLEMENTED);
-  };
+      const Intrinsic& intrinsic, std::string serialized_state) const = 0;
 };
 
 }  // namespace aggregation

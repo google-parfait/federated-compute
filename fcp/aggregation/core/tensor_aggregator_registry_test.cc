@@ -17,6 +17,7 @@
 #include "fcp/aggregation/core/tensor_aggregator_registry.h"
 
 #include <memory>
+#include <string>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -33,6 +34,8 @@ namespace {
 class MockFactory : public TensorAggregatorFactory {
   MOCK_METHOD(StatusOr<std::unique_ptr<TensorAggregator>>, Create,
               (const Intrinsic&), (const override));
+  MOCK_METHOD(StatusOr<std::unique_ptr<TensorAggregator>>, Deserialize,
+              (const Intrinsic&, std::string), (const override));
 };
 
 REGISTER_AGGREGATOR_FACTORY("foobar", MockFactory);

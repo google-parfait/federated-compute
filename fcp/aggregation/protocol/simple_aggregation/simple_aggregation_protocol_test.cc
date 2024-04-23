@@ -1158,6 +1158,11 @@ class FunctionAggregatorFactory final : public TensorAggregatorFactory {
                                                 agg_function_);
   }
 
+  absl::StatusOr<std::unique_ptr<TensorAggregator>> Deserialize(
+      const Intrinsic& intrinsic, std::string serialized_state) const override {
+    return FCP_STATUS(UNIMPLEMENTED);
+  }
+
   const FunctionAggregator::Func agg_function_;
 };
 
@@ -1582,6 +1587,10 @@ class FakeAggregator final : public TensorAggregator {
 
   int GetNumInputs() const override { return 0; }
 
+  StatusOr<std::string> Serialize() && override {
+    return FCP_STATUS(UNIMPLEMENTED);
+  };
+
  private:
   Tensor output_;
 };
@@ -1595,6 +1604,11 @@ class FakeAggregatorFactory final : public TensorAggregatorFactory {
   absl::StatusOr<std::unique_ptr<TensorAggregator>> Create(
       const Intrinsic& intrinsic) const override {
     return std::make_unique<FakeAggregator>(std::move(output_));
+  }
+
+  absl::StatusOr<std::unique_ptr<TensorAggregator>> Deserialize(
+      const Intrinsic& intrinsic, std::string serialized_state) const override {
+    return FCP_STATUS(UNIMPLEMENTED);
   }
 
   mutable Tensor output_;

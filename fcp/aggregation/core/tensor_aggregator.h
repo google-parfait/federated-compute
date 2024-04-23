@@ -17,9 +17,9 @@
 #ifndef FCP_AGGREGATION_CORE_TENSOR_AGGREGATOR_H_
 #define FCP_AGGREGATION_CORE_TENSOR_AGGREGATOR_H_
 
+#include <string>
 #include <vector>
 
-#include "absl/strings/cord.h"
 #include "fcp/aggregation/core/aggregator.h"
 #include "fcp/aggregation/core/input_tensor_list.h"
 #include "fcp/aggregation/core/tensor.h"
@@ -46,10 +46,7 @@ class TensorAggregator
   virtual int GetNumInputs() const = 0;
 
   // Serialize the internal state of the TensorAggregator as a string.
-  // TODO: b/331978180 - Make pure virtual once all derived classes implement.
-  virtual StatusOr<std::string> Serialize() && {
-    return FCP_STATUS(UNIMPLEMENTED);
-  };
+  virtual StatusOr<std::string> Serialize() && = 0;
 
  protected:
   // Construct TensorAggregator
