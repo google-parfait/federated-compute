@@ -17,6 +17,7 @@
 # which allows to orchestrate decentralized computations across
 # large set of dynamically available nodes (e.g. mobile devices).
 
+load("@bazel_toolchains//rules/exec_properties:exec_properties.bzl", "create_rbe_exec_properties_dict")
 load("@rules_python//python:pip.bzl", "compile_pip_requirements")
 
 package(
@@ -35,6 +36,19 @@ package_group(
     packages = [
         "//fcp/...",
     ],
+)
+
+platform(
+    name = "remote_platform",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    exec_properties = create_rbe_exec_properties_dict(
+        container_image = "docker://gcr.io/fcp-infra/fcp-build@sha256:4a33c4b91e3d146ed654a731ee4827629d8f2ebbcad21998082d7555c79a3f42",
+        os_family = "Linux",
+    ),
+    parents = ["@local_config_platform//:host"],
 )
 
 compile_pip_requirements(
