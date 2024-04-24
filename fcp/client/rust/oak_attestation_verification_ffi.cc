@@ -11,10 +11,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
-#include "third_party/oak/proto/attestation/endorsement.pb.h"
-#include "third_party/oak/proto/attestation/evidence.pb.h"
-#include "third_party/oak/proto/attestation/reference_value.pb.h"
-#include "third_party/oak/proto/attestation/verification.pb.h"
+#include "proto/attestation/endorsement.pb.h"
+#include "proto/attestation/evidence.pb.h"
+#include "proto/attestation/reference_value.pb.h"
+#include "proto/attestation/verification.pb.h"
 
 namespace fcp::client::rust::oak_attestation_verification_ffi {
 

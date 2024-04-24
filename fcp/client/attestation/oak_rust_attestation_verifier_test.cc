@@ -21,11 +21,11 @@
 #include "fcp/protos/confidentialcompute/verification_record.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "fcp/testing/testing.h"
-#include "third_party/oak/proto/attestation/endorsement.pb.h"
-#include "third_party/oak/proto/attestation/evidence.pb.h"
-#include "third_party/oak/proto/attestation/reference_value.pb.h"
-#include "third_party/oak/proto/attestation/verification.pb.h"
-#include "third_party/oak/proto/digest.pb.h"
+#include "proto/attestation/endorsement.pb.h"
+#include "proto/attestation/evidence.pb.h"
+#include "proto/attestation/reference_value.pb.h"
+#include "proto/attestation/verification.pb.h"
+#include "proto/digest.pb.h"
 
 namespace fcp::client::attestation {
 namespace {
