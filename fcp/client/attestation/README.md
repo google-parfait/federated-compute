@@ -73,10 +73,19 @@ logcat stream will contain an entry that looks as follows:
 
 These records represent a line-wrapped, base64-encoded, and gzip-compressed
 `AttestationVerificationRecord` protobuf (the encoding is performed in
-`oak_rust_attestation_verifier.cc`).
+`oak_rust_attestation_verifier.cc`). We provide an `extract_attestation_records`
+utility for extracting and parsing such records from a log stream. This utility
+will write each extracted record to its own file, in the shape of a serialized
+`AttestationVerificationRecord` proto.
 
-NOTE: We plan to provide a utility for parsing these encoded records into plain
-binary protos in the future.
+```shell
+$ mkdir extracted_records
+$ bazelisk run :extract_attestation_records -- \
+  --input=$PWD/fcp_attestation_records.txt \
+  --output=$PWD/extracted_records/
+Wrote a verification record extracted from lines 2-19 to extracted_records/record_l2_to_l19_digest12345678.pb
+Found 1 record(s).
+```
 
 Once you have gathered one or more such records, you can follow the instructions
 in the
