@@ -99,8 +99,8 @@ build:asan --action_env=ASAN_OPTIONS=check_initialization_order=true:strict_init
 
 build:fcp-remote --experimental_allow_tags_propagation
 build:fcp-remote --define=EXECUTOR=remote
-build:fcp-remote --remote_executor=grpcs://us-west1-remotebuildexecution.googleapis.com
-build:fcp-remote --remote_instance_name=projects/560162532548/instances/rbe_instance
+build:fcp-remote --remote_executor=grpcs://remotebuildexecution.googleapis.com
+build:fcp-remote --remote_instance_name=projects/560162532548/instances/default
 build:fcp-remote --noremote_upload_local_results
 build:fcp-remote --google_default_credentials
 build:fcp-remote --extra_execution_platforms=//fcp:remote_platform
