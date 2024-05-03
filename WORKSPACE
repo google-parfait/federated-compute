@@ -323,3 +323,10 @@ http_archive(
   sha256 = "6e6e1cd7a819695caae408f4fa938129ab7a86e83fe2410137c85e50131abbe0",
   strip_prefix = "differential-privacy-3.0.0",
 )
+
+http_archive(
+    name = "org_tensorflow_federated",
+    url = "https://github.com/tensorflow/federated/archive/93ffd03340d021a336994ace52ea6919b1821ff5.tar.gz",
+    sha256 = "247295d40ab2c78c22dec44b36a427fa143bb5a343a3a46f91fcddad5ac2ee07",
+    strip_prefix = "federated-93ffd03340d021a336994ace52ea6919b1821ff5",
+)

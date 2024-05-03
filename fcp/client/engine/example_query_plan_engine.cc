@@ -27,11 +27,6 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "fcp/aggregation/core/tensor.h"
-#include "fcp/aggregation/core/tensor.pb.h"
-#include "fcp/aggregation/core/tensor_shape.h"
-#include "fcp/aggregation/protocol/checkpoint_builder.h"
-#include "fcp/aggregation/protocol/federated_compute_checkpoint_builder.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/converters.h"
 #include "fcp/client/engine/common.h"
@@ -47,6 +42,11 @@
 #include "tensorflow/core/framework/tensor_slice.h"
 #include "tensorflow/core/platform/tstring.h"
 #include "tensorflow/core/util/tensor_slice_writer.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.pb.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor_shape.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/protocol/checkpoint_builder.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/protocol/federated_compute_checkpoint_builder.h"
 
 namespace fcp {
 namespace client {
@@ -54,14 +54,14 @@ namespace engine {
 
 namespace tf = ::tensorflow;
 
-using ::fcp::aggregation::CheckpointBuilder;
-using ::fcp::aggregation::Tensor;
-using ::fcp::aggregation::TensorShape;
 using ::fcp::client::ExampleQueryResult;
 using ::fcp::client::engine::PlanResult;
 using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::ExampleSelector;
+using tensorflow_federated::aggregation::CheckpointBuilder;
+using tensorflow_federated::aggregation::Tensor;
+using tensorflow_federated::aggregation::TensorShape;
 
 namespace {
 
@@ -217,7 +217,7 @@ absl::Status GenerateAggregationTensors(
             output_vector_spec, ExampleQuerySpec::OutputVectorSpec::INT32));
         FCP_ASSIGN_OR_RETURN(
             tensor, ConvertNumericTensor<int32_t>(
-                        aggregation::DT_INT32,
+                        tensorflow_federated::aggregation::DT_INT32,
                         TensorShape({values.int32_values().value_size()}),
                         values.int32_values().value()));
 
@@ -226,7 +226,7 @@ absl::Status GenerateAggregationTensors(
             output_vector_spec, ExampleQuerySpec::OutputVectorSpec::INT64));
         FCP_ASSIGN_OR_RETURN(
             tensor, ConvertNumericTensor<int64_t>(
-                        aggregation::DT_INT64,
+                        tensorflow_federated::aggregation::DT_INT64,
                         TensorShape({values.int64_values().value_size()}),
                         values.int64_values().value()));
       } else if (values.has_string_values()) {
@@ -244,7 +244,7 @@ absl::Status GenerateAggregationTensors(
             output_vector_spec, ExampleQuerySpec::OutputVectorSpec::FLOAT));
         FCP_ASSIGN_OR_RETURN(
             tensor, ConvertNumericTensor<float>(
-                        aggregation::DT_FLOAT,
+                        tensorflow_federated::aggregation::DT_FLOAT,
                         TensorShape({values.float_values().value_size()}),
                         values.float_values().value()));
       } else if (values.has_double_values()) {
@@ -252,7 +252,7 @@ absl::Status GenerateAggregationTensors(
             output_vector_spec, ExampleQuerySpec::OutputVectorSpec::DOUBLE));
         FCP_ASSIGN_OR_RETURN(
             tensor, ConvertNumericTensor<double>(
-                        aggregation::DT_DOUBLE,
+                        tensorflow_federated::aggregation::DT_DOUBLE,
                         TensorShape({values.double_values().value_size()}),
                         values.double_values().value()));
       } else if (values.has_bytes_values()) {

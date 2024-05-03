@@ -22,18 +22,19 @@
 
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
-#include "fcp/aggregation/core/tensor.h"
-#include "fcp/aggregation/core/tensor.pb.h"
-#include "fcp/aggregation/core/tensor_data.h"
-#include "fcp/aggregation/core/tensor_shape.h"
 #include "google/protobuf/repeated_ptr_field.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.pb.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor_data.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor_shape.h"
 
 namespace fcp::client {
 
 // A primitive TensorData implementation that holds reference to the repeated
 // value field in ExampleQueryResult values.
 template <typename T>
-class NumericTensorDataAdapter : public aggregation::TensorData {
+class NumericTensorDataAdapter
+    : public tensorflow_federated::aggregation::TensorData {
  public:
   explicit NumericTensorDataAdapter(absl::Span<const T> value)
       : value_(value) {}
@@ -48,18 +49,19 @@ class NumericTensorDataAdapter : public aggregation::TensorData {
 // Converts repeated numeric field of ExampleQueryResult Values to Aggregation
 // Tensor.
 template <typename Numeric>
-absl::StatusOr<aggregation::Tensor> ConvertNumericTensor(
-    aggregation::DataType dtype, aggregation::TensorShape tensor_shape,
+absl::StatusOr<tensorflow_federated::aggregation::Tensor> ConvertNumericTensor(
+    tensorflow_federated::aggregation::DataType dtype,
+    tensorflow_federated::aggregation::TensorShape tensor_shape,
     absl::Span<const Numeric> value) {
-  return aggregation::Tensor::Create(
+  return tensorflow_federated::aggregation::Tensor::Create(
       dtype, tensor_shape,
       std::make_unique<NumericTensorDataAdapter<Numeric>>(value));
 }
 
 // Converts repeated string field of ExampleQueryResult Values to Aggregation
 // Tensor.
-absl::StatusOr<aggregation::Tensor> ConvertStringTensor(
-    aggregation::TensorShape tensor_shape,
+absl::StatusOr<tensorflow_federated::aggregation::Tensor> ConvertStringTensor(
+    tensorflow_federated::aggregation::TensorShape tensor_shape,
     const ::google::protobuf::RepeatedPtrField<std::string>& value);
 }  // namespace fcp::client
 

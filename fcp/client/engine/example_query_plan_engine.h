@@ -19,12 +19,12 @@
 #include <string>
 #include <vector>
 
-#include "fcp/aggregation/protocol/federated_compute_checkpoint_builder.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/opstats/opstats_logger.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/protocol/federated_compute_checkpoint_builder.h"
 
 namespace fcp {
 namespace client {
@@ -48,7 +48,7 @@ class ExampleQueryPlanEngine {
  private:
   std::vector<ExampleIteratorFactory*> example_iterator_factories_;
   ::fcp::client::opstats::OpStatsLogger* opstats_logger_;
-  ::fcp::aggregation::FederatedComputeCheckpointBuilderFactory
+  tensorflow_federated::aggregation::FederatedComputeCheckpointBuilderFactory
       federated_compute_checkpoint_builder_factory_;
   const Flags& flags_;
   ExampleIteratorQueryRecorder* example_iterator_query_recorder_;

@@ -21,19 +21,19 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "fcp/aggregation/core/tensor.h"
-#include "fcp/aggregation/core/tensor.pb.h"
-#include "fcp/aggregation/core/tensor_data.h"
-#include "fcp/aggregation/core/tensor_shape.h"
 #include "google/protobuf/repeated_ptr_field.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.pb.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor_data.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor_shape.h"
 
 namespace fcp::client {
 
 using ::absl::StatusOr;
 using ::absl::string_view;
-using ::fcp::aggregation::Tensor;
-using ::fcp::aggregation::TensorData;
-using ::fcp::aggregation::TensorShape;
+using tensorflow_federated::aggregation::Tensor;
+using tensorflow_federated::aggregation::TensorData;
+using tensorflow_federated::aggregation::TensorShape;
 
 // Similar to NumericTensorDataAdapter but performs additional conversion
 // of the original value to string_view while keeping the reference to the
@@ -57,7 +57,8 @@ class StringTensorDataAdapter : public TensorData {
 StatusOr<Tensor> ConvertStringTensor(
     TensorShape tensor_shape,
     const ::google::protobuf::RepeatedPtrField<std::string>& value) {
-  return Tensor::Create(aggregation::DT_STRING, tensor_shape,
+  return Tensor::Create(tensorflow_federated::aggregation::DT_STRING,
+                        tensor_shape,
                         std::make_unique<StringTensorDataAdapter>(value));
 }
 

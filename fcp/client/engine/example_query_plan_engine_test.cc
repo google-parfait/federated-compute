@@ -33,11 +33,6 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "fcp/aggregation/core/tensor.h"
-#include "fcp/aggregation/core/tensor.pb.h"
-#include "fcp/aggregation/core/tensor_shape.h"
-#include "fcp/aggregation/protocol/checkpoint_header.h"
-#include "fcp/aggregation/testing/test_data.h"
 #include "fcp/client/client_runner.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
@@ -55,6 +50,11 @@
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.pb.h"
 #include "tensorflow/core/platform/tstring.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.pb.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/core/tensor_shape.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/protocol/checkpoint_header.h"
+#include "tensorflow_federated/cc/core/impl/aggregation/testing/test_data.h"
 
 namespace fcp {
 namespace client {
@@ -63,14 +63,14 @@ namespace {
 
 namespace tf = ::tensorflow;
 
-using ::fcp::aggregation::Tensor;
-using ::fcp::aggregation::TensorShape;
 using ::fcp::client::ExampleQueryResult;
 using ::google::internal::federated::plan::AggregationConfig;
 using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federated::plan::Dataset;
 using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::ExampleSelector;
+using tensorflow_federated::aggregation::Tensor;
+using tensorflow_federated::aggregation::TensorShape;
 using ::testing::StrictMock;
 
 const char* const kCollectionUri = "app:/test_collection";
@@ -596,15 +596,18 @@ TEST_F(ExampleQueryPlanEngineTest,
 
   std::string header;
   ASSERT_TRUE(stream.ReadString(&header, 4));
-  ASSERT_EQ(header, aggregation::kFederatedComputeCheckpointHeader);
+  ASSERT_EQ(
+      header,
+      tensorflow_federated::aggregation::kFederatedComputeCheckpointHeader);
 
-  absl::StatusOr<Tensor> int_tensor =
-      Tensor::Create(aggregation::DT_INT64, TensorShape({2}),
-                     aggregation::CreateTestData<uint64_t>({42, 24}));
+  absl::StatusOr<Tensor> int_tensor = Tensor::Create(
+      tensorflow_federated::aggregation::DT_INT64, TensorShape({2}),
+      tensorflow_federated::aggregation::CreateTestData<uint64_t>({42, 24}));
   ASSERT_OK(int_tensor.status());
   absl::StatusOr<Tensor> string_tensor = Tensor::Create(
-      aggregation::DT_STRING, TensorShape({2}),
-      aggregation::CreateTestData<absl::string_view>({"value1", "value2"}));
+      tensorflow_federated::aggregation::DT_STRING, TensorShape({2}),
+      tensorflow_federated::aggregation::CreateTestData<absl::string_view>(
+          {"value1", "value2"}));
   ASSERT_OK(string_tensor.status());
 
   uint32_t name_size1;
@@ -612,7 +615,7 @@ TEST_F(ExampleQueryPlanEngineTest,
   std::string name1;
   ASSERT_TRUE(stream.ReadString(&name1, name_size1));
 
-  aggregation::Tensor& t1 =
+  tensorflow_federated::aggregation::Tensor& t1 =
       name1 == kOutputIntTensorName ? *int_tensor : *string_tensor;
   uint32_t tensor_size1;
   ASSERT_TRUE(stream.ReadVarint32(&tensor_size1));
@@ -625,7 +628,7 @@ TEST_F(ExampleQueryPlanEngineTest,
   std::string name2;
   ASSERT_TRUE(stream.ReadString(&name2, name_size2));
 
-  aggregation::Tensor& t2 =
+  tensorflow_federated::aggregation::Tensor& t2 =
       name2 == kOutputIntTensorName ? *int_tensor : *string_tensor;
   uint32_t tensor_size2;
   ASSERT_TRUE(stream.ReadVarint32(&tensor_size2));

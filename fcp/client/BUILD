@@ -543,12 +543,12 @@ cc_library(
     hdrs = ["converters.h"],
     copts = FCP_COPTS,
     deps = [
-        "//fcp/aggregation/core:tensor",
-        "//fcp/aggregation/core:tensor_cc_proto",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_cc_proto",
     ],
 )
 
@@ -558,11 +558,11 @@ cc_test(
     deps = [
         ":converters",
         ":example_query_result_cc_proto",
-        "//fcp/aggregation/core:tensor",
-        "//fcp/aggregation/core:tensor_cc_proto",
-        "//fcp/aggregation/testing",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/testing",
     ],
 )
 

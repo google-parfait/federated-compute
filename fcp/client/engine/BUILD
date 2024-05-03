@@ -70,10 +70,6 @@ cc_library(
         ":common",
         ":example_iterator_factory",
         ":plan_engine_helpers",
-        "//fcp/aggregation/core:tensor",
-        "//fcp/aggregation/core:tensor_cc_proto",
-        "//fcp/aggregation/protocol:checkpoint_builder",
-        "//fcp/aggregation/protocol:federated_compute_checkpoint_builder",
         "//fcp/base",
         "//fcp/client:converters",
         "//fcp/client:example_iterator_query_recorder",
@@ -87,6 +83,10 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core/platform:tstring",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol:checkpoint_builder",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol:federated_compute_checkpoint_builder",
     ],
 )
 
@@ -97,10 +97,6 @@ cc_test(
         ":common",
         ":example_iterator_factory",
         ":example_query_plan_engine",
-        "//fcp/aggregation/core:tensor",
-        "//fcp/aggregation/core:tensor_cc_proto",
-        "//fcp/aggregation/protocol:checkpoint_header",
-        "//fcp/aggregation/testing:test_data",
         "//fcp/client:client_runner",
         "//fcp/client:example_query_result_cc_proto",
         "//fcp/client:simple_task_environment",
@@ -122,6 +118,10 @@ cc_test(
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@org_tensorflow//tensorflow/core/platform:tstring",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol:checkpoint_header",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/testing:test_data",
     ],
 )
 

@@ -213,7 +213,8 @@ Contains handlers for the Federated Compute protocol's
 [Aggregations](../protos/federatedcompute/aggregations.proto)
 service. This service is responsible for aggregating client-reported data using
 the
-[simple Aggregation Protocol](../aggregation/protocol/simple_aggregation)
+
+[simple Aggregation Protocol](https://github.com/tensorflow/federated/tree/main/tensorflow_federated/cc/core/impl/aggregation/protocol/simple_aggregation)
 library.
 
 Note that the demo platform does not currently contain an implementation of the
