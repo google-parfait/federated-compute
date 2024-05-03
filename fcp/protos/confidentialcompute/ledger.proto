@@ -219,3 +219,48 @@ message RevokeAccessRequest {
 }
 
 message RevokeAccessResponse {}
+
+// LedgerRequest and LedgerResponse combine individual request and response
+// messages above, and used by the replicated implementation of the Ledger.
+message LedgerRequest {
+  oneof request {
+    // Creates a new public/private keypair for encrypting the symmetric keys
+    // used to encrypt blobs.
+    CreateKeyRequest create_key = 1;
+    // Deletes a public/private keypair. Once deleted, any blobs encrypted with
+    // the keypair will no longer be accessible.
+    DeleteKeyRequest delete_key = 2;
+    // Authorizes the caller to read an encrypted blob. If the enclave
+    // requesting access is authorized by the blob's policy and the remaining
+    // access budget, the Ledger will decrypt and return the blob's symmetric
+    // key (re-encrypted so that only the enclave can read it).
+    AuthorizeAccessRequest authorize_access = 3;
+    // Prevents all future access to an encrypted blob; all subsequent
+    // AuthorizeAccess requests for the blob will fail.
+    RevokeAccessRequest revoke_access = 4;
+  }
+}
+
+message LedgerResponse {
+  // Error status similar to google.rpc.Status.
+  message Status {
+    int32 code = 1;
+    string message = 2;
+  }
+
+  oneof response {
+    // Response for CreateKeyRequest.
+    CreateKeyResponse create_key = 1;
+    // Response for DeleteKeyRequest.
+    DeleteKeyResponse delete_key = 2;
+    // Response for AuthorizeAccessRequest.
+    AuthorizeAccessResponse authorize_access = 3;
+    // Response for RevokeAccessRequest.
+    RevokeAccessResponse revoke_access = 4;
+    // Error response for all requests.
+    Status error = 5;
+  }
+}
+
+// Ledger configuration - used to configure replicated Ledger job.
+message LedgerConfig {}
