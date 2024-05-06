@@ -623,13 +623,6 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
         engine::PlanOutcome::kInvalidArgument,
         absl::InvalidArgumentError("Plan must include ExampleQuerySpec")));
   }
-  if (!flags->enable_example_query_plan_engine()) {
-    // Example query plan received while the flag is off.
-    return PlanResultAndCheckpointFile(engine::PlanResult(
-        engine::PlanOutcome::kInvalidArgument,
-        absl::InvalidArgumentError(
-            "Example query plan received while the flag is off")));
-  }
   if (!client_plan.phase().has_federated_example_query()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
         engine::PlanOutcome::kInvalidArgument,
