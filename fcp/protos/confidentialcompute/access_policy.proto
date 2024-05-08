@@ -104,6 +104,8 @@ message ValueMatcher {
   oneof kind {
     // Matches a numeric value.
     NumberMatcher number_value = 1;
+    // Matches a string value.
+    StringMatcher string_value = 2;
   }
 
   // Matchers for a numeric value.
@@ -115,6 +117,14 @@ message ValueMatcher {
       double eq = 3;  // Matches values == the given value.
       double ge = 4;  // Matches values >= the given value.
       double gt = 5;  // Matches values > the given value.
+    }
+  }
+
+  // Matchers for a string value.
+  message StringMatcher {
+    // If unset, the matcher matches any string value.
+    oneof kind {
+      string eq = 3;  // Matches strings equal to the given value.
     }
   }
 }
