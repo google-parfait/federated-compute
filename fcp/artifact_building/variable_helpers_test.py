@@ -28,7 +28,7 @@ from fcp.artifact_building import variable_helpers
 )
 def sample_comp(x, y):
   a = tff.federated_broadcast(x)
-  output1 = tff.federated_secure_sum_bitwidth(a, 5)
+  output1 = tff.federated_sum(a)
   output2 = tff.federated_mean([y, y], y)
   return output1, output2
 
@@ -251,17 +251,10 @@ class VariableHelpersTest(absltest.TestCase):
                     )
                 ],
             ],
-            [  # federated_secure_sum_bitwidth intrinsic args
-                [  # federated_secure_sum_bitwidth value arg
+            [  # federated_sum intrinsic args
+                [  # federated_sum value arg
                     tf.TensorSpec(
                         name='update/2',
-                        shape=tf.TensorShape([]),
-                        dtype=tf.int32,
-                    )
-                ],
-                [  # federated_secure_sum_bitwidth bitwidth arg
-                    tf.TensorSpec(
-                        name='intermediate_state/0',
                         shape=tf.TensorShape([]),
                         dtype=tf.int32,
                     )
@@ -269,6 +262,30 @@ class VariableHelpersTest(absltest.TestCase):
             ],
         ],
     )
+
+  def test_get_grouped_input_tensor_specs_for_aggregations_raises_value_error(
+      self,
+  ):
+
+    @tff.federated_computation(
+        tff.FederatedType(np.int32, tff.SERVER),
+        tff.FederatedType(np.float32, tff.CLIENTS),
+    )
+    def _comp(x, y):
+      a = tff.federated_broadcast(x)
+      output1 = tff.federated_secure_sum_bitwidth(a, 5)
+      output2 = tff.federated_mean([y, y], y)
+      return output1, output2
+
+    daf = tff.backends.mapreduce.get_distribute_aggregate_form_for_computation(
+        _comp
+    )
+
+    with self.assertRaises(ValueError):
+      variable_helpers.get_grouped_input_tensor_specs_for_aggregations(
+          daf.client_to_server_aggregation.to_building_block(),
+          artifact_constants.AGGREGATION_INTRINSIC_ARG_SELECTION_INDEX_TO_NAME_DICT,
+      )
 
   def test_get_grouped_output_tensor_specs_for_aggregations(self):
     daf = tff.backends.mapreduce.get_distribute_aggregate_form_for_computation(

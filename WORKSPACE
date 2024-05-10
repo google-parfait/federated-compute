@@ -167,6 +167,16 @@ load("@com_google_api_gax_java//:repositories.bzl", "com_google_api_gax_java_rep
 
 com_google_api_gax_java_repositories()
 
+http_archive(
+    name = "org_tensorflow_federated",
+    patches = [
+        "//fcp/patches:tensorflow_federated_deps.patch",
+    ],
+    url = "https://github.com/tensorflow/federated/archive/v0.78.0.tar.gz",
+    sha256 = "feba3001705b40700574465cd26502dacfd7837f360fc7f74941fdfaa0b94fa0",
+    strip_prefix = "federated-0.78.0",
+)
+
 # Tensorflow v2.14.0
 http_archive(
     name = "org_tensorflow",
@@ -187,6 +197,11 @@ http_archive(
         # gRPC v1.48.0-pre1 and later include zconf.h in addition to zlib.h;
         # TensorFlow's build rule for zlib only exports the latter.
         "//fcp/patches:tensorflow_zlib.patch",
+        # These patches enables building TensorFlow Federated from source by
+        # fixing visibility in TensorFlow.
+        "@org_tensorflow_federated//third_party/tensorflow:dtensor_internal_visibility.patch",
+        "@org_tensorflow_federated//third_party/tensorflow:internal_visibility.patch",
+        "@org_tensorflow_federated//third_party/tensorflow:tf2xla_visibility.patch",
     ],
     sha256 = "ce357fd0728f0d1b0831d1653f475591662ec5bca736a94ff789e6b1944df19f",
     strip_prefix = "tensorflow-2.14.0",
@@ -322,11 +337,4 @@ http_archive(
   url = "https://github.com/google/differential-privacy/archive/refs/tags/v3.0.0.tar.gz",
   sha256 = "6e6e1cd7a819695caae408f4fa938129ab7a86e83fe2410137c85e50131abbe0",
   strip_prefix = "differential-privacy-3.0.0",
-)
-
-http_archive(
-    name = "org_tensorflow_federated",
-    url = "https://github.com/tensorflow/federated/archive/93ffd03340d021a336994ace52ea6919b1821ff5.tar.gz",
-    sha256 = "247295d40ab2c78c22dec44b36a427fa143bb5a343a3a46f91fcddad5ac2ee07",
-    strip_prefix = "federated-93ffd03340d021a336994ace52ea6919b1821ff5",
 )

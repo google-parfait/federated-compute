@@ -30,9 +30,9 @@ py_library(
         ":type_checks",
         ":variable_helpers",
         "//fcp/protos:plan_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -47,10 +47,10 @@ py_test(
         ":checkpoint_utils",
         "//fcp/protos:plan_py_pb2",
         "@com_google_protobuf//:protobuf_python",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -63,9 +63,9 @@ py_library(
     deps = [
         ":type_checks",
         "//fcp/protos:plan_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -79,10 +79,10 @@ py_test(
     deps = [
         ":data_spec",
         "//fcp/protos:plan_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -105,10 +105,10 @@ py_library(
         "//fcp/protos:plan_py_pb2",
         "//fcp/tensorflow:append_slices_py",
         "//fcp/tensorflow:delete_file_py",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_attrs//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -123,8 +123,9 @@ py_library(
         ":tensor_utils",
         ":type_checks",
         "//fcp/tensorflow:external_dataset_py",
+        "@org_tensorflow_federated//tensorflow_federated",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:computation_py_pb2",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -139,10 +140,11 @@ py_test(
         ":graph_helpers",
         ":variable_helpers",
         "//fcp/protos:plan_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:computation_py_pb2",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -185,8 +187,8 @@ py_library(
         ":tensor_utils",
         ":type_checks",
         "//fcp/protos:plan_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -199,9 +201,9 @@ py_test(
     deps = [
         ":proto_helpers",
         ":variable_helpers",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -293,8 +295,8 @@ py_library(
     deps = [
         ":tensor_utils",
         ":type_checks",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -307,9 +309,9 @@ py_test(
     deps = [
         ":artifact_constants",
         ":variable_helpers",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )

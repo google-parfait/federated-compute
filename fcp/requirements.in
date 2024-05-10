@@ -24,4 +24,8 @@ protobuf>=4.23
 # The TensorFlow version should match what's specified in the WORKSPACE file for
 # C++ targets.
 tensorflow==2.14.0
-tensorflow-federated==0.68.0
+
+# TensorFlow Federated is specified here in order to ensure that the transient
+# Python dependencies are available to Bazel environment and can be patched into
+# TFF (see fcp/patches/tensorflow_federated_deps.patch)
+tensorflow-federated==0.78.0

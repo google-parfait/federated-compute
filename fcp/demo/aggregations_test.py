@@ -21,9 +21,6 @@ from unittest import mock
 from absl.testing import absltest
 import tensorflow as tf
 
-from fcp.aggregation.protocol import aggregation_protocol_messages_pb2 as apm_pb2
-from fcp.aggregation.protocol.python import aggregation_protocol
-from fcp.aggregation.tensorflow.python import aggregation_protocols
 from fcp.demo import aggregations
 from fcp.demo import http_actions
 from fcp.demo import media
@@ -32,6 +29,9 @@ from fcp.protos import plan_pb2
 from fcp.protos.federatedcompute import aggregations_pb2
 from fcp.protos.federatedcompute import common_pb2
 from pybind11_abseil import status as absl_status
+from tensorflow_federated.cc.core.impl.aggregation.protocol import aggregation_protocol_messages_pb2 as apm_pb2
+from tensorflow_federated.cc.core.impl.aggregation.protocol.python import aggregation_protocol
+from tensorflow_federated.cc.core.impl.aggregation.tensorflow.python import aggregation_protocols
 
 INPUT_TENSOR = 'in'
 OUTPUT_TENSOR = 'out'

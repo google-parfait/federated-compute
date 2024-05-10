@@ -36,15 +36,15 @@ py_library(
     deps = [
         ":http_actions",
         ":media",
-        "//fcp/aggregation/core:tensor_py_pb2",
-        "//fcp/aggregation/protocol:configuration_py_pb2",
-        "//fcp/aggregation/protocol:py_pb2",
-        "//fcp/aggregation/protocol/python:aggregation_protocol",
-        "//fcp/aggregation/tensorflow/python:aggregation_protocols",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
         "@com_google_googleapis//google/longrunning:operations_py_proto",
         "@com_google_googleapis//google/rpc:code_py_proto",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol:configuration_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol:py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol/python:aggregation_protocol",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/tensorflow/python:aggregation_protocols",
         "@pypi_absl_py//:pkg",
         "@pypi_tensorflow//:pkg",
     ],
@@ -61,11 +61,11 @@ py_test(
         ":http_actions",
         ":media",
         ":test_utils",
-        "//fcp/aggregation/protocol:py_pb2",
-        "//fcp/aggregation/protocol/python:aggregation_protocol",
-        "//fcp/aggregation/tensorflow/python:aggregation_protocols",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos/federatedcompute:federated_compute_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol:py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol/python:aggregation_protocol",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/tensorflow/python:aggregation_protocols",
         "@pypi_absl_py//:pkg",
         "@pypi_tensorflow//:pkg",
     ],
@@ -76,8 +76,8 @@ py_library(
     srcs = ["checkpoint_tensor_reference.py"],
     srcs_version = "PY3",
     deps = [
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -89,10 +89,10 @@ py_test(
     deps = [
         ":checkpoint_tensor_reference",
         ":test_utils",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -129,7 +129,7 @@ py_library(
     srcs = ["federated_computation.py"],
     srcs_version = "PY3",
     deps = [
-        "@pypi_tensorflow_federated//:pkg",
+        "@org_tensorflow_federated//tensorflow_federated",
     ],
 )
 
@@ -140,10 +140,10 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":federated_computation",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -163,12 +163,12 @@ py_library(
         "//fcp/artifact_building:plan_utils",
         "//fcp/artifact_building:variable_helpers",
         "//fcp/protos:plan_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_attrs//:pkg",
         "@pypi_dm_tree//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -189,11 +189,11 @@ py_test(
         "//fcp/artifact_building:plan_utils",
         "//fcp/artifact_building:variable_helpers",
         "//fcp/protos:plan_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_attrs//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -204,8 +204,8 @@ py_library(
     deps = [
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos:population_eligibility_spec_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_numpy//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -218,9 +218,9 @@ py_test(
         ":federated_data_source",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos:population_eligibility_spec_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
@@ -236,10 +236,10 @@ py_test(
         "//fcp/client:client_runner_example_data_py_pb2",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos:population_eligibility_spec_py_pb2",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
-        "@pypi_tensorflow_federated//:pkg",
     ],
 )
 
