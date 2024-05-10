@@ -79,7 +79,7 @@ message ConfigureAndAttestResponse {
   // For Oak Restricted Kernel applications, the application's attestation
   // evidence. This field should not be set for Oak Containers applications,
   // which can provide evidence through a separate RPC.
-  oak.attestation.v1.Evidence attestation_evidence = 3;
+  oak.attestation.v1.Evidence attestation_evidence = 3 [deprecated = true];
 
   reserved 2;
 }
