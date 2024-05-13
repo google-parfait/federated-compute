@@ -29,7 +29,7 @@ from fcp.protos import plan_pb2
 from fcp.protos.federatedcompute import aggregations_pb2
 from fcp.protos.federatedcompute import common_pb2
 from pybind11_abseil import status as absl_status
-from tensorflow_federated.cc.core.impl.aggregation.protocol import aggregation_protocol_messages_pb2 as apm_pb2
+from tensorflow_federated.cc.core.impl.aggregation.protocol import aggregation_protocol_messages_pb2
 from tensorflow_federated.cc.core.impl.aggregation.protocol.python import aggregation_protocol
 from tensorflow_federated.cc.core.impl.aggregation.tensorflow.python import aggregation_protocols
 
@@ -168,8 +168,9 @@ class AggregationsTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
 
     required_clients = (
         AGGREGATION_REQUIREMENTS.minimum_clients_in_server_published_aggregate)
-    agg_status = apm_pb2.StatusMessage(
-        num_inputs_aggregated_and_included=required_clients)
+    agg_status = aggregation_protocol_messages_pb2.StatusMessage(
+        num_inputs_aggregated_and_included=required_clients
+    )
     mock_agg_protocol.GetStatus.side_effect = lambda: agg_status
 
     def on_complete():

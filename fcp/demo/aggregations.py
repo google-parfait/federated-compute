@@ -37,7 +37,7 @@ from fcp.protos.federatedcompute import aggregations_pb2
 from fcp.protos.federatedcompute import common_pb2
 from pybind11_abseil import status as absl_status
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2 as aggregation_tensor_pb2
-from tensorflow_federated.cc.core.impl.aggregation.protocol import aggregation_protocol_messages_pb2 as apm_pb2
+from tensorflow_federated.cc.core.impl.aggregation.protocol import aggregation_protocol_messages_pb2
 from tensorflow_federated.cc.core.impl.aggregation.protocol import configuration_pb2
 from tensorflow_federated.cc.core.impl.aggregation.protocol.python import aggregation_protocol
 from tensorflow_federated.cc.core.impl.aggregation.tensorflow.python import aggregation_protocols
@@ -453,9 +453,16 @@ class Service:
       raise http_actions.HttpError(self._get_http_status(
           e.status.code())) from e
 
-    client_message = apm_pb2.ClientMessage(
-        simple_aggregation=apm_pb2.ClientMessage.SimpleAggregation(
-            input=apm_pb2.ClientResource(inline_bytes=update)))
+    simple_aggregation = (
+        aggregation_protocol_messages_pb2.ClientMessage.SimpleAggregation(
+            input=aggregation_protocol_messages_pb2.ClientResource(
+                inline_bytes=update
+            )
+        )
+    )
+    client_message = aggregation_protocol_messages_pb2.ClientMessage(
+        simple_aggregation=simple_aggregation
+    )
     try:
       state.agg_protocol.ReceiveClientMessage(client_data.client_id,
                                               client_message)
