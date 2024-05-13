@@ -132,6 +132,7 @@ py_library(
 py_test(
     name = "graph_helpers_test",
     size = "small",
+    timeout = "moderate",
     srcs = ["graph_helpers_test.py"],
     python_version = "PY3",
     srcs_version = "PY3",
