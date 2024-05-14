@@ -172,9 +172,9 @@ http_archive(
     patches = [
         "//fcp/patches:tensorflow_federated_deps.patch",
     ],
-    url = "https://github.com/tensorflow/federated/archive/v0.78.0.tar.gz",
-    sha256 = "feba3001705b40700574465cd26502dacfd7837f360fc7f74941fdfaa0b94fa0",
-    strip_prefix = "federated-0.78.0",
+    url = "https://github.com/google-parfait/tensorflow-federated/archive/v0.78.0.tar.gz",
+    sha256 = "0238ac9fe2cf96b138a8de1c61bb63a67f7e9ef1611b88e56c25e157ef28c8bf",
+    strip_prefix = "tensorflow-federated-0.78.0",
 )
 
 # Tensorflow v2.14.0
