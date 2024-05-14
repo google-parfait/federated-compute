@@ -111,7 +111,7 @@ message CreateKeyResponse {
   bytes public_key = 1;
 
   // The attestation evidence for the Ledger.
-  oak.attestation.v1.Evidence attestation_evidence = 4;
+  oak.attestation.v1.Evidence attestation_evidence = 4 [deprecated = true];
 
   reserved 2, 3, 5;
 }
