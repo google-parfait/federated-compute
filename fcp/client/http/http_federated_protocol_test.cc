@@ -323,7 +323,6 @@ void ExpectRejectedRetryWindow(
 }
 
 EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest(
-    bool supports_multiple_task_assignments = false,
     bool enable_confidential_aggregation = false) {
   EligibilityEvalTaskRequest request;
   // Note: we don't expect population_name to be set, since it should be set in
@@ -336,8 +335,7 @@ EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest(
   request.mutable_resource_capabilities()
       ->set_supports_confidential_aggregation(enable_confidential_aggregation);
   request.mutable_eligibility_eval_task_capabilities()
-      ->set_supports_multiple_task_assignment(
-          supports_multiple_task_assignments);
+      ->set_supports_multiple_task_assignment(true);
   request.mutable_eligibility_eval_task_capabilities()
       ->set_supports_native_eets(true);
 
@@ -554,9 +552,6 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillRepeatedly(Return(true));
     EXPECT_CALL(mock_flags_, waiting_period_sec_for_cancellation)
         .WillRepeatedly(Return(kCancellationWaitingPeriodSec));
-
-    EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-        .WillRepeatedly(Return(false));
     EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
         .WillRepeatedly(Return(false));
 
@@ -606,7 +601,6 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // absl::Status, which the caller should verify is OK using ASSERT_OK.
   absl::Status RunSuccessfulEligibilityEvalCheckin(
       bool eligibility_eval_enabled = true,
-      bool support_multiple_task_assignments = false,
       bool enable_confidential_aggregation = false) {
     EligibilityEvalTaskResponse eval_task_response;
     if (eligibility_eval_enabled) {
@@ -632,7 +626,6 @@ class HttpFederatedProtocolTest : public ::testing::Test {
                     request_uri, HttpRequest::Method::kPost, _,
                     EligibilityEvalTaskRequestMatcher(
                         EqualsProto(GetExpectedEligibilityEvalTaskRequest(
-                            support_multiple_task_assignments,
                             enable_confidential_aggregation))))))
         .WillOnce(Return(FakeHttpResponse(
             200, HeaderList(), eval_task_response.SerializeAsString())));
@@ -1213,8 +1206,6 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
 
 TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalCheckinWithPopulationEligibilitySpec) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   // We return a fake response which requires fetching the plan via HTTP,
   // but which has the checkpoint data available inline.
   std::string expected_plan = kPlan;
@@ -1247,8 +1238,7 @@ TEST_F(HttpFederatedProtocolTest,
                   "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   EligibilityEvalTaskRequestMatcher(
-                      EqualsProto(GetExpectedEligibilityEvalTaskRequest(
-                          /* supports_multiple_task_assignments= */ true))))))
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), eval_task_response.SerializeAsString())));
 
@@ -1287,8 +1277,6 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalCheckinWithPopulationEligibilitySpecInvalidFormat) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   // We return a fake response which requires fetching the plan via HTTP,
   // but which has the checkpoint data available inline.
   std::string expected_plan = kPlan;
@@ -1315,8 +1303,7 @@ TEST_F(HttpFederatedProtocolTest,
                   "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   EligibilityEvalTaskRequestMatcher(
-                      EqualsProto(GetExpectedEligibilityEvalTaskRequest(
-                          /* supports_multiple_task_assignments= */ true))))))
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), eval_task_response.SerializeAsString())));
 
@@ -1333,9 +1320,6 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalNotConfiguredWithPopulationEligibilitySpec) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
-
   Resource plan_resource;
   Resource checkpoint_resource;
 
@@ -1361,8 +1345,7 @@ TEST_F(HttpFederatedProtocolTest,
                   "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   EligibilityEvalTaskRequestMatcher(
-                      EqualsProto(GetExpectedEligibilityEvalTaskRequest(
-                          /* supports_multiple_task_assignments= */ true))))))
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), eval_task_response.SerializeAsString())));
 
@@ -1396,8 +1379,6 @@ TEST_F(HttpFederatedProtocolTest,
 // EligibilityEvalNotConfigured.
 TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalNotConfiguredWhenSpecHasPolicyButFlagOff) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, native_only_eligibility_config_support)
       .WillRepeatedly(Return(false));
 
@@ -1433,8 +1414,7 @@ TEST_F(HttpFederatedProtocolTest,
                   "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   EligibilityEvalTaskRequestMatcher(
-                      EqualsProto(GetExpectedEligibilityEvalTaskRequest(
-                          /* supports_multiple_task_assignments= */ true))))))
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), eval_task_response.SerializeAsString())));
 
@@ -1471,8 +1451,6 @@ TEST_F(HttpFederatedProtocolTest,
 // still return EligibilityEvalTask.
 TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalConfiguredWhenSpecHasPolicyAndFlagOn) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, native_only_eligibility_config_support)
       .WillRepeatedly(Return(true));
 
@@ -1508,8 +1486,7 @@ TEST_F(HttpFederatedProtocolTest,
                   "TEST%2FPOPULATION:request?%24alt=proto",
                   HttpRequest::Method::kPost, _,
                   EligibilityEvalTaskRequestMatcher(
-                      EqualsProto(GetExpectedEligibilityEvalTaskRequest(
-                          /* supports_multiple_task_assignments= */ true))))))
+                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), eval_task_response.SerializeAsString())));
 
@@ -2412,28 +2389,10 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
 }
 
 TEST_F(HttpFederatedProtocolTest,
-       TestCheckinTaskAssignedMultiTaskAssignmentEnabled) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
-  // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/true));
-  ASSERT_OK(RunSuccessfulCheckin());
-  // The Checkin call is expected to return the rejection retry window from the
-  // response to the first eligibility eval request because Multiple task
-  // assignment is enabled.
-  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-}
-
-TEST_F(HttpFederatedProtocolTest,
        TestMultiTaskAssignmentCalledAfterCheckinTaskAssigned) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/true));
+      /*eligibility_eval_enabled=*/true));
   ASSERT_OK(RunSuccessfulCheckin());
   // A PerformMultipleTaskAssignments(...) request should now fail, because
   // PerformMultipleTaskAssignments(...) should only be called before a
@@ -2658,12 +2617,9 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest,
        TestPerformMultipleTaskAssignmentsNoTaskAvailable) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/true));
+      /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -2701,12 +2657,9 @@ TEST_F(HttpFederatedProtocolTest,
 }
 
 TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsFailed) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/true));
+      /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -2750,12 +2703,9 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsFailed) {
 
 TEST_F(HttpFederatedProtocolTest,
        TestPerformMultipleTaskAssignmentsFailedPermanentError) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/true));
+      /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -2797,12 +2747,9 @@ TEST_F(HttpFederatedProtocolTest,
 }
 
 TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/true));
+      /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -2894,12 +2841,9 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
 
 TEST_F(HttpFederatedProtocolTest,
        TestPerformMultipleTaskAssignmentsPayloadRetrievalFailed) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/true));
+      /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -2985,12 +2929,9 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest,
        TestPerformMultipleTaskAssignmentsPartialFailure) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/true));
+      /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -3187,7 +3128,6 @@ TEST_F(HttpFederatedProtocolTest,
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/false,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
   ASSERT_OK(RunSuccessfulCheckin(
@@ -3309,7 +3249,6 @@ TEST_F(HttpFederatedProtocolTest,
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/false,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
   ASSERT_OK(RunSuccessfulCheckin(
@@ -4088,12 +4027,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
 }
 
 TEST_F(HttpFederatedProtocolTest, TestFullProtocol) {
-  EXPECT_CALL(mock_flags_, http_protocol_supports_multiple_task_assignments)
-      .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
-      /*eligibility_eval_enabled=*/true,
-      /*support_multiple_task_assignments=*/true));
+      /*eligibility_eval_enabled=*/true));
   // Issue a regular checkin
   ASSERT_OK(RunSuccessfulMultipleTaskAssignments());
 
@@ -4135,7 +4071,7 @@ TEST_F(HttpFederatedProtocolTest,
       ->add_supported_compression_formats(
           ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
   expected_eligibility_request.mutable_eligibility_eval_task_capabilities()
-      ->set_supports_multiple_task_assignment(false);
+      ->set_supports_multiple_task_assignment(true);
   expected_eligibility_request.mutable_eligibility_eval_task_capabilities()
       ->set_supports_native_eets(true);
 

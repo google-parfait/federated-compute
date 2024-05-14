@@ -2090,8 +2090,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   std::vector<std::string> successful_task_names;
 
   // Run multiple task assignments first if enabled.
-  if (flags->http_protocol_supports_multiple_task_assignments() &&
-      !eligibility_eval_result->task_names_for_multiple_task_assignments
+  if (!eligibility_eval_result->task_names_for_multiple_task_assignments
            .empty()) {
     expected_num_tasks = eligibility_eval_result
                              ->task_names_for_multiple_task_assignments.size();

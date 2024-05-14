@@ -212,9 +212,6 @@ class FlagsImpl : public Flags {
     return 2000;
   }
   bool log_tensorflow_error_messages() const override { return true; }
-  bool http_protocol_supports_multiple_task_assignments() const override {
-    return true;
-  }
 };
 
 }  // namespace fcp::client

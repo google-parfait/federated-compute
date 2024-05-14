@@ -169,11 +169,6 @@ class Flags {
   // The number of threads that TFLite interpreter will use.
   virtual int32_t num_threads_for_tflite() const { return 2; }
 
-  // If true, the HTTP federated protocol supports multiple task assignments.
-  virtual bool http_protocol_supports_multiple_task_assignments() const {
-    return false;
-  }
-
   // If true, enables new client report wire format for lightweight client.
   virtual bool enable_lightweight_client_report_wire_format() const {
     return false;

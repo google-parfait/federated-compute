@@ -480,8 +480,7 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
   request.mutable_resource_capabilities()->add_supported_compression_formats(
       ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
   request.mutable_eligibility_eval_task_capabilities()
-      ->set_supports_multiple_task_assignment(
-          flags_->http_protocol_supports_multiple_task_assignments());
+      ->set_supports_multiple_task_assignment(true);
   request.mutable_eligibility_eval_task_capabilities()
       ->set_supports_native_eets(true);
 
@@ -951,6 +950,7 @@ HttpFederatedProtocol::PerformMultipleTaskAssignments(
       << "PerformMultipleTaskAssignments(...) called despite failed/rejected "
          "earlier EligibilityEvalCheckin";
   object_state_ = ObjectState::kMultipleTaskAssignmentsFailed;
+  multiple_task_assignments_called_ = true;
   // Send the request and parse the response.
   auto response = HandleMultipleTaskAssignmentsInnerResponse(
       PerformMultipleTaskAssignmentsAndReportEligibilityEvalResult(task_names),
@@ -1845,7 +1845,7 @@ HttpFederatedProtocol::GetLatestRetryWindow() {
           retry_times_->retry_time_if_rejected);
     case ObjectState::kCheckinAccepted:
       FCP_CHECK(retry_times_.has_value());
-      if (flags_->http_protocol_supports_multiple_task_assignments()) {
+      if (multiple_task_assignments_called_) {
         return GenerateRetryWindowFromRetryTime(
             retry_times_->retry_time_if_rejected);
       } else {
@@ -2049,7 +2049,8 @@ HttpFederatedProtocol::GetTheLatestStateFromAllTasks() {
       object_state_ != ObjectState::kMultipleTaskAssignmentsAccepted) {
     return object_state_;
   }
-  if (!flags_->http_protocol_supports_multiple_task_assignments()) {
+
+  if (!multiple_task_assignments_called_) {
     return default_task_info_.state;
   }
 

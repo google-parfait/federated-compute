@@ -416,6 +416,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   bool eligibility_eval_enabled_ = false;
   // Set this field to true if ReportEligibilityEvalResult has been called.
   bool report_eligibility_eval_result_called_ = false;
+  // Set this field to true if multiple task assignments has been called.
+  bool multiple_task_assignments_called_ = false;
 };
 
 }  // namespace http
