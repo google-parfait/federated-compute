@@ -110,10 +110,7 @@ message CreateKeyResponse {
   //   -65537: HPKE-Base-X25519-SHA256-AES128GCM
   bytes public_key = 1;
 
-  // The attestation evidence for the Ledger.
-  oak.attestation.v1.Evidence attestation_evidence = 4 [deprecated = true];
-
-  reserved 2, 3, 5;
+  reserved 2 to 5;
 }
 
 message DeleteKeyRequest {

@@ -76,12 +76,7 @@ message ConfigureAndAttestResponse {
   //   -65538: google.protobuf.Struct containing app-specific config properties
   bytes public_key = 1;
 
-  // For Oak Restricted Kernel applications, the application's attestation
-  // evidence. This field should not be set for Oak Containers applications,
-  // which can provide evidence through a separate RPC.
-  oak.attestation.v1.Evidence attestation_evidence = 3 [deprecated = true];
-
-  reserved 2;
+  reserved 2, 3;
 }
 
 message GenerateNoncesRequest {
