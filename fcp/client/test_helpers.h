@@ -674,6 +674,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_minimum_separation_policy, (), (const, override));
   MOCK_METHOD(bool, native_only_eligibility_config_support, (),
               (const, override));
+  MOCK_METHOD(bool, enable_lightweight_computation_id, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

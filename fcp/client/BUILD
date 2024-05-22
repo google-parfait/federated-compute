@@ -242,9 +242,11 @@ cc_library(
     deps = [
         ":interfaces",
         ":phase_logger",
+        ":selector_context_cc_proto",
         ":simple_task_environment",
         "//fcp/base",
         "//fcp/base:clock",
+        "//fcp/base:digest",
         "//fcp/base:time_util",
         "//fcp/client/engine:common",
         "//fcp/client/engine:example_iterator_factory",

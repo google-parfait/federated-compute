@@ -202,6 +202,10 @@ class Flags {
   // HandleEligibilityEvalTaskResponse will return an EligibilityEvalTask
   // instead of an EligibilityEvalDisabled result to fl_runner.
   virtual bool native_only_eligibility_config_support() const { return false; }
+
+  // If true, the client will generate a computation id for example query tasks
+  // and native data availability policies based on a SQL selection criteria.
+  virtual bool enable_lightweight_computation_id() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

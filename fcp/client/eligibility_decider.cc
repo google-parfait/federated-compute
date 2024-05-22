@@ -31,6 +31,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
+#include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
 #include "fcp/client/engine/common.h"
@@ -39,6 +40,7 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_utils.h"
 #include "fcp/client/phase_logger.h"
+#include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -179,8 +181,9 @@ engine::ExampleIteratorFactory* FindExampleIteratorFactory(
 // returns false. Returns an error status for exceptional cases.
 absl::StatusOr<bool> ComputeDataAvailabilityEligibility(
     const DataAvailabilityPolicy& data_availability_policy,
-    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories) {
-  ExampleSelector selector = data_availability_policy.selector();
+    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+    const Flags& flags) {
+  const ExampleSelector& selector = data_availability_policy.selector();
   engine::ExampleIteratorFactory* iterator_factory =
       FindExampleIteratorFactory(selector, example_iterator_factories);
 
@@ -191,9 +194,23 @@ absl::StatusOr<bool> ComputeDataAvailabilityEligibility(
         absl::StrCat("No iterator factory that can handle selector with uri ",
                      selector.collection_uri()));
   }
+  SelectorContext selector_context = iterator_factory->GetSelectorContext();
+  if (flags.enable_lightweight_computation_id()) {
+    // We calculate the computation id here as a hash of the selection criteria.
+    // Notice that it differs from the logic behind computing ids for regular
+    // tasks, where id represents either the hash of all criteria combined (for
+    // `ExampleQuerySpec` tasks), or the hash of the plan proto (for
+    // `TensorFlowSpec` tasks). Each data availability policy is logically a
+    // separate task thus having a separate identifier.
+    selector_context.mutable_computation_properties()
+        ->mutable_eligibility_eval()
+        ->set_computation_id(
+            ComputeSHA256(selector.criteria().SerializeAsString()));
+  }
 
-  FCP_ASSIGN_OR_RETURN(std::unique_ptr<ExampleIterator> iterator,
-                       iterator_factory->CreateExampleIterator(selector));
+  FCP_ASSIGN_OR_RETURN(
+      std::unique_ptr<ExampleIterator> iterator,
+      iterator_factory->CreateExampleIterator(selector, selector_context));
   int32_t min_example_count = data_availability_policy.min_example_count();
   int examples_returned = 0;
   while (examples_returned < min_example_count) {
@@ -500,7 +517,7 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
           absl::StatusOr<bool> data_is_available =
               ComputeDataAvailabilityEligibility(
                   policy_spec.data_availability_policy(),
-                  example_iterator_factories);
+                  example_iterator_factories, *flags);
           if (data_is_available.ok()) {
             if (*data_is_available) {
               // Data is available for all tasks that use this policy.

@@ -82,6 +82,9 @@ message LocalComputation {
 message EligibilityEvalComputation {
   // Population name.
   string population_name = 1;
+  // Identity representing the computation e.g. its hash.
+  // Optional, currently it is only set for data availability policies.
+  bytes computation_id = 2;
 }
 
 // Federated computation with server aggregation.

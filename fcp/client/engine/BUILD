@@ -324,6 +324,7 @@ cc_library(
     copts = FCP_COPTS,
     visibility = default_visibility,
     deps = [
+        "//fcp/client:selector_context_cc_proto",
         "//fcp/client:simple_task_environment",
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/status:statusor",

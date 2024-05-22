@@ -20,6 +20,7 @@
 #include <memory>
 
 #include "absl/status/statusor.h"
+#include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 
@@ -45,6 +46,21 @@ class ExampleIteratorFactory {
       const google::internal::federated::plan::ExampleSelector&
           example_selector) = 0;
 
+  virtual absl::StatusOr<std::unique_ptr<ExampleIterator>>
+  CreateExampleIterator(
+      const google::internal::federated::plan::ExampleSelector&
+          example_selector,
+      const SelectorContext& selector_context) {
+    // Ignores the selector context by default, so ExampleIteratorFactory
+    // implementations that do not depend on the custom context can use this
+    // method without overriding.
+    return CreateExampleIterator(example_selector);
+  }
+
+  virtual SelectorContext GetSelectorContext() const {
+    return SelectorContext::default_instance();
+  };
+
   // Whether stats should be generated and logged into the OpStats database for
   // iterators created by this factory.
   virtual bool ShouldCollectStats() = 0;
@@ -62,7 +78,6 @@ class FunctionalExampleIteratorFactory : public ExampleIteratorFactory {
   explicit FunctionalExampleIteratorFactory(
       std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
           const google::internal::federated::plan::ExampleSelector&
-
           )>
           create_iterator_func)
       : can_handle_func_(
@@ -89,6 +104,20 @@ class FunctionalExampleIteratorFactory : public ExampleIteratorFactory {
         create_iterator_func_(create_iterator_func),
         should_collect_stats_(should_collect_stats) {}
 
+  FunctionalExampleIteratorFactory(
+      std::function<
+          bool(const google::internal::federated::plan::ExampleSelector&)>
+          can_handle_func,
+      std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
+          const google::internal::federated::plan::ExampleSelector&,
+          const SelectorContext&)>
+          create_iterator_with_context_func,
+      const SelectorContext& selector_context, bool should_collect_stats)
+      : can_handle_func_(can_handle_func),
+        create_iterator_with_context_func_(create_iterator_with_context_func),
+        selector_context_(selector_context),
+        should_collect_stats_(should_collect_stats) {}
+
   bool CanHandle(const google::internal::federated::plan::ExampleSelector&
                      example_selector) override {
     return can_handle_func_(example_selector);
@@ -97,10 +126,25 @@ class FunctionalExampleIteratorFactory : public ExampleIteratorFactory {
   absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
       const google::internal::federated::plan::ExampleSelector&
           example_selector) override {
+    return CreateExampleIterator(example_selector, selector_context_);
+  }
+
+  absl::StatusOr<std::unique_ptr<ExampleIterator>> CreateExampleIterator(
+      const google::internal::federated::plan::ExampleSelector&
+          example_selector,
+      const SelectorContext& selector_context) override {
+    if (create_iterator_with_context_func_) {
+      return create_iterator_with_context_func_(example_selector,
+                                                selector_context);
+    }
     return create_iterator_func_(example_selector);
   }
 
   bool ShouldCollectStats() override { return should_collect_stats_; }
+
+  SelectorContext GetSelectorContext() const override {
+    return selector_context_;
+  };
 
  private:
   std::function<bool(const google::internal::federated::plan::ExampleSelector&)>
@@ -108,6 +152,11 @@ class FunctionalExampleIteratorFactory : public ExampleIteratorFactory {
   std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
       const google::internal::federated::plan::ExampleSelector&)>
       create_iterator_func_;
+  std::function<absl::StatusOr<std::unique_ptr<ExampleIterator>>(
+      const google::internal::federated::plan::ExampleSelector&,
+      const SelectorContext&)>
+      create_iterator_with_context_func_;
+  SelectorContext selector_context_;
   bool should_collect_stats_;
 };
 

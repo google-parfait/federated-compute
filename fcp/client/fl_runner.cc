@@ -364,10 +364,10 @@ CreateSimpleTaskEnvironmentIteratorFactory(
         return true;
       },
       /*create_iterator_func=*/
-      [task_env, selector_context, should_log_collection_first_access_time,
-       phase_logger,
-       flags](const google::internal::federated::plan::ExampleSelector&
-                  example_selector) {
+      [task_env, should_log_collection_first_access_time, phase_logger, flags](
+          const google::internal::federated::plan::ExampleSelector&
+              example_selector,
+          const SelectorContext& selector_context) {
         if (should_log_collection_first_access_time &&
             flags->log_collection_first_access_time()) {
           phase_logger->MaybeLogCollectionFirstAccessTime(
@@ -376,6 +376,7 @@ CreateSimpleTaskEnvironmentIteratorFactory(
         return task_env->CreateExampleIterator(example_selector,
                                                selector_context);
       },
+      /*selector_context=*/selector_context,
       /*should_collect_stats=*/true);
 }
 
@@ -1239,8 +1240,23 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
     return absl::InvalidArgumentError(message);
   }
 
+  // Since there might be multiple queries within a single ExampleQuerySpec
+  // task, we merge all selection criteria to calculate the computation id.
+  // This approach is preferred over calculating ids for each query separately
+  // as the computation id represents the identity of the whole task.
   std::string computation_id;
-  if (flags->enable_computation_id()) {
+  if (flags->enable_lightweight_computation_id()) {
+    if (plan.phase().has_example_query_spec()) {
+      std::string merged_criteria;
+      for (const auto& example_query :
+           plan.phase().example_query_spec().example_queries()) {
+        absl::StrAppend(
+            &merged_criteria,
+            example_query.example_selector().criteria().SerializeAsString());
+      }
+      computation_id = ComputeSHA256(merged_criteria);
+    }
+  } else if (flags->enable_computation_id()) {
     if (flags->use_correct_sha256_impl_for_computation_id()) {
       if (std::holds_alternative<std::string>(plan_bytes)) {
         computation_id = ComputeSHA256(std::get<std::string>(plan_bytes));
@@ -1468,7 +1484,8 @@ SelectorContext FillSelectorContextWithTaskLevelDetails(
   federated_selector_context_with_task_name.mutable_computation_properties()
       ->mutable_federated()
       ->set_task_name(checkin_result->task_name);
-  if (flags->enable_computation_id()) {
+  if (flags->enable_computation_id() ||
+      flags->enable_lightweight_computation_id()) {
     federated_selector_context_with_task_name.mutable_computation_properties()
         ->mutable_federated()
         ->set_computation_id(checkin_result->computation_id);
