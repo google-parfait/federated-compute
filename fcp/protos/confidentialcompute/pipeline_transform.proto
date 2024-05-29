@@ -106,6 +106,9 @@ message TransformRequest {
 // A response providing the results of the transformation.
 message TransformResponse {
   repeated Record outputs = 1;
+
+  // The number of input records that were ignored due to being invalid.
+  int32 num_ignored_inputs = 2;
 }
 
 // A data record used as one of the inputs or outputs of a transform.
