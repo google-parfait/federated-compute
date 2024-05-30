@@ -174,6 +174,16 @@ class Flags {
     return false;
   }
 
+  // If true, enabling the lightweight client report wire format will be untied
+  // from requiring a lightweight client report. This means that even if
+  // `enable_lightweight_client_report_wire_format` is true, the client is not
+  // required to produce a lightweight client report. This is a bugfix for the
+  // existing implementation.
+  virtual bool untie_lw_client_report_format_support_from_requiring_lw_report()
+      const {
+    return false;
+  }
+
   // If true, OpStats logger enables PhaseStats logging.
   virtual bool enable_phase_stats_logging() const { return false; }
 

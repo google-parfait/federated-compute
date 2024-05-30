@@ -225,23 +225,51 @@ absl::StatusOr<ComputationResults> CreateComputationResults(
     }
   }
 
-  if (flags->enable_lightweight_client_report_wire_format()) {
-    // Reads string from federated_compute_checkpoint
-    if (plan_result.federated_compute_checkpoint.empty()) {
-      return absl::InvalidArgumentError("Empty federate compute checkpoint");
+  if (!flags
+           ->untie_lw_client_report_format_support_from_requiring_lw_report()) {
+    // Old buggy behavior
+    if (flags->enable_lightweight_client_report_wire_format()) {
+      // Reads string from federated_compute_checkpoint
+      if (plan_result.federated_compute_checkpoint.empty()) {
+        return absl::InvalidArgumentError("Empty federate compute checkpoint");
+      }
+      computation_results[kFederatedComputeCheckpoint] =
+          std::move(plan_result.federated_compute_checkpoint);
+    } else {
+      // Name of the TF checkpoint inside the aggregand map in the Checkpoint
+      // protobuf. This field name is ignored by the server.
+      if (!checkpoint_filename.empty()) {
+        FCP_ASSIGN_OR_RETURN(std::string tf_checkpoint,
+                             fcp::ReadFileToString(checkpoint_filename));
+        computation_results[std::string(kTensorflowCheckpointAggregand)] =
+            std::move(tf_checkpoint);
+      }
     }
-    computation_results[kFederatedComputeCheckpoint] =
-        std::move(plan_result.federated_compute_checkpoint);
   } else {
-    // Name of the TF checkpoint inside the aggregand map in the Checkpoint
-    // protobuf. This field name is ignored by the server.
-    if (!checkpoint_filename.empty()) {
+    if (!plan_result.federated_compute_checkpoint.empty()) {
+      if (flags->enable_lightweight_client_report_wire_format()) {
+        // Task produced a lightweight report, and the feature is enabled.
+        computation_results[kFederatedComputeCheckpoint] =
+            std::move(plan_result.federated_compute_checkpoint);
+      } else {
+        // Task produced a lightweight report, but the feature is disabled.
+        return absl::InternalError(
+            "Lightweight report produced but lightweight report feature is "
+            "disabled");
+      }
+    } else if (!checkpoint_filename.empty()) {
+      // Name of the TF checkpoint inside the aggregand map in the Checkpoint
+      // protobuf. This field name is ignored by the server.
       FCP_ASSIGN_OR_RETURN(std::string tf_checkpoint,
                            fcp::ReadFileToString(checkpoint_filename));
       computation_results[std::string(kTensorflowCheckpointAggregand)] =
           std::move(tf_checkpoint);
+    } else {
+      // No lightweight report produced, and no TF checkpoint produced. For this
+      // computation, all outputs are aggregated with secagg.
     }
   }
+
   return computation_results;
 }
 
