@@ -121,28 +121,6 @@ void AddValuesToQuantized(QuantizedTensor* quantized,
   }
 }
 
-std::string ComputeSHA256FromStringOrCord(
-    std::variant<std::string, absl::Cord> data) {
-  std::unique_ptr<EVP_MD_CTX, void (*)(EVP_MD_CTX*)> mdctx(EVP_MD_CTX_create(),
-                                                           EVP_MD_CTX_destroy);
-  FCP_CHECK(EVP_DigestInit_ex(mdctx.get(), EVP_sha256(), nullptr));
-
-  std::string plan_str;
-  if (std::holds_alternative<std::string>(data)) {
-    plan_str = std::get<std::string>(data);
-  } else {
-    plan_str = std::string(std::get<absl::Cord>(data));
-  }
-
-  FCP_CHECK(EVP_DigestUpdate(mdctx.get(), plan_str.c_str(), sizeof(int)));
-  const int hash_len = 32;  // 32 bytes for SHA-256.
-  uint8_t computation_id_bytes[hash_len];
-  FCP_CHECK(EVP_DigestFinal_ex(mdctx.get(), computation_id_bytes, nullptr));
-
-  return std::string(reinterpret_cast<char const*>(computation_id_bytes),
-                     hash_len);
-}
-
 struct PlanResultAndCheckpointFile {
   explicit PlanResultAndCheckpointFile(engine::PlanResult plan_result)
       : plan_result(std::move(plan_result)) {}
@@ -1285,14 +1263,10 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
       computation_id = ComputeSHA256(merged_criteria);
     }
   } else if (flags->enable_computation_id()) {
-    if (flags->use_correct_sha256_impl_for_computation_id()) {
-      if (std::holds_alternative<std::string>(plan_bytes)) {
-        computation_id = ComputeSHA256(std::get<std::string>(plan_bytes));
-      } else {
-        computation_id = ComputeSHA256(std::get<absl::Cord>(plan_bytes));
-      }
+    if (std::holds_alternative<std::string>(plan_bytes)) {
+      computation_id = ComputeSHA256(std::get<std::string>(plan_bytes));
     } else {
-      computation_id = ComputeSHA256FromStringOrCord(plan_bytes);
+      computation_id = ComputeSHA256(std::get<absl::Cord>(plan_bytes));
     }
   }
 

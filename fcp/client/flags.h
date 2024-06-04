@@ -200,13 +200,6 @@ class Flags {
   // If true, enables MinimumSeparationPolicy for clients.
   virtual bool enable_minimum_separation_policy() const { return false; }
 
-  // If true, the client will generate computation IDs by actually calculating a
-  // SHA256 hash correctly, whereas it calculated the hash only over the first 4
-  // bytes before this change.
-  virtual bool use_correct_sha256_impl_for_computation_id() const {
-    return false;
-  }
-
   // If true, and if a population has tasks which only use native policies and
   // no TensorFlow-based eligibility eval plan is deployed,
   // HandleEligibilityEvalTaskResponse will return an EligibilityEvalTask
