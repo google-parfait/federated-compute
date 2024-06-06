@@ -678,6 +678,8 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, native_only_eligibility_config_support, (),
               (const, override));
   MOCK_METHOD(bool, enable_lightweight_computation_id, (), (const, override));
+  MOCK_METHOD(bool, check_trustworthiness_for_min_sep_policy, (),
+              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

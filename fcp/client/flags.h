@@ -209,6 +209,13 @@ class Flags {
   // If true, the client will generate a computation id for example query tasks
   // and native data availability policies based on a SQL selection criteria.
   virtual bool enable_lightweight_computation_id() const { return false; }
+
+  // If true, the minimum separation policy will first check if the OpStatsDb's
+  // earliest trustworthy time is earlier than the required minimum
+  // trustworthiness period.
+  virtual bool check_trustworthiness_for_min_sep_policy() const {
+    return false;
+  }
 };
 }  // namespace client
 }  // namespace fcp

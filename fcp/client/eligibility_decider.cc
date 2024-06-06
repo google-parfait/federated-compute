@@ -66,6 +66,8 @@ const int32_t kDataAvailabilityImplementationVersion = 1;
 const int32_t kSworImplementationVersion = 1;
 const int32_t kTfCustomPolicyImplementationVersion = 1;
 const int32_t kMinimumSeparationPolicyImplementationVersion = 1;
+const int32_t kMinimumSeparationPolicyImplementationVersionWithTrustworthiness =
+    2;
 
 // URI handled by the eligibility decider for an example selector that will
 // return a single example containing the name of the policy implementation to
@@ -335,7 +337,29 @@ ComputeTfCustomPolicyEligibility(
 absl::flat_hash_set<std::string> ComputeMinimumSeparationPolicyEligibility(
     const MinimumSeparationPolicy& min_sep_policy,
     const absl::flat_hash_set<std::string>& task_names,
-    const opstats::OpStatsSequence& opstats_sequence, const Flags* flags) {
+    const opstats::OpStatsSequence& opstats_sequence, Clock& clock,
+    const Flags& flags) {
+  if (flags.check_trustworthiness_for_min_sep_policy()) {
+    // First, check that the policy's min trustworthiness period does not exceed
+    // the opstats db's trustworthiness timestamp if it is set. This timestamp
+    // tracks when the opstats db was initialized, so if the required min
+    // trustworthiness period covers a time span beyond this timestamp, it can
+    // not be guaranteed that the client did not successfully participate within
+    // the period.
+    absl::Duration min_period = fcp::TimeUtil::ConvertProtoToAbslDuration(
+        min_sep_policy.min_trustworthiness_period());
+    if (min_period != absl::ZeroDuration()) {
+      absl::Time now = clock.Now();
+      absl::Duration trustworthiness_period =
+          now - fcp::TimeUtil::ConvertProtoToAbslTime(
+                    opstats_sequence.earliest_trustworthy_time());
+      if (trustworthiness_period < min_period) {
+        // No tasks eligible, return empty set
+        return {};
+      }
+    }
+  }
+
   absl::flat_hash_set<std::string> eligibility_results;
   for (const std::string& task_name : task_names) {
     std::optional<int64_t> last_successful_contribution_index =
@@ -411,9 +435,16 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
         }
         break;
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kMinSepPolicy:
-        if (kMinimumSeparationPolicyImplementationVersion <
-            policy_spec.min_version()) {
+        if (flags->check_trustworthiness_for_min_sep_policy()) {
+          if (kMinimumSeparationPolicyImplementationVersionWithTrustworthiness <
+              policy_spec.min_version()) {
             policy_implemented = false;
+          }
+        } else {
+          if (kMinimumSeparationPolicyImplementationVersion <
+              policy_spec.min_version()) {
+            policy_implemented = false;
+          }
         }
         break;
       default:
@@ -552,7 +583,7 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
           eligible_policy_task_names =
               ComputeMinimumSeparationPolicyEligibility(
                   policy_spec.min_sep_policy(), policy_task_names,
-                  opstats_sequence, flags);
+                  opstats_sequence, clock, *flags);
         }
       } break;
       default:

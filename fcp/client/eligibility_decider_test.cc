@@ -982,27 +982,34 @@ TEST_F(EligibilityDeciderTest, TwoTasksNeitherUsePolicies) {
   EXPECT_THAT(*eligibility_result, EqualsProto(expected_output));
 }
 
-TEST_F(EligibilityDeciderTest, MinSepPolicyEnabledTaskNotExecutedIsEligible) {
+TEST_F(EligibilityDeciderTest, MinSepPolicyMinVersionTooHighIneligible) {
   EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
       .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
+      .WillRepeatedly(Return(false));
 
   PopulationEligibilitySpec spec;
 
   EligibilityPolicyEvalSpec* min_sep_spec =
       spec.mutable_eligibility_policies()->Add();
-  min_sep_spec->set_name("min_sep_policy_3_rounds");
-  min_sep_spec->set_min_version(1);
+  min_sep_spec->set_name("min_sep:3;current_index:5");
+  min_sep_spec->set_min_version(2);
   min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
+  min_sep_spec->mutable_min_sep_policy()
+      ->mutable_min_trustworthiness_period()
+      ->set_seconds(4);
 
-  PopulationEligibilitySpec::TaskInfo* task_info =
+  PopulationEligibilitySpec::TaskInfo* task_not_executed =
       spec.mutable_task_info()->Add();
-  task_info->set_task_name("single_task_1");
-  task_info->set_task_assignment_mode(
+  task_not_executed->set_task_name("single_task_1");
+  task_not_executed->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
-  task_info->mutable_eligibility_policy_indices()->Add(0);
+  task_not_executed->mutable_eligibility_policy_indices()->Add(0);
 
   opstats::OpStatsSequence opstats_sequence;
+  opstats_sequence.mutable_earliest_trustworthy_time()->set_seconds(0);
+  clock_.AdvanceTime(absl::Seconds(5));
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
@@ -1010,57 +1017,97 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyEnabledTaskNotExecutedIsEligible) {
       &mock_flags_);
   ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
-  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
 }
 
 TEST_F(EligibilityDeciderTest,
-       MinSepPolicyEnabledIndexSepGreaterThanOrEqualToMinSepIsEligible) {
+       MinSepPolicyTrustworthinessPeriodTooYoungIneligible) {
   EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
   PopulationEligibilitySpec spec;
 
   EligibilityPolicyEvalSpec* min_sep_spec =
       spec.mutable_eligibility_policies()->Add();
-  min_sep_spec->set_name("min_sep_policy_3_rounds");
-  min_sep_spec->set_min_version(1);
-  min_sep_spec->mutable_min_sep_policy()->set_current_index(6);
+  min_sep_spec->set_name("min_sep:3;current_index:5");
+  min_sep_spec->set_min_version(2);
+  min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
+  min_sep_spec->mutable_min_sep_policy()
+      ->mutable_min_trustworthiness_period()
+      ->set_seconds(6);
 
-  // The task's current index separation equals to the minimum separation.
-  PopulationEligibilitySpec::TaskInfo* task_info1 =
+  PopulationEligibilitySpec::TaskInfo* task_not_executed =
       spec.mutable_task_info()->Add();
-  task_info1->set_task_name("single_task_1");
-  task_info1->set_task_assignment_mode(
+  task_not_executed->set_task_name("single_task_1");
+  task_not_executed->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
-  task_info1->mutable_eligibility_policy_indices()->Add(0);
-
-  // The task's current index separation is greater than the minimum separation.
-  PopulationEligibilitySpec::TaskInfo* task_info2 =
-      spec.mutable_task_info()->Add();
-  task_info2->set_task_name("single_task_2");
-  task_info2->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
-  task_info2->mutable_eligibility_policy_indices()->Add(0);
+  task_not_executed->mutable_eligibility_policy_indices()->Add(0);
 
   opstats::OpStatsSequence opstats_sequence;
+  // Trustworthy since epoch time
+  opstats_sequence.mutable_earliest_trustworthy_time()->set_seconds(0);
+  // Set the clock to epoch + 5 seconds, which exceeds the required min
+  // trustworthiness period.
+  clock_.AdvanceTime(absl::Seconds(5));
 
-  opstats::OperationalStats stats1;
-  stats1.set_task_name(task_info1->task_name());
-  // Index separation for task1 is 3, which equals to the minimum separation.
-  stats1.set_min_sep_policy_index(2);
-  stats1.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
-  *opstats_sequence.add_opstats() = std::move(stats1);
+  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
+      spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
+      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
+      &mock_flags_);
+  ASSERT_OK(eligibility_result);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 1);
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
+}
 
-  opstats::OperationalStats stats2;
-  stats2.set_task_name(task_info2->task_name());
-  // Index separation for task2 is 4, which is greater than the minimum
-  // separation.
-  stats2.set_min_sep_policy_index(1);
-  stats2.mutable_events()->Add(CreateOpstatsEvent(
+TEST_F(EligibilityDeciderTest,
+       MinSepPolicyTrustworthinessPeriodExceededEligible) {
+  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
+      .WillRepeatedly(Return(true));
+
+  PopulationEligibilitySpec spec;
+
+  EligibilityPolicyEvalSpec* min_sep_spec =
+      spec.mutable_eligibility_policies()->Add();
+  min_sep_spec->set_name("min_sep:3;current_index:5");
+  min_sep_spec->set_min_version(2);
+  min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
+  min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
+  min_sep_spec->mutable_min_sep_policy()
+      ->mutable_min_trustworthiness_period()
+      ->set_seconds(4);
+
+  PopulationEligibilitySpec::TaskInfo* task_not_executed =
+      spec.mutable_task_info()->Add();
+  task_not_executed->set_task_name("single_task_1");
+  task_not_executed->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_not_executed->mutable_eligibility_policy_indices()->Add(0);
+
+  PopulationEligibilitySpec::TaskInfo* task_index_greater_than_min_sep =
+      spec.mutable_task_info()->Add();
+  task_index_greater_than_min_sep->set_task_name("single_task_1");
+  task_index_greater_than_min_sep->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_index_greater_than_min_sep->mutable_eligibility_policy_indices()->Add(0);
+
+  opstats::OpStatsSequence opstats_sequence;
+  // Trustworthy since epoch time
+  opstats_sequence.mutable_earliest_trustworthy_time()->set_seconds(0);
+  // Set the clock to epoch + 5 seconds, which exceeds the required min
+  // trustworthiness period.
+  clock_.AdvanceTime(absl::Seconds(5));
+
+  opstats::OperationalStats stats;
+  stats.set_task_name(task_index_greater_than_min_sep->task_name());
+  stats.set_min_sep_policy_index(1);
+  stats.mutable_events()->Add(CreateOpstatsEvent(
       opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
-  *opstats_sequence.add_opstats() = std::move(stats2);
+  *opstats_sequence.add_opstats() = std::move(stats);
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
@@ -1073,33 +1120,106 @@ TEST_F(EligibilityDeciderTest,
 }
 
 TEST_F(EligibilityDeciderTest,
-       MinSepPolicyEnabledIndexSepLessThanMinSepIsNotEligible) {
+       MinSepPolicyTrustworthinessPeriodExceededIneligible) {
   EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
   PopulationEligibilitySpec spec;
 
   EligibilityPolicyEvalSpec* min_sep_spec =
       spec.mutable_eligibility_policies()->Add();
-  min_sep_spec->set_name("min_swor_policy_3_rounds");
+  min_sep_spec->set_name("min_sep:3;current_index:5");
+  min_sep_spec->set_min_version(2);
+  min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
+  min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
+  min_sep_spec->mutable_min_sep_policy()
+      ->mutable_min_trustworthiness_period()
+      ->set_seconds(4);
+
+  PopulationEligibilitySpec::TaskInfo* task_index_equal_to_min_sep =
+      spec.mutable_task_info()->Add();
+  task_index_equal_to_min_sep->set_task_name("single_task_1");
+  task_index_equal_to_min_sep->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_index_equal_to_min_sep->mutable_eligibility_policy_indices()->Add(0);
+
+  PopulationEligibilitySpec::TaskInfo* task_index_less_than_min_sep =
+      spec.mutable_task_info()->Add();
+  task_index_less_than_min_sep->set_task_name("single_task_1");
+  task_index_less_than_min_sep->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_index_less_than_min_sep->mutable_eligibility_policy_indices()->Add(0);
+
+  opstats::OpStatsSequence opstats_sequence;
+  // Trustworthy since epoch time
+  opstats_sequence.mutable_earliest_trustworthy_time()->set_seconds(0);
+  // Set the clock to epoch + 5 seconds, which exceeds the required min
+  // trustworthiness period.
+  clock_.AdvanceTime(absl::Seconds(5));
+
+  opstats::OperationalStats stats1;
+  stats1.set_task_name(task_index_equal_to_min_sep->task_name());
+  stats1.set_min_sep_policy_index(2);
+  stats1.mutable_events()->Add(CreateOpstatsEvent(
+      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
+  *opstats_sequence.add_opstats() = std::move(stats1);
+
+  opstats::OperationalStats stats2;
+  stats2.set_task_name(task_index_less_than_min_sep->task_name());
+  stats2.set_min_sep_policy_index(4);
+  stats2.mutable_events()->Add(CreateOpstatsEvent(
+      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
+  *opstats_sequence.add_opstats() = std::move(stats2);
+
+  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
+      spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
+      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
+      &mock_flags_);
+  ASSERT_OK(eligibility_result);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 2);
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
+  ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 0.0f);
+}
+
+TEST_F(EligibilityDeciderTest,
+       MinSepPolicyTrustworthinessPeriodSkippedEligible) {
+  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
+      .WillRepeatedly(Return(true));
+
+  PopulationEligibilitySpec spec;
+
+  EligibilityPolicyEvalSpec* min_sep_spec =
+      spec.mutable_eligibility_policies()->Add();
+  min_sep_spec->set_name("min_sep:3;current_index:5");
   min_sep_spec->set_min_version(1);
   min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
 
-  PopulationEligibilitySpec::TaskInfo* task_info =
+  PopulationEligibilitySpec::TaskInfo* task_not_executed =
       spec.mutable_task_info()->Add();
-  task_info->set_task_name("single_task_1");
-  task_info->set_task_assignment_mode(
+  task_not_executed->set_task_name("single_task_1");
+  task_not_executed->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
-  task_info->mutable_eligibility_policy_indices()->Add(0);
+  task_not_executed->mutable_eligibility_policy_indices()->Add(0);
+
+  PopulationEligibilitySpec::TaskInfo* task_index_greater_than_min_sep =
+      spec.mutable_task_info()->Add();
+  task_index_greater_than_min_sep->set_task_name("single_task_1");
+  task_index_greater_than_min_sep->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_index_greater_than_min_sep->mutable_eligibility_policy_indices()->Add(0);
 
   opstats::OpStatsSequence opstats_sequence;
+
   opstats::OperationalStats stats;
-  stats.set_task_name(task_info->task_name());
-  stats.set_min_sep_policy_index(3);
+  stats.set_task_name(task_index_greater_than_min_sep->task_name());
+  stats.set_min_sep_policy_index(1);
   stats.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED,
-      1000));
+      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
   *opstats_sequence.add_opstats() = std::move(stats);
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
@@ -1107,8 +1227,65 @@ TEST_F(EligibilityDeciderTest,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
   ASSERT_OK(eligibility_result);
-  ASSERT_EQ(eligibility_result->task_weights_size(), 1);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 2);
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
+  ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 1.0f);
+}
+
+TEST_F(EligibilityDeciderTest,
+       MinSepPolicyTrustworthinessPeriodSkippedInEligible) {
+  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
+      .WillRepeatedly(Return(true));
+
+  PopulationEligibilitySpec spec;
+
+  EligibilityPolicyEvalSpec* min_sep_spec =
+      spec.mutable_eligibility_policies()->Add();
+  min_sep_spec->set_name("min_sep:3;current_index:5");
+  min_sep_spec->set_min_version(2);
+  min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
+  min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
+
+  PopulationEligibilitySpec::TaskInfo* task_index_equal_to_min_sep =
+      spec.mutable_task_info()->Add();
+  task_index_equal_to_min_sep->set_task_name("single_task_1");
+  task_index_equal_to_min_sep->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_index_equal_to_min_sep->mutable_eligibility_policy_indices()->Add(0);
+
+  PopulationEligibilitySpec::TaskInfo* task_index_less_than_min_sep =
+      spec.mutable_task_info()->Add();
+  task_index_less_than_min_sep->set_task_name("single_task_1");
+  task_index_less_than_min_sep->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_index_less_than_min_sep->mutable_eligibility_policy_indices()->Add(0);
+
+  opstats::OpStatsSequence opstats_sequence;
+
+  opstats::OperationalStats stats1;
+  stats1.set_task_name(task_index_equal_to_min_sep->task_name());
+  stats1.set_min_sep_policy_index(2);
+  stats1.mutable_events()->Add(CreateOpstatsEvent(
+      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
+  *opstats_sequence.add_opstats() = std::move(stats1);
+
+  opstats::OperationalStats stats2;
+  stats2.set_task_name(task_index_less_than_min_sep->task_name());
+  stats2.set_min_sep_policy_index(4);
+  stats2.mutable_events()->Add(CreateOpstatsEvent(
+      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
+  *opstats_sequence.add_opstats() = std::move(stats2);
+
+  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
+      spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
+      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
+      &mock_flags_);
+  ASSERT_OK(eligibility_result);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 2);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
+  ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 0.0f);
 }
 
 TEST_F(EligibilityDeciderTest, MinSepPolicyDisabledIsAlwaysNotEligible) {
@@ -1119,7 +1296,7 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyDisabledIsAlwaysNotEligible) {
 
   EligibilityPolicyEvalSpec* min_sep_spec =
       spec.mutable_eligibility_policies()->Add();
-  min_sep_spec->set_name("min_swor_policy_3_rounds");
+  min_sep_spec->set_name("min_sep:3;current_index:6");
   min_sep_spec->set_min_version(1);
   min_sep_spec->mutable_min_sep_policy()->set_current_index(6);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
@@ -1190,6 +1367,61 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyDisabledIsAlwaysNotEligible) {
   for (const auto& task_weight : eligibility_result->task_weights()) {
     ASSERT_EQ(task_weight.weight(), 0.0f);
   }
+}
+
+TEST_F(EligibilityDeciderTest, MinSepPolicyWithTrustworthinessCheckDisabled) {
+  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
+      .WillRepeatedly(Return(false));
+
+  PopulationEligibilitySpec spec;
+  EligibilityPolicyEvalSpec* min_sep_spec =
+      spec.mutable_eligibility_policies()->Add();
+  min_sep_spec->set_name("min_sep:3;current_index:6");
+  min_sep_spec->set_min_version(1);
+  min_sep_spec->mutable_min_sep_policy()->set_current_index(6);
+  min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
+
+  EligibilityPolicyEvalSpec* min_sep_spec_with_min_trust =
+      spec.mutable_eligibility_policies()->Add();
+  min_sep_spec_with_min_trust->set_name("min_sep:3;current_index:6");
+  min_sep_spec_with_min_trust->set_min_version(1);
+  min_sep_spec_with_min_trust->mutable_min_sep_policy()->set_current_index(6);
+  min_sep_spec_with_min_trust->mutable_min_sep_policy()->set_minimum_separation(
+      3);
+  min_sep_spec_with_min_trust->mutable_min_sep_policy()
+      ->mutable_min_trustworthiness_period()
+      ->set_seconds(4);
+  // task 1 is applied with the min sep policy without
+  // min_trustworthiness_period and has never been executed.
+  PopulationEligibilitySpec::TaskInfo* task_info1 =
+      spec.mutable_task_info()->Add();
+  task_info1->set_task_name("single_task_1");
+  task_info1->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_info1->mutable_eligibility_policy_indices()->Add(0);
+  // task 2 is applied with the min sep policy with min_trustworthiness_period
+  // and has never been executed.
+  PopulationEligibilitySpec::TaskInfo* task_info2 =
+      spec.mutable_task_info()->Add();
+  task_info2->set_task_name("single_task_2");
+  task_info2->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
+  task_info2->mutable_eligibility_policy_indices()->Add(1);
+
+  // OpstatsDb is younger than the required min trustworthiness period.
+  opstats::OpStatsSequence opstats_sequence;
+
+  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
+      spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
+      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
+      &mock_flags_);
+  ASSERT_OK(eligibility_result);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 2);
+  // Both tasks are eligible as the trustworthiness check is disabled.
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
+  ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 1.0f);
 }
 
 }  // namespace client

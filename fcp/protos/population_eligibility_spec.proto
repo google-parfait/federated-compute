@@ -111,4 +111,12 @@ message MinimumSeparationPolicy {
 
   // The minimum index separation required between successful contributions.
   int64 minimum_separation = 2;
+
+  // The minimum period required after the opstats database's earliest
+  // trustworthy time.
+  // This is to ensure that the opstats database is old enough to have
+  // trustworthy data to determine the eligibility, and to prevent clients that
+  // have reset the opstats database within the minimum separation period from
+  // overcontributing.
+  google.protobuf.Duration min_trustworthiness_period = 3;
 }
