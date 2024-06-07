@@ -81,6 +81,10 @@ message DataAvailabilityPolicy {
   // The minimum number of examples from the selector to be considered
   // eligible.
   int32 min_example_count = 2;
+
+  // Indicates if the elibigility policy should use ExampleQueryResult format to
+  // calculate the number of returned examples instead of counting tf.Examples.
+  bool use_example_query_result_format = 3;
 }
 
 // Sampling without replacement policy parameters.

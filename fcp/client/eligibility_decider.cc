@@ -36,6 +36,7 @@
 #include "fcp/base/time_util.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/example_query_result.pb.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_utils.h"
@@ -51,6 +52,7 @@
 
 namespace fcp::client {
 
+using ::fcp::client::ExampleQueryResult;
 using ::google::internal::federated::plan::DataAvailabilityPolicy;
 using ::google::internal::federated::plan::EligibilityPolicyEvalSpec;
 using ::google::internal::federated::plan::ExampleSelector;
@@ -63,6 +65,7 @@ using ::google::internal::federatedml::v2::TaskWeight;
 namespace {
 
 const int32_t kDataAvailabilityImplementationVersion = 1;
+const int32_t kDataAvailabilityImplementationVersionWithExampleQueryResult = 2;
 const int32_t kSworImplementationVersion = 1;
 const int32_t kTfCustomPolicyImplementationVersion = 1;
 const int32_t kMinimumSeparationPolicyImplementationVersion = 1;
@@ -209,31 +212,49 @@ absl::StatusOr<bool> ComputeDataAvailabilityEligibility(
         ->set_computation_id(
             ComputeSHA256(selector.criteria().SerializeAsString()));
   }
+  bool use_example_query_result_format =
+      flags.use_example_query_result_for_data_avail() &&
+      data_availability_policy.use_example_query_result_format();
+  if (use_example_query_result_format) {
+    selector_context.mutable_computation_properties()
+        ->set_example_iterator_output_format(
+            QueryTimeComputationProperties::EXAMPLE_QUERY_RESULT);
+  }
 
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<ExampleIterator> iterator,
       iterator_factory->CreateExampleIterator(selector, selector_context));
   int32_t min_example_count = data_availability_policy.min_example_count();
-  int examples_returned = 0;
-  while (examples_returned < min_example_count) {
-    absl::StatusOr<std::string> example = iterator->Next();
-    // Next() returns the example bytestring on success, and:
-    //  - CANCELLED if the call got interrupted.
-    //  - INVALID_ARGUMENT if some other error occurred, e.g. I/O.
-    //  - OUT_OF_RANGE if the end of the iterator was reached.
-    //
-    // Only on success and OUT_OF_RANGE should we continue execution.
-    if (example.ok()) {
-      examples_returned++;
-      continue;
+  if (use_example_query_result_format) {
+    FCP_ASSIGN_OR_RETURN(std::string result, iterator->Next());
+    ExampleQueryResult example_query_result;
+    if (!example_query_result.ParseFromString(result)) {
+      return absl::InvalidArgumentError("Failed to parse ExampleQueryResult");
     }
-    if (absl::IsOutOfRange(example.status())) {
-      // No more examples, and the client did not return a sufficient amount to
-      // satisfy the policy.
-      return false;
+    return example_query_result.stats().example_count_for_logs() >=
+           min_example_count;
+  } else {
+    int examples_returned = 0;
+    while (examples_returned < min_example_count) {
+      absl::StatusOr<std::string> example = iterator->Next();
+      // Next() returns the example bytestring on success, and:
+      //  - CANCELLED if the call got interrupted.
+      //  - INVALID_ARGUMENT if some other error occurred, e.g. I/O.
+      //  - OUT_OF_RANGE if the end of the iterator was reached.
+      //
+      // Only on success and OUT_OF_RANGE should we continue execution.
+      if (example.ok()) {
+        examples_returned++;
+        continue;
+      }
+      if (absl::IsOutOfRange(example.status())) {
+        // No more examples, and the client did not return a sufficient amount
+        // to satisfy the policy.
+        return false;
+      }
+      // By here, the example is not ok, and the status is unexpected.
+      return example.status();
     }
-    // By here, the example is not ok, and the status is unexpected.
-    return example.status();
   }
 
   // Enough examples returned!
@@ -419,9 +440,16 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
 
     switch (policy_spec.policy_type_case()) {
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kDataAvailabilityPolicy:
-        if (kDataAvailabilityImplementationVersion <
-            policy_spec.min_version()) {
-          policy_implemented = false;
+        if (flags->use_example_query_result_for_data_avail()) {
+          if (kDataAvailabilityImplementationVersionWithExampleQueryResult <
+              policy_spec.min_version()) {
+            policy_implemented = false;
+          }
+        } else {
+          if (kDataAvailabilityImplementationVersion <
+              policy_spec.min_version()) {
+            policy_implemented = false;
+          }
         }
         break;
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kSworPolicy:

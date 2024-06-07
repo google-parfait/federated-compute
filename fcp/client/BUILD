@@ -240,6 +240,7 @@ cc_library(
     srcs = ["eligibility_decider.cc"],
     hdrs = ["eligibility_decider.h"],
     deps = [
+        ":example_query_result_cc_proto",
         ":interfaces",
         ":phase_logger",
         ":selector_context_cc_proto",
