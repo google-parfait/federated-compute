@@ -90,9 +90,30 @@ proto_library(
     srcs = ["pipeline_transform.proto"],
     deps = [
         "@com_google_protobuf//:any_proto",
-        "@oak//proto/attestation:evidence_proto",
         "@oak//proto/micro_rpc:options_proto",
     ],
+)
+
+proto_library(
+    name = "confidential_transform",
+    srcs = ["confidential_transform.proto"],
+    deps = [
+        "@com_google_googleapis//google/rpc:status_proto",
+        "@com_google_protobuf//:any_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "confidential_transform_cc_proto",
+    deps = [":confidential_transform"],
+)
+
+cc_grpc_library(
+    name = "confidential_transform_cc_grpc",
+    srcs = [":confidential_transform"],
+    generate_mocks = True,
+    grpc_only = True,
+    deps = [":confidential_transform_cc_proto"],
 )
 
 # Using tf_proto_library to get dependencies to TF protos built correctly.
