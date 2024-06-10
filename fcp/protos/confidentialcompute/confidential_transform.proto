@@ -204,16 +204,11 @@ message BlobMetadata {
       // anonymized aggregate results).
       bytes reencryption_public_key = 1;
 
-      // Session-level nonce for this record to protect against replay attacks
-      // by an untrusted portion of the stack. The trusted worker application
-      // will ensure that the nonce and counter match its locally stored
-      // versions before decrypting and processing the data.
+      // Unique nonce for this record to protect against replay attacks by an
+      // untrusted portion of the stack. The trusted worker application will
+      // ensure that it has not already used the nonce before decrypting and
+      // processing the data.
       bytes nonce = 2;
-
-      // The counter for this record. The trusted worker application
-      // will ensure that the nonce and counter match its locally stored
-      // versions before decrypting and processing the data.
-      int32 counter = 3;
     }
   }
 }
