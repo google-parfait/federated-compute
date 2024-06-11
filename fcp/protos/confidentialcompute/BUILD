@@ -95,7 +95,7 @@ proto_library(
 )
 
 proto_library(
-    name = "confidential_transform",
+    name = "confidential_transform_proto",
     srcs = ["confidential_transform.proto"],
     deps = [
         "@com_google_googleapis//google/rpc:status_proto",
@@ -105,12 +105,12 @@ proto_library(
 
 cc_proto_library(
     name = "confidential_transform_cc_proto",
-    deps = [":confidential_transform"],
+    deps = [":confidential_transform_proto"],
 )
 
 cc_grpc_library(
     name = "confidential_transform_cc_grpc",
-    srcs = [":confidential_transform"],
+    srcs = [":confidential_transform_proto"],
     generate_mocks = True,
     grpc_only = True,
     deps = [":confidential_transform_cc_proto"],
@@ -181,4 +181,14 @@ alias(
 java_lite_proto_library(
     name = "sql_query_java_proto_lite",
     deps = [":sql_query_proto"],
+)
+
+proto_library(
+    name = "agg_core_container_config_proto",
+    srcs = ["agg_core_container_config.proto"],
+)
+
+cc_proto_library(
+    name = "agg_core_container_config_cc_proto",
+    deps = [":agg_core_container_config_proto"],
 )
