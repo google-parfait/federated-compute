@@ -184,7 +184,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
           r'FederatedDataSource.iterator\(\).select\(\)'):
         comp(0, plan_pb2.Plan())
 
-  def test_invoke_succeeds_with_structure_state_type(self):
+  async def test_invoke_succeeds_with_structure_state_type(self):
     comp = federated_computation.FederatedComputation(
         irregular_arrays, name='x'
     )
@@ -195,7 +195,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
       state = {'foo': (3, 1), 'bar': (4, 5, 6)}
       comp(state, DATA_SOURCE.iterator().select(1))
 
-  def test_invoke_succeeds_with_attrs_state_type(self):
+  async def test_invoke_succeeds_with_attrs_state_type(self):
     comp = federated_computation.FederatedComputation(
         attrs_computation, name='x'
     )

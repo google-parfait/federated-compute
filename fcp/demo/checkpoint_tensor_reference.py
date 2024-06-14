@@ -13,6 +13,7 @@
 # limitations under the License.
 """MaterializableValueReference that reads from a TensorFlow checkpoint."""
 
+import asyncio
 import typing
 from typing import Any, Optional
 import uuid
@@ -29,7 +30,7 @@ class CheckpointTensorReference(tff.program.MaterializableValueReference):
       tensor_name: str,
       dtype: tf.dtypes.DType,
       shape: Any,
-      checkpoint_future: tff.async_utils.SharedAwaitable,
+      checkpoint_future: asyncio.Task,
   ):
     """Constructs a new CheckpointTensorReference object.
 
@@ -38,8 +39,8 @@ class CheckpointTensorReference(tff.program.MaterializableValueReference):
       dtype: The type of the tensor.
       shape: The shape of the tensor, expressed as a value convertible to
         `tf.TensorShape`.
-      checkpoint_future: A `tff.async_utils.SharedAwaitable` that resolves to
-        the TF checkpoint bytes once they're available.
+      checkpoint_future: A `asyncio.Task` that resolves to the TF checkpoint
+        bytes once they're available.
     """
     self._tensor_name = tensor_name
     type_signature = tff.types.tensorflow_to_type((dtype, shape))

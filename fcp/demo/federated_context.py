@@ -13,7 +13,8 @@
 # limitations under the License.
 """TFF FederatedContext subclass for the demo Federated Computation platform."""
 
-from collections.abc import Awaitable
+import asyncio
+from collections.abc import Coroutine
 import socket
 import ssl
 import threading
@@ -292,11 +293,10 @@ class FederatedContext(tff.program.FederatedContext):
       tf.io.gfile.remove(tmpfile)
 
   def _create_tensor_reference_struct(
-      self, result_type: tff.Type,
-      checkpoint_future: Awaitable[bytes]) -> tff.structure.Struct:
+      self, result_type: tff.Type, checkpoint_future: Coroutine[Any, Any, bytes]
+  ) -> tff.structure.Struct:
     """Creates the CheckpointTensorReference struct for a result type."""
-    shared_checkpoint_future = tff.async_utils.SharedAwaitable(
-        checkpoint_future)
+    task = asyncio.create_task(checkpoint_future)
     tensor_specs = checkpoint_utils.tff_type_to_tensor_spec_list(result_type)  # pytype: disable=wrong-arg-types
     var_names = variable_helpers.variable_names_from_type(
         result_type[0],  # pytype: disable=unsupported-operands
@@ -307,7 +307,8 @@ class FederatedContext(tff.program.FederatedContext):
     )
     tensor_refs = [
         checkpoint_tensor_reference.CheckpointTensorReference(
-            var_name, spec.dtype, spec.shape, shared_checkpoint_future)
+            var_name, spec.dtype, spec.shape, task
+        )
         for var_name, spec in zip(var_names, tensor_specs)
     ]
     return checkpoint_utils.pack_tff_value(
