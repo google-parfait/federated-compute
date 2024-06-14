@@ -40,4 +40,10 @@ enum AggCoreFinalizationType {
 // This is specified through `FinalizeRequest.configuration`.
 message AggCoreContainerFinalizeConfiguration {
   AggCoreFinalizationType type = 1;
+
+  // The numerical identifier for the result blob of the aggregation. This field
+  // is only used by trusted services.  If the agg core finalization step
+  // produces an encrypted result, this will be used to identify the policy node
+  // to include in the blob header.
+  uint32 output_access_policy_node_id = 2;
 }
