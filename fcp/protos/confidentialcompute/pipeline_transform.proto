@@ -130,6 +130,9 @@ message Record {
 
   CompressionType compression_type = 3;
 
+  // Optional. Unique identifier for the record.
+  bytes record_id = 5;
+
   // Information about plaintext encrypted with AEAD, with the symmetric key
   // then encrypted with HPKE.
   message HpkePlusAeadData {

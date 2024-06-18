@@ -184,6 +184,19 @@ java_lite_proto_library(
 )
 
 proto_library(
+    name = "tff_config_proto",
+    srcs = ["tff_config.proto"],
+    deps = [
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "tff_config_cc_proto",
+    deps = [":tff_config_proto"],
+)
+
+proto_library(
     name = "agg_core_container_config_proto",
     srcs = ["agg_core_container_config.proto"],
 )
