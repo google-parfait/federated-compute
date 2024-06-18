@@ -424,6 +424,46 @@ class FederatedProtocol {
     // succeed.
     kReportMultipleTaskPartialError,
   };
+
+  std::string ObjectStateToString(ObjectState state) {
+    switch (state) {
+      case ObjectState::kInitialized:
+        return "kInitialized";
+      case ObjectState::kEligibilityEvalCheckinFailed:
+        return "kEligibilityEvalCheckinFailed";
+      case ObjectState::kEligibilityEvalCheckinFailedPermanentError:
+        return "kEligibilityEvalCheckinFailedPermanentError";
+      case ObjectState::kEligibilityEvalCheckinRejected:
+        return "kEligibilityEvalCheckinRejected";
+      case ObjectState::kEligibilityEvalDisabled:
+        return "kEligibilityEvalDisabled";
+      case ObjectState::kEligibilityEvalEnabled:
+        return "kEligibilityEvalEnabled";
+      case ObjectState::kCheckinFailed:
+        return "kCheckinFailed";
+      case ObjectState::kCheckinFailedPermanentError:
+        return "kCheckinFailedPermanentError";
+      case ObjectState::kCheckinRejected:
+        return "kCheckinRejected";
+      case ObjectState::kCheckinAccepted:
+        return "kCheckinAccepted";
+      case ObjectState::kMultipleTaskAssignmentsFailed:
+        return "kMultipleTaskAssignmentsFailed";
+      case ObjectState::kMultipleTaskAssignmentsFailedPermanentError:
+        return "kMultipleTaskAssignmentsFailedPermanentError";
+      case ObjectState::kMultipleTaskAssignmentsNoAvailableTask:
+        return "kMultipleTaskAssignmentsNoAvailableTask";
+      case ObjectState::kMultipleTaskAssignmentsAccepted:
+        return "kMultipleTaskAssignmentsAccepted";
+      case ObjectState::kReportCalled:
+        return "kReportCalled";
+      case ObjectState::kReportFailedPermanentError:
+        return "kReportFailedPermanentError";
+      case ObjectState::kReportMultipleTaskPartialError:
+        return "kReportMultipleTaskPartialError";
+    }
+    return "kUnexpectedValueForObjectState";
+  }
 };
 
 }  // namespace client

@@ -1123,7 +1123,8 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
   }
   FCP_CHECK(task_info->state == ObjectState::kCheckinAccepted ||
             task_info->state == ObjectState::kMultipleTaskAssignmentsAccepted)
-      << "Invalid call sequence";
+      << "Invalid call sequence for task " << task_info->task_name
+      << " with state " << ObjectStateToString(task_info->state);
   task_info->state = ObjectState::kReportCalled;
   auto find_secagg_tensor_lambda = [](const auto& item) {
     return std::holds_alternative<QuantizedTensor>(item.second);
