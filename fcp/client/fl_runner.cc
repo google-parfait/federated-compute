@@ -1453,12 +1453,10 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   absl::StatusOr<CheckinResult> result = CreateCheckinResultFromTaskAssignment(
       task_assignment, files, log_invalid_payload_error, log_io_error, flags);
   if (result.ok()) {
-    // Only log the current index of the MinimumSeparationPolicy if the flag
-    // `enable_minimum_separation_policy` is true and the `min_sep_policy_index`
-    // is present in the `client_persisted_data`.
+    // Only log the current index of the MinimumSeparationPolicy if the
+    // `min_sep_policy_index` is present in the `client_persisted_data`.
     std::optional<int64_t> min_sep_policy_index = std::nullopt;
-    if (flags->enable_minimum_separation_policy() &&
-        result.value().plan.has_client_persisted_data() &&
+    if (result.value().plan.has_client_persisted_data() &&
         result.value()
             .plan.client_persisted_data()
             .has_min_sep_policy_index()) {

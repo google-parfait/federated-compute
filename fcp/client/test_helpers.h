@@ -674,7 +674,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_native_example_query_recording, (),
               (const, override));
   MOCK_METHOD(bool, enable_confidential_aggregation, (), (const, override));
-  MOCK_METHOD(bool, enable_minimum_separation_policy, (), (const, override));
   MOCK_METHOD(bool, native_only_eligibility_config_support, (),
               (const, override));
   MOCK_METHOD(bool, enable_lightweight_computation_id, (), (const, override));

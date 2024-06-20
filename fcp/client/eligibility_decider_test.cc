@@ -983,8 +983,6 @@ TEST_F(EligibilityDeciderTest, TwoTasksNeitherUsePolicies) {
 }
 
 TEST_F(EligibilityDeciderTest, MinSepPolicyMinVersionTooHighIneligible) {
-  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
-      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(false));
 
@@ -1022,8 +1020,6 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyMinVersionTooHighIneligible) {
 
 TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodTooYoungIneligible) {
-  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
-      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
@@ -1064,8 +1060,6 @@ TEST_F(EligibilityDeciderTest,
 
 TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodExceededEligible) {
-  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
-      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
@@ -1121,8 +1115,6 @@ TEST_F(EligibilityDeciderTest,
 
 TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodExceededIneligible) {
-  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
-      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
@@ -1185,8 +1177,6 @@ TEST_F(EligibilityDeciderTest,
 
 TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodSkippedEligible) {
-  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
-      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
@@ -1234,8 +1224,6 @@ TEST_F(EligibilityDeciderTest,
 
 TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodSkippedInEligible) {
-  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
-      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
@@ -1288,90 +1276,7 @@ TEST_F(EligibilityDeciderTest,
   ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 0.0f);
 }
 
-TEST_F(EligibilityDeciderTest, MinSepPolicyDisabledIsAlwaysNotEligible) {
-  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
-      .WillRepeatedly(Return(false));
-
-  PopulationEligibilitySpec spec;
-
-  EligibilityPolicyEvalSpec* min_sep_spec =
-      spec.mutable_eligibility_policies()->Add();
-  min_sep_spec->set_name("min_sep:3;current_index:6");
-  min_sep_spec->set_min_version(1);
-  min_sep_spec->mutable_min_sep_policy()->set_current_index(6);
-  min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
-
-  // The task's current index separation equals to the minimum separation.
-  PopulationEligibilitySpec::TaskInfo* task_info1 =
-      spec.mutable_task_info()->Add();
-  task_info1->set_task_name("single_task_1");
-  task_info1->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
-  task_info1->mutable_eligibility_policy_indices()->Add(0);
-
-  // The task's current index separation is greater than the minimum separation.
-  PopulationEligibilitySpec::TaskInfo* task_info2 =
-      spec.mutable_task_info()->Add();
-  task_info2->set_task_name("single_task_2");
-  task_info2->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
-  task_info2->mutable_eligibility_policy_indices()->Add(0);
-
-  // The task's current index separation is less than the minimum separation.
-  PopulationEligibilitySpec::TaskInfo* task_info3 =
-      spec.mutable_task_info()->Add();
-  task_info3->set_task_name("single_task_3");
-  task_info3->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
-  task_info3->mutable_eligibility_policy_indices()->Add(0);
-
-  // The task was never executed.
-  PopulationEligibilitySpec::TaskInfo* task_info4 =
-      spec.mutable_task_info()->Add();
-  task_info4->set_task_name("single_task_4");
-  task_info4->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
-  task_info4->mutable_eligibility_policy_indices()->Add(0);
-
-  opstats::OpStatsSequence opstats_sequence;
-
-  opstats::OperationalStats stats1;
-  stats1.set_task_name(task_info1->task_name());
-  stats1.set_min_sep_policy_index(2);
-  stats1.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
-  *opstats_sequence.add_opstats() = std::move(stats1);
-
-  opstats::OperationalStats stats2;
-  stats2.set_task_name(task_info2->task_name());
-  stats2.set_min_sep_policy_index(1);
-  stats2.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
-  *opstats_sequence.add_opstats() = std::move(stats2);
-
-  opstats::OperationalStats stats3;
-  stats3.set_task_name(task_info3->task_name());
-  stats3.set_min_sep_policy_index(3);
-  stats3.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
-  *opstats_sequence.add_opstats() = std::move(stats3);
-
-  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
-      spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
-      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
-      &mock_flags_);
-  ASSERT_OK(eligibility_result);
-  ASSERT_EQ(eligibility_result->task_weights_size(), 4);
-  // All tasks should be not eligible as the minimum separation policy is
-  // disabled.
-  for (const auto& task_weight : eligibility_result->task_weights()) {
-    ASSERT_EQ(task_weight.weight(), 0.0f);
-  }
-}
-
 TEST_F(EligibilityDeciderTest, MinSepPolicyWithTrustworthinessCheckDisabled) {
-  EXPECT_CALL(mock_flags_, enable_minimum_separation_policy())
-      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(false));
 

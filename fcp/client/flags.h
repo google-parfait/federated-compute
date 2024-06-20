@@ -197,9 +197,6 @@ class Flags {
   // If true, confidential aggregation is advertised & can be used for uploads.
   virtual bool enable_confidential_aggregation() const { return false; }
 
-  // If true, enables MinimumSeparationPolicy for clients.
-  virtual bool enable_minimum_separation_policy() const { return false; }
-
   // If true, and if a population has tasks which only use native policies and
   // no TensorFlow-based eligibility eval plan is deployed,
   // HandleEligibilityEvalTaskResponse will return an EligibilityEvalTask

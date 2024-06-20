@@ -607,12 +607,9 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
         }
       } break;
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kMinSepPolicy: {
-        if (flags->enable_minimum_separation_policy()) {
-          eligible_policy_task_names =
-              ComputeMinimumSeparationPolicyEligibility(
-                  policy_spec.min_sep_policy(), policy_task_names,
-                  opstats_sequence, clock, *flags);
-        }
+        eligible_policy_task_names = ComputeMinimumSeparationPolicyEligibility(
+            policy_spec.min_sep_policy(), policy_task_names, opstats_sequence,
+            clock, *flags);
       } break;
       default:
         // Should never happen, because we pre-filtered above based on
