@@ -681,6 +681,8 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, use_example_query_result_for_data_avail, (),
               (const, override));
+  MOCK_METHOD(bool, confidential_agg_in_selector_context, (),
+              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

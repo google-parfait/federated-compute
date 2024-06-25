@@ -1228,6 +1228,7 @@ struct CheckinResult {
   std::string computation_id;
   std::string federated_select_uri_template;
   std::string aggregation_session_id;
+  std::optional<FederatedProtocol::ConfidentialAggInfo> confidential_agg_info;
 };
 
 absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
@@ -1301,7 +1302,11 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
       .computation_id = std::move(computation_id),
       .federated_select_uri_template =
           task_assignment.federated_select_uri_template,
-      .aggregation_session_id = task_assignment.aggregation_session_id};
+      .aggregation_session_id = task_assignment.aggregation_session_id,
+      .confidential_agg_info =
+          flags->confidential_agg_in_selector_context()
+              ? std::move(task_assignment.confidential_agg_info)
+              : std::nullopt};
 }
 
 absl::StatusOr<CheckinResult> IssueCheckin(
@@ -1531,8 +1536,16 @@ SelectorContext FillSelectorContextWithTaskLevelDetails(
     }
   }
 
-  if (checkin_result->plan.phase().has_example_query_spec()) {
-    // Example query plan only supports simple agg for now.
+  if (checkin_result->confidential_agg_info.has_value()) {
+    // This will only be true if the task is using confidential aggregation and
+    // flags->confidential_agg_in_selector_context() is true.
+    *(federated_selector_context_with_task_name
+          .mutable_computation_properties()
+          ->mutable_federated()
+          ->mutable_confidential_aggregation()) = ConfidentialAggregation();
+  } else if (checkin_result->plan.phase().has_example_query_spec()) {
+    // Example query plan only supports simple agg or confidential agg for now,
+    // confidential agg is supported by the above case.
     *(federated_selector_context_with_task_name
           .mutable_computation_properties()
           ->mutable_federated()

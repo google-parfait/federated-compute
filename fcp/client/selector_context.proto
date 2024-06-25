@@ -110,6 +110,12 @@ message FederatedComputation {
 
     // Secure aggregation. All values are aggregated with secure aggregation.
     SecureAggregation secure_aggregation = 4;
+
+    // Confidential aggregation. All values are aggregated with confidential
+    // aggregation. See
+    // https://github.com/google-parfait/confidential-federated-compute for more
+    // information.
+    ConfidentialAggregation confidential_aggregation = 7;
   }
 }
 
@@ -126,6 +132,11 @@ message SecureAggregation {
   // See `federated_api.proto`.
   int32 minimum_clients_in_server_visible_aggregate = 1;
 }
+
+// Confidential aggregation. See
+// https://github.com/google-parfait/confidential-federated-compute for more
+// information.
+message ConfidentialAggregation {}
 
 // Details about previous executions for the currently executing task.
 message HistoricalContext {
