@@ -1217,10 +1217,20 @@ TEST_F(HttpFederatedProtocolTest,
   checkpoint_resource.mutable_inline_resource()->set_data(expected_checkpoint);
 
   PopulationEligibilitySpec expected_population_eligibility_spec;
+  // Add a SWOR policy to the population eligibility spec, having an EET with
+  // no policies in the spec is not a valid configuration.
+  auto* swor_spec =
+      expected_population_eligibility_spec.mutable_eligibility_policies()
+          ->Add();
+  swor_spec->set_name("swor_policy_5_seconds");
+  swor_spec->set_min_version(1);
+  swor_spec->mutable_swor_policy()->mutable_min_period()->set_seconds(5);
+
   auto task_info = expected_population_eligibility_spec.add_task_info();
   task_info->set_task_name("task_1");
   task_info->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  task_info->add_eligibility_policy_indices(0);
   std::string population_eligibility_spec_uri =
       "https://fake.uri/population_eligibility_spec";
   Resource population_eligibility_spec;
@@ -1373,87 +1383,11 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
-// This test makes sure the behavior is unchanged when the flag is off. In this
-// case, the tasks in the population are using eligibility policies, but there
-// is no TensorFlow-based eligibility eval task configured, so we return
-// EligibilityEvalNotConfigured.
+// In this case, the tasks in the population are using eligibility policies,
+// and even though there is no TensorFlow-based eligibility eval task
+// configured, we still return EligibilityEvalTask.
 TEST_F(HttpFederatedProtocolTest,
-       TestEligibilityEvalNotConfiguredWhenSpecHasPolicyButFlagOff) {
-  EXPECT_CALL(mock_flags_, native_only_eligibility_config_support)
-      .WillRepeatedly(Return(false));
-
-  Resource plan_resource;
-  Resource checkpoint_resource;
-
-  PopulationEligibilitySpec expected_population_eligibility_spec;
-  auto* swor_spec =
-      expected_population_eligibility_spec.mutable_eligibility_policies()
-          ->Add();
-  swor_spec->set_name("swor_policy_5_seconds");
-  swor_spec->set_min_version(1);
-  swor_spec->mutable_swor_policy()->mutable_min_period()->set_seconds(5);
-
-  auto task_info = expected_population_eligibility_spec.add_task_info();
-  task_info->set_task_name("task_1");
-  task_info->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
-  std::string population_eligibility_spec_uri =
-      "https://fake.uri/population_eligibility_spec";
-  Resource population_eligibility_spec;
-  population_eligibility_spec.set_uri(population_eligibility_spec_uri);
-  std::string expected_execution_id = kEligibilityEvalExecutionId;
-  EligibilityEvalTaskResponse eval_task_response =
-      GetFakeEnabledEligibilityEvalTaskResponse(
-          plan_resource, checkpoint_resource, expected_execution_id,
-          population_eligibility_spec);
-
-  InSequence seq;
-  EXPECT_CALL(mock_http_client_,
-              PerformSingleRequest(SimpleHttpRequestMatcher(
-                  "https://initial.uri/v1/eligibilityevaltasks/"
-                  "TEST%2FPOPULATION:request?%24alt=proto",
-                  HttpRequest::Method::kPost, _,
-                  EligibilityEvalTaskRequestMatcher(
-                      EqualsProto(GetExpectedEligibilityEvalTaskRequest())))))
-      .WillOnce(Return(FakeHttpResponse(
-          200, HeaderList(), eval_task_response.SerializeAsString())));
-
-  // The 'EET received' callback should be called *before* the actual task
-  // resources are fetched.
-  EXPECT_CALL(mock_eet_received_callback_,
-              Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
-                             Eq(std::nullopt))));
-
-  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
-                                     population_eligibility_spec_uri,
-                                     HttpRequest::Method::kGet, _, "")))
-      .WillOnce(Return(FakeHttpResponse(
-          200, HeaderList(),
-          expected_population_eligibility_spec.SerializeAsString())));
-
-  auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
-      mock_eet_received_callback_.AsStdFunction());
-
-  ASSERT_OK(eligibility_checkin_result);
-  // Given that the flag is off, we expect EligibilityEvalNotConfigured even
-  // though the population eligibility spec has eligibility policies because
-  // there is no TensorFlow-based eligibility eval task configured.
-  EXPECT_THAT(
-      *eligibility_checkin_result,
-      VariantWith<FederatedProtocol::EligibilityEvalDisabled>(FieldsAre(
-          Optional(EqualsProto(expected_population_eligibility_spec)))));
-  ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
-}
-
-// This test makes sure the behavior is fixed when the flag is on. In this
-// case, the tasks in the population are using eligibility policies, and even
-// though there is no TensorFlow-based eligibility eval task configured, we
-// still return EligibilityEvalTask.
-TEST_F(HttpFederatedProtocolTest,
-       TestEligibilityEvalConfiguredWhenSpecHasPolicyAndFlagOn) {
-  EXPECT_CALL(mock_flags_, native_only_eligibility_config_support)
-      .WillRepeatedly(Return(true));
-
+       TestEligibilityEvalConfiguredWhenSpecHasPolicy) {
   Resource plan_resource;
   Resource checkpoint_resource;
 

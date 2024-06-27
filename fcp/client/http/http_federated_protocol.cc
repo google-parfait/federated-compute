@@ -569,17 +569,8 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
         // by the `population_eligibility_spec.eligibility_policies` field being
         // nonempty. In this case, we should return an EligibilityEvalTask
         // instead of an EligibilityEvalDisabled so that the client will still
-        // evaluate native policies. If the flag is disabled, we'll still return
-        // EligibilityEvalDisabled.
-        if ((flags_->native_only_eligibility_config_support() &&
-             population_eligibility_spec.eligibility_policies_size() == 0) ||
-            (!flags_->native_only_eligibility_config_support() &&
-             (IsResourceEmpty(task.plan()) &&
-              IsResourceEmpty(task.init_checkpoint())))) {
-          // If both plan and initial checkpoint are empty, it means the
-          // population has no TensorFlow-based eligibility eval task
-          // configured. We'll return a kEligibilityEvalDisabled with only
-          // population_eligibility_spec.
+        // evaluate native policies.
+        if (population_eligibility_spec.eligibility_policies_size() == 0) {
           object_state_ = ObjectState::kEligibilityEvalDisabled;
           return EligibilityEvalDisabled{
               .population_eligibility_spec =
@@ -592,10 +583,16 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
 
       // If we are using the native eligibility policy stack, we may not need to
       // fetch any TensorFlow-based eligibility eval task resources due to all
-      // policies used by the population having native implementations.
-      if (!flags_->native_only_eligibility_config_support() ||
-          (!IsResourceEmpty(task.plan()) &&
-           !IsResourceEmpty(task.init_checkpoint()))) {
+      // policies used by the population having native implementations, so check
+      // if the resource is empty before attempting to fetch it.
+      //
+      // There is currently a server workaround in place for legacy clients that
+      // will always populate the plan and init_checkpoint fields with empty
+      // inline data, so for now we will always attempt to fetch the resources
+      // even in the case of a fully native EET, but since they use inline data
+      // this is is effectively a no-op.
+      if (!IsResourceEmpty(task.plan()) &&
+          !IsResourceEmpty(task.init_checkpoint())) {
         // If set, fetch the eligibility eval task resources, returning any
         // errors that may be encountered in the process.
         FCP_ASSIGN_OR_RETURN(
