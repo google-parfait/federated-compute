@@ -359,8 +359,7 @@ void UpdateRetryWindowAndNetworkStats(FederatedProtocol& federated_protocol,
 std::unique_ptr<engine::ExampleIteratorFactory>
 CreateSimpleTaskEnvironmentIteratorFactory(
     SimpleTaskEnvironment* task_env, const SelectorContext& selector_context,
-    PhaseLogger* phase_logger, const Flags* flags,
-    bool should_log_collection_first_access_time) {
+    PhaseLogger* phase_logger, bool should_log_collection_first_access_time) {
   return std::make_unique<engine::FunctionalExampleIteratorFactory>(
       /*can_handle_func=*/
       [](const google::internal::federated::plan::ExampleSelector&) {
@@ -370,12 +369,11 @@ CreateSimpleTaskEnvironmentIteratorFactory(
         return true;
       },
       /*create_iterator_func=*/
-      [task_env, should_log_collection_first_access_time, phase_logger, flags](
+      [task_env, should_log_collection_first_access_time, phase_logger](
           const google::internal::federated::plan::ExampleSelector&
               example_selector,
           const SelectorContext& selector_context) {
-        if (should_log_collection_first_access_time &&
-            flags->log_collection_first_access_time()) {
+        if (should_log_collection_first_access_time) {
           phase_logger->MaybeLogCollectionFirstAccessTime(
               example_selector.collection_uri());
         }
@@ -1830,7 +1828,7 @@ RunPlanResults RunComputation(
   // sampling without replacement for the environment.
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(
-          env_deps, selector_context_with_task_details, &phase_logger, flags,
+          env_deps, selector_context_with_task_details, &phase_logger,
           /*should_log_collection_first_access_time=*/true);
   std::unique_ptr<::fcp::client::engine::ExampleIteratorFactory>
       fedselect_example_iterator_factory =
@@ -2098,7 +2096,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   std::unique_ptr<engine::ExampleIteratorFactory>
       env_eligibility_example_iterator_factory =
           CreateSimpleTaskEnvironmentIteratorFactory(
-              env_deps, eligibility_selector_context, &phase_logger, flags,
+              env_deps, eligibility_selector_context, &phase_logger,
               /*should_log_collection_first_access_time=*/false);
   std::vector<engine::ExampleIteratorFactory*>
       eligibility_example_iterator_factories{
@@ -2245,7 +2243,7 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
       opstats_logger.get(), log_manager);
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(env_deps, SelectorContext(),
-                                                 &phase_logger, flags, true);
+                                                 &phase_logger, true);
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
       &opstats_example_iterator_factory, env_example_iterator_factory.get()};
 
