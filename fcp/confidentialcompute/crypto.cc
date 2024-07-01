@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <optional>
 #include <string>
 #include <utility>
@@ -53,6 +54,59 @@ constexpr absl::string_view kInfo;
 // The expected length of COSE ECDSA256 signatures, when encoded as per RFC 8152
 // section 8.1.
 constexpr size_t kCoseP256SignatureLen = 64;
+
+namespace {
+// The size of the session-level nonce.
+constexpr size_t kNonceSize = 16;
+
+// Generates a blob-level nonce from a session-level nonce and a blob counter.
+std::string GenerateBlobNonce(std::string session_nonce, uint32_t counter) {
+  // We assume that the untrusted and trusted code are running on a machine with
+  // the same endianness.
+  std::string blob_nonce(session_nonce.length() + sizeof(uint32_t), '\0');
+  std::memcpy(blob_nonce.data(), session_nonce.data(), session_nonce.length());
+  std::memcpy(blob_nonce.data() + session_nonce.length(), &counter,
+              sizeof(uint32_t));
+  return blob_nonce;
+}
+}  // namespace
+
+NonceChecker::NonceChecker() {
+  std::string nonce(kNonceSize, '\0');
+  // BoringSSL documentation says that it always returns 1 so we don't check
+  // the return value.
+  (void)RAND_bytes(reinterpret_cast<unsigned char*>(nonce.data()),
+                   nonce.size());
+  session_nonce_ = std::move(nonce);
+}
+
+absl::StatusOr<std::string> NonceGenerator::GetNextBlobNonce() {
+  if (counter_ == UINT32_MAX) {
+    return absl::InternalError("Counter has overflowed.");
+  }
+  std::string next_blob_nonce = GenerateBlobNonce(session_nonce_, counter_);
+  counter_++;
+  return next_blob_nonce;
+}
+
+absl::Status NonceChecker::CheckBlobNonce(
+    const confidentialcompute::BlobMetadata& metadata) {
+  if (metadata.has_unencrypted()) {
+    return absl::OkStatus();
+  }
+
+  if (metadata.hpke_plus_aead_data()
+          .rewrapped_symmetric_key_associated_data()
+          .nonce() == GenerateBlobNonce(session_nonce_, counter_)) {
+    if (counter_ == UINT32_MAX) {
+      return absl::InternalError("Counter has overflowed.");
+    }
+    counter_++;
+    return absl::OkStatus();
+  }
+  return absl::PermissionDeniedError(
+      "Input nonce does not match the expected value.");
+}
 
 MessageEncryptor::MessageEncryptor()
     : hpke_kem_(EVP_hpke_x25519_hkdf_sha256()),

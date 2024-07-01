@@ -31,18 +31,58 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #include "google/protobuf/struct.pb.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "fcp/protos/confidentialcompute/confidential_transform.pb.h"
 #include "openssl/base.h"
 #include "openssl/ec_key.h"  // // IWYU pragma: keep, needed for bssl::UniquePtr<EC_KEY>
 #include "openssl/hpke.h"
 
 namespace fcp {
 namespace confidential_compute {
+
+// Class used to track and verify a session-level nonce and blob counter.
+//
+// This class is not thread safe.
+class NonceChecker {
+ public:
+  NonceChecker();
+  // Checks that the blob-level nonce matches the session-level nonce and blob
+  // counter. If so, increments the counter. If the blob is unencrypted, always
+  // returns OK and doesn't increment the blob counter.
+  absl::Status CheckBlobNonce(
+      const fcp::confidentialcompute::BlobMetadata& blob_metadata);
+
+  std::string GetSessionNonce() { return session_nonce_; }
+
+  // Returns the next blob-level nonce and increments the blob counter.
+  absl::StatusOr<std::string> GetNextBlobNonce();
+
+ private:
+  std::string session_nonce_;
+  uint32_t counter_ = 0;
+};
+
+// Class used to generate the series of blob-level nonces for a given session.
+//
+// This class is not thread safe.
+class NonceGenerator {
+ public:
+  explicit NonceGenerator(std::string session_nonce)
+      : session_nonce_(std::move(session_nonce)) {};
+
+  // Returns the next blob-level nonce and increments the blob counter.
+  absl::StatusOr<std::string> GetNextBlobNonce();
+
+ private:
+  std::string session_nonce_;
+  uint32_t counter_ = 0;
+};
 
 struct EncryptMessageResult {
   std::string ciphertext;
