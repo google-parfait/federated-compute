@@ -182,6 +182,17 @@ message BlobMetadata {
     // to encrypt `encrypted_secret_key`.
     bytes encapsulated_public_key = 5;
 
+    // Counter used with the session-level nonce to protect against replay
+    // attacks. Before decrypting and processing the data, the trusted worker
+    // application will ensure that
+    // 1) The counter is greater than all previously seen counters
+    // 2) When combined with the session's nonce, it matches the
+    //    RewrappedAssociatedData.nonce
+    // Since the decryption step only succeeds if the associated data matches
+    // what was included by the Ledger, this ensures that the Ledger explicitly
+    // authorized access for each individual WriteRequest.
+    uint32 counter = 6;
+
     // Components which will be appended together to create the associated data
     // to be used for decryption of the symmetric key by the Ledger so that it
     // can check the policy and grant access to worker components.
@@ -204,10 +215,8 @@ message BlobMetadata {
       // anonymized aggregate results).
       bytes reencryption_public_key = 1;
 
-      // Unique nonce for this record to protect against replay attacks by an
-      // untrusted portion of the stack. The trusted worker application will
-      // ensure that it has not already used the nonce before decrypting and
-      // processing the data.
+      // Unique nonce for this blob to protect against replay attacks by an
+      // untrusted portion of the stack.
       bytes nonce = 2;
     }
   }
