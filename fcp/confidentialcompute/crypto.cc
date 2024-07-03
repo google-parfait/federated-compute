@@ -25,6 +25,7 @@
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
@@ -80,13 +81,15 @@ NonceChecker::NonceChecker() {
   session_nonce_ = std::move(nonce);
 }
 
-absl::StatusOr<std::string> NonceGenerator::GetNextBlobNonce() {
+absl::StatusOr<NonceAndCounter> NonceGenerator::GetNextBlobNonce() {
   if (counter_ == UINT32_MAX) {
     return absl::InternalError("Counter has overflowed.");
   }
   std::string next_blob_nonce = GenerateBlobNonce(session_nonce_, counter_);
+
+  NonceAndCounter result = {.blob_nonce = next_blob_nonce, .counter = counter_};
   counter_++;
-  return next_blob_nonce;
+  return result;
 }
 
 absl::Status NonceChecker::CheckBlobNonce(
@@ -95,17 +98,26 @@ absl::Status NonceChecker::CheckBlobNonce(
     return absl::OkStatus();
   }
 
+  if (metadata.hpke_plus_aead_data().counter() == UINT32_MAX) {
+    return absl::InternalError("Counter has overflowed.");
+  }
+  if (metadata.hpke_plus_aead_data().counter() < counter_) {
+    return absl::PermissionDeniedError(
+        absl::StrFormat("Blob counter %d is less than the minimum expected "
+                        "value %d; caller may be "
+                        "attempting to reuse a previously seen nonce.",
+                        metadata.hpke_plus_aead_data().counter(), counter_));
+  }
   if (metadata.hpke_plus_aead_data()
           .rewrapped_symmetric_key_associated_data()
-          .nonce() == GenerateBlobNonce(session_nonce_, counter_)) {
-    if (counter_ == UINT32_MAX) {
-      return absl::InternalError("Counter has overflowed.");
-    }
-    counter_++;
-    return absl::OkStatus();
+          .nonce() !=
+      GenerateBlobNonce(session_nonce_,
+                        metadata.hpke_plus_aead_data().counter())) {
+    return absl::PermissionDeniedError(
+        "RewrappedAssociatedData nonce does not match the expected value.");
   }
-  return absl::PermissionDeniedError(
-      "Input nonce does not match the expected value.");
+  counter_ = metadata.hpke_plus_aead_data().counter() + 1;
+  return absl::OkStatus();
 }
 
 MessageEncryptor::MessageEncryptor()

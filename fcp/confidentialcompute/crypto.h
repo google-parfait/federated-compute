@@ -52,20 +52,26 @@ namespace confidential_compute {
 class NonceChecker {
  public:
   NonceChecker();
-  // Checks that the blob-level nonce matches the session-level nonce and blob
-  // counter. If so, increments the counter. If the blob is unencrypted, always
-  // returns OK and doesn't increment the blob counter.
+  // Checks that the BlobMetadata's counter is greater than any blob counters
+  // seen so far and that RewrappedAssociatedData.nonce is correct. If the blob
+  // is unencrypted, always returns OK and doesn't affect the blob counters seen
+  // so far.
   absl::Status CheckBlobNonce(
       const fcp::confidentialcompute::BlobMetadata& blob_metadata);
 
   std::string GetSessionNonce() { return session_nonce_; }
 
-  // Returns the next blob-level nonce and increments the blob counter.
-  absl::StatusOr<std::string> GetNextBlobNonce();
-
  private:
   std::string session_nonce_;
+  // The next valid blob counter. Values less than this are invalid.
   uint32_t counter_ = 0;
+};
+
+struct NonceAndCounter {
+  // Unique nonce for a blob.
+  std::string blob_nonce;
+  // The counter value for the blob, which is encoded in the blob_nonce.
+  uint32_t counter;
 };
 
 // Class used to generate the series of blob-level nonces for a given session.
@@ -76,8 +82,9 @@ class NonceGenerator {
   explicit NonceGenerator(std::string session_nonce)
       : session_nonce_(std::move(session_nonce)) {};
 
-  // Returns the next blob-level nonce and increments the blob counter.
-  absl::StatusOr<std::string> GetNextBlobNonce();
+  // Returns the next blob-level nonce and its associated counter. If
+  // successful, increments `counter_`.
+  absl::StatusOr<NonceAndCounter> GetNextBlobNonce();
 
  private:
   std::string session_nonce_;
