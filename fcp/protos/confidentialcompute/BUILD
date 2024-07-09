@@ -197,11 +197,14 @@ cc_proto_library(
 )
 
 proto_library(
-    name = "agg_core_container_config_proto",
-    srcs = ["agg_core_container_config.proto"],
+    name = "fed_sql_container_config_proto",
+    srcs = ["fed_sql_container_config.proto"],
+    deps = [
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol:configuration_proto",
+    ],
 )
 
 cc_proto_library(
-    name = "agg_core_container_config_cc_proto",
-    deps = [":agg_core_container_config_proto"],
+    name = "fed_sql_container_config_cc_proto",
+    deps = [":fed_sql_container_config_proto"],
 )

@@ -16,6 +16,14 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+import "tensorflow_federated/cc/core/impl/aggregation/protocol/configuration.proto";
+
+// Configures the FedSQL container initialization. This configuration will last
+// for the lifetime of the TEE and includes the privacy-relevant properties.
+message FedSqlContainerInitializeConfiguration {
+  tensorflow_federated.aggregation.Configuration agg_configuration = 1;
+}
+
 enum AggCoreAggregationType {
   AGGREGATION_TYPE_UNSPECIFIED = 0;
   AGGREGATION_TYPE_ACCUMULATE = 1;
@@ -24,7 +32,7 @@ enum AggCoreAggregationType {
 
 // Configures how a blob should be aggregated by the trusted AggCore container.
 // This is specified through `WriteRequest.first_request_configuration`.
-message AggCoreContainerWriteConfiguration {
+message FedSqlContainerWriteConfiguration {
   AggCoreAggregationType type = 1;
 }
 
@@ -38,7 +46,7 @@ enum AggCoreFinalizationType {
 
 // Configures how a blob should be aggregated by the trusted AggCore container.
 // This is specified through `FinalizeRequest.configuration`.
-message AggCoreContainerFinalizeConfiguration {
+message FedSqlContainerFinalizeConfiguration {
   AggCoreFinalizationType type = 1;
 
   // The numerical identifier for the result blob of the aggregation. This field
