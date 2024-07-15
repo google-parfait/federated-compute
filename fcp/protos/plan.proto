@@ -529,7 +529,18 @@ message ExampleQuerySpec {
     //
     // The keys in the map are the names the vectors should be aggregated under,
     // and must match the keys in FederatedExampleQueryIORouter.aggregations.
+    //
+    // If this field is set, data_upload_tensor_name must be empty.
     map<string, OutputVectorSpec> output_vector_specs = 2;
+
+    // Indicates that the query should be treated as a raw example store query.
+    // The results will be stored as a 1-d string tensor inside a federated
+    // compute checkpoint, and this field specifies the name of the tensor.
+    // This must match the key in the
+    // FederatedExampleQueryIORouter.aggregations.
+    //
+    // If this field is set, output_vector_specs must be empty.
+    string data_upload_tensor_name = 3;
   }
 
   // The queries to run.
@@ -634,6 +645,11 @@ message AggregationConfig {
     // tensors). The vectors will be stored in the checkpoint as a 1-D Tensor of
     // its corresponding data type.
     TFV1CheckpointAggregation tf_v1_checkpoint_aggregation = 3;
+
+    // Indicates that the given output tensor or vector should be placed in a
+    // federated compute checkpoint.
+    FederatedComputeCheckpointAggregation
+        federated_compute_checkpoint_aggregation = 4;
   }
 }
 
@@ -650,6 +666,13 @@ message SecureAggregationConfig {}
 // tensors). The vectors will be stored in the checkpoint as a 1-D Tensor of
 // its corresponding data type.
 message TFV1CheckpointAggregation {}
+
+// Parameters for the Federated Compute Checkpoint Aggregation protocol.
+//
+// Currently only the output from a data upload task is supported by this
+// aggregation type. The vectors will be stored in the checkpoint as a 1-D
+// String Tensor.
+message FederatedComputeCheckpointAggregation {}
 
 // The input and output router for eligibility-computing plans. These plans
 // compute which other plans a client is eligible to run, and are returned by
