@@ -21,7 +21,6 @@
 
 #include "absl/status/statusor.h"
 #include "fcp/base/clock.h"
-#include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/log_manager.h"
@@ -29,7 +28,6 @@
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
-#include "tensorflow/core/framework/tensor.h"
 
 namespace fcp::client {
 
@@ -40,11 +38,9 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 class EetPlanRunner {
  public:
   virtual ~EetPlanRunner() = default;
-  virtual engine::PlanResult RunPlan(
+  virtual absl::StatusOr<TaskEligibilityInfo> RunPlan(
       std::vector<engine::ExampleIteratorFactory*>
           example_iterator_factories) = 0;
-  virtual absl::StatusOr<TaskEligibilityInfo> ParseOutput(
-      const std::vector<tensorflow::Tensor>& output_tensors) = 0;
 };
 
 // Computes the eligibility of the client for the given tasks in the population

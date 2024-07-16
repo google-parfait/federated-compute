@@ -34,14 +34,12 @@
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
-#include "fcp/client/simple_task_environment.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/testing/testing.h"
 #include "tensorflow/core/example/example.pb.h"
-#include "tensorflow/core/framework/tensor.h"
 
 namespace fcp {
 namespace client {
@@ -94,12 +92,9 @@ std::unique_ptr<engine::ExampleIteratorFactory> SetUpExampleIteratorFactory(
 class MockEetPlanRunner : public EetPlanRunner {
  public:
   MOCK_METHOD(
-      engine::PlanResult, RunPlan,
+      absl::StatusOr<TaskEligibilityInfo>, RunPlan,
       (std::vector<engine::ExampleIteratorFactory*> example_iterator_factories),
       (override));
-  MOCK_METHOD(absl::StatusOr<TaskEligibilityInfo>, ParseOutput,
-              (const std::vector<tensorflow::Tensor>& output_tensors),
-              (override));
 };
 
 class EligibilityDeciderTest : public testing::Test {
@@ -455,20 +450,13 @@ TEST_F(EligibilityDeciderTest, TfCustomPolicyEnabledRunsSuccessfully) {
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   task_info->mutable_eligibility_policy_indices()->Add(0);
 
-  engine::PlanResult plan_result(engine::PlanOutcome::kSuccess,
-                                 absl::OkStatus());
-  plan_result.output_tensors = {};
-
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(Return(std::move(plan_result)));
-
   TaskEligibilityInfo tf_custom_policy_output;
   tf_custom_policy_output.set_version(1);
   auto* task_weight = tf_custom_policy_output.add_task_weights();
   task_weight->set_task_name("single_task_1");
   task_weight->set_weight(1.0f);
 
-  EXPECT_CALL(mock_eet_plan_runner_, ParseOutput(_))
+  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
       .WillOnce(Return(tf_custom_policy_output));
 
   // Result should match the response of our TfCustomPolicy output since we have
@@ -503,6 +491,12 @@ TEST_F(EligibilityDeciderTest, TfCustomPolicyPreparesNeetContextIterator) {
   engine::PlanResult plan_result(engine::PlanOutcome::kSuccess,
                                  absl::OkStatus());
   plan_result.output_tensors = {};
+
+  TaskEligibilityInfo tf_custom_policy_output;
+  tf_custom_policy_output.set_version(1);
+  auto* task_weight = tf_custom_policy_output.add_task_weights();
+  task_weight->set_task_name("single_task_1");
+  task_weight->set_weight(1.0f);
 
   // We do some asserts inside of our mock RunPlan, as we will not be able to
   // capture these variables and test them outside of the scope of
@@ -567,16 +561,7 @@ TEST_F(EligibilityDeciderTest, TfCustomPolicyPreparesNeetContextIterator) {
                           .value(0),
                       task_name);
           },
-          Return(std::move(plan_result))));
-
-  TaskEligibilityInfo tf_custom_policy_output;
-  tf_custom_policy_output.set_version(1);
-  auto* task_weight = tf_custom_policy_output.add_task_weights();
-  task_weight->set_task_name("single_task_1");
-  task_weight->set_weight(1.0f);
-
-  EXPECT_CALL(mock_eet_plan_runner_, ParseOutput(_))
-      .WillOnce(Return(tf_custom_policy_output));
+          Return(std::move(tf_custom_policy_output))));
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
       spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
@@ -607,12 +592,8 @@ TEST_F(EligibilityDeciderTest, TfCustomPolicyParseOutputsLogsNonfatal) {
                                  absl::OkStatus());
   plan_result.output_tensors = {};
 
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(Return(std::move(plan_result)));
-
   auto execution_error = absl::InternalError("cripes!");
-
-  EXPECT_CALL(mock_eet_plan_runner_, ParseOutput(_))
+  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
       .WillOnce(Return(execution_error));
   EXPECT_CALL(mock_phase_logger_,
               LogEligibilityEvalComputationErrorNonfatal(Eq(execution_error)));
@@ -644,14 +625,10 @@ TEST_F(EligibilityDeciderTest, TfCustomPolicyPlanOutcomeFailureNonfatal) {
   task_info->mutable_eligibility_policy_indices()->Add(0);
 
   auto execution_error = absl::InternalError("oh no!!");
-  engine::PlanResult plan_result(engine::PlanOutcome::kTensorflowError,
-                                 execution_error);
-
+  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
+      .WillOnce(Return(execution_error));
   EXPECT_CALL(mock_phase_logger_,
               LogEligibilityEvalComputationErrorNonfatal(Eq(execution_error)));
-
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(Return(std::move(plan_result)));
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
       spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
@@ -714,20 +691,13 @@ TEST_F(EligibilityDeciderTest, EligibleForAllPolicyTypes) {
   task_info->mutable_eligibility_policy_indices()->Add(1);
   task_info->mutable_eligibility_policy_indices()->Add(2);
 
-  engine::PlanResult plan_result(engine::PlanOutcome::kSuccess,
-                                 absl::OkStatus());
-  plan_result.output_tensors = {};
-
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(Return(std::move(plan_result)));
-
   TaskEligibilityInfo tf_custom_policy_output;
   tf_custom_policy_output.set_version(1);
   auto* task_weight = tf_custom_policy_output.add_task_weights();
   task_weight->set_task_name(task_name);
   task_weight->set_weight(1.0f);
 
-  EXPECT_CALL(mock_eet_plan_runner_, ParseOutput(_))
+  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
       .WillOnce(Return(tf_custom_policy_output));
   // Result should match the response of our TfCustomPolicy output since we have
   // a single task eligible for all policies.
@@ -801,13 +771,6 @@ TEST_F(EligibilityDeciderTest, TwoTasksOneEligibleForAllOneNot) {
   task_info2->mutable_eligibility_policy_indices()->Add(1);
   task_info2->mutable_eligibility_policy_indices()->Add(2);
 
-  engine::PlanResult plan_result(engine::PlanOutcome::kSuccess,
-                                 absl::OkStatus());
-  plan_result.output_tensors = {};
-
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(Return(std::move(plan_result)));
-
   TaskEligibilityInfo tf_custom_policy_output;
   tf_custom_policy_output.set_version(1);
   auto* task_weight = tf_custom_policy_output.add_task_weights();
@@ -817,7 +780,7 @@ TEST_F(EligibilityDeciderTest, TwoTasksOneEligibleForAllOneNot) {
   task_weight2->set_task_name(task_name2);
   task_weight2->set_weight(0.0f);
 
-  EXPECT_CALL(mock_eet_plan_runner_, ParseOutput(_))
+  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
       .WillOnce(Return(tf_custom_policy_output));
   // Result should match the response of our TfCustomPolicy output since we have
   // a single task eligible for all policies.

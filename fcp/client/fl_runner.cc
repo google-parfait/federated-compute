@@ -282,31 +282,22 @@ std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
 class EetPlanRunnerImpl : public EetPlanRunner {
  public:
   explicit EetPlanRunnerImpl(
-      const std::function<engine::PlanResult(
-          std::vector<engine::ExampleIteratorFactory*>)>& run_plan_func,
       const std::function<absl::StatusOr<TaskEligibilityInfo>(
-          std::vector<tensorflow::Tensor>)>& parse_output_func)
-      : run_plan_func_(run_plan_func), parse_output_func_(parse_output_func) {}
+          std::vector<engine::ExampleIteratorFactory*>)>& run_plan_func)
+      : run_plan_func_(run_plan_func) {}
 
-  engine::PlanResult RunPlan(std::vector<engine::ExampleIteratorFactory*>
-                                 example_iterator_factories) override {
+  absl::StatusOr<TaskEligibilityInfo> RunPlan(
+      std::vector<engine::ExampleIteratorFactory*> example_iterator_factories)
+      override {
     return run_plan_func_(example_iterator_factories);
-  }
-
-  absl::StatusOr<TaskEligibilityInfo> ParseOutput(
-      const std::vector<tensorflow::Tensor>& output_tensors) override {
-    return parse_output_func_(output_tensors);
   }
 
   ~EetPlanRunnerImpl() override = default;
 
  private:
-  std::function<engine::PlanResult(
+  std::function<absl::StatusOr<TaskEligibilityInfo>(
       std::vector<engine::ExampleIteratorFactory*>)>
       run_plan_func_;
-  std::function<absl::StatusOr<TaskEligibilityInfo>(
-      std::vector<tensorflow::Tensor>)>
-      parse_output_func_;
 };
 
 // Returns the cumulative network stats (those incurred up until this point in
@@ -930,26 +921,25 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
   // case we somehow get a legacy EET with no spec, we can skip evaluating this
   // and opt the client out of all tasks.
   if (eligibility_eval_task.population_eligibility_spec.has_value()) {
-    std::function<engine::PlanResult(
+    std::function<absl::StatusOr<TaskEligibilityInfo>(
         std::vector<engine::ExampleIteratorFactory*>)>
         run_plan_func = [&should_abort, &log_manager, &opstats_logger, &flags,
                          &plan, &checkpoint_input_filename, &timing_config,
                          &run_computation_start_time, &reference_time](
                             std::vector<engine::ExampleIteratorFactory*>
-                                override_iterator_factories) {
-          return RunEligibilityEvalPlanWithTensorflowSpec(
-              override_iterator_factories, should_abort, log_manager,
-              opstats_logger, flags, plan, *checkpoint_input_filename,
-              timing_config, run_computation_start_time, reference_time);
-        };
+                                override_iterator_factories)
+        -> absl::StatusOr<TaskEligibilityInfo> {
+      engine::PlanResult result = RunEligibilityEvalPlanWithTensorflowSpec(
+          override_iterator_factories, should_abort, log_manager,
+          opstats_logger, flags, plan, *checkpoint_input_filename,
+          timing_config, run_computation_start_time, reference_time);
+      if (result.outcome != engine::PlanOutcome::kSuccess) {
+        return result.original_status;
+      }
+      return ParseEligibilityEvalPlanOutput(result.output_tensors);
+    };
 
-    std::function<absl::StatusOr<TaskEligibilityInfo>(
-        std::vector<tensorflow::Tensor>)>
-        parse_output_func = [](std::vector<tensorflow::Tensor> output_tensors) {
-          return ParseEligibilityEvalPlanOutput(output_tensors);
-        };
-
-    EetPlanRunnerImpl eet_plan_runner(run_plan_func, parse_output_func);
+    EetPlanRunnerImpl eet_plan_runner(run_plan_func);
 
     // TODO(team): Return ExampleStats out of the NEET engine so they can
     // be measured.
@@ -2271,30 +2261,25 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     plan_result = std::move(plan_result_and_checkpoint_file.plan_result);
   } else if (client_plan.phase().has_federated_compute_eligibility()) {
     if (population_eligibility_spec.has_value()) {
-      std::function<engine::PlanResult(
+      std::function<absl::StatusOr<TaskEligibilityInfo>(
           std::vector<engine::ExampleIteratorFactory*>)>
           run_plan_func =
               [&should_abort, &log_manager, &opstats_logger, &flags,
                &client_plan, &checkpoint_input_filename, &timing_config,
                &run_plan_start_time,
                &reference_time](std::vector<engine::ExampleIteratorFactory*>
-                                    override_iterator_factories) {
-                return RunEligibilityEvalPlanWithTensorflowSpec(
-                    override_iterator_factories, should_abort, log_manager,
-                    opstats_logger.get(), flags, client_plan,
-                    checkpoint_input_filename, timing_config,
-                    run_plan_start_time, reference_time);
-              };
-
-      std::function<absl::StatusOr<TaskEligibilityInfo>(
-          std::vector<tensorflow::Tensor>)>
-          parse_output_func =
-              [](std::vector<tensorflow::Tensor> output_tensors) {
-                return ParseEligibilityEvalPlanOutput(output_tensors);
-              };
-
-      EetPlanRunnerImpl eet_plan_runner(run_plan_func, parse_output_func);
-
+                                    override_iterator_factories)
+          -> absl::StatusOr<TaskEligibilityInfo> {
+        engine::PlanResult result = RunEligibilityEvalPlanWithTensorflowSpec(
+            override_iterator_factories, should_abort, log_manager,
+            opstats_logger.get(), flags, client_plan, checkpoint_input_filename,
+            timing_config, run_plan_start_time, reference_time);
+        if (result.outcome != engine::PlanOutcome::kSuccess) {
+          return result.original_status;
+        }
+        return ParseEligibilityEvalPlanOutput(result.output_tensors);
+      };
+      EetPlanRunnerImpl eet_plan_runner(run_plan_func);
       absl::StatusOr<std::optional<TaskEligibilityInfo>>
           native_task_eligibility_info = ComputeNativeEligibility(
               population_eligibility_spec.value(), *log_manager, phase_logger,

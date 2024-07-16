@@ -249,7 +249,6 @@ cc_library(
         "//fcp/base:clock",
         "//fcp/base:digest",
         "//fcp/base:time_util",
-        "//fcp/client/engine:common",
         "//fcp/client/engine:example_iterator_factory",
         "//fcp/client/opstats:opstats_utils",
         "//fcp/protos:federated_api_cc_proto",
@@ -264,7 +263,6 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
         "@com_googlesource_code_re2//:re2",
-        "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
     ],
 )
@@ -275,7 +273,6 @@ cc_test(
     deps = [
         ":diag_codes_cc_proto",
         ":eligibility_decider",
-        ":simple_task_environment",
         ":test_helpers",
         "//fcp/base:simulated_clock",
         "//fcp/client/engine:common",
@@ -290,7 +287,6 @@ cc_test(
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
-        "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core/example:example_protos_cc",
     ],
 )

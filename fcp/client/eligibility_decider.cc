@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "google/protobuf/any.pb.h"
 #include "google/protobuf/duration.pb.h"
 #include "google/protobuf/timestamp.pb.h"
 #include "absl/container/flat_hash_map.h"
@@ -34,7 +35,6 @@
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
-#include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_query_result.pb.h"
 #include "fcp/client/flags.h"
@@ -336,14 +336,9 @@ ComputeTfCustomPolicyEligibility(
       overridden_example_iterator_factories.end(),
       example_iterator_factories.begin(), example_iterator_factories.end());
 
-  engine::PlanResult plan_result =
-      eet_plan_runner.RunPlan(overridden_example_iterator_factories);
-
-  if (plan_result.outcome != engine::PlanOutcome::kSuccess) {
-    return plan_result.original_status;
-  }
-  FCP_ASSIGN_OR_RETURN(TaskEligibilityInfo task_eligibility_info,
-                       eet_plan_runner.ParseOutput(plan_result.output_tensors));
+  FCP_ASSIGN_OR_RETURN(
+      TaskEligibilityInfo task_eligibility_info,
+      eet_plan_runner.RunPlan(overridden_example_iterator_factories));
   absl::flat_hash_set<std::string> eligible_task_names = {};
   for (const TaskWeight& task_weight : task_eligibility_info.task_weights()) {
     if (task_weight.weight() > 0) {
