@@ -47,16 +47,11 @@ service ConfidentialTransform {
   //    and concluding with a WriteRequest where commit is
   //    true. It must write all chunks of one blob before moving on to
   //    the next blob, never interleaving chunks of different blobs.
-  // 4. The client checks if the write_capacity_bytes minus the size of
-  //    the blob just written is enough to write another blob. If so, it
-  //    may go back to step 3 without waiting for a WriteFinishedResponse.
+  // 4. Once the write completes (OnWriteDone), the client may go back to step 3
+  //    without waiting for a WriteFinishedResponse.
   // 5. When the server finishes incorporating a blob into the session,
   //    (which may happen concurrently with additional blobs being
-  //    written to the server) it will send a WriteFinishedResponse. The
-  //    client updates its write_capacity_bytes with the value from the
-  //    WriteFinishedResponse and if the client is currently blocked
-  //    from writing blobs based on the previous write_capacity_bytes,
-  //    it will retry step 4.
+  //    written to the server) it will send a WriteFinishedResponse.
   // 6. Steps 3-5 can be repeated any number of times.
   // 7. A single FinalizeRequest is sent, after which the session is
   //    immutable. No more requests will be accepted by the server.
@@ -124,14 +119,8 @@ message ConfigureResponse {
   // data of the symmetric encryption key used to encrypt each blob,
   // along with a per-blob counter.
   bytes nonce = 1;
-  // The total number of bytes that can be written to this session
-  // for one or more blobs before the client should wait for a
-  // WriteFinishedResponse to be returned with an updated capacity.
-  // This allows for writing blobs to be decoupled from processing of
-  // any individual blob, while still providing an opportunity for
-  // the server to provide backpressure to the client to prevent either
-  // the server or client from running out of memory.
-  int64 write_capacity_bytes = 2;
+
+  reserved 2;
 }
 
 // Encodes metadata about a blob that is written to or read from the
@@ -268,16 +257,8 @@ message WriteFinishedResponse {
   // state should cause the Session bidirectional stream to fail
   // with an error.
   google.rpc.Status status = 2;
-  // The total number of additional bytes that can be written to this
-  // session for one or more blobs, before the client should wait for
-  // another WriteFinishedResponse to be returned with an updated
-  // capacity. Overwrites the previous write_capacity_bytes returned
-  // by a previous ConfigureResponse or WriteFinishedResponse.
-  // This allows for writing blobs to be decoupled from processing of
-  // any individual blob, while still providing an opportunity for
-  // the server to provide backpressure to the client to prevent either
-  // the server or client from running out of memory.
-  int64 write_capacity_bytes = 3;
+
+  reserved 3;
 }
 
 // Request to finalize the session by running a finalization
