@@ -2968,60 +2968,16 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSimpleAggSuccess) {
                                                  plan_duration, std::nullopt));
 }
 
+// Validates that reporting a lightweight client report wire format result
+// should work.
 TEST_F(HttpFederatedProtocolTest,
-       TestReportCompletedViaSimpleAggSuccessWithFCWireFormatBugFixDisabled) {
+       TestReportCompletedViaSimpleAggSuccessWithFCWireFormat) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
   // Enables enable_lightweight_client_report_wire_format flag.
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
-      .WillRepeatedly(Return(true));
-  // Reporting a lightweight result should still work even if the bugfix is
-  // disabled.
-  EXPECT_CALL(mock_flags_,
-              untie_lw_client_report_format_support_from_requiring_lw_report())
-      .WillRepeatedly(Return(false));
-  // Create a fake lightweight result format with 32 'X'.
-  std::string checkpoint_str(32, 'X');
-  absl::Cord checkpoint_cord(checkpoint_str);
-  ComputationResults results;
-  results.emplace("fc_checkpoint", checkpoint_cord);
-  absl::Duration plan_duration = absl::Minutes(5);
-
-  ExpectSuccessfulReportTaskResultRequest(
-      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, kTaskName, plan_duration);
-  ExpectSuccessfulStartAggregationDataUploadRequest(
-      "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
-      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
-  ExpectSuccessfulByteStreamUploadRequest(
-      "https://bytestream.uri/upload/v1/media/"
-      "CHECKPOINT_RESOURCE?upload_protocol=raw",
-      checkpoint_str);
-  ExpectSuccessfulSubmitAggregationResultRequest(
-      "https://aggregation.second.uri/v1/aggregations/"
-      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto");
-
-  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
-                                                 plan_duration, std::nullopt));
-}
-
-TEST_F(HttpFederatedProtocolTest,
-       TestReportCompletedViaSimpleAggSuccessWithFCWireFormatBugFixEnabled) {
-  // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
-  // Enables enable_lightweight_client_report_wire_format flag.
-  EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
-      .WillRepeatedly(Return(true));
-  // Reporting a lightweight result should still work when the bugfix is
-  // enabled.
-  EXPECT_CALL(mock_flags_,
-              untie_lw_client_report_format_support_from_requiring_lw_report())
       .WillRepeatedly(Return(true));
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -3050,9 +3006,10 @@ TEST_F(HttpFederatedProtocolTest,
                                                  plan_duration, std::nullopt));
 }
 
-TEST_F(
-    HttpFederatedProtocolTest,
-    TestReportCompletedWithLightweightWireFormatSupportDisabledBugFixEnabled) {
+// Validates that reporting a lightweight client report wire format result
+// should fail if the feature is disabled.
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedWithLightweightWireFormatSupportDisabled) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
@@ -3060,10 +3017,6 @@ TEST_F(
   // Disables enable_lightweight_client_report_wire_format flag.
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillRepeatedly(Return(false));
-  // Bugfix is disabled to test the old behavior.
-  EXPECT_CALL(mock_flags_,
-              untie_lw_client_report_format_support_from_requiring_lw_report())
-      .WillRepeatedly(Return(true));
   // Create a fake lightweight result format with 32 'X'.
   std::string checkpoint_str(32, 'X');
   absl::Cord checkpoint_cord(checkpoint_str);
@@ -3077,88 +3030,18 @@ TEST_F(
               IsCode(absl::StatusCode::kInternal));
 }
 
-TEST_F(
-    HttpFederatedProtocolTest,
-    TestReportCompletedSuccessWithTfCheckpointButSupportDisabledBugFixEnabled) {
-  // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
-  // Disables enable_lightweight_client_report_wire_format flag.
-  EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
-      .WillRepeatedly(Return(false));
-  // Enables the bugfix so that the client can report tf checkpoint even if
-  // enable_lightweight_client_report_wire_format is true.
-  EXPECT_CALL(mock_flags_,
-              untie_lw_client_report_format_support_from_requiring_lw_report())
-      .WillRepeatedly(Return(true));
-  // Create a fake tf checkpoint with 32 'X'.
-  std::string checkpoint_str(32, 'X');
-  ComputationResults results;
-  results.emplace("tensorflow_checkpoint", checkpoint_str);
-  absl::Duration plan_duration = absl::Minutes(5);
-
-  ExpectSuccessfulReportTaskResultRequest(
-      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
-      kAggregationSessionId, kTaskName, plan_duration);
-  ExpectSuccessfulStartAggregationDataUploadRequest(
-      "https://aggregation.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
-      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
-      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri);
-  ExpectSuccessfulByteStreamUploadRequest(
-      "https://bytestream.uri/upload/v1/media/"
-      "CHECKPOINT_RESOURCE?upload_protocol=raw",
-      checkpoint_str);
-  ExpectSuccessfulSubmitAggregationResultRequest(
-      "https://aggregation.second.uri/v1/aggregations/"
-      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto");
-
-  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
-                                                 plan_duration, std::nullopt));
-}
-
+// Validates that reporting a tf checkpoint should work, even if the
+// enable_lightweight_client_report_wire_format flag is enabled (e.g. because
+// the task type that was run did not actually support producing a lightweight
+// report, despite the flag being enabled).
 TEST_F(HttpFederatedProtocolTest,
-       TestReportCompletedFailureWithTfCheckpointSupportEnabledBugFixDisabled) {
+       TestReportWithTfCheckpointAndFcWireFormatFlagEnabled) {
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
   ASSERT_OK(RunSuccessfulCheckin());
   // Enables enable_lightweight_client_report_wire_format flag.
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
-      .WillRepeatedly(Return(true));
-  // The client should fail to report tf checkpoint since
-  // enable_lightweight_client_report_wire_format is true but the bugfix is
-  // disabled.
-  EXPECT_CALL(mock_flags_,
-              untie_lw_client_report_format_support_from_requiring_lw_report())
-      .WillRepeatedly(Return(false));
-  // Create a fake tf checkpoint with 32 'X'.
-  std::string checkpoint_str(32, 'X');
-  ComputationResults results;
-  results.emplace("tensorflow_checkpoint", checkpoint_str);
-  absl::Duration plan_duration = absl::Minutes(5);
-
-  // Should fail because the enable_lightweight_client_report_wire_format is
-  // still disabled.
-  EXPECT_THAT(federated_protocol_->ReportCompleted(std::move(results),
-                                                   plan_duration, std::nullopt),
-              IsCode(absl::StatusCode::kInternal));
-}
-
-TEST_F(HttpFederatedProtocolTest,
-       TestReportWithTfCheckpointFcWireFormatEnabledAndBugFixEnabled) {
-  // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
-  // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
-  // Enables enable_lightweight_client_report_wire_format flag.
-  EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
-      .WillRepeatedly(Return(true));
-  // Enables the bugfix so that the client can report tf checkpoint even if
-  // enable_lightweight_client_report_wire_format is true.
-  EXPECT_CALL(mock_flags_,
-              untie_lw_client_report_format_support_from_requiring_lw_report())
       .WillRepeatedly(Return(true));
   // Create a fake tf checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');

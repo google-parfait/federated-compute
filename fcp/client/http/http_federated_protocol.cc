@@ -1174,31 +1174,14 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
                      " aggregands have unexpected results size."));
   }
   auto result = std::move(results.begin()->second);
-  bool untie_lw_client_report_format_support_from_requiring_lw_report =
-      flags_->untie_lw_client_report_format_support_from_requiring_lw_report();
   bool enable_lightweight_client_report_wire_format =
       flags_->enable_lightweight_client_report_wire_format();
-  if (!untie_lw_client_report_format_support_from_requiring_lw_report) {
-    // Old incorrect behavior.
-    if (!enable_lightweight_client_report_wire_format &&
-        !std::holds_alternative<TFCheckpoint>(result)) {
-      return absl::InternalError(absl::StrCat(
-          aggregation_type_readable, " aggregands have unexpected format."));
-    }
-    if (enable_lightweight_client_report_wire_format &&
-        !std::holds_alternative<FCCheckpoint>(result)) {
-      return absl::InternalError(absl::StrCat(
-          aggregation_type_readable,
-          " aggregands have unexpected format for FC Wire Format."));
-    }
-  } else {
-    if (!enable_lightweight_client_report_wire_format &&
-        std::holds_alternative<FCCheckpoint>(result)) {
-      return absl::InternalError(absl::StrCat(
-          aggregation_type_readable,
-          " computation produced FC Wire Format but this feature is "
-          "not enabled."));
-    }
+  if (!enable_lightweight_client_report_wire_format &&
+      std::holds_alternative<FCCheckpoint>(result)) {
+    return absl::InternalError(
+        absl::StrCat(aggregation_type_readable,
+                     " computation produced FC Wire Format but this feature is "
+                     "not enabled."));
   }
   auto start_upload_status = HandleStartDataAggregationUploadOperationResponse(
       PerformStartDataUploadRequestAndReportTaskResult(plan_duration,
@@ -1217,25 +1200,15 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
       << aggregation_type_readable;
 
   std::string result_data;
-  if (!untie_lw_client_report_format_support_from_requiring_lw_report) {
-    if (enable_lightweight_client_report_wire_format) {
-      // TODO: b/300128447 - avoid copying serialized checkpoint once http
-      // federated protocol supports absl::Cord
-      absl::CopyCordToString(std::get<FCCheckpoint>(result), &result_data);
-    } else {
-      result_data = std::get<TFCheckpoint>(result);
-    }
+  bool should_report_lightweight_client_report_wire_format =
+      enable_lightweight_client_report_wire_format &&
+      std::holds_alternative<FCCheckpoint>(result);
+  if (should_report_lightweight_client_report_wire_format) {
+    // TODO: b/300128447 - avoid copying serialized checkpoint once http
+    // federated protocol supports absl::Cord
+    absl::CopyCordToString(std::get<FCCheckpoint>(result), &result_data);
   } else {
-    bool should_report_lightweight_client_report_wire_format =
-        enable_lightweight_client_report_wire_format &&
-        std::holds_alternative<FCCheckpoint>(result);
-    if (should_report_lightweight_client_report_wire_format) {
-      // TODO: b/300128447 - avoid copying serialized checkpoint once http
-      // federated protocol supports absl::Cord
-      absl::CopyCordToString(std::get<FCCheckpoint>(result), &result_data);
-    } else {
-      result_data = std::get<TFCheckpoint>(result);
-    }
+    result_data = std::get<TFCheckpoint>(result);
   }
 
   std::string data_to_upload;
