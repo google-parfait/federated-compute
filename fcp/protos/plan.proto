@@ -530,7 +530,7 @@ message ExampleQuerySpec {
     // The keys in the map are the names the vectors should be aggregated under,
     // and must match the keys in FederatedExampleQueryIORouter.aggregations.
     //
-    // If this field is set, data_upload_tensor_name must be empty.
+    // If this field is set, direct_output_tensor_name must be empty.
     map<string, OutputVectorSpec> output_vector_specs = 2;
 
     // Indicates that the query should be treated as a raw example store query.
@@ -540,7 +540,7 @@ message ExampleQuerySpec {
     // FederatedExampleQueryIORouter.aggregations.
     //
     // If this field is set, output_vector_specs must be empty.
-    string data_upload_tensor_name = 3;
+    string direct_output_tensor_name = 3;
   }
 
   // The queries to run.
