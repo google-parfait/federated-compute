@@ -678,6 +678,9 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, confidential_agg_in_selector_context, (),
               (const, override));
+  MOCK_METHOD(bool,
+              support_fccheckpoint_aggregation_in_legacy_example_query_tasks,
+              (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

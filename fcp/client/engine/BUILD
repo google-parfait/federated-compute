@@ -74,7 +74,6 @@ cc_library(
         "//fcp/client:converters",
         "//fcp/client:example_iterator_query_recorder",
         "//fcp/client:example_query_result_cc_proto",
-        "//fcp/client:interfaces",
         "//fcp/client:simple_task_environment",
         "//fcp/client/opstats:opstats_logger",
         "//fcp/protos:plan_cc_proto",

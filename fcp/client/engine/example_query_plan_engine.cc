@@ -34,7 +34,6 @@
 #include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/example_query_result.pb.h"
-#include "fcp/client/flags.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
@@ -273,22 +272,22 @@ absl::Status GenerateAggregationTensors(
 
 ExampleQueryPlanEngine::ExampleQueryPlanEngine(
     std::vector<ExampleIteratorFactory*> example_iterator_factories,
-    OpStatsLogger* opstats_logger, const Flags* flags,
+    OpStatsLogger* opstats_logger,
     ExampleIteratorQueryRecorder* example_iterator_query_recorder)
     : example_iterator_factories_(example_iterator_factories),
       opstats_logger_(opstats_logger),
-      flags_(*flags),
       example_iterator_query_recorder_(example_iterator_query_recorder) {}
 
 PlanResult ExampleQueryPlanEngine::RunPlan(
     const ExampleQuerySpec& example_query_spec,
-    const std::string& output_checkpoint_filename) {
+    const std::string& output_checkpoint_filename,
+    bool use_client_report_wire_format) {
   std::vector<ExampleQueryResult> example_query_results;
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
 
   for (const auto& example_query : example_query_spec.example_queries()) {
-    ExampleSelector selector = example_query.example_selector();
+    const ExampleSelector& selector = example_query.example_selector();
     ExampleIteratorFactory* example_iterator_factory =
         FindExampleIteratorFactory(selector, example_iterator_factories_);
     if (example_iterator_factory == nullptr) {
@@ -337,10 +336,7 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
 
   PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
   absl::Status status;
-  if (!flags_.enable_lightweight_client_report_wire_format()) {
-    status = WriteCheckpoint(output_checkpoint_filename, example_query_results,
-                             example_query_spec);
-  } else {
+  if (use_client_report_wire_format) {
     auto checkpoint_builder =
         federated_compute_checkpoint_builder_factory_.Create();
     status = GenerateAggregationTensors(
@@ -353,6 +349,9 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
         status = checkpoint.status();
       }
     }
+  } else {
+    status = WriteCheckpoint(output_checkpoint_filename, example_query_results,
+                             example_query_spec);
   }
   if (!status.ok()) {
     return PlanResult(PlanOutcome::kExampleIteratorError, status);

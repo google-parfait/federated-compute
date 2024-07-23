@@ -184,6 +184,7 @@ cc_library(
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@boringssl//:crypto",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

@@ -621,7 +621,6 @@ message FederatedExampleQueryIORouter {
   // Describes how each output vector should be aggregated using an aggregation
   // protocol, and the configuration for those protocols.
   // Keys must match the keys in ExampleQuerySpec.output_vector_specs.
-  // Note that currently only the TFV1CheckpointAggregation config is supported.
   map<string, AggregationConfig> aggregations = 1;
 }
 
@@ -638,7 +637,10 @@ message AggregationConfig {
     // checkpoint file first.
 
     // Indicates that the given output tensor or vector (e.g. as produced by an
-    // ExampleQuerySpec) should be placed in an output TF v1 checkpoint.
+    // ExampleQuerySpec) should be placed in an output TF v1 checkpoint or
+    // federated compute checkpoint. Currently, which report format is used is
+    // determined by the `enable_lightweight_client_report_wire_format` client
+    // flag.
     //
     // Currently only ExampleQuerySpec output vectors are supported by this
     // aggregation type (i.e. it cannot be used with TensorflowSpec output

@@ -33,6 +33,7 @@
 
 #include "google/protobuf/duration.pb.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -204,16 +205,8 @@ absl::StatusOr<ComputationResults> CreateComputationResults(
   }
 
   if (!plan_result.federated_compute_checkpoint.empty()) {
-    if (flags->enable_lightweight_client_report_wire_format()) {
-      // Task produced a lightweight report, and the feature is enabled.
       computation_results[kFederatedComputeCheckpoint] =
           std::move(plan_result.federated_compute_checkpoint);
-    } else {
-      // Task produced a lightweight report, but the feature is disabled.
-      return absl::InternalError(
-          "Lightweight report produced but lightweight report feature is "
-          "disabled");
-    }
   } else if (!checkpoint_filename.empty()) {
     // Name of the TF checkpoint inside the aggregand map in the Checkpoint
     // protobuf. This field name is ignored by the server.
@@ -602,28 +595,57 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
         engine::PlanOutcome::kInvalidArgument,
         absl::InvalidArgumentError("Invalid ExampleQuerySpec-based plan")));
   }
+
+  const auto& aggregations =
+      client_plan.phase().federated_example_query().aggregations();
+  absl::flat_hash_set<AggregationConfig::ProtocolConfigCase>
+      protocol_config_cases;
   for (const auto& example_query :
        client_plan.phase().example_query_spec().example_queries()) {
     for (auto const& [vector_name, spec] :
          example_query.output_vector_specs()) {
-      const auto& aggregations =
-          client_plan.phase().federated_example_query().aggregations();
-      if ((aggregations.find(vector_name) == aggregations.end()) ||
-          !aggregations.at(vector_name).has_tf_v1_checkpoint_aggregation()) {
+      if (aggregations.find(vector_name) == aggregations.end()) {
         return PlanResultAndCheckpointFile(engine::PlanResult(
             engine::PlanOutcome::kInvalidArgument,
             absl::InvalidArgumentError("Output vector is missing in "
-                                       "AggregationConfig, or has unsupported "
-                                       "aggregation type.")));
+                                       "AggregationConfig.")));
       }
+      protocol_config_cases.insert(
+          aggregations.at(vector_name).protocol_config_case());
     }
   }
 
+  if (protocol_config_cases.size() != 1) {
+    return PlanResultAndCheckpointFile(engine::PlanResult(
+        engine::PlanOutcome::kInvalidArgument,
+        absl::InvalidArgumentError("Output vectors have more than one "
+                                   "AggregationConfig.")));
+  }
+
+  const auto& protocol_config = *protocol_config_cases.begin();
+  bool use_client_report_wire_format;
+  if (protocol_config ==
+      AggregationConfig::ProtocolConfigCase::kTfV1CheckpointAggregation) {
+    use_client_report_wire_format =
+        flags->enable_lightweight_client_report_wire_format();
+  } else if (
+      protocol_config == AggregationConfig::ProtocolConfigCase::
+                             kFederatedComputeCheckpointAggregation &&
+      flags->support_fccheckpoint_aggregation_in_legacy_example_query_tasks()) {
+    use_client_report_wire_format = true;
+  } else {
+    return PlanResultAndCheckpointFile(engine::PlanResult(
+        engine::PlanOutcome::kInvalidArgument,
+        absl::InvalidArgumentError("Output vector has unsupported "
+                                   "AggregationConfig.")));
+  }
+
   engine::ExampleQueryPlanEngine plan_engine(example_iterator_factories,
-                                             opstats_logger, flags,
+                                             opstats_logger,
                                              example_iterator_query_recorder);
   engine::PlanResult plan_result = plan_engine.RunPlan(
-      client_plan.phase().example_query_spec(), checkpoint_output_filename);
+      client_plan.phase().example_query_spec(), checkpoint_output_filename,
+      use_client_report_wire_format);
   PlanResultAndCheckpointFile result(std::move(plan_result));
   result.checkpoint_filename = checkpoint_output_filename;
   return result;

@@ -22,7 +22,6 @@
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_iterator_query_recorder.h"
-#include "fcp/client/flags.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "tensorflow_federated/cc/core/impl/aggregation/protocol/federated_compute_checkpoint_builder.h"
 
@@ -36,21 +35,21 @@ class ExampleQueryPlanEngine {
  public:
   ExampleQueryPlanEngine(
       std::vector<ExampleIteratorFactory*> example_iterator_factories,
-      ::fcp::client::opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+      ::fcp::client::opstats::OpStatsLogger* opstats_logger,
       ExampleIteratorQueryRecorder* example_iterator_query_recorder);
 
   // Runs a plan and writes an output into a checkpoint at the given path.
   ::fcp::client::engine::PlanResult RunPlan(
       const google::internal::federated::plan::ExampleQuerySpec&
           example_query_spec,
-      const std::string& output_checkpoint_filename);
+      const std::string& output_checkpoint_filename,
+      bool use_client_report_wire_format);
 
  private:
   std::vector<ExampleIteratorFactory*> example_iterator_factories_;
   ::fcp::client::opstats::OpStatsLogger* opstats_logger_;
   tensorflow_federated::aggregation::FederatedComputeCheckpointBuilderFactory
       federated_compute_checkpoint_builder_factory_;
-  const Flags& flags_;
   ExampleIteratorQueryRecorder* example_iterator_query_recorder_;
 };
 }  // namespace engine
