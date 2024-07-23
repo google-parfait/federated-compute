@@ -239,7 +239,8 @@ message WriteRequest {
   // session.
   bool commit = 3;
   // A chunk of data for the blob being written.
-  bytes data = 4;
+  bytes data = 4
+      ;
 }
 
 // Acknowledges successful receipt of all chunks of an encrypted blob
