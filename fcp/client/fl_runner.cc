@@ -101,6 +101,7 @@ namespace client {
 using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::AggregationConfig;
 using ::google::internal::federated::plan::ClientOnlyPlan;
+using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::FederatedComputeEligibilityIORouter;
 using ::google::internal::federated::plan::FederatedComputeIORouter;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
@@ -579,6 +580,72 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
 #endif
 }
 
+// Extracts the protocol config case from the aggregations. Returns an error if
+// there are more than one protocol config cases.
+absl::StatusOr<AggregationConfig::ProtocolConfigCase> ExtractProtocolConfigCase(
+    const ::google::protobuf::Map<std::string, AggregationConfig>& aggregations) {
+  absl::flat_hash_set<AggregationConfig::ProtocolConfigCase>
+      protocol_config_cases;
+  for (const auto& [vector_name, spec] : aggregations) {
+    protocol_config_cases.insert(spec.protocol_config_case());
+  }
+  if (protocol_config_cases.size() != 1) {
+    return absl::InvalidArgumentError(
+        "Output vectors have more than one AggregationConfig.");
+  }
+  return *protocol_config_cases.begin();
+}
+
+// Validates the structured example query. Returns an error if the output
+// vector is missing in AggregationConfig or the AggregationConfig is not
+// supported.
+absl::Status ValidateStructuredExampleQuery(
+    const ExampleQuerySpec::ExampleQuery& example_query,
+    const ::google::protobuf::Map<std::string, AggregationConfig>& aggregations,
+    bool support_fccheckpoint_aggregation_in_legacy_example_query_tasks) {
+  for (auto const& [vector_name, spec] : example_query.output_vector_specs()) {
+    if (aggregations.find(vector_name) == aggregations.end()) {
+      return absl::InvalidArgumentError(
+          "Output vector is missing in AggregationConfig.");
+    }
+    const auto& protocol_config = aggregations.at(vector_name);
+    if (protocol_config.has_secure_aggregation()) {
+      return absl::InvalidArgumentError(
+          "Output vector has unsupported AggregationConfig.");
+    }
+    if (protocol_config.has_federated_compute_checkpoint_aggregation() &&
+        !support_fccheckpoint_aggregation_in_legacy_example_query_tasks) {
+      return absl::InvalidArgumentError(
+          "Output vector has unsupported AggregationConfig.");
+    }
+  }
+  return absl::OkStatus();
+}
+
+// Validates the direct example query. Returns an error if the output vector is
+// missing in AggregationConfig or the AggregationConfig is not supported.
+absl::Status ValidateDirectExampleQuery(
+    const ExampleQuerySpec::ExampleQuery& example_query,
+    const ::google::protobuf::Map<std::string, AggregationConfig>& aggregations,
+    bool enable_direct_data_upload_task) {
+  if (!enable_direct_data_upload_task) {
+    return absl::InvalidArgumentError(
+        "Direct data upload task is not enabled.");
+  }
+  if (aggregations.find(example_query.direct_output_tensor_name()) ==
+      aggregations.end()) {
+    return absl::InvalidArgumentError(
+        "Output vector is missing in AggregationConfig.");
+  }
+  const auto& protocol_config =
+      aggregations.at(example_query.direct_output_tensor_name());
+  if (!protocol_config.has_federated_compute_checkpoint_aggregation()) {
+    return absl::InvalidArgumentError(
+        "Output vector has unsupported Aggregation");
+  }
+  return absl::OkStatus();
+}
+
 PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     OpStatsLogger* opstats_logger, const Flags* flags,
@@ -598,40 +665,56 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
 
   const auto& aggregations =
       client_plan.phase().federated_example_query().aggregations();
-  absl::flat_hash_set<AggregationConfig::ProtocolConfigCase>
-      protocol_config_cases;
+  auto protocol_config = ExtractProtocolConfigCase(aggregations);
+  if (!protocol_config.ok()) {
+    return PlanResultAndCheckpointFile(engine::PlanResult(
+        engine::PlanOutcome::kInvalidArgument, protocol_config.status()));
+  }
+
+  const bool support_fccheckpoint_aggregation_in_legacy_example_query_tasks =
+      flags->support_fccheckpoint_aggregation_in_legacy_example_query_tasks();
+  const bool enable_direct_data_upload_task =
+      flags->enable_direct_data_upload_task();
   for (const auto& example_query :
        client_plan.phase().example_query_spec().example_queries()) {
-    for (auto const& [vector_name, spec] :
-         example_query.output_vector_specs()) {
-      if (aggregations.find(vector_name) == aggregations.end()) {
-        return PlanResultAndCheckpointFile(engine::PlanResult(
-            engine::PlanOutcome::kInvalidArgument,
-            absl::InvalidArgumentError("Output vector is missing in "
-                                       "AggregationConfig.")));
-      }
-      protocol_config_cases.insert(
-          aggregations.at(vector_name).protocol_config_case());
+    if (!(example_query.output_vector_specs().empty() ^
+          example_query.direct_output_tensor_name().empty())) {
+      return PlanResultAndCheckpointFile(engine::PlanResult(
+          engine::PlanOutcome::kInvalidArgument,
+          absl::InvalidArgumentError(
+              "ExampleQuerySpec must contain either output_vector_specs or "
+              "direct_output_tensor_name, but not both.")));
+    }
+    absl::Status status;
+    if (example_query.direct_output_tensor_name().empty()) {
+      // Structured example query.
+      status = ValidateStructuredExampleQuery(
+          example_query, aggregations,
+          support_fccheckpoint_aggregation_in_legacy_example_query_tasks);
+    } else {
+      // Direct example query.
+      status = ValidateDirectExampleQuery(example_query, aggregations,
+                                          enable_direct_data_upload_task);
+    }
+    if (!status.ok()) {
+      return PlanResultAndCheckpointFile(
+          engine::PlanResult(engine::PlanOutcome::kInvalidArgument, status));
     }
   }
 
-  if (protocol_config_cases.size() != 1) {
-    return PlanResultAndCheckpointFile(engine::PlanResult(
-        engine::PlanOutcome::kInvalidArgument,
-        absl::InvalidArgumentError("Output vectors have more than one "
-                                   "AggregationConfig.")));
-  }
-
-  const auto& protocol_config = *protocol_config_cases.begin();
   bool use_client_report_wire_format;
-  if (protocol_config ==
+  if (*protocol_config ==
       AggregationConfig::ProtocolConfigCase::kTfV1CheckpointAggregation) {
+    // Contrary to what the AggregationConfig name implies, the type of output
+    // checkpoint use in case of kTfV1CheckpointAggregation depends on the
+    // enable_lightweight_client_report_wire_format flag value.
     use_client_report_wire_format =
         flags->enable_lightweight_client_report_wire_format();
-  } else if (
-      protocol_config == AggregationConfig::ProtocolConfigCase::
-                             kFederatedComputeCheckpointAggregation &&
-      flags->support_fccheckpoint_aggregation_in_legacy_example_query_tasks()) {
+  } else if (*protocol_config == AggregationConfig::ProtocolConfigCase::
+                                     kFederatedComputeCheckpointAggregation) {
+    // For kFederatedComputeCheckpointAggregation, the output type is always
+    // unconditionally the client report wire format (regardless of the
+    // enable_lightweight_client_report_wire_format flag value).
     use_client_report_wire_format = true;
   } else {
     return PlanResultAndCheckpointFile(engine::PlanResult(

@@ -681,6 +681,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool,
               support_fccheckpoint_aggregation_in_legacy_example_query_tasks,
               (), (const, override));
+  MOCK_METHOD(bool, enable_direct_data_upload_task, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

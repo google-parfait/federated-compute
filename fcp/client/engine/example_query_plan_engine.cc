@@ -100,19 +100,16 @@ absl::Status CheckOutputVectorDataType(
   return absl::OkStatus();
 }
 
-// Writes example query results into a checkpoint. Example query results order
-// must be the same as example_query_spec.example_queries.
-absl::Status WriteCheckpoint(
+// Writes example query results into a checkpoint.
+absl::Status WriteTFV1Checkpoint(
     const std::string& output_checkpoint_filename,
-    const std::vector<ExampleQueryResult>& example_query_results,
-    const ExampleQuerySpec& example_query_spec) {
+    const std::vector<std::pair<ExampleQuerySpec::ExampleQuery,
+                                ExampleQueryResult>>& example_query_results) {
   tf::checkpoint::TensorSliceWriter slice_writer(
       output_checkpoint_filename,
       tf::checkpoint::CreateTableTensorSliceBuilder);
-  for (int i = 0; i < example_query_results.size(); ++i) {
-    const ExampleQueryResult& example_query_result = example_query_results[i];
-    const ExampleQuerySpec::ExampleQuery& example_query =
-        example_query_spec.example_queries()[i];
+  for (auto const& [example_query, example_query_result] :
+       example_query_results) {
     for (auto const& [vector_name, vector_tuple] :
          GetOutputVectorSpecs(example_query)) {
       std::string output_name = std::get<0>(vector_tuple);
@@ -191,14 +188,14 @@ absl::Status WriteCheckpoint(
 
 // Converts example query results to client report wire format tensors. Example
 // query results order must be the same as example_query_spec.example_queries.
-absl::Status GenerateAggregationTensors(
+absl::Status GenerateAggregationTensorsFromStructuredResults(
     CheckpointBuilder& checkpoint_builder,
-    const std::vector<ExampleQueryResult>& example_query_results,
+    const std::vector<
+        std::pair<ExampleQuerySpec::ExampleQuery, ExampleQueryResult>>&
+        structured_example_query_results,
     const ExampleQuerySpec& example_query_spec) {
-  for (int i = 0; i < example_query_results.size(); ++i) {
-    const ExampleQueryResult& example_query_result = example_query_results[i];
-    const ExampleQuerySpec::ExampleQuery& example_query =
-        example_query_spec.example_queries()[i];
+  for (auto const& [example_query, example_query_result] :
+       structured_example_query_results) {
     for (auto const& [vector_name, vector_tuple] :
          GetOutputVectorSpecs(example_query)) {
       std::string output_name = std::get<0>(vector_tuple);
@@ -268,6 +265,18 @@ absl::Status GenerateAggregationTensors(
   return absl::OkStatus();
 }
 
+// Converts direct example query results to client report wire format tensors.
+absl::Status GenerateAggregationTensorsFromDirectQueryResults(
+    CheckpointBuilder& checkpoint_builder,
+    const absl::flat_hash_map<std::string, std::vector<std::string>>&
+        raw_example_query_results) {
+  for (auto const& [vector_name, vector_value] : raw_example_query_results) {
+    FCP_ASSIGN_OR_RETURN(Tensor tensor, ConvertStringTensor(&vector_value));
+    FCP_RETURN_IF_ERROR(checkpoint_builder.Add(vector_name, tensor));
+  }
+  return absl::OkStatus();
+}
+
 }  // anonymous namespace
 
 ExampleQueryPlanEngine::ExampleQueryPlanEngine(
@@ -282,10 +291,12 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
     const ExampleQuerySpec& example_query_spec,
     const std::string& output_checkpoint_filename,
     bool use_client_report_wire_format) {
-  std::vector<ExampleQueryResult> example_query_results;
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
-
+  std::vector<std::pair<ExampleQuerySpec::ExampleQuery, ExampleQueryResult>>
+      structured_example_query_results;
+  absl::flat_hash_map<std::string, std::vector<std::string>>
+      direct_example_query_results;
   for (const auto& example_query : example_query_spec.example_queries()) {
     const ExampleSelector& selector = example_query.example_selector();
     ExampleIteratorFactory* example_iterator_factory =
@@ -308,30 +319,54 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
     }
 
     ExampleIteratorStatus example_iterator_status;
+    auto dataset_iterator_creator = [&](std::atomic<int32_t>* example_count) {
+      return std::make_unique<DatasetIterator>(
+          std::move(*example_iterator), opstats_logger_, single_query_recorder,
+          example_count, &total_example_size_bytes, &example_iterator_status,
+          selector.collection_uri(),
+          /*collect_stats=*/example_iterator_factory->ShouldCollectStats());
+    };
 
-    std::atomic<int> unused_example_count = 0;
-    auto dataset_iterator = std::make_unique<DatasetIterator>(
-        std::move(*example_iterator), opstats_logger_, single_query_recorder,
-        &unused_example_count, &total_example_size_bytes,
-        &example_iterator_status, selector.collection_uri(),
-        /*collect_stats=*/example_iterator_factory->ShouldCollectStats());
+    if (example_query.direct_output_tensor_name().empty()) {
+      // Structured example query
+      std::atomic<int> unused_example_count = 0;
+      auto dataset_iterator = dataset_iterator_creator(&unused_example_count);
 
-    absl::StatusOr<std::string> example_query_result_str =
-        dataset_iterator->GetNext();
-    if (!example_query_result_str.ok()) {
-      return PlanResult(PlanOutcome::kExampleIteratorError,
-                        example_query_result_str.status());
+      absl::StatusOr<std::string> example_query_result_str =
+          dataset_iterator->GetNext();
+      if (!example_query_result_str.ok()) {
+        return PlanResult(PlanOutcome::kExampleIteratorError,
+                          example_query_result_str.status());
+      }
+
+      ExampleQueryResult example_query_result;
+      if (!example_query_result.ParseFromString(*example_query_result_str)) {
+        return PlanResult(
+            PlanOutcome::kExampleIteratorError,
+            absl::DataLossError("Unexpected example query result format"));
+      }
+      total_example_count +=
+          example_query_result.stats().example_count_for_logs();
+      structured_example_query_results.push_back(
+          std::make_pair(example_query, std::move(example_query_result)));
+    } else {
+      // Direct example query
+      auto dataset_iterator = dataset_iterator_creator(&total_example_count);
+      std::vector<std::string> example_query_results;
+      while (true) {
+        absl::StatusOr<std::string> example = dataset_iterator->GetNext();
+        if (example.status().code() == absl::StatusCode::kOutOfRange) {
+          break;
+        }
+        if (!example.ok()) {
+          return PlanResult(PlanOutcome::kExampleIteratorError,
+                            example.status());
+        }
+        example_query_results.push_back(std::move(*example));
+      }
+      direct_example_query_results[example_query.direct_output_tensor_name()] =
+          std::move(example_query_results);
     }
-
-    ExampleQueryResult example_query_result;
-    if (!example_query_result.ParseFromString(*example_query_result_str)) {
-      return PlanResult(
-          PlanOutcome::kExampleIteratorError,
-          absl::DataLossError("Unexpected example query result format"));
-    }
-    total_example_count +=
-        example_query_result.stats().example_count_for_logs();
-    example_query_results.push_back(std::move(example_query_result));
   }
 
   PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
@@ -339,8 +374,16 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
   if (use_client_report_wire_format) {
     auto checkpoint_builder =
         federated_compute_checkpoint_builder_factory_.Create();
-    status = GenerateAggregationTensors(
-        *checkpoint_builder, example_query_results, example_query_spec);
+    // First add all the tensors from the structured example query results.
+    status = GenerateAggregationTensorsFromStructuredResults(
+        *checkpoint_builder, structured_example_query_results,
+        example_query_spec);
+    if (!status.ok()) {
+      return PlanResult(PlanOutcome::kExampleIteratorError, status);
+    }
+    // Add all the tensors from the direct example queries.
+    status = GenerateAggregationTensorsFromDirectQueryResults(
+        *checkpoint_builder, direct_example_query_results);
     if (status.ok()) {
       auto checkpoint = checkpoint_builder->Build();
       if (checkpoint.ok()) {
@@ -350,8 +393,12 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
       }
     }
   } else {
-    status = WriteCheckpoint(output_checkpoint_filename, example_query_results,
-                             example_query_spec);
+    // Direct example query results don't support TF v1 checkpoint format. If
+    // the direct example query results are not empty, there's a developer error
+    // somewhere.
+    FCP_CHECK(direct_example_query_results.empty());
+    status = WriteTFV1Checkpoint(output_checkpoint_filename,
+                                 structured_example_query_results);
   }
   if (!status.ok()) {
     return PlanResult(PlanOutcome::kExampleIteratorError, status);

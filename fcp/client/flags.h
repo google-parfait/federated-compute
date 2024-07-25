@@ -212,6 +212,9 @@ class Flags {
       const {
     return false;
   }
+
+  // If true, direct data upload tasks are supported.
+  virtual bool enable_direct_data_upload_task() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

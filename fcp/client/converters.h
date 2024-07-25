@@ -19,6 +19,7 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
@@ -63,6 +64,10 @@ absl::StatusOr<tensorflow_federated::aggregation::Tensor> ConvertNumericTensor(
 absl::StatusOr<tensorflow_federated::aggregation::Tensor> ConvertStringTensor(
     tensorflow_federated::aggregation::TensorShape tensor_shape,
     const ::google::protobuf::RepeatedPtrField<std::string>& value);
+
+// Converts a vector of string to Aggregation Tensor.
+absl::StatusOr<tensorflow_federated::aggregation::Tensor> ConvertStringTensor(
+    const std::vector<std::string>* value);
 }  // namespace fcp::client
 
 #endif  // FCP_CLIENT_CONVERTERS_H_

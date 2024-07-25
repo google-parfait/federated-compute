@@ -15,6 +15,7 @@
 #include "fcp/client/converters.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -60,6 +61,29 @@ StatusOr<Tensor> ConvertStringTensor(
   return Tensor::Create(tensorflow_federated::aggregation::DT_STRING,
                         tensor_shape,
                         std::make_unique<StringTensorDataAdapter>(value));
+}
+
+// Similar to StringTensorDataAdapter but stores the original value in a vector.
+class StringVectorTensorDataAdapter : public TensorData {
+ public:
+  explicit StringVectorTensorDataAdapter(const std::vector<std::string>* value)
+      : string_views_(value->begin(), value->end()) {}
+
+  size_t byte_size() const override {
+    return string_views_.size() * sizeof(string_view);
+  }
+  const void* data() const override { return string_views_.data(); }
+
+ private:
+  std::vector<string_view> string_views_;
+};
+
+StatusOr<Tensor> ConvertStringTensor(const std::vector<std::string>* value) {
+  int64_t size = value->size();
+  TensorShape tensor_shape({size});
+  return Tensor::Create(tensorflow_federated::aggregation::DT_STRING,
+                        tensor_shape,
+                        std::make_unique<StringVectorTensorDataAdapter>(value));
 }
 
 }  // namespace fcp::client

@@ -46,6 +46,7 @@
 #include "tensorflow/c/checkpoint_reader.h"
 #include "tensorflow/c/tf_status.h"
 #include "tensorflow/c/tf_status_helper.h"
+#include "tensorflow/core/example/example.pb.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.pb.h"
@@ -72,6 +73,7 @@ using ::google::internal::federated::plan::ExampleSelector;
 using tensorflow_federated::aggregation::Tensor;
 using tensorflow_federated::aggregation::TensorShape;
 using ::testing::StrictMock;
+using ::testing::UnorderedElementsAreArray;
 
 const char* const kCollectionUri = "app:/test_collection";
 const char* const kOutputStringVectorName = "vector1";
@@ -185,6 +187,56 @@ absl::StatusOr<absl::flat_hash_map<std::string, tf::Tensor>> ReadTensors(
   }
 
   return tensors;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+ReadFCCheckpointTensors(absl::string_view checkpoint) {
+  google::protobuf::io::ArrayInputStream input(checkpoint.data(),
+                                     static_cast<int>(checkpoint.size()));
+  google::protobuf::io::CodedInputStream stream(&input);
+
+  std::string header;
+  if (!stream.ReadString(&header, 4)) {
+    return absl::InvalidArgumentError("Failed to read header");
+  }
+  if (header !=
+      tensorflow_federated::aggregation::kFederatedComputeCheckpointHeader) {
+    return absl::InvalidArgumentError("Invalid header");
+  }
+
+  absl::flat_hash_map<std::string, std::string> tensors;
+  while (true) {
+    uint32_t name_size;
+    if (!stream.ReadVarint32(&name_size)) {
+      return absl::InvalidArgumentError("Failed to read name size");
+    }
+    if (name_size == 0) {
+      break;
+    }
+    std::string name;
+    if (!stream.ReadString(&name, name_size)) {
+      return absl::InvalidArgumentError("Failed to read name");
+    }
+    uint32_t tensor_size;
+    if (!stream.ReadVarint32(&tensor_size)) {
+      return absl::InvalidArgumentError("Failed to read tensor size");
+    }
+    std::string tensor;
+    if (!stream.ReadString(&tensor, tensor_size)) {
+      return absl::InvalidArgumentError("Failed to read tensor");
+    }
+    tensors[name] = tensor;
+  }
+  return tensors;
+}
+
+ExampleQuerySpec::ExampleQuery CreateDirectDataUploadExampleQuery(
+    absl::string_view tensor_name, absl::string_view collection_uri) {
+  ExampleQuerySpec::ExampleQuery query;
+  query.set_direct_output_tensor_name(std::string(tensor_name));
+  query.mutable_example_selector()->set_collection_uri(
+      std::string(collection_uri));
+  return query;
 }
 
 class ExampleQueryPlanEngineTest : public testing::Test {
@@ -579,14 +631,9 @@ TEST_F(ExampleQueryPlanEngineTest,
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
   absl::string_view str = result.federated_compute_checkpoint.Flatten();
-  google::protobuf::io::ArrayInputStream input(str.data(), static_cast<int>(str.size()));
-  google::protobuf::io::CodedInputStream stream(&input);
-
-  std::string header;
-  ASSERT_TRUE(stream.ReadString(&header, 4));
-  ASSERT_EQ(
-      header,
-      tensorflow_federated::aggregation::kFederatedComputeCheckpointHeader);
+  absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
+      ReadFCCheckpointTensors(str);
+  ASSERT_OK(tensors);
 
   absl::StatusOr<Tensor> int_tensor = Tensor::Create(
       tensorflow_federated::aggregation::DT_INT64, TensorShape({2}),
@@ -597,36 +644,290 @@ TEST_F(ExampleQueryPlanEngineTest,
       tensorflow_federated::aggregation::CreateTestData<absl::string_view>(
           {"value1", "value2"}));
   ASSERT_OK(string_tensor.status());
+  absl::flat_hash_map<std::string, std::string> expected_tensors = {
+      {kOutputIntTensorName, int_tensor->ToProto().SerializeAsString()},
+      {kOutputStringTensorName, string_tensor->ToProto().SerializeAsString()}};
 
-  uint32_t name_size1;
-  ASSERT_TRUE(stream.ReadVarint32(&name_size1));
-  std::string name1;
-  ASSERT_TRUE(stream.ReadString(&name1, name_size1));
+  ASSERT_THAT(*tensors, UnorderedElementsAreArray(expected_tensors));
+}
 
-  tensorflow_federated::aggregation::Tensor& t1 =
-      name1 == kOutputIntTensorName ? *int_tensor : *string_tensor;
-  uint32_t tensor_size1;
-  ASSERT_TRUE(stream.ReadVarint32(&tensor_size1));
-  std::string tensor1;
-  ASSERT_TRUE(stream.ReadString(&tensor1, tensor_size1));
-  ASSERT_EQ(tensor1, t1.ToProto().SerializeAsString());
+TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
+  const std::string kTensorName = "data";
+  client_only_plan_.mutable_phase()
+      ->mutable_example_query_spec()
+      ->mutable_example_queries()
+      ->Add(CreateDirectDataUploadExampleQuery(kTensorName, kCollectionUri));
 
-  uint32_t name_size2;
-  ASSERT_TRUE(stream.ReadVarint32(&name_size2));
-  std::string name2;
-  ASSERT_TRUE(stream.ReadString(&name2, name_size2));
+  auto* aggregations = client_only_plan_.mutable_phase()
+                           ->mutable_federated_example_query()
+                           ->mutable_aggregations();
+  AggregationConfig aggregation_config;
+  aggregation_config.mutable_federated_compute_checkpoint_aggregation();
+  (*aggregations)[kTensorName] = aggregation_config;
 
-  tensorflow_federated::aggregation::Tensor& t2 =
-      name2 == kOutputIntTensorName ? *int_tensor : *string_tensor;
-  uint32_t tensor_size2;
-  ASSERT_TRUE(stream.ReadVarint32(&tensor_size2));
-  std::string tensor2;
-  ASSERT_TRUE(stream.ReadString(&tensor2, tensor_size2));
-  ASSERT_EQ(tensor2, t2.ToProto().SerializeAsString());
+  tensorflow::Example example_1;
+  (*example_1.mutable_features()->mutable_feature())["col1"]
+      .mutable_int64_list()
+      ->add_value(1);
+  tensorflow::Example example_2;
+  (*example_2.mutable_features()->mutable_feature())["col1"]
+      .mutable_int64_list()
+      ->add_value(2);
+  std::string example_1_str = example_1.SerializeAsString();
+  std::string example_2_str = example_2.SerializeAsString();
 
-  uint32_t zero;
-  ASSERT_TRUE(stream.ReadVarint32(&zero));
-  ASSERT_EQ(zero, 0);
+  Dataset::ClientDataset client_dataset;
+  client_dataset.set_client_id("client_id");
+  client_dataset.add_example(example_1_str);
+  client_dataset.add_example(example_2_str);
+  dataset_.mutable_client_data()->Add(std::move(client_dataset));
+
+  num_examples_ = 2;
+  example_bytes_ = example_1.ByteSizeLong() + example_2.ByteSizeLong();
+
+  example_iterator_factory_ =
+      std::make_unique<FunctionalExampleIteratorFactory>(
+          [&dataset = dataset_](
+              const google::internal::federated::plan::ExampleSelector&
+                  selector) {
+            return std::make_unique<SimpleExampleIterator>(dataset);
+          });
+
+  EXPECT_CALL(
+      mock_opstats_logger_,
+      UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
+
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_,
+      /*example_iterator_query_recorder=*/nullptr);
+  engine::PlanResult result = plan_engine.RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+
+  absl::string_view str = result.federated_compute_checkpoint.Flatten();
+  absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
+      ReadFCCheckpointTensors(str);
+  ASSERT_OK(tensors);
+
+  absl::StatusOr<Tensor> string_tensor = Tensor::Create(
+      tensorflow_federated::aggregation::DT_STRING, TensorShape({2}),
+      tensorflow_federated::aggregation::CreateTestData<absl::string_view>(
+          {example_1_str, example_2_str}));
+  ASSERT_OK(string_tensor.status());
+  absl::flat_hash_map<std::string, std::string> expected_tensors = {
+      {kTensorName, string_tensor->ToProto().SerializeAsString()}};
+
+  ASSERT_THAT(*tensors, UnorderedElementsAreArray(expected_tensors));
+}
+
+TEST_F(ExampleQueryPlanEngineTest, TwoQueryDirectDataUploadTaskSucceeds) {
+  const std::string kTensorName1 = "data_1";
+  const std::string kTensorName2 = "data_2";
+  const std::string kCollectionUri2 = "app:/collection_uri_2";
+  auto* example_queries = client_only_plan_.mutable_phase()
+                              ->mutable_example_query_spec()
+                              ->mutable_example_queries();
+  example_queries->Add(
+      CreateDirectDataUploadExampleQuery(kTensorName1, kCollectionUri));
+  example_queries->Add(
+      CreateDirectDataUploadExampleQuery(kTensorName2, kCollectionUri2));
+
+  auto* aggregations = client_only_plan_.mutable_phase()
+                           ->mutable_federated_example_query()
+                           ->mutable_aggregations();
+  AggregationConfig aggregation_config;
+  aggregation_config.mutable_federated_compute_checkpoint_aggregation();
+  (*aggregations)[kTensorName1] = aggregation_config;
+  (*aggregations)[kTensorName2] = aggregation_config;
+
+  tensorflow::Example example_1;
+  (*example_1.mutable_features()->mutable_feature())["col1"]
+      .mutable_int64_list()
+      ->add_value(1);
+  tensorflow::Example example_2;
+  (*example_2.mutable_features()->mutable_feature())["col1"]
+      .mutable_int64_list()
+      ->add_value(2);
+  tensorflow::Example example_3;
+  (*example_3.mutable_features()->mutable_feature())["col1"]
+      .mutable_int64_list()
+      ->add_value(3);
+  tensorflow::Example example_4;
+  (*example_4.mutable_features()->mutable_feature())["col1"]
+      .mutable_int64_list()
+      ->add_value(4);
+  std::string example_1_str = example_1.SerializeAsString();
+  std::string example_2_str = example_2.SerializeAsString();
+  std::string example_3_str = example_3.SerializeAsString();
+  std::string example_4_str = example_4.SerializeAsString();
+
+  Dataset::ClientDataset client_dataset;
+  client_dataset.set_client_id("client_id_1");
+  client_dataset.add_example(example_1_str);
+  client_dataset.add_example(example_2_str);
+  dataset_.mutable_client_data()->Add(std::move(client_dataset));
+
+  Dataset second_dataset;
+  Dataset::ClientDataset second_client_dataset;
+  second_client_dataset.set_client_id("client_id_2");
+  second_client_dataset.add_example(example_3_str);
+  second_client_dataset.add_example(example_4_str);
+  second_dataset.mutable_client_data()->Add(std::move(second_client_dataset));
+
+  example_iterator_factory_ = std::make_unique<TwoExampleIteratorsFactory>(
+      [&dataset = dataset_](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      [&dataset = second_dataset](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      kCollectionUri, kCollectionUri2);
+
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_,
+      /*example_iterator_query_recorder=*/nullptr);
+  engine::PlanResult result = plan_engine.RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+
+  absl::string_view str = result.federated_compute_checkpoint.Flatten();
+  absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
+      ReadFCCheckpointTensors(str);
+  ASSERT_OK(tensors);
+
+  absl::StatusOr<Tensor> string_tensor = Tensor::Create(
+      tensorflow_federated::aggregation::DT_STRING, TensorShape({2}),
+      tensorflow_federated::aggregation::CreateTestData<absl::string_view>(
+          {example_1_str, example_2_str}));
+  ASSERT_OK(string_tensor.status());
+  absl::StatusOr<Tensor> second_string_tensor = Tensor::Create(
+      tensorflow_federated::aggregation::DT_STRING, TensorShape({2}),
+      tensorflow_federated::aggregation::CreateTestData<absl::string_view>(
+          {example_3_str, example_4_str}));
+  ASSERT_OK(second_string_tensor.status());
+  absl::flat_hash_map<std::string, std::string> expected_tensors = {
+      {kTensorName1, string_tensor->ToProto().SerializeAsString()},
+      {kTensorName2, second_string_tensor->ToProto().SerializeAsString()}};
+
+  ASSERT_THAT(*tensors, UnorderedElementsAreArray(expected_tensors));
+}
+
+TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
+  const std::string kTensorName1 = "data_1";
+  const std::string kTensorName2 = "data_2";
+  const std::string kTensorName3 = "data_3";
+  const std::string kCollectionUri2 = "app:/collection_uri_2";
+  auto* example_queries = client_only_plan_.mutable_phase()
+                              ->mutable_example_query_spec()
+                              ->mutable_example_queries();
+  example_queries->Add(
+      CreateDirectDataUploadExampleQuery(kTensorName1, kCollectionUri));
+  ExampleQuerySpec::ExampleQuery sql_example_query;
+  sql_example_query.mutable_example_selector()->set_collection_uri(
+      kCollectionUri2);
+  ExampleQuerySpec::OutputVectorSpec output_vector_spec_1;
+  output_vector_spec_1.set_vector_name("vector_1");
+  output_vector_spec_1.set_data_type(ExampleQuerySpec::OutputVectorSpec::INT64);
+  ExampleQuerySpec::OutputVectorSpec output_vector_spec_2;
+  output_vector_spec_2.set_vector_name("vector_2");
+  output_vector_spec_2.set_data_type(
+      ExampleQuerySpec::OutputVectorSpec::STRING);
+  (*sql_example_query.mutable_output_vector_specs())[kTensorName2] =
+      output_vector_spec_1;
+  (*sql_example_query.mutable_output_vector_specs())[kTensorName3] =
+      output_vector_spec_2;
+  example_queries->Add(std::move(sql_example_query));
+
+  auto* aggregations = client_only_plan_.mutable_phase()
+                           ->mutable_federated_example_query()
+                           ->mutable_aggregations();
+  AggregationConfig fc_checkpoint_aggregation_config;
+  fc_checkpoint_aggregation_config
+      .mutable_federated_compute_checkpoint_aggregation();
+  AggregationConfig tf_v1_checkpoint_aggregation_config;
+  tf_v1_checkpoint_aggregation_config.mutable_tf_v1_checkpoint_aggregation();
+  (*aggregations)[kTensorName1] = fc_checkpoint_aggregation_config;
+  (*aggregations)[kTensorName2] = tf_v1_checkpoint_aggregation_config;
+  (*aggregations)[kTensorName3] = tf_v1_checkpoint_aggregation_config;
+
+  tensorflow::Example example_1;
+  (*example_1.mutable_features()->mutable_feature())["col1"]
+      .mutable_int64_list()
+      ->add_value(1);
+  tensorflow::Example example_2;
+  (*example_2.mutable_features()->mutable_feature())["col1"]
+      .mutable_int64_list()
+      ->add_value(2);
+  std::string example_1_str = example_1.SerializeAsString();
+  std::string example_2_str = example_2.SerializeAsString();
+
+  Dataset::ClientDataset client_dataset;
+  client_dataset.set_client_id("client_id_1");
+  client_dataset.add_example(example_1_str);
+  client_dataset.add_example(example_2_str);
+  dataset_.mutable_client_data()->Add(std::move(client_dataset));
+
+  ExampleQueryResult sql_query_result;
+  auto* vector = sql_query_result.mutable_vector_data()->mutable_vectors();
+  (*vector)["vector_1"].mutable_int64_values()->add_value(1);
+  (*vector)["vector_2"].mutable_string_values()->add_value("string_value1");
+
+  Dataset second_dataset;
+  Dataset::ClientDataset second_client_dataset;
+  second_client_dataset.set_client_id("client_id_2");
+  second_client_dataset.add_example(sql_query_result.SerializeAsString());
+  second_dataset.mutable_client_data()->Add(std::move(second_client_dataset));
+
+  example_iterator_factory_ = std::make_unique<TwoExampleIteratorsFactory>(
+      [&dataset = dataset_](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      [&dataset = second_dataset](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      kCollectionUri, kCollectionUri2);
+
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_,
+      /*example_iterator_query_recorder=*/nullptr);
+  engine::PlanResult result = plan_engine.RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+
+  absl::string_view str = result.federated_compute_checkpoint.Flatten();
+  absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
+      ReadFCCheckpointTensors(str);
+  ASSERT_OK(tensors);
+
+  absl::StatusOr<Tensor> first_tensor = Tensor::Create(
+      tensorflow_federated::aggregation::DT_STRING, TensorShape({2}),
+      tensorflow_federated::aggregation::CreateTestData<absl::string_view>(
+          {example_1_str, example_2_str}));
+  ASSERT_OK(first_tensor.status());
+  absl::StatusOr<Tensor> second_tensor = Tensor::Create(
+      tensorflow_federated::aggregation::DT_INT64, TensorShape({1}),
+      tensorflow_federated::aggregation::CreateTestData<int64_t>({1}));
+  ASSERT_OK(second_tensor.status());
+  absl::StatusOr<Tensor> third_tensor = Tensor::Create(
+      tensorflow_federated::aggregation::DT_STRING, TensorShape({1}),
+      tensorflow_federated::aggregation::CreateTestData<absl::string_view>(
+          {"string_value1"}));
+  absl::flat_hash_map<std::string, std::string> expected_tensors = {
+      {kTensorName1, first_tensor->ToProto().SerializeAsString()},
+      {kTensorName2, second_tensor->ToProto().SerializeAsString()},
+      {kTensorName3, third_tensor->ToProto().SerializeAsString()}};
+
+  ASSERT_THAT(*tensors, UnorderedElementsAreArray(expected_tensors));
 }
 
 }  // anonymous namespace

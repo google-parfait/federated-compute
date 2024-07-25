@@ -14,6 +14,9 @@
 
 #include "fcp/client/converters.h"
 
+#include <string>
+#include <vector>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/strings/string_view.h"
@@ -49,6 +52,14 @@ TEST(ConvertersTest, ConvertStringTensor_Success) {
                            string_values.string_values().value()),
       tensorflow_federated::aggregation::IsTensor<absl::string_view>(
           {2}, {"string_value1", "string_value2"}));
+}
+
+TEST(ConvertersTest, ConvertStringTensorFromVector_Success) {
+  const std::vector<std::string> string_values = {"string_value1",
+                                                  "string_value2"};
+  EXPECT_THAT(*ConvertStringTensor(&string_values),
+              tensorflow_federated::aggregation::IsTensor<absl::string_view>(
+                  {2}, {"string_value1", "string_value2"}));
 }
 }  // namespace
 }  // namespace fcp::client
