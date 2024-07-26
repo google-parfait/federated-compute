@@ -22,6 +22,18 @@ import "tensorflow_federated/cc/core/impl/aggregation/protocol/configuration.pro
 // for the lifetime of the TEE and includes the privacy-relevant properties.
 message FedSqlContainerInitializeConfiguration {
   tensorflow_federated.aggregation.Configuration agg_configuration = 1;
+
+  // The numerical identifier for the result of serializing the FedSQL session.
+  // This field is only used by trusted services. If this field is empty then
+  // the trusted FedSQL service will not encrypt its outputs that are created
+  // with FINALIZATION_TYPE_SERIALIZE.
+  uint32 serialize_output_access_policy_node_id = 2;
+
+  // The numerical identifier for the reported result of the FedSQL session.
+  // This field is only used by trusted services. If this field is empty then
+  // the trusted FedSQL service will not encrypt its outputs that are created
+  // with FINALIZATION_TYPE_REPORT.
+  uint32 report_output_access_policy_node_id = 3;
 }
 
 enum AggCoreAggregationType {
