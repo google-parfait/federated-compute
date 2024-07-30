@@ -72,6 +72,10 @@ service ConfidentialTransform {
 message InitializeRequest {
   // Implementation-specific configuration to be passed to the TEE.
   google.protobuf.Any configuration = 1;
+
+  // The maximum number of sessions the trusted application can have open at
+  // once.
+  uint32 max_num_sessions = 2;
 }
 
 // Message indicating that the TEE was successfully initialized
