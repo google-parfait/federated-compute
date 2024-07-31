@@ -208,3 +208,18 @@ cc_proto_library(
     name = "fed_sql_container_config_cc_proto",
     deps = [":fed_sql_container_config_proto"],
 )
+
+proto_library(
+    name = "file_info_proto",
+    srcs = ["file_info.proto"],
+)
+
+py_proto_library(
+    name = "file_info_py_pb2",
+    deps = [":file_info_proto"],
+)
+
+cc_proto_library(
+    name = "file_info_cc_proto",
+    deps = [":file_info_proto"],
+)

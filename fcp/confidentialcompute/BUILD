@@ -113,3 +113,37 @@ cc_test(
         "@com_google_protobuf//:protobuf",
     ],
 )
+
+cc_library(
+    name = "data_helper",
+    srcs = ["data_helper.cc"],
+    hdrs = ["data_helper.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//fcp/base",
+        "//fcp/protos/confidentialcompute:file_info_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:cardinalities",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:computation_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "data_helper_test",
+    srcs = ["data_helper_test.cc"],
+    deps = [
+        ":data_helper",
+        "//fcp/protos/confidentialcompute:file_info_cc_proto",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:array_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:computation_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)
