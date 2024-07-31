@@ -317,3 +317,26 @@ py_test(
         "@pypi_tensorflow//:pkg",
     ],
 )
+
+py_library(
+    name = "data_upload_plan_builder",
+    srcs = ["data_upload_plan_builder.py"],
+    srcs_version = "PY3",
+    visibility = default_visibility + [
+    ],
+    deps = [
+        "//fcp/protos:plan_py_pb2",
+    ],
+)
+
+py_test(
+    name = "data_upload_plan_builder_test",
+    srcs = ["data_upload_plan_builder_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":data_upload_plan_builder",
+        "//fcp/protos:plan_py_pb2",
+        "@pypi_absl_py//:pkg",
+    ],
+)
