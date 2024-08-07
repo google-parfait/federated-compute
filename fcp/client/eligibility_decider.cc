@@ -64,7 +64,6 @@ using ::google::internal::federatedml::v2::TaskWeight;
 
 namespace {
 
-const int32_t kDataAvailabilityImplementationVersion = 1;
 const int32_t kDataAvailabilityImplementationVersionWithExampleQueryResult = 2;
 const int32_t kSworImplementationVersion = 1;
 const int32_t kTfCustomPolicyImplementationVersion = 1;
@@ -213,7 +212,6 @@ absl::StatusOr<bool> ComputeDataAvailabilityEligibility(
             ComputeSHA256(selector.criteria().SerializeAsString()));
   }
   bool use_example_query_result_format =
-      flags.use_example_query_result_for_data_avail() &&
       data_availability_policy.use_example_query_result_format();
   if (use_example_query_result_format) {
     selector_context.mutable_computation_properties()
@@ -435,16 +433,9 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
 
     switch (policy_spec.policy_type_case()) {
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kDataAvailabilityPolicy:
-        if (flags->use_example_query_result_for_data_avail()) {
-          if (kDataAvailabilityImplementationVersionWithExampleQueryResult <
-              policy_spec.min_version()) {
-            policy_implemented = false;
-          }
-        } else {
-          if (kDataAvailabilityImplementationVersion <
-              policy_spec.min_version()) {
-            policy_implemented = false;
-          }
+        if (kDataAvailabilityImplementationVersionWithExampleQueryResult <
+            policy_spec.min_version()) {
+          policy_implemented = false;
         }
         break;
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kSworPolicy:

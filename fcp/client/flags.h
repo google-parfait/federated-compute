@@ -195,10 +195,6 @@ class Flags {
     return false;
   }
 
-  // If true, the data availability policy will use ExampleQueryResult to
-  // determine a number of returned examples.
-  virtual bool use_example_query_result_for_data_avail() const { return false; }
-
   // If true, federated compute tasks using confidential aggregation will set
   // the correct aggregation type in the selector context.
   virtual bool confidential_agg_in_selector_context() const { return false; }
