@@ -229,7 +229,7 @@ absl::StatusOr<bool> ComputeDataAvailabilityEligibility(
     if (!example_query_result.ParseFromString(result)) {
       return absl::InvalidArgumentError("Failed to parse ExampleQueryResult");
     }
-    return example_query_result.stats().example_count_for_logs() >=
+    return example_query_result.stats().output_rows_count() >=
            min_example_count;
   } else {
     int examples_returned = 0;

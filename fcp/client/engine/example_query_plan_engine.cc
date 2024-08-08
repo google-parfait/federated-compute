@@ -345,8 +345,12 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
             PlanOutcome::kExampleIteratorError,
             absl::DataLossError("Unexpected example query result format"));
       }
-      total_example_count +=
-          example_query_result.stats().example_count_for_logs();
+      // We currently use the number of example query output rows as the
+      // 'example count' for the purpose of diagnostic logs. We may want to
+      // reconsider this in the future and introduce a proper notion of the
+      // total number of examples that were consumed in the example iterator in
+      // order to produce those output rows.
+      total_example_count += example_query_result.stats().output_rows_count();
       structured_example_query_results.push_back(
           std::make_pair(example_query, std::move(example_query_result)));
     } else {

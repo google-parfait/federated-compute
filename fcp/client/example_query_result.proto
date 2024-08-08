@@ -72,12 +72,12 @@ message ExampleQueryResult {
   VectorData vector_data = 1;
 
   message ExampleQueryStats {
-    // The number of 'examples' that should be considered to have been processed
-    // in order to produce this single query result, for logging purposes. This
-    // is the number that might end up being passed to PhaseLogger as the
-    // ExampleStats::example_count field, for example. This field isn't used for
-    // any other purpose, and hence may also be omitted.
-    int32 example_count_for_logs = 1;
+    // The total number of "logical" output rows produced by the query, which
+    // cannot otherwise be deduced from the produced vector data itself. This
+    // can be used both for logging purposes and to compare against a minimum
+    // number of outputs rows that must be produced by the query in order for
+    // the device to be eligible.
+    int32 output_rows_count = 1;
   }
 
   // Statistic data for an example query
