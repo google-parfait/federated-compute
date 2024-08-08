@@ -199,18 +199,16 @@ absl::StatusOr<bool> ComputeDataAvailabilityEligibility(
                      selector.collection_uri()));
   }
   SelectorContext selector_context = iterator_factory->GetSelectorContext();
-  if (flags.enable_lightweight_computation_id()) {
-    // We calculate the computation id here as a hash of the selection criteria.
-    // Notice that it differs from the logic behind computing ids for regular
-    // tasks, where id represents either the hash of all criteria combined (for
-    // `ExampleQuerySpec` tasks), or the hash of the plan proto (for
-    // `TensorFlowSpec` tasks). Each data availability policy is logically a
-    // separate task thus having a separate identifier.
-    selector_context.mutable_computation_properties()
-        ->mutable_eligibility_eval()
-        ->set_computation_id(
-            ComputeSHA256(selector.criteria().SerializeAsString()));
-  }
+  // We calculate the computation id here as a hash of the selection criteria.
+  // Notice that it differs from the logic behind computing ids for regular
+  // tasks, where id represents either the hash of all criteria combined (for
+  // `ExampleQuerySpec` tasks), or the hash of the plan proto (for
+  // `TensorFlowSpec` tasks). Each data availability policy is logically a
+  // separate task thus having a separate identifier.
+  selector_context.mutable_computation_properties()
+      ->mutable_eligibility_eval()
+      ->set_computation_id(
+          ComputeSHA256(selector.criteria().SerializeAsString()));
   bool use_example_query_result_format =
       data_availability_policy.use_example_query_result_format();
   if (use_example_query_result_format) {

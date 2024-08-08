@@ -184,10 +184,6 @@ class Flags {
   // If true, confidential aggregation is advertised & can be used for uploads.
   virtual bool enable_confidential_aggregation() const { return false; }
 
-  // If true, the client will generate a computation id for example query tasks
-  // and native data availability policies based on a SQL selection criteria.
-  virtual bool enable_lightweight_computation_id() const { return false; }
-
   // If true, the minimum separation policy will first check if the OpStatsDb's
   // earliest trustworthy time is earlier than the required minimum
   // trustworthiness period.

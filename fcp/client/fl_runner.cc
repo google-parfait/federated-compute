@@ -1323,17 +1323,15 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
   // This approach is preferred over calculating ids for each query separately
   // as the computation id represents the identity of the whole task.
   std::string computation_id;
-  if (flags->enable_lightweight_computation_id()) {
-    if (plan.phase().has_example_query_spec()) {
-      std::string merged_criteria;
-      for (const auto& example_query :
-           plan.phase().example_query_spec().example_queries()) {
-        absl::StrAppend(
-            &merged_criteria,
-            example_query.example_selector().criteria().SerializeAsString());
-      }
-      computation_id = ComputeSHA256(merged_criteria);
+  if (plan.phase().has_example_query_spec()) {
+    std::string merged_criteria;
+    for (const auto& example_query :
+         plan.phase().example_query_spec().example_queries()) {
+      absl::StrAppend(
+          &merged_criteria,
+          example_query.example_selector().criteria().SerializeAsString());
     }
+    computation_id = ComputeSHA256(merged_criteria);
   } else if (flags->enable_computation_id()) {
     if (std::holds_alternative<std::string>(plan_bytes)) {
       computation_id = ComputeSHA256(std::get<std::string>(plan_bytes));
@@ -1560,12 +1558,9 @@ SelectorContext FillSelectorContextWithTaskLevelDetails(
   federated_selector_context_with_task_name.mutable_computation_properties()
       ->mutable_federated()
       ->set_task_name(checkin_result->task_name);
-  if (flags->enable_computation_id() ||
-      flags->enable_lightweight_computation_id()) {
-    federated_selector_context_with_task_name.mutable_computation_properties()
-        ->mutable_federated()
-        ->set_computation_id(checkin_result->computation_id);
-  }
+  federated_selector_context_with_task_name.mutable_computation_properties()
+      ->mutable_federated()
+      ->set_computation_id(checkin_result->computation_id);
   if (checkin_result->plan.phase().has_example_query_spec()) {
     federated_selector_context_with_task_name.mutable_computation_properties()
         ->set_example_iterator_output_format(
