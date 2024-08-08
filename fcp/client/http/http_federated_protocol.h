@@ -350,6 +350,12 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
           task_assignment,
       ObjectState state);
 
+  absl::Status GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+      std::string most_recent_forwarding_prefix,
+      ::google::internal::federatedcompute::v1::ForwardingInfo*
+          next_target_uri_inf,
+      bool should_update);
+
   // This ObjectState tracks states until the end of check-in or multiple task
   // assignments.  Once a task is assigned, the state is tracked inside the
   // task_info_map_ for multiple task assignments or default_task_info_ for
@@ -380,6 +386,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // A measurement with which the client's integrity can be attested to the
   // server.
   const std::string client_attestation_measurement_;
+  std::string most_recent_forwarding_prefix_;
   std::function<bool()> should_abort_;
   absl::BitGen bit_gen_;
   const InterruptibleRunner::TimingConfig timing_config_;

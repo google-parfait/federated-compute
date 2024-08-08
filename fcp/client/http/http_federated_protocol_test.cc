@@ -345,6 +345,7 @@ EligibilityEvalTaskRequest GetExpectedEligibilityEvalTaskRequest(
 EligibilityEvalTaskResponse GetFakeEnabledEligibilityEvalTaskResponse(
     const Resource& plan, const Resource& checkpoint,
     const std::string& execution_id,
+    const std::string& target_uri_prefix = kTaskAssignmentTargetUri,
     std::optional<Resource> population_eligibility_spec = std::nullopt,
     const RetryWindow& accepted_retry_window = GetAcceptedRetryWindow(),
     const RetryWindow& rejected_retry_window = GetRejectedRetryWindow()) {
@@ -360,7 +361,7 @@ EligibilityEvalTaskResponse GetFakeEnabledEligibilityEvalTaskResponse(
   eval_task->set_execution_id(execution_id);
   ForwardingInfo* forwarding_info =
       response.mutable_task_assignment_forwarding_info();
-  forwarding_info->set_target_uri_prefix(kTaskAssignmentTargetUri);
+  forwarding_info->set_target_uri_prefix(target_uri_prefix);
   *response.mutable_retry_window_if_accepted() = accepted_retry_window;
   *response.mutable_retry_window_if_rejected() = rejected_retry_window;
   return response;
@@ -423,12 +424,13 @@ TaskAssignment CreateTaskAssignment(
     const std::string& federated_select_uri_template,
     const std::string& client_session_id,
     const std::string& aggregation_session_id, const std::string& task_name,
+    const std::string& target_uri_prefix,
     int32_t minimum_clients_in_server_visible_aggregate,
     std::optional<Resource> confidential_data_access_policy = std::nullopt) {
   TaskAssignment task_assignment;
   ForwardingInfo* forwarding_info =
       task_assignment.mutable_aggregation_data_forwarding_info();
-  forwarding_info->set_target_uri_prefix(kAggregationTargetUri);
+  forwarding_info->set_target_uri_prefix(target_uri_prefix);
   task_assignment.set_session_id(client_session_id);
   task_assignment.set_aggregation_id(aggregation_session_id);
   task_assignment.set_authorization_token(kAuthorizationToken);
@@ -455,13 +457,14 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
     const std::string& federated_select_uri_template,
     const std::string& aggregation_session_id,
     int32_t minimum_clients_in_server_visible_aggregate,
+    const std::string& target_uri_prefix = kAggregationTargetUri,
     std::optional<Resource> confidential_data_access_policy = std::nullopt) {
   StartTaskAssignmentResponse response;
-  *response.mutable_task_assignment() =
-      CreateTaskAssignment(plan, checkpoint, federated_select_uri_template,
-                           kClientSessionId, aggregation_session_id, kTaskName,
-                           minimum_clients_in_server_visible_aggregate,
-                           confidential_data_access_policy);
+  *response.mutable_task_assignment() = CreateTaskAssignment(
+      plan, checkpoint, federated_select_uri_template, kClientSessionId,
+      aggregation_session_id, kTaskName, target_uri_prefix,
+      minimum_clients_in_server_visible_aggregate,
+      confidential_data_access_policy);
   return response;
 }
 
@@ -554,6 +557,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillRepeatedly(Return(kCancellationWaitingPeriodSec));
     EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
         .WillRepeatedly(Return(false));
+    EXPECT_CALL(mock_flags_, enable_relative_uri_prefix)
+        .WillRepeatedly(Return(true));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -601,7 +606,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // absl::Status, which the caller should verify is OK using ASSERT_OK.
   absl::Status RunSuccessfulEligibilityEvalCheckin(
       bool eligibility_eval_enabled = true,
-      bool enable_confidential_aggregation = false) {
+      bool enable_confidential_aggregation = false,
+      bool set_relative_uri = false) {
     EligibilityEvalTaskResponse eval_task_response;
     if (eligibility_eval_enabled) {
       // We return a fake response which returns the plan/initial checkpoint
@@ -613,8 +619,14 @@ class HttpFederatedProtocolTest : public ::testing::Test {
       Resource checkpoint_resource;
       checkpoint_resource.mutable_inline_resource()->set_data(
           expected_checkpoint);
-      eval_task_response = GetFakeEnabledEligibilityEvalTaskResponse(
-          plan_resource, checkpoint_resource, kEligibilityEvalExecutionId);
+      if (set_relative_uri) {
+        eval_task_response = GetFakeEnabledEligibilityEvalTaskResponse(
+            plan_resource, checkpoint_resource, kEligibilityEvalExecutionId,
+            "/");
+      } else {
+        eval_task_response = GetFakeEnabledEligibilityEvalTaskResponse(
+            plan_resource, checkpoint_resource, kEligibilityEvalExecutionId);
+      }
     } else {
       eval_task_response = GetFakeDisabledEligibilityEvalTaskResponse();
     }
@@ -650,8 +662,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // absl::Status, which the caller should verify is OK using ASSERT_OK.
   absl::Status RunSuccessfulCheckin(
       bool report_eligibility_eval_result = true,
-      std::optional<std::string> confidential_data_access_policy =
-          std::nullopt) {
+      std::optional<std::string> confidential_data_access_policy = std::nullopt,
+      bool set_relative_uri = false) {
     // We return a fake response which returns the plan/initial checkpoint
     // data inline, to keep things simple.
     std::string expected_plan = kPlan;
@@ -672,11 +684,20 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     StartTaskAssignmentResponse task_assignment_response =
         GetFakeTaskAssignmentResponse(
             plan_resource, checkpoint_resource, kFederatedSelectUriTemplate,
-            expected_aggregation_session_id, 0, confidential_agg_resource);
+            expected_aggregation_session_id, 0,
+            set_relative_uri ? "/" : kAggregationTargetUri,
+            confidential_agg_resource);
 
-    std::string request_uri =
-        "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
-        "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto";
+    std::string request_uri;
+    if (set_relative_uri) {
+      request_uri =
+          "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto";
+    } else {
+      request_uri =
+          "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+          "taskassignments/ELIGIBILITY%2FSESSION%23ID:start?%24alt=proto";
+    }
     TaskEligibilityInfo expected_eligibility_info =
         GetFakeTaskEligibilityInfo();
     EXPECT_CALL(mock_http_client_,
@@ -743,7 +764,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     *response.add_task_assignments() = CreateTaskAssignment(
         plan_1, checkpoint_1, kFederatedSelectUriTemplate,
         kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
-        kMultiTaskId_1, kMinimumClientsInServerVisibleAggregate);
+        kMultiTaskId_1, kAggregationTargetUri,
+        kMinimumClientsInServerVisibleAggregate);
     Resource plan_2;
     std::string plan_uri = "https://fake.uri/plan";
     plan_2.set_uri(plan_uri);
@@ -753,7 +775,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     *response.add_task_assignments() = CreateTaskAssignment(
         plan_2, checkpoint_2, kFederatedSelectUriTemplate,
         kMultiTaskClientSessionId_2, kMultiTaskAggregationSessionId_2,
-        kMultiTaskId_2, kMinimumClientsInServerVisibleAggregate);
+        kMultiTaskId_2, kAggregationTargetUri,
+        kMinimumClientsInServerVisibleAggregate);
     std::string expected_plan_2 = "expected_plan_2";
     std::string expected_checkpoint_2 = "expected_checkpoint_2";
 
@@ -858,6 +881,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
       absl::string_view aggregation_resource_name,
       absl::string_view byte_stream_uri_prefix,
       absl::string_view second_stage_aggregation_uri_prefix,
+      bool set_relative_uri_prefix = false,
       std::optional<ConfidentialEncryptionConfig>
           confidential_encryption_config = std::nullopt) {
     Operation pending_operation_response =
@@ -874,12 +898,20 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillOnce(Return(
             FakeHttpResponse(200, HeaderList(),
                              pending_operation_response.SerializeAsString())));
+    std::string expected_operation_uri;
+    if (set_relative_uri_prefix) {
+      expected_operation_uri =
+          "https://initial.uri/v1/operations/foo%23bar?%24alt=proto";
+    } else {
+      expected_operation_uri =
+          "https://aggregation.uri/v1/operations/foo%23bar?%24alt=proto";
+    }
+
     EXPECT_CALL(
         mock_http_client_,
         PerformSingleRequest(SimpleHttpRequestMatcher(
             // Note that the '#' character is encoded as "%23".
-            "https://aggregation.uri/v1/operations/foo%23bar?%24alt=proto",
-            HttpRequest::Method::kGet, _,
+            expected_operation_uri, HttpRequest::Method::kGet, _,
             GetOperationRequestMatcher(EqualsProto(GetOperationRequest())))))
         .WillOnce(Return(FakeHttpResponse(
             200, HeaderList(),
@@ -1239,7 +1271,7 @@ TEST_F(HttpFederatedProtocolTest,
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
           plan_resource, checkpoint_resource, expected_execution_id,
-          population_eligibility_spec);
+          kTaskAssignmentTargetUri, population_eligibility_spec);
 
   InSequence seq;
   EXPECT_CALL(mock_http_client_,
@@ -1304,7 +1336,7 @@ TEST_F(HttpFederatedProtocolTest,
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
           plan_resource, checkpoint_resource, expected_execution_id,
-          population_eligibility_spec);
+          kTaskAssignmentTargetUri, population_eligibility_spec);
 
   InSequence seq;
   EXPECT_CALL(mock_http_client_,
@@ -1346,7 +1378,7 @@ TEST_F(HttpFederatedProtocolTest,
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
           plan_resource, checkpoint_resource, expected_execution_id,
-          population_eligibility_spec);
+          kTaskAssignmentTargetUri, population_eligibility_spec);
 
   InSequence seq;
   EXPECT_CALL(mock_http_client_,
@@ -1411,7 +1443,7 @@ TEST_F(HttpFederatedProtocolTest,
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
           plan_resource, checkpoint_resource, expected_execution_id,
-          population_eligibility_spec);
+          kTaskAssignmentTargetUri, population_eligibility_spec);
 
   InSequence seq;
   EXPECT_CALL(mock_http_client_,
@@ -1628,8 +1660,8 @@ TEST_F(HttpFederatedProtocolTest,
 
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
-          Resource(), Resource(), kEligibilityEvalExecutionId, std::nullopt,
-          retry_window, retry_window);
+          Resource(), Resource(), kEligibilityEvalExecutionId,
+          kTaskAssignmentTargetUri, std::nullopt, retry_window, retry_window);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
@@ -1663,8 +1695,8 @@ TEST_F(HttpFederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
 
   EligibilityEvalTaskResponse eval_task_response =
       GetFakeEnabledEligibilityEvalTaskResponse(
-          Resource(), Resource(), kEligibilityEvalExecutionId, std::nullopt,
-          retry_window, retry_window);
+          Resource(), Resource(), kEligibilityEvalExecutionId,
+          kTaskAssignmentTargetUri, std::nullopt, retry_window, retry_window);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   "https://initial.uri/v1/eligibilityevaltasks/"
@@ -2712,7 +2744,8 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
   *response.add_task_assignments() = CreateTaskAssignment(
       plan_1, checkpoint_1, kFederatedSelectUriTemplate,
       kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
-      kMultiTaskId_1, kMinimumClientsInServerVisibleAggregate);
+      kMultiTaskId_1, kAggregationTargetUri,
+      kMinimumClientsInServerVisibleAggregate);
   Resource plan_2;
   std::string plan_uri = "https://fake.uri/plan";
   plan_2.set_uri(plan_uri);
@@ -2722,7 +2755,8 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
   *response.add_task_assignments() = CreateTaskAssignment(
       plan_2, checkpoint_2, kFederatedSelectUriTemplate,
       kMultiTaskClientSessionId_2, kMultiTaskAggregationSessionId_2,
-      kMultiTaskId_2, kMinimumClientsInServerVisibleAggregate);
+      kMultiTaskId_2, kAggregationTargetUri,
+      kMinimumClientsInServerVisibleAggregate);
   std::string expected_plan_2 = "expected_plan_2";
   std::string expected_checkpoint_2 = "expected_checkpoint_2";
 
@@ -2806,7 +2840,8 @@ TEST_F(HttpFederatedProtocolTest,
   *response.add_task_assignments() = CreateTaskAssignment(
       plan_1, checkpoint_1, kFederatedSelectUriTemplate,
       kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
-      kMultiTaskId_1, kMinimumClientsInServerVisibleAggregate);
+      kMultiTaskId_1, kAggregationTargetUri,
+      kMinimumClientsInServerVisibleAggregate);
   Resource plan_2;
   std::string plan_uri = "https://fake.uri/plan";
   plan_2.set_uri(plan_uri);
@@ -2816,7 +2851,8 @@ TEST_F(HttpFederatedProtocolTest,
   *response.add_task_assignments() = CreateTaskAssignment(
       plan_2, checkpoint_2, kFederatedSelectUriTemplate,
       kMultiTaskClientSessionId_2, kMultiTaskAggregationSessionId_2,
-      kMultiTaskId_2, kMinimumClientsInServerVisibleAggregate);
+      kMultiTaskId_2, kAggregationTargetUri,
+      kMinimumClientsInServerVisibleAggregate);
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2894,7 +2930,8 @@ TEST_F(HttpFederatedProtocolTest,
   *response.add_task_assignments() = CreateTaskAssignment(
       plan_1, checkpoint_1, kFederatedSelectUriTemplate,
       kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
-      kMultiTaskId_1, kMinimumClientsInServerVisibleAggregate);
+      kMultiTaskId_1, kAggregationTargetUri,
+      kMinimumClientsInServerVisibleAggregate);
   // Add invalid task assignment which has empty target uri prefix in the
   // forwarding info.
   auto* invalid_task_assignment = response.add_task_assignments();
@@ -3178,7 +3215,7 @@ TEST_F(HttpFederatedProtocolTest,
       "AGGREGATION_SESSION_ID/"
       "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri,
-      encryption_config);
+      false, encryption_config);
 
   // Capture the raw uploaded data so we can subsequently validate that it was
   // properly encrypted with the public key that was provided to the client.
@@ -3285,7 +3322,7 @@ TEST_F(HttpFederatedProtocolTest,
       "AGGREGATION_SESSION_ID/"
       "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri,
-      encryption_config);
+      false, encryption_config);
 
   // Attestation validation will fail after the
   // StartConfidentialAggregationResponse, leading to the session being aborted
@@ -4142,6 +4179,576 @@ TEST_F(HttpFederatedProtocolTest,
 
   ASSERT_OK(federated_protocol_->Checkin(
       expected_eligibility_info, mock_task_received_callback_.AsStdFunction()));
+}
+TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingSimpleAgg) {
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(true, false,
+                                                /*set_relative_uri=*/true));
+
+  ASSERT_OK(
+      RunSuccessfulCheckin(true, std::nullopt, /*set_relative_uri=*/true));
+
+  std::string checkpoint_str;
+  const size_t kTFCheckpointSize = 32;
+  checkpoint_str.resize(kTFCheckpointSize, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://initial.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, /*byte_stream_uri_prefix=*/"/",
+      /*second_stage_aggregation_uri_prefix=*/"/", true);
+  ExpectSuccessfulByteStreamUploadRequest(
+      "https://initial.uri/upload/v1/media/"
+      "CHECKPOINT_RESOURCE?upload_protocol=raw",
+      checkpoint_str);
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://initial.uri/v1/aggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto");
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestRelativePathForwardingSimpleAggMixedRelativeAndAbsolute) {
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(true, false,
+                                                /*set_relative_uri=*/true));
+  ASSERT_OK(
+      RunSuccessfulCheckin(true, std::nullopt, /*set_relative_uri=*/true));
+
+  std::string checkpoint_str;
+  const size_t kTFCheckpointSize = 32;
+  checkpoint_str.resize(kTFCheckpointSize, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+
+  // Use absolute paths for the ByteStream and second stage aggregation URI
+  // prefixes.
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://initial.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri,
+      true);
+  ExpectSuccessfulByteStreamUploadRequest(
+      "https://bytestream.uri/upload/v1/media/"
+      "CHECKPOINT_RESOURCE?upload_protocol=raw",
+      checkpoint_str);
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/aggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto");
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestRelativePathForwardingRelativeDataUploadForwardingInfo) {
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(true, false,
+                                                /*set_relative_uri=*/true));
+
+  ASSERT_OK(
+      RunSuccessfulCheckin(true, std::nullopt, /*set_relative_uri=*/true));
+
+  std::string checkpoint_str;
+  const size_t kTFCheckpointSize = 32;
+  checkpoint_str.resize(kTFCheckpointSize, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://initial.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, /*byte_stream_uri_prefix=*/"/",
+      kSecondStageAggregationTargetUri, true);
+
+  // Although we process the second stage aggregation target URI prior to
+  // resolving the relative byte stream URI prefix above, we ensure the relative
+  // path is resolved using the previous stage's resolved protocol and hostname.
+  ExpectSuccessfulByteStreamUploadRequest(
+      "https://initial.uri/upload/v1/media/"
+      "CHECKPOINT_RESOURCE?upload_protocol=raw",
+      checkpoint_str);
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/aggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto");
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestRelativePathForwardingConfidentialAggregations) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      true, /*enable_confidential_aggregation=*/true,
+      /*set_relative_uri=*/true));
+
+  std::string serialized_access_policy = "the access policy";
+  ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
+                                 /*set_relative_uri=*/true));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  fcp::confidential_compute::MessageDecryptor decryptor;
+  auto encoded_public_key =
+      decryptor
+          .GetPublicKey(
+              [](absl::string_view payload) { return "fakesignature"; }, 0)
+          .value();
+  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
+  ASSERT_OK(parsed_public_key);
+  ASSERT_TRUE(parsed_public_key->public_key.has_value());
+
+  ConfidentialEncryptionConfig encryption_config;
+  encryption_config.set_public_key(encoded_public_key);
+
+  // Ensure that the server's attestation evidence is considered valid.
+  EXPECT_CALL(
+      *mock_attestation_verifier_,
+      Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
+      .WillRepeatedly(
+          [=](const absl::Cord& access_policy,
+              const ConfidentialEncryptionConfig& encryption_config) {
+            return attestation::AlwaysPassingAttestationVerifier().Verify(
+                access_policy, encryption_config);
+          });
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://initial.uri/v1/confidentialaggregations/AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, /*byte_stream_uri_prefix=*/"/",
+      /*second_stage_aggregation_uri_prefix=*/"/", true, encryption_config);
+
+  std::string uploaded_data;
+  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
+                                     "https://initial.uri/upload/v1/media/"
+                                     "CHECKPOINT_RESOURCE?upload_protocol=raw",
+                                     HttpRequest::Method::kPost, _, _)))
+      .WillOnce([&uploaded_data](MockHttpClient::SimpleHttpRequest request) {
+        uploaded_data = request.body;
+        return CreateEmptySuccessHttpResponse();
+      });
+
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://initial.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
+      /*confidential_aggregation=*/true);
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestRelativePathForwardingCAMixedRelativeAndAbsolute) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      true, /*enable_confidential_aggregation=*/true,
+      /*set_relative_uri=*/true));
+
+  std::string serialized_access_policy = "the access policy";
+  ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
+                                 /*set_relative_uri=*/true));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  fcp::confidential_compute::MessageDecryptor decryptor;
+  auto encoded_public_key =
+      decryptor
+          .GetPublicKey(
+              [](absl::string_view payload) { return "fakesignature"; }, 0)
+          .value();
+  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
+  ASSERT_OK(parsed_public_key);
+  ASSERT_TRUE(parsed_public_key->public_key.has_value());
+
+  ConfidentialEncryptionConfig encryption_config;
+  encryption_config.set_public_key(encoded_public_key);
+
+  // Ensure that the server's attestation evidence is considered valid.
+  EXPECT_CALL(
+      *mock_attestation_verifier_,
+      Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
+      .WillRepeatedly(
+          [=](const absl::Cord& access_policy,
+              const ConfidentialEncryptionConfig& encryption_config) {
+            return attestation::AlwaysPassingAttestationVerifier().Verify(
+                access_policy, encryption_config);
+          });
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+
+  // Use absolute paths for the ByteStream and aggregation URI
+  // prefixes.
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://initial.uri/v1/confidentialaggregations/AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, kByteStreamTargetUri, kAggregationTargetUri, true,
+      encryption_config);
+
+  std::string uploaded_data;
+  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
+                                     "https://bytestream.uri/upload/v1/media/"
+                                     "CHECKPOINT_RESOURCE?upload_protocol=raw",
+                                     HttpRequest::Method::kPost, _, _)))
+      .WillOnce([&uploaded_data](MockHttpClient::SimpleHttpRequest request) {
+        uploaded_data = request.body;
+        return CreateEmptySuccessHttpResponse();
+      });
+
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
+      /*confidential_aggregation=*/true);
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestRelativePathForwardingCARelativeDataUploadForwardingInfo) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      true, /*enable_confidential_aggregation=*/true,
+      /*set_relative_uri=*/true));
+
+  std::string serialized_access_policy = "the access policy";
+  ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
+                                 /*set_relative_uri=*/true));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  fcp::confidential_compute::MessageDecryptor decryptor;
+  auto encoded_public_key =
+      decryptor
+          .GetPublicKey(
+              [](absl::string_view payload) { return "fakesignature"; }, 0)
+          .value();
+  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
+  ASSERT_OK(parsed_public_key);
+  ASSERT_TRUE(parsed_public_key->public_key.has_value());
+
+  ConfidentialEncryptionConfig encryption_config;
+  encryption_config.set_public_key(encoded_public_key);
+
+  // Ensure that the server's attestation evidence is considered valid.
+  EXPECT_CALL(
+      *mock_attestation_verifier_,
+      Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
+      .WillRepeatedly(
+          [=](const absl::Cord& access_policy,
+              const ConfidentialEncryptionConfig& encryption_config) {
+            return attestation::AlwaysPassingAttestationVerifier().Verify(
+                access_policy, encryption_config);
+          });
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://initial.uri/v1/confidentialaggregations/AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, /*byte_stream_uri_prefix=*/"/",
+      kSecondStageAggregationTargetUri, true, encryption_config);
+
+  std::string uploaded_data;
+  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
+                                     "https://initial.uri/upload/v1/media/"
+                                     "CHECKPOINT_RESOURCE?upload_protocol=raw",
+                                     HttpRequest::Method::kPost, _, _)))
+      .WillOnce([&uploaded_data](MockHttpClient::SimpleHttpRequest request) {
+        uploaded_data = request.body;
+        return CreateEmptySuccessHttpResponse();
+      });
+
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
+      /*confidential_aggregation=*/true);
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+}
+
+TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingSecAgg) {
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(true, false,
+                                                /*set_relative_uri=*/true));
+
+  ASSERT_OK(
+      RunSuccessfulCheckin(true, std::nullopt, /*set_relative_uri=*/true));
+
+  StartSecureAggregationResponse start_secure_aggregation_response;
+  start_secure_aggregation_response.set_client_token(kClientToken);
+  auto masked_result_resource =
+      start_secure_aggregation_response.mutable_masked_result_resource();
+  masked_result_resource->set_resource_name("masked_resource");
+  masked_result_resource->mutable_data_upload_forwarding_info()
+      ->set_target_uri_prefix("/");
+
+  auto nonmasked_result_resource =
+      start_secure_aggregation_response.mutable_nonmasked_result_resource();
+  nonmasked_result_resource->set_resource_name("nonmasked_resource");
+  nonmasked_result_resource->mutable_data_upload_forwarding_info()
+      ->set_target_uri_prefix("/");
+
+  start_secure_aggregation_response.mutable_secagg_protocol_forwarding_info()
+      ->set_target_uri_prefix("/");
+  auto protocol_execution_info =
+      start_secure_aggregation_response.mutable_protocol_execution_info();
+  protocol_execution_info->set_minimum_surviving_clients_for_reconstruction(
+      450);
+  protocol_execution_info->set_expected_number_of_clients(500);
+
+  auto secure_aggregands =
+      start_secure_aggregation_response.mutable_secure_aggregands();
+  SecureAggregandExecutionInfo secure_aggregand_execution_info;
+  secure_aggregand_execution_info.set_modulus(9999);
+  (*secure_aggregands)["secagg_tensor"] = secure_aggregand_execution_info;
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/secureaggregations/"
+                  "AGGREGATION_SESSION_ID/clients/"
+                  "AUTHORIZATION_TOKEN:start?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  StartSecureAggregationRequest().SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreatePendingOperation("operations/foo#bar").SerializeAsString())));
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/operations/foo%23bar?%24alt=proto",
+                  HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreateDoneOperation(kOperationName, start_secure_aggregation_response)
+              .SerializeAsString())));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  results.emplace("secagg_tensor", QuantizedTensor());
+
+  EXPECT_CALL(*mock_secagg_runner_factory_,
+              CreateSecAggRunner(_, _, _, _, _, 500, 450))
+      .WillOnce(WithArg<0>([&](auto send_to_server_impl) {
+        auto mock_secagg_runner =
+            std::make_unique<StrictMock<MockSecAggRunner>>();
+        EXPECT_CALL(*mock_secagg_runner,
+                    Run(UnorderedElementsAre(Pair(
+                        "secagg_tensor", VariantWith<QuantizedTensor>(FieldsAre(
+                                             IsEmpty(), 0, IsEmpty()))))))
+            .WillOnce(
+                [=, send_to_server_impl = std::move(send_to_server_impl)] {
+                  // SecAggSendToServerBase::Send should use the client token.
+                  // This needs to be tested here since `send_to_server_impl`
+                  // should not be used outside of Run.
+                  EXPECT_CALL(mock_http_client_,
+                              PerformSingleRequest(SimpleHttpRequestMatcher(
+                                  "https://initial.uri/v1/secureaggregations/"
+                                  "AGGREGATION_SESSION_ID/clients/"
+                                  "CLIENT_TOKEN:abort?%24alt=proto",
+                                  _, _, _)))
+                      .WillOnce(Return(CreateEmptySuccessHttpResponse()));
+                  secagg::ClientToServerWrapperMessage abort_message;
+                  abort_message.mutable_abort();
+                  send_to_server_impl->Send(&abort_message);
+
+                  return absl::OkStatus();
+                });
+        return mock_secagg_runner;
+      }));
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestRelativePathForwardingSecAggRelativeSecAggMixedRelativeandAbsolute) {
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(true, false,
+                                                /*set_relative_uri=*/true));
+
+  ASSERT_OK(
+      RunSuccessfulCheckin(true, std::nullopt, /*set_relative_uri=*/true));
+
+  StartSecureAggregationResponse start_secure_aggregation_response;
+  start_secure_aggregation_response.set_client_token(kClientToken);
+  auto masked_result_resource =
+      start_secure_aggregation_response.mutable_masked_result_resource();
+  masked_result_resource->set_resource_name("masked_resource");
+  masked_result_resource->mutable_data_upload_forwarding_info()
+      ->set_target_uri_prefix("/");
+
+  auto nonmasked_result_resource =
+      start_secure_aggregation_response.mutable_nonmasked_result_resource();
+  nonmasked_result_resource->set_resource_name("nonmasked_resource");
+  nonmasked_result_resource->mutable_data_upload_forwarding_info()
+      ->set_target_uri_prefix("/");
+
+  start_secure_aggregation_response.mutable_secagg_protocol_forwarding_info()
+      ->set_target_uri_prefix("https://aggregation.second.uri/");
+  auto protocol_execution_info =
+      start_secure_aggregation_response.mutable_protocol_execution_info();
+  protocol_execution_info->set_minimum_surviving_clients_for_reconstruction(
+      450);
+  protocol_execution_info->set_expected_number_of_clients(500);
+
+  auto secure_aggregands =
+      start_secure_aggregation_response.mutable_secure_aggregands();
+  SecureAggregandExecutionInfo secure_aggregand_execution_info;
+  secure_aggregand_execution_info.set_modulus(9999);
+  (*secure_aggregands)["secagg_tensor"] = secure_aggregand_execution_info;
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/secureaggregations/"
+                  "AGGREGATION_SESSION_ID/clients/"
+                  "AUTHORIZATION_TOKEN:start?%24alt=proto",
+                  HttpRequest::Method::kPost, _,
+                  StartSecureAggregationRequest().SerializeAsString())))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreatePendingOperation("operations/foo#bar").SerializeAsString())));
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(SimpleHttpRequestMatcher(
+                  "https://initial.uri/v1/operations/foo%23bar?%24alt=proto",
+                  HttpRequest::Method::kGet, _, "")))
+      .WillOnce(Return(FakeHttpResponse(
+          200, HeaderList(),
+          CreateDoneOperation(kOperationName, start_secure_aggregation_response)
+              .SerializeAsString())));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  results.emplace("secagg_tensor", QuantizedTensor());
+
+  EXPECT_CALL(*mock_secagg_runner_factory_,
+              CreateSecAggRunner(_, _, _, _, _, 500, 450))
+      .WillOnce(WithArg<0>([&](auto send_to_server_impl) {
+        auto mock_secagg_runner =
+            std::make_unique<StrictMock<MockSecAggRunner>>();
+        EXPECT_CALL(*mock_secagg_runner,
+                    Run(UnorderedElementsAre(Pair(
+                        "secagg_tensor", VariantWith<QuantizedTensor>(FieldsAre(
+                                             IsEmpty(), 0, IsEmpty()))))))
+            .WillOnce([=,
+                       send_to_server_impl = std::move(send_to_server_impl)] {
+              // SecAggSendToServerBase::Send should use the client token.
+              // This needs to be tested here since `send_to_server_impl`
+              // should not be used outside of Run.
+              EXPECT_CALL(
+                  mock_http_client_,
+                  PerformSingleRequest(SimpleHttpRequestMatcher(
+                      "https://aggregation.second.uri/v1/secureaggregations/"
+                      "AGGREGATION_SESSION_ID/clients/"
+                      "CLIENT_TOKEN:abort?%24alt=proto",
+                      _, _, _)))
+                  .WillOnce(Return(CreateEmptySuccessHttpResponse()));
+              secagg::ClientToServerWrapperMessage abort_message;
+              abort_message.mutable_abort();
+              send_to_server_impl->Send(&abort_message);
+
+              return absl::OkStatus();
+            });
+        return mock_secagg_runner;
+      }));
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+}
+
+TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingNoTrailingSlash) {
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(true, false,
+                                                /*set_relative_uri=*/true));
+
+  ASSERT_OK(
+      RunSuccessfulCheckin(true, std::nullopt, /*set_relative_uri=*/true));
+
+  std::string checkpoint_str;
+  const size_t kTFCheckpointSize = 32;
+  checkpoint_str.resize(kTFCheckpointSize, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+
+  // Note these URIs do not contain a trailing slash and this should be fine.
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://initial.uri/v1/aggregations/AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, "https://bytestream.uri", "https://aggregation.second.uri",
+      true);
+  ExpectSuccessfulByteStreamUploadRequest(
+      "https://bytestream.uri/upload/v1/media/"
+      "CHECKPOINT_RESOURCE?upload_protocol=raw",
+      checkpoint_str);
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/aggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto");
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
 }
 
 }  // anonymous namespace

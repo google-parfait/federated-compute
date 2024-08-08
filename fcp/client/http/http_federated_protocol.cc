@@ -424,6 +424,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       retry_token_(retry_token),
       client_version_(client_version),
       client_attestation_measurement_(client_attestation_measurement),
+      most_recent_forwarding_prefix_(entry_point_uri),
       should_abort_(std::move(should_abort)),
       bit_gen_(std::move(bit_gen)),
       timing_config_(timing_config),
@@ -544,6 +545,13 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
   }
 
   pre_task_assignment_session_id_ = response_proto.session_id();
+  if (flags_->enable_relative_uri_prefix()) {
+    FCP_RETURN_IF_ERROR(
+        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+            most_recent_forwarding_prefix_,
+            response_proto.mutable_task_assignment_forwarding_info(),
+            /*should_update_most_recent_forwarding_prefix=*/true));
+  }
 
   FCP_ASSIGN_OR_RETURN(
       task_assignment_request_creator_,
@@ -892,11 +900,25 @@ HttpFederatedProtocol::CreatePerTaskInfoFromTaskAssignment(
         task_assignment,
     ObjectState state) {
   PerTaskInfo task_info;
-  FCP_ASSIGN_OR_RETURN(
-      task_info.aggregation_request_creator,
-      ProtocolRequestCreator::Create(
-          api_key_, task_assignment.aggregation_data_forwarding_info(),
-          !flags_->disable_http_request_body_compression()));
+  if (flags_->enable_relative_uri_prefix()) {
+    ForwardingInfo aggregation_data_forwarding_info =
+        task_assignment.aggregation_data_forwarding_info();
+    FCP_RETURN_IF_ERROR(
+        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+            most_recent_forwarding_prefix_, &aggregation_data_forwarding_info,
+            /*should_update_most_recent_forwarding_prefix=*/true));
+
+    FCP_ASSIGN_OR_RETURN(task_info.aggregation_request_creator,
+                         ProtocolRequestCreator::Create(
+                             api_key_, aggregation_data_forwarding_info,
+                             !flags_->disable_http_request_body_compression()));
+  } else {
+    FCP_ASSIGN_OR_RETURN(
+        task_info.aggregation_request_creator,
+        ProtocolRequestCreator::Create(
+            api_key_, task_assignment.aggregation_data_forwarding_info(),
+            !flags_->disable_http_request_body_compression()));
+  }
   task_info.state = state;
   task_info.session_id = task_assignment.session_id();
   task_info.aggregation_session_id = task_assignment.aggregation_id();
@@ -1373,10 +1395,25 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
           "could not parse StartConfidentialAggregationDataUploadResponse "
           "proto");
     }
+
+    if (flags_->enable_relative_uri_prefix()) {
+      FCP_RETURN_IF_ERROR(
+          GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+              most_recent_forwarding_prefix_,
+              response_proto.mutable_aggregation_protocol_forwarding_info(),
+              /*should_update_most_recent_forwarding_prefix=*/false));
+      FCP_RETURN_IF_ERROR(
+          GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+              most_recent_forwarding_prefix_,
+              response_proto.mutable_resource()
+                  ->mutable_data_upload_forwarding_info(),
+              /*should_update_most_recent_forwarding_prefix=*/false));
+    }
     aggregation_protocol_forwarding_info =
         response_proto.aggregation_protocol_forwarding_info();
     data_upload_forwarding_info =
         response_proto.resource().data_upload_forwarding_info();
+
     task_info.aggregation_resource_name =
         response_proto.resource().resource_name();
     task_info.aggregation_client_token = response_proto.client_token();
@@ -1391,10 +1428,25 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
       return absl::InvalidArgumentError(
           "could not parse StartAggregationDataUploadResponse proto");
     }
+
+    if (flags_->enable_relative_uri_prefix()) {
+      FCP_RETURN_IF_ERROR(
+          GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+              most_recent_forwarding_prefix_,
+              response_proto.mutable_aggregation_protocol_forwarding_info(),
+              /*should_update_most_recent_forwarding_prefix=*/false));
+      FCP_RETURN_IF_ERROR(
+          GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+              most_recent_forwarding_prefix_,
+              response_proto.mutable_resource()
+                  ->mutable_data_upload_forwarding_info(),
+              /*should_update_most_recent_forwarding_prefix=*/false));
+    }
     aggregation_protocol_forwarding_info =
         response_proto.aggregation_protocol_forwarding_info();
     data_upload_forwarding_info =
         response_proto.resource().data_upload_forwarding_info();
+
     task_info.aggregation_resource_name =
         response_proto.resource().resource_name();
     // TODO: b/254919633 - Remove the authorization token fallback once
@@ -1655,6 +1707,27 @@ absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
     }
   }
   absl::StatusOr<secagg::ServerToClientWrapperMessage> server_response_holder;
+
+  if (flags_->enable_relative_uri_prefix()) {
+    FCP_RETURN_IF_ERROR(
+        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+            most_recent_forwarding_prefix_,
+            response_proto.mutable_secagg_protocol_forwarding_info(),
+            /*should_update_most_recent_forwarding_prefix=*/false));
+    FCP_RETURN_IF_ERROR(
+        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+            most_recent_forwarding_prefix_,
+            response_proto.mutable_masked_result_resource()
+                ->mutable_data_upload_forwarding_info(),
+            /*should_update_most_recent_forwarding_prefix=*/false));
+    FCP_RETURN_IF_ERROR(
+        GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+            most_recent_forwarding_prefix_,
+            response_proto.mutable_nonmasked_result_resource()
+                ->mutable_data_upload_forwarding_info(),
+            /*should_update_most_recent_forwarding_prefix=*/false));
+  }
+
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<SecAggSendToServerBase> send_to_server_impl,
       HttpSecAggSendToServerImpl::Create(
@@ -2090,6 +2163,48 @@ NetworkStats HttpFederatedProtocol::GetNetworkStats() {
   return {.bytes_downloaded = bytes_downloaded_,
           .bytes_uploaded = bytes_uploaded_,
           .network_duration = network_stopwatch_->GetTotalDuration()};
+}
+
+absl::Status HttpFederatedProtocol::
+    GetNextTargetUriPrefixAndMaybeUpdateMostRecentForwardingPrefix(
+        std::string most_recent_forwarding_prefix,
+        ForwardingInfo* next_target_uri_info,
+        bool should_update_most_recent_forwarding_prefix) {
+  std::string next_target_uri_prefix =
+      next_target_uri_info->target_uri_prefix();
+  std::string updated_target_uri_prefix;
+
+  // If the next target URI prefix is a relative path, then we need to update
+  // it to be an absolute path based on the most recent known host.
+  if (next_target_uri_prefix[0] == ('/')) {
+    // Find the position of the first '/' after the initial '//'.
+    std::size_t pos = most_recent_forwarding_prefix.find(
+        '/', most_recent_forwarding_prefix.find("//") + 2);
+    // If there is a terminating '/', then add the relative path to the existing
+    // hostname while trimming the host's existing '/'.
+    if (pos != std::string::npos) {
+      updated_target_uri_prefix =
+          most_recent_forwarding_prefix.substr(0, pos) + next_target_uri_prefix;
+      next_target_uri_info->set_target_uri_prefix(updated_target_uri_prefix);
+    } else {
+      // Otherwise, append the relative path to the existing hostname.
+      updated_target_uri_prefix =
+          most_recent_forwarding_prefix + next_target_uri_prefix;
+      next_target_uri_info->set_target_uri_prefix(updated_target_uri_prefix);
+    }
+  } else {
+    // If the path is not relative, then we just use the next target URI prefix
+    // as-is.
+    updated_target_uri_prefix = next_target_uri_prefix;
+  }
+
+  // Only update the most recent forwarding prefix in cases where there is
+  // another protocol stage following the current one, and that stage should use
+  // the current stage's resolved URI prefix.
+  if (should_update_most_recent_forwarding_prefix) {
+    most_recent_forwarding_prefix_ = updated_target_uri_prefix;
+  }
+  return absl::OkStatus();
 }
 
 }  // namespace http

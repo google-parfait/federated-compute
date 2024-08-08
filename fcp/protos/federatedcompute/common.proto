@@ -43,6 +43,9 @@ message ForwardingInfo {
   // "https://foo.bar.com" or "https://foo.bar.com/", and if the subsequent
   // protocol request's URI suffix is "/baz", then the subsequent request's full
   // URI would be "https://foo.bar.com/baz".
+  //
+  // If a relative path is passed, the client should resolve it using the
+  // previous protocol phase's resolved protocol and hostname.
   string target_uri_prefix = 1;
   // Request headers that should be included with the next request for the next
   // protocol phase. Note that these headers should only be applied to protocol

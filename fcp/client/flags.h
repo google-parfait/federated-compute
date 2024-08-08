@@ -211,6 +211,9 @@ class Flags {
 
   // If true, direct data upload tasks are supported.
   virtual bool enable_direct_data_upload_task() const { return false; }
+
+  // If true, adds support for relative URI prefixes.
+  virtual bool enable_relative_uri_prefix() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
