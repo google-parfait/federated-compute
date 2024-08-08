@@ -47,13 +47,11 @@ message DataAccessPolicy {
     // The numeric id of the source blob in the graph.
     uint32 src = 1;
 
-    // The numeric id of the destination (derived) blob in the graph. For
-    // simplicity, ids are omitted for terminal blobs that are not the source of
-    // any other transforms. For example, a transform that produces a
-    // differentially private aggregate result might not have a `dest` set.
-    optional uint32 dest = 2;
-
     // A matcher for the properties of the application being authorized.
+    // If the transform should encrypt outputs, this should include fields that
+    // represent the possible node IDs in this policy graph that the application
+    // will assign to the outputs, which is necessary to ensure that the outputs
+    // will be subject to the correct rules for further transformation.
     ApplicationMatcher application = 3;
 
     // Limits on the application's access to the data.
@@ -62,6 +60,8 @@ message DataAccessPolicy {
     // The indices of shared AccessBudgets this transform is also subject to.
     // *All* budgets must allow the usage for access to be granted.
     repeated uint32 shared_access_budget_indices = 5;
+
+    reserved 2;
   }
 }
 
