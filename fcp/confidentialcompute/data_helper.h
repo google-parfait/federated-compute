@@ -16,6 +16,7 @@
 #define FCP_CONFIDENTIALCOMPUTE_DATA_HELPER_H_
 
 #include <functional>
+#include <optional>
 #include <string>
 
 #include "absl/status/statusor.h"
@@ -44,13 +45,24 @@ struct ReplaceDatasResult {
 };
 
 // Iterates through the input value and replaces all Data values with the values
-// they point to. Data values are resolved using the provided fetch_data_fn.
+// they point to. Data values are resolved using the provided fetch_data_fn or
+// fetch_client_data_fn for client uploaded data.
+//
+// fetch_data_fn takes a single argument, the URI of the Data value to resolve,
+// and returns the resolved value.
+//
+// fetch_client_data_fn takes two arguments, the URI of the Data value to
+// resolve and the key of the tensor within the Data value. It returns the
+// tensor data as a resolved value.
 //
 // The input value may contain a mix of Data values and non-Data values.
 absl::StatusOr<ReplaceDatasResult> ReplaceDatas(
     tensorflow_federated::v0::Value value,
     std::function<absl::StatusOr<tensorflow_federated::v0::Value>(std::string)>
-        fetch_data_fn);
+        fetch_data_fn,
+    std::optional<std::function<absl::StatusOr<tensorflow_federated::v0::Value>(
+        std::string, std::string)>>
+        fetch_client_data_fn = std::nullopt);
 
 }  // namespace confidential_compute
 }  // namespace fcp

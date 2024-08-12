@@ -280,6 +280,8 @@ class MockDataFetcher {
  public:
   MOCK_METHOD(absl::StatusOr<tensorflow_federated::v0::Value>, FetchData,
               (const std::string uri), (const));
+  MOCK_METHOD(absl::StatusOr<tensorflow_federated::v0::Value>, FetchClientData,
+              (const std::string uri, const std::string key), (const));
 };
 
 TEST(DataHelperTest, ReplaceDatasComputationWithData) {
@@ -341,9 +343,9 @@ TEST(DataHelperTest, ReplaceDatasFederatedWithClientUploads) {
       ->mutable_value()
       ->mutable_int32_list()
       ->add_value(40);
-  EXPECT_CALL(mock_data_fetcher, FetchData("client1"))
+  EXPECT_CALL(mock_data_fetcher, FetchClientData("client1", "key"))
       .WillOnce(Return(expected_value_1));
-  EXPECT_CALL(mock_data_fetcher, FetchData("client2"))
+  EXPECT_CALL(mock_data_fetcher, FetchClientData("client2", "key"))
       .WillOnce(Return(expected_value_2));
 
   auto expected_value = tensorflow_federated::v0::Value();
@@ -358,9 +360,77 @@ TEST(DataHelperTest, ReplaceDatasFederatedWithClientUploads) {
 
   FileInfo file_info_1;
   file_info_1.set_uri("client1");
+  file_info_1.set_key("key");
   file_info_1.set_client_upload(true);
   FileInfo file_info_2;
   file_info_2.set_uri("client2");
+  file_info_2.set_key("key");
+  file_info_2.set_client_upload(true);
+
+  auto federated_value = tensorflow_federated::v0::Value();
+  federated_value.mutable_federated()
+      ->mutable_type()
+      ->mutable_placement()
+      ->mutable_value()
+      ->set_uri("clients");
+  federated_value.mutable_federated()->mutable_type()->set_all_equal(false);
+  federated_value.mutable_federated()
+      ->add_value()
+      ->mutable_computation()
+      ->mutable_data()
+      ->mutable_content()
+      ->PackFrom(file_info_1);
+  federated_value.mutable_federated()
+      ->add_value()
+      ->mutable_computation()
+      ->mutable_data()
+      ->mutable_content()
+      ->PackFrom(file_info_2);
+
+  auto result = ReplaceDatas(
+      federated_value,
+      [&mock_data_fetcher](const std::string uri) {
+        return mock_data_fetcher.FetchData(uri);
+      },
+      [&mock_data_fetcher](const std::string uri, const std::string key) {
+        return mock_data_fetcher.FetchClientData(uri, key);
+      });
+  EXPECT_OK(result.status());
+  EXPECT_THAT(result.value().replaced_value, EqualsProto(expected_value));
+}
+
+TEST(DataHelperTest, ReplaceDatasWithClientUploadsNoClientFetchFn) {
+  MockDataFetcher mock_data_fetcher;
+  auto expected_value_1 = tensorflow_federated::v0::Value();
+  expected_value_1.mutable_computation()
+      ->mutable_literal()
+      ->mutable_value()
+      ->mutable_int32_list()
+      ->add_value(20);
+  auto expected_value_2 = tensorflow_federated::v0::Value();
+  expected_value_2.mutable_computation()
+      ->mutable_literal()
+      ->mutable_value()
+      ->mutable_int32_list()
+      ->add_value(40);
+
+  auto expected_value = tensorflow_federated::v0::Value();
+  expected_value.mutable_federated()
+      ->mutable_type()
+      ->mutable_placement()
+      ->mutable_value()
+      ->set_uri("clients");
+  expected_value.mutable_federated()->mutable_type()->set_all_equal(false);
+  *expected_value.mutable_federated()->add_value() = expected_value_1;
+  *expected_value.mutable_federated()->add_value() = expected_value_2;
+
+  FileInfo file_info_1;
+  file_info_1.set_uri("client1");
+  file_info_1.set_key("key");
+  file_info_1.set_client_upload(true);
+  FileInfo file_info_2;
+  file_info_2.set_uri("client2");
+  file_info_2.set_key("key");
   file_info_2.set_client_upload(true);
 
   auto federated_value = tensorflow_federated::v0::Value();
@@ -387,8 +457,9 @@ TEST(DataHelperTest, ReplaceDatasFederatedWithClientUploads) {
                              [&mock_data_fetcher](const std::string uri) {
                                return mock_data_fetcher.FetchData(uri);
                              });
-  EXPECT_OK(result.status());
-  EXPECT_THAT(result.value().replaced_value, EqualsProto(expected_value));
+  EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result.status().message(),
+              HasSubstr("No function provided to fetch client data"));
 }
 
 TEST(DataHelperTest, ReplaceDatasFederatedWithoutClientUploads) {

@@ -15,6 +15,7 @@
 #include "fcp/confidentialcompute/data_helper.h"
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -103,7 +104,10 @@ absl::StatusOr<tensorflow_federated::v0::Value> ExtractStructValue(
 absl::StatusOr<ReplaceDatasResult> ReplaceDatas(
     tensorflow_federated::v0::Value value,
     std::function<absl::StatusOr<tensorflow_federated::v0::Value>(std::string)>
-        fetch_data_fn) {
+        fetch_data_fn,
+    std::optional<std::function<absl::StatusOr<tensorflow_federated::v0::Value>(
+        std::string, std::string)>>
+        fetch_client_data_fn) {
   bool client_upload = false;
   if (google::protobuf::util::MessageDifferencer::Equivalent(
           value, tensorflow_federated::v0::Value())) {
@@ -123,11 +127,21 @@ absl::StatusOr<ReplaceDatasResult> ReplaceDatas(
       } else {
         fcp::confidentialcompute::FileInfo file_info;
         value.computation().data().content().UnpackTo(&file_info);
-        FCP_ASSIGN_OR_RETURN(replaced_value, fetch_data_fn(file_info.uri()));
-        if (!file_info.key().empty()) {
+        if (!file_info.client_upload()) {
+          FCP_ASSIGN_OR_RETURN(replaced_value, fetch_data_fn(file_info.uri()));
+          if (!file_info.key().empty()) {
+            FCP_ASSIGN_OR_RETURN(
+                replaced_value,
+                ExtractStructValue(replaced_value, file_info.key()));
+          }
+        } else {
+          if (!fetch_client_data_fn.has_value()) {
+            return absl::InvalidArgumentError(
+                "No function provided to fetch client data.");
+          }
           FCP_ASSIGN_OR_RETURN(
               replaced_value,
-              ExtractStructValue(replaced_value, file_info.key()));
+              (*fetch_client_data_fn)(file_info.uri(), file_info.key()));
         }
         return ReplaceDatasResult{
             .replaced_value = replaced_value,
@@ -138,8 +152,9 @@ absl::StatusOr<ReplaceDatasResult> ReplaceDatas(
           value.federated().type();
       for (const tensorflow_federated::v0::Value& inner_value :
            value.federated().value()) {
-        FCP_ASSIGN_OR_RETURN(ReplaceDatasResult replacement_federated_value,
-                             ReplaceDatas(inner_value, fetch_data_fn));
+        FCP_ASSIGN_OR_RETURN(
+            ReplaceDatasResult replacement_federated_value,
+            ReplaceDatas(inner_value, fetch_data_fn, fetch_client_data_fn));
         client_upload |= replacement_federated_value.contains_client_upload;
         *replaced_value.mutable_federated()->add_value() =
             std::move(replacement_federated_value.replaced_value);
@@ -175,7 +190,8 @@ absl::StatusOr<ReplaceDatasResult> ReplaceDatas(
             replaced_value.mutable_struct_()->add_element();
         *replaced_element->mutable_name() = inner_value.name();
         FCP_ASSIGN_OR_RETURN(ReplaceDatasResult replacement_struct_value,
-                             ReplaceDatas(inner_value.value(), fetch_data_fn));
+                             ReplaceDatas(inner_value.value(), fetch_data_fn,
+                                          fetch_client_data_fn));
         *replaced_element->mutable_value() =
             std::move(replacement_struct_value.replaced_value);
       }
