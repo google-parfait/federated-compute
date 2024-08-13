@@ -187,6 +187,7 @@ proto_library(
     name = "tff_config_proto",
     srcs = ["tff_config.proto"],
     deps = [
+        ":file_info_proto",
         "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_proto",
     ],
 )
