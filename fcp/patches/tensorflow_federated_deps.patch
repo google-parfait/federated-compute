@@ -2,7 +2,7 @@ diff --git tensorflow_federated/BUILD tensorflow_federated/BUILD
 index 85a0e08f7..9452c9ab5 100644
 --- tensorflow_federated/BUILD
 +++ tensorflow_federated/BUILD
-@@ -40,6 +40,26 @@ py_library(
+@@ -40,6 +40,24 @@ py_library(
          "//tensorflow_federated/python/learning",
          "//tensorflow_federated/python/program",
          "//tensorflow_federated/python/simulation",
@@ -11,7 +11,6 @@ index 85a0e08f7..9452c9ab5 100644
 +        "@pypi_cachetools//:pkg",
 +        "@pypi_dm_tree//:pkg",
 +        "@pypi_dp_accounting//:pkg",
-+        "@pypi_farmhashpy//:pkg",
 +        "@pypi_google_vizier//:pkg",
 +        "@pypi_googleapis_common_protos//:pkg",
 +        "@pypi_grpcio//:pkg",
@@ -20,7 +19,6 @@ index 85a0e08f7..9452c9ab5 100644
 +        "@pypi_numpy//:pkg",
 +        "@pypi_portpicker//:pkg",
 +        "@pypi_scipy//:pkg",
-+        "@pypi_semantic_version//:pkg",
 +        "@pypi_tensorflow_model_optimization//:pkg",
 +        "@pypi_tensorflow_privacy//:pkg",
 +        "@pypi_tensorflow//:pkg",

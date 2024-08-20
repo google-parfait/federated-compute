@@ -116,7 +116,7 @@ absl::StatusOr<ReplaceDatasResult> ReplaceDatas(
   }
   tensorflow_federated::v0::Value replaced_value;
   switch (value.value_case()) {
-    case tensorflow_federated::v0::Value::kTensor:
+    case tensorflow_federated::v0::Value::kArray:
     case tensorflow_federated::v0::Value::kSequence:
       return ReplaceDatasResult{.replaced_value = value,
                                 .contains_client_upload = client_upload};

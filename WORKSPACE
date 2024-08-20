@@ -43,8 +43,8 @@
 
 workspace(name = "com_google_fcp")
 
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")  # buildifier: disable=load-on-top
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")  # buildifier: disable=load-on-top
 
 # Needed for user-defined configs
 http_archive(
@@ -56,7 +56,7 @@ http_archive(
     ],
 )
 
-load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
+load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")  # buildifier: disable=load-on-top
 
 bazel_skylib_workspace()
 
@@ -67,7 +67,7 @@ http_archive(
     url = "https://github.com/bazelbuild/rules_python/releases/download/0.29.0/rules_python-0.29.0.tar.gz",
 )
 
-load("@rules_python//python:repositories.bzl", "py_repositories", "python_register_toolchains")
+load("@rules_python//python:repositories.bzl", "py_repositories", "python_register_toolchains")  # buildifier: disable=load-on-top
 
 py_repositories()
 
@@ -77,9 +77,9 @@ python_register_toolchains(
     python_version = "3.9",
 )
 
-load("@python//:defs.bzl", "interpreter")
-load("@rules_python//python:pip.bzl", "package_annotation", "pip_parse")
-load("//fcp/tensorflow/pip_tf:defs.bzl", "TF_ADDITIVE_BUILD_CONTENT")
+load("@python//:defs.bzl", "interpreter")  # buildifier: disable=load-on-top
+load("@rules_python//python:pip.bzl", "package_annotation", "pip_parse")  # buildifier: disable=load-on-top
+load("//fcp/tensorflow/pip_tf:defs.bzl", "TF_ADDITIVE_BUILD_CONTENT")  # buildifier: disable=load-on-top
 
 pip_parse(
     name = "pypi",
@@ -92,7 +92,7 @@ pip_parse(
     requirements_lock = "//fcp:requirements.txt",
 )
 
-load("@pypi//:requirements.bzl", "install_deps")
+load("@pypi//:requirements.bzl", "install_deps")  # buildifier: disable=load-on-top
 
 install_deps()
 
@@ -156,14 +156,14 @@ http_archive(
     urls = ["https://github.com/googleapis/gax-java/archive/v2.20.0.zip"],
 )
 
-load("@com_google_api_gax_java//:repository_rules.bzl", "com_google_api_gax_java_properties")
+load("@com_google_api_gax_java//:repository_rules.bzl", "com_google_api_gax_java_properties")  # buildifier: disable=load-on-top
 
 com_google_api_gax_java_properties(
     name = "com_google_api_gax_java_properties",
     file = "@com_google_api_gax_java//:dependencies.properties",
 )
 
-load("@com_google_api_gax_java//:repositories.bzl", "com_google_api_gax_java_repositories")
+load("@com_google_api_gax_java//:repositories.bzl", "com_google_api_gax_java_repositories")  # buildifier: disable=load-on-top
 
 com_google_api_gax_java_repositories()
 
@@ -172,9 +172,9 @@ http_archive(
     patches = [
         "//fcp/patches:tensorflow_federated_deps.patch",
     ],
-    url = "https://github.com/google-parfait/tensorflow-federated/archive/v0.78.0.tar.gz",
-    sha256 = "0238ac9fe2cf96b138a8de1c61bb63a67f7e9ef1611b88e56c25e157ef28c8bf",
-    strip_prefix = "tensorflow-federated-0.78.0",
+    sha256 = "14f53659d57c55883010b602f4f272df083f519dcbf90a714b6550a2cf376224",
+    strip_prefix = "tensorflow-federated-0.86.0",
+    url = "https://github.com/google-parfait/tensorflow-federated/archive/v0.86.0.tar.gz",
 )
 
 # Tensorflow v2.14.0
@@ -199,7 +199,6 @@ http_archive(
         "//fcp/patches:tensorflow_zlib.patch",
         # These patches enables building TensorFlow Federated from source by
         # fixing visibility in TensorFlow.
-        "@org_tensorflow_federated//third_party/tensorflow:dtensor_internal_visibility.patch",
         "@org_tensorflow_federated//third_party/tensorflow:internal_visibility.patch",
         "@org_tensorflow_federated//third_party/tensorflow:tf2xla_visibility.patch",
     ],
@@ -213,19 +212,19 @@ http_archive(
 # The following is copied from TensorFlow's own WORKSPACE, see
 # https://github.com/tensorflow/tensorflow/blob/v2.8.0/WORKSPACE#L9
 
-load("@org_tensorflow//tensorflow:workspace3.bzl", "tf_workspace3")
+load("@org_tensorflow//tensorflow:workspace3.bzl", "tf_workspace3")  # buildifier: disable=load-on-top
 
 tf_workspace3()
 
-load("@org_tensorflow//tensorflow:workspace2.bzl", "tf_workspace2")
+load("@org_tensorflow//tensorflow:workspace2.bzl", "tf_workspace2")  # buildifier: disable=load-on-top
 
 tf_workspace2()
 
-load("@org_tensorflow//tensorflow:workspace1.bzl", "tf_workspace1")
+load("@org_tensorflow//tensorflow:workspace1.bzl", "tf_workspace1")  # buildifier: disable=load-on-top
 
 tf_workspace1()
 
-load("@org_tensorflow//tensorflow:workspace0.bzl", "tf_workspace0")
+load("@org_tensorflow//tensorflow:workspace0.bzl", "tf_workspace0")  # buildifier: disable=load-on-top
 
 tf_workspace0()
 
@@ -257,19 +256,19 @@ http_archive(
     url = "https://github.com/tensorflow/serving/archive/refs/tags/2.9.0.zip",
 )
 
-load("@tensorflow_serving//tensorflow_serving:workspace.bzl", "tf_serving_workspace")
+load("@tensorflow_serving//tensorflow_serving:workspace.bzl", "tf_serving_workspace")  # buildifier: disable=load-on-top
 
 tf_serving_workspace()
 
-load("@rules_jvm_external//:repositories.bzl", "rules_jvm_external_deps")
+load("@rules_jvm_external//:repositories.bzl", "rules_jvm_external_deps")  # buildifier: disable=load-on-top
 
 rules_jvm_external_deps()
 
-load("@rules_jvm_external//:setup.bzl", "rules_jvm_external_setup")
+load("@rules_jvm_external//:setup.bzl", "rules_jvm_external_setup")  # buildifier: disable=load-on-top
 
 rules_jvm_external_setup()
 
-load("@rules_jvm_external//:defs.bzl", "maven_install")
+load("@rules_jvm_external//:defs.bzl", "maven_install")  # buildifier: disable=load-on-top
 
 maven_install(
     name = "fcp_maven",
@@ -309,32 +308,33 @@ http_archive(
     url = "https://github.com/grailbio/bazel-toolchain/releases/download/0.10.3/toolchains_llvm-0.10.3.tar.gz",
 )
 
-load("@toolchains_llvm//toolchain:deps.bzl", "bazel_toolchain_dependencies")
+load("@toolchains_llvm//toolchain:deps.bzl", "bazel_toolchain_dependencies")  # buildifier: disable=load-on-top
 
 bazel_toolchain_dependencies()
 
-load("@toolchains_llvm//toolchain:rules.bzl", "llvm_toolchain")
+load("@toolchains_llvm//toolchain:rules.bzl", "llvm_toolchain")  # buildifier: disable=load-on-top
 
 llvm_toolchain(
     name = "llvm_toolchain",
     llvm_version = "13.0.0",
 )
 
-load("@llvm_toolchain//:toolchains.bzl", "llvm_register_toolchains")
+load("@llvm_toolchain//:toolchains.bzl", "llvm_register_toolchains")  # buildifier: disable=load-on-top
 
 llvm_register_toolchains()
 
 # The following enables the use of the library functions in the differential-
 # privacy github repo
 http_archive(
-  name = "com_google_cc_differential_privacy",
-  url = "https://github.com/google/differential-privacy/archive/refs/tags/v3.0.0.tar.gz",
-  sha256 = "6e6e1cd7a819695caae408f4fa938129ab7a86e83fe2410137c85e50131abbe0",
-  strip_prefix = "differential-privacy-3.0.0/cc",
+    name = "com_google_cc_differential_privacy",
+    sha256 = "6e6e1cd7a819695caae408f4fa938129ab7a86e83fe2410137c85e50131abbe0",
+    strip_prefix = "differential-privacy-3.0.0/cc",
+    url = "https://github.com/google/differential-privacy/archive/refs/tags/v3.0.0.tar.gz",
 )
+
 http_archive(
-  name = "com_google_differential_privacy",
-  url = "https://github.com/google/differential-privacy/archive/refs/tags/v3.0.0.tar.gz",
-  sha256 = "6e6e1cd7a819695caae408f4fa938129ab7a86e83fe2410137c85e50131abbe0",
-  strip_prefix = "differential-privacy-3.0.0",
+    name = "com_google_differential_privacy",
+    sha256 = "6e6e1cd7a819695caae408f4fa938129ab7a86e83fe2410137c85e50131abbe0",
+    strip_prefix = "differential-privacy-3.0.0",
+    url = "https://github.com/google/differential-privacy/archive/refs/tags/v3.0.0.tar.gz",
 )
