@@ -28,10 +28,15 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
+#ifdef FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
 #include "libcppbor/include/cppbor/cppbor.h"
 #include "libcppbor/include/cppbor/cppbor_parse.h"
+#endif
 
 namespace fcp::confidential_compute {
+// TODO: b/361182982 - Clean up the ifdef once the iOS toolchain supports C++20,
+// or a better solution towards C++20 compatibility is found.
+#ifdef FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
 namespace {
 
 using ::cppbor::Array;
@@ -505,4 +510,48 @@ absl::StatusOr<std::string> OkpCwt::Encode() const {
       .toString();
 }
 
+#else  // defined(FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG)
+absl::StatusOr<OkpKey> OkpKey::Decode(absl::string_view encoded) {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> OkpKey::Encode() const {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<SymmetricKey> SymmetricKey::Decode(absl::string_view encoded) {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> SymmetricKey::Encode() const {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> OkpCwt::BuildSigStructureForSigning(
+    absl::string_view aad) const {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> OkpCwt::GetSigStructureForVerifying(
+    absl::string_view encoded, absl::string_view aad) {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<OkpCwt> OkpCwt::Decode(absl::string_view encoded) {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> OkpCwt::Encode() const {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+#endif  // defined(FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG)
 }  // namespace fcp::confidential_compute
