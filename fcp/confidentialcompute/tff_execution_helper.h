@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef FCP_CONFIDENTIALCOMPUTE_DATA_HELPER_H_
-#define FCP_CONFIDENTIALCOMPUTE_DATA_HELPER_H_
+#ifndef FCP_CONFIDENTIALCOMPUTE_TFF_EXECUTION_HELPER_H_
+#define FCP_CONFIDENTIALCOMPUTE_TFF_EXECUTION_HELPER_H_
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "tensorflow_federated/cc/core/impl/executors/executor.h"
 #include "tensorflow_federated/proto/v0/executor.pb.h"
 
 namespace fcp {
@@ -64,7 +66,12 @@ absl::StatusOr<ReplaceDatasResult> ReplaceDatas(
         std::string, std::string)>>
         fetch_client_data_fn = std::nullopt);
 
+// Embeds the provided value into the provided TFF execution stack.
+absl::StatusOr<std::shared_ptr<tensorflow_federated::OwnedValueId>> Embed(
+    const tensorflow_federated::v0::Value& value,
+    std::shared_ptr<tensorflow_federated::Executor> executor);
+
 }  // namespace confidential_compute
 }  // namespace fcp
 
-#endif  // FCP_CONFIDENTIALCOMPUTE_DATA_HELPER_H_
+#endif  // FCP_CONFIDENTIALCOMPUTE_TFF_EXECUTION_HELPER_H_

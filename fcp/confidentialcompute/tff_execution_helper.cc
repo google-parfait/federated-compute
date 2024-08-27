@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fcp/confidentialcompute/data_helper.h"
+#include "fcp/confidentialcompute/tff_execution_helper.h"
 
+#include <cstddef>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -32,11 +34,21 @@
 #include "fcp/protos/confidentialcompute/file_info.pb.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "tensorflow_federated/cc/core/impl/executors/cardinalities.h"
+#include "tensorflow_federated/cc/core/impl/executors/executor.h"
 #include "tensorflow_federated/proto/v0/computation.pb.h"
 #include "tensorflow_federated/proto/v0/executor.pb.h"
 
 namespace fcp {
 namespace confidential_compute {
+
+namespace {
+
+inline std::shared_ptr<tensorflow_federated::OwnedValueId> ShareValueId(
+    tensorflow_federated::OwnedValueId&& id) {
+  return std::make_shared<tensorflow_federated::OwnedValueId>(std::move(id));
+}
+
+}  // namespace
 
 constexpr absl::string_view kStructureKeyPathDelimiter = "/";
 
@@ -200,6 +212,36 @@ absl::StatusOr<ReplaceDatasResult> ReplaceDatas(
     default:
       return absl::InvalidArgumentError(
           "ReplaceDatas found unsupported value type");
+  }
+}
+
+absl::StatusOr<std::shared_ptr<tensorflow_federated::OwnedValueId>> Embed(
+    const tensorflow_federated::v0::Value& value,
+    std::shared_ptr<tensorflow_federated::Executor> executor) {
+  if (value.has_computation() || value.has_federated() || value.has_array()) {
+    FCP_ASSIGN_OR_RETURN(tensorflow_federated::OwnedValueId child_value_id,
+                         executor->CreateValue(value));
+    return ShareValueId(std::move(child_value_id));
+  } else if (value.has_struct_()) {
+    std::vector<std::shared_ptr<tensorflow_federated::OwnedValueId>> field_ids;
+    std::vector<tensorflow_federated::ValueId> unowned_field_ids;
+    size_t num_fields = value.struct_().element_size();
+    field_ids.reserve(num_fields);
+    unowned_field_ids.reserve(num_fields);
+    for (const tensorflow_federated::v0::Value_Struct_Element& field_value :
+         value.struct_().element()) {
+      FCP_ASSIGN_OR_RETURN(
+          std::shared_ptr<tensorflow_federated::OwnedValueId>
+              child_field_value_id,
+          fcp::confidential_compute::Embed(field_value.value(), executor));
+      unowned_field_ids.push_back(child_field_value_id->ref());
+      field_ids.push_back(std::move(child_field_value_id));
+    }
+    FCP_ASSIGN_OR_RETURN(tensorflow_federated::OwnedValueId child_struct_id,
+                         executor->CreateStruct(unowned_field_ids));
+    return ShareValueId(std::move(child_struct_id));
+  } else {
+    return absl::InvalidArgumentError("Unsupported value type");
   }
 }
 

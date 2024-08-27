@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fcp/confidentialcompute/data_helper.h"
+#include "fcp/confidentialcompute/tff_execution_helper.h"
 
+#include <memory>
 #include <string>
 
 #include "gmock/gmock.h"
@@ -22,6 +23,8 @@
 #include "absl/status/statusor.h"
 #include "fcp/protos/confidentialcompute/file_info.pb.h"
 #include "fcp/testing/testing.h"
+#include "tensorflow_federated/cc/core/impl/executors/executor.h"
+#include "tensorflow_federated/cc/core/impl/executors/mock_executor.h"
 #include "tensorflow_federated/proto/v0/array.pb.h"
 #include "tensorflow_federated/proto/v0/computation.pb.h"
 #include "tensorflow_federated/proto/v0/executor.pb.h"
@@ -36,7 +39,7 @@ using ::tensorflow_federated::v0::Value;
 using ::testing::HasSubstr;
 using ::testing::Return;
 
-TEST(DataHelperTest, ExtractStructValueOrdinalKey) {
+TEST(TffExecutionHelperTest, ExtractStructValueOrdinalKey) {
   auto expected_value = tensorflow_federated::v0::Value();
   expected_value.mutable_computation()
       ->mutable_literal()
@@ -64,7 +67,7 @@ TEST(DataHelperTest, ExtractStructValueOrdinalKey) {
   EXPECT_THAT(result.value(), EqualsProto(expected_value));
 }
 
-TEST(DataHelperTest, ExtractStructValueOrdinalKeyOutOfRange) {
+TEST(TffExecutionHelperTest, ExtractStructValueOrdinalKeyOutOfRange) {
   auto unexpected_value = tensorflow_federated::v0::Value();
   unexpected_value.mutable_computation()
       ->mutable_literal()
@@ -83,7 +86,7 @@ TEST(DataHelperTest, ExtractStructValueOrdinalKeyOutOfRange) {
   EXPECT_THAT(result.status().message(), testing::HasSubstr("out of range"));
 }
 
-TEST(DataHelperTest, ExtractStructValueStringKey) {
+TEST(TffExecutionHelperTest, ExtractStructValueStringKey) {
   auto expected_value = tensorflow_federated::v0::Value();
   expected_value.mutable_computation()
       ->mutable_literal()
@@ -114,7 +117,7 @@ TEST(DataHelperTest, ExtractStructValueStringKey) {
   EXPECT_THAT(result.value(), EqualsProto(expected_value));
 }
 
-TEST(DataHelperTest, ExtractStructValueInvalidKeyExtraDelimiter) {
+TEST(TffExecutionHelperTest, ExtractStructValueInvalidKeyExtraDelimiter) {
   auto unexpected_value = tensorflow_federated::v0::Value();
   unexpected_value.mutable_computation()
       ->mutable_literal()
@@ -134,7 +137,7 @@ TEST(DataHelperTest, ExtractStructValueInvalidKeyExtraDelimiter) {
   EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(DataHelperTest, ExtractStructValueInvalidStringKey) {
+TEST(TffExecutionHelperTest, ExtractStructValueInvalidStringKey) {
   auto unexpected_value = tensorflow_federated::v0::Value();
   unexpected_value.mutable_computation()
       ->mutable_literal()
@@ -156,7 +159,7 @@ TEST(DataHelperTest, ExtractStructValueInvalidStringKey) {
               testing::HasSubstr("surprise not found"));
 }
 
-TEST(DataHelperTest, ExtractStructValueNestedKey) {
+TEST(TffExecutionHelperTest, ExtractStructValueNestedKey) {
   auto expected_value = tensorflow_federated::v0::Value();
   expected_value.mutable_computation()
       ->mutable_literal()
@@ -204,7 +207,7 @@ TEST(DataHelperTest, ExtractStructValueNestedKey) {
   EXPECT_THAT(result.value(), EqualsProto(expected_value));
 }
 
-TEST(DataHelperTest, ExtractStructValueNestedInvalidKey) {
+TEST(TffExecutionHelperTest, ExtractStructValueNestedInvalidKey) {
   auto unexpected_value = tensorflow_federated::v0::Value();
   unexpected_value.mutable_computation()
       ->mutable_literal()
@@ -229,7 +232,7 @@ TEST(DataHelperTest, ExtractStructValueNestedInvalidKey) {
   EXPECT_THAT(result.status().message(), testing::HasSubstr("out of range"));
 }
 
-TEST(DataHelperTest, ExtractStructValueFederated) {
+TEST(TffExecutionHelperTest, ExtractStructValueFederated) {
   auto expected_value = tensorflow_federated::v0::Value();
   expected_value.mutable_computation()
       ->mutable_literal()
@@ -284,7 +287,7 @@ class MockDataFetcher {
               (const std::string uri, const std::string key), (const));
 };
 
-TEST(DataHelperTest, ReplaceDatasComputationWithData) {
+TEST(TffExecutionHelperTest, ReplaceDatasComputationWithData) {
   MockDataFetcher mock_data_fetcher;
   auto expected_value = tensorflow_federated::v0::Value();
   expected_value.mutable_computation()
@@ -309,7 +312,7 @@ TEST(DataHelperTest, ReplaceDatasComputationWithData) {
   EXPECT_THAT(result.value().replaced_value, EqualsProto(expected_value));
 }
 
-TEST(DataHelperTest, ReplaceDatasComputationWithoutData) {
+TEST(TffExecutionHelperTest, ReplaceDatasComputationWithoutData) {
   MockDataFetcher mock_data_fetcher;
 
   auto expected_value = tensorflow_federated::v0::Value();
@@ -329,7 +332,7 @@ TEST(DataHelperTest, ReplaceDatasComputationWithoutData) {
   EXPECT_THAT(result.value().replaced_value, EqualsProto(expected_value));
 }
 
-TEST(DataHelperTest, ReplaceDatasFederatedWithClientUploads) {
+TEST(TffExecutionHelperTest, ReplaceDatasFederatedWithClientUploads) {
   MockDataFetcher mock_data_fetcher;
   auto expected_value_1 = tensorflow_federated::v0::Value();
   expected_value_1.mutable_computation()
@@ -399,7 +402,7 @@ TEST(DataHelperTest, ReplaceDatasFederatedWithClientUploads) {
   EXPECT_THAT(result.value().replaced_value, EqualsProto(expected_value));
 }
 
-TEST(DataHelperTest, ReplaceDatasWithClientUploadsNoClientFetchFn) {
+TEST(TffExecutionHelperTest, ReplaceDatasWithClientUploadsNoClientFetchFn) {
   MockDataFetcher mock_data_fetcher;
   auto expected_value_1 = tensorflow_federated::v0::Value();
   expected_value_1.mutable_computation()
@@ -462,7 +465,7 @@ TEST(DataHelperTest, ReplaceDatasWithClientUploadsNoClientFetchFn) {
               HasSubstr("No function provided to fetch client data"));
 }
 
-TEST(DataHelperTest, ReplaceDatasFederatedWithoutClientUploads) {
+TEST(TffExecutionHelperTest, ReplaceDatasFederatedWithoutClientUploads) {
   MockDataFetcher mock_data_fetcher;
   auto expected_value = tensorflow_federated::v0::Value();
   expected_value.mutable_computation()
@@ -498,7 +501,7 @@ TEST(DataHelperTest, ReplaceDatasFederatedWithoutClientUploads) {
   EXPECT_THAT(result.value().replaced_value, EqualsProto(expected_value));
 }
 
-TEST(DataHelperTest, ReplaceDatasFederatedInvalidLength) {
+TEST(TffExecutionHelperTest, ReplaceDatasFederatedInvalidLength) {
   MockDataFetcher mock_data_fetcher;
   auto client_data = tensorflow_federated::v0::Value();
   client_data.mutable_computation()
@@ -545,7 +548,7 @@ TEST(DataHelperTest, ReplaceDatasFederatedInvalidLength) {
               HasSubstr("should have exactly one inner value"));
 }
 
-TEST(DataHelperTest, ReplaceDatasStruct) {
+TEST(TffExecutionHelperTest, ReplaceDatasStruct) {
   MockDataFetcher mock_data_fetcher;
   auto expected_value_1 = tensorflow_federated::v0::Value();
   expected_value_1.mutable_computation()
@@ -632,7 +635,7 @@ TEST(DataHelperTest, ReplaceDatasStruct) {
   EXPECT_THAT(result.value().replaced_value, EqualsProto(expected_value));
 }
 
-TEST(DataHelperTest, ReplaceDatasWithKeys) {
+TEST(TffExecutionHelperTest, ReplaceDatasWithKeys) {
   MockDataFetcher mock_data_fetcher;
   auto previous_round = tensorflow_federated::v0::Value();
 
@@ -734,6 +737,98 @@ TEST(DataHelperTest, ReplaceDatasWithKeys) {
       });
   EXPECT_OK(result.status());
   EXPECT_THAT(result.value().replaced_value, EqualsProto(expected_value));
+}
+
+TEST(TffExecutionHelperTest, EmbedUnsupportedValueType) {
+  auto mock_executor = std::make_shared<tensorflow_federated::MockExecutor>();
+  tensorflow_federated::v0::Value value;
+  value.mutable_sequence();
+  EXPECT_THAT(Embed(value, mock_executor),
+              IsCode(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(TffExecutionHelperTest, EmbedComputation) {
+  auto mock_executor = std::make_shared<tensorflow_federated::MockExecutor>();
+  tensorflow_federated::v0::Value value;
+  value.mutable_computation();
+  tensorflow_federated::ValueId value_id =
+      mock_executor->ExpectCreateValue(value);
+  auto result = Embed(value, mock_executor);
+  EXPECT_OK(result.status());
+  EXPECT_EQ(result.value()->ref(), value_id);
+}
+
+TEST(TffExecutionHelperTest, EmbedFederated) {
+  auto mock_executor = std::make_shared<tensorflow_federated::MockExecutor>();
+  tensorflow_federated::v0::Value value;
+  value.mutable_federated();
+  tensorflow_federated::ValueId value_id =
+      mock_executor->ExpectCreateValue(value);
+  auto result = Embed(value, mock_executor);
+  EXPECT_OK(result.status());
+  EXPECT_EQ(result.value()->ref(), value_id);
+}
+
+TEST(TffExecutionHelperTest, EmbedArray) {
+  auto mock_executor = std::make_shared<tensorflow_federated::MockExecutor>();
+  tensorflow_federated::v0::Value value;
+  value.mutable_array();
+  tensorflow_federated::ValueId value_id =
+      mock_executor->ExpectCreateValue(value);
+  auto result = Embed(value, mock_executor);
+  EXPECT_OK(result.status());
+  EXPECT_EQ(result.value()->ref(), value_id);
+}
+
+TEST(TffExecutionHelperTest, EmbedStruct) {
+  auto mock_executor = std::make_shared<tensorflow_federated::MockExecutor>();
+  auto expected_value_1 = tensorflow_federated::v0::Value();
+  expected_value_1.mutable_computation()
+      ->mutable_literal()
+      ->mutable_value()
+      ->mutable_int32_list()
+      ->add_value(20);
+  auto expected_value_2 = tensorflow_federated::v0::Value();
+  expected_value_2.mutable_computation()
+      ->mutable_literal()
+      ->mutable_value()
+      ->mutable_int32_list()
+      ->add_value(40);
+  auto expected_value_3 = tensorflow_federated::v0::Value();
+  expected_value_3.mutable_computation()
+      ->mutable_literal()
+      ->mutable_value()
+      ->mutable_int32_list()
+      ->add_value(60);
+
+  // Create an expected value corresponding to [val1, ["bar":val2, "foo":val3]].
+  auto expected_value = tensorflow_federated::v0::Value();
+  *expected_value.mutable_struct_()->add_element()->mutable_value() =
+      expected_value_1;
+  auto inner_struct = expected_value.mutable_struct_()
+                          ->add_element()
+                          ->mutable_value()
+                          ->mutable_struct_();
+  auto inner_struct_bar = inner_struct->add_element();
+  inner_struct_bar->set_name("bar");
+  *inner_struct_bar->mutable_value() = expected_value_2;
+  auto inner_struct_foo = inner_struct->add_element();
+  inner_struct_foo->set_name("foo");
+  *inner_struct_foo->mutable_value() = expected_value_3;
+
+  tensorflow_federated::ValueId value_id_1 =
+      mock_executor->ExpectCreateValue(expected_value_1);
+  tensorflow_federated::ValueId value_id_2 =
+      mock_executor->ExpectCreateValue(expected_value_2);
+  tensorflow_federated::ValueId value_id_3 =
+      mock_executor->ExpectCreateValue(expected_value_3);
+  tensorflow_federated::ValueId inner_struct_value_id =
+      mock_executor->ExpectCreateStruct({value_id_2, value_id_3});
+  tensorflow_federated::ValueId struct_value_id =
+      mock_executor->ExpectCreateStruct({value_id_1, inner_struct_value_id});
+  auto result = Embed(expected_value, mock_executor);
+  EXPECT_OK(result.status());
+  EXPECT_EQ(result.value()->ref(), struct_value_id);
 }
 
 }  // namespace
