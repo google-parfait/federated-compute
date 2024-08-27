@@ -1961,13 +1961,9 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     SelectorContext selector_context_with_task_details =
         FillSelectorContextWithTaskLevelDetails(
             task_assignment, federated_selector_context, opstats_logger, flags);
-    std::unique_ptr<ExampleIteratorQueryRecorder>
-        example_iterator_query_recorder = nullptr;
-    if (flags->enable_native_example_query_recording()) {
-      example_iterator_query_recorder =
-          std::make_unique<ExampleIteratorQueryRecorderImpl>(
-              selector_context_with_task_details);
-    }
+    auto example_iterator_query_recorder =
+        std::make_unique<ExampleIteratorQueryRecorderImpl>(
+            selector_context_with_task_details);
     RunPlanResults run_plan_results = RunComputation(
         task_assignment, selector_context_with_task_details, env_deps,
         phase_logger, files, log_manager, opstats_logger, flags,
@@ -1989,11 +1985,10 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     } else {
       task_result_info.set_result(false);
     }
-    if (flags->enable_native_example_query_recording() &&
-        example_iterator_query_recorder) {
+
       *task_result_info.mutable_example_iterator_queries() =
           example_iterator_query_recorder->StopRecordingAndGetQueries();
-    }
+
     env_deps->OnTaskCompleted(std::move(task_result_info));
   }
   return successful_task_names;
@@ -2219,13 +2214,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           FillSelectorContextWithTaskLevelDetails(checkin_result,
                                                   federated_selector_context,
                                                   opstats_logger, flags);
-      std::unique_ptr<ExampleIteratorQueryRecorder>
-          example_iterator_query_recorder = nullptr;
-      if (flags->enable_native_example_query_recording()) {
-        example_iterator_query_recorder =
-            std::make_unique<ExampleIteratorQueryRecorderImpl>(
-                selector_context_with_task_details);
-      }
+      auto example_iterator_query_recorder =
+          std::make_unique<ExampleIteratorQueryRecorderImpl>(
+              selector_context_with_task_details);
 
       auto run_plan_results = RunComputation(
           checkin_result, selector_context_with_task_details, env_deps,
@@ -2249,11 +2240,10 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
       } else {
         task_result_info.set_result(false);
       }
-      if (flags->enable_native_example_query_recording() &&
-          example_iterator_query_recorder) {
-        *task_result_info.mutable_example_iterator_queries() =
-            example_iterator_query_recorder->StopRecordingAndGetQueries();
-      }
+
+      *task_result_info.mutable_example_iterator_queries() =
+          example_iterator_query_recorder->StopRecordingAndGetQueries();
+
       env_deps->OnTaskCompleted(std::move(task_result_info));
     }
   }

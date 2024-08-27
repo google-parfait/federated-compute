@@ -668,8 +668,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_phase_stats_logging, (), (const, override));
   MOCK_METHOD(bool, enable_lightweight_client_report_wire_format, (),
               (const, override));
-  MOCK_METHOD(bool, enable_native_example_query_recording, (),
-              (const, override));
   MOCK_METHOD(bool, enable_confidential_aggregation, (), (const, override));
   MOCK_METHOD(bool, check_trustworthiness_for_min_sep_policy, (),
               (const, override));
