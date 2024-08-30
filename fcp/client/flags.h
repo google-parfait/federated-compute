@@ -191,16 +191,6 @@ class Flags {
   // the correct aggregation type in the selector context.
   virtual bool confidential_agg_in_selector_context() const { return false; }
 
-  // If true, ExampleQuery tasks for structured output will support the new
-  // aggregation type: FederatedComputeCheckpointAggregation.
-  // With this aggregation type, the client report format will be the same as if
-  // the legacy TFV1CheckpointAggregation format was used with the
-  // enable_lightweight_client_report_wire_format flag set to true.
-  virtual bool support_fccheckpoint_aggregation_in_legacy_example_query_tasks()
-      const {
-    return false;
-  }
-
   // If true, direct data upload tasks are supported.
   virtual bool enable_direct_data_upload_task() const { return false; }
 

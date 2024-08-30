@@ -601,8 +601,7 @@ absl::StatusOr<AggregationConfig::ProtocolConfigCase> ExtractProtocolConfigCase(
 // supported.
 absl::Status ValidateStructuredExampleQuery(
     const ExampleQuerySpec::ExampleQuery& example_query,
-    const ::google::protobuf::Map<std::string, AggregationConfig>& aggregations,
-    bool support_fccheckpoint_aggregation_in_legacy_example_query_tasks) {
+    const ::google::protobuf::Map<std::string, AggregationConfig>& aggregations) {
   for (auto const& [vector_name, spec] : example_query.output_vector_specs()) {
     if (aggregations.find(vector_name) == aggregations.end()) {
       return absl::InvalidArgumentError(
@@ -613,8 +612,8 @@ absl::Status ValidateStructuredExampleQuery(
       return absl::InvalidArgumentError(
           "Output vector has unsupported AggregationConfig.");
     }
-    if (protocol_config.has_federated_compute_checkpoint_aggregation() &&
-        !support_fccheckpoint_aggregation_in_legacy_example_query_tasks) {
+    if (!protocol_config.has_federated_compute_checkpoint_aggregation() &&
+        !protocol_config.has_tf_v1_checkpoint_aggregation()) {
       return absl::InvalidArgumentError(
           "Output vector has unsupported AggregationConfig.");
     }
@@ -671,8 +670,6 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
         engine::PlanOutcome::kInvalidArgument, protocol_config.status()));
   }
 
-  const bool support_fccheckpoint_aggregation_in_legacy_example_query_tasks =
-      flags->support_fccheckpoint_aggregation_in_legacy_example_query_tasks();
   const bool enable_direct_data_upload_task =
       flags->enable_direct_data_upload_task();
   for (const auto& example_query :
@@ -688,9 +685,7 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
     absl::Status status;
     if (example_query.direct_output_tensor_name().empty()) {
       // Structured example query.
-      status = ValidateStructuredExampleQuery(
-          example_query, aggregations,
-          support_fccheckpoint_aggregation_in_legacy_example_query_tasks);
+      status = ValidateStructuredExampleQuery(example_query, aggregations);
     } else {
       // Direct example query.
       status = ValidateDirectExampleQuery(example_query, aggregations,

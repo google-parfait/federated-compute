@@ -673,9 +673,6 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, confidential_agg_in_selector_context, (),
               (const, override));
-  MOCK_METHOD(bool,
-              support_fccheckpoint_aggregation_in_legacy_example_query_tasks,
-              (), (const, override));
   MOCK_METHOD(bool, enable_direct_data_upload_task, (), (const, override));
   MOCK_METHOD(bool, enable_relative_uri_prefix, (), (const, override));
 };
