@@ -93,7 +93,7 @@ def _build_client_phase_with_example_query_spec(
       for vector_name in set(example_query.output_vector_specs.keys()):
         io_router.aggregations[vector_name].CopyFrom(
             plan_pb2.AggregationConfig(
-                tf_v1_checkpoint_aggregation=plan_pb2.TFV1CheckpointAggregation()
+                federated_compute_checkpoint_aggregation=plan_pb2.FederatedComputeCheckpointAggregation()
             )
         )
     else:

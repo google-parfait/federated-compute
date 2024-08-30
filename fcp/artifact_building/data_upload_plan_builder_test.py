@@ -102,7 +102,7 @@ class BuildClientPhaseWithExampleQuerySpecTest(parameterized.TestCase):
           testcase_name='output_vectors',
           direct_upload=False,
           aggregation_type=plan_pb2.AggregationConfig(
-              tf_v1_checkpoint_aggregation=plan_pb2.TFV1CheckpointAggregation()
+              federated_compute_checkpoint_aggregation=plan_pb2.FederatedComputeCheckpointAggregation()
           ),
       ),
   )
@@ -148,7 +148,7 @@ class BuildPlanTest(parameterized.TestCase):
           testcase_name='output_vectors',
           direct_upload=False,
           aggregation_type=plan_pb2.AggregationConfig(
-              tf_v1_checkpoint_aggregation=plan_pb2.TFV1CheckpointAggregation()
+              federated_compute_checkpoint_aggregation=plan_pb2.FederatedComputeCheckpointAggregation()
           ),
       ),
   )
