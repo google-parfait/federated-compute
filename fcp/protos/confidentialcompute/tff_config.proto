@@ -16,19 +16,13 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
-import "fcp/protos/confidentialcompute/file_info.proto";
 import "tensorflow_federated/proto/v0/executor.proto";
 
 option java_package = "com.google.intelligence.fcp.confidentialcompute";
 option java_multiple_files = true;
 
-// Configuration for a TFF Computation to be run in a Confidential Compute
-// environment using the Pipeline Transform API.
-message TffConfig {
-  tensorflow_federated.v0.Value function = 1;
-  tensorflow_federated.v0.Value initial_arg = 2;
-}
-
+// Initialization config for a TFF container that implements the Confidential
+// Transform API.
 message TffContainerInitializeConfig {}
 
 // Configuration for a TFF Computation to be run in a Confidential Compute
@@ -45,11 +39,13 @@ message TffSessionConfig {
 }
 
 // Configuration for the initial WriteRequest of each blob to be stored in the
-// first_request_configuation field.
+// first_request_configuration field.
 message TffSessionWriteConfig {
-  // Information about the data that is in the encrypted blob that is written to
-  // the session.
-  FileInfo file_info = 1;
+  // The uri from which the data was fetched before being written to the
+  // container session.
+  bytes uri = 1;
+  // True if the data came from a client upload, false otherwise.
+  bool client_upload = 2;
 }
 
 message TffSessionFinalizeConfig {}

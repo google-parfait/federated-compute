@@ -187,7 +187,6 @@ proto_library(
     name = "tff_config_proto",
     srcs = ["tff_config.proto"],
     deps = [
-        ":file_info_proto",
         "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_proto",
     ],
 )
@@ -223,4 +222,15 @@ py_proto_library(
 cc_proto_library(
     name = "file_info_cc_proto",
     deps = [":file_info_proto"],
+)
+
+proto_library(
+    name = "blob_data_proto",
+    srcs = ["blob_data.proto"],
+    deps = [":confidential_transform_proto"],
+)
+
+cc_proto_library(
+    name = "blob_data_cc_proto",
+    deps = [":blob_data_proto"],
 )
