@@ -88,7 +88,7 @@ class DataSpec:
             "DataSpec's preprocessing_fn is None so a "
             'preprocessing tff.Computation cannot be generated.'
         )
-      self._preprocessing_comp = tff.tf_computation(
+      self._preprocessing_comp = tff.tensorflow.computation(
           self.preprocessing_fn,
           tff.SequenceType(np.str_),
       )

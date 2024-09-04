@@ -43,7 +43,7 @@ def initialize() -> tff.Value:
   return tff.federated_value(0, tff.SERVER)
 
 
-@tff.tf_computation(np.int32, np.int32)
+@tff.tensorflow.computation(np.int32, np.int32)
 def _add(x: int, y: int) -> int:
   return x + y
 
@@ -61,7 +61,7 @@ def sum_counts(state, client_data):
     count = tf.io.parse_example(example, features=features)['count']
     return s + tf.cast(count, tf.int32)
 
-  @tff.tf_computation
+  @tff.tensorflow.computation
   def client_work(client_data):
     return client_data.reduce(0, reduce_counts)
 

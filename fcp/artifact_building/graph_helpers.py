@@ -499,7 +499,7 @@ def make_data_sources_with_dataspec(
     assert ds.example_selector_proto is not None
     sel_bytes = ds.example_selector_proto.SerializeToString()
 
-    @tff.tf_computation(tf.string)
+    @tff.tensorflow.computation(tf.string)
     def data_comp(token):
       """The data source computation.
 
@@ -585,7 +585,8 @@ def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
   """
   type_spec = tff.to_type(type_spec)
   if isinstance(type_spec, tff.SequenceType):
-    @tff.tf_computation(tf.string, tf.string)
+
+    @tff.tensorflow.computation(tf.string, tf.string)
     def data_comp(token, example_selector):
       """The data source computation.
 

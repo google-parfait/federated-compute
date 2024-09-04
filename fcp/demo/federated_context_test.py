@@ -42,12 +42,12 @@ DATA_SOURCE = federated_data_source.FederatedDataSource(
     POPULATION_NAME, plan_pb2.ExampleSelector(collection_uri='app:/test'))
 
 
-@tff.tf_computation(tf.int32)
+@tff.tensorflow.computation(tf.int32)
 def add_one(x):
   return x + 1
 
 
-@tff.tf_computation(np.int32, np.int32)
+@tff.tensorflow.computation(np.int32, np.int32)
 def _add(x: int, y: int) -> int:
   return x + y
 
@@ -88,7 +88,7 @@ class TestClass:
   field_two = attr.ib()
 
 
-@tff.tf_computation
+@tff.tensorflow.computation
 def init():
   return TestClass(field_one=1, field_two=2)
 

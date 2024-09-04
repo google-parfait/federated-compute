@@ -157,7 +157,7 @@ class GraphHelperTest(absltest.TestCase):
   def test_import_tensorflow(self):
     # NOTE: Minimal test for now, since this is exercised by other components,
     # just a single example with a combo of all flavors of params and results.
-    @tff.tf_computation(tff.SequenceType(np.int64), tf.int64)
+    @tff.tensorflow.computation(tff.SequenceType(np.int64), tf.int64)
     def work(ds, x):
       return x + 1, ds.map(lambda a: a + x)
 
@@ -176,7 +176,8 @@ class GraphHelperTest(absltest.TestCase):
         self.assertEqual(sess.run(z), 33)
 
   def test_import_tensorflow_with_session_token(self):
-    @tff.tf_computation
+
+    @tff.tensorflow.computation
     def return_value():
       return tff.framework.get_context_stack().current.session_token  # pytype: disable=attribute-error
 
@@ -190,7 +191,7 @@ class GraphHelperTest(absltest.TestCase):
 
   def test_import_tensorflow_with_control_dep_remap(self):
     # Assert that importing graphdef remaps both regular and control dep inputs.
-    @tff.tf_computation(tf.int64, tf.int64)
+    @tff.tensorflow.computation(tf.int64, tf.int64)
     def work(x, y):
       # Insert a control dependency to ensure it is remapped during import.
       with tf.compat.v1.control_dependencies([y]):

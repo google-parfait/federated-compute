@@ -22,7 +22,7 @@ import tensorflow_federated as tff
 from fcp.demo import federated_computation as fc
 
 
-@tff.tf_computation(tf.int32, tf.int32)
+@tff.tensorflow.computation(tf.int32, tf.int32)
 def add_values(x, y):
   return x + y
 
@@ -47,7 +47,7 @@ def count_clients(state, client_data):
 def count_examples(state, client_data):
   """Example TFF computation that counts client examples."""
 
-  @tff.tf_computation
+  @tff.tensorflow.computation
   def client_work(client_data):
     return client_data.reduce(0, lambda x, _: x + 1)
 
