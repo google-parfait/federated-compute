@@ -196,6 +196,7 @@ py_library(
 py_test(
     name = "proto_helpers_test",
     size = "small",
+    timeout = "moderate",
     srcs = ["proto_helpers_test.py"],
     python_version = "PY3",
     srcs_version = "PY3",
