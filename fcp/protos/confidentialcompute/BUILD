@@ -33,6 +33,11 @@ cc_proto_library(
     deps = [":access_policy_proto"],
 )
 
+py_proto_library(
+    name = "access_policy_py_pb2",
+    deps = [":access_policy_proto"],
+)
+
 proto_library(
     name = "verification_record_proto",
     srcs = ["verification_record.proto"],
