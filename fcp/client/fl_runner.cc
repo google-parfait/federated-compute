@@ -15,9 +15,6 @@
  */
 #include "fcp/client/fl_runner.h"
 
-#include <fcntl.h>
-#include <openssl/base.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -83,12 +80,10 @@
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
-#include "openssl/digest.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/platform/tstring.h"
-#include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
@@ -179,7 +174,7 @@ absl::StatusOr<ComputationResults> CreateComputationResults(
           quantized.bitwidth = 31;
           break;
         case tensorflow::DT_INT64:
-          AddValuesToQuantized<tensorflow::int64>(&quantized, output_tensor);
+          AddValuesToQuantized<int64_t>(&quantized, output_tensor);
           quantized.bitwidth = 62;
           break;
         default:
@@ -489,7 +484,7 @@ absl::StatusOr<std::vector<std::string>> ConstructOutputsWithDeterministicOrder(
   std::vector<std::string> output_names;
   // The order of output tensor names should match the order in TensorflowSpec.
   for (const auto& output_tensor_spec : tensorflow_spec.output_tensor_specs()) {
-    std::string tensor_name = output_tensor_spec.name();
+    const std::string& tensor_name = output_tensor_spec.name();
     if (!io_router.aggregations().contains(tensor_name) ||
         !io_router.aggregations().at(tensor_name).has_secure_aggregation()) {
       return absl::InvalidArgumentError(
@@ -973,7 +968,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
       CreateInputCheckpointFile(files,
                                 eligibility_eval_task.payloads.checkpoint);
   if (!checkpoint_input_filename.ok()) {
-    auto status = checkpoint_input_filename.status();
+    const auto& status = checkpoint_input_filename.status();
     auto message = absl::StrCat(
         "Failed to create eligibility eval checkpoint input file: code: ",
         status.code(), ", message: ", status.message());
@@ -1191,7 +1186,7 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
   }
 
   if (!eligibility_checkin_result.ok()) {
-    auto status = eligibility_checkin_result.status();
+    const auto& status = eligibility_checkin_result.status();
     auto message = absl::StrCat("Error during eligibility eval checkin: code: ",
                                 status.code(), ", message: ", status.message());
     if (status.code() == absl::StatusCode::kAborted) {
@@ -1721,7 +1716,7 @@ std::vector<CheckinResult> IssueMultipleTaskAssignments(
   // failed completely without receiving any assignments and there's nothing
   // else for us to do.
   if (!multiple_task_assignments.ok()) {
-    auto status = multiple_task_assignments.status();
+    const auto& status = multiple_task_assignments.status();
     auto message = absl::StrCat(
         "Error during multiple task assignments: code: ", status.code(),
         ", message: ", status.message());
@@ -1867,7 +1862,7 @@ RunPlanResults RunComputation(
     absl::StatusOr<std::string> output_filename =
         files->CreateTempFile("output", ".ckp");
     if (!output_filename.ok()) {
-      auto status = output_filename.status();
+      const auto& status = output_filename.status();
       auto message = absl::StrCat(
           "Could not create temporary output checkpoint file: code: ",
           status.code(), ", message: ", status.message());
