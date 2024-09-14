@@ -39,8 +39,6 @@ inline static constexpr char kDatasetStatsNumExamplesRead[] =
     "dataset_stats-num_examples_read";
 inline static constexpr char kDatasetStatsNumBytesRead[] =
     "dataset_stats-num_bytes_read";
-inline static constexpr char kDatasetStatsFirstAccessTimestamp[] =
-    "dataset_stats-first_access_timestamp";
 inline static constexpr char kErrorMessage[] = "error_message";
 inline static constexpr char kRetryWindowDelayMinMillis[] =
     "retry_window-delay_min";
