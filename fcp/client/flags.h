@@ -196,6 +196,9 @@ class Flags {
 
   // If true, adds support for relative URI prefixes.
   virtual bool enable_relative_uri_prefix() const { return false; }
+
+  // If true, a unique task identifier will be created for each task assignment.
+  virtual bool create_task_identifier() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

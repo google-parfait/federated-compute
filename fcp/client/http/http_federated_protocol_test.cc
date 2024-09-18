@@ -252,6 +252,10 @@ MATCHER_P(IsOkAndHolds, m, "") {
   return testing::ExplainMatchResult(IsOk(), arg, result_listener) &&
          testing::ExplainMatchResult(m, arg.value(), result_listener);
 }
+MATCHER_P(EqTaskIdentifier, task_identifier, "") {
+  return testing::ExplainMatchResult(task_identifier, arg.task_identifier,
+                                     result_listener);
+}
 
 constexpr int kTransientErrorsRetryPeriodSecs = 10;
 constexpr double kTransientErrorsRetryDelayJitterPercent = 0.1;
@@ -559,6 +563,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillRepeatedly(Return(false));
     EXPECT_CALL(mock_flags_, enable_relative_uri_prefix)
         .WillRepeatedly(Return(true));
+    EXPECT_CALL(mock_flags_, create_task_identifier)
+        .WillRepeatedly(Return(false));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -659,8 +665,9 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // task assignment payload being returned by the server. This is a
   // utility function used by Report*() tests that depend on a prior,
   // successful execution of Checkin(). It returns a
-  // absl::Status, which the caller should verify is OK using ASSERT_OK.
-  absl::Status RunSuccessfulCheckin(
+  // absl::StatusOr<CheckinResult>, which the caller should verify is OK using
+  // ASSERT_OK.
+  absl::StatusOr<FederatedProtocol::CheckinResult> RunSuccessfulCheckin(
       bool report_eligibility_eval_result = true,
       std::optional<std::string> confidential_data_access_policy = std::nullopt,
       bool set_relative_uri = false) {
@@ -726,14 +733,13 @@ class HttpFederatedProtocolTest : public ::testing::Test {
           report_eet_request_uri, absl::OkStatus());
     }
 
-    return federated_protocol_
-        ->Checkin(expected_eligibility_info,
-                  mock_task_received_callback_.AsStdFunction())
-        .status();
+    return federated_protocol_->Checkin(
+        expected_eligibility_info,
+        mock_task_received_callback_.AsStdFunction());
   }
 
-  absl::Status RunSuccessfulMultipleTaskAssignments(
-      bool eligibility_eval_enabled = true) {
+  absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
+  RunSuccessfulMultipleTaskAssignments(bool eligibility_eval_enabled = true) {
     if (eligibility_eval_enabled) {
       std::string report_eet_request_uri =
           "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
@@ -801,10 +807,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
                     plan_uri, HttpRequest::Method::kGet, _, "")))
         .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan_2)));
 
-    return federated_protocol_
-        ->PerformMultipleTaskAssignments(
-            task_names, mock_multiple_tasks_received_callback_.AsStdFunction())
-        .status();
+    return federated_protocol_->PerformMultipleTaskAssignments(
+        task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
   }
 
   absl::Status RunSuccessfulUploadViaSimpleAgg(
@@ -2329,7 +2333,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
           FieldsAre("", ""), expected_federated_select_uri_template,
           expected_aggregation_session_id,
           Optional(FieldsAre(_, Eq(kMinimumClientsInServerVisibleAggregate))),
-          Eq(std::nullopt), kTaskName)));
+          Eq(std::nullopt), kTaskName, _)));
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -2348,10 +2352,22 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
           expected_federated_select_uri_template,
           expected_aggregation_session_id,
           Optional(FieldsAre(_, Eq(kMinimumClientsInServerVisibleAggregate))),
-          Eq(std::nullopt), kTaskName)));
+          Eq(std::nullopt), kTaskName, _)));
   // The Checkin call is expected to return the accepted retry window from the
   // response to the first eligibility eval request.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedWithTaskIdentifier) {
+  EXPECT_CALL(mock_flags_, create_task_identifier())
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  auto checkin_result = RunSuccessfulCheckin();
+  ASSERT_OK(checkin_result);
+  EXPECT_THAT(*checkin_result,
+              VariantWith<FederatedProtocol::TaskAssignment>(
+                  FieldsAre(_, _, _, _, _, _, "task_default")));
 }
 
 TEST_F(HttpFederatedProtocolTest,
@@ -2439,7 +2455,7 @@ TEST_F(HttpFederatedProtocolTest,
       mock_task_received_callback_,
       Call(FieldsAre(FieldsAre("", ""), expected_federated_select_uri_template,
                      expected_aggregation_session_id, Eq(std::nullopt),
-                     Eq(std::nullopt), kTaskName)));
+                     Eq(std::nullopt), kTaskName, _)));
 
   // Issue the regular checkin.
   auto checkin_result = federated_protocol_->Checkin(
@@ -2453,7 +2469,7 @@ TEST_F(HttpFederatedProtocolTest,
           FieldsAre(absl::Cord(expected_plan), absl::Cord(expected_checkpoint)),
           expected_federated_select_uri_template,
           expected_aggregation_session_id, Eq(std::nullopt), Eq(std::nullopt),
-          kTaskName)));
+          kTaskName, _)));
   // The Checkin call is expected to return the accepted retry window from the
   // response to the first eligibility eval request.
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -2794,7 +2810,7 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
                            kMultiTaskAggregationSessionId_1,
                            Optional(FieldsAre(
                                _, Eq(kMinimumClientsInServerVisibleAggregate))),
-                           Eq(std::nullopt), kMultiTaskId_1))),
+                           Eq(std::nullopt), kMultiTaskId_1, _))),
                   Pair(kMultiTaskId_2,
                        IsOkAndHolds(FieldsAre(
                            FieldsAre(absl::Cord(expected_plan_2),
@@ -2803,8 +2819,21 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
                            kMultiTaskAggregationSessionId_2,
                            Optional(FieldsAre(
                                _, Eq(kMinimumClientsInServerVisibleAggregate))),
-                           Eq(std::nullopt), kMultiTaskId_2)))));
+                           Eq(std::nullopt), kMultiTaskId_2, _)))));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestMultipleTaskAssignmentsCreateTaskIdentifier) {
+  EXPECT_CALL(mock_flags_, create_task_identifier).WillRepeatedly(Return(true));
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true));
+  auto multiple_task_assignment_result = RunSuccessfulMultipleTaskAssignments();
+  ASSERT_OK(multiple_task_assignment_result);
+  auto task_assignments = multiple_task_assignment_result->task_assignments;
+  EXPECT_EQ(task_assignments.size(), 2);
+  EXPECT_EQ(task_assignments[kMultiTaskId_1]->task_identifier, "task_0");
+  EXPECT_EQ(task_assignments[kMultiTaskId_2]->task_identifier, "task_1");
 }
 
 TEST_F(HttpFederatedProtocolTest,
@@ -2892,7 +2921,7 @@ TEST_F(HttpFederatedProtocolTest,
                   kFederatedSelectUriTemplate, kMultiTaskAggregationSessionId_1,
                   Optional(FieldsAre(
                       _, Eq(kMinimumClientsInServerVisibleAggregate))),
-                  Eq(std::nullopt), kMultiTaskId_1))),
+                  Eq(std::nullopt), kMultiTaskId_1, _))),
           Pair(kMultiTaskId_2, IsCode(absl::StatusCode::kInvalidArgument))));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
@@ -2968,7 +2997,7 @@ TEST_F(HttpFederatedProtocolTest,
                   kFederatedSelectUriTemplate, kMultiTaskAggregationSessionId_1,
                   Optional(FieldsAre(
                       _, Eq(kMinimumClientsInServerVisibleAggregate))),
-                  Eq(std::nullopt), kMultiTaskId_1))),
+                  Eq(std::nullopt), kMultiTaskId_1, _))),
           Pair(kMultiTaskId_2, IsCode(absl::StatusCode::kInvalidArgument))));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }

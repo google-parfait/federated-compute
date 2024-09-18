@@ -378,6 +378,14 @@ bool IsResourceEmpty(const Resource& resource) {
   return !resource.has_inline_resource() && !resource.has_uri();
 }
 
+std::string CreateTaskIdentifier(std::optional<int32_t> task_index) {
+  if (task_index.has_value()) {
+    return absl::StrCat(kTaskIdentifierPrefix, *task_index);
+  } else {
+    return absl::StrCat(kTaskIdentifierPrefix, "default");
+  }
+}
+
 }  // namespace
 
 HttpFederatedProtocol::HttpFederatedProtocol(
@@ -839,7 +847,7 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   }
   const auto& task_assignment = response_proto.task_assignment();
 
-  TaskAssignment result = CreateTaskAssignment(task_assignment);
+  TaskAssignment result = CreateTaskAssignment(task_assignment, std::nullopt);
   payload_uris_received_callback(result);
 
   // Fetch the task resources, returning any errors that may be encountered in
@@ -870,7 +878,8 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
 
 FederatedProtocol::TaskAssignment HttpFederatedProtocol::CreateTaskAssignment(
     const ::google::internal::federatedcompute::v1::TaskAssignment&
-        task_assignment) {
+        task_assignment,
+    std::optional<int32_t> task_index) {
   TaskAssignment result = {
       .federated_select_uri_template =
           task_assignment.federated_select_uri_info().uri_template(),
@@ -890,6 +899,10 @@ FederatedProtocol::TaskAssignment HttpFederatedProtocol::CreateTaskAssignment(
     // above can already determine that the task we got assigned but haven't
     // fetched resources for is a confidential aggregation task.
     result.confidential_agg_info = ConfidentialAggInfo{};
+  }
+
+  if (flags_->create_task_identifier()) {
+    result.task_identifier = CreateTaskIdentifier(task_index);
   }
   return result;
 }
@@ -1067,6 +1080,7 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
 
   std::vector<TaskResources> resources_to_fetch;
   std::vector<TaskAssignment> pending_fetch_task_assignments;
+  int32_t task_index = 0;
   for (const auto& task_assignment : response_proto.task_assignments()) {
     absl::StatusOr<PerTaskInfo> task_info = CreatePerTaskInfoFromTaskAssignment(
         task_assignment, ObjectState::kMultipleTaskAssignmentsAccepted);
@@ -1082,10 +1096,16 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
                 .data_access_policy()};
     resources_to_fetch.push_back(task_resources);
 
-    auto pending_task_assignment = CreateTaskAssignment(task_assignment);
+    auto pending_task_assignment =
+        CreateTaskAssignment(task_assignment, task_index++);
     pending_fetch_task_assignments.push_back(pending_task_assignment);
-    task_info_map_[pending_task_assignment.aggregation_session_id] =
-        std::move(*task_info);
+    if (flags_->create_task_identifier()) {
+      task_info_map_[pending_task_assignment.task_identifier] =
+          std::move(*task_info);
+    } else {
+      task_info_map_[pending_task_assignment.aggregation_session_id] =
+          std::move(*task_info);
+    }
   }
 
   payload_uris_received_callback(pending_fetch_task_assignments.size());
@@ -1129,14 +1149,14 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
 
 absl::Status HttpFederatedProtocol::ReportCompleted(
     ComputationResults results, absl::Duration plan_duration,
-    std::optional<std::string> aggregation_session_id) {
+    std::optional<std::string> task_identifier) {
   FCP_LOG(INFO) << "Reporting outcome: " << static_cast<int>(engine::COMPLETED);
   PerTaskInfo* task_info;
-  if (aggregation_session_id.has_value()) {
-    if (!task_info_map_.contains(aggregation_session_id.value())) {
-      return absl::InvalidArgumentError("Unexpected aggregation_session_id.");
+  if (task_identifier.has_value()) {
+    if (!task_info_map_.contains(task_identifier.value())) {
+      return absl::InvalidArgumentError("Unexpected task identifier.");
     }
-    task_info = &task_info_map_[aggregation_session_id.value()];
+    task_info = &task_info_map_[task_identifier.value()];
   } else {
     task_info = &default_task_info_;
   }
@@ -1841,14 +1861,14 @@ HttpFederatedProtocol::StartSecureAggregationAndReportTaskResult(
 
 absl::Status HttpFederatedProtocol::ReportNotCompleted(
     engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
-    std::optional<std::string> aggregation_session_id) {
+    std::optional<std::string> task_identifier) {
   FCP_LOG(WARNING) << "Reporting outcome: " << static_cast<int>(phase_outcome);
   PerTaskInfo* task_info;
-  if (aggregation_session_id.has_value()) {
-    if (!task_info_map_.contains(aggregation_session_id.value())) {
-      return absl::InvalidArgumentError("Unexpected aggregation_session_id.");
+  if (task_identifier.has_value()) {
+    if (!task_info_map_.contains(task_identifier.value())) {
+      return absl::InvalidArgumentError("Unexpected task identifier.");
     }
-    task_info = &task_info_map_[aggregation_session_id.value()];
+    task_info = &task_info_map_[task_identifier.value()];
   } else {
     task_info = &default_task_info_;
   }

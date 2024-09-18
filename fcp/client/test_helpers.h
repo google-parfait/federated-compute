@@ -675,6 +675,7 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, enable_direct_data_upload_task, (), (const, override));
   MOCK_METHOD(bool, enable_relative_uri_prefix, (), (const, override));
+  MOCK_METHOD(bool, create_task_identifier, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

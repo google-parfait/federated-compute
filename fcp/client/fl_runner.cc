@@ -841,7 +841,7 @@ absl::Status ReportPlanResult(
     FederatedProtocol* federated_protocol, PhaseLogger& phase_logger,
     absl::StatusOr<ComputationResults> computation_results,
     absl::Time run_plan_start_time, absl::Time reference_time,
-    std::optional<std::string> aggregation_session_id) {
+    std::optional<std::string> task_identifier) {
   const absl::Time before_report_time = absl::Now();
 
   // Note that the FederatedSelectManager shouldn't be active anymore during the
@@ -858,8 +858,7 @@ absl::Status ReportPlanResult(
     FCP_RETURN_IF_ERROR(phase_logger.LogResultUploadStarted());
     result = federated_protocol->ReportCompleted(
         std::move(*computation_results),
-        /*plan_duration=*/absl::Now() - run_plan_start_time,
-        aggregation_session_id);
+        /*plan_duration=*/absl::Now() - run_plan_start_time, task_identifier);
     LogResultUploadStatus(
         phase_logger, result,
         GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
@@ -869,8 +868,7 @@ absl::Status ReportPlanResult(
     FCP_RETURN_IF_ERROR(phase_logger.LogFailureUploadStarted());
     result = federated_protocol->ReportNotCompleted(
         engine::PhaseOutcome::ERROR,
-        /*plan_duration=*/absl::Now() - run_plan_start_time,
-        aggregation_session_id);
+        /*plan_duration=*/absl::Now() - run_plan_start_time, task_identifier);
     LogFailureUploadStatus(
         phase_logger, result,
         GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
@@ -1290,6 +1288,7 @@ struct CheckinResult {
   std::string federated_select_uri_template;
   std::string aggregation_session_id;
   std::optional<FederatedProtocol::ConfidentialAggInfo> confidential_agg_info;
+  std::string task_identifier;
 };
 
 absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
@@ -1365,7 +1364,10 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
       .confidential_agg_info =
           flags->confidential_agg_in_selector_context()
               ? std::move(task_assignment.confidential_agg_info)
-              : std::nullopt};
+              : std::nullopt,
+      .task_identifier = flags->create_task_identifier()
+                             ? task_assignment.task_identifier
+                             : task_assignment.aggregation_session_id};
 }
 
 absl::StatusOr<CheckinResult> IssueCheckin(
@@ -1960,11 +1962,14 @@ std::vector<std::string> HandleMultipleTaskAssignments(
         federated_protocol, fedselect_manager, opstats_example_iterator_factory,
         example_iterator_query_recorder.get(), fl_runner_result, should_abort,
         timing_config, reference_time);
+
     absl::Status report_result =
         ReportPlanResult(federated_protocol, phase_logger,
                          std::move(run_plan_results.computation_results),
                          run_plan_results.run_plan_start_time, reference_time,
-                         task_assignment.aggregation_session_id);
+                         flags->create_task_identifier()
+                             ? task_assignment.task_identifier
+                             : task_assignment.aggregation_session_id);
     TaskResultInfo task_result_info;
     if (run_plan_results.outcome == engine::PlanOutcome::kSuccess &&
         report_result.ok()) {

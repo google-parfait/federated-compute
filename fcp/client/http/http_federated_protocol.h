@@ -63,6 +63,8 @@ namespace fcp {
 namespace client {
 namespace http {
 
+inline constexpr absl::string_view kTaskIdentifierPrefix = "task_";
+
 // Implements a single session of the HTTP-based Federated Compute protocol.
 class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
  public:
@@ -102,11 +104,11 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
 
   absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
-      std::optional<std::string> aggregation_session_id) override;
+      std::optional<std::string> task_identifier) override;
 
   absl::Status ReportNotCompleted(
       engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
-      std::optional<std::string> aggregation_session_id) override;
+      std::optional<std::string> task_identifier) override;
 
   google::internal::federatedml::v2::RetryWindow GetLatestRetryWindow()
       override;
@@ -344,7 +346,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   ObjectState GetTheLatestStateFromAllTasks();
   TaskAssignment CreateTaskAssignment(
       const ::google::internal::federatedcompute::v1::TaskAssignment&
-          task_assignment);
+          task_assignment,
+      std::optional<int32_t> task_index);
   absl::StatusOr<PerTaskInfo> CreatePerTaskInfoFromTaskAssignment(
       const ::google::internal::federatedcompute::v1::TaskAssignment&
           task_assignment,
@@ -412,7 +415,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   std::optional<RetryTimes> retry_times_;
   std::string pre_task_assignment_session_id_;
 
-  // A map of aggregation_session_id to per-task information.
+  // A map of task identifier to per-task information.
   // Only tasks from the multiple task assignments will be tracked in this map.
   absl::flat_hash_map<std::string, PerTaskInfo> task_info_map_;
   // The task received from the regular check-in will be tracked here.

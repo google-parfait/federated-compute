@@ -205,6 +205,9 @@ class FederatedProtocol {
     // aggregation protocol.
     std::optional<ConfidentialAggInfo> confidential_agg_info;
     std::string task_name;
+    // Unique identifier for the task when the task is assigned via multiple
+    // task assignment.
+    std::string task_identifier;
   };
   // Checkin() returns either
   // 1. a `TaskAssignment` struct if the client was assigned a task to run, or
@@ -297,10 +300,11 @@ class FederatedProtocol {
 
   // Reports the result of a federated computation to the server. Must only be
   // called once and after a successful call to Checkin().
-  // @param checkpoint A checkpoint proto.
-  // @param stats all stats reported during the computation.
+  // @param results the ComputationResults of a task.
   // @param plan_duration the duration for executing the plan in the plan
   //        engine. Does not include time spent on downloading the plan.
+  // @param task_identifier the identifier of the task, this field is only
+  //        filled when the task is assigned via multiple task assignment.
   // Returns:
   // - On success, OK.
   // - On error (e.g. an interruption, network error, or other unexpected
@@ -314,13 +318,15 @@ class FederatedProtocol {
   //   - any server-provided error code.
   virtual absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
-      std::optional<std::string> aggregation_session_id) = 0;
+      std::optional<std::string> task_identifier) = 0;
 
   // Reports the unsuccessful result of a federated computation to the server.
   // Must only be called once and after a successful call to Checkin().
   // @param phase_outcome the outcome of the federated computation.
   // @param plan_duration the duration for executing the plan in the plan
   //        engine. Does not include time spent on downloading the plan.
+  // @param task_identifier the identifier of the task, this field is only
+  //        filled when the task is assigned via multiple task assignment.
   // Returns:
   // - On success, OK.
   // - On error:
@@ -333,7 +339,7 @@ class FederatedProtocol {
   //   - any server-provided error code.
   virtual absl::Status ReportNotCompleted(
       engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
-      std::optional<std::string> aggregation_session_id) = 0;
+      std::optional<std::string> task_identifier) = 0;
 
   // Returns the RetryWindow the caller should use when rescheduling, based on
   // the current protocol phase. The value returned by this method may change
