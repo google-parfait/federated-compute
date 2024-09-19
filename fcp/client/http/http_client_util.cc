@@ -16,11 +16,14 @@
 #include "fcp/client/http/http_client_util.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
 
 #include "google/rpc/status.pb.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -29,6 +32,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/http/http_client.h"
 
@@ -237,6 +241,34 @@ absl::StatusOr<std::string> CreateByteStreamUploadUriSuffix(
   // Construct the URI suffix.
   return absl::Substitute(pattern, encoded_resource_name);
 }
+
+bool IsRetryableError(absl::StatusCode code) {
+  // https://google.aip.dev/194 indicates that we should retry on UNAVAILABLE
+  // errors.
+  return code == absl::StatusCode::kUnavailable;
+}
+
+absl::Duration GetRetryDelay(absl::BitGen& bit_gen, absl::Duration retry_delay,
+                             int32_t retry_attempt) {
+  // `retry_delay` represents our minimum delay, and we increase the delay
+  // exponentially with each retry attempt.
+
+  // Ensure that the retry delay is at least 1 millisecond.
+  if (retry_delay < absl::Milliseconds(1)) {
+    retry_delay = absl::Milliseconds(1);
+  }
+
+  double backoff_random_multiplier = 0.4;
+  double backoff_base = 1.3;
+  const absl::Duration first_term = retry_delay * backoff_random_multiplier;
+  // Generate a random number in [0.6, 1.0].
+  double second_term_multiplier =
+      absl::Uniform(bit_gen, 1.0 - backoff_random_multiplier, 1.0);
+  const absl::Duration second_term = second_term_multiplier * retry_delay *
+                                     std::pow(backoff_base, retry_attempt);
+  return first_term + second_term;
+}
+
 }  // namespace http
 }  // namespace client
 }  // namespace fcp

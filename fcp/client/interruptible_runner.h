@@ -68,9 +68,9 @@ class InterruptibleRunner {
 
   ~InterruptibleRunner() { thread_pool_->WaitUntilIdle(); }
 
-  // Executes f() on a background. Returns CANCELLED if the background thread
-  // was aborted, or a Status object from the background thread on successful
-  // completion.
+  // Executes f() on a background thread, blocking until it is done. Returns
+  // CANCELLED if the background thread was aborted, or a Status object from the
+  // background thread on successful completion.
   absl::Status Run(std::function<absl::Status()> f,
                    std::function<void()> abort_function);
 

@@ -25,6 +25,7 @@
 #include "google/rpc/code.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -138,7 +139,9 @@ class HttpSecAggSendToServerImplTest : public ::testing::Test {
   void SetUp() override {
     request_helper_ = std::make_unique<ProtocolRequestHelper>(
         &http_client_, &bytes_downloaded_, &bytes_uploaded_,
-        network_stopwatch_.get(), Clock::RealClock());
+        network_stopwatch_.get(), Clock::RealClock(), &bit_gen_,
+        /*retry_max_attempts=*/0,
+        /*retry_delay_ms=*/5000);
     runner_ = std::make_unique<InterruptibleRunner>(
         &log_manager_, []() { return false; },
         InterruptibleRunner::TimingConfig{
@@ -222,6 +225,7 @@ class HttpSecAggSendToServerImplTest : public ::testing::Test {
   // testable "Clock" object. This ensures various timestamps we may encounter
   // are more understandable.
   SimulatedClock clock_ = SimulatedClock(absl::Now());
+  absl::BitGen bit_gen_;
   StrictMock<MockHttpClient> http_client_;
   NiceMock<MockLogManager> log_manager_;
   int64_t bytes_downloaded_ = 0;

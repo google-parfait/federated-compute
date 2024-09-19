@@ -101,7 +101,10 @@ absl::StatusOr<std::deque<absl::Cord>> FetchSlicesViaHttp(
           http_client, interruptible_runner, std::move(resources),
           bytes_received_acc, bytes_sent_acc,
           // TODO(team): Enable caching for federated select slices.
-          /*resource_cache=*/nullptr);
+          /*resource_cache=*/nullptr,
+          // Retries are disabled for federated select slices.
+          /*clock=*/nullptr, /*bit_gen=*/nullptr, /*retry_max_attempts=*/0,
+          /*retry_delay_ms=*/0);
 
   // Check whether issuing the requests failed as a whole (generally indicating
   // a programming error).

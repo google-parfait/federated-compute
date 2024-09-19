@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "google/protobuf/any.pb.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
@@ -288,12 +289,16 @@ ProtocolRequestCreator::Create(absl::string_view api_key,
 
 ProtocolRequestHelper::ProtocolRequestHelper(
     HttpClient* http_client, int64_t* bytes_downloaded, int64_t* bytes_uploaded,
-    WallClockStopwatch* network_stopwatch, Clock* clock)
+    WallClockStopwatch* network_stopwatch, Clock* clock, absl::BitGen* bit_gen,
+    int32_t retry_max_attempts, int32_t retry_delay_ms)
     : http_client_(*http_client),
       bytes_downloaded_(*bytes_downloaded),
       bytes_uploaded_(*bytes_uploaded),
       network_stopwatch_(*network_stopwatch),
-      clock_(*clock) {}
+      clock_(*clock),
+      bit_gen_(*bit_gen),
+      retry_max_attempts_(retry_max_attempts),
+      retry_delay_ms_(retry_delay_ms) {}
 
 absl::StatusOr<InMemoryHttpResponse>
 ProtocolRequestHelper::PerformProtocolRequest(
@@ -315,10 +320,11 @@ ProtocolRequestHelper::PerformMultipleProtocolRequests(
   std::vector<absl::StatusOr<InMemoryHttpResponse>> responses;
   {
     auto started_stopwatch = network_stopwatch_.Start();
-    FCP_ASSIGN_OR_RETURN(responses,
-                         PerformMultipleRequestsInMemory(
-                             http_client_, runner, std::move(requests),
-                             &bytes_downloaded_, &bytes_uploaded_));
+    FCP_ASSIGN_OR_RETURN(
+        responses, PerformMultipleRequestsInMemoryWithRetry(
+                       http_client_, runner, std::move(requests),
+                       &bytes_downloaded_, &bytes_uploaded_, &clock_, &bit_gen_,
+                       retry_max_attempts_, retry_delay_ms_));
   }
   std::vector<absl::StatusOr<InMemoryHttpResponse>> results;
   std::transform(responses.begin(), responses.end(),

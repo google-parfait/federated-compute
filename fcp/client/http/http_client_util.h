@@ -20,6 +20,7 @@
 #include <string>
 
 #include "google/rpc/status.pb.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -126,6 +127,14 @@ absl::StatusOr<std::string> EncodeUriMultiplePathSegments(
 // Returns INVALID_ARGUMENT when the resource name cannot be URI-encoded.
 absl::StatusOr<std::string> CreateByteStreamUploadUriSuffix(
     absl::string_view resource_name);
+
+// Returns true if the error is retryable.
+bool IsRetryableError(absl::StatusCode code);
+
+// Returns the delay for the next retry attempt.
+absl::Duration GetRetryDelay(absl::BitGen& bit_gen, absl::Duration retry_delay,
+                             int32_t retry_attempt);
+
 }  // namespace fcp::client::http
 
 #endif  // FCP_CLIENT_HTTP_HTTP_CLIENT_UTIL_H_

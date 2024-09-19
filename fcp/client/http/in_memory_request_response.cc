@@ -26,6 +26,7 @@
 
 #include "google/protobuf/any.pb.h"
 #include "absl/memory/memory.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -36,6 +37,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
+#include "fcp/base/clock.h"
 #include "fcp/base/compression.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/cache/resource_cache.h"
@@ -90,6 +92,74 @@ absl::Status TryPutResourceInCache(absl::string_view client_cache_id,
   metadata_wrapper.PackFrom(metadata);
   return resource_cache.Put(client_cache_id, response_body, metadata_wrapper,
                             max_age);
+}
+
+absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
+PerformMultipleRequestsInMemory(
+    HttpClient& http_client, InterruptibleRunner& interruptible_runner,
+    std::vector<std::unique_ptr<http::HttpRequest>> requests,
+    int64_t* bytes_received_acc, int64_t* bytes_sent_acc) {
+  // A vector that will own the request handles and callbacks (and will
+  // determine their lifetimes).
+  std::vector<std::pair<std::unique_ptr<HttpRequestHandle>,
+                        std::unique_ptr<InMemoryHttpRequestCallback>>>
+      handles_and_callbacks;
+  handles_and_callbacks.reserve(requests.size());
+
+  // An accompanying vector that contains just the raw pointers, for passing to
+  // `HttpClient::PerformRequests`.
+  std::vector<std::pair<HttpRequestHandle*, HttpRequestCallback*>>
+      handles_and_callbacks_ptrs;
+  handles_and_callbacks_ptrs.reserve(requests.size());
+
+  // Enqueue each request, and create a simple callback for each request which
+  // will simply buffer the response body in-memory and allow us to consume that
+  // buffer once all requests have finished.
+  for (std::unique_ptr<HttpRequest>& request : requests) {
+    std::unique_ptr<HttpRequestHandle> handle =
+        http_client.EnqueueRequest(std::move(request));
+    auto callback = std::make_unique<InMemoryHttpRequestCallback>();
+    handles_and_callbacks_ptrs.push_back({handle.get(), callback.get()});
+    handles_and_callbacks.push_back({std::move(handle), std::move(callback)});
+  }
+
+  // Issue the requests in one call (allowing the HttpClient to issue them
+  // concurrently), in an interruptible fashion.
+  absl::Status result = interruptible_runner.Run(
+      [&http_client, &handles_and_callbacks_ptrs]() {
+        return http_client.PerformRequests(handles_and_callbacks_ptrs);
+      },
+      [&handles_and_callbacks_ptrs] {
+        // If we get aborted then call HttpRequestHandle::Cancel on all handles.
+        // This should result in the PerformRequests call returning early and
+        // InterruptibleRunner::Run returning CANCELLED.
+        for (auto [handle, callback] : handles_and_callbacks_ptrs) {
+          handle->Cancel();
+        }
+      });
+  // Update the network stats *before* we return (just in case a failed
+  // `PerformRequests` call caused some network traffic to have been sent
+  // anyway).
+  for (auto& [handle, callback] : handles_and_callbacks) {
+    HttpRequestHandle::SentReceivedBytes sent_received_bytes =
+        handle->TotalSentReceivedBytes();
+    if (bytes_received_acc != nullptr) {
+      *bytes_received_acc += sent_received_bytes.received_bytes;
+    }
+    if (bytes_sent_acc != nullptr) {
+      *bytes_sent_acc += sent_received_bytes.sent_bytes;
+    }
+  }
+
+  FCP_RETURN_IF_ERROR(result);
+
+  // Gather and return the results.
+  std::vector<absl::StatusOr<InMemoryHttpResponse>> results;
+  results.reserve(handles_and_callbacks.size());
+  for (auto& [handle, callback] : handles_and_callbacks) {
+    results.push_back(callback->Response());
+  }
+  return results;
 }
 
 }  // namespace
@@ -160,6 +230,11 @@ absl::StatusOr<int64_t> InMemoryHttpRequest::ReadBody(char* buffer,
   std::memcpy(buffer, body_.data() + cursor_, actual_read);
   cursor_ += actual_read;
   return actual_read;
+}
+
+std::unique_ptr<HttpRequest> InMemoryHttpRequest::Clone() const {
+  return absl::WrapUnique(
+      new InMemoryHttpRequest(uri_, method_, headers_, body_));
 }
 
 absl::Status InMemoryHttpRequestCallback::OnResponseStarted(
@@ -309,85 +384,100 @@ absl::StatusOr<InMemoryHttpResponse> InMemoryHttpRequestCallback::Response()
 absl::StatusOr<InMemoryHttpResponse> PerformRequestInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::unique_ptr<http::HttpRequest> request, int64_t* bytes_received_acc,
-    int64_t* bytes_sent_acc) {
+    int64_t* bytes_sent_acc, Clock* clock, absl::BitGen* bit_gen,
+    int32_t retry_max_attempts, int32_t retry_delay_ms) {
   // Note: we must explicitly instantiate a vector here as opposed to passing an
   // initializer list to PerformRequestsInMemory, because initializer lists do
   // not support move-only values.
   std::vector<std::unique_ptr<http::HttpRequest>> requests;
   requests.push_back(std::move(request));
   FCP_ASSIGN_OR_RETURN(
-      auto result, PerformMultipleRequestsInMemory(
+      auto result, PerformMultipleRequestsInMemoryWithRetry(
                        http_client, interruptible_runner, std::move(requests),
-                       bytes_received_acc, bytes_sent_acc));
+                       bytes_received_acc, bytes_sent_acc, clock, bit_gen,
+                       retry_max_attempts, retry_delay_ms));
   return std::move(result[0]);
 }
 
 absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
-PerformMultipleRequestsInMemory(
+PerformMultipleRequestsInMemoryWithRetry(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::vector<std::unique_ptr<http::HttpRequest>> requests,
-    int64_t* bytes_received_acc, int64_t* bytes_sent_acc) {
-  // A vector that will own the request handles and callbacks (and will
-  // determine their lifetimes).
-  std::vector<std::pair<std::unique_ptr<HttpRequestHandle>,
-                        std::unique_ptr<InMemoryHttpRequestCallback>>>
-      handles_and_callbacks;
-  handles_and_callbacks.reserve(requests.size());
-
-  // An accompanying vector that contains just the raw pointers, for passing to
-  // `HttpClient::PerformRequests`.
-  std::vector<std::pair<HttpRequestHandle*, HttpRequestCallback*>>
-      handles_and_callbacks_ptrs;
-  handles_and_callbacks_ptrs.reserve(requests.size());
-
-  // Enqueue each request, and create a simple callback for each request which
-  // will simply buffer the response body in-memory and allow us to consume that
-  // buffer once all requests have finished.
-  for (std::unique_ptr<HttpRequest>& request : requests) {
-    std::unique_ptr<HttpRequestHandle> handle =
-        http_client.EnqueueRequest(std::move(request));
-    auto callback = std::make_unique<InMemoryHttpRequestCallback>();
-    handles_and_callbacks_ptrs.push_back({handle.get(), callback.get()});
-    handles_and_callbacks.push_back({std::move(handle), std::move(callback)});
+    int64_t* bytes_received_acc, int64_t* bytes_sent_acc, Clock* clock,
+    absl::BitGen* bit_gen, int32_t retry_max_attempts, int32_t retry_delay_ms) {
+  if (retry_max_attempts == 0) {
+    return PerformMultipleRequestsInMemory(http_client, interruptible_runner,
+                                           std::move(requests),
+                                           bytes_received_acc, bytes_sent_acc);
+  }
+  // clone requests so we can use them again.
+  std::vector<std::unique_ptr<http::HttpRequest>> requests_copy;
+  requests_copy.reserve(requests.size());
+  // It would be more efficient to copy the requests on failure, e.g. by having
+  // the http_client return the original request if a request could be retried,
+  // but given the small body sizes and the small number of requests, this was
+  // not worth the effort.
+  for (auto& request : requests) {
+    requests_copy.push_back(request->Clone());
   }
 
-  // Issue the requests in one call (allowing the HttpClient to issue them
-  // concurrently), in an interruptible fashion.
-  absl::Status result = interruptible_runner.Run(
-      [&http_client, &handles_and_callbacks_ptrs]() {
-        return http_client.PerformRequests(handles_and_callbacks_ptrs);
-      },
-      [&handles_and_callbacks_ptrs] {
-        // If we get aborted then call HttpRequestHandle::Cancel on all handles.
-        // This should result in the PerformRequests call returning early and
-        // InterruptibleRunner::Run returning CANCELLED.
-        for (auto [handle, callback] : handles_and_callbacks_ptrs) {
-          handle->Cancel();
-        }
-      });
-  // Update the network stats *before* we return (just in case a failed
-  // `PerformRequests` call caused some network traffic to have been sent
-  // anyway).
-  for (auto& [handle, callback] : handles_and_callbacks) {
-    HttpRequestHandle::SentReceivedBytes sent_received_bytes =
-        handle->TotalSentReceivedBytes();
-    if (bytes_received_acc != nullptr) {
-      *bytes_received_acc += sent_received_bytes.received_bytes;
-    }
-    if (bytes_sent_acc != nullptr) {
-      *bytes_sent_acc += sent_received_bytes.sent_bytes;
+  std::vector<absl::StatusOr<InMemoryHttpResponse>> responses;
+
+  FCP_ASSIGN_OR_RETURN(responses, PerformMultipleRequestsInMemory(
+                                      http_client, interruptible_runner,
+                                      std::move(requests_copy),
+                                      bytes_received_acc, bytes_sent_acc));
+  // Get indexes of responses that have a retry-able error
+  std::vector<int> retry_indexes;
+  for (int i = 0; i < responses.size(); i++) {
+    if (!responses[i].ok() && IsRetryableError(responses[i].status().code())) {
+      retry_indexes.push_back(i);
     }
   }
+  int32_t retry_attempt = 1;
+  while (!retry_indexes.empty() && retry_attempt <= retry_max_attempts) {
+    // Create new vector of requests that had retry-able responses.
+    std::vector<std::unique_ptr<http::HttpRequest>> retry_requests;
+    retry_requests.reserve(retry_indexes.size());
+    for (int index : retry_indexes) {
+      retry_requests.push_back(requests[index]->Clone());
+    }
 
-  FCP_RETURN_IF_ERROR(result);
+    // Wait for retry window, using interruptible runner to correctly propagate
+    // cancellation.
+    FCP_RETURN_IF_ERROR(interruptible_runner.Run(
+        [clock, bit_gen, retry_delay_ms, retry_attempt]() {
+          clock->Sleep(GetRetryDelay(
+              *bit_gen, absl::Milliseconds(retry_delay_ms), retry_attempt));
+          return absl::OkStatus();
+        },
+        // Nothing to abort if we get interrupted here.
+        []() {}));
 
-  // Gather and return the results.
-  std::vector<absl::StatusOr<InMemoryHttpResponse>> results;
-  results.reserve(handles_and_callbacks.size());
-  for (auto& [handle, callback] : handles_and_callbacks) {
-    results.push_back(callback->Response());
+    // then call PerformMultipleRequestsInMemory again with new vector of
+    // requests
+    std::vector<absl::StatusOr<InMemoryHttpResponse>> retry_responses;
+    FCP_ASSIGN_OR_RETURN(
+        retry_responses,
+        PerformMultipleRequestsInMemory(http_client, interruptible_runner,
+                                        std::move(retry_requests),
+                                        bytes_received_acc, bytes_sent_acc));
+
+    // replace responses from original requests with responses from retry.
+    for (int i = 0; i < retry_responses.size(); i++) {
+      responses[retry_indexes[i]] = retry_responses[i];
+    }
+    // Update retry_indexes with new indexes of retry-able responses.
+    retry_indexes.clear();
+    for (int i = 0; i < responses.size(); i++) {
+      if (!responses[i].ok() &&
+          IsRetryableError(responses[i].status().code())) {
+        retry_indexes.push_back(i);
+      }
+    }
+    retry_attempt++;
   }
-  return results;
+  return responses;
 }
 
 absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
@@ -395,7 +485,9 @@ FetchResourcesInMemory(HttpClient& http_client,
                        InterruptibleRunner& interruptible_runner,
                        const std::vector<UriOrInlineData>& resources,
                        int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
-                       cache::ResourceCache* resource_cache) {
+                       cache::ResourceCache* resource_cache, Clock* clock,
+                       absl::BitGen* bit_gen, int32_t retry_max_attempts,
+                       int32_t retry_delay_ms) {
   // Each resource may have the data already available (by having been included
   // in a prior response inline), or may need to be fetched.
 
@@ -486,9 +578,10 @@ FetchResourcesInMemory(HttpClient& http_client,
   }
 
   // Perform the requests.
-  auto resource_fetch_result = PerformMultipleRequestsInMemory(
+  auto resource_fetch_result = PerformMultipleRequestsInMemoryWithRetry(
       http_client, interruptible_runner, std::move(http_requests),
-      bytes_received_acc, bytes_sent_acc);
+      bytes_received_acc, bytes_sent_acc, clock, bit_gen, retry_max_attempts,
+      retry_delay_ms);
   // Check whether issuing the requests failed as a whole (generally indicating
   // a programming error).
   FCP_RETURN_IF_ERROR(resource_fetch_result);

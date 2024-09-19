@@ -424,9 +424,10 @@ HttpFederatedProtocol::HttpFederatedProtocol(
           std::make_unique<ProtocolRequestCreator>(
               entry_point_uri, api_key, HeaderList{},
               !flags->disable_http_request_body_compression())),
-      protocol_request_helper_(http_client, &bytes_downloaded_,
-                               &bytes_uploaded_, network_stopwatch_.get(),
-                               clock),
+      protocol_request_helper_(
+          http_client, &bytes_downloaded_, &bytes_uploaded_,
+          network_stopwatch_.get(), clock, &bit_gen,
+          flags->http_retry_max_attempts(), flags->http_retry_delay_ms()),
       api_key_(api_key),
       population_name_(population_name),
       retry_token_(retry_token),
@@ -2024,7 +2025,9 @@ HttpFederatedProtocol::FetchTaskResources(
     auto started_stopwatch = network_stopwatch_->Start();
     resource_responses = FetchResourcesInMemory(
         *http_client_, *interruptible_runner_, uris_to_fetch,
-        &bytes_downloaded_, &bytes_uploaded_, resource_cache_);
+        &bytes_downloaded_, &bytes_uploaded_, resource_cache_, &clock_,
+        &bit_gen_, flags_->http_retry_max_attempts(),
+        flags_->http_retry_delay_ms());
   }
 
   FCP_RETURN_IF_ERROR(resource_responses);
@@ -2100,7 +2103,9 @@ absl::StatusOr<T> HttpFederatedProtocol::FetchProtoResource(
     auto started_stopwatch = network_stopwatch_->Start();
     resource_responses = FetchResourcesInMemory(
         *http_client_, *interruptible_runner_, {uri_or_data},
-        &bytes_downloaded_, &bytes_uploaded_, resource_cache_);
+        &bytes_downloaded_, &bytes_uploaded_, resource_cache_, &clock_,
+        &bit_gen_, flags_->http_retry_max_attempts(),
+        flags_->http_retry_delay_ms());
   }
   FCP_RETURN_IF_ERROR(resource_responses);
   auto& response = (*resource_responses)[0];

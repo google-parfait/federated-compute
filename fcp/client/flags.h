@@ -30,6 +30,13 @@ class Flags {
  public:
   virtual ~Flags() = default;
 
+  // The maximum number of times to retry an HTTP request. If 0, retrying is
+  // disabled.
+  virtual int32_t http_retry_max_attempts() const { return 0; }
+
+  // The delay (in milliseconds) to wait before retrying an HTTP request.
+  virtual int32_t http_retry_delay_ms() const { return 5000; }
+
   // The period of time in milliseconds between device condition checks. This is
   // used during potentially long blocking calls such as TensorFlow or network
   // I/O, as well as for throttling regular condition checks during plan

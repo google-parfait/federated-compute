@@ -26,6 +26,7 @@
 #include "google/protobuf/any.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
@@ -34,6 +35,7 @@
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
+#include "fcp/base/clock.h"
 #include "fcp/base/compression.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/simulated_clock.h"
@@ -63,6 +65,7 @@ using ::testing::Eq;
 using ::testing::FieldsAre;
 using ::testing::Ge;
 using ::testing::HasSubstr;
+using ::testing::InSequence;
 using ::testing::IsEmpty;
 using ::testing::MockFunction;
 using ::testing::Ne;
@@ -676,6 +679,7 @@ class PerformRequestsTest : public ::testing::Test {
     std::filesystem::remove_all(root_files_dir_);
   }
 
+  absl::BitGen bit_gen_;
   NiceMock<MockLogManager> mock_log_manager_;
   NiceMock<MockFunction<bool()>> mock_should_abort_;
   InterruptibleRunner interruptible_runner_;
@@ -712,7 +716,9 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryOk) {
       mock_http_client_, interruptible_runner_, *std::move(request),
       // We pass in non-null pointers for the network stats, to ensure they are
       // correctly updated.
-      &bytes_received, &bytes_sent);
+      &bytes_received, &bytes_sent, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
   ASSERT_OK(result);
   EXPECT_THAT(*result, FieldsAre(expected_response_code, IsEmpty(), IsEmpty(),
                                  StrEq(expected_response_body)));
@@ -737,11 +743,78 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryNotFound) {
       .WillOnce(Return(FakeHttpResponse(expected_response_code, {},
                                         expected_response_body)));
 
-  absl::StatusOr<InMemoryHttpResponse> result =
-      PerformRequestInMemory(mock_http_client_, interruptible_runner_,
-                             *std::move(request), nullptr, nullptr);
+  absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
+      mock_http_client_, interruptible_runner_, *std::move(request), nullptr,
+      nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr, /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
   EXPECT_THAT(result, IsCode(NOT_FOUND));
   EXPECT_THAT(result.status().message(), HasSubstr("404"));
+}
+
+TEST_F(PerformRequestsTest, PerformRequestInMemoryWithRetryUnavailableThenOk) {
+  absl::StatusOr<std::unique_ptr<HttpRequest>> request =
+      InMemoryHttpRequest::Create("https://valid.com",
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
+  ASSERT_OK(request);
+
+  int unavailable_expected_response_code = kHttpServiceUnavailable;
+  std::string unavailable_expected_response_body = "response_body1";
+  int ok_expected_response_code = kHttpOk;
+  std::string ok_expected_response_body = "response_body2";
+  // We expect the first two requests to return an unavailable error, and the
+  // third to return an OK response. Since we retry 3 times, we expect the
+  // third request to be the one that succeeds.
+  {
+    InSequence in_sequence;
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(
+                    FieldsAre((*request)->uri(), (*request)->method(), _, _)))
+        .WillOnce(
+            Return(FakeHttpResponse(unavailable_expected_response_code, {},
+                                    unavailable_expected_response_body)));
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(
+                    FieldsAre((*request)->uri(), (*request)->method(), _, _)))
+        .WillOnce(
+            Return(FakeHttpResponse(unavailable_expected_response_code, {},
+                                    unavailable_expected_response_body)));
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(
+                    FieldsAre((*request)->uri(), (*request)->method(), _, _)))
+        .WillOnce(Return(FakeHttpResponse(ok_expected_response_code, {},
+                                          ok_expected_response_body)));
+  }
+
+  absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
+      mock_http_client_, interruptible_runner_, *std::move(request), nullptr,
+      nullptr, /*clock=*/Clock::RealClock(), &bit_gen_,
+      /*retry_max_attempts=*/2,
+      /*retry_delay_ms=*/50);
+  EXPECT_THAT(result, IsCode(OK));
+}
+
+TEST_F(PerformRequestsTest, PerformRequestInMemoryWithRetryUnavailableForever) {
+  absl::StatusOr<std::unique_ptr<HttpRequest>> request =
+      InMemoryHttpRequest::Create("https://valid.com",
+                                  HttpRequest::Method::kGet, {}, "",
+                                  /*use_compression=*/false);
+  ASSERT_OK(request);
+
+  int expected_response_code = kHttpServiceUnavailable;
+  std::string expected_response_body = "response_body";
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(
+                  FieldsAre((*request)->uri(), (*request)->method(), _, _)))
+      .WillRepeatedly(Return(FakeHttpResponse(expected_response_code, {},
+                                              expected_response_body)));
+
+  absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
+      mock_http_client_, interruptible_runner_, *std::move(request), nullptr,
+      nullptr, /*clock=*/Clock::RealClock(), &bit_gen_,
+      /*retry_max_attempts=*/2,
+      /*retry_delay_ms=*/50);
+  EXPECT_THAT(result, IsCode(UNAVAILABLE));
 }
 
 TEST_F(PerformRequestsTest, PerformRequestInMemoryEarlyError) {
@@ -761,9 +834,11 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryEarlyError) {
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
-  absl::StatusOr<InMemoryHttpResponse> result =
-      PerformRequestInMemory(mock_http_client_, interruptible_runner_,
-                             *std::move(request), &bytes_received, &bytes_sent);
+  absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
+      mock_http_client_, interruptible_runner_, *std::move(request),
+      &bytes_received, &bytes_sent, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("PerformRequests failed"));
 
@@ -816,9 +891,11 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryCancellation) {
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
   // The request should result in a CANCELLED outcome.
-  absl::StatusOr<InMemoryHttpResponse> result =
-      PerformRequestInMemory(mock_http_client_, interruptible_runner_,
-                             *std::move(request), &bytes_received, &bytes_sent);
+  absl::StatusOr<InMemoryHttpResponse> result = PerformRequestInMemory(
+      mock_http_client_, interruptible_runner_, *std::move(request),
+      &bytes_received, &bytes_sent, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
 
   EXPECT_THAT(result, IsCode(CANCELLED));
   EXPECT_THAT(result.status().message(),
@@ -871,11 +948,13 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsInMemoryOk) {
   requests.push_back(*std::move(request));
   requests.push_back(*std::move(another_request));
   absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>> results =
-      PerformMultipleRequestsInMemory(
+      PerformMultipleRequestsInMemoryWithRetry(
           mock_http_client_, interruptible_runner_, std::move(requests),
           // We pass in non-null pointers for the network
           // stats, to ensure they are correctly updated.
-          &bytes_received, &bytes_sent);
+          &bytes_received, &bytes_sent, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+          /*retry_max_attempts=*/0,
+          /*retry_delay_ms=*/0);
   ASSERT_OK(results);
   ASSERT_EQ(results->size(), 2);
 
@@ -937,11 +1016,13 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailedOneSuccess) {
   requests.push_back(*std::move(success_request));
   requests.push_back(*std::move(failure_request));
   absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>> results =
-      PerformMultipleRequestsInMemory(
+      PerformMultipleRequestsInMemoryWithRetry(
           mock_http_client_, interruptible_runner_, std::move(requests),
           // We pass in non-null pointers for the network
           // stats, to ensure they are correctly updated.
-          &bytes_received, &bytes_sent);
+          &bytes_received, &bytes_sent, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+          /*retry_max_attempts=*/0,
+          /*retry_delay_ms=*/0);
   ASSERT_OK(results);
   ASSERT_EQ(results->size(), 2);
   auto first_response = (*results)[0];
@@ -959,13 +1040,93 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailedOneSuccess) {
               Ge(success_response_body.size() + failure_response_body.size()));
 }
 
+TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailThenRetryBothSuccess) {
+  std::string success_request_body = "success_request_body";
+  absl::StatusOr<std::unique_ptr<HttpRequest>> success_request =
+      InMemoryHttpRequest::Create(
+          "https://valid.com", HttpRequest::Method::kPost,
+          {{"Some-Request-Header", "foo"}}, success_request_body,
+          /*use_compression=*/false);
+  ASSERT_OK(success_request);
+  std::string failure_request_body = "failure_request_body";
+  absl::StatusOr<std::unique_ptr<HttpRequest>> failure_request =
+      InMemoryHttpRequest::Create(
+          "https://valid2.com", HttpRequest::Method::kPost,
+          {{"Some-Other-Request-Header", "foo2"}}, failure_request_body,
+          /*use_compression=*/false);
+  ASSERT_OK(failure_request);
+
+  int ok_response_code = kHttpOk;
+  std::string success_response_body = "response_body";
+  EXPECT_CALL(mock_http_client_,
+              PerformSingleRequest(FieldsAre(
+                  (*success_request)->uri(), (*success_request)->method(),
+                  Contains(Header{"Some-Request-Header", "foo"}),
+                  StrEq(success_request_body))))
+      .WillOnce(Return(FakeHttpResponse(ok_response_code,
+                                        {{"Some-Response-Header", "bar"}},
+                                        success_response_body)));
+
+  std::string failure_response_body = "failure_response_body";
+  {
+    InSequence seq;
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(FieldsAre(
+                    (*failure_request)->uri(), (*failure_request)->method(),
+                    Contains(Header{"Some-Other-Request-Header", "foo2"}),
+                    StrEq(failure_request_body))))
+        .WillOnce(Return(FakeHttpResponse(kHttpServiceUnavailable, {},
+                                          failure_response_body)));
+
+    EXPECT_CALL(mock_http_client_,
+                PerformSingleRequest(FieldsAre(
+                    (*failure_request)->uri(), (*failure_request)->method(),
+                    Contains(Header{"Some-Other-Request-Header", "foo2"}),
+                    StrEq(failure_request_body))))
+        .WillOnce(Return(
+            FakeHttpResponse(ok_response_code, {}, success_response_body)));
+  }
+
+  int64_t bytes_received = 0;
+  int64_t bytes_sent = 0;
+  std::vector<std::unique_ptr<HttpRequest>> requests;
+  requests.push_back(*std::move(success_request));
+  requests.push_back(*std::move(failure_request));
+  absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>> results =
+      PerformMultipleRequestsInMemoryWithRetry(
+          mock_http_client_, interruptible_runner_, std::move(requests),
+          // We pass in non-null pointers for the network
+          // stats, to ensure they are correctly updated.
+          &bytes_received, &bytes_sent, /*clock=*/Clock::RealClock(), &bit_gen_,
+          /*retry_max_attempts=*/1,
+          /*retry_delay_ms=*/50);
+  ASSERT_OK(results);
+  ASSERT_EQ(results->size(), 2);
+  auto first_response = (*results)[0];
+  ASSERT_OK(first_response);
+  EXPECT_THAT(*first_response, FieldsAre(ok_response_code, IsEmpty(), IsEmpty(),
+                                         StrEq(success_response_body)));
+
+  ASSERT_OK(results->at(1));
+  EXPECT_THAT(*results->at(1), FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
+                                         StrEq(success_response_body)));
+
+  EXPECT_THAT(bytes_sent, Ne(bytes_received));
+  EXPECT_THAT(bytes_sent, Ge(success_request_body.size() +
+                             failure_request_body.size() * 2));
+  EXPECT_THAT(bytes_received, Ge(failure_response_body.size() +
+                                 success_response_body.size() * 2));
+}
+
 // Tests the case where a zero-length vector of UriOrInlineData is passed in. It
 // should result in a zero-length result vector (as opposed to an error or a
 // crash).
 TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyInputVector) {
-  auto result = FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                                       {}, nullptr, nullptr,
-                                       /*resource_cache=*/nullptr);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {}, nullptr, nullptr,
+      /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
   ASSERT_OK(result);
   EXPECT_THAT(*result, IsEmpty());
 }
@@ -978,7 +1139,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyUriAndInline) {
       {UriOrInlineData::CreateInlineData(absl::Cord(),
                                          CompressionFormat::kUncompressed)},
       nullptr, nullptr,
-      /*resource_cache=*/nullptr);
+      /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -996,7 +1159,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryInvalidUri) {
        UriOrInlineData::CreateUri("http://invalid.com", "",
                                   absl::ZeroDuration())},
       nullptr, nullptr,
-      /*resource_cache=*/nullptr);
+      /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("Non-HTTPS"));
 }
@@ -1039,13 +1204,14 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryAllUris) {
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
-  auto result =
-      FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                             {resource1, resource2, resource3, resource4},
-                             // We pass in non-null pointers for the network
-                             // stats, to ensure they are correctly updated.
-                             &bytes_received, &bytes_sent,
-                             /*resource_cache=*/nullptr);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_,
+      {resource1, resource2, resource3, resource4},
+      // We pass in non-null pointers for the network
+      // stats, to ensure they are correctly updated.
+      &bytes_received, &bytes_sent,
+      /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1095,11 +1261,12 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemorySomeInlineData) {
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
-  auto result =
-      FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                             {resource1, resource2, resource3, resource4},
-                             &bytes_received, &bytes_sent,
-                             /*resource_cache=*/nullptr);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_,
+      {resource1, resource2, resource3, resource4}, &bytes_received,
+      &bytes_sent,
+      /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   EXPECT_THAT((*result)[0], IsCode(UNAVAILABLE));
@@ -1132,10 +1299,12 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryOnlyInlineData) {
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
-  auto result = FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                                       {resource1, resource2}, &bytes_received,
-                                       &bytes_sent,
-                                       /*resource_cache=*/nullptr);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource1, resource2},
+      &bytes_received, &bytes_sent,
+      /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1191,10 +1360,12 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCancellation) {
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
   // The request should result in an overall CANCELLED outcome.
-  auto result = FetchResourcesInMemory(mock_http_client_, interruptible_runner_,
-                                       {resource1, resource2}, &bytes_received,
-                                       &bytes_sent,
-                                       /*resource_cache=*/nullptr);
+  auto result = FetchResourcesInMemory(
+      mock_http_client_, interruptible_runner_, {resource1, resource2},
+      &bytes_received, &bytes_sent,
+      /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
   EXPECT_THAT(result, IsCode(CANCELLED));
   EXPECT_THAT(result.status().message(),
               HasSubstr("cancelled after graceful wait"));
@@ -1231,7 +1402,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedResources) {
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
       &bytes_received, &bytes_sent,
-      /*resource_cache=*/nullptr);
+      /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1272,7 +1445,9 @@ TEST_F(PerformRequestsTest,
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
       &bytes_received, &bytes_sent,
-      /*resource_cache=*/nullptr);
+      /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0,
+      /*retry_delay_ms=*/0);
   // Fetching will succeed
   ASSERT_OK(result);
 
@@ -1307,7 +1482,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCachedResourceOk) {
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, resource_cache->get());
+      &bytes_received, &bytes_sent, resource_cache->get(), /*clock=*/nullptr,
+      /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1344,7 +1521,9 @@ TEST_F(PerformRequestsTest,
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, resource_cache->get());
+      &bytes_received, &bytes_sent, resource_cache->get(), /*clock=*/nullptr,
+      /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1384,7 +1563,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryNotCachedButThenPutInCache) {
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, resource_cache->get());
+      &bytes_received, &bytes_sent, resource_cache->get(), /*clock=*/nullptr,
+      /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1431,7 +1612,9 @@ TEST_F(PerformRequestsTest,
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, resource_cache->get());
+      &bytes_received, &bytes_sent, resource_cache->get(), /*clock=*/nullptr,
+      /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1476,7 +1659,9 @@ TEST_F(PerformRequestsTest,
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, resource_cache->get());
+      &bytes_received, &bytes_sent, resource_cache->get(), /*clock=*/nullptr,
+      /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1521,7 +1706,9 @@ TEST_F(PerformRequestsTest,
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, &resource_cache);
+      &bytes_received, &bytes_sent, &resource_cache, /*clock=*/nullptr,
+      /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);
@@ -1562,7 +1749,9 @@ TEST_F(PerformRequestsTest,
       mock_http_client_, interruptible_runner_, {resource},
       // We pass in non-null pointers for the network
       // stats, to ensure they are correctly updated.
-      &bytes_received, &bytes_sent, &resource_cache);
+      &bytes_received, &bytes_sent, &resource_cache, /*clock=*/nullptr,
+      /*bit_gen=*/nullptr,
+      /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
   ASSERT_OK(result);
 
   ASSERT_OK((*result)[0]);

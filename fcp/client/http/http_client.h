@@ -237,6 +237,11 @@ class HttpRequest {
   // May also return other errors, in which case the request will be ended and
   // `HttpRequestCallback::OnResponseError` will be called with the same error.
   virtual absl::StatusOr<int64_t> ReadBody(char* buffer, int64_t requested) = 0;
+
+  // Returns a copy of this request, with any internal state reset to the same
+  // state as if this request was just created, including resetting the read
+  // cursor to the beginning of the request body.
+  virtual std::unique_ptr<HttpRequest> Clone() const = 0;
 };
 
 // A handle to a pending `HttpRequest`, allowing a caller of `HttpClient` to

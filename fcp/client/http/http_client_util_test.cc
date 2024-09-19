@@ -21,7 +21,9 @@
 #include "google/rpc/status.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
 
@@ -29,7 +31,10 @@ namespace fcp::client::http {
 namespace {
 
 using ::fcp::IsCode;
+using ::testing::AllOf;
+using ::testing::Gt;
 using ::testing::HasSubstr;
+using ::testing::Lt;
 using ::testing::Optional;
 using ::testing::StrEq;
 
@@ -317,6 +322,51 @@ TEST(CreateByteStreamUriTest, HappyCase) {
 
 TEST(CreateByteStreamUriTest, NonAsciiResourceNameShouldReturnError) {
   EXPECT_THAT(CreateByteStreamUploadUriSuffix("€"), IsCode(INVALID_ARGUMENT));
+}
+
+TEST(IsRetryableErrorTest, ReturnsTrueForRetryableErrors) {
+  EXPECT_TRUE(IsRetryableError(absl::StatusCode::kUnavailable));
+}
+
+TEST(IsRetryableErrorTest, ReturnsFalseForNonRetryableErrors) {
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kOk));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kCancelled));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kUnknown));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kInvalidArgument));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kDeadlineExceeded));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kNotFound));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kAlreadyExists));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kPermissionDenied));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kResourceExhausted));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kFailedPrecondition));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kAborted));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kOutOfRange));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kUnimplemented));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kInternal));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kDataLoss));
+  EXPECT_FALSE(IsRetryableError(absl::StatusCode::kUnauthenticated));
+}
+
+TEST(GetRetryDelayTest, ReturnsCorrectDelay) {
+  absl::BitGen bit_gen;
+  absl::Duration retry_delay = absl::Seconds(1);
+  // Lower bound = (0.4 + 0.6 * 1.3^retries) * retry_delay
+  // Upper bound = (0.4 + 1.3^retries) * retry_delay
+  EXPECT_THAT(
+      GetRetryDelay(bit_gen, retry_delay, 1),
+      AllOf(Gt(absl::Milliseconds(1179)), Lt(absl::Milliseconds(1701))));
+  EXPECT_THAT(
+      GetRetryDelay(bit_gen, retry_delay, 2),
+      AllOf(Gt(absl::Milliseconds(1413)), Lt(absl::Milliseconds(2100))));
+  EXPECT_THAT(
+      GetRetryDelay(bit_gen, retry_delay, 3),
+      AllOf(Gt(absl::Milliseconds(1717)), Lt(absl::Milliseconds(2600))));
+  EXPECT_THAT(
+      GetRetryDelay(bit_gen, retry_delay, 4),
+      AllOf(Gt(absl::Milliseconds(2112)), Lt(absl::Milliseconds(3257))));
+  EXPECT_THAT(
+      GetRetryDelay(bit_gen, retry_delay, 5),
+      AllOf(Gt(absl::Milliseconds(2610)), Lt(absl::Milliseconds(4120))));
 }
 
 }  // namespace

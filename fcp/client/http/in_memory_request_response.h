@@ -24,12 +24,14 @@
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
+#include "fcp/base/clock.h"
 #include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/interruptible_runner.h"
@@ -67,6 +69,8 @@ class InMemoryHttpRequest : public HttpRequest {
   bool HasBody() const override { return !body_.empty(); };
 
   absl::StatusOr<int64_t> ReadBody(char* buffer, int64_t requested) override;
+
+  std::unique_ptr<HttpRequest> Clone() const override;
 
  private:
   InMemoryHttpRequest(absl::string_view uri, Method method,
@@ -140,19 +144,24 @@ class InMemoryHttpRequestCallback : public HttpRequestCallback {
 absl::StatusOr<InMemoryHttpResponse> PerformRequestInMemory(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::unique_ptr<http::HttpRequest> request, int64_t* bytes_received_acc,
-    int64_t* bytes_sent_acc);
+    int64_t* bytes_sent_acc, Clock* clock, absl::BitGen* bit_gen,
+    int32_t retry_max_attempts, int32_t retry_delay_ms);
 
 // Utility for performing multiple HTTP requests and returning the results
-// (incl. the response body) in memory.
+// (incl. the response body) in memory, retrying the requests if they fail.
+//
+// The requests will be retried up to `retry_max_attempts` times, sleeping for
+// `retry_delay_ms` between each attempt.
 //
 // Returns an error if issuing the joint `PerformRequests` call failed.
 // Otherwise it returns a vector containing the result of each request
 // (in the same order the requests were provided in).
 absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>>
-PerformMultipleRequestsInMemory(
+PerformMultipleRequestsInMemoryWithRetry(
     HttpClient& http_client, InterruptibleRunner& interruptible_runner,
     std::vector<std::unique_ptr<http::HttpRequest>> requests,
-    int64_t* bytes_received_acc, int64_t* bytes_sent_acc);
+    int64_t* bytes_received_acc, int64_t* bytes_sent_acc, Clock* clock,
+    absl::BitGen* bit_gen, int32_t retry_max_attempts, int32_t retry_delay_ms);
 
 // Simple class representing a resource for which data is already available
 // in-memory (`inline_data`) or for which data needs to be fetched by an HTTP
@@ -234,7 +243,9 @@ FetchResourcesInMemory(HttpClient& http_client,
                        InterruptibleRunner& interruptible_runner,
                        const std::vector<UriOrInlineData>& resources,
                        int64_t* bytes_received_acc, int64_t* bytes_sent_acc,
-                       cache::ResourceCache* resource_cache);
+                       cache::ResourceCache* resource_cache, Clock* clock,
+                       absl::BitGen* bit_gen, int32_t retry_max_attempts,
+                       int32_t retry_delay_ms);
 
 };  // namespace http
 };  // namespace client

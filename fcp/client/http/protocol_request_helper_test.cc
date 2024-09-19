@@ -24,6 +24,7 @@
 #include "google/protobuf/any.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -241,7 +242,7 @@ class ProtocolRequestHelperTest : public ::testing::Test {
                                  /*use_compression=*/false),
         protocol_request_helper_(&mock_http_client_, &bytes_downloaded_,
                                  &bytes_uploaded_, network_stopwatch_.get(),
-                                 &mock_clock_) {}
+                                 &mock_clock_, &bit_gen_, 0, 0) {}
 
  protected:
   void TearDown() override {
@@ -252,7 +253,7 @@ class ProtocolRequestHelperTest : public ::testing::Test {
     EXPECT_THAT(bytes_downloaded_, sent_received_bytes.received_bytes);
     EXPECT_THAT(bytes_uploaded_, sent_received_bytes.sent_bytes);
   }
-
+  absl::BitGen bit_gen_;
   StrictMock<MockClock> mock_clock_;
   StrictMock<MockHttpClient> mock_http_client_;
 
