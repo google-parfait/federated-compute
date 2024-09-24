@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+import "google/protobuf/any.proto";
 import "tensorflow_federated/cc/core/impl/aggregation/protocol/configuration.proto";
 
 // Configures the FedSQL container initialization. This configuration will last
@@ -34,6 +35,17 @@ message FedSqlContainerInitializeConfiguration {
   // the trusted FedSQL service will not encrypt its outputs that are created
   // with FINALIZATION_TYPE_REPORT.
   uint32 report_output_access_policy_node_id = 3;
+
+  // The table schema for the data that can be joined with the device uploaded
+  // data by the per-client query. This is an `Any` because using a TableSchema
+  // would require using the `tf_proto_library` build rule for
+  // fed_sql_container_config.proto and all its dependencies.
+  google.protobuf.Any joiner_table_schema = 4;
+
+  // The data that can be joined with the device uploaded data by the per-client
+  // query. The FedSQL container expects this data to be in the Federated
+  // Compute client wire format.
+  bytes joiner_data = 5;
 }
 
 enum AggCoreAggregationType {
