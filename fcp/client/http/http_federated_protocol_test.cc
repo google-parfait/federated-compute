@@ -739,7 +739,10 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   }
 
   absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
-  RunSuccessfulMultipleTaskAssignments(bool eligibility_eval_enabled = true) {
+  RunSuccessfulMultipleTaskAssignments(
+      bool eligibility_eval_enabled = true,
+      bool enable_confidential_aggregation = false,
+      std::optional<Resource> confidential_data_access_policy = std::nullopt) {
     if (eligibility_eval_enabled) {
       std::string report_eet_request_uri =
           "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
@@ -755,6 +758,10 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     request.mutable_client_version()->set_version_code(kClientVersion);
     request.mutable_resource_capabilities()->add_supported_compression_formats(
         ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
+    if (enable_confidential_aggregation) {
+      request.mutable_resource_capabilities()
+          ->set_supports_confidential_aggregation(true);
+    }
     for (const auto& task_name : task_names) {
       request.add_task_names(task_name);
     }
@@ -771,7 +778,10 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         plan_1, checkpoint_1, kFederatedSelectUriTemplate,
         kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
         kMultiTaskId_1, kAggregationTargetUri,
-        kMinimumClientsInServerVisibleAggregate);
+        enable_confidential_aggregation
+            ? 0
+            : kMinimumClientsInServerVisibleAggregate,
+        confidential_data_access_policy);
     Resource plan_2;
     std::string plan_uri = "https://fake.uri/plan";
     plan_2.set_uri(plan_uri);
@@ -782,7 +792,10 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         plan_2, checkpoint_2, kFederatedSelectUriTemplate,
         kMultiTaskClientSessionId_2, kMultiTaskAggregationSessionId_2,
         kMultiTaskId_2, kAggregationTargetUri,
-        kMinimumClientsInServerVisibleAggregate);
+        enable_confidential_aggregation
+            ? 0
+            : kMinimumClientsInServerVisibleAggregate,
+        confidential_data_access_policy);
     std::string expected_plan_2 = "expected_plan_2";
     std::string expected_checkpoint_2 = "expected_checkpoint_2";
 
@@ -2386,6 +2399,72 @@ TEST_F(HttpFederatedProtocolTest,
             mock_multiple_tasks_received_callback_.AsStdFunction());
       },
       _);
+}
+
+TEST_F(HttpFederatedProtocolTest,
+       TestMultipleTaskAssignmentsWithConfidentialAggregation) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, create_task_identifier)
+      .WillRepeatedly(Return(false));
+
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*enable_confidential_aggregation=*/true));
+  std::string serialized_access_policy = "the access policy";
+  Resource access_policy_resource;
+  access_policy_resource.mutable_inline_resource()->set_data(
+      serialized_access_policy);
+  auto result = RunSuccessfulMultipleTaskAssignments(
+      /*eligibility_eval_enabled*/ true,
+      /*enable_confidential_aggregation=*/true,
+      /*confidential_data_access_policy=*/access_policy_resource);
+  ASSERT_OK(result);
+  EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
+  absl::Cord expected_access_policy(serialized_access_policy);
+  auto task_assignment_1 = result->task_assignments[kMultiTaskId_1];
+  ASSERT_OK(task_assignment_1);
+  EXPECT_EQ(task_assignment_1->confidential_agg_info.value().data_access_policy,
+            expected_access_policy);
+
+  auto task_assignment_2 = result->task_assignments[kMultiTaskId_2];
+  ASSERT_OK(task_assignment_2);
+  EXPECT_EQ(task_assignment_2->confidential_agg_info.value().data_access_policy,
+            expected_access_policy);
+}
+
+TEST_F(
+    HttpFederatedProtocolTest,
+    TestMultipleTaskAssignmentsWithConfidentialAggregationAndTaskIdentifier) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, create_task_identifier).WillRepeatedly(Return(true));
+
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*enable_confidential_aggregation=*/true));
+  std::string serialized_access_policy = "the access policy";
+  Resource access_policy_resource;
+  access_policy_resource.mutable_inline_resource()->set_data(
+      serialized_access_policy);
+  auto result = RunSuccessfulMultipleTaskAssignments(
+      /*eligibility_eval_enabled*/ true,
+      /*enable_confidential_aggregation=*/true,
+      /*confidential_data_access_policy=*/access_policy_resource);
+  ASSERT_OK(result);
+  EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
+  absl::Cord expected_access_policy(serialized_access_policy);
+  auto task_assignment_1 = result->task_assignments[kMultiTaskId_1];
+  ASSERT_OK(task_assignment_1);
+  EXPECT_EQ(task_assignment_1->confidential_agg_info.value().data_access_policy,
+            expected_access_policy);
+  EXPECT_EQ(task_assignment_1->task_identifier, "task_0");
+
+  auto task_assignment_2 = result->task_assignments[kMultiTaskId_2];
+  ASSERT_OK(task_assignment_2);
+  EXPECT_EQ(task_assignment_2->confidential_agg_info.value().data_access_policy,
+            expected_access_policy);
+  EXPECT_EQ(task_assignment_2->task_identifier, "task_1");
 }
 
 // Ensures that polling the Operation returned by a StartTaskAssignmentRequest

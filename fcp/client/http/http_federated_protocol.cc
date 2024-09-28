@@ -1135,9 +1135,15 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
             std::move((*payloads)->confidential_data_access_policy);
         // Store the serialized data access policy in the PerTaskInfo, since
         // we need to calculate a hash over it at upload time.
-        task_info_map_[task_assignment.aggregation_session_id]
-            .confidential_data_access_policy =
-            task_assignment.confidential_agg_info->data_access_policy;
+        if (flags_->create_task_identifier()) {
+          task_info_map_[task_assignment.task_identifier]
+              .confidential_data_access_policy =
+              task_assignment.confidential_agg_info->data_access_policy;
+        } else {
+          task_info_map_[task_assignment.aggregation_session_id]
+              .confidential_data_access_policy =
+              task_assignment.confidential_agg_info->data_access_policy;
+        }
       }
       result.task_assignments[task_assignment.task_name] =
           std::move(task_assignment);
