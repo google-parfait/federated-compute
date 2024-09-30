@@ -29,6 +29,7 @@
 #include "fcp/client/federated_select.h"
 #include "fcp/client/files.h"
 #include "fcp/client/fl_runner.pb.h"
+#include "fcp/client/fl_runner_tensorflow_spec_result.pb.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
