@@ -1337,8 +1337,8 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
           HttpRequest::Method::kPost, start_upload_request,
           /*is_protobuf_encoded=*/true));
   FCP_LOG(INFO) << (confidential_aggregation
-                        ? "StartAggregationDataUpload"
-                        : "StartConfidentialAggregationDataUpload")
+                        ? "StartConfidentialAggregationDataUpload"
+                        : "StartAggregationDataUpload")
                 << " request uri is : "
                 << http_start_aggregation_data_upload_request->uri();
   FCP_LOG(INFO) << "ReportTaskResult request uri is: "
