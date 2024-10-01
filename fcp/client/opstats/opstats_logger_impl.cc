@@ -47,9 +47,7 @@ OpStatsLoggerImpl::OpStatsLoggerImpl(std::unique_ptr<OpStatsDb> db,
                                      const Flags* flags,
                                      const std::string& session_name,
                                      const std::string& population_name)
-    : db_(std::move(db)),
-      log_manager_(log_manager),
-      use_phase_stats_(flags->enable_phase_stats_logging()) {
+    : db_(std::move(db)), log_manager_(log_manager) {
   log_manager_->LogDiag(DebugDiagCode::TRAINING_OPSTATS_ENABLED);
   log_manager_->LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_EXPECTED);
 
@@ -66,8 +64,8 @@ OpStatsLoggerImpl::~OpStatsLoggerImpl() {
 void OpStatsLoggerImpl::AddEventAndSetTaskName(
     const std::string& task_name, OperationalStats::Event::EventKind event) {
   absl::MutexLock lock(&mutex_);
-  if (use_phase_stats_ && current_phase_stats_.phase() !=
-                              OperationalStats::PhaseStats::UNSPECIFIED) {
+  if (current_phase_stats_.phase() !=
+      OperationalStats::PhaseStats::UNSPECIFIED) {
     AddNewEventToCurrentPhaseStats(event);
     current_phase_stats_.set_task_name(task_name);
   } else {
@@ -80,8 +78,8 @@ void OpStatsLoggerImpl::AddEvent(OperationalStats::Event::EventKind event) {
   absl::MutexLock lock(&mutex_);
   // Initialization events don't belong to any phase, we'll log it at the
   // top level of an OperationalStats message.
-  if (use_phase_stats_ && current_phase_stats_.phase() !=
-                              OperationalStats::PhaseStats::UNSPECIFIED) {
+  if (current_phase_stats_.phase() !=
+      OperationalStats::PhaseStats::UNSPECIFIED) {
     AddNewEventToCurrentPhaseStats(event);
   } else {
     AddNewEventToStats(event);
@@ -92,8 +90,8 @@ void OpStatsLoggerImpl::AddEventWithErrorMessage(
     OperationalStats::Event::EventKind event,
     const std::string& error_message) {
   absl::MutexLock lock(&mutex_);
-  if (use_phase_stats_ && current_phase_stats_.phase() !=
-                              OperationalStats::PhaseStats::UNSPECIFIED) {
+  if (current_phase_stats_.phase() !=
+      OperationalStats::PhaseStats::UNSPECIFIED) {
     AddNewEventToCurrentPhaseStats(event);
     // Don't replace an existing error message.
     if (current_phase_stats_.error_message().empty()) {
@@ -126,8 +124,8 @@ void OpStatsLoggerImpl::UpdateDatasetStats(
     int64_t additional_example_size_bytes) {
   absl::MutexLock lock(&mutex_);
   OperationalStats::DatasetStats* dataset_stats;
-  if (use_phase_stats_ && current_phase_stats_.phase() !=
-                              OperationalStats::PhaseStats::UNSPECIFIED) {
+  if (current_phase_stats_.phase() !=
+      OperationalStats::PhaseStats::UNSPECIFIED) {
     dataset_stats =
         &(*current_phase_stats_.mutable_dataset_stats())[collection_uri];
   } else {
@@ -148,8 +146,8 @@ void OpStatsLoggerImpl::UpdateDatasetStats(
 
 void OpStatsLoggerImpl::SetNetworkStats(const NetworkStats& network_stats) {
   absl::MutexLock lock(&mutex_);
-  if (use_phase_stats_ && current_phase_stats_.phase() !=
-                              OperationalStats::PhaseStats::UNSPECIFIED) {
+  if (current_phase_stats_.phase() !=
+      OperationalStats::PhaseStats::UNSPECIFIED) {
     // The input network stats is always the accumulated stats, but we want the
     // per-phase network stats in PhaseStats.  Therefore, we calculates the
     // difference between the new network stats with the accumulated network
@@ -200,8 +198,8 @@ absl::Status OpStatsLoggerImpl::CommitToStorage() {
   log_manager_->LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_ATTEMPTED);
   const absl::Time before_commit_time = absl::Now();
   OperationalStats copy = stats_;
-  if (use_phase_stats_ && current_phase_stats_.phase() !=
-                              OperationalStats::PhaseStats::UNSPECIFIED) {
+  if (current_phase_stats_.phase() !=
+      OperationalStats::PhaseStats::UNSPECIFIED) {
     *copy.add_phase_stats() = current_phase_stats_;
   }
   auto status = already_committed_
@@ -231,31 +229,25 @@ absl::Status OpStatsLoggerImpl::CommitToStorage() {
 
 std::string OpStatsLoggerImpl::GetCurrentTaskName() {
   absl::MutexLock lock(&mutex_);
-  if (use_phase_stats_) {
-    if (!current_phase_stats_.task_name().empty()) {
-      return current_phase_stats_.task_name();
-    }
-    for (auto it = stats_.phase_stats().rbegin();
-         it != stats_.phase_stats().rend(); it++) {
-      if (!it->task_name().empty()) {
-        return it->task_name();
-      }
-    }
-    // If we reach this line, it means we don't know the task name yet for the
-    // current run. Technically, it won't happen because this method is only
-    // called by the opstats example store and at that point we already know
-    // the task name.  Unfortunately, we can't enforce this at API level.
-    return "";
+  if (!current_phase_stats_.task_name().empty()) {
+    return current_phase_stats_.task_name();
   }
-  return stats_.task_name();
+  for (auto it = stats_.phase_stats().rbegin();
+       it != stats_.phase_stats().rend(); it++) {
+    if (!it->task_name().empty()) {
+      return it->task_name();
+    }
+  }
+  // If we reach this line, it means we don't know the task name yet for the
+  // current run. Technically, it won't happen because this method is only
+  // called by the opstats example store and at that point we already know
+  // the task name.  Unfortunately, we can't enforce this at API level.
+  return "";
 }
 
 void OpStatsLoggerImpl::StartLoggingForPhase(
     OperationalStats::PhaseStats::Phase phase) {
   absl::MutexLock lock(&mutex_);
-  if (!use_phase_stats_) {
-    return;
-  }
 
   if (current_phase_stats_.phase() !=
       OperationalStats::PhaseStats::UNSPECIFIED) {
@@ -270,8 +262,8 @@ void OpStatsLoggerImpl::StartLoggingForPhase(
 void OpStatsLoggerImpl::StopLoggingForTheCurrentPhase() {
   absl::MutexLock lock(&mutex_);
   // Only add the current PhaseStats when it's not empty.
-  if (use_phase_stats_ && current_phase_stats_.phase() !=
-                              OperationalStats::PhaseStats::UNSPECIFIED) {
+  if (current_phase_stats_.phase() !=
+      OperationalStats::PhaseStats::UNSPECIFIED) {
     *stats_.add_phase_stats() = current_phase_stats_;
     current_phase_stats_ = OperationalStats::PhaseStats();
   }

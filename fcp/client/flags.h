@@ -181,9 +181,6 @@ class Flags {
     return false;
   }
 
-  // If true, OpStats logger enables PhaseStats logging.
-  virtual bool enable_phase_stats_logging() const { return false; }
-
   // If true, confidential aggregation is advertised & can be used for uploads.
   virtual bool enable_confidential_aggregation() const { return false; }
 

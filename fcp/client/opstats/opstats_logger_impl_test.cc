@@ -85,10 +85,7 @@ class OpStatsLoggerImplTest : public testing::Test {
   }
 
   std::unique_ptr<OpStatsLogger> CreateOpStatsLoggerImpl(
-      const std::string& session_name, const std::string& population_name,
-      bool use_phase_stats = false) {
-    ON_CALL(mock_flags_, enable_phase_stats_logging())
-        .WillByDefault(Return(use_phase_stats));
+      const std::string& session_name, const std::string& population_name) {
     auto db = PdsBackedOpStatsDb::Create(
         base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
         mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
@@ -681,8 +678,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsAddEventAndSetTaskName) {
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 1);
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger->AddEventAndSetTaskName(
@@ -719,8 +715,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsAddEventStartLoggingNotCalled) {
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 1);
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->AddEvent(
       OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
   opstats_logger.reset();
@@ -747,8 +742,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsAddEvent) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 1);
 
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
   const std::string task_1 = "task_1";
@@ -823,8 +817,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsAddEventWithErrorMessage) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 1);
 
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger->AddEventAndSetTaskName(
@@ -870,8 +863,7 @@ TEST_F(OpStatsLoggerImplTest,
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 1);
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   const std::string error_message = "Fatal initialization error.";
   opstats_logger->AddEventWithErrorMessage(
       OperationalStats::Event::EVENT_KIND_INITIALIZATION_ERROR_FATAL,
@@ -901,8 +893,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsUpdateDatasetStats) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 1);
 
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger->AddEventAndSetTaskName(
@@ -961,8 +952,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsSetNetworkStats) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 1);
 
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->StartLoggingForPhase(
       OperationalStats::PhaseStats::ELIGIBILITY_EVAL_CHECKIN);
   const int64_t eet_checkin_bytes_downloaded = 15;
@@ -1040,8 +1030,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsCommitToStorage) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 2);
 
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger->AddEventAndSetTaskName(
@@ -1094,8 +1083,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsLogCommitLogCommitKeepsAllEntries) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/2,
                              /*num_opstats_commits*/ 4);
 
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger->AddEventAndSetTaskName(
@@ -1115,8 +1103,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsLogCommitLogCommitKeepsAllEntries) {
   opstats_logger.reset();
 
   // second run
-  auto opstats_logger2 = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                 /*use_phase_stats=*/true);
+  auto opstats_logger2 = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger2->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger2->AddEventAndSetTaskName(
@@ -1189,8 +1176,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsGetCurrentTaskName) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 1);
 
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger->AddEventAndSetTaskName(
@@ -1220,8 +1206,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsStopCurrentPhaseLoggingNotCalled) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 1);
 
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger->AddEventAndSetTaskName(
@@ -1265,8 +1250,7 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsStopCurrentPhaseLoggingCalled) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
                              /*num_opstats_commits*/ 1);
 
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/true);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
   opstats_logger->StartLoggingForPhase(
       OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger->AddEventAndSetTaskName(
@@ -1292,69 +1276,6 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsStopCurrentPhaseLoggingCalled) {
   computation_phase->set_task_name(kTaskName);
   computation_phase->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
-
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
-}
-
-TEST_F(OpStatsLoggerImplTest,
-       PhaseStatsNotEnabledStartLoggingForPhaseShouldDoNothing) {
-  auto start_time = TimeUtil::GetCurrentTime();
-  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
-                             /*num_opstats_commits*/ 1);
-
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/false);
-  opstats_logger->StartLoggingForPhase(
-      OperationalStats::PhaseStats::COMPUTATION);
-  opstats_logger->AddEventAndSetTaskName(
-      kTaskName, OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
-
-  opstats_logger.reset();
-
-  // PhaseStats is not enabled, we don't expect any PhaseStats.
-  auto db = PdsBackedOpStatsDb::Create(
-      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
-  ASSERT_OK(db);
-  auto data = (*db)->Read();
-  ASSERT_OK(data);
-
-  OpStatsSequence expected;
-  auto expected_stats = expected.add_opstats();
-  expected_stats->set_population_name(kPopulationName);
-  expected_stats->set_session_name(kSessionName);
-  expected_stats->set_task_name(kTaskName);
-  expected_stats->add_events()->set_event_type(
-      OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
-
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
-}
-
-TEST_F(OpStatsLoggerImplTest,
-       PhaseStatsStopLoggingShouldDoNothingIfStartLoggingIsNotCalled) {
-  auto start_time = TimeUtil::GetCurrentTime();
-  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
-                             /*num_opstats_commits*/ 1);
-
-  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName,
-                                                /*use_phase_stats=*/false);
-  opstats_logger->StopLoggingForTheCurrentPhase();
-
-  opstats_logger.reset();
-
-  // PhaseStats is not enabled, we don't expect any PhaseStats.
-  auto db = PdsBackedOpStatsDb::Create(
-      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
-  ASSERT_OK(db);
-  auto data = (*db)->Read();
-  ASSERT_OK(data);
-
-  // There shouldn't be any PhaseStats.
-  OpStatsSequence expected;
-  auto expected_stats = expected.add_opstats();
-  expected_stats->set_population_name(kPopulationName);
-  expected_stats->set_session_name(kSessionName);
 
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }

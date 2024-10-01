@@ -423,7 +423,7 @@ class MockFederatedProtocol : public FederatedProtocol {
     return retry_window;
   }
 
-  explicit MockFederatedProtocol() {}
+  explicit MockFederatedProtocol() = default;
 
   // We override the real FederatedProtocol methods so that we can intercept the
   // progression of protocol stages, and expose dedicate gMock-overridable
@@ -665,7 +665,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_federated_select, (), (const, override));
   MOCK_METHOD(int32_t, num_threads_for_tflite, (), (const, override));
   MOCK_METHOD(bool, disable_tflite_delegate_clustering, (), (const, override));
-  MOCK_METHOD(bool, enable_phase_stats_logging, (), (const, override));
   MOCK_METHOD(bool, enable_lightweight_client_report_wire_format, (),
               (const, override));
   MOCK_METHOD(bool, enable_confidential_aggregation, (), (const, override));
