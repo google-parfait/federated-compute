@@ -288,9 +288,9 @@ maven_install(
 
 http_archive(
     name = "oak",
-    sha256 = "4c3bbe95d02149f63a95a845221af12ebe566f0885bb5cfbb38dec6f6b3cbd42",
-    strip_prefix = "oak-bcd41441c25be5cfee9811e9cd5912c2f8519b8e",
-    url = "https://github.com/project-oak/oak/archive/bcd41441c25be5cfee9811e9cd5912c2f8519b8e.tar.gz",
+    sha256 = "704451da7df6cca50d710842fb67e4509ab2211c10f5fa2e2d33bc6a9dfc83b9",
+    strip_prefix = "oak-bd9e19ed20525444be0882bd5848ec475ac8c040",
+    url = "https://github.com/project-oak/oak/archive/bd9e19ed20525444be0882bd5848ec475ac8c040.tar.gz",
 )
 
 git_repository(
