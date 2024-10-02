@@ -62,7 +62,8 @@ class SimplePlanEngine {
       const std::string& graph, const ::google::protobuf::Any& config_proto,
       std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
           inputs,
-      const std::vector<std::string>& output_names);
+      const std::vector<std::string>& output_names,
+      bool is_eligibility_eval_plan);
 
  private:
   // Runs the plan. Returns one of three error codes:

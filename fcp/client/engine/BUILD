@@ -38,6 +38,7 @@ cc_library(
         ":common",
         ":example_iterator_factory",
         ":plan_engine_helpers",
+        ":tensorflow_utils",
         ":tf_wrapper",
         "//fcp/base",
         "//fcp/client:example_iterator_query_recorder",
@@ -258,6 +259,7 @@ cc_library(
         ":common",
         ":example_iterator_factory",
         ":plan_engine_helpers",
+        ":tensorflow_utils",
         ":tflite_wrapper",
         "//fcp/base",
         "//fcp/client:diag_codes_cc_proto",
@@ -307,9 +309,11 @@ cc_library(
         ":engine_cc_proto",
         "//fcp/base",
         "//fcp/client:interfaces",
+        "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@org_tensorflow//tensorflow/core:framework",
@@ -327,6 +331,34 @@ cc_library(
         "//fcp/client:simple_task_environment",
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_library(
+    name = "tensorflow_utils",
+    srcs = ["tensorflow_utils.cc"],
+    hdrs = ["tensorflow_utils.h"],
+    deps = [
+        "//fcp/protos:federated_api_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core/platform:tstring",
+    ],
+)
+
+cc_test(
+    name = "tensorflow_utils_test",
+    srcs = ["tensorflow_utils_test.cc"],
+    deps = [
+        ":tensorflow_utils",
+        "//fcp/protos:federated_api_cc_proto",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core/platform:tstring",
     ],
 )
 

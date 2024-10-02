@@ -172,6 +172,7 @@ cc_library(
         "//fcp/client/engine:example_iterator_factory",
         "//fcp/client/engine:example_query_plan_engine",
         "//fcp/client/engine:plan_engine_helpers",
+        "//fcp/client/engine:tensorflow_utils",
         "//fcp/client/engine:tflite_plan_engine",
         "//fcp/client/http:http_client",
         "//fcp/client/http:http_federated_protocol",

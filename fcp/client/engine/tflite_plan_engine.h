@@ -65,7 +65,8 @@ class TfLitePlanEngine {
       const google::internal::federated::plan::TensorflowSpec& tensorflow_spec,
       const std::string& model,
       std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
-      const std::vector<std::string>& output_names);
+      const std::vector<std::string>& output_names,
+      bool is_eligibility_eval_plan);
 
  private:
   std::vector<ExampleIteratorFactory*> example_iterator_factories_;

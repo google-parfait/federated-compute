@@ -379,7 +379,8 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
         flags, /*example_iterator_query_recorder=*/nullptr, &timing_config);
     return plan_engine.RunPlan(client_plan.phase().tensorflow_spec(),
                                client_plan.tflite_graph(),
-                               std::move(tflite_inputs), output_names);
+                               std::move(tflite_inputs), output_names,
+                               /*is_eligibility_eval_plan=*/true);
   }
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
@@ -393,46 +394,13 @@ engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
       /*example_iterator_query_recorder=*/nullptr, &timing_config);
   return plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
-      client_plan.tensorflow_config_proto(), std::move(inputs), output_names);
+      client_plan.tensorflow_config_proto(), std::move(inputs), output_names,
+      /*is_eligibility_eval_plan=*/true);
 #else
   return engine::PlanResult(
       engine::PlanOutcome::kTensorflowError,
       absl::InternalError("No eligibility eval plan engine enabled"));
 #endif
-}
-
-// Validates the output tensors that resulted from executing the plan, and then
-// parses the output into a TaskEligibilityInfo proto. Returns an error if
-// validation or parsing failed.
-absl::StatusOr<TaskEligibilityInfo> ParseEligibilityEvalPlanOutput(
-    const std::vector<tensorflow::Tensor>& output_tensors) {
-  auto output_size = output_tensors.size();
-  if (output_size != 1) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Unexpected number of output tensors: ", output_size));
-  }
-  auto output_elements = output_tensors[0].NumElements();
-  if (output_elements != 1) {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "Unexpected number of output tensor elements: ", output_elements));
-  }
-  tensorflow::DataType output_type = output_tensors[0].dtype();
-  if (output_type != tensorflow::DT_STRING) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Unexpected output tensor type: ", output_type));
-  }
-
-  // Extract the serialized TaskEligibilityInfo proto from the tensor and
-  // parse it.
-  // First, convert the output Tensor into a Scalar (= a TensorMap with 1
-  // element), then use its operator() to access the actual data.
-  const tensorflow::tstring& serialized_output =
-      output_tensors[0].scalar<const tensorflow::tstring>()();
-  TaskEligibilityInfo parsed_output;
-  if (!parsed_output.ParseFromString(serialized_output)) {
-    return absl::InvalidArgumentError("Could not parse output proto");
-  }
-  return parsed_output;
 }
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
@@ -544,7 +512,8 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
         flags, example_iterator_query_recorder, &timing_config);
     engine::PlanResult plan_result = plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
-        std::move(tflite_inputs), *output_names);
+        std::move(tflite_inputs), *output_names,
+        /*is_eligibility_eval_plan=*/false);
     PlanResultAndCheckpointFile result(std::move(plan_result));
     result.checkpoint_filename = checkpoint_output_filename;
 
@@ -563,7 +532,8 @@ PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
       example_iterator_query_recorder, &timing_config);
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
-      client_plan.tensorflow_config_proto(), std::move(inputs), *output_names);
+      client_plan.tensorflow_config_proto(), std::move(inputs), *output_names,
+      /*is_eligibility_eval_plan=*/false);
 
   PlanResultAndCheckpointFile result(std::move(plan_result));
   result.checkpoint_filename = checkpoint_output_filename;
@@ -1008,7 +978,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
       if (result.outcome != engine::PlanOutcome::kSuccess) {
         return result.original_status;
       }
-      return ParseEligibilityEvalPlanOutput(result.output_tensors);
+      return result.task_eligibility_info;
     };
 
     EetPlanRunnerImpl eet_plan_runner(run_plan_func);
@@ -2341,7 +2311,7 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
         if (result.outcome != engine::PlanOutcome::kSuccess) {
           return result.original_status;
         }
-        return ParseEligibilityEvalPlanOutput(result.output_tensors);
+        return result.task_eligibility_info;
       };
       EetPlanRunnerImpl eet_plan_runner(run_plan_func);
       absl::StatusOr<std::optional<TaskEligibilityInfo>>

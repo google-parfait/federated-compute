@@ -58,6 +58,14 @@ SimpleExampleIterator::SimpleExampleIterator(Dataset dataset) {
   FCP_CHECK(!examples_.empty()) << "No data was loaded";
 }
 
+SimpleExampleIterator::SimpleExampleIterator(
+    const std::vector<std::string>& examples) {
+  for (const auto& example : examples) {
+    examples_.push_back(example);
+  }
+  FCP_CHECK(!examples_.empty()) << "No data was loaded";
+}
+
 SimpleExampleIterator::SimpleExampleIterator(Dataset dataset,
                                              absl::string_view collection_uri) {
   for (const Dataset::ClientDataset& client_dataset : dataset.client_data()) {

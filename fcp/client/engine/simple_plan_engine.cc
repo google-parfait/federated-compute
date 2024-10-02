@@ -32,6 +32,7 @@
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+#include "fcp/client/engine/tensorflow_utils.h"
 #include "fcp/client/engine/tf_wrapper.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/interruptible_runner.h"
@@ -67,7 +68,8 @@ PlanResult SimplePlanEngine::RunPlan(
     const ::google::protobuf::Any& config_proto,
     std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
         inputs,
-    const std::vector<std::string>& output_names) {
+    const std::vector<std::string>& output_names,
+    bool is_eligibility_eval_plan) {
   // Check that all inputs have corresponding TensorSpecProtos.
   absl::flat_hash_set<std::string> expected_input_tensor_names_set;
   for (const std::pair<std::string, tensorflow::Tensor>& input : *inputs) {
@@ -102,8 +104,13 @@ PlanResult SimplePlanEngine::RunPlan(
   switch (tf_result.status().code()) {
     case absl::StatusCode::kOk: {
       PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
-      plan_result.output_names = output_names;
-      plan_result.output_tensors = std::move(tf_result).value();
+      if (is_eligibility_eval_plan) {
+        plan_result.task_eligibility_info =
+            ParseEligibilityEvalPlanOutput(tf_result.value());
+      } else {
+        plan_result.output_names = output_names;
+        plan_result.output_tensors = std::move(tf_result).value();
+      }
       plan_result.example_stats = {
           .example_count = total_example_count,
           .example_size_bytes = total_example_size_bytes};

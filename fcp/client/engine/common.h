@@ -21,9 +21,11 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/stats.h"
+#include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/tensor.h"
 
@@ -61,6 +63,9 @@ struct PlanResult {
   // contain the original error status which leads to the PlanOutcome.
   absl::Status original_status;
   ::fcp::client::ExampleStats example_stats;
+  // Only set if the plan is an eligibility eval plan.
+  absl::StatusOr<google::internal::federatedml::v2::TaskEligibilityInfo>
+      task_eligibility_info;
 
   PlanResult(PlanResult&&) = default;
   PlanResult& operator=(PlanResult&&) = default;

@@ -31,6 +31,7 @@
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/plan_engine_helpers.h"
+#include "fcp/client/engine/tensorflow_utils.h"
 #include "fcp/client/engine/tflite_wrapper.h"
 #include "fcp/client/flags.h"
 #include "fcp/protos/plan.pb.h"
@@ -51,12 +52,17 @@ namespace {
 PlanResult CreatePlanResultFromOutput(
     absl::StatusOr<OutputTensors> output, std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes,
-    absl::Status example_iterator_status) {
+    absl::Status example_iterator_status, bool is_eligibility_eval_plan) {
   switch (output.status().code()) {
     case absl::StatusCode::kOk: {
       PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
-      plan_result.output_names = std::move(output->output_tensor_names);
-      plan_result.output_tensors = std::move(output->output_tensors);
+      if (is_eligibility_eval_plan) {
+        plan_result.task_eligibility_info =
+            ParseEligibilityEvalPlanOutput(output->output_tensors);
+      } else {
+        plan_result.output_names = std::move(output->output_tensor_names);
+        plan_result.output_tensors = std::move(output->output_tensors);
+      }
       plan_result.example_stats = {
           .example_count = *total_example_count,
           .example_size_bytes = *total_example_size_bytes};
@@ -89,7 +95,8 @@ TfLiteInterpreterOptions CreateOptions(const Flags& flags) {
 PlanResult TfLitePlanEngine::RunPlan(
     const TensorflowSpec& tensorflow_spec, const std::string& model,
     std::unique_ptr<absl::flat_hash_map<std::string, std::string>> inputs,
-    const std::vector<std::string>& output_names) {
+    const std::vector<std::string>& output_names,
+    bool is_eligibility_eval_plan) {
   log_manager_->LogDiag(ProdDiagCode::BACKGROUND_TRAINING_TFLITE_ENGINE_USED);
   // Check that all inputs have corresponding TensorSpecProtos.
   absl::flat_hash_set<std::string> expected_input_tensor_names_set;
@@ -143,7 +150,7 @@ PlanResult TfLitePlanEngine::RunPlan(
       output_names, CreateOptions(flags_), flags_.num_threads_for_tflite());
   PlanResult plan_result = CreatePlanResultFromOutput(
       std::move(output), &total_example_count, &total_example_size_bytes,
-      example_iterator_status.GetStatus());
+      example_iterator_status.GetStatus(), is_eligibility_eval_plan);
   return plan_result;
 }
 

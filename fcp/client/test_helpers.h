@@ -619,6 +619,8 @@ class SimpleExampleIterator : public ExampleIterator {
   // field.
   explicit SimpleExampleIterator(
       google::internal::federated::plan::Dataset dataset);
+  // Uses the given strings as the examples to return.
+  explicit SimpleExampleIterator(const std::vector<std::string>& examples);
   // Passes through each of the examples in the
   // `Dataset.client_data.selected_example.example` field, whose example
   // collection URI matches the provided `collection_uri`.

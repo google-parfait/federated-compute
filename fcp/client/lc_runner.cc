@@ -241,7 +241,8 @@ absl::Status RunPlanWithTensorflowSpec(
         flags, /*example_iterator_query_recorder=*/nullptr, &timing_config);
     engine::PlanResult plan_result = plan_engine.RunPlan(
         client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
-        std::move(*inputs), output_names_unused);
+        std::move(*inputs), output_names_unused,
+        /*is_eligibility_eval_plan=*/false);
     engine::PlanOutcome outcome = plan_result.outcome;
     LogComputationOutcome(std::move(plan_result), phase_logger,
                           run_plan_start_time, reference_time);
@@ -265,7 +266,7 @@ absl::Status RunPlanWithTensorflowSpec(
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().tensorflow_spec(), client_plan.graph(),
       client_plan.tensorflow_config_proto(), std::move(*inputs),
-      output_names_unused);
+      output_names_unused, /*is_eligibility_eval_plan=*/false);
   engine::PlanOutcome outcome = plan_result.outcome;
   LogComputationOutcome(std::move(plan_result), phase_logger,
                         run_plan_start_time, reference_time);
