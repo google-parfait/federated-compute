@@ -240,3 +240,29 @@ cc_proto_library(
     name = "blob_data_cc_proto",
     deps = [":blob_data_proto"],
 )
+
+# --------------------------------------------------------------------
+# signed_endorsements.proto
+
+proto_library(
+    name = "signed_endorsements_proto",
+    srcs = ["signed_endorsements.proto"],
+    deps = [
+        "@oak//proto/attestation:endorsement_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "signed_endorsements_cc_proto",
+    deps = [":signed_endorsements_proto"],
+)
+
+java_proto_library(
+    name = "signed_endorsements_java_proto",
+    deps = [":signed_endorsements_proto"],
+)
+
+py_proto_library(
+    name = "signed_endorsements_py_pb2",
+    deps = [":signed_endorsements_proto"],
+)
