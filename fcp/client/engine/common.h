@@ -19,15 +19,16 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "fcp/client/engine/engine.pb.h"
+#include "fcp/client/federated_protocol.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
-#include "tensorflow/core/framework/tensor.h"
 
 namespace fcp {
 namespace client {
@@ -52,10 +53,8 @@ struct PlanResult {
 
   // The outcome of the plan execution.
   PlanOutcome outcome;
-  // Only set if `outcome` is `kSuccess`, otherwise this is empty.
-  std::vector<tensorflow::Tensor> output_tensors;
-  // Only set if `outcome` is `kSuccess`, otherwise this is empty.
-  std::vector<std::string> output_names;
+  // The secagg tensors from the plan execution.
+  absl::flat_hash_map<std::string, QuantizedTensor> secagg_tensor_map;
   // Only set if 'outcome' is 'kSuccess' and the federated compute wire format
   // is enabled, otherwise this is empty.
   absl::Cord federated_compute_checkpoint;

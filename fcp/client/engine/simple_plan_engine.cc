@@ -108,8 +108,13 @@ PlanResult SimplePlanEngine::RunPlan(
         plan_result.task_eligibility_info =
             ParseEligibilityEvalPlanOutput(tf_result.value());
       } else {
-        plan_result.output_names = output_names;
-        plan_result.output_tensors = std::move(tf_result).value();
+        auto secagg_tensor_map =
+            CreateQuantizedTensorMap(output_names, *tf_result, tensorflow_spec);
+        if (!secagg_tensor_map.ok()) {
+          return PlanResult(PlanOutcome::kTensorflowError,
+                            secagg_tensor_map.status());
+        }
+        plan_result.secagg_tensor_map = std::move(*secagg_tensor_map);
       }
       plan_result.example_stats = {
           .example_count = total_example_count,

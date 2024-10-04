@@ -52,7 +52,8 @@ namespace {
 PlanResult CreatePlanResultFromOutput(
     absl::StatusOr<OutputTensors> output, std::atomic<int>* total_example_count,
     std::atomic<int64_t>* total_example_size_bytes,
-    absl::Status example_iterator_status, bool is_eligibility_eval_plan) {
+    absl::Status example_iterator_status, bool is_eligibility_eval_plan,
+    const TensorflowSpec& tensorflow_spec) {
   switch (output.status().code()) {
     case absl::StatusCode::kOk: {
       PlanResult plan_result(PlanOutcome::kSuccess, absl::OkStatus());
@@ -60,8 +61,14 @@ PlanResult CreatePlanResultFromOutput(
         plan_result.task_eligibility_info =
             ParseEligibilityEvalPlanOutput(output->output_tensors);
       } else {
-        plan_result.output_names = std::move(output->output_tensor_names);
-        plan_result.output_tensors = std::move(output->output_tensors);
+        auto secagg_tensor_map =
+            CreateQuantizedTensorMap(output->output_tensor_names,
+                                     output->output_tensors, tensorflow_spec);
+        if (!secagg_tensor_map.ok()) {
+          return PlanResult(PlanOutcome::kTensorflowError,
+                            secagg_tensor_map.status());
+        }
+        plan_result.secagg_tensor_map = std::move(*secagg_tensor_map);
       }
       plan_result.example_stats = {
           .example_count = *total_example_count,
@@ -150,7 +157,8 @@ PlanResult TfLitePlanEngine::RunPlan(
       output_names, CreateOptions(flags_), flags_.num_threads_for_tflite());
   PlanResult plan_result = CreatePlanResultFromOutput(
       std::move(output), &total_example_count, &total_example_size_bytes,
-      example_iterator_status.GetStatus(), is_eligibility_eval_plan);
+      example_iterator_status.GetStatus(), is_eligibility_eval_plan,
+      tensorflow_spec);
   return plan_result;
 }
 

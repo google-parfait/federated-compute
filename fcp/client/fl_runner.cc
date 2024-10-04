@@ -109,16 +109,6 @@ using TfLiteInputs = absl::flat_hash_map<std::string, std::string>;
 
 namespace {
 
-template <typename T>
-void AddValuesToQuantized(QuantizedTensor* quantized,
-                          const tensorflow::Tensor& tensor) {
-  auto flat_tensor = tensor.flat<T>();
-  quantized->values.reserve(quantized->values.size() + flat_tensor.size());
-  for (int i = 0; i < flat_tensor.size(); i++) {
-    quantized->values.push_back(flat_tensor(i));
-  }
-}
-
 struct PlanResultAndCheckpointFile {
   explicit PlanResultAndCheckpointFile(engine::PlanResult plan_result)
       : plan_result(std::move(plan_result)) {}
@@ -141,63 +131,16 @@ struct PlanResultAndCheckpointFile {
 // `tensorflow_spec != nullptr`.
 absl::StatusOr<ComputationResults> CreateComputationResults(
     const TensorflowSpec* tensorflow_spec,
-    const PlanResultAndCheckpointFile& plan_result_and_checkpoint_file,
+    PlanResultAndCheckpointFile& plan_result_and_checkpoint_file,
     const Flags* flags) {
-  const auto& [plan_result, checkpoint_filename] =
-      plan_result_and_checkpoint_file;
+  auto& [plan_result, checkpoint_filename] = plan_result_and_checkpoint_file;
   if (plan_result.outcome != engine::PlanOutcome::kSuccess) {
     return absl::InvalidArgumentError("Computation failed.");
   }
   ComputationResults computation_results;
   if (tensorflow_spec != nullptr) {
-    for (int i = 0; i < plan_result.output_names.size(); i++) {
-      QuantizedTensor quantized;
-      const auto& output_tensor = plan_result.output_tensors[i];
-      switch (output_tensor.dtype()) {
-        case tensorflow::DT_INT8:
-          AddValuesToQuantized<int8_t>(&quantized, output_tensor);
-          quantized.bitwidth = 7;
-          break;
-        case tensorflow::DT_UINT8:
-          AddValuesToQuantized<uint8_t>(&quantized, output_tensor);
-          quantized.bitwidth = 8;
-          break;
-        case tensorflow::DT_INT16:
-          AddValuesToQuantized<int16_t>(&quantized, output_tensor);
-          quantized.bitwidth = 15;
-          break;
-        case tensorflow::DT_UINT16:
-          AddValuesToQuantized<uint16_t>(&quantized, output_tensor);
-          quantized.bitwidth = 16;
-          break;
-        case tensorflow::DT_INT32:
-          AddValuesToQuantized<int32_t>(&quantized, output_tensor);
-          quantized.bitwidth = 31;
-          break;
-        case tensorflow::DT_INT64:
-          AddValuesToQuantized<int64_t>(&quantized, output_tensor);
-          quantized.bitwidth = 62;
-          break;
-        default:
-          return absl::InvalidArgumentError(
-              absl::StrCat("Tensor of type",
-                           tensorflow::DataType_Name(output_tensor.dtype()),
-                           "could not be converted to quantized value"));
-      }
-      computation_results[plan_result.output_names[i]] = std::move(quantized);
-    }
-
-    // Add dimensions to QuantizedTensors.
-    for (const tensorflow::TensorSpecProto& tensor_spec :
-         tensorflow_spec->output_tensor_specs()) {
-      if (computation_results.find(tensor_spec.name()) !=
-          computation_results.end()) {
-        for (const tensorflow::TensorShapeProto_Dim& dim :
-             tensor_spec.shape().dim()) {
-          std::get<QuantizedTensor>(computation_results[tensor_spec.name()])
-              .dimensions.push_back(dim.size());
-        }
-      }
+    for (auto& [name, tensor] : plan_result.secagg_tensor_map) {
+      computation_results[name] = std::move(tensor);
     }
   }
 
@@ -2323,6 +2266,10 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
       if (native_task_eligibility_info.ok()) {
         plan_result =
             engine::PlanResult(engine::PlanOutcome::kSuccess, absl::OkStatus());
+        if (native_task_eligibility_info->has_value()) {
+          result.set_task_eligibility_info(
+              native_task_eligibility_info->value().SerializeAsString());
+        }
       } else {
         plan_result = engine::PlanResult(engine::PlanOutcome::kTensorflowError,
                                          native_task_eligibility_info.status());
@@ -2333,6 +2280,10 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
           example_iterator_factories, should_abort, log_manager,
           opstats_logger.get(), flags, client_plan, checkpoint_input_filename,
           timing_config, run_plan_start_time, reference_time);
+      if (plan_result.task_eligibility_info.ok()) {
+        result.set_task_eligibility_info(
+            plan_result.task_eligibility_info->SerializeAsString());
+      }
     }
 
   } else {
@@ -2349,12 +2300,6 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   result.set_outcome(
       engine::ConvertPlanOutcomeToPhaseOutcome(plan_result.outcome));
   if (plan_result.outcome == engine::PlanOutcome::kSuccess) {
-    for (int i = 0; i < plan_result.output_names.size(); i++) {
-      tensorflow::TensorProto output_tensor_proto;
-      plan_result.output_tensors[i].AsProtoField(&output_tensor_proto);
-      (*result.mutable_output_tensors())[plan_result.output_names[i]] =
-          std::move(output_tensor_proto);
-    }
     phase_logger.LogComputationCompleted(
         plan_result.example_stats,
         // Empty network stats, since no network protocol is actually used in

@@ -490,7 +490,6 @@ TEST_F(EligibilityDeciderTest, TfCustomPolicyPreparesNeetContextIterator) {
 
   engine::PlanResult plan_result(engine::PlanOutcome::kSuccess,
                                  absl::OkStatus());
-  plan_result.output_tensors = {};
 
   TaskEligibilityInfo tf_custom_policy_output;
   tf_custom_policy_output.set_version(1);
@@ -590,7 +589,6 @@ TEST_F(EligibilityDeciderTest, TfCustomPolicyParseOutputsLogsNonfatal) {
 
   engine::PlanResult plan_result(engine::PlanOutcome::kSuccess,
                                  absl::OkStatus());
-  plan_result.output_tensors = {};
 
   auto execution_error = absl::InternalError("cripes!");
   EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))

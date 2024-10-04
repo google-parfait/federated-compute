@@ -308,15 +308,16 @@ cc_library(
     deps = [
         ":engine_cc_proto",
         "//fcp/base",
+        "//fcp/client:federated_protocol",
         "//fcp/client:interfaces",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
-        "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
     ],
 )
@@ -339,11 +340,15 @@ cc_library(
     srcs = ["tensorflow_utils.cc"],
     hdrs = ["tensorflow_utils.h"],
     deps = [
+        "//fcp/client:federated_protocol",
         "//fcp/protos:federated_api_cc_proto",
+        "//fcp/protos:plan_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@org_tensorflow//tensorflow/core:framework",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
         "@org_tensorflow//tensorflow/core/platform:tstring",
     ],
 )

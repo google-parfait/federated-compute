@@ -16,10 +16,14 @@
 #ifndef FCP_CLIENT_ENGINE_TENSORFLOW_UTILS_H_
 #define FCP_CLIENT_ENGINE_TENSORFLOW_UTILS_H_
 
+#include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "fcp/client/federated_protocol.h"
 #include "fcp/protos/federated_api.pb.h"
+#include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/tensor.h"
 
 namespace fcp::client::engine {
@@ -32,6 +36,15 @@ namespace fcp::client::engine {
 absl::StatusOr<google::internal::federatedml::v2::TaskEligibilityInfo>
 ParseEligibilityEvalPlanOutput(
     const std::vector<tensorflow::Tensor>& output_tensors);
+
+// Converts a vector of tensor name and a vector of tensorflow::Tensor to a
+// map of tensor name to QuantizedTensor.  The shape of the tensor is taken from
+// the TensorflowSpec.
+absl::StatusOr<absl::flat_hash_map<std::string, QuantizedTensor>>
+CreateQuantizedTensorMap(
+    const std::vector<std::string>& tensor_names,
+    const std::vector<tensorflow::Tensor>& tensors,
+    const google::internal::federated::plan::TensorflowSpec& tensorflow_spec);
 
 }  // namespace fcp::client::engine
 
