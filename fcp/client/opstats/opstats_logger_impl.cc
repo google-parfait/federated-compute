@@ -47,7 +47,10 @@ OpStatsLoggerImpl::OpStatsLoggerImpl(std::unique_ptr<OpStatsDb> db,
                                      const Flags* flags,
                                      const std::string& session_name,
                                      const std::string& population_name)
-    : db_(std::move(db)), log_manager_(log_manager) {
+    : db_(std::move(db)),
+      log_manager_(log_manager),
+      log_min_sep_index_to_phase_stats_(
+          flags->log_min_sep_index_to_phase_stats()) {
   log_manager_->LogDiag(DebugDiagCode::TRAINING_OPSTATS_ENABLED);
   log_manager_->LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_EXPECTED);
 
@@ -108,7 +111,13 @@ void OpStatsLoggerImpl::AddEventWithErrorMessage(
 
 void OpStatsLoggerImpl::SetMinSepPolicyIndex(int64_t current_index) {
   absl::MutexLock lock(&mutex_);
-  stats_.set_min_sep_policy_index(current_index);
+  if (log_min_sep_index_to_phase_stats_ &&
+      current_phase_stats_.phase() !=
+          OperationalStats::PhaseStats::UNSPECIFIED) {
+    current_phase_stats_.set_min_sep_policy_index(current_index);
+  } else {
+    stats_.set_min_sep_policy_index(current_index);
+  }
 }
 
 void OpStatsLoggerImpl::RecordCollectionFirstAccessTime(

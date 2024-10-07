@@ -40,6 +40,8 @@ using ::testing::ElementsAre;
 
 constexpr char kTaskName[] = "task";
 constexpr char kCollectionUri[] = "collection_uri";
+OperationalStats::Event::EventKind kComputationFinishedEvent =
+    OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED;
 OperationalStats::Event::EventKind kUploadStartedEvent =
     OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED;
 OperationalStats::Event::EventKind kUploadServerAbortedEvent =
@@ -497,6 +499,7 @@ TEST(OpStatsUtils,
   OperationalStats stats;
   stats.set_task_name(kTaskName);
   stats.set_min_sep_policy_index(1);
+  stats.mutable_events()->Add(CreateEvent(kUploadStartedEvent, 1000));
 
   OpStatsSequence opstats_sequence;
   *opstats_sequence.add_opstats() = std::move(stats);
@@ -578,6 +581,161 @@ TEST(OpStatsUtils,
   EXPECT_FALSE(GetLastSuccessfulContributionMinSepPolicyIndex(opstats_sequence,
                                                               kTaskName)
                    .has_value());
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionMinSepPolicyIndexWithPhaseStats) {
+  OperationalStats first_success_run;
+  OperationalStats::PhaseStats compute;
+  compute.set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  compute.set_task_name(kTaskName);
+  *compute.add_events() = CreateEvent(kComputationFinishedEvent, 10000);
+  compute.set_min_sep_policy_index(1);
+  OperationalStats::PhaseStats upload;
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  *upload.add_events() = CreateEvent(kUploadStartedEvent, 15000);
+  upload.set_task_name(kTaskName);
+  *first_success_run.add_phase_stats() = compute;
+  *first_success_run.add_phase_stats() = upload;
+
+  OperationalStats second_success_run;
+  compute.set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  compute.set_task_name(kTaskName);
+  *compute.add_events() = CreateEvent(kComputationFinishedEvent, 20000);
+  compute.set_min_sep_policy_index(2);
+  compute.set_task_name(kTaskName);
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  *upload.add_events() = CreateEvent(kUploadStartedEvent, 25000);
+  upload.set_task_name(kTaskName);
+  *second_success_run.add_phase_stats() = compute;
+  *second_success_run.add_phase_stats() = upload;
+
+  OperationalStats third_failure_run;
+  OperationalStats::PhaseStats failed_upload;
+  failed_upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  failed_upload.set_task_name(kTaskName);
+  *failed_upload.add_events() = CreateEvent(kUploadStartedEvent, 30000);
+  *failed_upload.add_events() = CreateEvent(kUploadServerAbortedEvent, 30001);
+  *third_failure_run.add_phase_stats() = failed_upload;
+  third_failure_run.set_min_sep_policy_index(3);
+
+  OpStatsSequence data;
+  *data.add_opstats() = first_success_run;
+  *data.add_opstats() = second_success_run;
+  *data.add_opstats() = third_failure_run;
+
+  auto last_index =
+      GetLastSuccessfulContributionMinSepPolicyIndex(data, kTaskName);
+  EXPECT_EQ(last_index.value(), 2);
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionMinSepPolicyIndexMixedLegacyAndNewOpStats) {
+  OperationalStats first_success_run;
+  first_success_run.set_task_name(kTaskName);
+  *first_success_run.add_events() = CreateEvent(kUploadStartedEvent, 10000);
+  first_success_run.set_min_sep_policy_index(1);
+
+  OperationalStats second_success_run;
+  OperationalStats::PhaseStats compute;
+  compute.set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  compute.set_task_name(kTaskName);
+  *compute.add_events() = CreateEvent(kComputationFinishedEvent, 20000);
+  compute.set_min_sep_policy_index(2);
+  compute.set_task_name(kTaskName);
+  OperationalStats::PhaseStats upload;
+  upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  *upload.add_events() = CreateEvent(kUploadStartedEvent, 25000);
+  upload.set_task_name(kTaskName);
+  *second_success_run.add_phase_stats() = compute;
+  *second_success_run.add_phase_stats() = upload;
+
+  OperationalStats third_failure_run;
+  OperationalStats::PhaseStats failed_upload;
+  failed_upload.set_phase(OperationalStats::PhaseStats::UPLOAD);
+  failed_upload.set_task_name(kTaskName);
+  *failed_upload.add_events() = CreateEvent(kUploadStartedEvent, 30000);
+  *failed_upload.add_events() = CreateEvent(kUploadServerAbortedEvent, 30001);
+  *third_failure_run.add_phase_stats() = failed_upload;
+  third_failure_run.set_min_sep_policy_index(3);
+
+  OpStatsSequence data;
+  *data.add_opstats() = first_success_run;
+  *data.add_opstats() = second_success_run;
+  *data.add_opstats() = third_failure_run;
+
+  auto last_index =
+      GetLastSuccessfulContributionMinSepPolicyIndex(data, kTaskName);
+  EXPECT_TRUE(last_index.has_value());
+  EXPECT_EQ(last_index.value(), 2);
+}
+
+TEST(OpStatsUtils,
+     GetLastSuccessfulContributionMinSepPolicyIndexMultipleTasksInSameRun) {
+  OperationalStats run_with_3_tasks;
+
+  OperationalStats::PhaseStats* computation_1 =
+      run_with_3_tasks.add_phase_stats();
+  computation_1->set_task_name("task_1");
+  computation_1->set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  OperationalStats::Event computation_event_1 = CreateEvent(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED, 10000);
+  *computation_1->add_events() = computation_event_1;
+  computation_1->set_min_sep_policy_index(1);
+  OperationalStats::PhaseStats* upload_1 = run_with_3_tasks.add_phase_stats();
+  upload_1->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  OperationalStats::Event upload_event_1 =
+      CreateEvent(kUploadStartedEvent, 10001);
+  *upload_1->add_events() = upload_event_1;
+
+  OperationalStats::PhaseStats* computation_2 =
+      run_with_3_tasks.add_phase_stats();
+  computation_2->set_task_name("task_2");
+  computation_2->set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  OperationalStats::Event computation_event_2 = CreateEvent(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED, 11000);
+  computation_2->set_min_sep_policy_index(2);
+  *computation_2->add_events() = computation_event_2;
+  OperationalStats::PhaseStats* upload_2 = run_with_3_tasks.add_phase_stats();
+  upload_2->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  OperationalStats::Event upload_event_2 =
+      CreateEvent(kUploadStartedEvent, 11001);
+  *upload_2->add_events() = upload_event_2;
+
+  OperationalStats::PhaseStats* computation_3 =
+      run_with_3_tasks.add_phase_stats();
+  computation_3->set_task_name("task_3");
+  computation_3->set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  OperationalStats::Event computation_event_3 = CreateEvent(
+      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED, 12000);
+  computation_3->set_min_sep_policy_index(3);
+  *computation_3->add_events() = computation_event_3;
+  OperationalStats::PhaseStats* upload_3 = run_with_3_tasks.add_phase_stats();
+  upload_3->set_phase(OperationalStats::PhaseStats::UPLOAD);
+  OperationalStats::Event upload_event_3 =
+      CreateEvent(kUploadStartedEvent, 12001);
+  *upload_3->add_events() = upload_event_3;
+
+  OpStatsSequence data;
+  *data.add_opstats() = run_with_3_tasks;
+
+  auto stats = GetOperationalStatsForTimeRange(
+      data, absl::FromUnixSeconds(11000), absl::FromUnixSeconds(13000));
+
+  auto last_index_task_1 =
+      GetLastSuccessfulContributionMinSepPolicyIndex(data, "task_1");
+  EXPECT_TRUE(last_index_task_1.has_value());
+  EXPECT_EQ(last_index_task_1.value(), 1);
+
+  auto last_index_task_2 =
+      GetLastSuccessfulContributionMinSepPolicyIndex(data, "task_2");
+  EXPECT_TRUE(last_index_task_2.has_value());
+  EXPECT_EQ(last_index_task_2.value(), 2);
+
+  auto last_index_task_3 =
+      GetLastSuccessfulContributionMinSepPolicyIndex(data, "task_3");
+  EXPECT_TRUE(last_index_task_3.has_value());
+  EXPECT_EQ(last_index_task_3.value(), 3);
 }
 }  // namespace
 }  // namespace opstats

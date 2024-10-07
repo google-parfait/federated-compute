@@ -560,19 +560,17 @@ void PhaseLoggerImpl::LogCheckinPlanUriReceived(
       OperationalStats::Event::EVENT_KIND_CHECKIN_PLAN_URI_RECEIVED);
 }
 
-void PhaseLoggerImpl::LogCheckinCompleted(
-    absl::string_view task_name, const NetworkStats& network_stats,
-    absl::Time time_before_checkin, absl::Time time_before_plan_download,
-    absl::Time reference_time, std::optional<int64_t> min_sep_policy_index) {
+void PhaseLoggerImpl::LogCheckinCompleted(absl::string_view task_name,
+                                          const NetworkStats& network_stats,
+                                          absl::Time time_before_checkin,
+                                          absl::Time time_before_plan_download,
+                                          absl::Time reference_time) {
   absl::Duration duration = absl::Now() - time_before_plan_download;
   event_publisher_->PublishCheckinFinishedV2(network_stats, duration);
   // We already have set the task name when LogCheckinPlanUriReceived was
   // called, so we only have to add the event.
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-  if (min_sep_policy_index.has_value()) {
-    opstats_logger_->SetMinSepPolicyIndex(min_sep_policy_index.value());
-  }
   opstats_logger_->StopLoggingForTheCurrentPhase();
   // The 'EligibilityEvalCheckinLatency' should cover the whole period from
   // eligibility eval checkin to completion (and not just the period from EET
@@ -673,14 +671,17 @@ void PhaseLoggerImpl::LogComputationInterrupted(
   LogComputationLatency(run_plan_start_time, reference_time);
 }
 
-void PhaseLoggerImpl::LogComputationCompleted(const ExampleStats& example_stats,
-                                              const NetworkStats& network_stats,
-                                              absl::Time run_plan_start_time,
-                                              absl::Time reference_time) {
+void PhaseLoggerImpl::LogComputationCompleted(
+    const ExampleStats& example_stats, const NetworkStats& network_stats,
+    absl::Time run_plan_start_time, absl::Time reference_time,
+    std::optional<int64_t> min_sep_policy_index) {
   event_publisher_->PublishComputationCompleted(
       example_stats, network_stats, absl::Now() - run_plan_start_time);
   opstats_logger_->AddEvent(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
+  if (min_sep_policy_index.has_value()) {
+    opstats_logger_->SetMinSepPolicyIndex(min_sep_policy_index.value());
+  }
   opstats_logger_->StopLoggingForTheCurrentPhase();
   log_manager_->LogToLongHistogram(
       HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,

@@ -126,6 +126,7 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   std::unique_ptr<OpStatsDb> db_;
   LogManager* log_manager_;
   OperationalStats::PhaseStats current_phase_stats_ ABSL_GUARDED_BY(mutex_);
+  const bool log_min_sep_index_to_phase_stats_;
   NetworkStats accumulated_network_stats_ ABSL_GUARDED_BY(mutex_);
   absl::Mutex mutex_;
 };

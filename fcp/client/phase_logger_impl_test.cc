@@ -626,46 +626,7 @@ TEST_P(PhaseLoggerImplTest, LogCheckinCompleted) {
       task_name, network_stats,
       /*time_before_checkin=*/absl::Now() - absl::Minutes(2),
       /*time_before_plan_download=*/absl::Now() - absl::Minutes(1),
-      /*reference_time=*/absl::Now() - absl::Minutes(8),
-      /*min_sep_policy_index=*/std::nullopt);
-}
-
-TEST_P(PhaseLoggerImplTest, LogCheckinCompletedWithMinSepPolicyIndex) {
-  NetworkStats network_stats{.bytes_downloaded = 100,
-                             .bytes_uploaded = 200,
-                             .network_duration = absl::Seconds(40)};
-
-  absl::Duration expected_duration = absl::Minutes(1);
-
-  std::optional<int64_t> min_sep_policy_index = 1;
-
-  std::string task_name = "my_task";
-  InSequence seq;
-  EXPECT_CALL(mock_event_publisher_,
-              PublishCheckinFinishedV2(
-                  network_stats,
-                  AllOf(Ge(expected_duration),
-                        Lt(expected_duration + absl::Milliseconds(10)))));
-  EXPECT_CALL(mock_opstats_logger_,
-              AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED));
-  EXPECT_CALL(mock_opstats_logger_, SetMinSepPolicyIndex(1));
-  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
-  // The counter should always log the full duration, from before the start of
-  // the checkin.
-  VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_LATENCY,
-                      AllOf(Ge(absl::ToInt64Milliseconds(absl::Minutes(2))),
-                            Lt(absl::ToInt64Milliseconds(
-                                absl::Minutes(2) + absl::Milliseconds(100)))));
-  VerifyCounterLogged(HistogramCounters::TRAINING_FL_CHECKIN_END_TIME,
-                      AllOf(Ge(absl::ToInt64Milliseconds(absl::Minutes(8))),
-                            Lt(absl::ToInt64Milliseconds(
-                                absl::Minutes(8) + absl::Milliseconds(100)))));
-
-  phase_logger_->LogCheckinCompleted(
-      task_name, network_stats,
-      /*time_before_checkin=*/absl::Now() - absl::Minutes(2),
-      /*time_before_plan_download=*/absl::Now() - absl::Minutes(1),
-      /*reference_time=*/absl::Now() - absl::Minutes(8), min_sep_policy_index);
+      /*reference_time=*/absl::Now() - absl::Minutes(8));
 }
 
 TEST_P(PhaseLoggerImplTest, LogComputationStarted) {
@@ -812,7 +773,36 @@ TEST_P(PhaseLoggerImplTest, LogComputationCompleted) {
                       Ge(absl::ToInt64Milliseconds(absl::Minutes(8))));
 
   phase_logger_->LogComputationCompleted(example_stats_, network_stats_,
-                                         run_plan_start_time, reference_time);
+                                         run_plan_start_time, reference_time,
+                                         /*min_sep_policy_index=*/std::nullopt);
+}
+
+TEST_P(PhaseLoggerImplTest, LogComputationCompletedWithMinSepPolicyIndex) {
+  absl::Time run_plan_start_time = absl::Now() - absl::Minutes(6);
+  absl::Time reference_time = absl::Now() - absl::Minutes(8);
+  std::optional<int> min_sep_policy_index = 1;
+  InSequence seq;
+  EXPECT_CALL(mock_event_publisher_,
+              PublishComputationCompleted(example_stats_, network_stats_,
+                                          Ge(absl::Minutes(6))));
+  EXPECT_CALL(
+      mock_opstats_logger_,
+      AddEvent(OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED));
+  EXPECT_CALL(mock_opstats_logger_,
+              SetMinSepPolicyIndex(min_sep_policy_index.value()));
+  EXPECT_CALL(mock_opstats_logger_, StopLoggingForTheCurrentPhase());
+  VerifyCounterLogged(HistogramCounters::TRAINING_OVERALL_EXAMPLE_SIZE,
+                      kTotalExampleSizeBytes);
+  VerifyCounterLogged(HistogramCounters::TRAINING_OVERALL_EXAMPLE_COUNT,
+                      kTotalExampleCount);
+  VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_LATENCY,
+                      Ge(absl::ToInt64Milliseconds(absl::Minutes(6))));
+  VerifyCounterLogged(HistogramCounters::TRAINING_RUN_PHASE_END_TIME,
+                      Ge(absl::ToInt64Milliseconds(absl::Minutes(8))));
+
+  phase_logger_->LogComputationCompleted(example_stats_, network_stats_,
+                                         run_plan_start_time, reference_time,
+                                         min_sep_policy_index);
 }
 
 TEST_P(PhaseLoggerImplTest, LogResultUploadStartedOpStatsDbCommitSucceeds) {

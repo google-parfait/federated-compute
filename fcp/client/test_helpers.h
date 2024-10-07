@@ -677,6 +677,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_direct_data_upload_task, (), (const, override));
   MOCK_METHOD(bool, enable_relative_uri_prefix, (), (const, override));
   MOCK_METHOD(bool, create_task_identifier, (), (const, override));
+  MOCK_METHOD(bool, log_min_sep_index_to_phase_stats, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
@@ -847,8 +848,7 @@ class MockPhaseLogger : public PhaseLogger {
   MOCK_METHOD(void, LogCheckinCompleted,
               (absl::string_view task_name, const NetworkStats& network_stats,
                absl::Time time_before_checkin,
-               absl::Time time_before_plan_download, absl::Time reference_time,
-               (std::optional<int64_t> min_sep_policy_index)),
+               absl::Time time_before_plan_download, absl::Time reference_time),
               (override));
   MOCK_METHOD(void, MaybeLogCollectionFirstAccessTime, (absl::string_view),
               (override));
@@ -881,7 +881,8 @@ class MockPhaseLogger : public PhaseLogger {
   MOCK_METHOD(void, LogComputationCompleted,
               (const ExampleStats& example_stats,
                const NetworkStats& network_stats,
-               absl::Time run_plan_start_time, absl::Time reference_time),
+               absl::Time run_plan_start_time, absl::Time reference_time,
+               (std::optional<int64_t> min_sep_policy_index)),
               (override));
   MOCK_METHOD(absl::Status, LogResultUploadStarted, (), (override));
   MOCK_METHOD(void, LogResultUploadIOError,

@@ -136,6 +136,10 @@ OperationalStats CreateLegacyOperationalStats(
     if (!phase_stats.error_message().empty()) {
       legacy_stats.set_error_message(phase_stats.error_message());
     }
+    if (phase_stats.has_min_sep_policy_index() &&
+        !legacy_stats.has_min_sep_policy_index()) {
+      legacy_stats.set_min_sep_policy_index(phase_stats.min_sep_policy_index());
+    }
     for (const auto& [collection_uri, stats] : phase_stats.dataset_stats()) {
       auto& existing_dataset_stats =
           (*legacy_stats.mutable_dataset_stats())[collection_uri];
@@ -281,6 +285,10 @@ absl::Time GetLastUpdatedTimeFromLegacyOpStats(
 
 }  // anonymous namespace
 
+// Note that this method returns a legacy OperationalStats converted from the
+// input OperationalStats if the last successful contribution is found (see
+// ConvertToLegacyOperationalStats for more details). Make sure the information
+// in the returned OperationalStats is sufficient for your use case.
 std::optional<OperationalStats> GetLastSuccessfulContribution(
     const OpStatsSequence& data, absl::string_view task_name) {
   std::vector<OperationalStats> legacy_op_stats =

@@ -204,13 +204,11 @@ class PhaseLogger {
                                          const NetworkStats& network_stats,
                                          absl::Time time_before_checkin) = 0;
   // Called when check-in is completed.
-  virtual void LogCheckinCompleted(
-      absl::string_view task_name, const NetworkStats& network_stats,
-      absl::Time time_before_checkin, absl::Time time_before_plan_download,
-      absl::Time reference_time,
-      // The current index of MinimumSeparationPolicy that is applied to this
-      // computation execution.
-      std::optional<int64_t> min_sep_policy_index) = 0;
+  virtual void LogCheckinCompleted(absl::string_view task_name,
+                                   const NetworkStats& network_stats,
+                                   absl::Time time_before_checkin,
+                                   absl::Time time_before_plan_download,
+                                   absl::Time reference_time) = 0;
 
   // Computation phase.
   // Called when collection is first accessed.
@@ -244,10 +242,12 @@ class PhaseLogger {
                                          absl::Time run_plan_start_time,
                                          absl::Time reference_time) = 0;
   // Called when computation is completed.
-  virtual void LogComputationCompleted(const ExampleStats& example_stats,
-                                       const NetworkStats& network_stats,
-                                       absl::Time run_plan_start_time,
-                                       absl::Time reference_time) = 0;
+  virtual void LogComputationCompleted(
+      const ExampleStats& example_stats, const NetworkStats& network_stats,
+      absl::Time run_plan_start_time, absl::Time reference_time,
+      // The current index of MinimumSeparationPolicy that is applied to this
+      // computation execution.
+      std::optional<int64_t> min_sep_policy_index) = 0;
 
   // Result upload phase. Result upload only happens when all the previous
   // phases succeed.

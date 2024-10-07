@@ -89,6 +89,37 @@ std::unique_ptr<engine::ExampleIteratorFactory> SetUpExampleIteratorFactory(
       });
 }
 
+// Create an opstats entry with the given task_name and min_sep_policy_index.
+// The min_sep_policy_index will be logged in the PhaseStats at the computation
+// phase.
+opstats::OperationalStats CreateOpstatsWithMinSepPolicyIndex(
+    const std::string& task_name, int64_t min_sep_policy_index,
+    bool use_phase_stats) {
+  opstats::OperationalStats stats;
+  if (use_phase_stats) {
+    auto* compute = stats.add_phase_stats();
+    compute->set_task_name(task_name);
+    compute->set_phase(opstats::OperationalStats::PhaseStats::COMPUTATION);
+    *compute->add_events() = CreateOpstatsEvent(
+        opstats::OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED, 1);
+    compute->set_min_sep_policy_index(min_sep_policy_index);
+    auto* upload = stats.add_phase_stats();
+    upload->set_task_name(task_name);
+    upload->set_phase(opstats::OperationalStats::PhaseStats::UPLOAD);
+    *upload->add_events() = CreateOpstatsEvent(
+        opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 2);
+  } else {
+    stats.set_task_name(task_name);
+    *stats.add_events() = CreateOpstatsEvent(
+        opstats::OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED, 1);
+    stats.set_min_sep_policy_index(min_sep_policy_index);
+    *stats.add_events() = CreateOpstatsEvent(
+        opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 2);
+  }
+
+  return stats;
+}
+
 class MockEetPlanRunner : public EetPlanRunner {
  public:
   MOCK_METHOD(
@@ -944,15 +975,15 @@ TEST_F(EligibilityDeciderTest, TwoTasksNeitherUsePolicies) {
 }
 
 TEST_F(EligibilityDeciderTest, MinSepPolicyMinVersionTooHighIneligible) {
-  EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
-      .WillRepeatedly(Return(false));
+  ON_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
+      .WillByDefault(Return(false));
 
   PopulationEligibilitySpec spec;
 
   EligibilityPolicyEvalSpec* min_sep_spec =
       spec.mutable_eligibility_policies()->Add();
   min_sep_spec->set_name("min_sep:3;current_index:5");
-  min_sep_spec->set_min_version(2);
+  min_sep_spec->set_min_version(3);
   min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
   min_sep_spec->mutable_min_sep_policy()
@@ -981,6 +1012,8 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyMinVersionTooHighIneligible) {
 
 TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodTooYoungIneligible) {
+  EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
+      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
@@ -989,7 +1022,7 @@ TEST_F(EligibilityDeciderTest,
   EligibilityPolicyEvalSpec* min_sep_spec =
       spec.mutable_eligibility_policies()->Add();
   min_sep_spec->set_name("min_sep:3;current_index:5");
-  min_sep_spec->set_min_version(2);
+  min_sep_spec->set_min_version(3);
   min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
   min_sep_spec->mutable_min_sep_policy()
@@ -1006,7 +1039,7 @@ TEST_F(EligibilityDeciderTest,
   opstats::OpStatsSequence opstats_sequence;
   // Trustworthy since epoch time
   opstats_sequence.mutable_earliest_trustworthy_time()->set_seconds(0);
-  // Set the clock to epoch + 5 seconds, which exceeds the required min
+  // Set the clock to epoch + 5 seconds, which has not reached the required min
   // trustworthiness period.
   clock_.AdvanceTime(absl::Seconds(5));
 
@@ -1021,6 +1054,8 @@ TEST_F(EligibilityDeciderTest,
 
 TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodExceededEligible) {
+  EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
+      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
@@ -1029,7 +1064,7 @@ TEST_F(EligibilityDeciderTest,
   EligibilityPolicyEvalSpec* min_sep_spec =
       spec.mutable_eligibility_policies()->Add();
   min_sep_spec->set_name("min_sep:3;current_index:5");
-  min_sep_spec->set_min_version(2);
+  min_sep_spec->set_min_version(3);
   min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
   min_sep_spec->mutable_min_sep_policy()
@@ -1045,7 +1080,7 @@ TEST_F(EligibilityDeciderTest,
 
   PopulationEligibilitySpec::TaskInfo* task_index_greater_than_min_sep =
       spec.mutable_task_info()->Add();
-  task_index_greater_than_min_sep->set_task_name("single_task_1");
+  task_index_greater_than_min_sep->set_task_name("single_task_2");
   task_index_greater_than_min_sep->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
   task_index_greater_than_min_sep->mutable_eligibility_policy_indices()->Add(0);
@@ -1057,11 +1092,9 @@ TEST_F(EligibilityDeciderTest,
   // trustworthiness period.
   clock_.AdvanceTime(absl::Seconds(5));
 
-  opstats::OperationalStats stats;
-  stats.set_task_name(task_index_greater_than_min_sep->task_name());
-  stats.set_min_sep_policy_index(1);
-  stats.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
+  opstats::OperationalStats stats = CreateOpstatsWithMinSepPolicyIndex(
+      "single_task_2", /*min_sep_policy_index=*/1, /*use_phase_stats=*/true);
+
   *opstats_sequence.add_opstats() = std::move(stats);
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
@@ -1076,6 +1109,8 @@ TEST_F(EligibilityDeciderTest,
 
 TEST_F(EligibilityDeciderTest,
        MinSepPolicyTrustworthinessPeriodExceededIneligible) {
+  EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
+      .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
@@ -1084,7 +1119,7 @@ TEST_F(EligibilityDeciderTest,
   EligibilityPolicyEvalSpec* min_sep_spec =
       spec.mutable_eligibility_policies()->Add();
   min_sep_spec->set_name("min_sep:3;current_index:5");
-  min_sep_spec->set_min_version(2);
+  min_sep_spec->set_min_version(3);
   min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
   min_sep_spec->mutable_min_sep_policy()
@@ -1100,7 +1135,7 @@ TEST_F(EligibilityDeciderTest,
 
   PopulationEligibilitySpec::TaskInfo* task_index_less_than_min_sep =
       spec.mutable_task_info()->Add();
-  task_index_less_than_min_sep->set_task_name("single_task_1");
+  task_index_less_than_min_sep->set_task_name("single_task_2");
   task_index_less_than_min_sep->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
   task_index_less_than_min_sep->mutable_eligibility_policy_indices()->Add(0);
@@ -1112,18 +1147,12 @@ TEST_F(EligibilityDeciderTest,
   // trustworthiness period.
   clock_.AdvanceTime(absl::Seconds(5));
 
-  opstats::OperationalStats stats1;
-  stats1.set_task_name(task_index_equal_to_min_sep->task_name());
-  stats1.set_min_sep_policy_index(2);
-  stats1.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
+  opstats::OperationalStats stats1 = CreateOpstatsWithMinSepPolicyIndex(
+      "single_task_1", /*min_sep_policy_index=*/2, /*use_phase_stats=*/true);
   *opstats_sequence.add_opstats() = std::move(stats1);
-
-  opstats::OperationalStats stats2;
-  stats2.set_task_name(task_index_less_than_min_sep->task_name());
-  stats2.set_min_sep_policy_index(4);
-  stats2.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
+  opstats::OperationalStats stats2 = CreateOpstatsWithMinSepPolicyIndex(
+      "single_task_2", /*min_sep_policy_index=*/4,
+      /*use_phase_stats=*/true);
   *opstats_sequence.add_opstats() = std::move(stats2);
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
@@ -1136,8 +1165,9 @@ TEST_F(EligibilityDeciderTest,
   ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 0.0f);
 }
 
-TEST_F(EligibilityDeciderTest,
-       MinSepPolicyTrustworthinessPeriodSkippedEligible) {
+TEST_F(EligibilityDeciderTest, MinSepPolicyNoMinTrustworthinessPeriodEligible) {
+  EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
+      .WillRepeatedly(Return(false));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
@@ -1159,18 +1189,15 @@ TEST_F(EligibilityDeciderTest,
 
   PopulationEligibilitySpec::TaskInfo* task_index_greater_than_min_sep =
       spec.mutable_task_info()->Add();
-  task_index_greater_than_min_sep->set_task_name("single_task_1");
+  task_index_greater_than_min_sep->set_task_name("single_task_2");
   task_index_greater_than_min_sep->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
   task_index_greater_than_min_sep->mutable_eligibility_policy_indices()->Add(0);
 
   opstats::OpStatsSequence opstats_sequence;
 
-  opstats::OperationalStats stats;
-  stats.set_task_name(task_index_greater_than_min_sep->task_name());
-  stats.set_min_sep_policy_index(1);
-  stats.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
+  opstats::OperationalStats stats = CreateOpstatsWithMinSepPolicyIndex(
+      "single_task_2", /*min_sep_policy_index=*/1, /*use_phase_stats=*/false);
   *opstats_sequence.add_opstats() = std::move(stats);
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
@@ -1184,7 +1211,9 @@ TEST_F(EligibilityDeciderTest,
 }
 
 TEST_F(EligibilityDeciderTest,
-       MinSepPolicyTrustworthinessPeriodSkippedInEligible) {
+       MinSepPolicyNoMinTrustworthinessPeriodInEligible) {
+  EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
+      .WillRepeatedly(Return(false));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
 
@@ -1193,7 +1222,7 @@ TEST_F(EligibilityDeciderTest,
   EligibilityPolicyEvalSpec* min_sep_spec =
       spec.mutable_eligibility_policies()->Add();
   min_sep_spec->set_name("min_sep:3;current_index:5");
-  min_sep_spec->set_min_version(2);
+  min_sep_spec->set_min_version(1);
   min_sep_spec->mutable_min_sep_policy()->set_current_index(5);
   min_sep_spec->mutable_min_sep_policy()->set_minimum_separation(3);
 
@@ -1206,25 +1235,19 @@ TEST_F(EligibilityDeciderTest,
 
   PopulationEligibilitySpec::TaskInfo* task_index_less_than_min_sep =
       spec.mutable_task_info()->Add();
-  task_index_less_than_min_sep->set_task_name("single_task_1");
+  task_index_less_than_min_sep->set_task_name("single_task_2");
   task_index_less_than_min_sep->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
   task_index_less_than_min_sep->mutable_eligibility_policy_indices()->Add(0);
 
   opstats::OpStatsSequence opstats_sequence;
 
-  opstats::OperationalStats stats1;
-  stats1.set_task_name(task_index_equal_to_min_sep->task_name());
-  stats1.set_min_sep_policy_index(2);
-  stats1.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
+  opstats::OperationalStats stats1 = CreateOpstatsWithMinSepPolicyIndex(
+      "single_task_1", /*min_sep_policy_index=*/2, /*use_phase_stats=*/false);
   *opstats_sequence.add_opstats() = std::move(stats1);
 
-  opstats::OperationalStats stats2;
-  stats2.set_task_name(task_index_less_than_min_sep->task_name());
-  stats2.set_min_sep_policy_index(4);
-  stats2.mutable_events()->Add(CreateOpstatsEvent(
-      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 1));
+  opstats::OperationalStats stats2 = CreateOpstatsWithMinSepPolicyIndex(
+      "single_task_2", /*min_sep_policy_index=*/4, /*use_phase_stats=*/false);
   *opstats_sequence.add_opstats() = std::move(stats2);
 
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
@@ -1238,6 +1261,8 @@ TEST_F(EligibilityDeciderTest,
 }
 
 TEST_F(EligibilityDeciderTest, MinSepPolicyWithTrustworthinessCheckDisabled) {
+  EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
+      .WillRepeatedly(Return(false));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(false));
 

@@ -418,6 +418,13 @@ message OperationalStats {
     //  The duration of time spent waiting on the network (but excluding idle
     //  time like the time between polling the server).
     google.protobuf.Duration network_duration = 8;
+
+    // The index of MinimumSeparationPolicy that applied to this task execution.
+    // The MinimumSeparationPolicy now is only used for enabling round-based
+    // sampling-without-replacement. The index (i.e., the round number) should
+    // be the same no matter what the value of the minimum separation is. So use
+    // a single value to record the index.
+    optional int64 min_sep_policy_index = 9;
   }
 
   repeated PhaseStats phase_stats = 13;
@@ -428,7 +435,8 @@ message OperationalStats {
   // sampling-without-replacement. The index (i.e., the round number) should be
   // the same no matter what the value of the minimum separation is. So use a
   // single value to record the index.
-  optional int64 min_sep_policy_index = 15;
+  // Deprecated, use the min_sep_policy_index inside PhaseStats.
+  optional int64 min_sep_policy_index = 15 [deprecated = true];
 
   reserved 8, 9, 14;
 }

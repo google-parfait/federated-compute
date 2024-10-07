@@ -17,6 +17,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -144,9 +145,9 @@ void LogComputationOutcome(engine::PlanResult plan_result,
                            absl::Time reference_time) {
   switch (plan_result.outcome) {
     case engine::PlanOutcome::kSuccess:
-      phase_logger.LogComputationCompleted(plan_result.example_stats,
-                                           NetworkStats(), run_plan_start_time,
-                                           reference_time);
+      phase_logger.LogComputationCompleted(
+          plan_result.example_stats, NetworkStats(), run_plan_start_time,
+          reference_time, /*min_sep_policy_index=*/std::nullopt);
       break;
     case engine::PlanOutcome::kInterrupted:
       phase_logger.LogComputationInterrupted(

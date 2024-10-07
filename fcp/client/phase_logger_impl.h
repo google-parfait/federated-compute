@@ -165,11 +165,11 @@ class PhaseLoggerImpl : public PhaseLogger {
   void LogCheckinPlanUriReceived(absl::string_view task_name,
                                  const NetworkStats& network_stats,
                                  absl::Time time_before_checkin) override;
-  void LogCheckinCompleted(
-      absl::string_view task_name, const NetworkStats& network_stats,
-      absl::Time time_before_checkin, absl::Time time_before_plan_download,
-      absl::Time reference_time,
-      std::optional<int64_t> min_sep_policy_index) override;
+  void LogCheckinCompleted(absl::string_view task_name,
+                           const NetworkStats& network_stats,
+                           absl::Time time_before_checkin,
+                           absl::Time time_before_plan_download,
+                           absl::Time reference_time) override;
 
   // Computation phase.
   void MaybeLogCollectionFirstAccessTime(
@@ -197,10 +197,10 @@ class PhaseLoggerImpl : public PhaseLogger {
                                  const NetworkStats& network_stats,
                                  absl::Time run_plan_start_time,
                                  absl::Time reference_time) override;
-  void LogComputationCompleted(const ExampleStats& example_stats,
-                               const NetworkStats& network_stats,
-                               absl::Time run_plan_start_time,
-                               absl::Time reference_time) override;
+  void LogComputationCompleted(
+      const ExampleStats& example_stats, const NetworkStats& network_stats,
+      absl::Time run_plan_start_time, absl::Time reference_time,
+      std::optional<int64_t> min_sep_policy_index) override;
 
   absl::Status LogResultUploadStarted() override;
   void LogResultUploadIOError(absl::Status error_status,

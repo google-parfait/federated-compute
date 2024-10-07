@@ -404,6 +404,8 @@ TEST_F(OpStatsLoggerImplTest, AddEventWithErrorMessage) {
 }
 
 TEST_F(OpStatsLoggerImplTest, SetMinSepPolicyIndex) {
+  EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
+      .WillRepeatedly(Return(false));
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
 
@@ -1276,6 +1278,44 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsStopCurrentPhaseLoggingCalled) {
   computation_phase->set_task_name(kTaskName);
   computation_phase->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
+
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
+}
+
+TEST_F(OpStatsLoggerImplTest, PhaseStatsSetMinSepPolicyIndex) {
+  EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
+      .WillRepeatedly(Return(true));
+  auto start_time = TimeUtil::GetCurrentTime();
+  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
+                             /*num_opstats_commits*/ 1);
+  auto opstats_logger = CreateOpStatsLoggerImpl(kSessionName, kPopulationName);
+  opstats_logger->StartLoggingForPhase(OperationalStats::PhaseStats::CHECKIN);
+  opstats_logger->AddEventAndSetTaskName(
+      kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
+  opstats_logger->SetMinSepPolicyIndex(1);
+  opstats_logger->StopLoggingForTheCurrentPhase();
+
+  ASSERT_EQ(opstats_logger->GetCurrentTaskName(), kTaskName);
+
+  opstats_logger.reset();
+
+  auto db = PdsBackedOpStatsDb::Create(
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
+  ASSERT_OK(data);
+
+  OpStatsSequence expected;
+  auto expected_stats = expected.add_opstats();
+  expected_stats->set_population_name(kPopulationName);
+  expected_stats->set_session_name(kSessionName);
+  OperationalStats::PhaseStats* phase_stats = expected_stats->add_phase_stats();
+  phase_stats->set_phase(OperationalStats::PhaseStats::CHECKIN);
+  phase_stats->set_task_name(kTaskName);
+  phase_stats->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
+  phase_stats->set_min_sep_policy_index(1);
 
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }

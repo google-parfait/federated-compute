@@ -665,13 +665,14 @@ void LogComputationOutcome(const engine::PlanResult& plan_result,
                            PhaseLogger& phase_logger,
                            const NetworkStats& network_stats,
                            absl::Time run_plan_start_time,
-                           absl::Time reference_time) {
+                           absl::Time reference_time,
+                           std::optional<int64_t> min_sep_policy_index) {
   switch (plan_result.outcome) {
     case engine::PlanOutcome::kSuccess: {
       if (computation_results_parsing_status.ok()) {
-        phase_logger.LogComputationCompleted(plan_result.example_stats,
-                                             network_stats, run_plan_start_time,
-                                             reference_time);
+        phase_logger.LogComputationCompleted(
+            plan_result.example_stats, network_stats, run_plan_start_time,
+            reference_time, min_sep_policy_index);
       } else {
         phase_logger.LogComputationTensorflowError(
             computation_results_parsing_status, plan_result.example_stats,
@@ -1433,24 +1434,14 @@ absl::StatusOr<CheckinResult> IssueCheckin(
   absl::StatusOr<CheckinResult> result = CreateCheckinResultFromTaskAssignment(
       task_assignment, files, log_invalid_payload_error, log_io_error, flags);
   if (result.ok()) {
-    // Only log the current index of the MinimumSeparationPolicy if the
-    // `min_sep_policy_index` is present in the `client_persisted_data`.
-    std::optional<int64_t> min_sep_policy_index = std::nullopt;
-    if (result.value().plan.has_client_persisted_data() &&
-        result.value()
-            .plan.client_persisted_data()
-            .has_min_sep_policy_index()) {
-      min_sep_policy_index =
-          result.value().plan.client_persisted_data().min_sep_policy_index();
-    }
     phase_logger.LogCheckinCompleted(
         result->task_name,
         GetNetworkStatsSince(federated_protocol,
                              /*fedselect_manager=*/nullptr,
                              network_stats_before_plan_download),
         /*time_before_checkin=*/time_before_checkin,
-        /*time_before_plan_download=*/time_before_plan_download, reference_time,
-        min_sep_policy_index);
+        /*time_before_plan_download=*/time_before_plan_download,
+        reference_time);
   }
   return result;
 }
@@ -1741,6 +1732,16 @@ struct RunPlanResults {
   absl::Time run_plan_start_time;
 };
 
+std::optional<int64_t> GetMinSepPolicyIndexFromCheckinResult(
+    const ClientOnlyPlan& plan) {
+  if (plan.has_client_persisted_data() &&
+      plan.client_persisted_data().has_min_sep_policy_index()) {
+    return std::make_optional(
+        plan.client_persisted_data().min_sep_policy_index());
+  }
+  return std::nullopt;
+}
+
 RunPlanResults RunComputation(
     const CheckinResult& checkin_result,
     const SelectorContext& selector_context_with_task_details,
@@ -1837,12 +1838,14 @@ RunPlanResults RunComputation(
             : &checkin_result.plan.phase().tensorflow_spec(),
         plan_result_and_checkpoint_file, flags);
   }
+  std::optional<int64_t> min_sep_policy_index =
+      GetMinSepPolicyIndexFromCheckinResult(checkin_result.plan);
   LogComputationOutcome(
       plan_result_and_checkpoint_file.plan_result, computation_results.status(),
       phase_logger,
       GetNetworkStatsSince(federated_protocol, fedselect_manager,
                            run_plan_start_network_stats),
-      run_plan_start_time, reference_time);
+      run_plan_start_time, reference_time, min_sep_policy_index);
   return RunPlanResults{.outcome = outcome,
                         .computation_results = std::move(computation_results),
                         .run_plan_start_time = run_plan_start_time};
@@ -2300,11 +2303,14 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   result.set_outcome(
       engine::ConvertPlanOutcomeToPhaseOutcome(plan_result.outcome));
   if (plan_result.outcome == engine::PlanOutcome::kSuccess) {
+    std::optional<int64_t> min_sep_policy_index =
+        GetMinSepPolicyIndexFromCheckinResult(client_plan);
     phase_logger.LogComputationCompleted(
         plan_result.example_stats,
         // Empty network stats, since no network protocol is actually used in
         // this method.
-        NetworkStats(), run_plan_start_time, reference_time);
+        NetworkStats(), run_plan_start_time, reference_time,
+        min_sep_policy_index);
   } else {
     phase_logger.LogComputationTensorflowError(
         plan_result.original_status, plan_result.example_stats, NetworkStats(),

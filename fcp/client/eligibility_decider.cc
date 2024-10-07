@@ -68,8 +68,7 @@ const int32_t kDataAvailabilityImplementationVersionWithExampleQueryResult = 2;
 const int32_t kSworImplementationVersion = 1;
 const int32_t kTfCustomPolicyImplementationVersion = 1;
 const int32_t kMinimumSeparationPolicyImplementationVersion = 1;
-const int32_t kMinimumSeparationPolicyImplementationVersionWithTrustworthiness =
-    2;
+const int32_t kMinimumSeparationPolicyImplementationVersionWithPhaseStats = 3;
 
 // URI handled by the eligibility decider for an example selector that will
 // return a single example containing the name of the policy implementation to
@@ -344,6 +343,13 @@ ComputeTfCustomPolicyEligibility(
   return eligible_task_names;
 }
 
+int32_t GetMinSepImplementationVersion(const Flags* flags) {
+  if (flags->log_min_sep_index_to_phase_stats()) {
+    return kMinimumSeparationPolicyImplementationVersionWithPhaseStats;
+  }
+  return kMinimumSeparationPolicyImplementationVersion;
+}
+
 // Computes minimum separation eligibility for the given set of tasks based on
 // the execution history in opstats.
 absl::flat_hash_set<std::string> ComputeMinimumSeparationPolicyEligibility(
@@ -447,16 +453,8 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
         }
         break;
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kMinSepPolicy:
-        if (flags->check_trustworthiness_for_min_sep_policy()) {
-          if (kMinimumSeparationPolicyImplementationVersionWithTrustworthiness <
-              policy_spec.min_version()) {
-            policy_implemented = false;
-          }
-        } else {
-          if (kMinimumSeparationPolicyImplementationVersion <
-              policy_spec.min_version()) {
-            policy_implemented = false;
-          }
+        if (GetMinSepImplementationVersion(flags) < policy_spec.min_version()) {
+          policy_implemented = false;
         }
         break;
       default:
