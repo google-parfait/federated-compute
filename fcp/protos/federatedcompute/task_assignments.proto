@@ -213,6 +213,11 @@ message TaskAssignment {
     // The `fcp.confidentialcompute.DataAccessPolicy` that will apply to client
     // contributions.
     Resource data_access_policy = 1;
+
+    // the serialized fcp.confidentialcompute.SignedEndorsements that authorize
+    // the `data_access_policy`.  The client will verify that these
+    // SignedEndorsements are valid and sufficient for contribution.
+    Resource signed_endorsements = 2;
   }
 
   oneof aggregation_type {
