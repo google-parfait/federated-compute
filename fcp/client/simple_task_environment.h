@@ -25,10 +25,13 @@
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/task_result_info.pb.h"
+#include "fcp/protos/confidentialcompute/access_policy_endorsement_options.pb.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp {
 namespace client {
+
+using ::fcp::confidentialcompute::AccessPolicyEndorsementOptions;
 
 // An interface used by the plan engine to query for serialized examples. Not
 // required to be thread-safe.
@@ -107,6 +110,10 @@ class SimpleTaskEnvironment {
   // more than one tasks were assigned to the device.
   virtual bool OnTaskCompleted(const TaskResultInfo& task_result_info) {
     return true;
+  }
+
+  virtual AccessPolicyEndorsementOptions GetAccessPolicyEndorsementOptions() {
+    return AccessPolicyEndorsementOptions::default_instance();
   }
 
  private:

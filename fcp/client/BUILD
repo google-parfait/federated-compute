@@ -94,6 +94,7 @@ cc_library(
         "//fcp/client/attestation:attestation_verifier",
         "//fcp/client/http:http_client",
         "//fcp/protos:plan_cc_proto",
+        "//fcp/protos/confidentialcompute:access_policy_endorsement_options_cc_proto",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
     ],

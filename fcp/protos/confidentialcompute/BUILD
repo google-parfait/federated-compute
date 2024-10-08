@@ -266,3 +266,24 @@ py_proto_library(
     name = "signed_endorsements_py_pb2",
     deps = [":signed_endorsements_proto"],
 )
+
+# --------------------------------------------------------------------
+# access_policy_endorsement_options.proto
+
+proto_library(
+    name = "access_policy_endorsement_options_proto",
+    srcs = ["access_policy_endorsement_options.proto"],
+    deps = [
+        "@oak//proto/attestation:reference_value_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "access_policy_endorsement_options_cc_proto",
+    deps = [":access_policy_endorsement_options_proto"],
+)
+
+java_proto_library(
+    name = "access_policy_endorsement_options_java_proto",
+    deps = [":access_policy_endorsement_options_proto"],
+)
