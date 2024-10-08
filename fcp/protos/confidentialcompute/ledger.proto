@@ -132,19 +132,63 @@ message AuthorizeAccessRequest {
   bytes access_policy = 2;
 
   // The serialized fcp.confidentialcompute.BlobHeader of the blob being
-  // accessed.
-  bytes blob_header = 3;
+  // accessed. Use BlobMetadata.blob_header instead.
+  bytes blob_header = 3 [deprecated = true];
 
   // Encapsulated HPKE secret key used (along with one of the Ledger's private
   // keys) to decrypt `encrypted_symmetric_key`. The encapsulated key will have
   // been produced as part of encrypting the blob's symmetric key using HPKE.
-  bytes encapsulated_key = 4;
+  // Use BlobMetadata.encapsulated_key instead.
+  bytes encapsulated_key = 4 [deprecated = true];
 
   // The blob's encrypted symmetric key, used to encrypt the blob data using
   // AEAD. This symmetric key should have been encrypted using the Ledger-owned
   // public key indicated in the blob header. The plaintext should be a COSE_Key
   // structure (RFC 9052), but this is not enforced by this method.
-  bytes encrypted_symmetric_key = 5;
+  // Use BlobMetadata.encrypted_symmetric_key instead.
+  bytes encrypted_symmetric_key = 5 [deprecated = true];
+
+  // Optional. The range of records to authorize access to in batches.
+  // If there is only a single blob, this field can be left unset.
+  Range record_key_range = 12;
+
+  message Range {
+    // Beginning of the range, inclusive.
+    bytes start = 1;
+    // End of the range, exclusive.
+    bytes end = 2;
+  }
+
+  // The metadata of the blobs pertaining to the given range. This MUST be
+  // provided for range-based batch authorization requests.
+  repeated BlobMetadata blob_metadata = 13;
+
+  message BlobMetadata {
+    // The serialized fcp.confidentialcompute.BlobHeader of the blob being
+    // accessed.
+    bytes blob_header = 1;
+
+    // Encapsulated HPKE secret key used (along with one of the Ledger's private
+    // keys) to decrypt `encrypted_symmetric_key`. The encapsulated key will
+    // have been produced as part of encrypting the blob's symmetric key using
+    // HPKE.
+    bytes encapsulated_key = 2;
+
+    // The blob's encrypted symmetric key, used to encrypt the blob data using
+    // AEAD. This symmetric key should have been encrypted using the
+    // Ledger-owned public key indicated in the blob header. The plaintext
+    // should be a COSE_Key structure (RFC 9052), but this is not enforced by
+    // this method.
+    bytes encrypted_symmetric_key = 3;
+
+    // Nonce used by the recipient to ensure the same AuthorizeAccessResponse
+    // cannot be replayed multiple times by an unsealed portion of the stack to
+    // cause it to process the same data multiple times. The recipient will
+    // discard it after using it once as part of the associated data to decrypt
+    // the symmetric key. This nonce must be appended to the associated data for
+    // the symmetric key.
+    bytes recipient_nonce = 4;
+  }
 
   // The public key to use to encrypt the response.
   //
@@ -180,21 +224,21 @@ message AuthorizeAccessRequest {
   // cause it to process the same data multiple times. The recipient will
   // discard it after using it once as part of the associated data to decrypt
   // the symmetric key. This nonce must be appended to the associated data for
-  // the symmetric key.
-  bytes recipient_nonce = 10;
+  // the symmetric key. Use BlobMetadata.recipient_nonce instead.
+  bytes recipient_nonce = 10 [deprecated = true];
 
   reserved 7;
 }
 
 message AuthorizeAccessResponse {
   // Encapsulated HPKE secret key for decrypting `encrypted_symmetric_key`.
-  bytes encapsulated_key = 1;
+  bytes encapsulated_key = 1 [deprecated = true];
 
   // The symmetric key for reading the data, encrypted with HPKE using
   // `AuthorizeAccessRequest.recipient_public_key`. The associated data for the
   // hybrid encryption is `reencryption_public_key` +
   // `AuthorizeAccessRequest::recipient_nonce`.
-  bytes encrypted_symmetric_key = 2;
+  bytes encrypted_symmetric_key = 2 [deprecated = true];
 
   // If the application will be re-encrypting its output, the CWT for the public
   // key to use. The CWT has the same required claims and parameters as
@@ -203,6 +247,32 @@ message AuthorizeAccessResponse {
   // data. This key can be ignored if the application doesn't encrypt its
   // outputs (e.g., because it produces anonymized aggregate results).
   bytes reencryption_public_key = 3;
+
+  // Re-wrapped keys for all the blobs in the request. This is only populated
+  // when using range-based batch authorization. The ordering of the blobs
+  // matches the ordering of the blob metadata in the request.
+  repeated AuthorizedBlobKeys authorized_blob_keys = 4;
+
+  message AuthorizedBlobKeys {
+    // Encapsulated HPKE secret key for decrypting `encrypted_symmetric_key`.
+    bytes encapsulated_key = 1;
+
+    // The symmetric key for reading the data, encrypted with HPKE using
+    // `AuthorizeAccessRequest.recipient_public_key`. The associated data for
+    // the hybrid encryption is `reencryption_public_key` +
+    // `AuthorizeAccessRequest::recipient_nonce`.
+    bytes encrypted_symmetric_key = 2;
+
+    // The status of the authorization request for this blob. If the status is
+    // not OK, the other fields in this message will be empty.
+    Status status = 3;
+  }
+}
+
+// Error status similar to google.rpc.Status.
+message Status {
+  int32 code = 1;
+  string message = 2;
 }
 
 message RevokeAccessRequest {
@@ -240,10 +310,6 @@ message LedgerRequest {
 
 message LedgerResponse {
   // Error status similar to google.rpc.Status.
-  message Status {
-    int32 code = 1;
-    string message = 2;
-  }
 
   oneof response {
     // Response for CreateKeyRequest.
