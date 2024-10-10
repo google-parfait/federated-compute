@@ -18,20 +18,28 @@
 
 namespace fcp::client::rust::oak_attestation_verification_ffi {
 
+using oak::attestation::v1::EndorsementDetails;
+
 // See `oak_attestation_verification_ffi_wrapper.rs`.
-struct SerializedAttestationResults {
+struct SerializedResult {
   char* data;
   size_t size;
+  bool is_err;
 };
 
-extern "C" SerializedAttestationResults
+extern "C" SerializedResult
 fcp_rs_oak_attestation_verification_verify_attestation(
     int64_t now_utc_millis, const char* serialized_evidence,
     size_t serialized_evidence_size, const char* serialized_endorsements,
     size_t, const char* serialized_reference_values, size_t);
 
-extern "C" void fcp_rs_oak_attestation_verification_free_attestation_result(
-    SerializedAttestationResults result);
+extern "C" void fcp_rs_oak_attestation_verification_free_result(
+    SerializedResult result);
+
+extern "C" SerializedResult
+fcp_rs_oak_attestation_verification_verify_endorsement(int64_t now_utc_millis,
+                                                       const char*, size_t,
+                                                       const char*, size_t);
 
 absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
     absl::Time now, const oak::attestation::v1::Evidence& evidence,
@@ -42,7 +50,7 @@ absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
   std::string serialized_reference_values =
       reference_values.SerializeAsString();
 
-  SerializedAttestationResults attestation_result =
+  SerializedResult attestation_result =
       fcp_rs_oak_attestation_verification_verify_attestation(
           absl::ToUnixMillis(now), serialized_evidence.data(),
           serialized_evidence.size(), serialized_endorsements.data(),
@@ -50,8 +58,7 @@ absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
           serialized_reference_values.size());
   // Ensure that the Rust buffer gets released when we go out of scope.
   absl::Cleanup free_result_cleanup = [&attestation_result]() {
-    fcp_rs_oak_attestation_verification_free_attestation_result(
-        attestation_result);
+    fcp_rs_oak_attestation_verification_free_result(attestation_result);
   };
 
   // Ensure the returned data fits within the `int` size type used by
@@ -71,4 +78,33 @@ absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
   }
   return result;
 }
+
+absl::StatusOr<EndorsementDetails> VerifyEndorsement(
+    absl::Time now,
+    const oak::attestation::v1::SignedEndorsement& signed_endorsement,
+    const oak::attestation::v1::EndorsementReferenceValue& reference_value) {
+  std::string serialized_signed_endorsement =
+      signed_endorsement.SerializeAsString();
+  std::string serialized_reference_value = reference_value.SerializeAsString();
+
+  SerializedResult r = fcp_rs_oak_attestation_verification_verify_endorsement(
+      absl::ToUnixMillis(now), serialized_signed_endorsement.data(),
+      serialized_signed_endorsement.size(), serialized_reference_value.data(),
+      serialized_reference_value.size());
+  // Ensure that the Rust buffer gets released when we go out of scope.
+  absl::Cleanup free_result_cleanup = [&r]() {
+    fcp_rs_oak_attestation_verification_free_result(r);
+  };
+
+  if (r.is_err) {
+    return absl::FailedPreconditionError({r.data, r.size});
+  }
+
+  EndorsementDetails result;
+  if (!result.ParseFromArray(r.data, static_cast<int>(r.size))) {
+    return absl::InternalError("Failed to parse EndorsementDetails");
+  }
+  return result;
+}
+
 }  // namespace fcp::client::rust::oak_attestation_verification_ffi

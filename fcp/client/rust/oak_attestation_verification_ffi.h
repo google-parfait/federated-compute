@@ -9,6 +9,7 @@
 #include "proto/attestation/verification.pb.h"
 
 namespace fcp::client::rust::oak_attestation_verification_ffi {
+
 // Verifies the given attestation evidence using the provided endorsements and
 // reference values, and returns the verification result as an
 // `AttestationResults` proto (which indicates whether verification passed or
@@ -25,6 +26,20 @@ absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
     absl::Time now, const oak::attestation::v1::Evidence& evidence,
     const oak::attestation::v1::Endorsements& endorsements,
     const oak::attestation::v1::ReferenceValues& reference_values);
+
+// Verifies the given signed endorsement against a reference value.
+//
+// Returns OK whenever the endorsement is valid, and FailedPreconditionError
+// with a message describing the failure otherwise.
+//
+// This function delegates the actual verification process to the Oak
+// Attestation Verification crate
+// https://github.com/project-oak/oak/tree/main/oak_attestation_verification.
+absl::StatusOr<oak::attestation::v1::EndorsementDetails> VerifyEndorsement(
+    absl::Time now,
+    const oak::attestation::v1::SignedEndorsement& signed_endorsement,
+    const oak::attestation::v1::EndorsementReferenceValue& reference_value);
+
 }  // namespace fcp::client::rust::oak_attestation_verification_ffi
 
 #endif  // FCP_CLIENT_RUST_OAK_ATTESTATION_VERIFICATION_FFI_H_
