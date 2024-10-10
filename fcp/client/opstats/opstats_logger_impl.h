@@ -131,6 +131,14 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   absl::Mutex mutex_;
 };
 
+// If opstats is enabled, this method attempts to create an opstats logger
+// backed by a database within base_dir and prepares to record information for a
+// training run with the provided session and population names. If there is an
+// error initializing the db or opstats is disabled, creates a no-op logger.
+std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
+    const std::string& base_dir, const Flags* flags, LogManager* log_manager,
+    const std::string& session_name, const std::string& population_name);
+
 }  // namespace opstats
 }  // namespace client
 }  // namespace fcp

@@ -52,7 +52,6 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/example_query_plan_engine.h"
-#include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/engine/tflite_plan_engine.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/example_iterator_query_recorder.h"
@@ -68,10 +67,12 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_example_store.h"
 #include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/opstats/opstats_logger_impl.h"
 #include "fcp/client/opstats/opstats_utils.h"
 #include "fcp/client/parsing_utils.h"
 #include "fcp/client/phase_logger.h"
 #include "fcp/client/phase_logger_impl.h"
+#include "fcp/client/runner_common.h"
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
@@ -108,24 +109,6 @@ using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 using TfLiteInputs = absl::flat_hash_map<std::string, std::string>;
 
 namespace {
-
-struct PlanResultAndCheckpointFile {
-  explicit PlanResultAndCheckpointFile(engine::PlanResult plan_result)
-      : plan_result(std::move(plan_result)) {}
-  engine::PlanResult plan_result;
-  // The name of the output checkpoint file. Empty if the plan did not produce
-  // an output checkpoint.
-  std::string checkpoint_filename;
-
-  PlanResultAndCheckpointFile(PlanResultAndCheckpointFile&&) = default;
-  PlanResultAndCheckpointFile& operator=(PlanResultAndCheckpointFile&&) =
-      default;
-
-  // Disallow copy and assign.
-  PlanResultAndCheckpointFile(const PlanResultAndCheckpointFile&) = delete;
-  PlanResultAndCheckpointFile& operator=(const PlanResultAndCheckpointFile&) =
-      delete;
-};
 
 // Creates computation results. The method checks for SecAgg tensors only if
 // `tensorflow_spec != nullptr`.
@@ -1917,8 +1900,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     const std::string& client_version,
     const std::string& client_attestation_measurement) {
   auto opstats_logger =
-      engine::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
-                                  session_name, population_name);
+      opstats::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
+                                   session_name, population_name);
 
   absl::Time reference_time = absl::Now();
   FLRunnerResult fl_runner_result;
@@ -2195,8 +2178,8 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   Clock* clock = Clock::RealClock();
 
   auto opstats_logger =
-      engine::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
-                                  /*session_name=*/"", /*population_name=*/"");
+      opstats::CreateOpStatsLogger(env_deps->GetBaseDir(), flags, log_manager,
+                                   /*session_name=*/"", /*population_name=*/"");
   PhaseLoggerImpl phase_logger(event_publisher, opstats_logger.get(),
                                log_manager, flags);
 

@@ -32,6 +32,8 @@
 #include "fcp/client/histogram_counters.pb.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"
+#include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/opstats/pds_backed_opstats_db.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
@@ -275,6 +277,22 @@ void OpStatsLoggerImpl::StopLoggingForTheCurrentPhase() {
       OperationalStats::PhaseStats::UNSPECIFIED) {
     *stats_.add_phase_stats() = current_phase_stats_;
     current_phase_stats_ = OperationalStats::PhaseStats();
+  }
+}
+
+std::unique_ptr<OpStatsLogger> CreateOpStatsLogger(
+    const std::string& base_dir, const Flags* flags, LogManager* log_manager,
+    const std::string& session_name, const std::string& population_name) {
+  auto db_or = PdsBackedOpStatsDb::Create(
+      base_dir, flags->opstats_ttl_days() * absl::Hours(24), *log_manager,
+      flags->opstats_db_size_limit_bytes());
+  if (db_or.ok()) {
+    return std::make_unique<OpStatsLoggerImpl>(std::move(db_or).value(),
+                                               log_manager, flags, session_name,
+                                               population_name);
+  } else {
+    return std::make_unique<OpStatsLogger>(
+        /*init_status=*/db_or.status());
   }
 }
 

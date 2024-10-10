@@ -19,12 +19,15 @@
 #include <string>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/synchronization/mutex.h"
 #include "fcp/client/engine/engine.pb.h"
+#include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -83,6 +86,26 @@ absl::Status ValidateTensorflowSpec(
 PhaseOutcome ConvertPlanOutcomeToPhaseOutcome(PlanOutcome plan_outcome);
 
 absl::Status ConvertPlanOutcomeToStatus(engine::PlanOutcome outcome);
+
+// Tracks whether any example iterator encountered an error during the
+// computation (a single computation may use multiple iterators), either during
+// creation of the iterator or during one of the iterations.
+// This class is thread-safe.
+class ExampleIteratorStatus {
+ public:
+  void SetStatus(absl::Status status) ABSL_LOCKS_EXCLUDED(mu_);
+  absl::Status GetStatus() ABSL_LOCKS_EXCLUDED(mu_);
+
+ private:
+  absl::Status status_ ABSL_GUARDED_BY(mu_) = absl::OkStatus();
+  mutable absl::Mutex mu_;
+};
+
+// Finds a suitable example iterator factory out of provided factories based on
+// the provided selector.
+ExampleIteratorFactory* FindExampleIteratorFactory(
+    const google::internal::federated::plan::ExampleSelector& selector,
+    std::vector<ExampleIteratorFactory*> example_iterator_factories);
 
 }  // namespace engine
 }  // namespace client

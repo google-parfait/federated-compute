@@ -27,16 +27,11 @@
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
-#include "absl/time/time.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_iterator_query_recorder.h"
-#include "fcp/client/flags.h"
-#include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
-#include "fcp/client/opstats/opstats_logger_impl.h"
-#include "fcp/client/opstats/pds_backed_opstats_db.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/tensorflow/external_dataset.h"
@@ -50,8 +45,6 @@ namespace engine {
 namespace {
 
 using ::fcp::client::opstats::OpStatsLogger;
-using ::fcp::client::opstats::OpStatsLoggerImpl;
-using ::fcp::client::opstats::PdsBackedOpStatsDb;
 using ::google::internal::federated::plan::ExampleSelector;
 
 /** An iterator that forwards the failing status from the external dataset to
@@ -197,22 +190,6 @@ absl::StatusOr<std::string> DatasetIterator::GetNext() {
   return example;
 }
 
-void ExampleIteratorStatus::SetStatus(absl::Status status) {
-  absl::MutexLock lock(&mu_);
-  // We ignores normal status such as ok and outOfRange to avoid running into a
-  // race condition when an error happened, then an outofRange or ok status
-  // returned in a different thread which overrides the error status.
-  if (status.code() != absl::StatusCode::kOk &&
-      status.code() != absl::StatusCode::kOutOfRange) {
-    status_ = status;
-  }
-}
-
-absl::Status ExampleIteratorStatus::GetStatus() {
-  absl::MutexLock lock(&mu_);
-  return status_;
-}
-
 HostObjectRegistration AddDatasetTokenToInputs(
     std::vector<ExampleIteratorFactory*> example_iterator_factories,
     OpStatsLogger* opstats_logger,
@@ -264,22 +241,6 @@ HostObjectRegistration AddDatasetTokenToInputsForTfLite(
   return host_registration;
 }
 
-std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
-    const std::string& base_dir, const Flags* flags, LogManager* log_manager,
-    const std::string& session_name, const std::string& population_name) {
-  auto db_or = PdsBackedOpStatsDb::Create(
-      base_dir, flags->opstats_ttl_days() * absl::Hours(24), *log_manager,
-      flags->opstats_db_size_limit_bytes());
-  if (db_or.ok()) {
-    return std::make_unique<OpStatsLoggerImpl>(std::move(db_or).value(),
-                                               log_manager, flags, session_name,
-                                               population_name);
-  } else {
-    return std::make_unique<OpStatsLogger>(
-        /*init_status=*/db_or.status());
-  }
-}
-
 PlanResult CreateComputationErrorPlanResult(
     absl::Status example_iterator_status,
     absl::Status computation_error_status) {
@@ -299,17 +260,6 @@ PlanResult CreateComputationErrorPlanResult(
       return PlanResult(PlanOutcome::kExampleIteratorError,
                         example_iterator_status);
   }
-}
-
-ExampleIteratorFactory* FindExampleIteratorFactory(
-    const ExampleSelector& selector,
-    std::vector<ExampleIteratorFactory*> example_iterator_factories) {
-  for (ExampleIteratorFactory* factory : example_iterator_factories) {
-    if (factory->CanHandle(selector)) {
-      return factory;
-    }
-  }
-  return nullptr;
 }
 
 }  // namespace engine

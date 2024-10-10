@@ -158,6 +158,7 @@ cc_library(
         ":parsing_utils",
         ":phase_logger",
         ":phase_logger_impl",
+        ":runner_common",
         ":secagg_runner",
         ":selector_context_cc_proto",
         ":simple_task_environment",
@@ -179,6 +180,7 @@ cc_library(
         "//fcp/client/http:http_federated_protocol",
         "//fcp/client/opstats:opstats_example_store",
         "//fcp/client/opstats:opstats_logger",
+        "//fcp/client/opstats:opstats_logger_impl",
         "//fcp/client/opstats:opstats_utils",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
@@ -218,6 +220,7 @@ cc_library(
         ":interruptible_runner",
         ":phase_logger",
         ":phase_logger_impl",
+        ":runner_common",
         ":selector_context_cc_proto",
         ":simple_task_environment",
         "//fcp/base",
@@ -227,6 +230,7 @@ cc_library(
         "//fcp/client/engine:tflite_plan_engine",
         "//fcp/client/opstats:opstats_example_store",
         "//fcp/client/opstats:opstats_logger",
+        "//fcp/client/opstats:opstats_logger_impl",
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
@@ -439,6 +443,12 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/time",
     ],
+)
+
+cc_library(
+    name = "runner_common",
+    hdrs = ["runner_common.h"],
+    deps = ["//fcp/client/engine:common"],
 )
 
 cc_library(

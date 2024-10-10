@@ -53,6 +53,7 @@ cc_library(
     deps = [
         ":opstats_db",
         ":opstats_logger",
+        ":pds_backed_opstats_db",
         "//fcp/base:time_util",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:histogram_counters_cc_proto",
@@ -76,7 +77,6 @@ cc_test(
         ":opstats_logger",
         ":opstats_logger_impl",
         ":pds_backed_opstats_db",
-        "//fcp/base",
         "//fcp/base:time_util",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:histogram_counters_cc_proto",

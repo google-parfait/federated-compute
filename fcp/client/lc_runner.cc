@@ -33,12 +33,12 @@
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
-#include "fcp/client/engine/plan_engine_helpers.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/opstats/opstats_logger_impl.h"
 #include "fcp/client/phase_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/stats.h"
@@ -284,7 +284,7 @@ absl::Status RunLocalComputation(
     const std::string& session_name, const std::string& plan_uri,
     const std::string& input_dir_uri, const std::string& output_dir_uri,
     const absl::flat_hash_map<std::string, std::string>& input_resources) {
-  auto opstats_logger = engine::CreateOpStatsLogger(
+  auto opstats_logger = opstats::CreateOpStatsLogger(
       env_deps->GetBaseDir(), flags, log_manager, session_name,
       /*population_name=*/"");
   SelectorContext selector_context;

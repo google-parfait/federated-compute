@@ -22,13 +22,17 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "absl/synchronization/mutex.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 
 namespace fcp {
 namespace client {
 namespace engine {
 
+using ::google::internal::federated::plan::ExampleSelector;
 using ::google::internal::federated::plan::TensorflowSpec;
 
 PlanResult::PlanResult(PlanOutcome outcome, absl::Status status)
@@ -103,6 +107,32 @@ absl::Status ConvertPlanOutcomeToStatus(PlanOutcome outcome) {
   }
 }
 
+void ExampleIteratorStatus::SetStatus(absl::Status status) {
+  absl::MutexLock lock(&mu_);
+  // We ignores normal status such as ok and outOfRange to avoid running into a
+  // race condition when an error happened, then an outofRange or ok status
+  // returned in a different thread which overrides the error status.
+  if (status.code() != absl::StatusCode::kOk &&
+      status.code() != absl::StatusCode::kOutOfRange) {
+    status_ = status;
+  }
+}
+
+absl::Status ExampleIteratorStatus::GetStatus() {
+  absl::MutexLock lock(&mu_);
+  return status_;
+}
+
+ExampleIteratorFactory* FindExampleIteratorFactory(
+    const ExampleSelector& selector,
+    std::vector<ExampleIteratorFactory*> example_iterator_factories) {
+  for (ExampleIteratorFactory* factory : example_iterator_factories) {
+    if (factory->CanHandle(selector)) {
+      return factory;
+    }
+  }
+  return nullptr;
+}
 }  // namespace engine
 }  // namespace client
 }  // namespace fcp

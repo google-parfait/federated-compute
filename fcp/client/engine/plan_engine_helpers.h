@@ -33,8 +33,6 @@
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_iterator_query_recorder.h"
-#include "fcp/client/flags.h"
-#include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/tensorflow/external_dataset.h"
@@ -84,20 +82,6 @@ inline absl::Status AsStatus(absl::Status status) { return status; }
       return __status;                                                      \
     }                                                                       \
   } while (0)
-
-// Tracks whether any example iterator encountered an error during the
-// computation (a single computation may use multiple iterators), either during
-// creation of the iterator or during one of the iterations.
-// This class is thread-safe.
-class ExampleIteratorStatus {
- public:
-  void SetStatus(absl::Status status) ABSL_LOCKS_EXCLUDED(mu_);
-  absl::Status GetStatus() ABSL_LOCKS_EXCLUDED(mu_);
-
- private:
-  absl::Status status_ ABSL_GUARDED_BY(mu_) = absl::OkStatus();
-  mutable absl::Mutex mu_;
-};
 
 // A class to iterate over a given example iterator.
 class DatasetIterator : public ExternalDatasetIterator {
@@ -170,26 +154,12 @@ HostObjectRegistration AddDatasetTokenToInputsForTfLite(
     std::atomic<int64_t>* total_example_size_bytes,
     ExampleIteratorStatus* example_iterator_status);
 
-// If opstats is enabled, this method attempts to create an opstats logger
-// backed by a database within base_dir and prepares to record information for a
-// training run with the provided session and population names. If there is an
-// error initializing the db or opstats is disabled, creates a no-op logger.
-std::unique_ptr<::fcp::client::opstats::OpStatsLogger> CreateOpStatsLogger(
-    const std::string& base_dir, const Flags* flags, LogManager* log_manager,
-    const std::string& session_name, const std::string& population_name);
-
 // Utility for creating a PlanResult when an `INVALID_ARGUMENT` TensorFlow error
 // was encountered, disambiguating between generic TF errors and TF errors that
 // were likely root-caused by an earlier example iterator error.
 PlanResult CreateComputationErrorPlanResult(
     absl::Status example_iterator_status,
     absl::Status computation_error_status);
-
-// Finds a suitable example iterator factory out of provided factories based on
-// the provided selector.
-ExampleIteratorFactory* FindExampleIteratorFactory(
-    const google::internal::federated::plan::ExampleSelector& selector,
-    std::vector<ExampleIteratorFactory*> example_iterator_factories);
 
 }  // namespace engine
 }  // namespace client
