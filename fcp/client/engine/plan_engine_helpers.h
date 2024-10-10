@@ -18,24 +18,17 @@
 
 #include <atomic>
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/base/optimization.h"
-#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/synchronization/mutex.h"
-#include "absl/time/time.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/opstats/opstats_logger.h"
-#include "fcp/client/simple_task_environment.h"
-#include "fcp/tensorflow/external_dataset.h"
 #include "fcp/tensorflow/host_object.h"
 #include "tensorflow/core/framework/tensor.h"
 
@@ -82,40 +75,6 @@ inline absl::Status AsStatus(absl::Status status) { return status; }
       return __status;                                                      \
     }                                                                       \
   } while (0)
-
-// A class to iterate over a given example iterator.
-class DatasetIterator : public ExternalDatasetIterator {
- public:
-  DatasetIterator(std::unique_ptr<ExampleIterator> example_iterator,
-                  opstats::OpStatsLogger* opstats_logger,
-                  SingleExampleIteratorQueryRecorder* single_query_recorder,
-                  std::atomic<int>* total_example_count,
-                  std::atomic<int64_t>* total_example_size_bytes,
-                  ExampleIteratorStatus* example_iterator_status,
-                  const std::string& collection_uri, bool collect_stats);
-  ~DatasetIterator() override;
-
-  // Returns the next entry from the dataset.
-  absl::StatusOr<std::string> GetNext() final;
-
- private:
-  std::unique_ptr<ExampleIterator> example_iterator_
-      ABSL_GUARDED_BY(iterator_lock_);
-  opstats::OpStatsLogger* opstats_logger_;
-  SingleExampleIteratorQueryRecorder* single_query_recorder_;
-  absl::Time iterator_start_time_;
-  // Example stats across all datasets.
-  std::atomic<int>* total_example_count_;
-  std::atomic<int64_t>* total_example_size_bytes_;
-  ExampleIteratorStatus* example_iterator_status_;
-  // Example stats only for this dataset.
-  std::atomic<int> example_count_;
-  std::atomic<int64_t> example_size_bytes_;
-  const std::string collection_uri_;
-  bool iterator_finished_ ABSL_GUARDED_BY(iterator_lock_);
-  const bool collect_stats_;
-  absl::Mutex iterator_lock_;
-};
 
 // Sets up a ExternalDatasetProvider that is registered with the global
 // HostObjectRegistry. Adds a tensor representing the HostObjectRegistration

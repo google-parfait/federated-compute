@@ -16,6 +16,9 @@
 #ifndef FCP_CLIENT_ENGINE_COMMON_H_
 #define FCP_CLIENT_ENGINE_COMMON_H_
 
+#include <atomic>
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -26,12 +29,17 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/federated_protocol.h"
+#include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/simple_task_environment.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
+#include "fcp/tensorflow/external_dataset.h"
 
 namespace fcp {
 namespace client {
@@ -106,6 +114,40 @@ class ExampleIteratorStatus {
 ExampleIteratorFactory* FindExampleIteratorFactory(
     const google::internal::federated::plan::ExampleSelector& selector,
     std::vector<ExampleIteratorFactory*> example_iterator_factories);
+
+// A class to iterate over a given example iterator.
+class DatasetIterator : public ExternalDatasetIterator {
+ public:
+  DatasetIterator(std::unique_ptr<ExampleIterator> example_iterator,
+                  opstats::OpStatsLogger* opstats_logger,
+                  SingleExampleIteratorQueryRecorder* single_query_recorder,
+                  std::atomic<int>* total_example_count,
+                  std::atomic<int64_t>* total_example_size_bytes,
+                  ExampleIteratorStatus* example_iterator_status,
+                  const std::string& collection_uri, bool collect_stats);
+  ~DatasetIterator() override;
+
+  // Returns the next entry from the dataset.
+  absl::StatusOr<std::string> GetNext() final;
+
+ private:
+  std::unique_ptr<ExampleIterator> example_iterator_
+      ABSL_GUARDED_BY(iterator_lock_);
+  opstats::OpStatsLogger* opstats_logger_;
+  SingleExampleIteratorQueryRecorder* single_query_recorder_;
+  absl::Time iterator_start_time_;
+  // Example stats across all datasets.
+  std::atomic<int>* total_example_count_;
+  std::atomic<int64_t>* total_example_size_bytes_;
+  ExampleIteratorStatus* example_iterator_status_;
+  // Example stats only for this dataset.
+  std::atomic<int> example_count_;
+  std::atomic<int64_t> example_size_bytes_;
+  const std::string collection_uri_;
+  bool iterator_finished_ ABSL_GUARDED_BY(iterator_lock_);
+  const bool collect_stats_;
+  absl::Mutex iterator_lock_;
+};
 
 }  // namespace engine
 }  // namespace client

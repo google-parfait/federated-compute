@@ -15,16 +15,24 @@
  */
 #include "fcp/client/engine/common.h"
 
+#include <atomic>
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/clock.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/example_iterator_query_recorder.h"
+#include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 
@@ -133,6 +141,67 @@ ExampleIteratorFactory* FindExampleIteratorFactory(
   }
   return nullptr;
 }
+
+DatasetIterator::DatasetIterator(
+    std::unique_ptr<ExampleIterator> example_iterator,
+    opstats::OpStatsLogger* opstats_logger,
+    SingleExampleIteratorQueryRecorder* single_query_recorder,
+    std::atomic<int>* total_example_count,
+    std::atomic<int64_t>* total_example_size_bytes,
+    ExampleIteratorStatus* example_iterator_status,
+    const std::string& collection_uri, bool collect_stats)
+    : example_iterator_(std::move(example_iterator)),
+      opstats_logger_(opstats_logger),
+      single_query_recorder_(single_query_recorder),
+      iterator_start_time_(absl::Now()),
+      total_example_count_(total_example_count),
+      total_example_size_bytes_(total_example_size_bytes),
+      example_iterator_status_(example_iterator_status),
+      example_count_(0),
+      example_size_bytes_(0),
+      collection_uri_(collection_uri),
+      iterator_finished_(false),
+      collect_stats_(collect_stats) {}
+
+DatasetIterator::~DatasetIterator() {
+  if (collect_stats_) {
+    opstats_logger_->UpdateDatasetStats(collection_uri_, example_count_,
+                                        example_size_bytes_);
+  }
+}
+
+// Returns the next entry from the dataset.
+absl::StatusOr<std::string> DatasetIterator::GetNext() {
+  absl::MutexLock locked(&iterator_lock_);
+  if (iterator_finished_) {
+    // If we've reached the end of the iterator, always return OUT_OF_RANGE.
+    return absl::OutOfRangeError("End of iterator reached");
+  }
+  absl::StatusOr<std::string> example = example_iterator_->Next();
+  absl::StatusCode error_code = example.status().code();
+  example_iterator_status_->SetStatus(example.status());
+  if (error_code == absl::StatusCode::kOutOfRange) {
+    example_iterator_->Close();
+    iterator_finished_ = true;
+  }
+  if (example.ok()) {
+    if (single_query_recorder_) {
+      single_query_recorder_->Increment();
+    }
+    // If we're not forwarding an OUT_OF_RANGE to the caller, record example
+    // stats for metrics logging.
+    if (collect_stats_) {
+      // TODO: b/184863488 - Consider reducing logic duplication in
+      // cross-dataset and single-dataset example stat variables.
+      *total_example_count_ += 1;
+      *total_example_size_bytes_ += example->size();
+      example_count_ += 1;
+      example_size_bytes_ += example->size();
+    }
+  }
+  return example;
+}
+
 }  // namespace engine
 }  // namespace client
 }  // namespace fcp
