@@ -16,13 +16,16 @@
 #ifndef FCP_CLIENT_ENGINE_EXAMPLE_QUERY_PLAN_ENGINE_H_
 #define FCP_CLIENT_ENGINE_EXAMPLE_QUERY_PLAN_ENGINE_H_
 
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "absl/functional/any_invocable.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/client/tensorflow/tensorflow_runner.h"
 #include "tensorflow_federated/cc/core/impl/aggregation/protocol/federated_compute_checkpoint_builder.h"
 
 namespace fcp {
@@ -36,7 +39,13 @@ class ExampleQueryPlanEngine {
   ExampleQueryPlanEngine(
       std::vector<ExampleIteratorFactory*> example_iterator_factories,
       ::fcp::client::opstats::OpStatsLogger* opstats_logger,
-      ExampleIteratorQueryRecorder* example_iterator_query_recorder);
+      ExampleIteratorQueryRecorder* example_iterator_query_recorder,
+      // The tensorflow_runner_factory is only used for legacy ExampleQuerySpec
+      // that use the TF v1 checkpoint format. The factory may be empty if no
+      // such specs will be used (the engine will return an UNIMPLEMENTED error
+      // if such plans are encountered in that case).
+      const absl::AnyInvocable<std::unique_ptr<TensorflowRunner>() const>&
+          tensorflow_runner_factory);
 
   // Runs a plan and writes an output into a checkpoint at the given path.
   ::fcp::client::engine::PlanResult RunPlan(
@@ -51,6 +60,8 @@ class ExampleQueryPlanEngine {
   tensorflow_federated::aggregation::FederatedComputeCheckpointBuilderFactory
       federated_compute_checkpoint_builder_factory_;
   ExampleIteratorQueryRecorder* example_iterator_query_recorder_;
+  const absl::AnyInvocable<std::unique_ptr<TensorflowRunner>() const>&
+      tensorflow_runner_factory_;
 };
 }  // namespace engine
 }  // namespace client

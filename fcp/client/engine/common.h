@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
@@ -148,6 +149,22 @@ class DatasetIterator : public ExternalDatasetIterator {
   const bool collect_stats_;
   absl::Mutex iterator_lock_;
 };
+
+// Parse ExampleQuery and returns a map of (vector name) -> tuple(output name,
+// vector spec).
+absl::flat_hash_map<
+    std::string,
+    std::tuple<std::string, google::internal::federated::plan::
+                                ExampleQuerySpec::OutputVectorSpec>>
+GetOutputVectorSpecs(
+    const google::internal::federated::plan::ExampleQuerySpec::ExampleQuery&
+        example_query);
+// Checks if the output vector data type matches the expected data type.
+absl::Status CheckOutputVectorDataType(
+    const google::internal::federated::plan::ExampleQuerySpec::OutputVectorSpec&
+        output_vector_spec,
+    const google::internal::federated::plan::ExampleQuerySpec::
+        OutputVectorSpec::DataType& expected_data_type);
 
 }  // namespace engine
 }  // namespace client

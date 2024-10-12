@@ -19,9 +19,11 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -40,6 +42,7 @@ namespace fcp {
 namespace client {
 namespace engine {
 
+using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::ExampleSelector;
 using ::google::internal::federated::plan::TensorflowSpec;
 
@@ -200,6 +203,31 @@ absl::StatusOr<std::string> DatasetIterator::GetNext() {
     }
   }
   return example;
+}
+
+// Returns a map of (vector name) -> tuple(output name, vector spec).
+absl::flat_hash_map<std::string,
+                    std::tuple<std::string, ExampleQuerySpec::OutputVectorSpec>>
+GetOutputVectorSpecs(const ExampleQuerySpec::ExampleQuery& example_query) {
+  absl::flat_hash_map<
+      std::string, std::tuple<std::string, ExampleQuerySpec::OutputVectorSpec>>
+      map;
+  for (auto const& [output_name, output_vector_spec] :
+       example_query.output_vector_specs()) {
+    map[output_vector_spec.vector_name()] =
+        std::make_tuple(output_name, output_vector_spec);
+  }
+  return map;
+}
+
+absl::Status CheckOutputVectorDataType(
+    const ExampleQuerySpec::OutputVectorSpec& output_vector_spec,
+    const ExampleQuerySpec::OutputVectorSpec::DataType& expected_data_type) {
+  if (output_vector_spec.data_type() != expected_data_type) {
+    return absl::FailedPreconditionError(
+        "Unexpected data type in the example query");
+  }
+  return absl::OkStatus();
 }
 
 }  // namespace engine

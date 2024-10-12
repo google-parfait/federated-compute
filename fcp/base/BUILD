@@ -576,3 +576,25 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "function_registry",
+    hdrs = ["function_registry.h"],
+    deps = [
+        ":base",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:log_severity",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+cc_test(
+    name = "function_registry_test",
+    srcs = ["function_registry_test.cc"],
+    deps = [
+        ":function_registry",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

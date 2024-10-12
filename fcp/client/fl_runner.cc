@@ -31,6 +31,7 @@
 #include "google/protobuf/duration.pb.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/functional/any_invocable.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -52,7 +53,6 @@
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/engine/example_query_plan_engine.h"
-#include "fcp/client/engine/tflite_plan_engine.h"
 #include "fcp/client/event_publisher.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/federated_protocol.h"
@@ -78,19 +78,12 @@
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/stats.h"
 #include "fcp/client/task_result_info.pb.h"
+#include "fcp/client/tensorflow/tensorflow_runner.h"
+#include "fcp/client/tensorflow/tensorflow_runner_factory.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
-#include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/framework/tensor.pb.h"
-#include "tensorflow/core/framework/tensor_shape.pb.h"
-#include "tensorflow/core/platform/tstring.h"
-#include "tensorflow/core/protobuf/struct.pb.h"
-
-#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
-#include "fcp/client/engine/simple_plan_engine.h"
-#endif
 
 namespace fcp {
 namespace client {
@@ -99,13 +92,13 @@ using ::fcp::client::opstats::OpStatsLogger;
 using ::google::internal::federated::plan::AggregationConfig;
 using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federated::plan::ExampleQuerySpec;
-using ::google::internal::federated::plan::FederatedComputeEligibilityIORouter;
-using ::google::internal::federated::plan::FederatedComputeIORouter;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federated::plan::TensorflowSpec;
 using ::google::internal::federatedml::v2::RetryWindow;
 using ::google::internal::federatedml::v2::TaskEligibilityInfo;
 
+using TensorflowRunnerFactory =
+    absl::AnyInvocable<std::unique_ptr<TensorflowRunner>() const>;
 using TfLiteInputs = absl::flat_hash_map<std::string, std::string>;
 
 namespace {
@@ -143,33 +136,6 @@ absl::StatusOr<ComputationResults> CreateComputationResults(
   }
 
   return computation_results;
-}
-
-#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
-std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
-ConstructInputsForEligibilityEvalPlan(
-    const FederatedComputeEligibilityIORouter& io_router,
-    const std::string& checkpoint_input_filename) {
-  auto inputs = std::make_unique<
-      std::vector<std::pair<std::string, tensorflow::Tensor>>>();
-  if (!io_router.input_filepath_tensor_name().empty()) {
-    tensorflow::Tensor input_filepath(tensorflow::DT_STRING, {});
-    input_filepath.scalar<tensorflow::tstring>()() = checkpoint_input_filename;
-    inputs->push_back({io_router.input_filepath_tensor_name(), input_filepath});
-  }
-  return inputs;
-}
-#endif
-
-std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
-    const FederatedComputeEligibilityIORouter& io_router,
-    const std::string& checkpoint_input_filename) {
-  auto inputs = std::make_unique<TfLiteInputs>();
-  if (!io_router.input_filepath_tensor_name().empty()) {
-    (*inputs)[io_router.input_filepath_tensor_name()] =
-        checkpoint_input_filename;
-  }
-  return inputs;
 }
 
 // A helper class for running TensorFlowSpec Eligibility Eval Plans.
@@ -269,209 +235,6 @@ CreateSimpleTaskEnvironmentIteratorFactory(
       /*should_collect_stats=*/true);
 }
 
-engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
-    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
-    std::function<bool()> should_abort, LogManager* log_manager,
-    OpStatsLogger* opstats_logger, const Flags* flags,
-    const ClientOnlyPlan& client_plan,
-    const std::string& checkpoint_input_filename,
-    const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time run_plan_start_time, const absl::Time reference_time) {
-  // Check that this is a TensorflowSpec-based plan for federated eligibility
-  // computation.
-  if (!client_plan.phase().has_tensorflow_spec() ||
-      !client_plan.phase().has_federated_compute_eligibility()) {
-    return engine::PlanResult(
-        engine::PlanOutcome::kInvalidArgument,
-        absl::InvalidArgumentError("Invalid eligibility eval plan"));
-  }
-  const FederatedComputeEligibilityIORouter& io_router =
-      client_plan.phase().federated_compute_eligibility();
-
-  std::vector<std::string> output_names = {
-      io_router.task_eligibility_info_tensor_name()};
-
-  const bool tflite_model_included = !client_plan.tflite_graph().empty();
-  if (tflite_model_included) {
-    log_manager->LogDiag(
-        ProdDiagCode::BACKGROUND_TRAINING_TFLITE_MODEL_INCLUDED);
-  }
-  if (flags->use_tflite_training() && tflite_model_included) {
-    std::unique_ptr<TfLiteInputs> tflite_inputs =
-        ConstructTfLiteInputsForEligibilityEvalPlan(io_router,
-                                                    checkpoint_input_filename);
-    engine::TfLitePlanEngine plan_engine(
-        example_iterator_factories, should_abort, log_manager, opstats_logger,
-        flags, /*example_iterator_query_recorder=*/nullptr, &timing_config);
-    return plan_engine.RunPlan(client_plan.phase().tensorflow_spec(),
-                               client_plan.tflite_graph(),
-                               std::move(tflite_inputs), output_names,
-                               /*is_eligibility_eval_plan=*/true);
-  }
-
-#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
-  // Construct input tensors and output tensor names based on the values in the
-  // FederatedComputeEligibilityIORouter message.
-  auto inputs = ConstructInputsForEligibilityEvalPlan(
-      io_router, checkpoint_input_filename);
-  // Run plan and get a set of output tensors back.
-  engine::SimplePlanEngine plan_engine(
-      example_iterator_factories, should_abort, log_manager, opstats_logger,
-      /*example_iterator_query_recorder=*/nullptr, &timing_config);
-  return plan_engine.RunPlan(
-      client_plan.phase().tensorflow_spec(), client_plan.graph(),
-      client_plan.tensorflow_config_proto(), std::move(inputs), output_names,
-      /*is_eligibility_eval_plan=*/true);
-#else
-  return engine::PlanResult(
-      engine::PlanOutcome::kTensorflowError,
-      absl::InternalError("No eligibility eval plan engine enabled"));
-#endif
-}
-
-#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
-std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
-ConstructInputsForTensorflowSpecPlan(
-    const FederatedComputeIORouter& io_router,
-    const std::string& checkpoint_input_filename,
-    const std::string& checkpoint_output_filename) {
-  auto inputs = std::make_unique<
-      std::vector<std::pair<std::string, tensorflow::Tensor>>>();
-  if (!io_router.input_filepath_tensor_name().empty()) {
-    tensorflow::Tensor input_filepath(tensorflow::DT_STRING, {});
-    input_filepath.scalar<tensorflow::tstring>()() = checkpoint_input_filename;
-    inputs->push_back({io_router.input_filepath_tensor_name(), input_filepath});
-  }
-
-  if (!io_router.output_filepath_tensor_name().empty()) {
-    tensorflow::Tensor output_filepath(tensorflow::DT_STRING, {});
-    output_filepath.scalar<tensorflow::tstring>()() =
-        checkpoint_output_filename;
-    inputs->push_back(
-        {io_router.output_filepath_tensor_name(), output_filepath});
-  }
-
-  return inputs;
-}
-#endif
-
-std::unique_ptr<TfLiteInputs> ConstructTFLiteInputsForTensorflowSpecPlan(
-    const FederatedComputeIORouter& io_router,
-    const std::string& checkpoint_input_filename,
-    const std::string& checkpoint_output_filename) {
-  auto inputs = std::make_unique<TfLiteInputs>();
-  if (!io_router.input_filepath_tensor_name().empty()) {
-    (*inputs)[io_router.input_filepath_tensor_name()] =
-        checkpoint_input_filename;
-  }
-
-  if (!io_router.output_filepath_tensor_name().empty()) {
-    (*inputs)[io_router.output_filepath_tensor_name()] =
-        checkpoint_output_filename;
-  }
-
-  return inputs;
-}
-
-absl::StatusOr<std::vector<std::string>> ConstructOutputsWithDeterministicOrder(
-    const TensorflowSpec& tensorflow_spec,
-    const FederatedComputeIORouter& io_router) {
-  std::vector<std::string> output_names;
-  // The order of output tensor names should match the order in TensorflowSpec.
-  for (const auto& output_tensor_spec : tensorflow_spec.output_tensor_specs()) {
-    const std::string& tensor_name = output_tensor_spec.name();
-    if (!io_router.aggregations().contains(tensor_name) ||
-        !io_router.aggregations().at(tensor_name).has_secure_aggregation()) {
-      return absl::InvalidArgumentError(
-          "Output tensor is missing in AggregationConfig, or has unsupported "
-          "aggregation type.");
-    }
-    output_names.push_back(tensor_name);
-  }
-
-  return output_names;
-}
-
-PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
-    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
-    std::function<bool()> should_abort, LogManager* log_manager,
-    OpStatsLogger* opstats_logger, const Flags* flags,
-    ExampleIteratorQueryRecorder* example_iterator_query_recorder,
-    const ClientOnlyPlan& client_plan,
-    const std::string& checkpoint_input_filename,
-    const std::string& checkpoint_output_filename,
-    const fcp::client::InterruptibleRunner::TimingConfig& timing_config) {
-  if (!client_plan.phase().has_tensorflow_spec()) {
-    return PlanResultAndCheckpointFile(engine::PlanResult(
-        engine::PlanOutcome::kInvalidArgument,
-        absl::InvalidArgumentError("Plan must include TensorflowSpec.")));
-  }
-  if (!client_plan.phase().has_federated_compute()) {
-    return PlanResultAndCheckpointFile(engine::PlanResult(
-        engine::PlanOutcome::kInvalidArgument,
-        absl::InvalidArgumentError("Invalid TensorflowSpec-based plan")));
-  }
-
-  // Get the output tensor names.
-  absl::StatusOr<std::vector<std::string>> output_names;
-  output_names = ConstructOutputsWithDeterministicOrder(
-      client_plan.phase().tensorflow_spec(),
-      client_plan.phase().federated_compute());
-  if (!output_names.ok()) {
-    return PlanResultAndCheckpointFile(engine::PlanResult(
-        engine::PlanOutcome::kInvalidArgument, output_names.status()));
-  }
-
-  const bool tflite_model_included = !client_plan.tflite_graph().empty();
-  if (tflite_model_included) {
-    log_manager->LogDiag(
-        ProdDiagCode::BACKGROUND_TRAINING_TFLITE_MODEL_INCLUDED);
-  }
-  // Run plan and get a set of output tensors back.
-  if (flags->use_tflite_training() && tflite_model_included) {
-    std::unique_ptr<TfLiteInputs> tflite_inputs =
-        ConstructTFLiteInputsForTensorflowSpecPlan(
-            client_plan.phase().federated_compute(), checkpoint_input_filename,
-            checkpoint_output_filename);
-    engine::TfLitePlanEngine plan_engine(
-        example_iterator_factories, should_abort, log_manager, opstats_logger,
-        flags, example_iterator_query_recorder, &timing_config);
-    engine::PlanResult plan_result = plan_engine.RunPlan(
-        client_plan.phase().tensorflow_spec(), client_plan.tflite_graph(),
-        std::move(tflite_inputs), *output_names,
-        /*is_eligibility_eval_plan=*/false);
-    PlanResultAndCheckpointFile result(std::move(plan_result));
-    result.checkpoint_filename = checkpoint_output_filename;
-
-    return result;
-  }
-
-#ifdef FCP_CLIENT_SUPPORT_TFMOBILE
-  // Construct input tensors based on the values in the
-  // FederatedComputeIORouter message and create a temporary file for the output
-  // checkpoint if needed.
-  auto inputs = ConstructInputsForTensorflowSpecPlan(
-      client_plan.phase().federated_compute(), checkpoint_input_filename,
-      checkpoint_output_filename);
-  engine::SimplePlanEngine plan_engine(
-      example_iterator_factories, should_abort, log_manager, opstats_logger,
-      example_iterator_query_recorder, &timing_config);
-  engine::PlanResult plan_result = plan_engine.RunPlan(
-      client_plan.phase().tensorflow_spec(), client_plan.graph(),
-      client_plan.tensorflow_config_proto(), std::move(inputs), *output_names,
-      /*is_eligibility_eval_plan=*/false);
-
-  PlanResultAndCheckpointFile result(std::move(plan_result));
-  result.checkpoint_filename = checkpoint_output_filename;
-
-  return result;
-#else
-  return PlanResultAndCheckpointFile(
-      engine::PlanResult(engine::PlanOutcome::kTensorflowError,
-                         absl::InternalError("No plan engine enabled")));
-#endif
-}
-
 // Extracts the protocol config case from the aggregations. Returns an error if
 // there are more than one protocol config cases.
 absl::StatusOr<AggregationConfig::ProtocolConfigCase> ExtractProtocolConfigCase(
@@ -541,6 +304,7 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     OpStatsLogger* opstats_logger, const Flags* flags,
     ExampleIteratorQueryRecorder* example_iterator_query_recorder,
+    const TensorflowRunnerFactory& tensorflow_runner_factory,
     const ClientOnlyPlan& client_plan,
     const std::string& checkpoint_output_filename) {
   if (!client_plan.phase().has_example_query_spec()) {
@@ -610,9 +374,9 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
                                    "AggregationConfig.")));
   }
 
-  engine::ExampleQueryPlanEngine plan_engine(example_iterator_factories,
-                                             opstats_logger,
-                                             example_iterator_query_recorder);
+  engine::ExampleQueryPlanEngine plan_engine(
+      example_iterator_factories, opstats_logger,
+      example_iterator_query_recorder, tensorflow_runner_factory);
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().example_query_spec(), checkpoint_output_filename,
       use_client_report_wire_format);
@@ -844,6 +608,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     std::function<bool()> should_abort, PhaseLogger& phase_logger, Files* files,
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
+    const TensorflowRunnerFactory& tensorflow_runner_factory,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, const absl::Time time_before_checkin,
     const absl::Time time_before_plan_download,
@@ -890,32 +655,43 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
   // case we somehow get a legacy EET with no spec, we can skip evaluating this
   // and opt the client out of all tasks.
   if (eligibility_eval_task.population_eligibility_spec.has_value()) {
-    std::function<absl::StatusOr<TaskEligibilityInfo>(
-        std::vector<engine::ExampleIteratorFactory*>)>
-        run_plan_func = [&should_abort, &log_manager, &opstats_logger, &flags,
-                         &plan, &checkpoint_input_filename, &timing_config,
-                         &run_computation_start_time, &reference_time](
-                            std::vector<engine::ExampleIteratorFactory*>
-                                override_iterator_factories)
-        -> absl::StatusOr<TaskEligibilityInfo> {
-      engine::PlanResult result = RunEligibilityEvalPlanWithTensorflowSpec(
-          override_iterator_factories, should_abort, log_manager,
-          opstats_logger, flags, plan, *checkpoint_input_filename,
-          timing_config, run_computation_start_time, reference_time);
-      if (result.outcome != engine::PlanOutcome::kSuccess) {
-        return result.original_status;
-      }
-      return result.task_eligibility_info;
-    };
+    if (tensorflow_runner_factory) {
+      std::unique_ptr<TensorflowRunner> tensorflow_runner =
+          tensorflow_runner_factory();
+      std::function<absl::StatusOr<TaskEligibilityInfo>(
+          std::vector<engine::ExampleIteratorFactory*>)>
+          run_plan_func =
+              [&should_abort, &log_manager, &opstats_logger, &flags, &plan,
+               &checkpoint_input_filename, &timing_config,
+               &run_computation_start_time, &reference_time,
+               &tensorflow_runner](std::vector<engine::ExampleIteratorFactory*>
+                                       override_iterator_factories)
+          -> absl::StatusOr<TaskEligibilityInfo> {
+        FCP_CHECK(tensorflow_runner != nullptr);
+        engine::PlanResult result =
+            tensorflow_runner->RunEligibilityEvalPlanWithTensorflowSpec(
+                override_iterator_factories, should_abort, log_manager,
+                opstats_logger, flags, plan, *checkpoint_input_filename,
+                timing_config, run_computation_start_time, reference_time);
+        if (result.outcome != engine::PlanOutcome::kSuccess) {
+          return result.original_status;
+        }
+        return result.task_eligibility_info;
+      };
 
-    EetPlanRunnerImpl eet_plan_runner(run_plan_func);
+      EetPlanRunnerImpl eet_plan_runner(run_plan_func);
 
-    // TODO(team): Return ExampleStats out of the NEET engine so they can
-    // be measured.
-    native_task_eligibility_info = ComputeNativeEligibility(
-        eligibility_eval_task.population_eligibility_spec.value(), *log_manager,
-        phase_logger, opstats_logger, clock, example_iterator_factories,
-        eet_plan_runner, flags);
+      // TODO: b/290714966 - Return ExampleStats out of the NEET engine so they
+      // can be measured.
+      native_task_eligibility_info = ComputeNativeEligibility(
+          eligibility_eval_task.population_eligibility_spec.value(),
+          *log_manager, phase_logger, opstats_logger, clock,
+          example_iterator_factories, eet_plan_runner, flags);
+    } else {
+      return absl::UnimplementedError(
+          "TensorFlow is required, but no tensorflow runner factory "
+          "registered");
+    }
   }
 
   LogNativeEligibilityEvalComputationOutcome(
@@ -1008,6 +784,7 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
     std::function<bool()> should_abort, PhaseLogger& phase_logger, Files* files,
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
+    const TensorflowRunnerFactory& tensorflow_runner_factory,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time, FLRunnerResult& fl_runner_result,
     Clock& clock) {
@@ -1151,7 +928,8 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
       RunEligibilityEvalPlan(
           eligibility_eval_task, example_iterator_factories, should_abort,
           phase_logger, files, log_manager, opstats_logger, flags,
-          federated_protocol, timing_config, reference_time,
+          federated_protocol, tensorflow_runner_factory, timing_config,
+          reference_time,
           /*time_before_checkin=*/time_before_checkin,
           /*time_before_plan_download=*/time_before_plan_download,
           GetNetworkStatsSince(federated_protocol,
@@ -1734,6 +1512,7 @@ RunPlanResults RunComputation(
     FederatedSelectManager* fedselect_manager,
     engine::ExampleIteratorFactory* opstats_example_iterator_factory,
     ExampleIteratorQueryRecorder* example_iterator_query_recorder,
+    const TensorflowRunnerFactory& tensorflow_runner_factory,
     FLRunnerResult& fl_runner_result, const std::function<bool()>& should_abort,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time) {
@@ -1796,36 +1575,52 @@ RunPlanResults RunComputation(
       fedselect_example_iterator_factory.get(),
       opstats_example_iterator_factory, env_example_iterator_factory.get()};
 
-  PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
-      checkin_result.plan.phase().has_example_query_spec()
-          ? RunPlanWithExampleQuerySpec(
+  std::unique_ptr<PlanResultAndCheckpointFile> plan_result_and_checkpoint_file;
+  if (checkin_result.plan.phase().has_example_query_spec()) {
+    plan_result_and_checkpoint_file =
+        std::make_unique<PlanResultAndCheckpointFile>(
+            RunPlanWithExampleQuerySpec(
                 example_iterator_factories, opstats_logger, flags,
-                example_iterator_query_recorder, checkin_result.plan,
-                checkpoint_output_filename)
-          : RunPlanWithTensorflowSpec(
-                example_iterator_factories, should_abort, log_manager,
-                opstats_logger, flags, example_iterator_query_recorder,
-                checkin_result.plan, checkin_result.checkpoint_input_filename,
-                checkpoint_output_filename, timing_config);
+                example_iterator_query_recorder, tensorflow_runner_factory,
+                checkin_result.plan, checkpoint_output_filename));
+  } else {
+    if (tensorflow_runner_factory) {
+      std::unique_ptr<TensorflowRunner> tensorflow_runner =
+          tensorflow_runner_factory();
+      plan_result_and_checkpoint_file =
+          std::make_unique<PlanResultAndCheckpointFile>(
+              tensorflow_runner->RunPlanWithTensorflowSpec(
+                  example_iterator_factories, should_abort, log_manager,
+                  opstats_logger, flags, example_iterator_query_recorder,
+                  checkin_result.plan, checkin_result.checkpoint_input_filename,
+                  checkpoint_output_filename, timing_config));
+    } else {
+      return RunPlanResults{.outcome = engine::PlanOutcome::kInvalidArgument,
+                            .computation_results = absl::UnimplementedError(
+                                "Tensorflow is required, but TensorflowRunner "
+                                "is not registered."),
+                            .run_plan_start_time = run_plan_start_time};
+    }
+  }
   // Update the FLRunnerResult fields to account for any network usage during
   // the execution of the plan (e.g. due to Federated Select slices having been
   // fetched).
   UpdateRetryWindowAndNetworkStats(*federated_protocol, fedselect_manager,
                                    phase_logger, fl_runner_result);
-  auto outcome = plan_result_and_checkpoint_file.plan_result.outcome;
+  auto outcome = plan_result_and_checkpoint_file->plan_result.outcome;
   absl::StatusOr<ComputationResults> computation_results;
   if (outcome == engine::PlanOutcome::kSuccess) {
     computation_results = CreateComputationResults(
         checkin_result.plan.phase().has_example_query_spec()
             ? nullptr
             : &checkin_result.plan.phase().tensorflow_spec(),
-        plan_result_and_checkpoint_file, flags);
+        *plan_result_and_checkpoint_file, flags);
   }
   std::optional<int64_t> min_sep_policy_index =
       GetMinSepPolicyIndexFromCheckinResult(checkin_result.plan);
   LogComputationOutcome(
-      plan_result_and_checkpoint_file.plan_result, computation_results.status(),
-      phase_logger,
+      plan_result_and_checkpoint_file->plan_result,
+      computation_results.status(), phase_logger,
       GetNetworkStatsSince(federated_protocol, fedselect_manager,
                            run_plan_start_network_stats),
       run_plan_start_time, reference_time, min_sep_policy_index);
@@ -1842,6 +1637,7 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     FederatedProtocol* federated_protocol,
     FederatedSelectManager* fedselect_manager,
     engine::ExampleIteratorFactory* opstats_example_iterator_factory,
+    TensorflowRunnerFactory tensorflow_runner_factory,
     FLRunnerResult& fl_runner_result, const std::function<bool()>& should_abort,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     const absl::Time reference_time) {
@@ -1860,8 +1656,8 @@ std::vector<std::string> HandleMultipleTaskAssignments(
         task_assignment, selector_context_with_task_details, env_deps,
         phase_logger, files, log_manager, opstats_logger, flags,
         federated_protocol, fedselect_manager, opstats_example_iterator_factory,
-        example_iterator_query_recorder.get(), fl_runner_result, should_abort,
-        timing_config, reference_time);
+        example_iterator_query_recorder.get(), tensorflow_runner_factory,
+        fl_runner_result, should_abort, timing_config, reference_time);
 
     absl::Status report_result =
         ReportPlanResult(federated_protocol, phase_logger,
@@ -2061,13 +1857,18 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           &opstats_example_iterator_factory,
           env_eligibility_example_iterator_factory.get()};
 
+  auto tensorflow_runner_factory =
+      GetGlobalTensorflowRunnerFactoryRegistry().Get(
+          TensorflowRunnerImplementation::kTensorflowRunnerImpl);
+
   // Note that this method will update fl_runner_result's fields with values
   // received over the course of the eligibility eval protocol interaction.
   absl::StatusOr<EligibilityEvalResult> eligibility_eval_result =
       IssueEligibilityEvalCheckinAndRunPlan(
           eligibility_example_iterator_factories, should_abort, phase_logger,
           files, log_manager, opstats_logger, flags, federated_protocol,
-          timing_config, reference_time, fl_runner_result, clock);
+          tensorflow_runner_factory, timing_config, reference_time,
+          fl_runner_result, clock);
   if (!eligibility_eval_result.ok()) {
     return fl_runner_result;
   }
@@ -2089,8 +1890,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         multiple_task_assignments, federated_selector_context, env_deps,
         phase_logger, files, log_manager, opstats_logger, flags,
         federated_protocol, fedselect_manager,
-        &opstats_example_iterator_factory, fl_runner_result, should_abort,
-        timing_config, reference_time);
+        &opstats_example_iterator_factory, tensorflow_runner_factory,
+        fl_runner_result, should_abort, timing_config, reference_time);
   }
 
   if (eligibility_eval_result->population_supports_single_task_assignment) {
@@ -2118,8 +1919,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           phase_logger, files, log_manager, opstats_logger, flags,
           federated_protocol, fedselect_manager,
           &opstats_example_iterator_factory,
-          example_iterator_query_recorder.get(), fl_runner_result, should_abort,
-          timing_config, reference_time);
+          example_iterator_query_recorder.get(), tensorflow_runner_factory,
+          fl_runner_result, should_abort, timing_config, reference_time);
 
       absl::Status report_result = ReportPlanResult(
           federated_protocol, phase_logger,
@@ -2200,6 +2001,15 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
       &opstats_example_iterator_factory, env_example_iterator_factory.get()};
 
+  auto tensorflow_runner_factory =
+      GetGlobalTensorflowRunnerFactoryRegistry().Get(
+          TensorflowRunnerImplementation::kTensorflowRunnerImpl);
+  FCP_CHECK(tensorflow_runner_factory)
+      << "RunPlanWithTensorflowSpecForTesting requires a tensorflow_runner "
+         "implementation to be linked in.";
+  std::unique_ptr<TensorflowRunner> tensorflow_runner =
+      tensorflow_runner_factory();
+
   phase_logger.LogComputationStarted("");
   if (client_plan.phase().has_federated_compute()) {
     absl::StatusOr<std::string> checkpoint_output_filename =
@@ -2214,11 +2024,12 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     }
     // Regular TensorflowSpec-based plans.
     PlanResultAndCheckpointFile plan_result_and_checkpoint_file =
-        RunPlanWithTensorflowSpec(example_iterator_factories, should_abort,
-                                  log_manager, opstats_logger.get(), flags,
-                                  /*example_iterator_query_recorder=*/nullptr,
-                                  client_plan, checkpoint_input_filename,
-                                  *checkpoint_output_filename, timing_config);
+        tensorflow_runner->RunPlanWithTensorflowSpec(
+            example_iterator_factories, should_abort, log_manager,
+            opstats_logger.get(), flags,
+            /*example_iterator_query_recorder=*/nullptr, client_plan,
+            checkpoint_input_filename, *checkpoint_output_filename,
+            timing_config);
     result.set_checkpoint_output_filename(
         plan_result_and_checkpoint_file.checkpoint_filename);
     plan_result = std::move(plan_result_and_checkpoint_file.plan_result);
@@ -2229,14 +2040,16 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
           run_plan_func =
               [&should_abort, &log_manager, &opstats_logger, &flags,
                &client_plan, &checkpoint_input_filename, &timing_config,
-               &run_plan_start_time,
-               &reference_time](std::vector<engine::ExampleIteratorFactory*>
-                                    override_iterator_factories)
+               &run_plan_start_time, &reference_time,
+               &tensorflow_runner](std::vector<engine::ExampleIteratorFactory*>
+                                       override_iterator_factories)
           -> absl::StatusOr<TaskEligibilityInfo> {
-        engine::PlanResult result = RunEligibilityEvalPlanWithTensorflowSpec(
-            override_iterator_factories, should_abort, log_manager,
-            opstats_logger.get(), flags, client_plan, checkpoint_input_filename,
-            timing_config, run_plan_start_time, reference_time);
+        engine::PlanResult result =
+            tensorflow_runner->RunEligibilityEvalPlanWithTensorflowSpec(
+                override_iterator_factories, should_abort, log_manager,
+                opstats_logger.get(), flags, client_plan,
+                checkpoint_input_filename, timing_config, run_plan_start_time,
+                reference_time);
         if (result.outcome != engine::PlanOutcome::kSuccess) {
           return result.original_status;
         }
@@ -2262,7 +2075,7 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
       }
     } else {
       // Legacy eligibility eval plan.
-      plan_result = RunEligibilityEvalPlanWithTensorflowSpec(
+      plan_result = tensorflow_runner->RunEligibilityEvalPlanWithTensorflowSpec(
           example_iterator_factories, should_abort, log_manager,
           opstats_logger.get(), flags, client_plan, checkpoint_input_filename,
           timing_config, run_plan_start_time, reference_time);
@@ -2282,7 +2095,6 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
     return result;
   }
 
-  // Copy output tensors into the result proto.
   result.set_outcome(
       engine::ConvertPlanOutcomeToPhaseOutcome(plan_result.outcome));
   if (plan_result.outcome == engine::PlanOutcome::kSuccess) {

@@ -28,6 +28,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
@@ -38,6 +39,8 @@
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_query_result.pb.h"
 #include "fcp/client/simple_task_environment.h"
+#include "fcp/client/tensorflow/tensorflow_runner.h"
+#include "fcp/client/tensorflow/tensorflow_runner_impl.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"  // IWYU pragma: keep
@@ -303,6 +306,9 @@ class ExampleQueryPlanEngineTest : public testing::Test {
                     selector) {
               return std::make_unique<SimpleExampleIterator>(dataset);
             });
+    tensorflow_runner_factory_ = []() {
+      return std::make_unique<TensorflowRunnerImpl>();
+    };
   }
 
   fcp::client::FilesImpl files_impl_;
@@ -313,6 +319,8 @@ class ExampleQueryPlanEngineTest : public testing::Test {
   ClientOnlyPlan client_only_plan_;
   Dataset dataset_;
   std::string output_checkpoint_filename_;
+  absl::AnyInvocable<std::unique_ptr<TensorflowRunner>() const>
+      tensorflow_runner_factory_;
 
   int num_examples_ = 0;
   int64_t example_bytes_ = 0;
@@ -326,7 +334,7 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceeds) {
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
@@ -419,7 +427,7 @@ TEST_F(ExampleQueryPlanEngineTest, MultipleQueries) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
@@ -515,7 +523,7 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
@@ -548,7 +556,7 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecTypeMismatch) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
@@ -563,7 +571,7 @@ TEST_F(ExampleQueryPlanEngineTest, FactoryNotFound) {
 
   ExampleQueryPlanEngine plan_engine(
       {invalid_example_factory.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
@@ -578,7 +586,7 @@ TEST_F(ExampleQueryPlanEngineTest, NoIteratorCreated) {
 
   ExampleQueryPlanEngine plan_engine(
       {invalid_example_factory.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
@@ -605,7 +613,7 @@ TEST_F(ExampleQueryPlanEngineTest, InvalidExampleQueryResultFormat) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
@@ -623,7 +631,7 @@ TEST_F(ExampleQueryPlanEngineTest,
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
@@ -699,7 +707,7 @@ TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
@@ -789,7 +797,7 @@ TEST_F(ExampleQueryPlanEngineTest, TwoQueryDirectDataUploadTaskSucceeds) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
@@ -897,7 +905,7 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr);
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
