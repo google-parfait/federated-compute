@@ -148,9 +148,9 @@ message AuthorizeAccessRequest {
   // Use BlobMetadata.encrypted_symmetric_key instead.
   bytes encrypted_symmetric_key = 5 [deprecated = true];
 
-  // Optional. The range of records to authorize access to in batches.
+  // Optional. The range of blobs to authorize access to in batches.
   // If there is only a single blob, this field can be left unset.
-  Range record_key_range = 12;
+  Range blob_range = 12;
 
   message Range {
     // Beginning of the range, inclusive.
