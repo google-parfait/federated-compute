@@ -22,6 +22,7 @@
 
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -39,6 +40,7 @@
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"
 #include "fcp/protos/confidentialcompute/access_policy.pb.h"
+#include "fcp/protos/confidentialcompute/access_policy_endorsement_options.pb.h"
 #include "fcp/protos/confidentialcompute/verification_record.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "proto/attestation/endorsement.pb.h"
@@ -53,12 +55,14 @@ using ::fcp::confidential_compute::OkpKey;
 using ::fcp::confidentialcompute::DataAccessPolicy;
 using ::google::internal::federatedcompute::v1::ConfidentialEncryptionConfig;
 using ::oak::attestation::v1::AttestationResults;
+using ::oak::attestation::v1::EndorsementDetails;
 
 // See https://www.iana.org/assignments/cose/cose.xhtml.
 constexpr int64_t kAlgorithmES256 = -7;
 
 absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
     const absl::Cord& access_policy,
+    const confidentialcompute::SignedEndorsements& signed_endorsements,
     const ConfidentialEncryptionConfig& encryption_config) {
   // Validate the attestation evidence provided in the encryption config, using
   // the `public_key_reference_values_` provided to us at construction time.
@@ -90,9 +94,59 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
   // due non-deterministic map serialization).
   auto access_policy_hash =
       absl::BytesToHexString(ComputeSHA256(access_policy));
-  if (!allowlisted_access_policy_hashes_.contains(access_policy_hash)) {
-    return absl::FailedPreconditionError(absl::Substitute(
-        "Data access policy not in allowlist ($0).", access_policy_hash));
+
+  if (signed_endorsements.signed_endorsement().empty()) {
+    // If we have an empty SignedEndorsements proto, we'll use the legacy
+    // allowlisted access policy hashes to validate the access policy.
+    if (!allowlisted_access_policy_hashes_.contains(access_policy_hash)) {
+      return absl::FailedPreconditionError(absl::Substitute(
+          "Data access policy not in allowlist ($0).", access_policy_hash));
+    }
+  } else {
+    // Currently, we only support a single SignedEndorsement and a single
+    // EndorsementReferenceValue. If we have more than one of either, fail.
+    if (signed_endorsements.signed_endorsement().size() > 1) {
+      return absl::FailedPreconditionError(absl::Substitute(
+          "Only a single SignedEndorsement is supported, but $0 "
+          "were provided.",
+          signed_endorsements.signed_endorsement().size()));
+    }
+
+    const auto& signed_endorsement = signed_endorsements.signed_endorsement(0);
+
+    if (!signed_endorsement.has_endorsement()) {
+      return absl::FailedPreconditionError(
+          "SignedEndorsement does not contain an endorsement.");
+    }
+    if (access_policy_endorsement_options_.endorsement_reference_values()
+            .size() != 1) {
+      return absl::FailedPreconditionError(absl::Substitute(
+          "Only a single EndorsementReferenceValue is supported, but $0 "
+          "were provided.",
+          access_policy_endorsement_options_.endorsement_reference_values()
+              .size()));
+    }
+
+    const auto& endorsement_reference_value =
+        access_policy_endorsement_options_.endorsement_reference_values(0);
+
+    // verify_endorsement returns the hash of the endorsed access policy.
+    FCP_ASSIGN_OR_RETURN(
+        EndorsementDetails endorsement_details,
+        fcp::client::rust::oak_attestation_verification_ffi::VerifyEndorsement(
+            absl::Now(), signed_endorsement, endorsement_reference_value));
+    // We must hex-escape the hash, because the hash we're comparing against is
+    // also hex-escaped.
+    auto endorsed_access_policy_hash =
+        absl::BytesToHexString(endorsement_details.subject_digest().sha2_256());
+    if (access_policy_hash != endorsed_access_policy_hash) {
+      return absl::FailedPreconditionError(absl::Substitute(
+          "The digest of the endorsed access policy ($0) does not match the "
+          "digest of the provided access policy ($1).",
+          endorsed_access_policy_hash, access_policy_hash));
+    }
+    // If we get here, the endorsement is valid and correctly endorses the
+    // access policy.
   }
 
   // Next, let's validate the CWT-encoded public key.

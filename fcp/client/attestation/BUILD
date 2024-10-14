@@ -26,6 +26,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//fcp/confidentialcompute:cose",
+        "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

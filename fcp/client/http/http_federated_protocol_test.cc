@@ -69,6 +69,7 @@
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
 #include "fcp/testing/testing.h"
+#include "proto/attestation/endorsement.pb.h"
 
 namespace fcp::client::http {
 namespace {
@@ -430,7 +431,8 @@ TaskAssignment CreateTaskAssignment(
     const std::string& aggregation_session_id, const std::string& task_name,
     const std::string& target_uri_prefix,
     int32_t minimum_clients_in_server_visible_aggregate,
-    std::optional<Resource> confidential_data_access_policy = std::nullopt) {
+    std::optional<Resource> confidential_data_access_policy = std::nullopt,
+    std::optional<Resource> signed_endorsements = std::nullopt) {
   TaskAssignment task_assignment;
   ForwardingInfo* forwarding_info =
       task_assignment.mutable_aggregation_data_forwarding_info();
@@ -450,6 +452,10 @@ TaskAssignment CreateTaskAssignment(
   } else if (confidential_data_access_policy.has_value()) {
     *task_assignment.mutable_confidential_aggregation_info()
          ->mutable_data_access_policy() = *confidential_data_access_policy;
+    if (signed_endorsements.has_value()) {
+      *task_assignment.mutable_confidential_aggregation_info()
+           ->mutable_signed_endorsements() = *signed_endorsements;
+    }
   } else {
     task_assignment.mutable_aggregation_info();
   }
@@ -462,13 +468,14 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
     const std::string& aggregation_session_id,
     int32_t minimum_clients_in_server_visible_aggregate,
     const std::string& target_uri_prefix = kAggregationTargetUri,
-    std::optional<Resource> confidential_data_access_policy = std::nullopt) {
+    std::optional<Resource> confidential_data_access_policy = std::nullopt,
+    std::optional<Resource> signed_endorsements = std::nullopt) {
   StartTaskAssignmentResponse response;
   *response.mutable_task_assignment() = CreateTaskAssignment(
       plan, checkpoint, federated_select_uri_template, kClientSessionId,
       aggregation_session_id, kTaskName, target_uri_prefix,
       minimum_clients_in_server_visible_aggregate,
-      confidential_data_access_policy);
+      confidential_data_access_policy, signed_endorsements);
   return response;
 }
 
@@ -530,6 +537,16 @@ GetFakeStartConfidentialAggregationDataUploadResponse(
 
 FakeHttpResponse CreateEmptySuccessHttpResponse() {
   return FakeHttpResponse(200, HeaderList(), "");
+}
+
+confidentialcompute::SignedEndorsements GetFakeSignedEndorsements() {
+  confidentialcompute::SignedEndorsements signed_endorsements;
+  auto signed_endorsement = signed_endorsements.add_signed_endorsement();
+  signed_endorsement->mutable_endorsement()->set_serialized(
+      "{\"payload\":{\"subject\":{\"name\":\"stefans signed endorsement\"}}}");
+  signed_endorsement->mutable_signature()->set_key_id(1);
+  signed_endorsement->mutable_signature()->set_raw("stefans public key");
+  return signed_endorsements;
 }
 
 class HttpFederatedProtocolTest : public ::testing::Test {
@@ -670,7 +687,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   absl::StatusOr<FederatedProtocol::CheckinResult> RunSuccessfulCheckin(
       bool report_eligibility_eval_result = true,
       std::optional<std::string> confidential_data_access_policy = std::nullopt,
-      bool set_relative_uri = false) {
+      bool set_relative_uri = false,
+      std::optional<std::string> signed_endorsements = std::nullopt) {
     // We return a fake response which returns the plan/initial checkpoint
     // data inline, to keep things simple.
     std::string expected_plan = kPlan;
@@ -683,17 +701,23 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         expected_checkpoint);
     std::string expected_aggregation_session_id = kAggregationSessionId;
     std::optional<Resource> confidential_agg_resource;
+    std::optional<Resource> signed_endorsements_resource;
     if (confidential_data_access_policy.has_value()) {
       confidential_agg_resource = Resource();
       confidential_agg_resource->mutable_inline_resource()->set_data(
           *confidential_data_access_policy);
+      if (signed_endorsements.has_value()) {
+        signed_endorsements_resource = Resource();
+        signed_endorsements_resource->mutable_inline_resource()->set_data(
+            *signed_endorsements);
+      }
     }
     StartTaskAssignmentResponse task_assignment_response =
         GetFakeTaskAssignmentResponse(
             plan_resource, checkpoint_resource, kFederatedSelectUriTemplate,
             expected_aggregation_session_id, 0,
             set_relative_uri ? "/" : kAggregationTargetUri,
-            confidential_agg_resource);
+            confidential_agg_resource, signed_endorsements_resource);
 
     std::string request_uri;
     if (set_relative_uri) {
@@ -742,7 +766,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   RunSuccessfulMultipleTaskAssignments(
       bool eligibility_eval_enabled = true,
       bool enable_confidential_aggregation = false,
-      std::optional<Resource> confidential_data_access_policy = std::nullopt) {
+      std::optional<Resource> confidential_data_access_policy = std::nullopt,
+      std::optional<Resource> signed_endorsements = std::nullopt) {
     if (eligibility_eval_enabled) {
       std::string report_eet_request_uri =
           "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
@@ -3302,16 +3327,152 @@ TEST_F(HttpFederatedProtocolTest,
   // attestations in a test anyway.
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.set_public_key(encoded_public_key);
+  // Empty SignedEndorsements since the task does not use endorsements.
+  confidentialcompute::SignedEndorsements signed_endorsements;
 
   // Ensure that the server's attestation evidence is considered valid.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
+      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
       .WillRepeatedly(
           [=](const absl::Cord& access_policy,
+              const confidentialcompute::SignedEndorsements&
+                  signed_endorsements,
               const ConfidentialEncryptionConfig& encryption_config) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, encryption_config);
+                access_policy, signed_endorsements, encryption_config);
+          });
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri,
+      false, encryption_config);
+
+  // Capture the raw uploaded data so we can subsequently validate that it was
+  // properly encrypted with the public key that was provided to the client.
+  std::string uploaded_data;
+  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
+                                     "https://bytestream.uri/upload/v1/media/"
+                                     "CHECKPOINT_RESOURCE?upload_protocol=raw",
+                                     HttpRequest::Method::kPost, _, _)))
+      .WillOnce([&uploaded_data](MockHttpClient::SimpleHttpRequest request) {
+        uploaded_data = request.body;
+        return CreateEmptySuccessHttpResponse();
+      });
+
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
+      /*confidential_aggregation=*/true);
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+
+  // Validate that the payload can be parsed and that the ciphertext can be
+  // decrypted using the decryptor that generated the public encryption key.
+  absl::StatusOr<confidential_compute::ClientPayloadHeader> payload_header;
+  absl::string_view ciphertext;
+  {
+    absl::string_view uploaded_data_view(uploaded_data);
+    payload_header =
+        fcp::confidential_compute::DecodeAndConsumeClientPayloadHeader(
+            uploaded_data_view);
+    ASSERT_OK(payload_header);
+    // The uploaded_data_view now contains just the ciphertext.
+    ciphertext = uploaded_data_view;
+  }
+
+  // Validate the payload header values.
+  EXPECT_TRUE(payload_header->is_gzip_compressed);
+  ::fcp::confidentialcompute::BlobHeader blob_header;
+  ASSERT_TRUE(
+      blob_header.ParseFromString(payload_header->serialized_blob_header));
+  EXPECT_EQ(blob_header.access_policy_sha256(),
+            ComputeSHA256(serialized_access_policy));
+  EXPECT_EQ(blob_header.access_policy_node_id(), 0);
+  EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
+  EXPECT_EQ(blob_header.key_id(), parsed_public_key->public_key->key_id);
+
+  // Ensure that the ciphertext can be decrypted.
+  auto decrypted_uploaded_data =
+      decryptor.Decrypt(ciphertext, payload_header->serialized_blob_header,
+                        payload_header->encrypted_symmetric_key,
+                        payload_header->serialized_blob_header,
+                        payload_header->encapsulated_public_key);
+  ASSERT_OK(decrypted_uploaded_data);
+
+  // The ciphertext contains compressed data, so we must decompress it before
+  // comparing it with the expected checkpoint.
+  auto decompressed_uploaded_data =
+      UncompressWithGzip(*decrypted_uploaded_data);
+  ASSERT_OK(decompressed_uploaded_data);
+  EXPECT_EQ(*decompressed_uploaded_data, checkpoint_str);
+}
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedViaConfidentialAggWithSignedEndorsementsSuccess) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, enable_access_policy_endorsement_verification)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*enable_confidential_aggregation*/ true));
+  std::string serialized_access_policy = "the access policy";
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
+  ASSERT_OK(RunSuccessfulCheckin(
+      /*report_eligibility_eval_result*/ true,
+      /*confidential_data_access_policy=*/serialized_access_policy,
+      /*set_relative_uri=*/false,
+      /*signed_endorsements=*/serialized_signed_endorsements));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  // Generate a new public key, which we'll pass to the client in the
+  // ConfidentialEncryptionConfig. We'll use the decryptor from which the public
+  // key was generated to validate the encrypted payload at the end of the test.
+  fcp::confidential_compute::MessageDecryptor decryptor;
+  auto encoded_public_key =
+      decryptor
+          .GetPublicKey(
+              [](absl::string_view payload) { return "fakesignature"; }, 0)
+          .value();
+  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
+  ASSERT_OK(parsed_public_key);
+  ASSERT_TRUE(parsed_public_key->public_key.has_value());
+
+  // Note: we don't specify any attestation evidence nor attestation
+  // endorsements in the encryption config, since we can't generate valid
+  // attestations in a test anyway.
+  ConfidentialEncryptionConfig encryption_config;
+  encryption_config.set_public_key(encoded_public_key);
+
+  // Ensure that the server's attestation evidence is considered valid, and that
+  // the signed_endorsements have been correctly plumbed through and parsed.
+  EXPECT_CALL(*mock_attestation_verifier_,
+              Verify(Eq(serialized_access_policy),
+                     EqualsProto(GetFakeSignedEndorsements()),
+                     EqualsProto(encryption_config)))
+      .WillRepeatedly(
+          [=](const absl::Cord& access_policy,
+              const confidentialcompute::SignedEndorsements&
+                  signed_endorsements,
+              const ConfidentialEncryptionConfig& encryption_config) {
+            return attestation::AlwaysPassingAttestationVerifier().Verify(
+                access_policy, signed_endorsements, encryption_config);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -3386,6 +3547,106 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_EQ(*decompressed_uploaded_data, checkpoint_str);
 }
 
+// This test ensures that even though the signed endorsements are propagated
+// through the server to the client, the client ignores them if the flag is
+// disabled.
+TEST_F(HttpFederatedProtocolTest,
+       TestConfidentialAggregationWithSignedEndorsementsFlagDisabledIsEmpty) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+  // Since the flag is disabled, the signed endorsements should be empty.
+  EXPECT_CALL(mock_flags_, enable_access_policy_endorsement_verification)
+      .WillRepeatedly(Return(false));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*enable_confidential_aggregation*/ true));
+  std::string serialized_access_policy = "the access policy";
+  // Even though the server sends signed endorsements, they should be ignored
+  // since the flag is disabled.
+  confidentialcompute::SignedEndorsements signed_endorsements =
+      GetFakeSignedEndorsements();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
+  ASSERT_OK(RunSuccessfulCheckin(
+      /*report_eligibility_eval_result*/ true,
+      /*confidential_data_access_policy=*/serialized_access_policy,
+      /*set_relative_uri=*/false,
+      /*signed_endorsements=*/serialized_signed_endorsements));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  // Generate a new public key, which we'll pass to the client in the
+  // ConfidentialEncryptionConfig. We'll use the decryptor from which the public
+  // key was generated to validate the encrypted payload at the end of the test.
+  fcp::confidential_compute::MessageDecryptor decryptor;
+  auto encoded_public_key =
+      decryptor
+          .GetPublicKey(
+              [](absl::string_view payload) { return "fakesignature"; }, 0)
+          .value();
+  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
+  ASSERT_OK(parsed_public_key);
+  ASSERT_TRUE(parsed_public_key->public_key.has_value());
+
+  // Note: we don't specify any attestation evidence nor attestation
+  // endorsements in the encryption config, since we can't generate valid
+  // attestations in a test anyway.
+  ConfidentialEncryptionConfig encryption_config;
+  encryption_config.set_public_key(encoded_public_key);
+
+  confidentialcompute::SignedEndorsements empty_signed_endorsements;
+  // Even though the server sends signed endorsements, the signed endorsements
+  // passed to the verifier should be empty, since the flag is disabled.
+  EXPECT_CALL(*mock_attestation_verifier_,
+              Verify(Eq(serialized_access_policy),
+                     EqualsProto(empty_signed_endorsements),
+                     EqualsProto(encryption_config)))
+      .WillRepeatedly(
+          [=](const absl::Cord& access_policy,
+              const confidentialcompute::SignedEndorsements&
+                  signed_endorsements,
+              const ConfidentialEncryptionConfig& encryption_config) {
+            return attestation::AlwaysPassingAttestationVerifier().Verify(
+                access_policy, signed_endorsements, encryption_config);
+          });
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri,
+      false, encryption_config);
+
+  // Capture the raw uploaded data so we can subsequently validate that it was
+  // properly encrypted with the public key that was provided to the client.
+  std::string uploaded_data;
+  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
+                                     "https://bytestream.uri/upload/v1/media/"
+                                     "CHECKPOINT_RESOURCE?upload_protocol=raw",
+                                     HttpRequest::Method::kPost, _, _)))
+      .WillOnce([&uploaded_data](MockHttpClient::SimpleHttpRequest request) {
+        uploaded_data = request.body;
+        return CreateEmptySuccessHttpResponse();
+      });
+
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
+      /*confidential_aggregation=*/true);
+
+  EXPECT_OK(federated_protocol_->ReportCompleted(std::move(results),
+                                                 plan_duration, std::nullopt));
+}
+
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaConfidentialAggAttestationValidationFailure) {
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
@@ -3409,16 +3670,20 @@ TEST_F(HttpFederatedProtocolTest,
   // verification failure case, which doesn't need any real values in the
   // config.
   ConfidentialEncryptionConfig encryption_config;
+  // Empty SignedEndorsements since the task does not use endorsements.
+  confidentialcompute::SignedEndorsements signed_endorsements;
 
   // Ensure that the server's attestation evidence is considered invalid.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
+      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
       .WillRepeatedly(
           [=](const absl::Cord& access_policy,
+              const confidentialcompute::SignedEndorsements&
+                  signed_endorsements,
               const ConfidentialEncryptionConfig& encryption_config) {
             return attestation::AlwaysFailingAttestationVerifier().Verify(
-                access_policy, encryption_config);
+                access_policy, signed_endorsements, encryption_config);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -4432,16 +4697,20 @@ TEST_F(HttpFederatedProtocolTest,
 
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.set_public_key(encoded_public_key);
+  // Empty SignedEndorsements since the task does not use endorsements.
+  confidentialcompute::SignedEndorsements signed_endorsements;
 
   // Ensure that the server's attestation evidence is considered valid.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
+      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
       .WillRepeatedly(
           [=](const absl::Cord& access_policy,
+              const confidentialcompute::SignedEndorsements&
+                  signed_endorsements,
               const ConfidentialEncryptionConfig& encryption_config) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, encryption_config);
+                access_policy, signed_endorsements, encryption_config);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -4504,16 +4773,20 @@ TEST_F(HttpFederatedProtocolTest,
 
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.set_public_key(encoded_public_key);
+  // Empty SignedEndorsements since the task does not use endorsements.
+  confidentialcompute::SignedEndorsements signed_endorsements;
 
   // Ensure that the server's attestation evidence is considered valid.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
+      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
       .WillRepeatedly(
           [=](const absl::Cord& access_policy,
+              const confidentialcompute::SignedEndorsements&
+                  signed_endorsements,
               const ConfidentialEncryptionConfig& encryption_config) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, encryption_config);
+                access_policy, signed_endorsements, encryption_config);
           });
 
   ExpectSuccessfulReportTaskResultRequest(
@@ -4579,16 +4852,21 @@ TEST_F(HttpFederatedProtocolTest,
 
   ConfidentialEncryptionConfig encryption_config;
   encryption_config.set_public_key(encoded_public_key);
+  // Empty SignedEndorsements since the task does not use endorsements.
+  confidentialcompute::SignedEndorsements signed_endorsements;
 
   // Ensure that the server's attestation evidence is considered valid.
   EXPECT_CALL(
       *mock_attestation_verifier_,
-      Verify(Eq(serialized_access_policy), EqualsProto(encryption_config)))
+      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
       .WillRepeatedly(
           [=](const absl::Cord& access_policy,
+              const confidentialcompute::SignedEndorsements&
+                  signed_endorsements,
+
               const ConfidentialEncryptionConfig& encryption_config) {
             return attestation::AlwaysPassingAttestationVerifier().Verify(
-                access_policy, encryption_config);
+                access_policy, signed_endorsements, encryption_config);
           });
 
   ExpectSuccessfulReportTaskResultRequest(

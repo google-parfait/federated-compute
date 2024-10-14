@@ -26,6 +26,8 @@
 #include "absl/strings/cord.h"
 #include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/confidentialcompute/cose.h"
+#include "fcp/protos/confidentialcompute/access_policy_endorsement_options.pb.h"
+#include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/confidentialcompute/verification_record.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "proto/attestation/endorsement.pb.h"
@@ -47,22 +49,29 @@ class OakRustAttestationVerifier : public AttestationVerifier {
   OakRustAttestationVerifier(
       oak::attestation::v1::ReferenceValues public_key_reference_values,
       absl::flat_hash_set<std::string> allowlisted_access_policy_hashes,
+      confidentialcompute::AccessPolicyEndorsementOptions
+          access_policy_endorsement_options,
       absl::AnyInvocable<
           void(const fcp::confidentialcompute::AttestationVerificationRecord&)>
           record_logger)
       : public_key_reference_values_(std::move(public_key_reference_values)),
         allowlisted_access_policy_hashes_(
             std::move(allowlisted_access_policy_hashes)),
+        access_policy_endorsement_options_(
+            std::move(access_policy_endorsement_options)),
         record_logger_(std::move(record_logger)) {}
 
   absl::StatusOr<::fcp::confidential_compute::OkpKey> Verify(
       const absl::Cord& access_policy,
+      const fcp::confidentialcompute::SignedEndorsements& signed_endorsements,
       const google::internal::federatedcompute::v1::
           ConfidentialEncryptionConfig& encryption_config) override;
 
  private:
   oak::attestation::v1::ReferenceValues public_key_reference_values_;
   absl::flat_hash_set<std::string> allowlisted_access_policy_hashes_;
+  fcp::confidentialcompute::AccessPolicyEndorsementOptions
+      access_policy_endorsement_options_;
   absl::AnyInvocable<void(
       const fcp::confidentialcompute::AttestationVerificationRecord&)>
       record_logger_;

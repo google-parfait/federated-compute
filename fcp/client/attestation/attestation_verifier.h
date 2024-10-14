@@ -20,6 +20,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "fcp/confidentialcompute/cose.h"
+#include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 
 namespace fcp::client::attestation {
@@ -36,6 +37,7 @@ class AttestationVerifier {
   // inputs are not considered a valid confidential configuration.
   virtual absl::StatusOr<fcp::confidential_compute::OkpKey> Verify(
       const absl::Cord& access_policy,
+      const confidentialcompute::SignedEndorsements& signed_endorsements,
       const google::internal::federatedcompute::v1::
           ConfidentialEncryptionConfig& encryption_config) = 0;
 };
@@ -46,6 +48,7 @@ class AlwaysFailingAttestationVerifier : public AttestationVerifier {
  public:
   absl::StatusOr<fcp::confidential_compute::OkpKey> Verify(
       const absl::Cord& access_policy,
+      const confidentialcompute::SignedEndorsements& signed_endorsements,
       const google::internal::federatedcompute::v1::
           ConfidentialEncryptionConfig& encryption_config) override;
 };
@@ -58,6 +61,7 @@ class AlwaysPassingAttestationVerifier : public AttestationVerifier {
  public:
   absl::StatusOr<fcp::confidential_compute::OkpKey> Verify(
       const absl::Cord& access_policy,
+      const confidentialcompute::SignedEndorsements& signed_endorsements,
       const google::internal::federatedcompute::v1::
           ConfidentialEncryptionConfig& encryption_config) override;
 };

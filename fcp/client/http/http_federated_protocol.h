@@ -50,6 +50,7 @@
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/stats.h"
 #include "fcp/confidentialcompute/cose.h"
+#include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
@@ -151,6 +152,10 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     // to the data uploaded via the ConfidentialAggregations protocol. Only set
     // when aggregation_type == kConfidentialAggregation.
     std::optional<absl::Cord> confidential_data_access_policy;
+    // The signed endorsements that will be used to attest the data access
+    // policy above. Only set when aggregation_type == kConfidentialAggregation,
+    // and the task uses SignedEndorsements.
+    std::optional<absl::Cord> signed_endorsements;
     // Each task's state is tracked individually starting from the end of
     // check-in or multiple task assignments. The states from all of the tasks
     // will be used collectively to determine which retry window to use.
@@ -299,6 +304,12 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     // meaning nothing will be fetched and an empty Cord will be returned).
     const ::google::internal::federatedcompute::v1::Resource&
         confidential_data_access_policy;
+    // While all tasks can have a plan and checkpoint Resource, only tasks using
+    // the confidential aggregation method may have a signed endorsements (for
+    // all other tasks this Resource proto will simply be empty, meaning nothing
+    // will be fetched and an empty Cord will be returned).
+    const ::google::internal::federatedcompute::v1::Resource&
+        signed_endorsements;
   };
 
   // Represents fetched task resources, separating plan-and-checkpoint from the
@@ -309,6 +320,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     // The serialized `fcp.confidentialcompute.DataAccessPolicy` proto, if the
     // task has one, or an empty Cord if the task did not have one.
     absl::Cord confidential_data_access_policy;
+    // The serialized `fcp.confidentialcompute.SignedEndorsements` proto, if the
+    // task has one, or an empty Cord if the task did not have one.
+    absl::Cord signed_endorsements;
   };
 
   // Helper function for fetching the checkpoint/plan resources for a list of
@@ -328,7 +342,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::StatusOr<InMemoryHttpResponse>& plan_data_response,
       absl::StatusOr<InMemoryHttpResponse>& checkpoint_data_response,
       absl::StatusOr<InMemoryHttpResponse>&
-          confidential_data_access_policy_response);
+          confidential_data_access_policy_response,
+      absl::StatusOr<InMemoryHttpResponse>& signed_endorsements_response);
 
   // Helper function for fetching the Resources used by the protocol
   // implementation itself, like PopulationEligibilitySpec or

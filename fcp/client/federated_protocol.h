@@ -189,6 +189,9 @@ class FederatedProtocol {
     // The serialized `fcp.confidentialcompute.DataAccessPolicy` proto that will
     // apply to the client's contribution to this task.
     absl::Cord data_access_policy;
+    // The serialized `fcp.confidentialcompute.SignedEndorsements` proto that
+    // will be used to verify the data access policy above.
+    absl::Cord signed_endorsements;
   };
 
   // A task assignment, consisting of task payloads, a URI template to download

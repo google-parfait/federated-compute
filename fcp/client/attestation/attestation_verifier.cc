@@ -31,6 +31,7 @@ using ::google::internal::federatedcompute::v1::ConfidentialEncryptionConfig;
 
 absl::StatusOr<OkpKey> AlwaysFailingAttestationVerifier::Verify(
     const absl::Cord& access_policy,
+    const confidentialcompute::SignedEndorsements& signed_endorsements,
     const ConfidentialEncryptionConfig& encryption_config) {
   return absl::FailedPreconditionError(
       "Attestation verification failed unconditionally.");
@@ -38,6 +39,7 @@ absl::StatusOr<OkpKey> AlwaysFailingAttestationVerifier::Verify(
 
 absl::StatusOr<OkpKey> AlwaysPassingAttestationVerifier::Verify(
     const absl::Cord& access_policy,
+    const confidentialcompute::SignedEndorsements& signed_endorsements,
     const ConfidentialEncryptionConfig& encryption_config) {
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(encryption_config.public_key());
   if (!cwt.ok()) {

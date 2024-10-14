@@ -168,6 +168,7 @@ cc_library(
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos:population_eligibility_spec_cc_proto",
         "//fcp/protos/confidentialcompute:blob_header_cc_proto",
+        "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -225,6 +226,7 @@ cc_test(
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
+        "@oak//proto/attestation:endorsement_cc_proto",
     ],
 )
 

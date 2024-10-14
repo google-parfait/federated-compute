@@ -69,6 +69,7 @@
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
+#include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
@@ -614,12 +615,13 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
         // errors that may be encountered in the process.
         FCP_ASSIGN_OR_RETURN(
             std::vector<absl::StatusOr<FetchedTaskResources>> task_resources,
-            FetchTaskResources({TaskResources{
-                .plan = task.plan(),
-                .checkpoint = task.init_checkpoint(),
-                // Eligibility eval tasks have no confidential data
-                // access policy to fetch.
-                .confidential_data_access_policy = Resource()}}));
+            FetchTaskResources(
+                {TaskResources{.plan = task.plan(),
+                               .checkpoint = task.init_checkpoint(),
+                               // Eligibility eval tasks have no confidential
+                               // data access policy or endorsements to fetch.
+                               .confidential_data_access_policy = Resource(),
+                               .signed_endorsements = Resource()}}));
         if (!task_resources[0].ok()) {
           return task_resources[0].status();
         }
@@ -853,13 +855,16 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
 
   // Fetch the task resources, returning any errors that may be encountered in
   // the process.
-  FCP_ASSIGN_OR_RETURN(auto task_resources,
-                       FetchTaskResources({TaskResources{
-                           .plan = task_assignment.plan(),
-                           .checkpoint = task_assignment.init_checkpoint(),
-                           .confidential_data_access_policy =
-                               task_assignment.confidential_aggregation_info()
-                                   .data_access_policy()}}));
+  FCP_ASSIGN_OR_RETURN(
+      auto task_resources,
+      FetchTaskResources({TaskResources{
+          .plan = task_assignment.plan(),
+          .checkpoint = task_assignment.init_checkpoint(),
+          .confidential_data_access_policy =
+              task_assignment.confidential_aggregation_info()
+                  .data_access_policy(),
+          .signed_endorsements = task_assignment.confidential_aggregation_info()
+                                     .signed_endorsements()}}));
   if (!task_resources[0].ok()) {
     return task_resources[0].status();
   }
@@ -872,6 +877,12 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
         task_resources[0]->confidential_data_access_policy;
     default_task_info_.confidential_data_access_policy =
         result.confidential_agg_info->data_access_policy;
+    if (flags_->enable_access_policy_endorsement_verification()) {
+      result.confidential_agg_info->signed_endorsements =
+          task_resources[0]->signed_endorsements;
+      default_task_info_.signed_endorsements =
+          result.confidential_agg_info->signed_endorsements;
+    }
   }
   object_state_ = ObjectState::kCheckinAccepted;
   return std::move(result);
@@ -1094,7 +1105,9 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
         .checkpoint = task_assignment.init_checkpoint(),
         .confidential_data_access_policy =
             task_assignment.confidential_aggregation_info()
-                .data_access_policy()};
+                .data_access_policy(),
+        .signed_endorsements = task_assignment.confidential_aggregation_info()
+                                   .signed_endorsements()};
     resources_to_fetch.push_back(task_resources);
 
     auto pending_task_assignment =
@@ -1133,16 +1146,34 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
       if (task_assignment.confidential_agg_info.has_value()) {
         task_assignment.confidential_agg_info->data_access_policy =
             std::move((*payloads)->confidential_data_access_policy);
+        if (flags_->enable_access_policy_endorsement_verification()) {
+          // If the task does not use SignedEndorsements, this will be an empty
+          // Cord.
+          task_assignment.confidential_agg_info->signed_endorsements =
+              std::move((*payloads)->signed_endorsements);
+        }
         // Store the serialized data access policy in the PerTaskInfo, since
         // we need to calculate a hash over it at upload time.
         if (flags_->create_task_identifier()) {
           task_info_map_[task_assignment.task_identifier]
               .confidential_data_access_policy =
               task_assignment.confidential_agg_info->data_access_policy;
+          // Also need the SignedEndorsements in the task info map.
+          if (flags_->enable_access_policy_endorsement_verification()) {
+            task_info_map_[task_assignment.task_identifier]
+                .signed_endorsements =
+                task_assignment.confidential_agg_info->signed_endorsements;
+          }
         } else {
           task_info_map_[task_assignment.aggregation_session_id]
               .confidential_data_access_policy =
               task_assignment.confidential_agg_info->data_access_policy;
+          // Also need the SignedEndorsements in the task info map.
+          if (flags_->enable_access_policy_endorsement_verification()) {
+            task_info_map_[task_assignment.aggregation_session_id]
+                .signed_endorsements =
+                task_assignment.confidential_agg_info->signed_endorsements;
+          }
         }
       }
       result.task_assignments[task_assignment.task_name] =
@@ -1510,8 +1541,20 @@ HttpFederatedProtocol::ValidateConfidentialEncryptionConfig(
     PerTaskInfo& task_info,
     const ConfidentialEncryptionConfig& encryption_config) {
   FCP_CHECK(task_info.confidential_data_access_policy.has_value());
-  auto result = attestation_verifier_->Verify(
-      *task_info.confidential_data_access_policy, encryption_config);
+  // At this point, task_info.signed_endorsements will only be non-empty if the
+  // flag enabling endorsement verification is true and we got a signed
+  // endorsements proto from the server.
+  confidentialcompute::SignedEndorsements signed_endorsements;
+  if (task_info.signed_endorsements.has_value() &&
+      !task_info.signed_endorsements->empty()) {
+      if(!signed_endorsements.ParseFromString(
+          std::string(task_info.signed_endorsements.value()))) {
+      return absl::InvalidArgumentError("Could not parse signed_endorsements");
+    }
+  }
+  auto result =
+      attestation_verifier_->Verify(*task_info.confidential_data_access_policy,
+                                    signed_endorsements, encryption_config);
   if (!result.ok()) {
     task_info.state = ObjectState::kReportFailedPermanentError;
     std::string server_error_msg =
@@ -2015,12 +2058,19 @@ HttpFederatedProtocol::FetchTaskResources(
       results.push_back(confidential_data_access_policy_uri_or_data.status());
       continue;
     }
+    auto signed_endorsements_uri_or_data =
+        ConvertResourceToUriOrInlineData(task_resources.signed_endorsements);
+    if (!signed_endorsements_uri_or_data.ok()) {
+      results.push_back(signed_endorsements_uri_or_data.status());
+      continue;
+    }
     // We still need to fetch the resources, push an empty
     // FetchedTaskResources as placeholder to the result vector.
     results.push_back(FetchedTaskResources{});
     uris_to_fetch.push_back(*plan_uri_or_data);
     uris_to_fetch.push_back(*checkpoint_uri_or_data);
     uris_to_fetch.push_back(*confidential_data_access_policy_uri_or_data);
+    uris_to_fetch.push_back(*signed_endorsements_uri_or_data);
   }
 
   // Fetch the task resources if they need to be fetched (using the inline data
@@ -2050,10 +2100,15 @@ HttpFederatedProtocol::FetchTaskResources(
     // using confidential aggregation, so we must only try and access it in
     // those cases.
     auto confidential_data_access_policy_response = response_it++;
+    // The signed endorsements resource is only specified for tasks
+    // using confidential aggregation, and only those with signed endorsements,
+    // so we must only try and access it in those cases.
+    auto signed_endorsements_response = response_it++;
 
     pending_result = CreateFetchedTaskResources(
         *plan_data_response, *checkpoint_data_response,
-        *confidential_data_access_policy_response);
+        *confidential_data_access_policy_response,
+        *signed_endorsements_response);
   }
   return results;
 }
@@ -2063,7 +2118,8 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
     absl::StatusOr<InMemoryHttpResponse>& plan_data_response,
     absl::StatusOr<InMemoryHttpResponse>& checkpoint_data_response,
     absl::StatusOr<InMemoryHttpResponse>&
-        confidential_data_access_policy_response) {
+        confidential_data_access_policy_response,
+    absl::StatusOr<InMemoryHttpResponse>& signed_endorsements_response) {
   // Note: we forward any error during the fetching of the task resources to
   // the caller, which means that these error codes will be checked against
   // the set of 'permanent' error codes, just like the errors in response to
@@ -2086,13 +2142,20 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
             "confidential data access policy fetch failed: ",
             confidential_data_access_policy_response.status().ToString()));
   }
+  if (!signed_endorsements_response.ok()) {
+    return absl::Status(
+        signed_endorsements_response.status().code(),
+        absl::StrCat("signed endorsements fetch failed: ",
+                     signed_endorsements_response.status().ToString()));
+  }
 
   return FetchedTaskResources{
       .plan_and_checkpoint_payloads =
           FederatedProtocol::PlanAndCheckpointPayloads{
               plan_data_response->body, checkpoint_data_response->body},
       .confidential_data_access_policy =
-          confidential_data_access_policy_response->body};
+          confidential_data_access_policy_response->body,
+      .signed_endorsements = signed_endorsements_response->body};
 }
 
 template <typename T>

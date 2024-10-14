@@ -681,6 +681,8 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_relative_uri_prefix, (), (const, override));
   MOCK_METHOD(bool, create_task_identifier, (), (const, override));
   MOCK_METHOD(bool, log_min_sep_index_to_phase_stats, (), (const, override));
+  MOCK_METHOD(bool, enable_access_policy_endorsement_verification, (),
+              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
@@ -979,11 +981,13 @@ class MockSecAggProtocolDelegate : public SecAggProtocolDelegate {
 
 class MockAttestationVerifier : public attestation::AttestationVerifier {
  public:
-  MOCK_METHOD(absl::StatusOr<fcp::confidential_compute::OkpKey>, Verify,
-              (const absl::Cord& access_policy,
-               const google::internal::federatedcompute::v1::
-                   ConfidentialEncryptionConfig& encryption_config),
-              (override));
+  MOCK_METHOD(
+      absl::StatusOr<fcp::confidential_compute::OkpKey>, Verify,
+      (const absl::Cord& access_policy,
+       const confidentialcompute::SignedEndorsements& signed_endorsements,
+       const google::internal::federatedcompute::v1::
+           ConfidentialEncryptionConfig& encryption_config),
+      (override));
 };
 
 }  // namespace client
