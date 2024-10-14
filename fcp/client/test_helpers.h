@@ -68,6 +68,9 @@
 namespace fcp {
 namespace client {
 
+// Loads the contents of a file into a string.
+bool LoadFileAsString(std::string path, std::string* msg);
+
 class MockSecAggEventPublisher : public SecAggEventPublisher {
  public:
   MOCK_METHOD(void, PublishStateTransition,

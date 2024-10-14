@@ -38,6 +38,17 @@ namespace client {
 
 using ::google::internal::federated::plan::Dataset;
 
+bool LoadFileAsString(std::string path, std::string* msg) {
+  std::ifstream checkpoint_istream(path);
+  if (!checkpoint_istream) {
+    return false;
+  }
+  std::stringstream checkpoint_stream;
+  checkpoint_stream << checkpoint_istream.rdbuf();
+  *msg = checkpoint_stream.str();
+  return true;
+}
+
 SimpleExampleIterator::SimpleExampleIterator(
     std::vector<const char*> examples) {
   for (const auto& example : examples) {
