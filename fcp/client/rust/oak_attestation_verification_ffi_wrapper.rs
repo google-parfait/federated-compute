@@ -2,8 +2,7 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
-use alloc::string::ToString;
+use alloc::{boxed::Box, format};
 use oak_proto_rust::oak::attestation::v1::{
     AttestationResults, EndorsementReferenceValue, Endorsements, Evidence, ReferenceValues,
     SignedEndorsement,
@@ -126,7 +125,8 @@ pub unsafe extern "C" fn fcp_rs_oak_attestation_verification_verify_endorsement<
             is_err: false,
         }
     } else {
-        let serialized_err: Box<str> = result.err().unwrap().to_string().into_boxed_str();
+        let err = result.err().unwrap();
+        let serialized_err: Box<str> = format!("{:#?}", err).into_boxed_str();
         let static_serialized_err: &'static mut str = Box::<str>::leak(serialized_err);
         SerializedResult {
             data: static_serialized_err.as_mut_ptr(),
