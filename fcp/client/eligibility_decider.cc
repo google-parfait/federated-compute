@@ -356,7 +356,7 @@ absl::flat_hash_set<std::string> ComputeMinimumSeparationPolicyEligibility(
     const MinimumSeparationPolicy& min_sep_policy,
     const absl::flat_hash_set<std::string>& task_names,
     const opstats::OpStatsSequence& opstats_sequence, Clock& clock,
-    const Flags& flags) {
+    const Flags& flags, LogManager& log_manager) {
   if (flags.check_trustworthiness_for_min_sep_policy()) {
     // First, check that the policy's min trustworthiness period does not exceed
     // the opstats db's trustworthiness timestamp if it is set. This timestamp
@@ -393,10 +393,12 @@ absl::flat_hash_set<std::string> ComputeMinimumSeparationPolicyEligibility(
 
     // Note that the index separation is defined to be the number of indexes
     // (exclusive) between two consecutive contributions.
-    if ((min_sep_policy.current_index() -
-         last_successful_contribution_index.value()) >
-        min_sep_policy.minimum_separation()) {
+    int64_t index_separation = min_sep_policy.current_index() -
+                               last_successful_contribution_index.value() - 1;
+    if (index_separation >= min_sep_policy.minimum_separation()) {
       eligibility_results.insert(task_name);
+      log_manager.LogToLongHistogram(
+          HistogramCounters::TRAINING_FL_ROUND_SEPARATION, index_separation);
     }
   }
 
@@ -591,7 +593,7 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kMinSepPolicy: {
         eligible_policy_task_names = ComputeMinimumSeparationPolicyEligibility(
             policy_spec.min_sep_policy(), policy_task_names, opstats_sequence,
-            clock, *flags);
+            clock, *flags, log_manager);
       } break;
       default:
         // Should never happen, because we pre-filtered above based on

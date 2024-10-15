@@ -52,6 +52,7 @@ using ::testing::DoAll;
 using ::testing::Eq;
 using ::testing::NiceMock;
 using ::testing::Return;
+using ::testing::StrictMock;
 
 PopulationEligibilitySpec GenNoPoliciesSpec(int num_tasks) {
   PopulationEligibilitySpec spec;
@@ -130,7 +131,7 @@ class MockEetPlanRunner : public EetPlanRunner {
 
 class EligibilityDeciderTest : public testing::Test {
  protected:
-  NiceMock<MockLogManager> mock_log_manager_;
+  StrictMock<MockLogManager> mock_log_manager_;
   NiceMock<MockPhaseLogger> mock_phase_logger_;
   SimulatedClock clock_;
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories_;
@@ -1058,6 +1059,13 @@ TEST_F(EligibilityDeciderTest,
       .WillRepeatedly(Return(true));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
+  EXPECT_CALL(
+      mock_log_manager_,
+      LogToLongHistogram(HistogramCounters::TRAINING_FL_ROUND_SEPARATION,
+                         /*execution_index=*/0,
+                         /*epoch_index=*/0, engine::DataSourceType::DATASET,
+                         /*value=*/3))
+      .Times(1);
 
   PopulationEligibilitySpec spec;
 
@@ -1170,6 +1178,13 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyNoMinTrustworthinessPeriodEligible) {
       .WillRepeatedly(Return(false));
   EXPECT_CALL(mock_flags_, check_trustworthiness_for_min_sep_policy())
       .WillRepeatedly(Return(true));
+  EXPECT_CALL(
+      mock_log_manager_,
+      LogToLongHistogram(HistogramCounters::TRAINING_FL_ROUND_SEPARATION,
+                         /*execution_index=*/0,
+                         /*epoch_index=*/0, engine::DataSourceType::DATASET,
+                         /*value=*/3))
+      .Times(1);
 
   PopulationEligibilitySpec spec;
 
