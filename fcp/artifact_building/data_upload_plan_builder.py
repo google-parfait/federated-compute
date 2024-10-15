@@ -14,16 +14,17 @@ def build_plan(example_query_spec: plan_pb2.ExampleQuerySpec) -> plan_pb2.Plan:
 
   Returns:
     A plan proto message containing just a `ClientPhase` with the
-    `ExampleQuerySpec` populated.
+    `ExampleQuerySpec` populated and an empty `ServerPhaseV2`.
   """
   return plan_pb2.Plan(
       version=1,
       phase=[
+          plan_pb2.Plan.Phase(server_phase_v2=plan_pb2.ServerPhaseV2()),
           plan_pb2.Plan.Phase(
               client_phase=_build_client_phase_with_example_query_spec(
                   example_query_spec
               )
-          )
+          ),
       ],
   )
 
