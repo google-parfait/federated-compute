@@ -1037,10 +1037,7 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
       .federated_select_uri_template =
           task_assignment.federated_select_uri_template,
       .aggregation_session_id = task_assignment.aggregation_session_id,
-      .confidential_agg_info =
-          flags->confidential_agg_in_selector_context()
-              ? std::move(task_assignment.confidential_agg_info)
-              : std::nullopt,
+      .confidential_agg_info = std::move(task_assignment.confidential_agg_info),
       .task_identifier = flags->create_task_identifier()
                              ? task_assignment.task_identifier
                              : task_assignment.aggregation_session_id};
@@ -1261,8 +1258,7 @@ SelectorContext FillSelectorContextWithTaskLevelDetails(
   }
 
   if (checkin_result.confidential_agg_info.has_value()) {
-    // This will only be true if the task is using confidential aggregation and
-    // flags->confidential_agg_in_selector_context() is true.
+    // This will only be true if the task is using confidential aggregation.
     *(federated_selector_context_with_task_name
           .mutable_computation_properties()
           ->mutable_federated()

@@ -196,10 +196,6 @@ class Flags {
     return false;
   }
 
-  // If true, federated compute tasks using confidential aggregation will set
-  // the correct aggregation type in the selector context.
-  virtual bool confidential_agg_in_selector_context() const { return false; }
-
   // If true, direct data upload tasks are supported.
   virtual bool enable_direct_data_upload_task() const { return false; }
 

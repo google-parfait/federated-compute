@@ -675,8 +675,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_confidential_aggregation, (), (const, override));
   MOCK_METHOD(bool, check_trustworthiness_for_min_sep_policy, (),
               (const, override));
-  MOCK_METHOD(bool, confidential_agg_in_selector_context, (),
-              (const, override));
   MOCK_METHOD(bool, enable_direct_data_upload_task, (), (const, override));
   MOCK_METHOD(bool, enable_relative_uri_prefix, (), (const, override));
   MOCK_METHOD(bool, create_task_identifier, (), (const, override));
