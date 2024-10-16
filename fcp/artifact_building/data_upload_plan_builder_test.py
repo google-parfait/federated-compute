@@ -163,11 +163,11 @@ class BuildPlanTest(parameterized.TestCase):
         direct_upload=direct_upload,
     )
     plan = data_upload_plan_builder.build_plan(example_query_spec)
-    self.assertLen(plan.phase, 2)
+    self.assertLen(plan.phase, 1)
     server_phase = plan.phase[0].server_phase_v2
     self.assertEqual(server_phase.name, '')
 
-    client_phase = plan.phase[1].client_phase
+    client_phase = plan.phase[0].client_phase
     self.assertEqual(
         client_phase.example_query_spec.example_queries[
             0

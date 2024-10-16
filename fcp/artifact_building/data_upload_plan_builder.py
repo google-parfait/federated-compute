@@ -19,11 +19,11 @@ def build_plan(example_query_spec: plan_pb2.ExampleQuerySpec) -> plan_pb2.Plan:
   return plan_pb2.Plan(
       version=1,
       phase=[
-          plan_pb2.Plan.Phase(server_phase_v2=plan_pb2.ServerPhaseV2()),
           plan_pb2.Plan.Phase(
+              server_phase_v2=plan_pb2.ServerPhaseV2(),
               client_phase=_build_client_phase_with_example_query_spec(
                   example_query_spec
-              )
+              ),
           ),
       ],
   )
