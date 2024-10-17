@@ -212,6 +212,10 @@ message BlobMetadata {
       // untrusted portion of the stack.
       bytes nonce = 2;
     }
+
+    // The ID of the blob. This must match the ID in the blob's
+    // `fcp.confidentialcompute.BlobHeader`.
+    bytes blob_id = 7;
   }
 }
 
