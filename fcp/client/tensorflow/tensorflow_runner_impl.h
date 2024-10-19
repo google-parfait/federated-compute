@@ -67,4 +67,4 @@ class TensorflowRunnerImpl : public TensorflowRunner {
 
 }  // namespace fcp::client
 
-#endif  // FCP_CLIENT_TENSORLFOW_TENSORFLOW_RUNNER_IMPL_H_
+#endif  // FCP_CLIENT_TENSORFLOW_TENSORFLOW_RUNNER_IMPL_H_
