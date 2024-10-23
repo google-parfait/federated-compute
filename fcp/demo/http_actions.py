@@ -49,7 +49,7 @@ from google.protobuf import message_factory
 _CallableT = TypeVar('_CallableT', bound=Callable)
 
 _HTTP_ACTION_ATTR = '_http_action_data'
-_FACTORY = message_factory.MessageFactory(descriptor_pool.Default())
+_POOL = descriptor_pool.Default()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -85,7 +85,7 @@ def proto_action(*,
     An annotated function.
   """
   try:
-    desc = _FACTORY.pool.FindServiceByName(service).FindMethodByName(method)
+    desc = _POOL.FindServiceByName(service).FindMethodByName(method)
   except KeyError as e:
     raise ValueError(f'Unable to find /{service}.{method}.') from e
 
@@ -101,7 +101,10 @@ def proto_action(*,
 
   def handler(match: Match[str], body: bytes,
               fn: Callable[[message.Message], message.Message]) -> HttpResponse:
-    request = _FACTORY.GetPrototype(desc.input_type)()
+    if hasattr(message_factory, 'GetMessageClass'):
+      request = message_factory.GetMessageClass(desc.input_type)()
+    else:
+      request = message_factory.MessageFactory().GetPrototype(desc.input_type)()
     if rule.body == '*':
       try:
         request.ParseFromString(body)
