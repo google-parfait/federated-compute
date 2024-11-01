@@ -1038,9 +1038,7 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
           task_assignment.federated_select_uri_template,
       .aggregation_session_id = task_assignment.aggregation_session_id,
       .confidential_agg_info = std::move(task_assignment.confidential_agg_info),
-      .task_identifier = flags->create_task_identifier()
-                             ? task_assignment.task_identifier
-                             : task_assignment.aggregation_session_id};
+      .task_identifier = task_assignment.task_identifier};
 }
 
 absl::StatusOr<CheckinResult> IssueCheckin(
@@ -1659,9 +1657,7 @@ std::vector<std::string> HandleMultipleTaskAssignments(
         ReportPlanResult(federated_protocol, phase_logger,
                          std::move(run_plan_results.computation_results),
                          run_plan_results.run_plan_start_time, reference_time,
-                         flags->create_task_identifier()
-                             ? task_assignment.task_identifier
-                             : task_assignment.aggregation_session_id);
+                         task_assignment.task_identifier);
     TaskResultInfo task_result_info;
     if (run_plan_results.outcome == engine::PlanOutcome::kSuccess &&
         report_result.ok()) {

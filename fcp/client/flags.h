@@ -202,9 +202,6 @@ class Flags {
   // If true, adds support for relative URI prefixes.
   virtual bool enable_relative_uri_prefix() const { return false; }
 
-  // If true, a unique task identifier will be created for each task assignment.
-  virtual bool create_task_identifier() const { return false; }
-
   // If true, the minimum separation policy index will be logged to PhaseStats.
   virtual bool log_min_sep_index_to_phase_stats() const { return false; }
 };

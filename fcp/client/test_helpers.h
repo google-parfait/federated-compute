@@ -677,7 +677,6 @@ class MockFlags : public Flags {
               (const, override));
   MOCK_METHOD(bool, enable_direct_data_upload_task, (), (const, override));
   MOCK_METHOD(bool, enable_relative_uri_prefix, (), (const, override));
-  MOCK_METHOD(bool, create_task_identifier, (), (const, override));
   MOCK_METHOD(bool, log_min_sep_index_to_phase_stats, (), (const, override));
   MOCK_METHOD(bool, enable_access_policy_endorsement_verification, (),
               (const, override));

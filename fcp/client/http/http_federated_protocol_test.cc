@@ -580,8 +580,6 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillRepeatedly(Return(false));
     EXPECT_CALL(mock_flags_, enable_relative_uri_prefix)
         .WillRepeatedly(Return(true));
-    EXPECT_CALL(mock_flags_, create_task_identifier)
-        .WillRepeatedly(Return(false));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values
@@ -851,6 +849,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
 
   absl::Status RunSuccessfulUploadViaSimpleAgg(
       absl::string_view client_session_id,
+      std::optional<std::string> task_identifier,
       absl::string_view aggregation_session_id, absl::string_view task_name,
       absl::Duration plan_duration, absl::string_view checkpoint_str,
       bool use_per_task_upload = true) {
@@ -880,8 +879,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     results.emplace("tensorflow_checkpoint", std::string(checkpoint_str));
     if (use_per_task_upload) {
       return federated_protocol_->ReportCompleted(
-          std::move(results), plan_duration,
-          std::string(aggregation_session_id));
+          std::move(results), plan_duration, task_identifier);
     } else {
       return federated_protocol_->ReportCompleted(std::move(results),
                                                   plan_duration, std::nullopt);
@@ -2397,8 +2395,6 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
 }
 
 TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedWithTaskIdentifier) {
-  EXPECT_CALL(mock_flags_, create_task_identifier())
-      .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   auto checkin_result = RunSuccessfulCheckin();
@@ -2430,8 +2426,6 @@ TEST_F(HttpFederatedProtocolTest,
        TestMultipleTaskAssignmentsWithConfidentialAggregation) {
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_flags_, create_task_identifier)
-      .WillRepeatedly(Return(false));
 
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
@@ -2463,7 +2457,6 @@ TEST_F(
     TestMultipleTaskAssignmentsWithConfidentialAggregationAndTaskIdentifier) {
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_flags_, create_task_identifier).WillRepeatedly(Return(true));
 
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
@@ -2929,7 +2922,6 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
 
 TEST_F(HttpFederatedProtocolTest,
        TestMultipleTaskAssignmentsCreateTaskIdentifier) {
-  EXPECT_CALL(mock_flags_, create_task_identifier).WillRepeatedly(Return(true));
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true));
   auto multiple_task_assignment_result = RunSuccessfulMultipleTaskAssignments();
@@ -4446,14 +4438,14 @@ TEST_F(HttpFederatedProtocolTest, TestFullProtocol) {
   std::string checkpoint_str_1(32, 'X');
   absl::Duration plan_duration_1 = absl::Minutes(5);
   ASSERT_OK(RunSuccessfulUploadViaSimpleAgg(
-      kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
+      kMultiTaskClientSessionId_1, "task_0", kMultiTaskAggregationSessionId_1,
       kMultiTaskId_1, plan_duration_1, checkpoint_str_1));
 
   // Upload the result from the second task.
   std::string checkpoint_str_2(32, 'Y');
   absl::Duration plan_duration_2 = absl::Minutes(6);
   ASSERT_OK(RunSuccessfulUploadViaSimpleAgg(
-      kMultiTaskClientSessionId_2, kMultiTaskAggregationSessionId_2,
+      kMultiTaskClientSessionId_2, "task_1", kMultiTaskAggregationSessionId_2,
       kMultiTaskId_2, plan_duration_2, checkpoint_str_2));
 
   // Run regular checkin, note we won't report eligibility eval result again
@@ -4464,8 +4456,8 @@ TEST_F(HttpFederatedProtocolTest, TestFullProtocol) {
   std::string checkpoint_str_3(32, 'Z');
   absl::Duration plan_duration_3 = absl::Minutes(7);
   ASSERT_OK(RunSuccessfulUploadViaSimpleAgg(
-      kClientSessionId, kAggregationSessionId, kTaskName, plan_duration_3,
-      checkpoint_str_3, /*use_per_task_upload=*/false));
+      kClientSessionId, std::nullopt, kAggregationSessionId, kTaskName,
+      plan_duration_3, checkpoint_str_3, /*use_per_task_upload=*/false));
 }
 
 TEST_F(HttpFederatedProtocolTest,

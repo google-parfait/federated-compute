@@ -913,9 +913,7 @@ FederatedProtocol::TaskAssignment HttpFederatedProtocol::CreateTaskAssignment(
     result.confidential_agg_info = ConfidentialAggInfo{};
   }
 
-  if (flags_->create_task_identifier()) {
-    result.task_identifier = CreateTaskIdentifier(task_index);
-  }
+  result.task_identifier = CreateTaskIdentifier(task_index);
   return result;
 }
 
@@ -1113,13 +1111,8 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
     auto pending_task_assignment =
         CreateTaskAssignment(task_assignment, task_index++);
     pending_fetch_task_assignments.push_back(pending_task_assignment);
-    if (flags_->create_task_identifier()) {
-      task_info_map_[pending_task_assignment.task_identifier] =
-          std::move(*task_info);
-    } else {
-      task_info_map_[pending_task_assignment.aggregation_session_id] =
-          std::move(*task_info);
-    }
+    task_info_map_[pending_task_assignment.task_identifier] =
+        std::move(*task_info);
   }
 
   payload_uris_received_callback(pending_fetch_task_assignments.size());
@@ -1154,26 +1147,13 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
         }
         // Store the serialized data access policy in the PerTaskInfo, since
         // we need to calculate a hash over it at upload time.
-        if (flags_->create_task_identifier()) {
-          task_info_map_[task_assignment.task_identifier]
-              .confidential_data_access_policy =
-              task_assignment.confidential_agg_info->data_access_policy;
-          // Also need the SignedEndorsements in the task info map.
-          if (flags_->enable_access_policy_endorsement_verification()) {
-            task_info_map_[task_assignment.task_identifier]
-                .signed_endorsements =
-                task_assignment.confidential_agg_info->signed_endorsements;
-          }
-        } else {
-          task_info_map_[task_assignment.aggregation_session_id]
-              .confidential_data_access_policy =
-              task_assignment.confidential_agg_info->data_access_policy;
-          // Also need the SignedEndorsements in the task info map.
-          if (flags_->enable_access_policy_endorsement_verification()) {
-            task_info_map_[task_assignment.aggregation_session_id]
-                .signed_endorsements =
-                task_assignment.confidential_agg_info->signed_endorsements;
-          }
+        task_info_map_[task_assignment.task_identifier]
+            .confidential_data_access_policy =
+            task_assignment.confidential_agg_info->data_access_policy;
+        // Also need the SignedEndorsements in the task info map.
+        if (flags_->enable_access_policy_endorsement_verification()) {
+          task_info_map_[task_assignment.task_identifier].signed_endorsements =
+              task_assignment.confidential_agg_info->signed_endorsements;
         }
       }
       result.task_assignments[task_assignment.task_name] =
