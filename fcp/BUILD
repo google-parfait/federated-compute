@@ -54,9 +54,13 @@ platform(
 compile_pip_requirements(
     name = "requirements",
     timeout = "moderate",
-    src = "requirements.in",
+    srcs = [
+        "requirements.in",
+        "@org_tensorflow_federated//:requirements.txt",
+    ],
     extra_args = [
         "--allow-unsafe",
+        "--no-annotate",
         "--resolver=backtracking",
     ],
     requirements_txt = "requirements.txt",

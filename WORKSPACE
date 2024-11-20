@@ -62,9 +62,9 @@ bazel_skylib_workspace()
 
 http_archive(
     name = "rules_python",
-    sha256 = "d71d2c67e0bce986e1c5a7731b4693226867c45bfe0b7c5e0067228a536fc580",
-    strip_prefix = "rules_python-0.29.0",
-    url = "https://github.com/bazelbuild/rules_python/releases/download/0.29.0/rules_python-0.29.0.tar.gz",
+    sha256 = "690e0141724abb568267e003c7b6d9a54925df40c275a870a4d934161dc9dd53",
+    strip_prefix = "rules_python-0.40.0",
+    url = "https://github.com/bazelbuild/rules_python/releases/download/0.40.0/rules_python-0.40.0.tar.gz",
 )
 
 load("@rules_python//python:repositories.bzl", "py_repositories", "python_register_toolchains")  # buildifier: disable=load-on-top
@@ -222,7 +222,7 @@ tf_workspace2()
 
 load("@org_tensorflow//tensorflow:workspace1.bzl", "tf_workspace1")  # buildifier: disable=load-on-top
 
-tf_workspace1()
+tf_workspace1(with_rules_cc = False)
 
 load("@org_tensorflow//tensorflow:workspace0.bzl", "tf_workspace0")  # buildifier: disable=load-on-top
 
