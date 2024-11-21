@@ -43,7 +43,7 @@ class CheckpointTensorReference(tff.program.MaterializableValueReference):
         bytes once they're available.
     """
     self._tensor_name = tensor_name
-    type_signature = tff.types.tensorflow_to_type((dtype, shape))
+    type_signature = tff.tensorflow.to_type((dtype, shape))
     self._type_signature = typing.cast(tff.TensorType, type_signature)
     self._checkpoint_future = checkpoint_future
     self._tensor: Optional[tf.Tensor] = None

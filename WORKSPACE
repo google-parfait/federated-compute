@@ -172,9 +172,9 @@ http_archive(
     patches = [
         "//fcp/patches:tensorflow_federated_deps.patch",
     ],
-    sha256 = "14f53659d57c55883010b602f4f272df083f519dcbf90a714b6550a2cf376224",
-    strip_prefix = "tensorflow-federated-0.86.0",
-    url = "https://github.com/google-parfait/tensorflow-federated/archive/v0.86.0.tar.gz",
+    sha256 = "391dea2c6f3ec1279d802d36703c1cec690c4a1642cc8cd19a078f440b3e7fa8",
+    strip_prefix = "tensorflow-federated-03b32cfbd38b58bb9c09f2649632c3376cb95163",
+    url = "https://github.com/google-parfait/tensorflow-federated/archive/03b32cfbd38b58bb9c09f2649632c3376cb95163.tar.gz",
 )
 
 # Tensorflow v2.14.0

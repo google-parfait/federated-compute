@@ -40,10 +40,7 @@ class CheckpointTensorReferenceTest(absltest.TestCase,
     coro = get_test_checkpoint()
     task = asyncio.create_task(coro)
     ref = ctr.CheckpointTensorReference(TENSOR_NAME, DTYPE, SHAPE, task)
-    self.assertEqual(
-        ref.type_signature,
-        tff.types.tensorflow_to_type((DTYPE, SHAPE)),
-    )
+    self.assertEqual(ref.type_signature, tff.tensorflow.to_type((DTYPE, SHAPE)))
 
   async def test_get_value(self):
 
