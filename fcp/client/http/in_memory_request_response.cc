@@ -551,7 +551,7 @@ FetchResourcesInMemory(HttpClient& http_client,
         // client_cache_id and max_age in the response_accessor.
         response_accessors.push_back(
             {.accessor = response_accessing_fn,
-             .client_cache_id = std::string(resource.uri().client_cache_id),
+             .client_cache_id = resource.uri().client_cache_id,
              .max_age = resource.uri().max_age});
       } else {
         response_accessors.push_back({.accessor = response_accessing_fn});
