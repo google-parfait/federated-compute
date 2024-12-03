@@ -168,9 +168,9 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
+        "@federated_language//federated_language/proto:computation_cc_proto",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:cardinalities",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:executor",
-        "@org_tensorflow_federated//tensorflow_federated/proto/v0:computation_cc_proto",
         "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
     ],
 )
@@ -185,10 +185,10 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
+        "@federated_language//federated_language/proto:array_cc_proto",
+        "@federated_language//federated_language/proto:computation_cc_proto",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:executor",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:mock_executor",
-        "@org_tensorflow_federated//tensorflow_federated/proto/v0:array_cc_proto",
-        "@org_tensorflow_federated//tensorflow_federated/proto/v0:computation_cc_proto",
         "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
     ],
 )

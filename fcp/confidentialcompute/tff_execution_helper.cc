@@ -33,9 +33,9 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/protos/confidentialcompute/file_info.pb.h"
 #include "google/protobuf/util/message_differencer.h"
+#include "federated_language/proto/computation.pb.h"
 #include "tensorflow_federated/cc/core/impl/executors/cardinalities.h"
 #include "tensorflow_federated/cc/core/impl/executors/executor.h"
-#include "tensorflow_federated/proto/v0/computation.pb.h"
 #include "tensorflow_federated/proto/v0/executor.pb.h"
 
 namespace fcp {

@@ -23,10 +23,10 @@
 #include "absl/status/statusor.h"
 #include "fcp/protos/confidentialcompute/file_info.pb.h"
 #include "fcp/testing/testing.h"
+#include "federated_language/proto/array.pb.h"
+#include "federated_language/proto/computation.pb.h"
 #include "tensorflow_federated/cc/core/impl/executors/executor.h"
 #include "tensorflow_federated/cc/core/impl/executors/mock_executor.h"
-#include "tensorflow_federated/proto/v0/array.pb.h"
-#include "tensorflow_federated/proto/v0/computation.pb.h"
 #include "tensorflow_federated/proto/v0/executor.pb.h"
 
 namespace fcp {
@@ -247,7 +247,7 @@ TEST(TffExecutionHelperTest, ExtractStructValueFederated) {
       ->mutable_int32_list()
       ->add_value(-1);
 
-  tensorflow_federated::v0::FederatedType federated_type;
+  federated_language::FederatedType federated_type;
   federated_type.mutable_placement()->mutable_value()->set_uri("server");
   federated_type.set_all_equal(true);
 

@@ -1,20 +1,11 @@
---- BUILD
-+++ BUILD
-@@ -16,4 +16,5 @@
- exports_files([
-     "LICENSE",
-     "README.md",
-+    "requirements.txt",
- ])
-
 diff --git tensorflow_federated/BUILD tensorflow_federated/BUILD
-index 85a0e08f7..9452c9ab5 100644
+index ff6bc8e22..bab38b2be 100644
 --- tensorflow_federated/BUILD
 +++ tensorflow_federated/BUILD
-@@ -40,6 +40,24 @@ py_library(
-         "//tensorflow_federated/python/learning",
+@@ -27,6 +27,24 @@ py_library(
          "//tensorflow_federated/python/program",
          "//tensorflow_federated/python/simulation",
+         "@federated_language//federated_language",
 +        "@pypi_absl_py//:pkg",
 +        "@pypi_attrs//:pkg",
 +        "@pypi_cachetools//:pkg",

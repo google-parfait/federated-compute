@@ -15,6 +15,7 @@
 import collections
 
 from absl.testing import absltest
+from federated_language.proto import computation_pb2
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -23,7 +24,6 @@ from fcp.artifact_building import data_spec
 from fcp.artifact_building import graph_helpers
 from fcp.artifact_building import variable_helpers
 from fcp.protos import plan_pb2
-from tensorflow_federated.proto.v0 import computation_pb2
 
 TRAIN_URI = 'boo'
 TEST_URI = 'foo'

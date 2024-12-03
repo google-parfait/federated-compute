@@ -172,9 +172,23 @@ http_archive(
     patches = [
         "//fcp/patches:tensorflow_federated_deps.patch",
     ],
-    sha256 = "391dea2c6f3ec1279d802d36703c1cec690c4a1642cc8cd19a078f440b3e7fa8",
-    strip_prefix = "tensorflow-federated-03b32cfbd38b58bb9c09f2649632c3376cb95163",
-    url = "https://github.com/google-parfait/tensorflow-federated/archive/03b32cfbd38b58bb9c09f2649632c3376cb95163.tar.gz",
+    sha256 = "599b886aa63d10728d3acd9d1aea5c71f571110fd99c2b3cad317f3c33d725eb",
+    strip_prefix = "tensorflow-federated-4b152349a49cb8131835106243334f4f43bcff14",
+    url = "https://github.com/google-parfait/tensorflow-federated/archive/4b152349a49cb8131835106243334f4f43bcff14.tar.gz",
+)
+
+http_archive(
+    name = "federated_language",
+    patches = [
+        "@org_tensorflow_federated//third_party/federated_language:proto_library_loads.patch",
+        "//fcp/patches:federated_language_structure_visibility.patch",
+    ],
+    repo_mapping = {
+        "@protobuf": "@com_google_protobuf",
+    },
+    sha256 = "de4bbfd93ee10c3797463d6a96911963d8969fb5ed0b264ae4f3f3088013fed4",
+    strip_prefix = "federated-language-5405fd4b2965e2f7c6c240b386f0540e4114818e",
+    url = "https://github.com/google-parfait/federated-language/archive/5405fd4b2965e2f7c6c240b386f0540e4114818e.tar.gz",
 )
 
 # Tensorflow v2.14.0

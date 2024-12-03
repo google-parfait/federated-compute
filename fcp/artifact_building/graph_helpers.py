@@ -15,6 +15,7 @@
 
 from typing import Optional, Union
 
+from federated_language.proto import computation_pb2
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -22,7 +23,6 @@ from fcp.artifact_building import data_spec
 from fcp.artifact_building import tensor_utils
 from fcp.artifact_building import type_checks
 from fcp.tensorflow import external_dataset
-from tensorflow_federated.proto.v0 import computation_pb2
 
 TfValue = Union[tf.Variable, tf.Tensor]
 DatasetTensor = tf.Tensor
@@ -250,13 +250,11 @@ def import_tensorflow(
       node_name = name.split(':', maxsplit=1)[0]
       return f'^{node_name}'
 
-    input_map.update(
-        {
-            control_dep_name(k): control_dep_name(v.name)
-            for k, v in input_map.items()
-            if not k.startswith('^')
-        }
-    )
+    input_map.update({
+        control_dep_name(k): control_dep_name(v.name)
+        for k, v in input_map.items()
+        if not k.startswith('^')
+    })
   input_map = {} if input_map is None else input_map
   if (
       session_token_tensor is not None
