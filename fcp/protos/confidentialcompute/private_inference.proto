@@ -68,6 +68,9 @@ message GemmaConfiguration {
   // The path to the model tokenizer file. Tokenizer file does not require
   // chunking because it is less than 2GB in size.
   string tokenizer_file = 1;
-  // The model weight file split into multiple chunks, each under 2GB in size.
-  repeated string model_weight_chunk_file = 2;
+  // The path to the model weights file, possibly over 2GB size. This file will
+  // be chunked into multiple gRPC requests under 2GB in the pipeline.
+  string model_weight_file = 3;
+
+  reserved 2;
 }
