@@ -32,7 +32,7 @@ class Flags {
 
   // The maximum number of times to retry an HTTP request. If 0, retrying is
   // disabled.
-  virtual int32_t http_retry_max_attempts() const { return 0; }
+  virtual int32_t http_retry_max_attempts() const { return 3; }
 
   // The delay (in milliseconds) to wait before retrying an HTTP request.
   virtual int32_t http_retry_delay_ms() const { return 5000; }

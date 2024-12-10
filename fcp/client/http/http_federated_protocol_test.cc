@@ -580,6 +580,9 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillRepeatedly(Return(false));
     EXPECT_CALL(mock_flags_, enable_relative_uri_prefix)
         .WillRepeatedly(Return(true));
+    // Disable http retries to simplify transient error tests that return
+    // retriable http errors.
+    EXPECT_CALL(mock_flags_, http_retry_max_attempts).WillRepeatedly(Return(0));
 
     // We only initialize federated_protocol_ in this SetUp method, rather than
     // in the test's constructor, to ensure that we can set mock flag values

@@ -680,6 +680,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, log_min_sep_index_to_phase_stats, (), (const, override));
   MOCK_METHOD(bool, enable_access_policy_endorsement_verification, (),
               (const, override));
+  MOCK_METHOD(int32_t, http_retry_max_attempts, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
