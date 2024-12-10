@@ -71,6 +71,41 @@ message GemmaConfiguration {
   // The path to the model weights file, possibly over 2GB size. This file will
   // be chunked into multiple gRPC requests under 2GB in the pipeline.
   string model_weight_file = 3;
+  // The Gemma model variant to be used for inference.
+  GemmaModel model = 4;
+  // The Gemma model training type to be used for inference.
+  GemmaModelTraining model_training = 5;
+  // The Gemma model tensor type to be used for inference.
+  GemmaTensorType tensor_type = 6;
 
   reserved 2;
+}
+
+// An enum of Gemma models supported for inference in TEE. Details about Gemma
+// model variants can be found at gcpp::Model in the Gemma CPP repo
+// (https://github.com/google/gemma.cpp).
+enum GemmaModel {
+  GEMMA_MODEL_UNSPECIFIED = 0;
+  // Tiny model is only for testing.
+  GEMMA_TINY = 1;
+  GEMMA_2B = 2;
+  GEMMA2_2B = 3;
+}
+
+// An enum of Gemma model training types supported for inference in TEE. Details
+// about Gemma model training can be found atÏ gcpp::ModelTraining in the Gemma
+// CPP repo (https://github.com/google/gemma.cpp).
+enum GemmaModelTraining {
+  GEMMA_MODEL_TRAINING_UNSPECIFIED = 0;
+  GEMMA_IT = 1;
+  GEMMA_PT = 2;
+}
+
+// An enum of Gemma tensor types supported for inference in TEE. Details about
+// the Gemma model tensor types can be found at gcpp::Type in the Gemma CPP repo
+// (https://github.com/google/gemma.cpp).
+enum GemmaTensorType {
+  GEMMA_TENSOR_TYPE_UNSPECIFIED = 0;
+  GEMMA_F32 = 1;
+  GEMMA_SFP = 2;
 }
