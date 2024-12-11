@@ -22,8 +22,10 @@ message InferenceConfiguration {
   // A set of private inference tasks to execute inside the TEE-hosted
   // container using client data.
   repeated InferenceTask inference_task = 1;
-  // The model and its configurations to be used for private inference.
-  ModelConfiguration model_config = 2;
+  // Configuration of different models to be used for inference.
+  oneof model_config {
+    GemmaConfiguration gemma_config = 2;
+  }
 }
 
 // A single private inference task to execute inside the TEE-hosted
@@ -32,8 +34,10 @@ message InferenceConfiguration {
 message InferenceTask {
   // Data columns used for inference and for storing inference results.
   ColumnConfiguration column_config = 1;
-  // The logic used for inference.
-  InferenceLogic inference_logic = 2;
+  // The logic used by a model to perform inference.
+  oneof inference_logic {
+    Prompt prompt = 2;
+  }
 }
 
 // Configuration for columns used for inference. Currently, only one input
@@ -44,23 +48,9 @@ message ColumnConfiguration {
   string output_column_name = 2;
 }
 
-// Logics used for different models to perform inference.
-message InferenceLogic {
-  oneof kind {
-    Prompt prompt = 1;
-  }
-}
-
 // A message for storing logics required for prompting a model.
 message Prompt {
   string prompt_template = 1;
-}
-
-// Configuration of different models to be used for inference.
-message ModelConfiguration {
-  oneof kind {
-    GemmaConfiguration gemma_config = 1;
-  }
 }
 
 // Configuration for running inference using Gemma models.
@@ -70,15 +60,13 @@ message GemmaConfiguration {
   string tokenizer_file = 1;
   // The path to the model weights file, possibly over 2GB size. This file will
   // be chunked into multiple gRPC requests under 2GB in the pipeline.
-  string model_weight_file = 3;
+  string model_weight_file = 2;
   // The Gemma model variant to be used for inference.
-  GemmaModel model = 4;
+  GemmaModel model = 3;
   // The Gemma model training type to be used for inference.
-  GemmaModelTraining model_training = 5;
+  GemmaModelTraining model_training = 4;
   // The Gemma model tensor type to be used for inference.
-  GemmaTensorType tensor_type = 6;
-
-  reserved 2;
+  GemmaTensorType tensor_type = 5;
 }
 
 // An enum of Gemma models supported for inference in TEE. Details about Gemma
@@ -108,4 +96,28 @@ enum GemmaTensorType {
   GEMMA_TENSOR_TYPE_UNSPECIFIED = 0;
   GEMMA_F32 = 1;
   GEMMA_SFP = 2;
+}
+
+// Message to be passed in as part of FedSqlContainerInitializeConfiguration as
+// StreamInitializeRequest.configure.configuration for private inference in the
+// ConfidentialTransform API.
+message InferenceInitializeConfiguration {
+  InferenceConfiguration inference_config = 1;
+  // Additional model-specific initialization configuration.
+  oneof model_init_config {
+    GemmaInitializeConfiguration gemma_init_config = 2;
+  }
+}
+
+// Additional initialize configuration for Gemma models not covered by
+// InferenceConfiguration.
+message GemmaInitializeConfiguration {
+  // The configuration_id for the tokenizer blob. It should match
+  // StreamInitializeRequest.write_configuration.first_request_metadata.configuration_id
+  // for the tokenizer blob.
+  string tokenizer_configuration_id = 1;
+  // The configuration_id for the model weight blob. It should match
+  // StreamInitializeRequest.write_configuration.first_request_metadata.configuration_id
+  // for the model weight blob.
+  string model_weight_configuration_id = 2;
 }

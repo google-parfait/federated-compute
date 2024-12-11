@@ -205,6 +205,7 @@ proto_library(
     name = "fed_sql_container_config_proto",
     srcs = ["fed_sql_container_config.proto"],
     deps = [
+        ":private_inference_proto",
         "@com_google_protobuf//:any_proto",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol:configuration_proto",
     ],

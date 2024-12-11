@@ -17,6 +17,7 @@ syntax = "proto3";
 package fcp.confidentialcompute;
 
 import "google/protobuf/any.proto";
+import "fcp/protos/confidentialcompute/private_inference.proto";
 import "tensorflow_federated/cc/core/impl/aggregation/protocol/configuration.proto";
 
 // Configures the FedSQL container initialization. This configuration will last
@@ -46,6 +47,9 @@ message FedSqlContainerInitializeConfiguration {
   // query. The FedSQL container expects this data to be in the Federated
   // Compute client wire format.
   bytes joiner_data = 5;
+
+  // Configuration for running private inference in FedSQL container.
+  InferenceInitializeConfiguration inference_init_config = 6;
 }
 
 enum AggCoreAggregationType {
