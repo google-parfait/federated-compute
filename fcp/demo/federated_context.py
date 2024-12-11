@@ -23,6 +23,7 @@ import uuid
 
 from absl import logging
 import attr
+import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -41,7 +42,7 @@ from fcp.demo import server
 from fcp.protos import plan_pb2
 
 
-class FederatedContext(tff.program.FederatedContext):
+class FederatedContext(federated_language.program.FederatedContext):
   """A FederatedContext for use with the demo platform."""
 
   def __init__(self,
@@ -159,7 +160,7 @@ class FederatedContext(tff.program.FederatedContext):
       structure: Union[
           tff.structure.Struct,
           tf.Tensor,
-          tff.program.MaterializableValue,
+          federated_language.program.MaterializableValue,
       ],
   ) -> bool:
     """Checks if each node in `structure` is an allowed type for `state`."""
@@ -179,18 +180,21 @@ class FederatedContext(tff.program.FederatedContext):
                   float,
                   str,
                   bytes,
-                  tff.program.MaterializableValueReference,
+                  federated_language.program.MaterializableValueReference,
               ),
           )
       ):
         return False
     return True
 
-  def _parse_arg(
-      self, arg: tff.structure.Struct
-  ) -> tuple[Union[tff.structure.Struct, tf.Tensor,
-                   tff.program.MaterializableValueReference],
-             federated_data_source.DataSelectionConfig]:
+  def _parse_arg(self, arg: tff.structure.Struct) -> tuple[
+      Union[
+          tff.structure.Struct,
+          tf.Tensor,
+          federated_language.program.MaterializableValueReference,
+      ],
+      federated_data_source.DataSelectionConfig,
+  ]:
     """Parses and validates the invoke arguments."""
     if len(arg) != 2:
       raise ValueError(f'The argument structure is unsupported: {arg}.')
@@ -224,10 +228,16 @@ class FederatedContext(tff.program.FederatedContext):
     return data_spec.DataSpec(example_selector)
 
   async def _run_computation(
-      self, name: str, config: federated_data_source.DataSelectionConfig,
-      plan: plan_pb2.Plan, input_type: tff.Type,
-      input_state: Union[tff.structure.Struct, tf.Tensor,
-                         tff.program.MaterializableValueReference]
+      self,
+      name: str,
+      config: federated_data_source.DataSelectionConfig,
+      plan: plan_pb2.Plan,
+      input_type: tff.Type,
+      input_state: Union[
+          tff.structure.Struct,
+          tf.Tensor,
+          federated_language.program.MaterializableValueReference,
+      ],
   ) -> bytes:
     """Prepares and runs a computation using the demo server."""
     input_checkpoint = self._state_to_checkpoint(
@@ -245,11 +255,17 @@ class FederatedContext(tff.program.FederatedContext):
       logging.log(logging.INFO, 'Finished running %s', name)
 
   async def _resolve_value_references(
-      self, structure: Union[tff.structure.Struct, tf.Tensor,
-                             tff.program.MaterializableValueReference]
+      self,
+      structure: Union[
+          tff.structure.Struct,
+          tf.Tensor,
+          federated_language.program.MaterializableValueReference,
+      ],
   ) -> Union[tff.structure.Struct, tf.Tensor]:
     """Dereferences any MaterializableValueReferences in a struct."""
-    if isinstance(structure, tff.program.MaterializableValueReference):
+    if isinstance(
+        structure, federated_language.program.MaterializableValueReference
+    ):
       return await structure.get_value()  # pytype: disable=bad-return-type  # numpy-scalars
     elif tf.is_tensor(structure):
       return structure

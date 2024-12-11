@@ -22,7 +22,7 @@ COMPUTATION_NAME_REGEX = re.compile(r'\w+(/\w+)*')
 
 
 class FederatedComputation(tff.Computation):
-  """A tff.Computation that should be run in a tff.program.FederatedContext."""
+  """A tff.Computation that should be run in a federated_language.program.FederatedContext."""
 
   def __init__(self, comp: tff.Computation, *, name: str):
     """Constructs a new FederatedComputation object.

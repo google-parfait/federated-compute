@@ -52,7 +52,7 @@ def main():
     # Configure the platform-agnostic components.
     summary_dir = os.path.join(_OUTPUT_DIR.value, 'summary')
     output_managers = [
-      tff.program.LoggingReleaseManager(),
+      federated_language.program.LoggingReleaseManager(),
       tensorboard_manager = tff.program.TensorBoardReleaseManager(summary_dir),
     ]
     program_state_dir = os.path.join(..., 'program_state')
@@ -143,7 +143,7 @@ server(s) instead of an in-process server.
 #### `federated_context.py`
 
 Contains a
-[`tff.program.FederatedContext`](https://www.tensorflow.org/federated/api_docs/python/tff/program/FederatedContext)
+[`federated_language.program.FederatedContext`](https://www.tensorflow.org/federated/api_docs/python/tff/program/FederatedContext)
 implementation for running computations on the demo Federated Computations
 platform.
 
@@ -162,13 +162,13 @@ platform.
 #### `federated_data_source.py`
 
 Contains a
-[`tff.program.FederatedDataSource`](https://www.tensorflow.org/federated/api_docs/python/tff/program/FederatedDataSource)
+[`federated_language.program.FederatedDataSource`](https://www.tensorflow.org/federated/api_docs/python/tff/program/FederatedDataSource)
 implementation for representing on-device data sources.
 
 #### `checkpoint_tensor_reference.py`
 
 Contains a
-[`tff.program.MaterializableValueReference`](https://www.tensorflow.org/federated/api_docs/python/tff/program/MaterializableValueReference)
+[`federated_language.program.MaterializableValueReference`](https://www.tensorflow.org/federated/api_docs/python/tff/program/MaterializableValueReference)
 implementation that reads values from a TensorFlow checkpoint.
 
 ### In-Process Server

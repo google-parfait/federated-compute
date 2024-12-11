@@ -76,6 +76,7 @@ py_library(
     srcs = ["checkpoint_tensor_reference.py"],
     srcs_version = "PY3",
     deps = [
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_tensorflow//:pkg",
     ],
@@ -140,6 +141,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":federated_computation",
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
@@ -163,6 +165,7 @@ py_library(
         "//fcp/artifact_building:plan_utils",
         "//fcp/artifact_building:variable_helpers",
         "//fcp/protos:plan_py_pb2",
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_attrs//:pkg",
@@ -189,6 +192,7 @@ py_test(
         "//fcp/artifact_building:plan_utils",
         "//fcp/artifact_building:variable_helpers",
         "//fcp/protos:plan_py_pb2",
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_attrs//:pkg",
@@ -204,6 +208,7 @@ py_library(
     deps = [
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos:population_eligibility_spec_py_pb2",
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_numpy//:pkg",
     ],
@@ -236,6 +241,7 @@ py_test(
         "//fcp/client:client_runner_example_data_py_pb2",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos:population_eligibility_spec_py_pb2",
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",

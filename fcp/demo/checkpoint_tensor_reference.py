@@ -18,11 +18,14 @@ import typing
 from typing import Any, Optional
 import uuid
 
+import federated_language
 import tensorflow as tf
 import tensorflow_federated as tff
 
 
-class CheckpointTensorReference(tff.program.MaterializableValueReference):
+class CheckpointTensorReference(
+    federated_language.program.MaterializableValueReference
+):
   """A reference to a tensor in a TF checkpoint file."""
 
   def __init__(
@@ -52,7 +55,7 @@ class CheckpointTensorReference(tff.program.MaterializableValueReference):
   def type_signature(self) -> tff.Type:
     return self._type_signature
 
-  async def get_value(self) -> tff.program.MaterializedValue:
+  async def get_value(self) -> federated_language.program.MaterializedValue:
     if self._tensor is None:
       checkpoint = await self._checkpoint_future
       # Write to a file in TensorFlow's RamFileSystem to avoid disk I/O.

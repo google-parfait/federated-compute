@@ -18,6 +18,7 @@ import functools
 import re
 from typing import Optional, Union
 
+import federated_language
 import numpy as np
 import tensorflow_federated as tff
 
@@ -41,7 +42,7 @@ class DataSelectionConfig:
   num_clients: int
 
 
-class FederatedDataSource(tff.program.FederatedDataSource):
+class FederatedDataSource(federated_language.program.FederatedDataSource):
   """A FederatedDataSource for use with the demo platform.
 
   A FederatedDataSource represents a population of client devices and the set of
@@ -103,11 +104,13 @@ class FederatedDataSource(tff.program.FederatedDataSource):
     return tff.FederatedType(
         get_struct_type(self._example_selector), tff.CLIENTS)
 
-  def iterator(self) -> tff.program.FederatedDataSourceIterator:
+  def iterator(self) -> federated_language.program.FederatedDataSourceIterator:
     return _FederatedDataSourceIterator(self)
 
 
-class _FederatedDataSourceIterator(tff.program.FederatedDataSourceIterator):
+class _FederatedDataSourceIterator(
+    federated_language.program.FederatedDataSourceIterator
+):
   """A `FederatedDataSourceIterator` for use with the demo platform."""
 
   def __init__(self, data_source: FederatedDataSource):

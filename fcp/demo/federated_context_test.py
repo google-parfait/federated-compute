@@ -21,6 +21,7 @@ from unittest import mock
 
 from absl.testing import absltest
 import attr
+import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -225,7 +226,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     comp = federated_computation.FederatedComputation(count_clients, name='x')
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
-    release_manager = tff.program.MemoryReleaseManager()
+    release_manager = federated_language.program.MemoryReleaseManager()
     with tff.framework.get_context_stack().install(ctx):
       state, _ = comp(3, DATA_SOURCE.iterator().select(10))
       await release_manager.release(state, key='result')
@@ -261,7 +262,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     comp = federated_computation.FederatedComputation(count_clients, name='x')
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
-    release_manager = tff.program.MemoryReleaseManager()
+    release_manager = federated_language.program.MemoryReleaseManager()
     with tff.framework.get_context_stack().install(ctx):
       state, _ = comp(3, DATA_SOURCE.iterator().select(10))
       state, _ = comp(state, DATA_SOURCE.iterator().select(10))
@@ -298,7 +299,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     comp = federated_computation.FederatedComputation(count_clients, name='x')
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
-    release_manager = tff.program.MemoryReleaseManager()
+    release_manager = federated_language.program.MemoryReleaseManager()
     with tff.framework.get_context_stack().install(ctx):
       state, _ = comp(0, DATA_SOURCE.iterator().select(10))
       with self.assertRaisesRegex(ValueError, 'message'):
@@ -346,7 +347,7 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
     self.enter_context(tff.framework.get_context_stack().install(
         federated_context.FederatedContext(
             POPULATION_NAME, address_family=ADDRESS_FAMILY)))
-    self.release_manager = tff.program.MemoryReleaseManager()
+    self.release_manager = federated_language.program.MemoryReleaseManager()
 
     # Run (and therefore cache) count_clients_comp1 with data_source1.
     await self.release_manager.release(

@@ -15,6 +15,7 @@
 from unittest import mock
 
 from absl.testing import absltest
+import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -113,7 +114,9 @@ class FederatedComputationTest(absltest.TestCase):
 
   def test_call(self):
     comp = fc.FederatedComputation(count_clients, name='comp')
-    ctx = mock.create_autospec(tff.program.FederatedContext, instance=True)
+    ctx = mock.create_autospec(
+        federated_language.program.FederatedContext, instance=True
+    )
     ctx.invoke.return_value = 1234
     with tff.framework.get_context_stack().install(ctx):
       self.assertEqual(comp(1, 2, 3, kw1='a', kw2='b'), 1234)

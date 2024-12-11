@@ -20,6 +20,7 @@ import unittest
 
 from absl import flags
 from absl.testing import absltest
+import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -90,13 +91,13 @@ def count_clients(state, client_data):
 async def program_logic(
     init_fns: list[tff.Computation],
     comp_fns: list[tff.Computation],
-    data_source: tff.program.FederatedDataSource,
+    data_source: federated_language.program.FederatedDataSource,
     total_rounds: int,
     number_of_clients: int,
-    release_manager: tff.program.ReleaseManager,
+    release_manager: federated_language.program.ReleaseManager,
 ) -> None:
   """Initializes and runs a computation, releasing metrics and final state."""
-  tff.program.check_in_federated_context()
+  federated_language.program.check_in_federated_context()
   assert len(init_fns) == len(comp_fns)
   data_iterator = data_source.iterator()
   states = [init() for init in init_fns]
@@ -174,7 +175,7 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         POPULATION_NAME,
         plan_pb2.ExampleSelector(collection_uri=COLLECTION_URI))
     comp = demo.FederatedComputation(sum_counts, name='sum_counts')
-    release_manager = tff.program.MemoryReleaseManager()
+    release_manager = federated_language.program.MemoryReleaseManager()
     num_rounds = 2
     client_counts = [
         [0, 3, 5, 1],
@@ -222,7 +223,7 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     )
     comp1 = demo.FederatedComputation(sum_counts, name='sum_counts')
     comp2 = demo.FederatedComputation(count_clients, name='count_clients')
-    release_manager = tff.program.MemoryReleaseManager()
+    release_manager = federated_language.program.MemoryReleaseManager()
     client_counts = [
         [0, 3, 5, 1],
         [2, 4],
