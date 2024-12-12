@@ -98,7 +98,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     FederatedProtocol* federated_protocol,
     FederatedSelectManager* fedselect_manager,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time reference_time, const std::string& session_name,
+    absl::Time reference_time, const std::string& session_name,
     const std::string& population_name, Clock& clock);
 
 // This is exposed for use in compatibility tests only. Prod code should call
