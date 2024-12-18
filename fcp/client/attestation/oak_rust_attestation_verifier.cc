@@ -81,7 +81,7 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
 
   // Ensure that the provided data access policy parses correctly.
   DataAccessPolicy parsed_access_policy;
-  if (!parsed_access_policy.ParseFromCord(access_policy)) {
+  if (!parsed_access_policy.ParseFromString(access_policy)) {
     return absl::FailedPreconditionError("DataAccessPolicy failed to parse.");
   }
 
