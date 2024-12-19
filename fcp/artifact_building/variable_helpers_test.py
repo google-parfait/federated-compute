@@ -11,9 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for variable_helpers.py."""
 
 from absl.testing import absltest
+import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -22,7 +22,7 @@ from fcp.artifact_building import artifact_constants
 from fcp.artifact_building import variable_helpers
 
 
-@tff.federated_computation(
+@federated_language.federated_computation(
     tff.FederatedType(np.int32, tff.SERVER),
     tff.FederatedType(np.float32, tff.CLIENTS),
 )
@@ -267,7 +267,7 @@ class VariableHelpersTest(absltest.TestCase):
       self,
   ):
 
-    @tff.federated_computation(
+    @federated_language.federated_computation(
         tff.FederatedType(np.int32, tff.SERVER),
         tff.FederatedType(np.float32, tff.CLIENTS),
     )

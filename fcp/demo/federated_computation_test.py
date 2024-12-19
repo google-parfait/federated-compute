@@ -28,7 +28,7 @@ def add_values(x, y):
   return x + y
 
 
-@tff.federated_computation(
+@federated_language.federated_computation(
     tff.FederatedType(np.int32, tff.SERVER),
     tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
 )
@@ -41,7 +41,7 @@ def count_clients(state, client_data):
   return tff.federated_map(add_values, (state, aggregated_count)), metrics
 
 
-@tff.federated_computation(
+@federated_language.federated_computation(
     tff.FederatedType(np.int32, tff.SERVER),
     tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
 )
@@ -66,7 +66,9 @@ class FederatedComputationTest(absltest.TestCase):
 
   def test_incompatible_computation(self):
     # This function doesn't have the return value structure required for MRF.
-    @tff.federated_computation(tff.FederatedType(np.int32, tff.SERVER))
+    @federated_language.federated_computation(
+        tff.FederatedType(np.int32, tff.SERVER)
+    )
     def _identity(value):
       return value
 

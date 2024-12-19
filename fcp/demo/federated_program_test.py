@@ -38,7 +38,7 @@ _TaskAssignmentMode = (
 )
 
 
-@tff.federated_computation()
+@federated_language.federated_computation()
 def initialize() -> tff.Value:
   """Returns the initial state."""
   return tff.federated_value(0, tff.SERVER)
@@ -49,7 +49,7 @@ def _add(x: int, y: int) -> int:
   return x + y
 
 
-@tff.federated_computation(
+@federated_language.federated_computation(
     tff.FederatedType(np.int32, tff.SERVER),
     tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
 )
@@ -75,7 +75,7 @@ def sum_counts(state, client_data):
   return updated_state, metrics
 
 
-@tff.federated_computation(
+@federated_language.federated_computation(
     tff.FederatedType(np.int32, tff.SERVER),
     tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
 )

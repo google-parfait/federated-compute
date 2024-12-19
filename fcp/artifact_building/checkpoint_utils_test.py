@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for checkpoint_utils."""
 
 import collections
 import os
@@ -20,7 +19,7 @@ from typing import Any
 
 from absl.testing import absltest
 from absl.testing import parameterized
-
+import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -180,7 +179,8 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
       checkpoint_utils.pack_tff_value(tff_type, value_list)
 
   def test_pack_tff_value_with_tff_type_error(self):
-    @tff.federated_computation
+
+    @federated_language.federated_computation
     def fed_comp():
       return tff.federated_value(0, tff.SERVER)
 

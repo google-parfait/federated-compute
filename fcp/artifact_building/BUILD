@@ -47,6 +47,7 @@ py_test(
         ":checkpoint_utils",
         "//fcp/protos:plan_py_pb2",
         "@com_google_protobuf//:protobuf_python",
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
@@ -312,6 +313,7 @@ py_test(
     deps = [
         ":artifact_constants",
         ":variable_helpers",
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",

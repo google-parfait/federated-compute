@@ -53,7 +53,7 @@ def _add(x: int, y: int) -> int:
   return x + y
 
 
-@tff.federated_computation(
+@federated_language.federated_computation(
     tff.FederatedType(np.int32, tff.SERVER),
     tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
 )
@@ -66,7 +66,7 @@ def count_clients(state, client_data):
   return updated_state, non_state
 
 
-@tff.federated_computation(
+@federated_language.federated_computation(
     tff.FederatedType(
         tff.StructType([('foo', np.int32), ('bar', np.int32)]), tff.SERVER
     ),
@@ -97,7 +97,7 @@ def init():
 attrs_type = init.type_signature.result
 
 
-@tff.federated_computation(
+@federated_language.federated_computation(
     tff.FederatedType(attrs_type, tff.SERVER),
     tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
 )
@@ -312,7 +312,7 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
   async def asyncSetUp(self):
     await super().asyncSetUp()
 
-    @tff.federated_computation(
+    @federated_language.federated_computation(
         tff.FederatedType(np.int32, tff.SERVER),
         tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
     )
