@@ -23,8 +23,8 @@ from fcp.artifact_building import variable_helpers
 
 
 @federated_language.federated_computation(
-    tff.FederatedType(np.int32, tff.SERVER),
-    tff.FederatedType(np.float32, tff.CLIENTS),
+    federated_language.FederatedType(np.int32, tff.SERVER),
+    federated_language.FederatedType(np.float32, tff.CLIENTS),
 )
 def sample_comp(x, y):
   a = tff.federated_broadcast(x)
@@ -38,7 +38,7 @@ class VariableHelpersTest(absltest.TestCase):
   def test_create_vars_for_tff_type(self):
     with tf.Graph().as_default():
       vl = variable_helpers.create_vars_for_tff_type(
-          tff.StructType(
+          federated_language.StructType(
               [('a', np.int32), ('b', [('c', np.bool_), ('d', np.float32)])]
           ),  # pytype: disable=wrong-arg-types
           'x',
@@ -53,7 +53,7 @@ class VariableHelpersTest(absltest.TestCase):
   def test_create_vars_for_tff_type_with_none_and_zero_shape(self):
     with tf.Graph().as_default():
       vl = variable_helpers.create_vars_for_tff_type(
-          tff.TensorType(dtype=np.int32, shape=[5, None, 0])
+          federated_language.TensorType(dtype=np.int32, shape=[5, None, 0])
       )
       self.assertLen(vl, 1)
       test_variable = vl[0]
@@ -61,7 +61,9 @@ class VariableHelpersTest(absltest.TestCase):
       self.assertEqual(test_variable.shape.as_list(), [5, None, None])
 
   def test_create_vars_for_tff_federated_type(self):
-    tff_type = tff.FederatedType(tff.TensorType(np.int32), tff.SERVER)
+    tff_type = federated_language.FederatedType(
+        federated_language.TensorType(np.int32), tff.SERVER
+    )
     with tf.Graph().as_default():
       vl = variable_helpers.create_vars_for_tff_type(tff_type)
 
@@ -73,14 +75,18 @@ class VariableHelpersTest(absltest.TestCase):
     self.assertEqual(v.name, 'v:0')
 
   def test_create_vars_for_struct_of_tff_federated_types(self):
-    tff_type = tff.StructType([
+    tff_type = federated_language.StructType([
         (
             'num_examples_secagg',
-            tff.FederatedType(tff.TensorType(np.int32), tff.SERVER),
+            federated_language.FederatedType(
+                federated_language.TensorType(np.int32), tff.SERVER
+            ),
         ),
         (
             'num_examples_simpleagg',
-            tff.FederatedType(tff.TensorType(np.int32), tff.SERVER),
+            federated_language.FederatedType(
+                federated_language.TensorType(np.int32), tff.SERVER
+            ),
         ),
     ])
     with tf.Graph().as_default():
@@ -98,27 +104,29 @@ class VariableHelpersTest(absltest.TestCase):
 
   def test_variable_names_from_type_with_tensor_type_and_no_name(self):
     names = variable_helpers.variable_names_from_type(
-        tff.TensorType(dtype=np.int32)
+        federated_language.TensorType(dtype=np.int32)
     )
     self.assertEqual(names, ['v'])
 
   def test_variable_names_from_type_with_tensor_type(self):
     names = variable_helpers.variable_names_from_type(
-        tff.TensorType(dtype=np.int32),
+        federated_language.TensorType(dtype=np.int32),
         'test_name',
     )
     self.assertEqual(names, ['test_name'])
 
   def test_variable_names_from_type_with_federated_type(self):
     names = variable_helpers.variable_names_from_type(
-        tff.FederatedType(tff.TensorType(dtype=np.int32), tff.SERVER),
+        federated_language.FederatedType(
+            federated_language.TensorType(dtype=np.int32), tff.SERVER
+        ),
         'test_name',
     )
     self.assertEqual(names, ['test_name'])
 
   def test_variable_names_from_type_with_named_tuple_type_and_no_name(self):
     names = variable_helpers.variable_names_from_type(
-        tff.to_type(
+        federated_language.to_type(
             [('a', np.int32), ('b', [('c', np.bool_), ('d', np.float32)])]
         )  # pytype: disable=wrong-arg-types
     )
@@ -126,7 +134,7 @@ class VariableHelpersTest(absltest.TestCase):
 
   def test_variable_names_from_type_with_named_tuple_type(self):
     names = variable_helpers.variable_names_from_type(
-        tff.to_type(
+        federated_language.to_type(
             [('a', np.int32), ('b', [('c', np.bool_), ('d', np.float32)])]
         ),  # pytype: disable=wrong-arg-types
         'test_name',
@@ -135,14 +143,14 @@ class VariableHelpersTest(absltest.TestCase):
 
   def test_variable_names_from_type_with_named_tuple_type_no_name_field(self):
     names = variable_helpers.variable_names_from_type(
-        tff.to_type([(np.int32), ('b', [(np.bool_), ('d', np.float32)])]),  # pytype: disable=wrong-arg-types
+        federated_language.to_type([(np.int32), ('b', [(np.bool_), ('d', np.float32)])]),  # pytype: disable=wrong-arg-types
         'test_name',
     )
     self.assertEqual(names, ['test_name/0', 'test_name/b/0', 'test_name/b/d'])
 
   def test_get_flattened_tensor_specs_with_tensor_type(self):
     specs = variable_helpers.get_flattened_tensor_specs(
-        tff.TensorType(dtype=np.int32, shape=[3, 5]),
+        federated_language.TensorType(dtype=np.int32, shape=[3, 5]),
         'test_name',
     )
     self.assertEqual(
@@ -158,8 +166,8 @@ class VariableHelpersTest(absltest.TestCase):
 
   def test_get_flattened_tensor_specs_with_federated_type(self):
     specs = variable_helpers.get_flattened_tensor_specs(
-        tff.FederatedType(
-            tff.TensorType(dtype=np.int32, shape=[3, 5]),
+        federated_language.FederatedType(
+            federated_language.TensorType(dtype=np.int32, shape=[3, 5]),
             tff.SERVER,
         ),
         'test_name',
@@ -177,18 +185,18 @@ class VariableHelpersTest(absltest.TestCase):
 
   def test_get_flattened_tensor_specs_with_tuple_type(self):
     specs = variable_helpers.get_flattened_tensor_specs(
-        tff.StructType([
+        federated_language.StructType([
             (
                 'a',
-                tff.TensorType(dtype=np.int32, shape=[3, 5]),
+                federated_language.TensorType(dtype=np.int32, shape=[3, 5]),
             ),
             (
                 'b',
-                tff.StructType([
-                    (tff.TensorType(dtype=np.bool_, shape=[4])),
+                federated_language.StructType([
+                    (federated_language.TensorType(dtype=np.bool_, shape=[4])),
                     (
                         'd',
-                        tff.TensorType(
+                        federated_language.TensorType(
                             dtype=np.float32,
                             shape=[1, 3, 5],
                         ),
@@ -268,8 +276,8 @@ class VariableHelpersTest(absltest.TestCase):
   ):
 
     @federated_language.federated_computation(
-        tff.FederatedType(np.int32, tff.SERVER),
-        tff.FederatedType(np.float32, tff.CLIENTS),
+        federated_language.FederatedType(np.int32, tff.SERVER),
+        federated_language.FederatedType(np.float32, tff.CLIENTS),
     )
     def _comp(x, y):
       a = tff.federated_broadcast(x)

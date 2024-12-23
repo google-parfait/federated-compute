@@ -49,7 +49,9 @@ class FederatedDataSource(federated_language.program.FederatedDataSource):
   on-device data over which computations should be invoked.
   """
 
-  _FEDERATED_TYPE = tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS)
+  _FEDERATED_TYPE = federated_language.FederatedType(
+      federated_language.SequenceType(np.str_), tff.CLIENTS
+  )
 
   def __init__(
       self,
@@ -90,19 +92,20 @@ class FederatedDataSource(federated_language.program.FederatedDataSource):
     return self._task_assignment_mode
 
   @functools.cached_property
-  def federated_type(self) -> tff.FederatedType:
+  def federated_type(self) -> federated_language.FederatedType:
 
     def get_struct_type(value):
       if isinstance(value, dict):
-        return tff.StructType([
-            (k, get_struct_type(v)) for k, v in value.items()
-        ])
+        return federated_language.StructType(
+            [(k, get_struct_type(v)) for k, v in value.items()]
+        )
       # ExternalDataset always returns a sequence of tf.strings, which should be
       # serialized `tf.train.Example` protos.
-      return tff.SequenceType(np.str_)
+      return federated_language.SequenceType(np.str_)
 
-    return tff.FederatedType(
-        get_struct_type(self._example_selector), tff.CLIENTS)
+    return federated_language.FederatedType(
+        get_struct_type(self._example_selector), tff.CLIENTS
+    )
 
   def iterator(self) -> federated_language.program.FederatedDataSourceIterator:
     return _FederatedDataSourceIterator(self)

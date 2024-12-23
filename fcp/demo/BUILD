@@ -130,6 +130,7 @@ py_library(
     srcs = ["federated_computation.py"],
     srcs_version = "PY3",
     deps = [
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
     ],
 )
@@ -223,6 +224,7 @@ py_test(
         ":federated_data_source",
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos:population_eligibility_spec_py_pb2",
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",

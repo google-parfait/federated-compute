@@ -16,6 +16,7 @@
 import functools
 import re
 
+import federated_language
 import tensorflow_federated as tff
 
 COMPUTATION_NAME_REGEX = re.compile(r'\w+(/\w+)*')
@@ -60,7 +61,7 @@ class FederatedComputation(tff.Computation):
     return self._name
 
   @property
-  def type_signature(self) -> tff.Type:
+  def type_signature(self) -> federated_language.Type:
     return self._comp.type_signature
 
   def __call__(self, *args, **kwargs) ->...:

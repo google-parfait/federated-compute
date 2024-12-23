@@ -48,8 +48,12 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
     with tf.Graph().as_default():
       state_vars, _, _, savepoint = (
           checkpoint_utils.create_server_checkpoint_vars_and_savepoint(
-              server_state_type=tff.StructType([('foo1', np.int32)]),
-              server_metrics_type=tff.StructType([('bar2', np.int32)]),
+              server_state_type=federated_language.StructType(
+                  [('foo1', np.int32)]
+              ),
+              server_metrics_type=federated_language.StructType(
+                  [('bar2', np.int32)]
+              ),
               write_metrics_to_checkpoint=True,
           )
       )
@@ -68,8 +72,12 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
     with tf.Graph().as_default():
       _, _, metadata_vars, savepoint = (
           checkpoint_utils.create_server_checkpoint_vars_and_savepoint(
-              server_state_type=tff.StructType([('foo3', np.int32)]),
-              server_metrics_type=tff.StructType([('bar1', np.int32)]),
+              server_state_type=federated_language.StructType(
+                  [('foo3', np.int32)]
+              ),
+              server_metrics_type=federated_language.StructType(
+                  [('bar1', np.int32)]
+              ),
               additional_checkpoint_metadata_var_fn=(
                   additional_checkpoint_metadata_var_fn
               ),
@@ -87,8 +95,12 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
     with tf.Graph().as_default():
       _, metrics_vars, _, savepoint = (
           checkpoint_utils.create_server_checkpoint_vars_and_savepoint(
-              server_state_type=tff.StructType([('foo2', np.int32)]),
-              server_metrics_type=tff.StructType([('bar3', np.int32)]),
+              server_state_type=federated_language.StructType(
+                  [('foo2', np.int32)]
+              ),
+              server_metrics_type=federated_language.StructType(
+                  [('bar3', np.int32)]
+              ),
               write_metrics_to_checkpoint=True,
           )
       )
@@ -96,8 +108,8 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
       self._assert_variable_functionality(metrics_vars)
 
   def test_tff_type_to_dtype_list_as_expected(self):
-    tff_type = tff.FederatedType(
-        tff.StructType([('foo', np.int32), ('bar', np.str_)]),
+    tff_type = federated_language.FederatedType(
+        federated_language.StructType([('foo', np.int32), ('bar', np.str_)]),
         tff.SERVER,
     )
     expected_dtype_list = [tf.int32, tf.string]
@@ -111,10 +123,11 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
       checkpoint_utils.tff_type_to_dtype_list(list_type)  # pytype: disable=wrong-arg-types
 
   def test_tff_type_to_tensor_spec_list_as_expected(self):
-    tff_type = tff.FederatedType(
-        tff.StructType(
-            [('foo', np.int32), ('bar', tff.TensorType(np.str_, shape=[1]))]
-        ),
+    tff_type = federated_language.FederatedType(
+        federated_language.StructType([
+            ('foo', np.int32),
+            ('bar', federated_language.TensorType(np.str_, shape=[1])),
+        ]),
         tff.SERVER,
     )
     expected_tensor_spec_list = [
@@ -132,7 +145,9 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
       checkpoint_utils.tff_type_to_tensor_spec_list(list_type)  # pytype: disable=wrong-arg-types
 
   def test_pack_tff_value_with_tensors_as_expected(self):
-    tff_type = tff.StructType([('foo', np.int32), ('bar', np.str_)])
+    tff_type = federated_language.StructType(
+        [('foo', np.int32), ('bar', np.str_)]
+    )
     value_list = [
         tf.constant(1, dtype=np.int32),
         tf.constant('bla', dtype=np.str_),
@@ -150,11 +165,13 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
     # This test must create a type that has `StructType`s nested under the
     # `FederatedType` to cover testing that tff.structure.pack_sequence_as
     # package correctly descends through the entire type tree.
-    tff_type = tff.to_type(
+    tff_type = federated_language.to_type(
         collections.OrderedDict(
-            foo=tff.FederatedType(np.int32, tff.SERVER),
+            foo=federated_language.FederatedType(np.int32, tff.SERVER),
             # Some arbitrarily deep nesting to ensure full traversals.
-            bar=tff.FederatedType([(), ([np.int32], np.int32)], tff.SERVER),
+            bar=federated_language.FederatedType(
+                [(), ([np.int32], np.int32)], tff.SERVER
+            ),
         )
     )
     value_list = [tf.constant(1), tf.constant(2), tf.constant(3)]
@@ -173,7 +190,9 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
     )
 
   def test_pack_tff_value_with_unmatched_input_sizes(self):
-    tff_type = tff.StructType([('foo', np.int32), ('bar', np.str_)])
+    tff_type = federated_language.StructType(
+        [('foo', np.int32), ('bar', np.str_)]
+    )
     value_list = [tf.constant(1, dtype=np.int32)]
     with self.assertRaises(ValueError):
       checkpoint_utils.pack_tff_value(tff_type, value_list)

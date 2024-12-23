@@ -15,6 +15,7 @@
 
 from typing import Optional
 
+import federated_language
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -62,14 +63,14 @@ def make_tensor_spec_from_tensor(
 
 
 def make_measurement(
-    t: tf.Tensor, name: str, tff_type: tff.types.TensorType
+    t: tf.Tensor, name: str, tff_type: federated_language.TensorType
 ) -> plan_pb2.Measurement:
   """Creates a `plan_pb.Measurement` descriptor for a tensor.
 
   Args:
     t: A tensor to create the measurement for.
     name: The name of the measurement (e.g. 'server/loss').
-    tff_type: The `tff.Type` of the measurement.
+    tff_type: The `federated_language.Type` of the measurement.
 
   Returns:
     An instance of `plan_pb.Measurement`.
@@ -78,7 +79,7 @@ def make_measurement(
     ValueError: If the `dtype`s or `shape`s of the provided tensor and TFF type
       do not match.
   """
-  type_checks.check_type(tff_type, tff.types.TensorType)
+  type_checks.check_type(tff_type, federated_language.TensorType)
   if tff_type.dtype != t.dtype:
     raise ValueError(
         f'`tff_type.dtype`: {tff_type.dtype} does not match '

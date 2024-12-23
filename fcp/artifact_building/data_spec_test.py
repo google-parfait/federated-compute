@@ -15,9 +15,9 @@
 import collections
 
 from absl.testing import absltest
+import federated_language
 import numpy as np
 import tensorflow as tf
-import tensorflow_federated as tff
 
 from fcp.artifact_building import data_spec
 from fcp.protos import plan_pb2
@@ -55,9 +55,10 @@ class DataSpecTest(absltest.TestCase):
     preprocessing_fn = lambda ds: ds.map(parsing_fn)
     ds = data_spec.DataSpec(_TEST_EXAMPLE_SELECTOR, preprocessing_fn)
 
-    expected_type = tff.SequenceType(
-        tff.StructWithPythonType(
-            [('key', tff.TensorType(np.int64, (1,)))], collections.OrderedDict
+    expected_type = federated_language.SequenceType(
+        federated_language.StructWithPythonType(
+            [('key', federated_language.TensorType(np.int64, (1,)))],
+            collections.OrderedDict,
         )
     )
     self.assertEqual(ds.type_signature, expected_type)

@@ -54,8 +54,10 @@ def _add(x: int, y: int) -> int:
 
 
 @federated_language.federated_computation(
-    tff.FederatedType(np.int32, tff.SERVER),
-    tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
+    federated_language.FederatedType(np.int32, tff.SERVER),
+    federated_language.FederatedType(
+        federated_language.SequenceType(np.str_), tff.CLIENTS
+    ),
 )
 def count_clients(state, client_data):
   """Example TFF computation that counts clients."""
@@ -67,10 +69,13 @@ def count_clients(state, client_data):
 
 
 @federated_language.federated_computation(
-    tff.FederatedType(
-        tff.StructType([('foo', np.int32), ('bar', np.int32)]), tff.SERVER
+    federated_language.FederatedType(
+        federated_language.StructType([('foo', np.int32), ('bar', np.int32)]),
+        tff.SERVER,
     ),
-    tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
+    federated_language.FederatedType(
+        federated_language.SequenceType(np.str_), tff.CLIENTS
+    ),
 )
 def irregular_arrays(state, client_data):
   """Example TFF computation that returns irregular data."""
@@ -98,8 +103,10 @@ attrs_type = init.type_signature.result
 
 
 @federated_language.federated_computation(
-    tff.FederatedType(attrs_type, tff.SERVER),
-    tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
+    federated_language.FederatedType(attrs_type, tff.SERVER),
+    federated_language.FederatedType(
+        federated_language.SequenceType(np.str_), tff.CLIENTS
+    ),
 )
 def attrs_computation(state, client_data):
   """Example TFF computation that returns an attrs class."""
@@ -313,8 +320,10 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
     await super().asyncSetUp()
 
     @federated_language.federated_computation(
-        tff.FederatedType(np.int32, tff.SERVER),
-        tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
+        federated_language.FederatedType(np.int32, tff.SERVER),
+        federated_language.FederatedType(
+            federated_language.SequenceType(np.str_), tff.CLIENTS
+        ),
     )
     def identity(state, client_data):
       del client_data

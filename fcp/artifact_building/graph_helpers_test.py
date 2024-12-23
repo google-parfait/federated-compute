@@ -15,6 +15,7 @@
 import collections
 
 from absl.testing import absltest
+import federated_language
 from federated_language.proto import computation_pb2
 import numpy as np
 import tensorflow as tf
@@ -43,7 +44,7 @@ class EmbedDataLogicTest(absltest.TestCase):
     with tf.Graph().as_default():
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
-              tff.SequenceType((np.str_)),
+              federated_language.SequenceType((np.str_)),
               data_spec.DataSpec(
                   plan_pb2.ExampleSelector(collection_uri='app://fake_uri')
               ),
@@ -60,8 +61,8 @@ class EmbedDataLogicTest(absltest.TestCase):
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
-                  A=tff.SequenceType((np.str_)),
-                  B=tff.SequenceType((np.str_)),
+                  A=federated_language.SequenceType((np.str_)),
+                  B=federated_language.SequenceType((np.str_)),
               ),  # pytype: disable=wrong-arg-types
               collections.OrderedDict(
                   A=data_spec.DataSpec(
@@ -86,7 +87,9 @@ class EmbedDataLogicTest(absltest.TestCase):
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
-                  A=collections.OrderedDict(B=tff.SequenceType(np.str_))
+                  A=collections.OrderedDict(
+                      B=federated_language.SequenceType(np.str_)
+                  )
               ),  # pytype: disable=wrong-arg-types
               collections.OrderedDict(
                   A=collections.OrderedDict(
@@ -106,7 +109,9 @@ class EmbedDataLogicTest(absltest.TestCase):
   def test_one_dataset_of_integers_without_dataspec(self):
     with tf.Graph().as_default():
       token_placeholder, data_values, placeholders = (
-          graph_helpers.embed_data_logic(tff.SequenceType(np.str_))
+          graph_helpers.embed_data_logic(
+              federated_language.SequenceType(np.str_)
+          )
       )
 
     self.assertTensorSpec(token_placeholder, 'data_token:0', [], tf.string)
@@ -120,8 +125,8 @@ class EmbedDataLogicTest(absltest.TestCase):
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
-                  A=tff.SequenceType(np.str_),
-                  B=tff.SequenceType(np.str_),
+                  A=federated_language.SequenceType(np.str_),
+                  B=federated_language.SequenceType(np.str_),
               )  # pytype: disable=wrong-arg-types
           )
       )
@@ -140,7 +145,9 @@ class EmbedDataLogicTest(absltest.TestCase):
       token_placeholder, data_values, placeholders = (
           graph_helpers.embed_data_logic(
               collections.OrderedDict(
-                  A=collections.OrderedDict(B=tff.SequenceType(np.str_))
+                  A=collections.OrderedDict(
+                      B=federated_language.SequenceType(np.str_)
+                  )
               )  # pytype: disable=wrong-arg-types
           )
       )
@@ -157,7 +164,9 @@ class GraphHelperTest(absltest.TestCase):
   def test_import_tensorflow(self):
     # NOTE: Minimal test for now, since this is exercised by other components,
     # just a single example with a combo of all flavors of params and results.
-    @tff.tensorflow.computation(tff.SequenceType(np.int64), tf.int64)
+    @tff.tensorflow.computation(
+        federated_language.SequenceType(np.int64), tf.int64
+    )
     def work(ds, x):
       return x + 1, ds.map(lambda a: a + x)
 
@@ -287,7 +296,7 @@ class GraphHelperTest(absltest.TestCase):
   def test_create_tensor_map_with_non_sequence_binding_and_vars(self):
     with tf.Graph().as_default():
       vars_list = variable_helpers.create_vars_for_tff_type(
-          tff.StructType([('a', np.int32), ('b', np.int32)])
+          federated_language.StructType([('a', np.int32), ('b', np.int32)])
       )
       init_op = tf.compat.v1.global_variables_initializer()
       assign_op = tf.group(

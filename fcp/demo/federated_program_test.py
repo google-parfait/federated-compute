@@ -50,8 +50,10 @@ def _add(x: int, y: int) -> int:
 
 
 @federated_language.federated_computation(
-    tff.FederatedType(np.int32, tff.SERVER),
-    tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
+    federated_language.FederatedType(np.int32, tff.SERVER),
+    federated_language.FederatedType(
+        federated_language.SequenceType(np.str_), tff.CLIENTS
+    ),
 )
 def sum_counts(state, client_data):
   """Sums the value of all 'count' features across all clients."""
@@ -76,8 +78,10 @@ def sum_counts(state, client_data):
 
 
 @federated_language.federated_computation(
-    tff.FederatedType(np.int32, tff.SERVER),
-    tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
+    federated_language.FederatedType(np.int32, tff.SERVER),
+    federated_language.FederatedType(
+        federated_language.SequenceType(np.str_), tff.CLIENTS
+    ),
 )
 def count_clients(state, client_data):
   """Counts the number of clients."""

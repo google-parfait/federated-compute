@@ -15,6 +15,7 @@
 
 import collections
 
+import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -28,7 +29,9 @@ class MakeMetricTest(tf.test.TestCase):
   def test_make_metric(self):
     with tf.Graph().as_default():
       v = variable_helpers.create_vars_for_tff_type(
-          tff.StructType(collections.OrderedDict([("bar", np.int32)])),
+          federated_language.StructType(
+              collections.OrderedDict([("bar", np.int32)])
+          ),
           name="foo",
       )
       self.assertProtoEquals(
@@ -155,7 +158,7 @@ class MakeMeasurementTest(tf.test.TestCase):
   def test_succeeds(self):
     with tf.Graph().as_default():
       tensor = tf.constant(1)
-      tff_type = tff.TensorType(np.int32)
+      tff_type = federated_language.TensorType(np.int32)
       m = proto_helpers.make_measurement(
           t=tensor, name="test", tff_type=tff_type
       )
@@ -168,7 +171,7 @@ class MakeMeasurementTest(tf.test.TestCase):
   def test_fails_for_non_matching_dtype(self):
     with tf.Graph().as_default():
       tensor = tf.constant(1.0)
-      tff_type = tff.types.TensorType(np.int32)
+      tff_type = federated_language.TensorType(np.int32)
 
       with self.assertRaisesRegex(ValueError, ".* does not match.*"):
         proto_helpers.make_measurement(t=tensor, name="test", tff_type=tff_type)
@@ -176,7 +179,7 @@ class MakeMeasurementTest(tf.test.TestCase):
   def test_fails_for_non_matching_shape(self):
     with tf.Graph().as_default():
       tensor = tf.constant(1.0)
-      tff_type = tff.types.TensorType(np.float32, shape=[5])
+      tff_type = federated_language.TensorType(np.float32, shape=[5])
 
       with self.assertRaisesRegex(ValueError, ".* does not match.*"):
         proto_helpers.make_measurement(t=tensor, name="test", tff_type=tff_type)

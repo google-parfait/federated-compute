@@ -47,12 +47,14 @@ class CheckpointTensorReference(
     """
     self._tensor_name = tensor_name
     type_signature = tff.tensorflow.to_type((dtype, shape))
-    self._type_signature = typing.cast(tff.TensorType, type_signature)
+    self._type_signature = typing.cast(
+        federated_language.TensorType, type_signature
+    )
     self._checkpoint_future = checkpoint_future
     self._tensor: Optional[tf.Tensor] = None
 
   @property
-  def type_signature(self) -> tff.Type:
+  def type_signature(self) -> federated_language.Type:
     return self._type_signature
 
   async def get_value(self) -> federated_language.program.MaterializedValue:

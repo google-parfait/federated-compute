@@ -15,6 +15,7 @@
 
 from typing import Optional, Union
 
+import federated_language
 from federated_language.proto import computation_pb2
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -37,7 +38,7 @@ EXAMPLE_SELECTOR_PLACEHOLDER_PREFIX = 'example_selector'
 
 
 def generate_example_selector_placeholders(
-    type_spec: tff.Type,
+    type_spec: federated_language.Type,
     name_prefix: str,
 ):
   """Generates list of tff.compat.v1.placeholders for each leaf in a type spec.
@@ -47,29 +48,31 @@ def generate_example_selector_placeholders(
 
   Placeholders will be named by concatenating the name_prefix arg with the list
   of indexes at each level of the struct to get to the placeholder's leaf in the
-  tff.Type.
+  federated_language.Type.
 
   Args:
     type_spec: A type spec to infer the list of placeholders from. This is
-      expected to be a tff.SequenceType or a tff.StructType, and if it is a
-      tff.StructType, it is expected to be a tree of tff.StructTypes with
-      tff.SequenceTypes at the leaves. This is expected to reflect the TFF type
-      signature of the input client data.
+      expected to be a federated_language.SequenceType or a
+      federated_language.StructType, and if it is a
+      federated_language.StructType, it is expected to be a tree of
+      federated_language.StructTypes with federated_language.SequenceTypes at
+      the leaves. This is expected to reflect the TFF type signature of the
+      input client data.
     name_prefix: The name prefix that should be used when naming each
       placeholder.
 
   Returns:
     A list of tf.compat.v2.placeholders.
   """
-  type_spec = tff.to_type(type_spec)
-  if isinstance(type_spec, tff.SequenceType):
+  type_spec = federated_language.to_type(type_spec)
+  if isinstance(type_spec, federated_language.SequenceType):
     # Each client input is a sequence of serialized `tf.Example`s, which is why
     # the leaves of these TFF type signatures are sequences. Each input sequence
     # of `tf.Example`s requires a single `ExampleSelector` that determines that
     # stream of `tf.Example`s is selected from the data store, which is why we
     # only have a single placeholder for the `ExampleSelector`.
     return [tf.compat.v1.placeholder(tf.string, shape=[], name=name_prefix)]
-  elif isinstance(type_spec, tff.StructType):
+  elif isinstance(type_spec, federated_language.StructType):
     type_spec_elements = tff.structure.to_elements(type_spec)
     placeholders = []
     for element_index, (_, element_type) in enumerate(type_spec_elements):
@@ -84,7 +87,7 @@ def generate_example_selector_placeholders(
 
 
 def embed_data_logic(
-    client_data_type: tff.Type,
+    client_data_type: federated_language.Type,
     dataspec: Optional[data_spec.NestedDataSpec] = None,
 ) -> tuple[tf.Tensor, list[MaybeSplitOutputs], list[tf.Tensor]]:
   """Embeds the data logic into the current TensorFlow graph.
@@ -442,8 +445,12 @@ def create_tensor_map(
     }
 
 
-def _validate_data_comp(data_comp: tff.Computation, type_spec: tff.Type):
-  type_checks.check_type(data_comp.type_signature, tff.FunctionType)
+def _validate_data_comp(
+    data_comp: tff.Computation, type_spec: federated_language.Type
+):  # pylint: disable=missing-function-docstring
+  type_checks.check_type(
+      data_comp.type_signature, federated_language.FunctionType
+  )
   if not type_spec.is_assignable_from(data_comp.type_signature.result):
     type_mismatch_string = tff.types.type_mismatch_error_message(
         type_spec,
@@ -458,7 +465,7 @@ def _validate_data_comp(data_comp: tff.Computation, type_spec: tff.Type):
 
 
 def make_data_sources_with_dataspec(
-    type_spec: tff.Type, ds: data_spec.NestedDataSpec
+    type_spec: federated_language.Type, ds: data_spec.NestedDataSpec
 ) -> list[tff.Computation]:
   """Creates a list of computations that feed data into the graph using specified example selectors.
 
@@ -487,11 +494,13 @@ def make_data_sources_with_dataspec(
     TypeError: If the arguments are of the wrong types.
   """
   assert ds
-  type_spec = tff.to_type(type_spec)
+  type_spec = federated_language.to_type(type_spec)
   type_checks.check_type(
-      type_spec, (tff.SequenceType, tff.StructType), name='type_spec'
+      type_spec,
+      (federated_language.SequenceType, federated_language.StructType),
+      name='type_spec',
   )
-  if isinstance(type_spec, tff.SequenceType):
+  if isinstance(type_spec, federated_language.SequenceType):
     type_checks.check_type(ds, data_spec.DataSpec)
     assert isinstance(ds, data_spec.DataSpec)
     assert ds.example_selector_proto is not None
@@ -525,7 +534,7 @@ def make_data_sources_with_dataspec(
 
     _validate_data_comp(data_comp, type_spec)
     return [data_comp]
-  elif isinstance(type_spec, tff.StructType):
+  elif isinstance(type_spec, federated_language.StructType):
     if isinstance(ds, data_spec.DataSpec):
       raise TypeError(
           'Expected nested structure of `DataSpec`s conforming to '
@@ -552,8 +561,8 @@ def make_data_sources_with_dataspec(
     return elements
   else:
     raise ValueError(
-        'Expected `type_spec` to be either a `tff.SequenceType` or a '
-        f'`tff.StructType`, found `{type(type_spec)}`.'
+        'Expected `type_spec` to be either a `federated_language.SequenceType`'
+        f' or a `federated_language.StructType`, found `{type(type_spec)}`.'
     )
 
 
@@ -581,8 +590,8 @@ def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
   Raises:
     TypeError: If the arguments are of the wrong types.
   """
-  type_spec = tff.to_type(type_spec)
-  if isinstance(type_spec, tff.SequenceType):
+  type_spec = federated_language.to_type(type_spec)
+  if isinstance(type_spec, federated_language.SequenceType):
 
     @tff.tensorflow.computation(tf.string, tf.string)
     def data_comp(token, example_selector):
@@ -608,7 +617,7 @@ def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
 
     _validate_data_comp(data_comp, type_spec)
     return [data_comp]
-  elif isinstance(type_spec, tff.StructType):
+  elif isinstance(type_spec, federated_language.StructType):
     type_spec_elements = tff.structure.to_elements(type_spec)
     elements = []
     for _, element_type in type_spec_elements:

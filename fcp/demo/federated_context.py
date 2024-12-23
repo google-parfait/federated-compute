@@ -232,7 +232,7 @@ class FederatedContext(federated_language.program.FederatedContext):
       name: str,
       config: federated_data_source.DataSelectionConfig,
       plan: plan_pb2.Plan,
-      input_type: tff.Type,
+      input_type: federated_language.Type,
       input_state: Union[
           tff.structure.Struct,
           tf.Tensor,
@@ -280,8 +280,10 @@ class FederatedContext(federated_language.program.FederatedContext):
           'arg[1] must be a struct, Tensor, or MaterializableValueReference.')
 
   def _state_to_checkpoint(
-      self, state_type: tff.Type, state: Union[tff.structure.Struct,
-                                               tf.Tensor]) -> bytes:
+      self,
+      state_type: federated_language.Type,
+      state: Union[tff.structure.Struct, tf.Tensor],
+  ) -> bytes:
     """Converts computation input state to a checkpoint file.
 
     The checkpoint file format is used to pass the state to
@@ -309,7 +311,9 @@ class FederatedContext(federated_language.program.FederatedContext):
       tf.io.gfile.remove(tmpfile)
 
   def _create_tensor_reference_struct(
-      self, result_type: tff.Type, checkpoint_future: Coroutine[Any, Any, bytes]
+      self,
+      result_type: federated_language.Type,
+      checkpoint_future: Coroutine[Any, Any, bytes],
   ) -> tff.structure.Struct:
     """Creates the CheckpointTensorReference struct for a result type."""
     task = asyncio.create_task(checkpoint_future)

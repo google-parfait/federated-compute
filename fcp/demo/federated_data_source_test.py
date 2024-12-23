@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from absl.testing import absltest
+import federated_language
 import numpy as np
 import tensorflow_federated as tff
 
@@ -63,7 +64,9 @@ class FederatedDataSourceTest(absltest.TestCase):
     ds = fds.FederatedDataSource(POPULATION_NAME, EXAMPLE_SELECTOR)
     self.assertEqual(
         ds.federated_type,
-        tff.FederatedType(tff.SequenceType(np.str_), tff.CLIENTS),
+        federated_language.FederatedType(
+            federated_language.SequenceType(np.str_), tff.CLIENTS
+        ),
     )
 
   def test_federated_type_nested(self):
@@ -78,15 +81,15 @@ class FederatedDataSourceTest(absltest.TestCase):
     ds = fds.FederatedDataSource(POPULATION_NAME, nested_example_selector)
     self.assertEqual(
         ds.federated_type,
-        tff.FederatedType(
-            tff.StructType([
-                ('a', tff.SequenceType(np.str_)),
-                ('b', tff.SequenceType(np.str_)),
+        federated_language.FederatedType(
+            federated_language.StructType([
+                ('a', federated_language.SequenceType(np.str_)),
+                ('b', federated_language.SequenceType(np.str_)),
                 (
                     'c',
-                    tff.StructType([
-                        ('1', tff.SequenceType(np.str_)),
-                        ('2', tff.SequenceType(np.str_)),
+                    federated_language.StructType([
+                        ('1', federated_language.SequenceType(np.str_)),
+                        ('2', federated_language.SequenceType(np.str_)),
                     ]),
                 ),
             ]),

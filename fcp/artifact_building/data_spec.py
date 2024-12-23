@@ -16,6 +16,7 @@
 from collections.abc import Callable
 from typing import Any, Optional, Union
 
+import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -90,12 +91,12 @@ class DataSpec:
         )
       self._preprocessing_comp = tff.tensorflow.computation(
           self.preprocessing_fn,
-          tff.SequenceType(np.str_),
+          federated_language.SequenceType(np.str_),
       )
     return self._preprocessing_comp
 
   @property
-  def type_signature(self) -> tff.Type:
+  def type_signature(self) -> federated_language.Type:
     """Returns the type signature of the result of the preprocessing_comp.
 
     Effectively the type or 'spec' of the parsed example from the example store

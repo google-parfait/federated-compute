@@ -15,6 +15,7 @@
 
 from typing import Optional, Union
 
+import federated_language
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -23,7 +24,11 @@ from fcp.artifact_building import type_checks
 
 # TFF types allowed for variables created at input/output serialization
 # boundaries.
-AllowedTffTypes = Union[tff.TensorType, tff.StructType, tff.FederatedType]
+AllowedTffTypes = Union[
+    federated_language.TensorType,
+    federated_language.StructType,
+    federated_language.FederatedType,
+]
 
 
 # The prefix for the name of the sidechannel for a securely-summed variable.
@@ -41,10 +46,10 @@ _TF_TENSOR_NAME_SUFFIX = ':0'
 
 
 def _create_var_for_tff_tensor(
-    tff_type: tff.TensorType, name: str, **kwargs
+    tff_type: federated_language.TensorType, name: str, **kwargs
 ) -> tf.Variable:
-  """Creates a TensorFlow variable to hold a value of the `tff.TensorType`."""
-  type_checks.check_type(tff_type, tff.TensorType)
+  """Creates a TensorFlow variable to hold a value of the `federated_language.TensorType`."""
+  type_checks.check_type(tff_type, federated_language.TensorType)
   type_checks.check_type(name, str)
   # `tff_type` can have shapes that contain `None` or `0`:
   # * `None` shape cannot be used in `tf.zeros` to create the initial value
@@ -97,11 +102,13 @@ def create_vars_for_tff_type(
   automatically given `tf.zeros` initializers.
 
   Args:
-    tff_type: Either a `tff.StructType`, SERVER-placed `tff.FederatedType` or a
-      `tff.TensorType` object.
+    tff_type: Either a `federated_language.StructType`, SERVER-placed
+      `federated_language.FederatedType` or a `federated_language.TensorType`
+      object.
     name: The preferred name to use at the top-most level (if not None, must be
-      a string). If `tff_type` is a `tff.StructType`, the names of the inner
-      fields will be scoped under `name`, e.g. `some_name/field_name`.
+      a string). If `tff_type` is a `federated_language.StructType`, the names
+      of the inner fields will be scoped under `name`, e.g.
+      `some_name/field_name`.
     **kwargs: Optional arguments, if any, to pass to the `tf.Variable()` calls.
 
   Returns:
@@ -112,18 +119,22 @@ def create_vars_for_tff_type(
   """
   type_checks.check_type(
       tff_type,
-      (tff.TensorType, tff.StructType, tff.FederatedType),
+      (
+          federated_language.TensorType,
+          federated_language.StructType,
+          federated_language.FederatedType,
+      ),
       name='tff_type',
   )
   if name is not None:
     type_checks.check_type(name, str)
   else:
     name = 'v'
-  if isinstance(tff_type, tff.TensorType):
+  if isinstance(tff_type, federated_language.TensorType):
     return [_create_var_for_tff_tensor(tff_type, name, **kwargs)]
-  elif isinstance(tff_type, tff.FederatedType):
+  elif isinstance(tff_type, federated_language.FederatedType):
     return create_vars_for_tff_type(tff_type.member, name, **kwargs)
-  else:  # tff.StructType
+  else:  # federated_language.StructType
     result = []
     with tf.compat.v1.variable_scope(name):
       fields = tff.structure.to_elements(tff_type)
@@ -143,9 +154,11 @@ def variable_names_from_type(
 ) -> list[str]:
   """Creates a flattened list of variables names for the given `tff_type`.
 
-  If `tff_type` is a `tff.TensorType`, the name is the `name` parameter if
+  If `tff_type` is a `federated_language.TensorType`, the name is the `name`
+  parameter if
   specified, otherwise a default name: `v`. If `tff_type` is a
-  `tff.StructType` then '/' is used between inner and outer fields together
+  `federated_language.StructType` then '/' is used between inner and outer
+  fields together
   with the tuple name or index of the element in the tuple.
 
   Some examples:
@@ -160,11 +173,13 @@ def variable_names_from_type(
     'update/a/c', 'update/a/2'].
 
   Args:
-    tff_type: Either a `tff.StructType`, a `tff.FederatedType` or a
-      `tff.TensorType` object.
+    tff_type: Either a `federated_language.StructType`, a
+      `federated_language.FederatedType` or a `federated_language.TensorType`
+      object.
     name: The preferred name to use at the top-most level (if not None, must be
-      a string). If `tff_type` is a `tff.StructType`, the names of the inner
-      fields will be scoped under `name`, e.g. `some_name/field_name`.
+      a string). If `tff_type` is a `federated_language.StructType`, the names
+      of the inner fields will be scoped under `name`, e.g.
+      `some_name/field_name`.
 
   Returns:
     A flat Python `list` of `str` names.
@@ -174,15 +189,19 @@ def variable_names_from_type(
   """
   type_checks.check_type(
       tff_type,
-      (tff.TensorType, tff.FederatedType, tff.StructType),
+      (
+          federated_language.TensorType,
+          federated_language.FederatedType,
+          federated_language.StructType,
+      ),
       name='tff_type',
   )
   type_checks.check_type(name, str, name='name')
-  if isinstance(tff_type, tff.TensorType):
+  if isinstance(tff_type, federated_language.TensorType):
     return [name]
-  elif isinstance(tff_type, tff.FederatedType):
+  elif isinstance(tff_type, federated_language.FederatedType):
     return variable_names_from_type(tff_type.member, name)
-  elif isinstance(tff_type, tff.StructType):
+  elif isinstance(tff_type, federated_language.StructType):
     result = []
     fields = tff.structure.iter_elements(tff_type)
     for index, (field_name, field_type) in enumerate(fields):
@@ -214,8 +233,9 @@ def get_shared_secagg_tensor_names(
 
   Args:
     intrinsic_name: The name of the secure aggregation intrinsic being used.
-    tff_type: Either a `tff.StructType`, `tff.FederatedType` or a
-      `tff.TensorType` object.
+    tff_type: Either a `federated_language.StructType`,
+      `federated_language.FederatedType` or a `federated_language.TensorType`
+      object.
 
   Returns:
     A list of variable names created from the input TFF type.
@@ -238,11 +258,13 @@ def get_flattened_tensor_specs(
   see that function's docstring.
 
   Args:
-    tff_type: Either a `tff.StructType`, a `tff.FederatedType` or a
-      `tff.TensorType` object.
+    tff_type: Either a `federated_language.StructType`, a
+      `federated_language.FederatedType` or a `federated_language.TensorType`
+      object.
     name: The preferred name to use at the top-most level (if not None, must be
-      a string). If `tff_type` is a `tff.StructType`, the names of the inner
-      fields will be scoped under `name`, e.g. `some_name/field_name`.
+      a string). If `tff_type` is a `federated_language.StructType`, the names
+      of the inner fields will be scoped under `name`, e.g.
+      `some_name/field_name`.
 
   Returns:
     A flat Python `list` of `TensorSpec`s.
@@ -252,15 +274,19 @@ def get_flattened_tensor_specs(
   """
   type_checks.check_type(
       tff_type,
-      (tff.TensorType, tff.FederatedType, tff.StructType),
+      (
+          federated_language.TensorType,
+          federated_language.FederatedType,
+          federated_language.StructType,
+      ),
       name='tff_type',
   )
   type_checks.check_type(name, str, name='name')
-  if isinstance(tff_type, tff.TensorType):
+  if isinstance(tff_type, federated_language.TensorType):
     return [tf.TensorSpec(tff_type.shape, tff_type.dtype, name=name)]
-  elif isinstance(tff_type, tff.FederatedType):
+  elif isinstance(tff_type, federated_language.FederatedType):
     return get_flattened_tensor_specs(tff_type.member, name)
-  elif isinstance(tff_type, tff.StructType):
+  elif isinstance(tff_type, federated_language.StructType):
     result = []
     fields = tff.structure.iter_elements(tff_type)
     for index, (field_name, field_type) in enumerate(fields):
@@ -388,7 +414,7 @@ def get_grouped_input_tensor_specs_for_aggregations(
     input_tensor_specs_for_intrinsic = []
     if isinstance(
         local_fn.intrinsic_def().type_signature.parameter,  # pytype: disable=attribute-error
-        tff.StructType,
+        federated_language.StructType,
     ):
       for element in local_value.argument.children():  # pytype: disable=attribute-error
         input_tensor_specs_for_intrinsic.append(
@@ -437,7 +463,7 @@ def get_grouped_output_tensor_specs_for_aggregations(
   # (which is the same as the type of the aggregation result input arg in
   # DistributeAggregateForm.server_result).
   output_tensor_specs = get_flattened_tensor_specs(
-      tff.StructType([aggregation_comp.type_signature.result]),  # pytype: disable=attribute-error
+      federated_language.StructType([aggregation_comp.type_signature.result]),  # pytype: disable=attribute-error
       name='intermediate_update',
   )
   output_tensor_spec_index = 0
@@ -456,13 +482,15 @@ def get_grouped_output_tensor_specs_for_aggregations(
       )
     assert local_fn.intrinsic_def().aggregation_kind
     local_type = local_value.type_signature
-    if not isinstance(local_type, tff.FederatedType):
-      raise ValueError(f'Expected a `tff.FederatedType`, found {local_type}.')
+    if not isinstance(local_type, federated_language.FederatedType):
+      raise ValueError(
+          f'Expected a `federated_language.FederatedType`, found {local_type}.'
+      )
 
     tensor_specs = []
     # If the output is a struct, select the appropriate number of
     # TensorflowSpecs.
-    if isinstance(local_type.member, tff.StructType):
+    if isinstance(local_type.member, federated_language.StructType):
       num_specs = len(tff.structure.flatten(local_type.member))
       tensor_specs = output_tensor_specs[
           output_tensor_spec_index : output_tensor_spec_index + num_specs

@@ -1423,6 +1423,6 @@ message Measurement {
 
   reserved 3;
 
-  // A serialized `tff.Type` for the measurement.
+  // A serialized `federated_language.Type` for the measurement.
   bytes tff_type = 4;
 }

@@ -17,6 +17,7 @@ import collections
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Optional, Union
 
+import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -32,11 +33,18 @@ SAVE_SERVER_SAVEPOINT_NAME = 'save_server_savepoint'
 
 def create_server_checkpoint_vars_and_savepoint(
     *,
-    server_state_type: tff.StructType,
-    server_metrics_type: Optional[tff.StructType] = None,
+    server_state_type: federated_language.StructType,
+    server_metrics_type: Optional[federated_language.StructType] = None,
     write_metrics_to_checkpoint: bool = True,
     additional_checkpoint_metadata_var_fn: Optional[
-        Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
+        Callable[
+            [
+                federated_language.StructType,
+                federated_language.StructType,
+                bool,
+            ],
+            list[tf.Variable],
+        ]
     ] = None,
 ) -> tuple[
     list[tf.Variable],
@@ -57,13 +65,13 @@ def create_server_checkpoint_vars_and_savepoint(
   the complete round result structure stored in the checkpoint for a round.
 
   Args:
-    server_state_type: A `tff.Type` with the type signature of the state. This
-      is used to construct the server state variable names stored in the
-      checkpoint and is used to create the metadata variables for the checkpoint
-      if `server_result_type` is not provided.
-    server_metrics_type: Optional. A `tff.Type` with the type signature of the
-      metrics. If provided, this is used to construct the metric variable names
-      that are stored in the checkpoint.
+    server_state_type: A `federated_language.Type` with the type signature of
+      the state. This is used to construct the server state variable names
+      stored in the checkpoint and is used to create the metadata variables for
+      the checkpoint if `server_result_type` is not provided.
+    server_metrics_type: Optional. A `federated_language.Type` with the type
+      signature of the metrics. If provided, this is used to construct the
+      metric variable names that are stored in the checkpoint.
     write_metrics_to_checkpoint: If False, revert to legacy behavior where
       metrics and other non-state values were handled by post-processing
       separate from the outputted checkpoint.
@@ -86,7 +94,9 @@ def create_server_checkpoint_vars_and_savepoint(
   has_metrics = False
   metric_vars = []
   save_tensor_name = None
-  type_checks.check_type(server_state_type, tff.Type, name='server_state_type')
+  type_checks.check_type(
+      server_state_type, federated_language.Type, name='server_state_type'
+  )
   state_vars = variable_helpers.create_vars_for_tff_type(
       server_state_type, artifact_constants.SERVER_STATE_VAR_PREFIX
   )
@@ -94,7 +104,7 @@ def create_server_checkpoint_vars_and_savepoint(
   metadata_vars = []
   if server_metrics_type is not None:
     type_checks.check_type(
-        server_metrics_type, tff.Type, name='server_metrics_type'
+        server_metrics_type, federated_language.Type, name='server_metrics_type'
     )
     metric_vars = variable_helpers.create_vars_for_tff_type(
         server_metrics_type, artifact_constants.SERVER_METRICS_VAR_PREFIX
@@ -151,7 +161,8 @@ def create_state_vars_and_savepoint(
   The variables and the associated saver are constructed in the default graph.
 
   Args:
-    type_spec: An instance of `tff.Type` with the type signature of the state.
+    type_spec: An instance of `federated_language.Type` with the type signature
+      of the state.
     name: The string to use as a basis for naming the vars and the saver. The
       vars will be under `${name}_state`, and saver under `${name}_savepoint`.
 
@@ -178,7 +189,8 @@ def create_state_vars_and_saver(
   The variables and the associated saver are constructed in the default graph.
 
   Args:
-    type_spec: An instance of `tff.Type` with the type signature of the state.
+    type_spec: An instance of `federated_language.Type` with the type signature
+      of the state.
     name: The string to use as a basis for naming the vars and the saver. The
       vars will be under `${name}_state`, and saver under `${name}_savepoint`.
 
@@ -190,7 +202,7 @@ def create_state_vars_and_saver(
   Raises:
     ValueError: If the name is empty.
   """
-  type_checks.check_type(type_spec, tff.Type, name='type_spec')
+  type_checks.check_type(type_spec, federated_language.Type, name='type_spec')
   type_checks.check_type(name, str, name='name')
   if not name:
     raise ValueError('Name cannot be empty.')
@@ -269,23 +281,29 @@ def create_deterministic_saver(
 def tff_type_to_dtype_list(
     tff_type: variable_helpers.AllowedTffTypes,
 ) -> list[tf.DType]:
-  """Creates a flat list of `tf.DType`s for tensors in a `tff.Type`.
+  """Creates a flat list of `tf.DType`s for tensors in a `federated_language.Type`.
 
   Args:
-    tff_type: Either a `tff.StructType`, `tff.FederatedType`, or a
-      `tff.TensorType` object.
+    tff_type: Either a `federated_language.StructType`,
+      `federated_language.FederatedType`, or a `federated_language.TensorType`
+      object.
 
   Returns:
     A flat list of `tf.DType`s.
   """
   type_checks.check_type(
-      tff_type, (tff.TensorType, tff.FederatedType, tff.StructType)
+      tff_type,
+      (
+          federated_language.TensorType,
+          federated_language.FederatedType,
+          federated_language.StructType,
+      ),
   )
-  if isinstance(tff_type, tff.TensorType):
+  if isinstance(tff_type, federated_language.TensorType):
     return [tf.as_dtype(tff_type.dtype)]
-  elif isinstance(tff_type, tff.FederatedType):
+  elif isinstance(tff_type, federated_language.FederatedType):
     return tff_type_to_dtype_list(tff_type.member)
-  else:  # tff.StructType
+  else:  # federated_language.StructType
     elem_list = []
     for elem_type in tff_type:
       elem_list.extend(tff_type_to_dtype_list(elem_type))
@@ -295,23 +313,29 @@ def tff_type_to_dtype_list(
 def tff_type_to_tensor_spec_list(
     tff_type: variable_helpers.AllowedTffTypes,
 ) -> list[tf.TensorSpec]:
-  """Creates a flat list of tensor specs for tensors in a `tff.Type`.
+  """Creates a flat list of tensor specs for tensors in a `federated_language.Type`.
 
   Args:
-    tff_type: Either a `tff.StructType`, `tff.FederatedType` or a
-      `tff.TensorType` object.
+    tff_type: Either a `federated_language.StructType`,
+      `federated_language.FederatedType` or a `federated_language.TensorType`
+      object.
 
   Returns:
     A flat list of `tf.TensorSpec`s.
   """
   type_checks.check_type(
-      tff_type, (tff.TensorType, tff.FederatedType, tff.StructType)
+      tff_type,
+      (
+          federated_language.TensorType,
+          federated_language.FederatedType,
+          federated_language.StructType,
+      ),
   )
-  if isinstance(tff_type, tff.TensorType):
+  if isinstance(tff_type, federated_language.TensorType):
     return [tf.TensorSpec(tff_type.shape, dtype=tf.as_dtype(tff_type.dtype))]
-  elif isinstance(tff_type, tff.FederatedType):
+  elif isinstance(tff_type, federated_language.FederatedType):
     return tff_type_to_tensor_spec_list(tff_type.member)
-  else:  # tff.StructType
+  else:  # federated_language.StructType
     elem_list = []
     for elem_type in tff_type:
       elem_list.extend(tff_type_to_tensor_spec_list(elem_type))
@@ -321,22 +345,29 @@ def tff_type_to_tensor_spec_list(
 def pack_tff_value(
     tff_type: variable_helpers.AllowedTffTypes, value_list: Any
 ) -> Any:
-  """Packs a list of values into a shape specified by a `tff.Type`.
+  """Packs a list of values into a shape specified by a `federated_language.Type`.
 
   Args:
-    tff_type: Either a `tff.StructType`, `tff.FederatedType`, or a
-      `tff.TensorType` object.
+    tff_type: Either a `federated_language.StructType`,
+      `federated_language.FederatedType`, or a `federated_language.TensorType`
+      object.
     value_list: A flat list of `tf.Tensor` or `CheckpointTensorReference`.
 
   Returns:
-    A Python container with a structure consistent with a `tff.Type`.
+    A Python container with a structure consistent with a
+    `federated_language.Type`.
 
   Raises:
     ValueError: If the number of leaves in `tff_type` does not match the length
     of `value_list`, or `tff_type` is of a disallowed type.
   """
   type_checks.check_type(
-      tff_type, (tff.TensorType, tff.FederatedType, tff.StructType)
+      tff_type,
+      (
+          federated_language.TensorType,
+          federated_language.FederatedType,
+          federated_language.StructType,
+      ),
   )
 
   # We must "unwrap" any FederatedTypes because the
@@ -345,22 +376,23 @@ def pack_tff_value(
   # build up a Python tree structure that matches the struct/tensor types from a
   # list of values.
   def remove_federated_types(
-      type_spec: tff.Type,
-  ) -> Union[tff.StructType, tff.TensorType]:
+      type_spec: federated_language.Type,
+  ) -> Union[federated_language.StructType, federated_language.TensorType]:
     """Removes `FederatedType` from a type tree, returning a new tree."""
-    if isinstance(type_spec, tff.TensorType):
+    if isinstance(type_spec, federated_language.TensorType):
       return type_spec
-    elif isinstance(type_spec, tff.FederatedType):
+    elif isinstance(type_spec, federated_language.FederatedType):
       return type_spec.member
-    elif isinstance(type_spec, tff.StructType):
-      return tff.StructType(
+    elif isinstance(type_spec, federated_language.StructType):
+      return federated_language.StructType(
           (elem_name, remove_federated_types(elem_type))
           for elem_name, elem_type in tff.structure.iter_elements(type_spec)
       )
     else:
       raise ValueError(
-          'Must be either tff.TensorType, tff.FederatedType, or tff.StructType.'
-          f' Got a {type(type_spec)}'
+          'Must be either federated_language.TensorType,'
+          ' federated_language.FederatedType, or'
+          f' federated_language.StructType. Got a {type(type_spec)}'
       )
 
   try:
@@ -380,14 +412,14 @@ def pack_tff_value(
         f' {len(value_list)}.'
     )
 
-  if isinstance(tff_type, tff.TensorType):
+  if isinstance(tff_type, federated_language.TensorType):
     return value_list[0]
-  elif isinstance(tff_type, tff.StructType):
+  elif isinstance(tff_type, federated_language.StructType):
     return tff.structure.pack_sequence_as(tff_type, value_list)
   else:
     raise ValueError(
-        '`tff_type` must be either tff.TensorType or '
-        'tff.StructType, reaching here is an internal coding '
+        '`tff_type` must be either federated_language.TensorType or '
+        'federated_language.StructType, reaching here is an internal coding '
         'error, please file a bug.'
     )
 
