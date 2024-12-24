@@ -60,7 +60,7 @@ REGISTER_OP("ServeSlices")
 
 template <class T>
 absl::Status get_scalar_input(tensorflow::OpKernelContext* context,
-                              tensorflow::StringPiece name, T* scalar_out) {
+                              absl::string_view name, T* scalar_out) {
   const tensorflow::Tensor* tensor;
   TF_RETURN_IF_ERROR(context->input(name, &tensor));
   *scalar_out = tensor->scalar<T>()();
@@ -68,7 +68,7 @@ absl::Status get_scalar_input(tensorflow::OpKernelContext* context,
 }
 
 absl::Status get_arbitrary_input_list_as_tensor_vector(
-    tensorflow::OpKernelContext* context, tensorflow::StringPiece name,
+    tensorflow::OpKernelContext* context, absl::string_view name,
     std::vector<tensorflow::Tensor>* out) {
   tensorflow::OpInputList input_list;
   TF_RETURN_IF_ERROR(context->input_list(name, &input_list));
@@ -80,7 +80,7 @@ absl::Status get_arbitrary_input_list_as_tensor_vector(
 }
 
 absl::Status get_string_list_input(tensorflow::OpKernelContext* context,
-                                   tensorflow::StringPiece name,
+                                   absl::string_view name,
                                    std::vector<std::string>* out) {
   tensorflow::OpInputList input_list;
   TF_RETURN_IF_ERROR(context->input_list(name, &input_list));

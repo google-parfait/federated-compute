@@ -213,7 +213,7 @@ class AppendedFileWithStartPosFooter : public tensorflow::WritableFile {
         new AppendedFileWithStartPosFooter(std::move(file), body_start));
     return absl::OkStatus();
   }
-  absl::Status Append(tensorflow::StringPiece data) override {
+  absl::Status Append(absl::string_view data) override {
     return file_->Append(data);
   }
   absl::Status Close() override {
@@ -249,7 +249,7 @@ class TableBuilder : public tensorflow::checkpoint::TensorSliceWriter::Builder {
     builder_ =
         std::make_unique<tensorflow::table::TableBuilder>(option, file_.get());
   }
-  void Add(tensorflow::StringPiece key, tensorflow::StringPiece val) override {
+  void Add(absl::string_view key, absl::string_view val) override {
     builder_->Add(key, val);
   }
   absl::Status Finish(int64_t* file_size) override {
@@ -320,7 +320,7 @@ class PartialRandomAccessFile : public tensorflow::RandomAccessFile {
                           int64_t end)
       : file_(file), start_(start), end_(end) {}
   ~PartialRandomAccessFile() override = default;
-  absl::Status Read(uint64_t offset, size_t n, tensorflow::StringPiece* result,
+  absl::Status Read(uint64_t offset, size_t n, absl::string_view* result,
                     char* scratch) const override {
     const size_t max_allowable_n = end_ - (start_ + offset);
     bool read_too_long = n > max_allowable_n;
@@ -430,7 +430,7 @@ absl::Status LoadAndMergeAppendedSlices(const std::string& filename) {
   while (chunk_footer_end > 0) {
     // Read in the footer telling us where the chunk started.
     char footer_scratch[sizeof(int64_t)];
-    tensorflow::StringPiece chunk_footer;
+    absl::string_view chunk_footer;
     TF_RETURN_IF_ERROR(file->Read(chunk_footer_end - sizeof(int64_t),
                                   sizeof(int64_t), &chunk_footer,
                                   footer_scratch));
