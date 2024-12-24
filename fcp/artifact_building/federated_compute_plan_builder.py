@@ -23,6 +23,7 @@ import enum
 from typing import Optional, TypeVar, Union
 
 import attr
+import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -303,9 +304,9 @@ def _read_secagg_update_from_sidechannel_into_vars(
 
 
 def _merge_secagg_vars(
-    secure_sum_bitwidth_update_type: tff.Type,
-    secure_sum_update_type: tff.Type,
-    secure_modular_sum_update_type: tff.Type,
+    secure_sum_bitwidth_update_type: federated_language.Type,
+    secure_sum_update_type: federated_language.Type,
+    secure_modular_sum_update_type: federated_language.Type,
     flattened_moduli: list[int],
     variables: list[tf.Variable],
     tensors: list[tf.Variable],
@@ -318,7 +319,7 @@ def _merge_secagg_vars(
     )
   num_simple_add_vars = len(
       tff.structure.flatten(
-          tff.to_type([
+          federated_language.to_type([
               secure_sum_bitwidth_update_type,
               secure_sum_update_type,
           ])
@@ -365,16 +366,21 @@ def _merge_secagg_vars(
   return ops
 
 
-def _is_empty_tff_value(type_signature: tff.Type) -> bool:
+def _is_empty_tff_value(type_signature: federated_language.Type) -> bool:
   """Determines whether this type signature represents an empty TFF value.
 
-  Empty TFF values have a `tff.Type` that contains only `tff.StructType` (and
-  structure of `tff.StructType`s). TFF values that contain any non-
-  `tff.StructType`, e.g., `tff.TensorType`, are considered non-empty (even
-  `tff.TensorType` with shape None or 0 since it may just not be possible to
-  define the shape at compile time). For any `tff.FederatedType` instance, its
+  Empty TFF values have a `federated_language.Type` that contains only
+  `federated_language.StructType` (and
+  structure of `federated_language.StructType`s). TFF values that contain any
+  non-
+  `federated_language.StructType`, e.g., `federated_language.TensorType`, are
+  considered non-empty (even
+  `federated_language.TensorType` with shape None or 0 since it may just not be
+  possible to
+  define the shape at compile time). For any `federated_language.FederatedType`
+  instance, its
   `placement` information is ignored, and only the non-federated part (i.e.,
-  its member `tff.Type`), will be checked.
+  its member `federated_language.Type`), will be checked.
 
   Args:
     type_signature: The TFF type signature to evaluate.
@@ -384,7 +390,9 @@ def _is_empty_tff_value(type_signature: tff.Type) -> bool:
   """
   return tff.types.contains_only(
       type_signature,
-      lambda t: isinstance(t, (tff.StructType, tff.FederatedType)),
+      lambda t: isinstance(
+          t, (federated_language.StructType, federated_language.FederatedType)
+      ),
   )
 
 
@@ -449,7 +457,14 @@ def _build_server_graphs_from_distribute_aggregate_form(
     grappler_config: tf.compat.v1.ConfigProto,
     write_metrics_to_checkpoint: bool = False,
     additional_checkpoint_metadata_var_fn: Optional[
-        Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
+        Callable[
+            [
+                federated_language.StructType,
+                federated_language.StructType,
+                bool,
+            ],
+            list[tf.Variable],
+        ]
     ] = None,
 ) -> tuple[
     Optional[tf.compat.v1.GraphDef],
@@ -590,7 +605,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
 
   assert isinstance(
       daf.server_result.type_signature.result[0],  # pytype: disable=unsupported-operands
-      tff.FederatedType,
+      federated_language.FederatedType,
   )
   uses_updated_server_state = not _is_empty_tff_value(
       daf.server_result.type_signature.result[0]  # pytype: disable=unsupported-operands
@@ -653,7 +668,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
       )
 
     # Restore the aggregation results.
-    aggregate_result_type = tff.StructType(
+    aggregate_result_type = federated_language.StructType(
         [daf.server_result.type_signature.parameter[1]]  # pytype: disable=unsupported-operands
     )
     aggregate_result_vars = variable_helpers.create_vars_for_tff_type(
@@ -691,9 +706,9 @@ def _build_server_graphs_from_distribute_aggregate_form(
       # To match the metric naming in the MRF pathway, turn the metric type into
       # a struct if it isn't already.
       metric_type = daf.server_result.type_signature.result[1]  # pytype: disable=unsupported-operands
-      assert isinstance(metric_type, tff.FederatedType)
-      if not isinstance(metric_type.member, tff.StructType):
-        metric_type = tff.StructType([metric_type])
+      assert isinstance(metric_type, federated_language.FederatedType)
+      if not isinstance(metric_type.member, federated_language.StructType):
+        metric_type = federated_language.StructType([metric_type])
       metric_names_with_server_prefix = (
           variable_helpers.variable_names_from_type(
               metric_type,  # pytype: disable=unsupported-operands
@@ -832,7 +847,14 @@ def _build_server_graph(
     flattened_moduli: list[int],
     write_metrics_to_checkpoint: bool = True,
     additional_checkpoint_metadata_var_fn: Optional[
-        Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
+        Callable[
+            [
+                federated_language.StructType,
+                federated_language.StructType,
+                bool,
+            ],
+            list[tf.Variable],
+        ]
     ] = None,
     experimental_client_update_format: checkpoint_type.CheckpointFormatType = checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES,
 ) -> tuple[
@@ -846,8 +868,8 @@ def _build_server_graph(
   Args:
     mrf: A `MapReduceForm` object containing the different computations to
       combine into a single server graph.
-    broadcast_tff_type: A `tff.Type` object that specifies the tensors in the
-      model that are broadcasted and aggregated.
+    broadcast_tff_type: A `federated_language.Type` object that specifies the
+      tensors in the model that are broadcasted and aggregated.
     is_broadcast_empty: boolean indicating whether the broadcasted value from
       the server was initially empty.
     flattened_bitwidths: The `bitwidth`s for the tensors that will be aggregated
@@ -886,11 +908,13 @@ def _build_server_graph(
     # and the intermediate aggregators.
     # server_state_type will be a SERVER-placed federated type.
     server_state_type, server_metrics_type = mrf.type_signature.result  # pytype: disable=attribute-error
-    assert isinstance(server_state_type, tff.FederatedType), server_state_type
+    assert isinstance(
+        server_state_type, federated_language.FederatedType
+    ), server_state_type
     assert server_state_type.placement is tff.SERVER, server_state_type
-    # server_metrics_type can be a tff.FederatedType or a structure containing
-    # tff.FederatedTypes.
-    if isinstance(server_metrics_type, tff.FederatedType):
+    # server_metrics_type can be a federated_language.FederatedType or a
+    # structure containing federated_language.FederatedTypes.
+    if isinstance(server_metrics_type, federated_language.FederatedType):
       # We need to check for server metrics without the placement so
       # tff.structure.flatten works correctly.
       has_server_metrics = bool(
@@ -898,13 +922,15 @@ def _build_server_graph(
       )
     else:
       has_server_metrics = bool(tff.structure.flatten(server_metrics_type))
-    if isinstance(server_metrics_type, tff.TensorType) or (
-        isinstance(server_metrics_type, tff.FederatedType)
-        and isinstance(server_metrics_type.member, tff.TensorType)
+    if isinstance(server_metrics_type, federated_language.TensorType) or (
+        isinstance(server_metrics_type, federated_language.FederatedType)
+        and isinstance(
+            server_metrics_type.member, federated_language.TensorType
+        )
     ):
       # Single tensor; must be wrapped inside of a NamedTuple for proper
       # variable initialization.
-      server_metrics_type = tff.StructType([server_metrics_type])
+      server_metrics_type = federated_language.StructType([server_metrics_type])
     (
         server_state_vars,
         server_metrics_vars,
@@ -932,7 +958,7 @@ def _build_server_graph(
         secure_sum_update_type,
         secure_modular_sum_update_type,
     ]
-    combined_intermediate_update_type = tff.StructType(
+    combined_intermediate_update_type = federated_language.StructType(
         [mrf.zero.type_signature.result] + secure_sum_update_types
     )
 
@@ -942,7 +968,9 @@ def _build_server_graph(
         )
     )
     num_simpleagg_vars = len(combined_intermediate_update_vars) - len(
-        tff.structure.flatten(tff.to_type(secure_sum_update_types))
+        tff.structure.flatten(
+            federated_language.to_type(secure_sum_update_types)
+        )
     )
     intermediate_update_vars = combined_intermediate_update_vars[
         :num_simpleagg_vars
@@ -1525,25 +1553,27 @@ def _build_client_graph_with_tensorflow_spec(
     ValueError: If any of the arguments are found to be in an unexpected form.
   """
   if (
-      not isinstance(client_work_comp.type_signature.parameter, tff.StructType)
-      or len(client_work_comp.type_signature.parameter) < 1
-  ):
+      not isinstance(
+          client_work_comp.type_signature.parameter,
+          (tff.StructType, federated_language.StructType),
+      )
+  ) or len(client_work_comp.type_signature.parameter) < 1:
     raise ValueError(
         'client_work_comp.type_signature.parameter should be a '
-        '`tff.StructType` with length >= 1, but found: {p}.'.format(
-            p=client_work_comp.type_signature.parameter
-        )
+        '`federated_language.StructType` with length >= 1, but found: {p}.'
+        .format(p=client_work_comp.type_signature.parameter)
     )
 
   if (
-      not isinstance(client_work_comp.type_signature.result, tff.StructType)
-      or len(client_work_comp.type_signature.result) != 4
-  ):
+      not isinstance(
+          client_work_comp.type_signature.result,
+          (tff.StructType, federated_language.StructType),
+      )
+  ) or len(client_work_comp.type_signature.result) != 4:
     raise ValueError(
         'client_work_comp.type_signature.result should be a '
-        '`tff.StructType` with length == 4, but found: {r}.'.format(
-            r=client_work_comp.type_signature.result
-        )
+        '`federated_language.StructType` with length == 4, but found: {r}.'
+        .format(r=client_work_comp.type_signature.result)
     )
 
   client_phase = plan_pb2.ClientPhase()
@@ -1636,20 +1666,24 @@ def _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
     ValueError: If any of the arguments are found to be in an unexpected form.
   """
   if (
-      not isinstance(client_work.type_signature.parameter, tff.StructType)
-      or len(client_work.type_signature.parameter) < 1
-  ):
+      not isinstance(
+          client_work.type_signature.parameter,
+          (tff.StructType, federated_language.StructType),
+      )
+  ) or len(client_work.type_signature.parameter) < 1:
     raise ValueError(
         'client_work.type_signature.parameter should be a '
-        '`tff.StructType` with length >= 1, but found: {p}.'.format(
-            p=client_work.type_signature.parameter
-        )
+        '`federated_language.StructType` with length >= 1, but found: {p}.'
+        .format(p=client_work.type_signature.parameter)
     )
 
-  if not isinstance(client_work.type_signature.result, tff.StructType):
+  if not isinstance(
+      client_work.type_signature.result,
+      (tff.StructType, federated_language.StructType),
+  ):
     raise ValueError(
         'client_work.type_signature.result should be a '
-        '`tff.StructType`, but found: {r}.'.format(
+        '`federated_language.StructType`, but found: {r}.'.format(
             r=client_work.type_signature.result
         )
     )
@@ -1883,7 +1917,14 @@ def build_plan(
     example_query_spec: Optional[plan_pb2.ExampleQuerySpec] = None,
     grappler_config: Optional[tf.compat.v1.ConfigProto] = None,
     additional_checkpoint_metadata_var_fn: Optional[
-        Callable[[tff.StructType, tff.StructType, bool], list[tf.Variable]]
+        Callable[
+            [
+                federated_language.StructType,
+                federated_language.StructType,
+                bool,
+            ],
+            list[tf.Variable],
+        ]
     ] = None,
     experimental_client_checkpoint_write: checkpoint_type.CheckpointFormatType = checkpoint_type.CheckpointFormatType.TF1_SAVE_SLICES,
     write_metrics_to_checkpoint: bool = True,
@@ -2025,14 +2066,16 @@ def build_plan(
     else:
       assert mrf
       is_broadcast_empty = (
-          isinstance(mrf.prepare.type_signature.result, tff.StructType)
+          isinstance(
+              mrf.prepare.type_signature.result, federated_language.StructType
+          )
           and not mrf.prepare.type_signature.result
       )
       if is_broadcast_empty:
         # This MapReduceForm does not send any server state to clients, however
         # we need something to satisfy current restrictions from the FCP server.
         # Use a placeholder scalar int.
-        broadcast_tff_type = tff.TensorType(np.int32)
+        broadcast_tff_type = federated_language.TensorType(np.int32)
       else:
         broadcast_tff_type = mrf.prepare.type_signature.result
 
@@ -2135,12 +2178,12 @@ def build_cross_round_aggregation_execution(
 
   if not server_metrics_type:
     # No metrics to aggregrate; will initialize to no-op.
-    server_metrics_type = tff.StructType([])
-  elif isinstance(server_metrics_type, tff.TensorType):
+    server_metrics_type = federated_language.StructType([])
+  elif isinstance(server_metrics_type, federated_language.TensorType):
     # Single tensor metric; must be wrapped inside of a NamedTuple for proper
     # variable initialiazation.
-    server_metrics_type = tff.StructType([server_metrics_type])
-  combined_aggregated_update_type = tff.StructType([
+    server_metrics_type = federated_language.StructType([server_metrics_type])
+  combined_aggregated_update_type = federated_language.StructType([
       simpleagg_merge_type,
       secure_sum_bitwidth_update_type,
       secure_sum_update_type,

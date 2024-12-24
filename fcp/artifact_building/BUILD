@@ -108,6 +108,7 @@ py_library(
         "//fcp/protos:plan_py_pb2",
         "//fcp/tensorflow:append_slices_py",
         "//fcp/tensorflow:delete_file_py",
+        "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_attrs//:pkg",
         "@pypi_numpy//:pkg",
