@@ -20,7 +20,6 @@ from typing import Optional, Union
 
 import federated_language
 import numpy as np
-import tensorflow_federated as tff
 
 from fcp.protos import plan_pb2
 from fcp.protos import population_eligibility_spec_pb2
@@ -50,7 +49,7 @@ class FederatedDataSource(federated_language.program.FederatedDataSource):
   """
 
   _FEDERATED_TYPE = federated_language.FederatedType(
-      federated_language.SequenceType(np.str_), tff.CLIENTS
+      federated_language.SequenceType(np.str_), federated_language.CLIENTS
   )
 
   def __init__(
@@ -104,7 +103,7 @@ class FederatedDataSource(federated_language.program.FederatedDataSource):
       return federated_language.SequenceType(np.str_)
 
     return federated_language.FederatedType(
-        get_struct_type(self._example_selector), tff.CLIENTS
+        get_struct_type(self._example_selector), federated_language.CLIENTS
     )
 
   def iterator(self) -> federated_language.program.FederatedDataSourceIterator:

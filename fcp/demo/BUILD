@@ -210,7 +210,6 @@ py_library(
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos:population_eligibility_spec_py_pb2",
         "@federated_language//federated_language",
-        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_numpy//:pkg",
     ],
 )
@@ -225,7 +224,6 @@ py_test(
         "//fcp/protos:plan_py_pb2",
         "//fcp/protos:population_eligibility_spec_py_pb2",
         "@federated_language//federated_language",
-        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_numpy//:pkg",
     ],

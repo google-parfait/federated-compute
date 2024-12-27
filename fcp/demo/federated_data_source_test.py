@@ -15,7 +15,6 @@
 from absl.testing import absltest
 import federated_language
 import numpy as np
-import tensorflow_federated as tff
 
 from fcp.demo import federated_data_source as fds
 from fcp.protos import plan_pb2
@@ -65,7 +64,7 @@ class FederatedDataSourceTest(absltest.TestCase):
     self.assertEqual(
         ds.federated_type,
         federated_language.FederatedType(
-            federated_language.SequenceType(np.str_), tff.CLIENTS
+            federated_language.SequenceType(np.str_), federated_language.CLIENTS
         ),
     )
 
@@ -93,7 +92,7 @@ class FederatedDataSourceTest(absltest.TestCase):
                     ]),
                 ),
             ]),
-            tff.CLIENTS,
+            federated_language.CLIENTS,
         ),
     )
 

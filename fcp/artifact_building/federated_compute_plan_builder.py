@@ -911,7 +911,9 @@ def _build_server_graph(
     assert isinstance(
         server_state_type, federated_language.FederatedType
     ), server_state_type
-    assert server_state_type.placement is tff.SERVER, server_state_type
+    assert (
+        server_state_type.placement is federated_language.SERVER
+    ), server_state_type
     # server_metrics_type can be a federated_language.FederatedType or a
     # structure containing federated_language.FederatedTypes.
     if isinstance(server_metrics_type, federated_language.FederatedType):

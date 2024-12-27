@@ -29,24 +29,26 @@ def add_values(x, y):
 
 
 @federated_language.federated_computation(
-    federated_language.FederatedType(np.int32, tff.SERVER),
+    federated_language.FederatedType(np.int32, federated_language.SERVER),
     federated_language.FederatedType(
-        federated_language.SequenceType(np.str_), tff.CLIENTS
+        federated_language.SequenceType(np.str_), federated_language.CLIENTS
     ),
 )
 def count_clients(state, client_data):
   """Example TFF computation that counts clients."""
   del client_data
-  client_value = tff.federated_value(1, tff.CLIENTS)
+  client_value = tff.federated_value(1, federated_language.CLIENTS)
   aggregated_count = tff.federated_sum(client_value)
-  metrics = tff.federated_value(tff.structure.Struct(()), tff.SERVER)
+  metrics = tff.federated_value(
+      tff.structure.Struct(()), federated_language.SERVER
+  )
   return tff.federated_map(add_values, (state, aggregated_count)), metrics
 
 
 @federated_language.federated_computation(
-    federated_language.FederatedType(np.int32, tff.SERVER),
+    federated_language.FederatedType(np.int32, federated_language.SERVER),
     federated_language.FederatedType(
-        federated_language.SequenceType(np.str_), tff.CLIENTS
+        federated_language.SequenceType(np.str_), federated_language.CLIENTS
     ),
 )
 def count_examples(state, client_data):
@@ -58,7 +60,9 @@ def count_examples(state, client_data):
 
   client_counts = tff.federated_map(client_work, client_data)
   aggregated_count = tff.federated_sum(client_counts)
-  metrics = tff.federated_value(tff.structure.Struct(()), tff.SERVER)
+  metrics = tff.federated_value(
+      tff.structure.Struct(()), federated_language.SERVER
+  )
   return tff.federated_map(add_values, (state, aggregated_count)), metrics
 
 
@@ -71,7 +75,7 @@ class FederatedComputationTest(absltest.TestCase):
   def test_incompatible_computation(self):
     # This function doesn't have the return value structure required for MRF.
     @federated_language.federated_computation(
-        federated_language.FederatedType(np.int32, tff.SERVER)
+        federated_language.FederatedType(np.int32, federated_language.SERVER)
     )
     def _identity(value):
       return value

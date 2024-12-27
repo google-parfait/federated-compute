@@ -110,7 +110,7 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
   def test_tff_type_to_dtype_list_as_expected(self):
     tff_type = federated_language.FederatedType(
         federated_language.StructType([('foo', np.int32), ('bar', np.str_)]),
-        tff.SERVER,
+        federated_language.SERVER,
     )
     expected_dtype_list = [tf.int32, tf.string]
     self.assertEqual(
@@ -128,7 +128,7 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
             ('foo', np.int32),
             ('bar', federated_language.TensorType(np.str_, shape=[1])),
         ]),
-        tff.SERVER,
+        federated_language.SERVER,
     )
     expected_tensor_spec_list = [
         tf.TensorSpec([], tf.int32),
@@ -167,10 +167,12 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
     # package correctly descends through the entire type tree.
     tff_type = federated_language.to_type(
         collections.OrderedDict(
-            foo=federated_language.FederatedType(np.int32, tff.SERVER),
+            foo=federated_language.FederatedType(
+                np.int32, federated_language.SERVER
+            ),
             # Some arbitrarily deep nesting to ensure full traversals.
             bar=federated_language.FederatedType(
-                [(), ([np.int32], np.int32)], tff.SERVER
+                [(), ([np.int32], np.int32)], federated_language.SERVER
             ),
         )
     )
@@ -201,7 +203,7 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
 
     @federated_language.federated_computation
     def fed_comp():
-      return tff.federated_value(0, tff.SERVER)
+      return tff.federated_value(0, federated_language.SERVER)
 
     tff_function_type = fed_comp.type_signature
     value_list = [tf.constant(1, dtype=np.int32)]

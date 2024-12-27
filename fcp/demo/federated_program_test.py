@@ -41,7 +41,7 @@ _TaskAssignmentMode = (
 @federated_language.federated_computation()
 def initialize() -> tff.Value:
   """Returns the initial state."""
-  return tff.federated_value(0, tff.SERVER)
+  return tff.federated_value(0, federated_language.SERVER)
 
 
 @tff.tensorflow.computation(np.int32, np.int32)
@@ -50,9 +50,9 @@ def _add(x: int, y: int) -> int:
 
 
 @federated_language.federated_computation(
-    federated_language.FederatedType(np.int32, tff.SERVER),
+    federated_language.FederatedType(np.int32, federated_language.SERVER),
     federated_language.FederatedType(
-        federated_language.SequenceType(np.str_), tff.CLIENTS
+        federated_language.SequenceType(np.str_), federated_language.CLIENTS
     ),
 )
 def sum_counts(state, client_data):
@@ -72,23 +72,29 @@ def sum_counts(state, client_data):
   aggregated_count = tff.federated_sum(client_counts)
 
   updated_state = tff.federated_map(_add, (state, aggregated_count))
-  num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
+  num_clients = tff.federated_sum(
+      tff.federated_value(1, federated_language.CLIENTS)
+  )
   metrics = tff.federated_zip((num_clients,))
   return updated_state, metrics
 
 
 @federated_language.federated_computation(
-    federated_language.FederatedType(np.int32, tff.SERVER),
+    federated_language.FederatedType(np.int32, federated_language.SERVER),
     federated_language.FederatedType(
-        federated_language.SequenceType(np.str_), tff.CLIENTS
+        federated_language.SequenceType(np.str_), federated_language.CLIENTS
     ),
 )
 def count_clients(state, client_data):
   """Counts the number of clients."""
   del client_data
-  num_clients = tff.federated_sum(tff.federated_value(1, tff.CLIENTS))
+  num_clients = tff.federated_sum(
+      tff.federated_value(1, federated_language.CLIENTS)
+  )
   updated_state = tff.federated_map(_add, (state, num_clients))
-  metrics = tff.federated_zip((tff.federated_value(0, tff.SERVER),))
+  metrics = tff.federated_zip((
+      tff.federated_value(0, federated_language.SERVER),
+  ))
   return updated_state, metrics
 
 

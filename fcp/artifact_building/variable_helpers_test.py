@@ -23,8 +23,8 @@ from fcp.artifact_building import variable_helpers
 
 
 @federated_language.federated_computation(
-    federated_language.FederatedType(np.int32, tff.SERVER),
-    federated_language.FederatedType(np.float32, tff.CLIENTS),
+    federated_language.FederatedType(np.int32, federated_language.SERVER),
+    federated_language.FederatedType(np.float32, federated_language.CLIENTS),
 )
 def sample_comp(x, y):
   a = tff.federated_broadcast(x)
@@ -62,7 +62,7 @@ class VariableHelpersTest(absltest.TestCase):
 
   def test_create_vars_for_tff_federated_type(self):
     tff_type = federated_language.FederatedType(
-        federated_language.TensorType(np.int32), tff.SERVER
+        federated_language.TensorType(np.int32), federated_language.SERVER
     )
     with tf.Graph().as_default():
       vl = variable_helpers.create_vars_for_tff_type(tff_type)
@@ -79,13 +79,15 @@ class VariableHelpersTest(absltest.TestCase):
         (
             'num_examples_secagg',
             federated_language.FederatedType(
-                federated_language.TensorType(np.int32), tff.SERVER
+                federated_language.TensorType(np.int32),
+                federated_language.SERVER,
             ),
         ),
         (
             'num_examples_simpleagg',
             federated_language.FederatedType(
-                federated_language.TensorType(np.int32), tff.SERVER
+                federated_language.TensorType(np.int32),
+                federated_language.SERVER,
             ),
         ),
     ])
@@ -118,7 +120,8 @@ class VariableHelpersTest(absltest.TestCase):
   def test_variable_names_from_type_with_federated_type(self):
     names = variable_helpers.variable_names_from_type(
         federated_language.FederatedType(
-            federated_language.TensorType(dtype=np.int32), tff.SERVER
+            federated_language.TensorType(dtype=np.int32),
+            federated_language.SERVER,
         ),
         'test_name',
     )
@@ -168,7 +171,7 @@ class VariableHelpersTest(absltest.TestCase):
     specs = variable_helpers.get_flattened_tensor_specs(
         federated_language.FederatedType(
             federated_language.TensorType(dtype=np.int32, shape=[3, 5]),
-            tff.SERVER,
+            federated_language.SERVER,
         ),
         'test_name',
     )
@@ -276,8 +279,10 @@ class VariableHelpersTest(absltest.TestCase):
   ):
 
     @federated_language.federated_computation(
-        federated_language.FederatedType(np.int32, tff.SERVER),
-        federated_language.FederatedType(np.float32, tff.CLIENTS),
+        federated_language.FederatedType(np.int32, federated_language.SERVER),
+        federated_language.FederatedType(
+            np.float32, federated_language.CLIENTS
+        ),
     )
     def _comp(x, y):
       a = tff.federated_broadcast(x)
