@@ -762,7 +762,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
         checkpoint_type_signature_var = metadata_vars[0]
         assign_tff_signature_op = checkpoint_type_signature_var.assign(
             tff.types.serialize_type(
-                daf.type_signature.result[0]  # pytype: disable=unsupported-operands
+                daf.type_signature.result[0]
             ).SerializeToString()
         )
         metadata_control_dependencies.append(assign_tff_signature_op.name)
@@ -1201,6 +1201,11 @@ def _build_server_graph(
         server_metrics_values,
     )
     all_assign_ops = assign_server_state_ops + assign_non_state_ops
+
+    checkpoint_state_type_value = (
+        tff.types.serialize_type(server_state_type).SerializeToString()
+    )
+
     apply_aggregrated_updates_op = tf.group(*all_assign_ops).name
 
     # Constructs the metadata for server metrics to be included in the plan.

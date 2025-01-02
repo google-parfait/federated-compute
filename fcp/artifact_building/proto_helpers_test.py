@@ -18,6 +18,7 @@ import collections
 import federated_language
 import numpy as np
 import tensorflow as tf
+
 import tensorflow_federated as tff
 
 from fcp.artifact_building import proto_helpers
@@ -165,7 +166,8 @@ class MakeMeasurementTest(tf.test.TestCase):
 
       self.assertEqual(m.name, "test")
       self.assertProtoEquals(
-          m.tff_type, tff.types.serialize_type(tff_type).SerializeToString()
+          m.tff_type,
+          tff.types.serialize_type(tff_type).SerializeToString()
       )
 
   def test_fails_for_non_matching_dtype(self):
