@@ -452,15 +452,12 @@ def _validate_data_comp(
       data_comp.type_signature, federated_language.FunctionType
   )
   if not type_spec.is_assignable_from(data_comp.type_signature.result):
-    type_mismatch_string = tff.types.type_mismatch_error_message(
-        type_spec,
-        data_comp.type_signature.result,
-        tff.types.TypeRelation.ASSIGNABLE,
-    )
     raise TypeError(
         'The data source constructed with the supplied dataspec returns data '
         'which does not match type of request. Details of the mismatch:\n'
-        + type_mismatch_string
+        f'{type_spec.formatted_representation()}\n'
+        'is not assignable to\n'
+        f'{data_comp.type_signature.result.formatted_representation()}\n'
     )
 
 
