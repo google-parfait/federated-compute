@@ -42,10 +42,10 @@ service ConfidentialTransform {
   //    first_request_metadata is set, and concluding with a
   //    WriteConfigurationRequest where commit is true. This step may be
   //    repeated for multiple configuration blobs.
-  // 2. The client sends a ConfigureRequest which contains proto
-  //    configuration which the TEE will parse. The proto configuration
-  //    may refer to larger configuration blobs passed via
-  //    WriteConfigurationRequests.
+  // 2. The client sends an InitializeRequest which contains a proto
+  //    configuration and max_num_sessions, both of which the TEE will parse.
+  //    The proto configuration may refer to larger configuration blobs passed
+  //    via WriteConfigurationRequests.
   // 3. The server responds with an InitializeResponse or fails if the
   //    configuration cannot be parsed.
   // Either this method or Initialize must be called exactly once for the
@@ -106,10 +106,10 @@ message StreamInitializeRequest {
   oneof kind {
     // Optional request to write a configuration blob in chunks.
     WriteConfigurationRequest write_configuration = 1;
-    // If the configuration is too large to fit in a single gRPC message, this
-    // proto may refer to the configuration_ids of other configuration blobs
-    // passed in via WriteConfigurationRequests.
-    ConfigureRequest configure = 2;
+    // If the configuration is too large to fit in a single gRPC message,
+    // initialize_request.configuration may refer to the configuration_ids of
+    // other configuration blobs passed in via WriteConfigurationRequests.
+    InitializeRequest initialize_request = 2;
   }
 }
 
