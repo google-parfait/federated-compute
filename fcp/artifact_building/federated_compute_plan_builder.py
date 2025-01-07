@@ -388,7 +388,7 @@ def _is_empty_tff_value(type_signature: federated_language.Type) -> bool:
   Returns:
     Boolean indicating whether the TFF type signature is considered empty.
   """
-  return tff.types.contains_only(
+  return federated_language.framework.type_contains_only(
       type_signature,
       lambda t: isinstance(
           t, (federated_language.StructType, federated_language.FederatedType)
