@@ -1562,7 +1562,7 @@ def _build_client_graph_with_tensorflow_spec(
   if (
       not isinstance(
           client_work_comp.type_signature.parameter,
-          (tff.StructType, federated_language.StructType),
+          federated_language.StructType,
       )
   ) or len(client_work_comp.type_signature.parameter) < 1:
     raise ValueError(
@@ -1573,8 +1573,7 @@ def _build_client_graph_with_tensorflow_spec(
 
   if (
       not isinstance(
-          client_work_comp.type_signature.result,
-          (tff.StructType, federated_language.StructType),
+          client_work_comp.type_signature.result, federated_language.StructType
       )
   ) or len(client_work_comp.type_signature.result) != 4:
     raise ValueError(
@@ -1675,7 +1674,7 @@ def _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
   if (
       not isinstance(
           client_work.type_signature.parameter,
-          (tff.StructType, federated_language.StructType),
+          federated_language.StructType,
       )
   ) or len(client_work.type_signature.parameter) < 1:
     raise ValueError(
@@ -1686,7 +1685,7 @@ def _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
 
   if not isinstance(
       client_work.type_signature.result,
-      (tff.StructType, federated_language.StructType),
+      federated_language.StructType,
   ):
     raise ValueError(
         'client_work.type_signature.result should be a '
