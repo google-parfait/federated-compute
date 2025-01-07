@@ -346,7 +346,10 @@ def get_grouped_input_tensor_specs_for_aggregations(
     """Gets the list of selection indices for a building_blocks.Selection."""
 
     path = []
-    while isinstance(selection, tff.framework.Selection):
+    while isinstance(
+        selection,
+        tff.framework.Selection,
+    ):
       path.append(selection.index)  # pytype: disable=attribute-error
       selection = selection.source  # pytype: disable=attribute-error
     # In ASTs like x[0][1], we'll see the last (outermost) selection first.
@@ -354,14 +357,18 @@ def get_grouped_input_tensor_specs_for_aggregations(
     return path
 
   def _get_input_tensor_specs_for_aggregation_arg(
-      value: tff.framework.ComputationBuildingBlock, names: dict[int, str]
+      value: tff.framework.ComputationBuildingBlock,
+      names: dict[int, str],
   ) -> list[tf.TensorSpec]:
     """Gets the input TensorSpecs for a single intrinsic argument."""
 
     # An intrinsic arg may be a `building_block.Selection` or a (potentially
     # nested) struct of `building_block.Selection`s. Start by creating a
     # flattened list of the `building_block.Selection`s.
-    if isinstance(value, tff.framework.Struct):
+    if isinstance(
+        value,
+        tff.framework.Struct,
+    ):
       inner_values = tff.structure.flatten(value)
     else:
       inner_values = [value]
@@ -381,7 +388,8 @@ def get_grouped_input_tensor_specs_for_aggregations(
     for inner_value in inner_values:
       if not isinstance(inner_value, tff.framework.Selection):
         raise ValueError(
-            f'Expected a `tff.framework.Selection`, found {type(inner_value)}.'
+            'Expected a `tff.framework.Selection`,'
+            f' found {type(inner_value)}.'
         )
       path = _get_selection_path(inner_value)
       arg_index = path[0]
@@ -403,7 +411,9 @@ def get_grouped_input_tensor_specs_for_aggregations(
       raise ValueError(
           f'Expected a `tff.framework.Call`, found {type(local_value)}.'
       )
+
     local_fn = local_value.function
+
     if not isinstance(local_fn, tff.framework.Intrinsic):
       raise ValueError(
           f'Expected a `tff.framework.Intrinsic`, found {type(local_value)}.'
@@ -475,7 +485,9 @@ def get_grouped_output_tensor_specs_for_aggregations(
       raise ValueError(
           f'Expected a `tff.framework.Call`, found {type(local_value)}.'
       )
+
     local_fn = local_value.function
+
     if not isinstance(local_fn, tff.framework.Intrinsic):
       raise ValueError(
           f'Expected a `tff.framework.Intrinsic`, found {type(local_value)}.'

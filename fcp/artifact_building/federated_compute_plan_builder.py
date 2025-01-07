@@ -1841,14 +1841,18 @@ def build_aggregations(
   # a specific structure. It is a lambda computation whose result block contains
   # locals that are exclusively aggregation-type intrinsics.
   aggregations_bb = daf.client_to_server_aggregation.to_building_block()
+
   if not isinstance(aggregations_bb, tff.framework.Lambda):
     raise ValueError(
         f'Expected a `tff.framework.Lambda`, found {type(aggregations_bb)}.'
     )
+
   aggregations_result = aggregations_bb.result
+
   if not isinstance(aggregations_result, tff.framework.Block):
     raise ValueError(
-        f'Expected a `tff.framework.Block`, found {type(aggregations_result)}.'
+        'Expected a `tff.framework.Block`,'
+        f'found {type(aggregations_result)}.'
     )
 
   # Get lists of the TensorSpecProtos for the inputs and outputs of all
