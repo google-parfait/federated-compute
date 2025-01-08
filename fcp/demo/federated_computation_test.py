@@ -128,7 +128,7 @@ class FederatedComputationTest(absltest.TestCase):
         federated_language.program.FederatedContext, instance=True
     )
     ctx.invoke.return_value = 1234
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       self.assertEqual(comp(1, 2, 3, kw1='a', kw2='b'), 1234)
     ctx.invoke.assert_called_once_with(
         comp,

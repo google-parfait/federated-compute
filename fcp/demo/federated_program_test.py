@@ -202,7 +202,7 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
                      num_rounds, COLLECTION_URI, create_examples(counts))
           for counts in client_counts
       ]
-      with tff.framework.get_context_stack().install(ctx):
+      with federated_language.framework.get_context_stack().install(ctx):
         program = program_logic(
             [initialize],
             [comp],
@@ -256,7 +256,7 @@ class FederatedProgramTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
                 create_examples(counts),
             )
         )
-      with tff.framework.get_context_stack().install(ctx):
+      with federated_language.framework.get_context_stack().install(ctx):
         num_rounds = 1
         program = program_logic(
             [initialize, initialize],

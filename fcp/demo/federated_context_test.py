@@ -167,13 +167,13 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
         POPULATION_NAME,
         address_family=ADDRESS_FAMILY,
         base_context=base_context)
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       self.assertEqual(add_one(3), 4)
 
   def test_invoke_non_federated_without_base_context(self):
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       with self.assertRaisesRegex(TypeError,
                                   'computation must be a FederatedComputation'):
         add_one(3)
@@ -182,7 +182,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     comp = federated_computation.FederatedComputation(count_clients, name='x')
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       with self.assertRaisesRegex(
           TypeError, r'arg\[0\] must be a value or structure of values'
       ):
@@ -192,7 +192,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     comp = federated_computation.FederatedComputation(count_clients, name='x')
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       with self.assertRaisesRegex(
           TypeError, r'arg\[1\] must be the result of '
           r'FederatedDataSource.iterator\(\).select\(\)'):
@@ -205,7 +205,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY
     )
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       state = {'foo': (3, 1), 'bar': (4, 5, 6)}
       comp(state, DATA_SOURCE.iterator().select(1))
 
@@ -216,7 +216,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY
     )
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       state = TestClass(field_one=1, field_two=2)
       comp(state, DATA_SOURCE.iterator().select(1))
 
@@ -226,7 +226,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
                                                    DATA_SOURCE.example_selector)
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       with self.assertRaisesRegex(
           ValueError, 'FederatedDataSource and FederatedContext '
           'population_names must match'):
@@ -240,7 +240,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
     release_manager = federated_language.program.MemoryReleaseManager()
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       state, _ = comp(3, DATA_SOURCE.iterator().select(10))
       await release_manager.release(state, key='result')
 
@@ -276,7 +276,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
     release_manager = federated_language.program.MemoryReleaseManager()
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       state, _ = comp(3, DATA_SOURCE.iterator().select(10))
       state, _ = comp(state, DATA_SOURCE.iterator().select(10))
       await release_manager.release(state, key='result')
@@ -299,7 +299,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     comp = federated_computation.FederatedComputation(count_clients, name='x')
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       with self.assertRaisesRegex(
           TypeError, r'arg\[0\] must be a value or structure of values'
       ):
@@ -313,7 +313,7 @@ class FederatedContextTest(absltest.TestCase, unittest.IsolatedAsyncioTestCase):
     ctx = federated_context.FederatedContext(
         POPULATION_NAME, address_family=ADDRESS_FAMILY)
     release_manager = federated_language.program.MemoryReleaseManager()
-    with tff.framework.get_context_stack().install(ctx):
+    with federated_language.framework.get_context_stack().install(ctx):
       state, _ = comp(0, DATA_SOURCE.iterator().select(10))
       with self.assertRaisesRegex(ValueError, 'message'):
         await release_manager.release(state, key='result')
@@ -359,9 +359,13 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
         mock.patch.object(
             plan_utils, 'generate_and_add_flat_buffer_to_plan', autospec=True))
     self.generate_and_add_flat_buffer_to_plan.side_effect = lambda plan: plan
-    self.enter_context(tff.framework.get_context_stack().install(
-        federated_context.FederatedContext(
-            POPULATION_NAME, address_family=ADDRESS_FAMILY)))
+    self.enter_context(
+        federated_language.framework.get_context_stack().install(
+            federated_context.FederatedContext(
+                POPULATION_NAME, address_family=ADDRESS_FAMILY
+            )
+        )
+    )
     self.release_manager = federated_language.program.MemoryReleaseManager()
 
     # Run (and therefore cache) count_clients_comp1 with data_source1.

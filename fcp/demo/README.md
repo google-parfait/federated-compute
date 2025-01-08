@@ -44,7 +44,7 @@ def main():
   # Configure the platform-specific components.
   with demo.FederatedContext(
       _POPULATION_NAME.value,
-      base_context=tff.framework.get_context_stack().current) as context:
+      base_context=federated_language.framework.get_context_stack().current) as context:
     data_source = demo.FederatedDataSource(
         _POPULATION_NAME.value,
         plan_pb2.ExampleSelector(collection_uri=_COLLECTION_URI.value))
@@ -64,7 +64,7 @@ def main():
     train = ...
 
     # Execute the computations using program logic.
-    tff.framework.set_default_context(context)
+    federated_language.framework.set_default_context(context)
     train_federated_model(
         initialize=initialize,
         train=train,

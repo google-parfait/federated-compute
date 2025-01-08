@@ -188,7 +188,7 @@ class GraphHelperTest(absltest.TestCase):
 
     @tff.tensorflow.computation
     def return_value():
-      return tff.framework.get_context_stack().current.session_token  # pytype: disable=attribute-error
+      return federated_language.framework.get_context_stack().current.session_token  # pytype: disable=attribute-error
 
     with tf.Graph().as_default():
       x = tf.compat.v1.placeholder(dtype=tf.string)
@@ -411,7 +411,7 @@ class GraphHelperTest(absltest.TestCase):
 
 
 if __name__ == '__main__':
-  with tff.framework.get_context_stack().install(
+  with federated_language.framework.get_context_stack().install(
       tff.test.create_runtime_error_context()
   ):
     absltest.main()

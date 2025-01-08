@@ -67,7 +67,9 @@ class FederatedComputation(tff.Computation):
   def __call__(self, *args, **kwargs) ->...:
     arg = tff.structure.Struct([(None, arg) for arg in args] +
                                list(kwargs.items()))
-    return tff.framework.get_context_stack().current.invoke(self, arg)
+    return federated_language.framework.get_context_stack().current.invoke(
+        self, arg
+    )
 
   def __hash__(self) -> int:
     return hash((self._comp, self._name))

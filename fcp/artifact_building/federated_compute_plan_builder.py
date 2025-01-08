@@ -2036,7 +2036,7 @@ def build_plan(
           '`example_query_spec` or `dataspec` cannot both be specified.'
       )
 
-  with tff.framework.get_context_stack().install(
+  with federated_language.framework.get_context_stack().install(
       tff.test.create_runtime_error_context()
   ):
     if daf:
