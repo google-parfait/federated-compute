@@ -35,9 +35,11 @@
 #include "absl/time/time.h"
 #include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/diag_codes.pb.h"
+#include "fcp/client/engine/common.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/event_publisher.h"
+#include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/federated_select.h"
 #include "fcp/client/flags.h"
@@ -48,12 +50,14 @@
 #include "fcp/client/opstats/opstats_db.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/phase_logger.h"
+#include "fcp/client/runner_common.h"
 #include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/stats.h"
 #include "fcp/client/task_result_info.pb.h"
+#include "fcp/client/tensorflow/tensorflow_runner.h"
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
@@ -637,6 +641,27 @@ class SimpleExampleIterator : public ExampleIterator {
   int index_ = 0;
 };
 
+struct ComputationArtifacts {
+  // The path to the file containing the plan data.
+  std::string plan_filepath;
+  // The already-parsed plan data.
+  google::internal::federated::plan::ClientOnlyPlan plan;
+  // The test dataset.
+  google::internal::federated::plan::Dataset dataset;
+  // The path to the file containing the initial checkpoint data (not set for
+  // local compute task artifacts).
+  std::string checkpoint_filepath;
+  // The initial checkpoint data, as a string (not set for local compute task
+  // artifacts).
+  std::string checkpoint;
+  // The Federated Select slice data (not set for local compute task artifacts).
+  google::internal::federated::plan::SlicesTestDataset federated_select_slices;
+  // A fake PopulationEligibilitySpec matching the policies in the
+  // EligibilityEvalTask (only non-empty for EET artifacts)
+  google::internal::federated::plan::PopulationEligibilitySpec
+      population_eligibility_spec;
+};
+
 class MockFlags : public Flags {
  public:
   MOCK_METHOD(int64_t, condition_polling_period_millis, (), (const, override));
@@ -986,6 +1011,73 @@ class MockAttestationVerifier : public attestation::AttestationVerifier {
        const google::internal::federatedcompute::v1::
            ConfidentialEncryptionConfig& encryption_config),
       (override));
+};
+
+class MockTensorflowRunner : public TensorflowRunner {
+ public:
+  MOCK_METHOD(
+      engine::PlanResult, RunEligibilityEvalPlanWithTensorflowSpec,
+      (std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+       std::function<bool()> should_abort, LogManager* log_manager,
+       opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+       const google::internal::federated::plan::ClientOnlyPlan& client_plan,
+       const std::string& checkpoint_input_filename,
+       const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
+       absl::Time run_plan_start_time, absl::Time reference_time),
+      (override));
+  MOCK_METHOD(
+      PlanResultAndCheckpointFile, RunPlanWithTensorflowSpec,
+      (std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+       std::function<bool()> should_abort, LogManager* log_manager,
+       opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+       ExampleIteratorQueryRecorder* example_iterator_query_recorder,
+       const google::internal::federated::plan::ClientOnlyPlan& client_plan,
+       const std::string& checkpoint_input_filename,
+       const std::string& checkpoint_output_filename,
+       const fcp::client::InterruptibleRunner::TimingConfig& timing_config),
+      (override));
+  MOCK_METHOD(
+      absl::Status, WriteTFV1Checkpoint,
+      (const std::string& output_checkpoint_filename,
+       (const std::vector<std::pair<
+            google::internal::federated::plan::ExampleQuerySpec::ExampleQuery,
+            ExampleQueryResult>>& example_query_results)),
+      (override));
+};
+
+// A TensorflowRunner that delegates all calls to a MockTensorflowRunner.
+class TestingTensorflowRunner : public TensorflowRunner {
+ public:
+  explicit TestingTensorflowRunner(MockTensorflowRunner* delegate)
+      : delegate_(*delegate) {}
+  engine::PlanResult RunEligibilityEvalPlanWithTensorflowSpec(
+      std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+      std::function<bool()> should_abort, LogManager* log_manager,
+      opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+      const google::internal::federated::plan::ClientOnlyPlan& client_plan,
+      const std::string& checkpoint_input_filename,
+      const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
+      absl::Time run_plan_start_time, absl::Time reference_time) override;
+
+  PlanResultAndCheckpointFile RunPlanWithTensorflowSpec(
+      std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
+      std::function<bool()> should_abort, LogManager* log_manager,
+      opstats::OpStatsLogger* opstats_logger, const Flags* flags,
+      ExampleIteratorQueryRecorder* example_iterator_query_recorder,
+      const google::internal::federated::plan::ClientOnlyPlan& client_plan,
+      const std::string& checkpoint_input_filename,
+      const std::string& checkpoint_output_filename,
+      const fcp::client::InterruptibleRunner::TimingConfig& timing_config)
+      override;
+
+  absl::Status WriteTFV1Checkpoint(
+      const std::string& output_checkpoint_filename,
+      const std::vector<std::pair<
+          google::internal::federated::plan::ExampleQuerySpec::ExampleQuery,
+          ExampleQueryResult>>& example_query_results) override;
+
+ private:
+  MockTensorflowRunner& delegate_;
 };
 
 }  // namespace client
