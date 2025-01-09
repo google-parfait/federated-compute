@@ -561,7 +561,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
       prepared_values, intermediate_state_values = (
           graph_helpers.import_tensorflow(
               'server_prepare',
-              tff.framework.ConcreteComputation.from_building_block(
+              federated_language.framework.ConcreteComputation.from_building_block(
                   tff.backends.mapreduce.consolidate_and_extract_local_processing(
                       daf.server_prepare.to_building_block(), grappler_config
                   )
@@ -685,7 +685,7 @@ def _build_server_graphs_from_distribute_aggregate_form(
     # Perform the server_result step.
     server_state_values, server_output_values = graph_helpers.import_tensorflow(
         'server_result',
-        tff.framework.ConcreteComputation.from_building_block(
+        federated_language.framework.ConcreteComputation.from_building_block(
             tff.backends.mapreduce.consolidate_and_extract_local_processing(
                 daf.server_result.to_building_block(), grappler_config
             )
@@ -1313,7 +1313,7 @@ def _redirect_save_saver_to_restore_saver_placeholder(
 
 def _add_client_work(
     client_phase: plan_pb2.ClientPhase,
-    client_work_comp: tff.framework.ConcreteComputation,
+    client_work_comp: federated_language.framework.ConcreteComputation,
     dataspec,
     broadcast_tensor_specs: list[tf.TensorSpec],
 ) -> graph_helpers.MaybeSplitOutputs:
@@ -1328,8 +1328,8 @@ def _add_client_work(
 
   Args:
     client_phase: The `plan_pb2.ClientPhase` message to populate.
-    client_work_comp: A `tff.framework.ConcreteComputation` that represents the
-      TensorFlow logic to run on-device.
+    client_work_comp: A `federated_language.framework.ConcreteComputation` that
+      represents the TensorFlow logic to run on-device.
     dataspec: Either an instance of `data_spec.DataSpec` or a nested structure
       of these that matches the structure of the first element of the input to
       `client_work_comp`.
@@ -1525,7 +1525,7 @@ def _save_client_output_tensors(
 
 
 def _build_client_graph_with_tensorflow_spec(
-    client_work_comp: tff.framework.ConcreteComputation,
+    client_work_comp: federated_language.framework.ConcreteComputation,
     dataspec,
     broadcasted_tensor_specs: Iterable[tf.TensorSpec],
     is_broadcast_empty: bool,
@@ -1537,8 +1537,8 @@ def _build_client_graph_with_tensorflow_spec(
   This function builds a client phase with tensorflow specs proto.
 
   Args:
-    client_work_comp: A `tff.framework.ConcreteComputation` that represents the
-      TensorFlow logic run on-device.
+    client_work_comp: A `federated_language.framework.ConcreteComputation` that
+      represents the TensorFlow logic run on-device.
     dataspec: Either an instance of `data_spec.DataSpec` or a nested structure
       of these that matches the structure of the first element of the input to
       `client_work_comp`.
@@ -1638,7 +1638,7 @@ def _build_client_graph_with_tensorflow_spec(
 
 
 def _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
-    client_work: tff.framework.ConcreteComputation,
+    client_work: federated_language.framework.ConcreteComputation,
     dataspec,
     grappler_config: Optional[tf.compat.v1.ConfigProto],
     secagg_client_output_tensor_specs: set[tf.TensorSpec],
@@ -1651,8 +1651,8 @@ def _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
   to a different type of on-device computation (e.g., a SQL query).
 
   Args:
-    client_work: A `tff.framework.ConcreteComputation` that represents the
-      client portion of the DistributeAggregateForm.
+    client_work: A `federated_language.framework.ConcreteComputation` that
+      represents the client portion of the DistributeAggregateForm.
     dataspec: Either an instance of `data_spec.DataSpec` or a nested structure
       of these that matches the structure of the first element of the input to
       `daf.client_work`.
@@ -1707,9 +1707,11 @@ def _build_client_graph_with_tensorflow_spec_from_distribute_aggregate_form(
       broadcast_tensor_specs = tf.nest.map_structure(
           variable_helpers.tensorspec_from_var, broadcast_vars
       )
-    client_work_comp = tff.framework.ConcreteComputation.from_building_block(
-        tff.backends.mapreduce.consolidate_and_extract_local_processing(
-            client_work.to_building_block(), grappler_config
+    client_work_comp = (
+        federated_language.framework.ConcreteComputation.from_building_block(
+            tff.backends.mapreduce.consolidate_and_extract_local_processing(
+                client_work.to_building_block(), grappler_config
+            )
         )
     )
     client_output_values = _add_client_work(

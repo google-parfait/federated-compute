@@ -172,7 +172,7 @@ def embed_data_logic(
 
 def import_tensorflow(
     name: str,
-    comp: tff.framework.ConcreteComputation,
+    comp: federated_language.framework.ConcreteComputation,
     args: Args = None,
     split_outputs: bool = False,
     session_token_tensor: Optional[tf.Tensor] = None,
@@ -181,8 +181,8 @@ def import_tensorflow(
 
   Args:
     name: The string name to use as the graph import prefix.
-    comp: An instance of `tff.framework.ConcreteComputation` with just the
-      `tensorflow` section.
+    comp: An instance of `federated_language.framework.ConcreteComputation` with
+      just the `tensorflow` section.
     args: Either a single argument, a tuple of arguments, or None. An argument
       must be either: - a Python `list` containing either tensors or variables,
       or - a single variant tensor representing a dataset input.
@@ -211,10 +211,14 @@ def import_tensorflow(
     TypeError: If the arguments are of the wrong types.
   """
   type_checks.check_type(name, str, name='name')
-  type_checks.check_type(comp, tff.framework.ConcreteComputation, name='comp')
+  type_checks.check_type(
+      comp, federated_language.framework.ConcreteComputation, name='comp'
+  )
   type_checks.check_type(split_outputs, bool, name='split_outputs')
 
-  comp_proto = tff.framework.ConcreteComputation.get_proto(comp)
+  comp_proto = (
+      federated_language.framework.ConcreteComputation.get_proto(comp)
+  )
   type_checks.check_type(
       comp_proto, computation_pb2.Computation, name='comp_proto'
   )
