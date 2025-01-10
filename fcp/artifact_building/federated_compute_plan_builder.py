@@ -1882,13 +1882,13 @@ def build_aggregations(
 
   # Each intrinsic input arg can be a struct or even a nested struct, which
   # requires the intrinsic to be applied independently to each element (e.g. a
-  # tff.federated_sum call applied to a struct will result in a federated_sum
-  # aggregation message for each element of the struct). Note that elements of
-  # structs can themselves be multi-dimensional tensors. When an intrinsic call
-  # has multiple args with mismatching structure (e.g. a federated_weighted_mean
-  # intrinsic applied to a 2D struct value arg and scalar weight arg), some args
-  # will need to be "scaled up" via repetition to match the args with the
-  # "largest" structure.
+  # federated_language.federated_sum call applied to a struct will result in a
+  # federated_sum aggregation message for each element of the struct). Note that
+  # elements of structs can themselves be multi-dimensional tensors. When an
+  # intrinsic call has multiple args with mismatching structure (e.g. a
+  # federated_weighted_mean intrinsic applied to a 2D struct value arg and
+  # scalar weight arg), some args will need to be "scaled up" via repetition to
+  # match the args with the "largest" structure.
   aggregations = []
   secagg_client_output_tensor_specs = []
   for intrinsic_index, (input_tensor_specs, output_tensor_specs) in enumerate(

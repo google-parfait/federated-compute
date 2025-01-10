@@ -37,12 +37,17 @@ def add_values(x, y):
 def count_clients(state, client_data):
   """Example TFF computation that counts clients."""
   del client_data
-  client_value = tff.federated_value(1, federated_language.CLIENTS)
-  aggregated_count = tff.federated_sum(client_value)
-  metrics = tff.federated_value(
+  client_value = federated_language.federated_value(
+      1, federated_language.CLIENTS
+  )
+  aggregated_count = federated_language.federated_sum(client_value)
+  metrics = federated_language.federated_value(
       tff.structure.Struct(()), federated_language.SERVER
   )
-  return tff.federated_map(add_values, (state, aggregated_count)), metrics
+  return (
+      federated_language.federated_map(add_values, (state, aggregated_count)),
+      metrics,
+  )
 
 
 @federated_language.federated_computation(
@@ -58,12 +63,15 @@ def count_examples(state, client_data):
   def client_work(client_data):
     return client_data.reduce(0, lambda x, _: x + 1)
 
-  client_counts = tff.federated_map(client_work, client_data)
-  aggregated_count = tff.federated_sum(client_counts)
-  metrics = tff.federated_value(
+  client_counts = federated_language.federated_map(client_work, client_data)
+  aggregated_count = federated_language.federated_sum(client_counts)
+  metrics = federated_language.federated_value(
       tff.structure.Struct(()), federated_language.SERVER
   )
-  return tff.federated_map(add_values, (state, aggregated_count)), metrics
+  return (
+      federated_language.federated_map(add_values, (state, aggregated_count)),
+      metrics,
+  )
 
 
 class FederatedComputationTest(absltest.TestCase):

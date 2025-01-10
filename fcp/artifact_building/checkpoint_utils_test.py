@@ -203,7 +203,7 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
 
     @federated_language.federated_computation
     def fed_comp():
-      return tff.federated_value(0, federated_language.SERVER)
+      return federated_language.federated_value(0, federated_language.SERVER)
 
     tff_function_type = fed_comp.type_signature
     value_list = [tf.constant(1, dtype=np.int32)]

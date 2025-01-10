@@ -1189,7 +1189,7 @@ message ServerPhase {
   // - Applying the update aggregated from the intermediate checkpoints to the
   //   global model and other updates to cross-round state variables.
   // - Computing final round metric values (e.g. the `report` of a
-  //   `tff.federated_aggregate`).
+  //   `federated_language.federated_aggregate`).
   string apply_aggregrated_updates_op = 5;
 
   // 5. Fetch the server aggregated metrics.

@@ -27,9 +27,9 @@ from fcp.artifact_building import variable_helpers
     federated_language.FederatedType(np.float32, federated_language.CLIENTS),
 )
 def sample_comp(x, y):
-  a = tff.federated_broadcast(x)
-  output1 = tff.federated_sum(a)
-  output2 = tff.federated_mean([y, y], y)
+  a = federated_language.federated_broadcast(x)
+  output1 = federated_language.federated_sum(a)
+  output2 = federated_language.federated_mean([y, y], y)
   return output1, output2
 
 
@@ -285,9 +285,9 @@ class VariableHelpersTest(absltest.TestCase):
         ),
     )
     def _comp(x, y):
-      a = tff.federated_broadcast(x)
-      output1 = tff.federated_secure_sum_bitwidth(a, 5)
-      output2 = tff.federated_mean([y, y], y)
+      a = federated_language.federated_broadcast(x)
+      output1 = federated_language.federated_secure_sum_bitwidth(a, 5)
+      output2 = federated_language.federated_mean([y, y], y)
       return output1, output2
 
     daf = tff.backends.mapreduce.get_distribute_aggregate_form_for_computation(

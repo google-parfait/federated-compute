@@ -62,11 +62,11 @@ def _add(x: int, y: int) -> int:
 def count_clients(state, client_data):
   """Example TFF computation that counts clients."""
   del client_data
-  num_clients = tff.federated_sum(
-      tff.federated_value(1, federated_language.CLIENTS)
+  num_clients = federated_language.federated_sum(
+      federated_language.federated_value(1, federated_language.CLIENTS)
   )
-  updated_state = tff.federated_map(_add, (state, num_clients))
-  non_state = tff.federated_value((), federated_language.SERVER)
+  updated_state = federated_language.federated_map(_add, (state, num_clients))
+  non_state = federated_language.federated_value((), federated_language.SERVER)
   return updated_state, non_state
 
 
@@ -82,11 +82,13 @@ def count_clients(state, client_data):
 def irregular_arrays(state, client_data):
   """Example TFF computation that returns irregular data."""
   del client_data
-  num_clients = tff.federated_sum(
-      tff.federated_value(1, federated_language.CLIENTS)
+  num_clients = federated_language.federated_sum(
+      federated_language.federated_value(1, federated_language.CLIENTS)
   )
-  non_state = tff.federated_value(1, federated_language.SERVER)
-  updated_non_state = tff.federated_map(_add, (non_state, num_clients))
+  non_state = federated_language.federated_value(1, federated_language.SERVER)
+  updated_non_state = federated_language.federated_map(
+      _add, (non_state, num_clients)
+  )
   return state, updated_non_state
 
 
@@ -115,12 +117,12 @@ attrs_type = init.type_signature.result
 def attrs_computation(state, client_data):
   """Example TFF computation that returns an attrs class."""
   del client_data
-  num_clients = tff.federated_sum(
-      tff.federated_value(1, federated_language.CLIENTS)
+  num_clients = federated_language.federated_sum(
+      federated_language.federated_value(1, federated_language.CLIENTS)
   )
-  non_state = tff.federated_value(1, federated_language.SERVER)
+  non_state = federated_language.federated_value(1, federated_language.SERVER)
 
-  metrics = tff.federated_map(_add, (non_state, num_clients))
+  metrics = federated_language.federated_map(_add, (non_state, num_clients))
   return state, metrics
 
 
@@ -333,7 +335,9 @@ class FederatedContextPlanCachingTest(absltest.TestCase,
     )
     def identity(state, client_data):
       del client_data
-      return state, tff.federated_value((), federated_language.SERVER)
+      return state, federated_language.federated_value(
+          (), federated_language.SERVER
+      )
 
     self.count_clients_comp1 = federated_computation.FederatedComputation(
         count_clients, name='count_clients1')

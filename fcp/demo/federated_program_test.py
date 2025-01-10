@@ -41,7 +41,7 @@ _TaskAssignmentMode = (
 @federated_language.federated_computation()
 def initialize() -> tff.Value:
   """Returns the initial state."""
-  return tff.federated_value(0, federated_language.SERVER)
+  return federated_language.federated_value(0, federated_language.SERVER)
 
 
 @tff.tensorflow.computation(np.int32, np.int32)
@@ -68,14 +68,16 @@ def sum_counts(state, client_data):
   def client_work(client_data):
     return client_data.reduce(0, reduce_counts)
 
-  client_counts = tff.federated_map(client_work, client_data)
-  aggregated_count = tff.federated_sum(client_counts)
+  client_counts = federated_language.federated_map(client_work, client_data)
+  aggregated_count = federated_language.federated_sum(client_counts)
 
-  updated_state = tff.federated_map(_add, (state, aggregated_count))
-  num_clients = tff.federated_sum(
-      tff.federated_value(1, federated_language.CLIENTS)
+  updated_state = federated_language.federated_map(
+      _add, (state, aggregated_count)
   )
-  metrics = tff.federated_zip((num_clients,))
+  num_clients = federated_language.federated_sum(
+      federated_language.federated_value(1, federated_language.CLIENTS)
+  )
+  metrics = federated_language.federated_zip((num_clients,))
   return updated_state, metrics
 
 
@@ -88,12 +90,12 @@ def sum_counts(state, client_data):
 def count_clients(state, client_data):
   """Counts the number of clients."""
   del client_data
-  num_clients = tff.federated_sum(
-      tff.federated_value(1, federated_language.CLIENTS)
+  num_clients = federated_language.federated_sum(
+      federated_language.federated_value(1, federated_language.CLIENTS)
   )
-  updated_state = tff.federated_map(_add, (state, num_clients))
-  metrics = tff.federated_zip((
-      tff.federated_value(0, federated_language.SERVER),
+  updated_state = federated_language.federated_map(_add, (state, num_clients))
+  metrics = federated_language.federated_zip((
+      federated_language.federated_value(0, federated_language.SERVER),
   ))
   return updated_state, metrics
 
