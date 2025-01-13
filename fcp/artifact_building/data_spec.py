@@ -51,8 +51,9 @@ class DataSpec:
         preprocessing such as deserialization, filtering, batching, and
         formatting, and returns the transformed `tf.data.Dataset` as a result.
         If preprocessing_fn is set to None, it is expected that any client data
-        preprocessing has already been incorporated into the `tff.Computation`
-        that this `DataSpec` is associated with.
+        preprocessing has already been incorporated into the
+        `federated_language.Computation` that this `DataSpec` is associated
+        with.
 
     Raises:
       TypeError: If the types of the arguments are invalid.
@@ -81,13 +82,13 @@ class DataSpec:
     return self._preprocessing_fn
 
   @property
-  def preprocessing_comp(self) -> tff.Computation:
+  def preprocessing_comp(self) -> federated_language.Computation:
     """Returns the preprocessing computation for the input dataset."""
     if self._preprocessing_comp is None:
       if self.preprocessing_fn is None:
         raise ValueError(
             "DataSpec's preprocessing_fn is None so a "
-            'preprocessing tff.Computation cannot be generated.'
+            'preprocessing federated_language.Computation cannot be generated.'
         )
       self._preprocessing_comp = tff.tensorflow.computation(
           self.preprocessing_fn,

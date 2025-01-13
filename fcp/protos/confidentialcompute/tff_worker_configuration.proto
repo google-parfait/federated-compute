@@ -41,7 +41,8 @@ message TffWorkerConfiguration {
     bytes serialized_client_work_computation = 1;
     // A serialized `tff.v0.Value` proto representing the data to broadcast to
     // each client, which will be fed as the second argument to the
-    // tff.Computation serialized as serialized_client_work_computation.
+    // federated_language.Computation serialized as
+    // serialized_client_work_computation.
     //
     // This value is produced as the first output of the server_prepare
     // computation in the `tff.backends.mapreduce.DistributeAggregateForm`.
@@ -86,8 +87,9 @@ message TffWorkerConfiguration {
     // of arbitrary length that represents the aggregated data.
     bytes serialized_client_to_server_aggregation_computation = 1;
     // A serialized `tff.v0.Value` proto representing the temporary server
-    // state, which will be fed as the first argument to the tff.Computation
-    // serialized as serialized_client_to_server_aggregation_computation.
+    // state, which will be fed as the first argument to the
+    // federated_language.Computation serialized as
+    // serialized_client_to_server_aggregation_computation.
     //
     // This value is produced as the second output of the server_prepare
     // computation in the `tff.backends.mapreduce.DistributeAggregateForm`.

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either expresus or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""tff.Computation subclass for the demo Federated Computation platform."""
+"""federated_language.Computation subclass for the demo Federated Computation platform."""
 
 import functools
 import re
@@ -22,10 +22,10 @@ import tensorflow_federated as tff
 COMPUTATION_NAME_REGEX = re.compile(r'\w+(/\w+)*')
 
 
-class FederatedComputation(tff.Computation):
-  """A tff.Computation that should be run in a federated_language.program.FederatedContext."""
+class FederatedComputation(federated_language.Computation):
+  """A federated_language.Computation that should be run in a federated_language.program.FederatedContext."""
 
-  def __init__(self, comp: tff.Computation, *, name: str):
+  def __init__(self, comp: federated_language.Computation, *, name: str):
     """Constructs a new FederatedComputation object.
 
     Args:
@@ -51,8 +51,8 @@ class FederatedComputation(tff.Computation):
     )
 
   @property
-  def wrapped_computation(self) -> tff.Computation:
-    """The underlying tff.Computation."""
+  def wrapped_computation(self) -> federated_language.Computation:
+    """The underlying federated_language.Computation."""
     return self._comp
 
   @property

@@ -128,9 +128,10 @@ def embed_data_logic(
     )
     # If the first placeholder does not have the expected prefix, then it is due
     # to other variables in the graph, likely created from the input
-    # tff.Computation, having the special name. This check ensures that no other
-    # variables use this special example selector placeholder name and we can
-    # easily extract example selector placeholders in the generated artifact.
+    # federated_language.Computation, having the special name. This check
+    # ensures that no other variables use this special example selector
+    # placeholder name and we can easily extract example selector placeholders
+    # in the generated artifact.
     if example_selector_placeholders and (
         not (
             example_selector_placeholders[0].name.startswith(
@@ -450,7 +451,8 @@ def create_tensor_map(
 
 
 def _validate_data_comp(
-    data_comp: tff.Computation, type_spec: federated_language.Type
+    data_comp: federated_language.Computation,
+    type_spec: federated_language.Type,
 ):  # pylint: disable=missing-function-docstring
   type_checks.check_type(
       data_comp.type_signature, federated_language.FunctionType
@@ -467,7 +469,7 @@ def _validate_data_comp(
 
 def make_data_sources_with_dataspec(
     type_spec: federated_language.Type, ds: data_spec.NestedDataSpec
-) -> list[tff.Computation]:
+) -> list[federated_language.Computation]:
   """Creates a list of computations that feed data into the graph using specified example selectors.
 
   The computations use the custom ExternalDataset op to feed in example data.
@@ -484,7 +486,8 @@ def make_data_sources_with_dataspec(
       `type_spec`.
 
   Returns:
-    A list of `tff.Computation`s, each of which accepts a single `string`-typed
+    A list of `federated_language.Computation`s, each of which accepts a single
+    `string`-typed
     tensor as input (the token for the ExternalDataset op) and returns a
     sequence as output (with the result that matches the corresponding part of
     `type_spec`). The computations appear on the list in a depth-first order
@@ -567,7 +570,9 @@ def make_data_sources_with_dataspec(
     )
 
 
-def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
+def make_data_sources_without_dataspec(
+    type_spec,
+) -> list[federated_language.Computation]:
   """Creates a list of computations that feed data into the graph.
 
   The computations use the custom ExternalDataset op to feed in example data.
@@ -581,7 +586,8 @@ def make_data_sources_without_dataspec(type_spec) -> list[tff.Computation]:
       sequence, or a named tuple of sequences.
 
   Returns:
-    A list of `tff.Computation`s, each of which accepts a single `string`-typed
+    A list of `federated_language.Computation`s, each of which accepts a single
+    `string`-typed
     tensor as input (the token for the ExternalDataset op) and returns a
     sequence as output (with the result that matches the corresponding part of
     `type_spec`). The computations appear on the list in a depth-first order

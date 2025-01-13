@@ -155,7 +155,7 @@ convert TFF computations to the format expected by the
 #### `federated_computation.py`
 
 Contains a
-[`tff.Computation`](https://www.tensorflow.org/federated/api_docs/python/tff/Computation)
+[`federated_language.Computation`](https://www.tensorflow.org/federated/api_docs/python/tff/Computation)
 subclass for computations that will be run by the demo Federated Computations
 platform.
 

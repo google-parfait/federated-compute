@@ -101,8 +101,8 @@ def count_clients(state, client_data):
 
 
 async def program_logic(
-    init_fns: list[tff.Computation],
-    comp_fns: list[tff.Computation],
+    init_fns: list[federated_language.Computation],
+    comp_fns: list[federated_language.Computation],
     data_source: federated_language.program.FederatedDataSource,
     total_rounds: int,
     number_of_clients: int,

@@ -90,7 +90,9 @@ class FederatedContext(federated_language.program.FederatedContext):
           self._server.socket, server_side=True)
     self._server_thread = threading.Thread(
         target=self._server.serve_forever, daemon=True)
-    self._cached_comps: dict[tuple[tff.Computation, int], plan_pb2.Plan] = {}
+    self._cached_comps: dict[
+        tuple[federated_language.Computation, int], plan_pb2.Plan
+    ] = {}
 
   @property
   def server_port(self) -> int:
@@ -108,7 +110,7 @@ class FederatedContext(federated_language.program.FederatedContext):
     self._server_thread.join()
     logging.log(logging.INFO, 'Federated Compute server stopped')
 
-  def invoke(self, comp: tff.Computation, arg: Any) -> Any:
+  def invoke(self, comp: federated_language.Computation, arg: Any) -> Any:
     """Invokes a computation.
 
     Args:
