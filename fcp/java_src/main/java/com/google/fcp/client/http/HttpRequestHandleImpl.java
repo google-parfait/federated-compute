@@ -17,6 +17,7 @@ import static com.google.common.base.Strings.nullToEmpty;
 
 import com.google.common.base.Ascii;
 import com.google.common.io.CountingInputStream;
+import com.google.errorprone.annotations.concurrent.GuardedBy;
 import com.google.fcp.client.CallFromNativeWrapper;
 import com.google.fcp.client.http.HttpClientForNative.HttpRequestHandle;
 import com.google.fcp.client.http.HttpClientForNativeImpl.UncheckedHttpClientForNativeException;
@@ -37,7 +38,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.zip.GZIPInputStream;
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 
 /**
  * An implementation of {@link HttpRequestHandle} that uses {@link HttpURLConnection} (the

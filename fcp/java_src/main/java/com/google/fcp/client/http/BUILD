@@ -45,6 +45,7 @@ java_library(
         "@com_google_googleapis//google/rpc:rpc_java_proto",
         "@com_google_protobuf//:protobuf_java",
         "@fcp_maven//:com_google_code_findbugs_jsr305",
+        "@fcp_maven//:com_google_errorprone_error_prone_annotations",
         "@fcp_maven//:com_google_guava_guava",
     ],
 )
