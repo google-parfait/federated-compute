@@ -118,6 +118,10 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   void AddNewEventToCurrentPhaseStats(OperationalStats::Event::EventKind kind)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Returns true if the event kind is an initialization event which is logged
+  // before any phases are started.
+  bool IsInitializationEvent(OperationalStats::Event::EventKind kind);
+
   // Cumulative message storing information about this run.
   absl::flat_hash_map<std::string, absl::Time> collection_first_access_time_map_
       ABSL_GUARDED_BY(mutex_);
@@ -126,8 +130,9 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   std::unique_ptr<OpStatsDb> db_;
   LogManager* log_manager_;
   OperationalStats::PhaseStats current_phase_stats_ ABSL_GUARDED_BY(mutex_);
-  const bool log_min_sep_index_to_phase_stats_;
   NetworkStats accumulated_network_stats_ ABSL_GUARDED_BY(mutex_);
+  const bool log_min_sep_index_to_phase_stats_;
+  const bool check_opstats_logger_method_calling_order_;
   absl::Mutex mutex_;
 };
 
