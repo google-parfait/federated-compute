@@ -236,6 +236,21 @@ TEST_F(OpStatsLoggerImplTest, SetTaskName) {
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
+TEST_F(OpStatsLoggerImplTest, SetTaskNameWithoutStartPhaseLogging) {
+  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
+      .WillRepeatedly(Return(true));
+  EXPECT_DEATH(
+      {
+        auto opstats_logger =
+            CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
+                                kSessionName, kPopulationName);
+        opstats_logger->AddEventAndSetTaskName(
+            kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
+      },
+      testing::HasSubstr(
+          "AddEventAndSetTaskName called before StartLoggingForPhase"));
+}
+
 TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/2);
@@ -329,6 +344,50 @@ TEST_F(OpStatsLoggerImplTest, AddEvent) {
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
+TEST_F(OpStatsLoggerImplTest, AddEventWithoutStartPhaseLogging) {
+  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
+      .WillRepeatedly(Return(true));
+  EXPECT_DEATH(
+      {
+        auto opstats_logger =
+            CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
+                                kSessionName, kPopulationName);
+        opstats_logger->AddEvent(
+            OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
+      },
+      testing::HasSubstr("AddEvent called before StartLoggingForPhase"));
+}
+
+TEST_F(OpStatsLoggerImplTest, AddInitializationEventWithoutStartPhaseLogging) {
+  auto start_time = TimeUtil::GetCurrentTime();
+  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
+      .WillRepeatedly(Return(true));
+
+  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
+  auto opstats_logger =
+      CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
+                          kSessionName, kPopulationName);
+  opstats_logger->AddEvent(
+      OperationalStats::Event::EVENT_KIND_INITIALIZATION_ERROR_NONFATAL);
+  opstats_logger.reset();
+
+  auto db = PdsBackedOpStatsDb::Create(
+      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
+      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
+  ASSERT_OK(db);
+  auto data = (*db)->Read();
+  ASSERT_OK(data);
+
+  OpStatsSequence expected;
+  auto new_opstats = expected.add_opstats();
+  new_opstats->set_session_name(kSessionName);
+  new_opstats->set_population_name(kPopulationName);
+  new_opstats->add_events()->set_event_type(
+      OperationalStats::Event::EVENT_KIND_INITIALIZATION_ERROR_NONFATAL);
+
+  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
+}
+
 TEST_F(OpStatsLoggerImplTest, AddEventAfterTtl) {
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/2);
@@ -402,9 +461,26 @@ TEST_F(OpStatsLoggerImplTest, AddEventWithErrorMessage) {
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
+TEST_F(OpStatsLoggerImplTest,
+       AddEventWithErrorMessageWithoutStartPhaseLogging) {
+  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
+      .WillRepeatedly(Return(true));
+  EXPECT_DEATH(
+      {
+        auto opstats_logger =
+            CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
+                                kSessionName, kPopulationName);
+        opstats_logger->AddEventWithErrorMessage(
+            OperationalStats::Event::EVENT_KIND_ERROR_IO, "error");
+      },
+      testing::HasSubstr(
+          "AddEventWithErrorMessage called before StartLoggingForPhase"));
+}
+
 TEST_F(OpStatsLoggerImplTest, SetMinSepPolicyIndex) {
   EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
       .WillRepeatedly(Return(false));
+
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
 
@@ -434,13 +510,29 @@ TEST_F(OpStatsLoggerImplTest, SetMinSepPolicyIndex) {
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
-TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
-  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
+TEST_F(OpStatsLoggerImplTest, SetMinSepPolicyIndexWithoutStartPhaseLogging) {
+  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
+      .WillRepeatedly(Return(true));
 
+  EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
+      .WillRepeatedly(Return(true));
+
+  EXPECT_DEATH(
+      {
+        auto opstats_logger =
+            CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
+                                kSessionName, kPopulationName);
+        opstats_logger->SetMinSepPolicyIndex(1);
+      },
+      "SetMinSepPolicyIndex called before StartLoggingForPhase");
+}
+
+TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
+  const std::string kCollectionUri = "app:/collection_uri";
+  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
   auto opstats_logger =
       CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
                           kSessionName, kPopulationName);
-  const std::string kCollectionUri = "app:/collection_uri";
   const std::string kCollectionUriOther = "app:/collection_uri_other";
   opstats_logger->UpdateDatasetStats(kCollectionUri,
                                      /*additional_example_count=*/100,
@@ -476,6 +568,20 @@ TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
 
   (*data).clear_earliest_trustworthy_time();
   EXPECT_THAT(*data, EqualsProto(expected));
+}
+
+TEST_F(OpStatsLoggerImplTest, UpdateDatasetStatsWithoutStartPhaseLogging) {
+  const std::string kCollectionUri = "app:/collection_uri";
+  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
+      .WillRepeatedly(Return(true));
+  EXPECT_DEATH(
+      {
+        auto opstats_logger =
+            CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
+                                kSessionName, kPopulationName);
+        opstats_logger->UpdateDatasetStats(kCollectionUri, 100, 1000);
+      },
+      "UpdateDatasetStats called before StartLoggingForPhase");
 }
 
 TEST_F(OpStatsLoggerImplTest, RecordCollectionFirstAccessTime) {
@@ -561,6 +667,23 @@ TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
 
   (*data).clear_earliest_trustworthy_time();
   EXPECT_THAT(*data, EqualsProto(expected));
+}
+
+TEST_F(OpStatsLoggerImplTest, SetNetworkStatsWithoutStartPhaseLogging) {
+  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
+      .WillRepeatedly(Return(true));
+
+  EXPECT_DEATH(
+      {
+        auto opstats_logger =
+            CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
+                                kSessionName, kPopulationName);
+        opstats_logger->SetNetworkStats(
+            {.bytes_downloaded = 102,
+             .bytes_uploaded = 103,
+             .network_duration = absl::Milliseconds(104)});
+      },
+      "SetNetworkStats called before StartLoggingForPhase");
 }
 
 TEST_F(OpStatsLoggerImplTest, SetRetryWindow) {
