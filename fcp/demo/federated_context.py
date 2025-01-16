@@ -156,8 +156,9 @@ class FederatedContext(federated_language.program.FederatedContext):
                                               state)
     result_value_ref = self._create_tensor_reference_struct(
         comp.type_signature.result, checkpoint_future)
-    return tff.types.type_to_py_container(result_value_ref,
-                                          comp.type_signature.result)
+    return federated_language.framework.type_to_py_container(
+        result_value_ref, comp.type_signature.result
+    )
 
   def _is_state_structure_of_allowed_types(
       self,
