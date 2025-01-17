@@ -20,30 +20,42 @@ import "proto/attestation/reference_value.proto";
 
 option java_multiple_files = true;
 
-// A policy imposing limits on what can access a data blob and how many times,
-// as well as limits on all derived artifacts. The DataAccessPolicy defines a
-// graph, where each node is a data blob and each edge ("transform") specifies
-// a permitted usage of that blob.
+// A `DataAccessPolicy` governs access to client uploads. It authorizes a set of
+// named `LogicalPipelinePolicies` to process such uploads. Each
+// `LogicalPipelinePolicy` represents a permissible logical pipeline for client
+// upload processing, defining a high-level workflow.
+
+// Within each `LogicalPipelinePolicy`, one or more `PipelineVariantPolicy`
+// instances may be defined. Each `PipelineVariantPolicy` specifies a concrete
+// data processing graph, where nodes represent data blobs and edges represent
+// permissible transformations between them.
+
+// Access to client uploads is granted independently to each
+// `LogicalPipelinePolicy`. However, within a given `LogicalPipelinePolicy`,
+// only one of its associated `PipelineVariantPolicy` instances may process a
+// specific client upload.
 //
-// The blobs are identified by a numeric id; the initial blob has id 0, and
-// derived blobs receive arbitrary positive values.
+// Historically, this root message represented the policy for a single logical
+// pipeline variant, but now supports multiple logical pipelines and their
+// variants. The legacy fields are included for compatibility with existing
+// policies, but are deprecated. All new policies will use
+// `PipelineVariantPolicy` and `PipelineVariantPolicy.Transform` instead.
 //
-// For example:
-//                        [ 0 ]
-//            3 times by /     \ 1 time by
-//                app A /       \ app B
-//                   [ 1 ]      [ 2 ]
-//                                | 2 times by
-//                                | app C
-//                              [ 3 ]
+// TODO: b/390344558 - rename DataAccessPolicy to
+// AuthorizedLogicalPipelinePolicies.
 message DataAccessPolicy {
   // A list of all transforms that are allowed on this data and its derivatives.
-  repeated Transform transforms = 1;
+  repeated Transform transforms = 1 [deprecated = true];
 
   // Access budget that are shared between multiple transforms (if any).
-  repeated AccessBudget shared_access_budgets = 2;
+  repeated AccessBudget shared_access_budgets = 2 [deprecated = true];
 
+  // A transform that is allowed on this data and its derivatives.
   message Transform {
+    // Deprecated. Use PipelineVariantPolicy and PipelineVariantPolicy.Transform
+    // instead.
+    option deprecated = true;
+
     // The numeric id of the source blob in the graph.
     uint32 src = 1;
 
@@ -62,6 +74,65 @@ message DataAccessPolicy {
     repeated uint32 shared_access_budget_indices = 5;
 
     reserved 2;
+  }
+
+  // A map of names to the policies of the logical pipelines that are authorized
+  // to access the client upload.
+  //
+  // If this field is set, values in the deprecated fields above will be
+  // ignored. If this field is unset, the policy is considered to be legacy and
+  // only supports a single logical pipeline. The above deprecated fields will
+  // be used.
+  map<string, LogicalPipelinePolicy> pipelines = 3;
+}
+
+message LogicalPipelinePolicy {
+  // Policies for each pipeline instance that can serve as this logical
+  // pipeline. This fully specifies the data flow between worker stages as well
+  // as the binary hashes for each worker stage.
+  repeated PipelineVariantPolicy instances = 1;
+}
+
+// A policy imposing limits on what can access a data blob and how many times,
+// as well as limits on all derived artifacts. The PipelineVariantPolicy defines
+// a graph, where each node is a data blob and each edge ("transform") specifies
+// a permitted usage of that blob.
+//
+// The blobs are identified by a numeric id; the initial blob has id 0, and
+// derived blobs receive arbitrary positive values.
+//
+// For example:
+//                        [ 0 ]
+//            3 times by /     \ 1 time by
+//                app A /       \ app B
+//                   [ 1 ]      [ 2 ]
+//                                | 2 times by
+//                                | app C
+//                              [ 3 ]
+message PipelineVariantPolicy {
+  // A list of all transforms that are allowed on this data and its derivatives.
+  repeated Transform transforms = 1;
+
+  // Access budget that are shared between multiple transforms (if any).
+  repeated AccessBudget shared_access_budgets = 2;
+
+  message Transform {
+    // The numeric id of the source blob in the graph.
+    uint32 src = 1;
+
+    // A matcher for the properties of the application being authorized.
+    // If the transform should encrypt outputs, this should include fields that
+    // represent the possible node IDs in this policy graph that the application
+    // will assign to the outputs, which is necessary to ensure that the outputs
+    // will be subject to the correct rules for further transformation.
+    ApplicationMatcher application = 2;
+
+    // Limits on the application's access to the data.
+    AccessBudget access_budget = 3;
+
+    // The indices of shared AccessBudgets this transform is also subject to.
+    // *All* budgets must allow the usage for access to be granted.
+    repeated uint32 shared_access_budget_indices = 4;
   }
 }
 
