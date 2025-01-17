@@ -39,7 +39,7 @@ _TaskAssignmentMode = (
 
 
 @federated_language.federated_computation()
-def initialize() -> tff.Value:
+def initialize() -> federated_language.Value:
   """Returns the initial state."""
   return federated_language.federated_value(0, federated_language.SERVER)
 
