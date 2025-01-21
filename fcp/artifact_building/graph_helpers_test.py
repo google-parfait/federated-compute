@@ -412,6 +412,6 @@ class GraphHelperTest(absltest.TestCase):
 
 if __name__ == '__main__':
   with federated_language.framework.get_context_stack().install(
-      tff.test.create_runtime_error_context()
+      federated_language.framework.RuntimeErrorContext()
   ):
     absltest.main()

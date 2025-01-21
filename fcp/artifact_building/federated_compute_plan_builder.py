@@ -2039,7 +2039,7 @@ def build_plan(
       )
 
   with federated_language.framework.get_context_stack().install(
-      tff.test.create_runtime_error_context()
+      federated_language.framework.RuntimeErrorContext()
   ):
     if daf:
       assert grappler_config
