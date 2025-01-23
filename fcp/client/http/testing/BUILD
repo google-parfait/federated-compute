@@ -26,6 +26,7 @@ cc_library(
     testonly = True,
     srcs = ["test_helpers.cc"],
     hdrs = ["test_helpers.h"],
+    visibility = ["//visibility:public"],
     deps = [
         "//fcp/base",
         "//fcp/client/http:http_client",

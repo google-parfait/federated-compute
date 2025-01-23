@@ -23,6 +23,7 @@ cc_library(
     name = "temp_files",
     srcs = ["temp_files.cc"],
     hdrs = ["temp_files.h"],
+    visibility = ["//visibility:public"],
     deps = [
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:interfaces",
