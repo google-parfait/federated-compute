@@ -91,7 +91,7 @@ class FederatedComputationTest(absltest.TestCase):
     with self.assertRaises(TypeError):
       fc.FederatedComputation(_identity, name='comp')
 
-  @tff.test.with_context(
+  @federated_language.framework.with_context(
       tff.backends.native.create_sync_local_cpp_execution_context
   )
   def test_distribute_aggregate_form(self):
