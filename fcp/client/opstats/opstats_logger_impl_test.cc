@@ -669,23 +669,6 @@ TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
   EXPECT_THAT(*data, EqualsProto(expected));
 }
 
-TEST_F(OpStatsLoggerImplTest, SetNetworkStatsWithoutStartPhaseLogging) {
-  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
-      .WillRepeatedly(Return(true));
-
-  EXPECT_DEATH(
-      {
-        auto opstats_logger =
-            CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
-                                kSessionName, kPopulationName);
-        opstats_logger->SetNetworkStats(
-            {.bytes_downloaded = 102,
-             .bytes_uploaded = 103,
-             .network_duration = absl::Milliseconds(104)});
-      },
-      "SetNetworkStats called before StartLoggingForPhase");
-}
-
 TEST_F(OpStatsLoggerImplTest, SetRetryWindow) {
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
 

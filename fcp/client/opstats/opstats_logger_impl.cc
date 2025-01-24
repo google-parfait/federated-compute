@@ -204,8 +204,6 @@ void OpStatsLoggerImpl::SetNetworkStats(const NetworkStats& network_stats) {
             incremental_network_stats.network_duration);
     accumulated_network_stats_ = network_stats;
   } else {
-    FCP_CHECK(!check_opstats_logger_method_calling_order_)
-        << "SetNetworkStats called before StartLoggingForPhase";
     stats_.set_chunking_layer_bytes_downloaded(network_stats.bytes_downloaded);
     stats_.set_chunking_layer_bytes_uploaded(network_stats.bytes_uploaded);
     *stats_.mutable_network_duration() =
