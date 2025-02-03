@@ -36,6 +36,9 @@ message TffSessionConfig {
   // The numerical identifier for the result of the TFF session.
   // This field is only used by trusted services.
   uint32 output_access_policy_node_id = 4;
+  // Max concurrent computation calls in TensorFlow executor. When set to -1,
+  // the number will be determined by the number of CPUs.
+  int32 max_concurrent_computation_calls = 5;
 }
 
 // Configuration for the initial WriteRequest of each blob to be stored in the
