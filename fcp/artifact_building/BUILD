@@ -5,7 +5,6 @@ default_visibility = ["//fcp:internal"]
 py_library(
     name = "artifact_constants",
     srcs = ["artifact_constants.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
 )
@@ -13,7 +12,6 @@ py_library(
 py_library(
     name = "checkpoint_type",
     srcs = ["checkpoint_type.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
 )
@@ -21,7 +19,6 @@ py_library(
 py_library(
     name = "checkpoint_utils",
     srcs = ["checkpoint_utils.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -42,8 +39,6 @@ py_test(
     srcs = [
         "checkpoint_utils_test.py",
     ],
-    python_version = "PY3",
-    srcs_version = "PY3",
     deps = [
         ":checkpoint_utils",
         "//fcp/protos:plan_py_pb2",
@@ -59,7 +54,6 @@ py_test(
 py_library(
     name = "data_spec",
     srcs = ["data_spec.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -77,8 +71,6 @@ py_test(
     srcs = [
         "data_spec_test.py",
     ],
-    python_version = "PY3",
-    srcs_version = "PY3",
     deps = [
         ":data_spec",
         "//fcp/protos:plan_py_pb2",
@@ -92,7 +84,6 @@ py_test(
 py_library(
     name = "federated_compute_plan_builder",
     srcs = ["federated_compute_plan_builder.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -119,7 +110,6 @@ py_library(
 py_library(
     name = "graph_helpers",
     srcs = ["graph_helpers.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -139,8 +129,6 @@ py_test(
     size = "small",
     timeout = "moderate",
     srcs = ["graph_helpers_test.py"],
-    python_version = "PY3",
-    srcs_version = "PY3",
     deps = [
         ":data_spec",
         ":graph_helpers",
@@ -158,7 +146,6 @@ py_test(
 py_library(
     name = "plan_utils",
     srcs = ["plan_utils.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -173,8 +160,6 @@ py_test(
     srcs = [
         "plan_utils_test.py",
     ],
-    python_version = "PY3",
-    srcs_version = "PY3",
     deps = [
         ":checkpoint_utils",
         ":plan_utils",
@@ -187,7 +172,6 @@ py_test(
 py_library(
     name = "proto_helpers",
     srcs = ["proto_helpers.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -205,8 +189,6 @@ py_test(
     size = "small",
     timeout = "moderate",
     srcs = ["proto_helpers_test.py"],
-    python_version = "PY3",
-    srcs_version = "PY3",
     deps = [
         ":proto_helpers",
         ":variable_helpers",
@@ -220,7 +202,6 @@ py_test(
 py_library(
     name = "tensor_utils",
     srcs = ["tensor_utils.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -233,8 +214,6 @@ py_test(
     srcs = [
         "tensor_utils_test.py",
     ],
-    python_version = "PY3",
-    srcs_version = "PY3",
     deps = [
         ":tensor_utils",
         "@com_google_protobuf//:protobuf_python",
@@ -246,7 +225,6 @@ py_test(
 py_library(
     name = "test_utils",
     srcs = ["test_utils.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -260,8 +238,6 @@ py_test(
     srcs = [
         "test_utils_test.py",
     ],
-    python_version = "PY3",
-    srcs_version = "PY3",
     deps = [
         ":checkpoint_utils",
         ":test_utils",
@@ -274,7 +250,6 @@ py_test(
 py_library(
     name = "type_checks",
     srcs = ["type_checks.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -287,8 +262,6 @@ py_test(
     srcs = [
         "type_checks_test.py",
     ],
-    python_version = "PY3",
-    srcs_version = "PY3",
     deps = [
         ":type_checks",
         "@pypi_absl_py//:pkg",
@@ -299,7 +272,6 @@ py_test(
 py_library(
     name = "variable_helpers",
     srcs = ["variable_helpers.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -316,8 +288,6 @@ py_test(
     size = "small",
     timeout = "moderate",
     srcs = ["variable_helpers_test.py"],
-    python_version = "PY3",
-    srcs_version = "PY3",
     deps = [
         ":artifact_constants",
         ":variable_helpers",
@@ -332,7 +302,6 @@ py_test(
 py_library(
     name = "data_upload_plan_builder",
     srcs = ["data_upload_plan_builder.py"],
-    srcs_version = "PY3",
     visibility = default_visibility + [
     ],
     deps = [
@@ -343,8 +312,6 @@ py_library(
 py_test(
     name = "data_upload_plan_builder_test",
     srcs = ["data_upload_plan_builder_test.py"],
-    python_version = "PY3",
-    srcs_version = "PY3",
     deps = [
         ":data_upload_plan_builder",
         "//fcp/protos:plan_py_pb2",

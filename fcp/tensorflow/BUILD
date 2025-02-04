@@ -43,7 +43,6 @@ tf_cc_test(
 py_test(
     name = "tf_py_smoke_test",
     srcs = ["tf_py_smoke_test.py"],
-    python_version = "PY3",
     deps = ["@pypi_tensorflow//:pkg"],
 )
 
@@ -268,7 +267,6 @@ py_binary(
     name = "make_external_dataset_test_graph",
     testonly = True,
     srcs = ["make_external_dataset_test_graph.py"],
-    python_version = "PY3",
     deps = [
         ":external_dataset_py",
         "@pypi_tensorflow//:pkg",
@@ -386,7 +384,6 @@ tf_custom_op_py_library(
 py_test(
     name = "crc32_test",
     srcs = ["crc32_test.py"],
-    python_version = "PY3",
     deps = [
         ":crc32_py",
         "@pypi_tensorflow//:pkg",
@@ -456,7 +453,6 @@ py_proto_library(
 py_test(
     name = "example_selector_fuser_test",
     srcs = ["example_selector_fuser_test.py"],
-    python_version = "PY3",
     deps = [
         ":example_selector_fuser_py",
         ":test_selector_py_pb2",
@@ -562,7 +558,6 @@ py_binary(
     name = "make_serve_slices_test_graph",
     testonly = True,
     srcs = ["make_serve_slices_test_graph.py"],
-    python_version = "PY3",
     deps = [
         ":serve_slices_py",
         "@pypi_absl_py//:pkg",
@@ -663,7 +658,6 @@ py_test(
     name = "make_slices_selector_example_selector_test",
     testonly = True,
     srcs = ["make_slices_selector_example_selector_test.py"],
-    python_version = "PY3",
     deps = [
         ":make_slices_selector_example_selector_py",
         "//fcp/protos:plan_py_pb2",
@@ -735,7 +729,6 @@ py_test(
     name = "append_slices_test",
     testonly = True,
     srcs = ["append_slices_test.py"],
-    python_version = "PY3",
     deps = [
         ":append_slices_py",
         ":delete_file_py",
@@ -805,7 +798,6 @@ py_test(
     name = "delete_file_test",
     testonly = True,
     srcs = ["delete_file_test.py"],
-    python_version = "PY3",
     deps = [
         ":delete_file_py",
         "@pypi_tensorflow//:pkg",
@@ -872,7 +864,6 @@ py_test(
     name = "tensor_name_test",
     testonly = True,
     srcs = ["tensor_name_test.py"],
-    python_version = "PY3",
     deps = [
         ":tensor_name_py",
         "@pypi_tensorflow//:pkg",
@@ -935,7 +926,6 @@ tf_custom_op_py_library(
 py_test(
     name = "task_eligibility_info_ops_test",
     srcs = ["task_eligibility_info_ops_test.py"],
-    python_version = "PY3",
     deps = [
         ":task_eligibility_info_ops_py",
         "//fcp/protos:federated_api_py_pb2",
@@ -1005,7 +995,6 @@ tf_custom_op_py_library(
 py_test(
     name = "dictionary_ops_test",
     srcs = ["dictionary_ops_test.py"],
-    python_version = "PY3",
     deps = [
         ":dictionary_ops_py",
         "//fcp/dictionary:dictionary_py_pb2",
