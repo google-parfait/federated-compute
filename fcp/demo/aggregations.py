@@ -143,29 +143,34 @@ class Service:
     self._sessions: dict[str, _AggregationSessionState] = {}
     self._sessions_lock = threading.Lock()
 
-  def create_session(self,
-                     aggregation_requirements: AggregationRequirements) -> str:
+  def create_session(
+      self, aggregation_requirements: AggregationRequirements
+  ) -> str:
     """Creates a new aggregation session and returns its id."""
     session_id = str(uuid.uuid4())
     if (len(aggregation_requirements.plan.phase) != 1 or
         not aggregation_requirements.plan.phase[0].HasField('server_phase_v2')):
       raise ValueError('Plan must contain exactly one server_phase_v2.')
+    protocol_config = configuration_pb2.Configuration(
+        intrinsic_configs=[
+            self._translate_server_aggregation_config(aggregation_config)
+            for aggregation_config in aggregation_requirements.plan.phase[
+                0
+            ].server_phase_v2.aggregations
+        ]
+    )
 
     # NOTE: For simplicity, this implementation only creates a single,
-    # in-process aggregation shard. In a production implementation, there should
-    # be multiple shards running on separate servers to enable high rates of
-    # client contributions. Utilities for combining results from separate shards
-    # are still in development as of Jan 2023.
+    # in-process aggregation shard. In a production implementation, there
+    # should be multiple shards running on separate servers to enable high
+    # rates of client contributions. Utilities for combining results from
+    # separate shards are still in development as of Jan 2023.
+
     agg_protocol = aggregation_protocols.create_simple_aggregation_protocol(
-        configuration_pb2.Configuration(
-            intrinsic_configs=[
-                self._translate_server_aggregation_config(aggregation_config)
-                for aggregation_config in aggregation_requirements.plan.phase[
-                    0
-                ].server_phase_v2.aggregations
-            ]
-        )
+        protocol_config
     )
+
+    # Start the aggregation protocol.
     agg_protocol.Start(0)
 
     with self._sessions_lock:
@@ -305,8 +310,6 @@ class Service:
       self, plan_aggregation_config: plan_pb2.ServerAggregationConfig
   ) -> configuration_pb2.Configuration.IntrinsicConfig:
     """Transform the aggregation config for use by the aggregation service."""
-    if plan_aggregation_config.inner_aggregations:
-      raise AssertionError('Nested intrinsic structrues are not supported yet.')
     return configuration_pb2.Configuration.IntrinsicConfig(
         intrinsic_uri=plan_aggregation_config.intrinsic_uri,
         intrinsic_args=[
@@ -316,6 +319,10 @@ class Service:
         output_tensors=[
             self._translate_tensor_spec_proto(output_tensor)
             for output_tensor in plan_aggregation_config.output_tensors
+        ],
+        inner_intrinsics=[
+            self._translate_server_aggregation_config(inner_aggregation)
+            for inner_aggregation in plan_aggregation_config.inner_aggregations
         ],
     )
 
