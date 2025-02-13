@@ -825,6 +825,9 @@ proto_library(
     name = "example_query_result_proto",
     srcs = ["example_query_result.proto"],
     visibility = ["//visibility:public"],
+    deps = [
+        ":event_time_range_proto",
+    ],
 )
 
 java_proto_library(
@@ -836,6 +839,15 @@ cc_proto_library(
     name = "example_query_result_cc_proto",
     visibility = ["//visibility:public"],
     deps = [":example_query_result_proto"],
+)
+
+# --------------------------------------------------------------------
+# event_time_range.proto
+
+proto_library(
+    name = "event_time_range_proto",
+    srcs = ["event_time_range.proto"],
+    deps = ["@com_google_googleapis//google/type:datetime_proto"],
 )
 
 # --------------------------------------------------------------------

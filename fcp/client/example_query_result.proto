@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package fcp.client;
 
+import "fcp/client/event_time_range.proto";
+
 option java_package = "com.google.intelligence.fcp.client";
 option java_multiple_files = true;
 
@@ -79,29 +81,6 @@ message ExampleQueryResult {
     // the device to be eligible.
     int32 output_rows_count = 1;
 
-    message DateTime {
-      // Year of date. Must be from 1 to 9999, or 0 if specifying a
-      // datetime without a year.
-      int32 year = 1;
-      // Month of year. Must be from 1 to 12, or 0 if specifying a
-      // datetime without a month.
-      int32 month = 2;
-      // Day of month. Must be from 1 to 31 and valid for the year and
-      // month, or 0 if specifying a datetime without a day.
-      int32 day = 3;
-    }
-
-    // The event time range of the query results.
-    message EventTimeRange {
-      // If specified, start_event_time is the inclusive start time of the event
-      // time range.
-      DateTime start_event_time = 1;
-      // If specified, end_event_time is the non-inclusive end time of the event
-      // time range.
-      // end_event_time not specified + start_event_time specified, means the
-      // event time range is equal to the start_event_time.
-      DateTime end_event_time = 2;
-    }
     // Maps the query name to the event time range of the query results.
     map<string, EventTimeRange> event_time_range = 2;
   }

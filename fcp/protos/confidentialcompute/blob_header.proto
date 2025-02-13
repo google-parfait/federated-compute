@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+import "fcp/client/event_time_range.proto";
+
 option java_multiple_files = true;
 
 // A header included with each uploaded data blob, documenting how it was
@@ -40,4 +42,7 @@ message BlobHeader {
   // only be used by transforms with a matching `src` field. This field should
   // be 0 for non-derived blobs.
   uint32 access_policy_node_id = 4;
+
+  // The event time range of the blob.
+  client.EventTimeRange event_time_range = 6;
 }

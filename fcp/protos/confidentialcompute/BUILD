@@ -56,6 +56,7 @@ cc_proto_library(
 proto_library(
     name = "blob_header_proto",
     srcs = ["blob_header.proto"],
+    deps = ["//fcp/client:event_time_range_proto"],
 )
 
 cc_proto_library(
