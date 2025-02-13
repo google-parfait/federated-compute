@@ -304,3 +304,22 @@ java_proto_library(
     name = "access_policy_endorsement_options_java_proto",
     deps = [":access_policy_endorsement_options_proto"],
 )
+
+proto_library(
+    name = "program_worker_proto",
+    srcs = ["program_worker.proto"],
+    deps = ["@com_google_protobuf//:any_proto"],
+)
+
+cc_proto_library(
+    name = "program_worker_cc_proto",
+    deps = [":program_worker_proto"],
+)
+
+cc_grpc_library(
+    name = "program_worker_cc_grpc",
+    srcs = [":program_worker_proto"],
+    generate_mocks = True,
+    grpc_only = True,
+    deps = [":program_worker_cc_proto"],
+)
