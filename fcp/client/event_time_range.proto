@@ -27,13 +27,14 @@ option java_multiple_files = true;
 // fcp/client/example_query_result.proto
 // The associated time zone may differ for different queries, e.g. some queries
 // might return event time in UTC, while some use device local time zone.
+// Note that if a start_event_time is specified, an end_event_time should
+// always be specified. And if end_event_time is specified, start_event_time
+// should always be specified as well.
 message EventTimeRange {
   // If specified, start_event_time is the inclusive start time of the event
   // time range.
   google.type.DateTime start_event_time = 1;
   // If specified, end_event_time is the non-inclusive end time of the event
   // time range.
-  // end_event_time not specified + start_event_time specified, means the
-  // event time range is equal to the start_event_time.
   google.type.DateTime end_event_time = 2;
 }

@@ -24,10 +24,12 @@
 #include <utility>
 #include <vector>
 
+#include "google/type/datetime.pb.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/time/civil_time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/converters.h"
 #include "fcp/client/engine/common.h"
@@ -58,9 +60,79 @@ using tensorflow_federated::aggregation::Tensor;
 using tensorflow_federated::aggregation::TensorShape;
 
 namespace {
+// Converts the event time range to CivilSecond for comparison.
+absl::CivilSecond ConvertEventTimeRangeToCivilSecond(
+    const google::type::DateTime& event_time_range) {
+  return absl::CivilSecond(event_time_range.year(), event_time_range.month(),
+                           event_time_range.day(), event_time_range.hours(),
+                           event_time_range.minutes(),
+                           event_time_range.seconds());
+}
 
-// Converts example query results to client report wire format tensors. Example
-// query results order must be the same as example_query_spec.example_queries.
+// Merges the event time range from the example query results.
+EventTimeRange GetEventTimeRange(
+    const std::vector<
+        std::pair<ExampleQuerySpec::ExampleQuery, ExampleQueryResult>>&
+        structured_example_query_results) {
+  EventTimeRange merged_event_time_range;
+  for (auto const& [example_query, example_query_result] :
+       structured_example_query_results) {
+    for (auto const& [query_name, event_time_range] :
+         example_query_result.stats().event_time_range()) {
+      // Expands the merged start time if necessary.
+      if (event_time_range.has_start_event_time()) {
+        if (merged_event_time_range.has_start_event_time()) {
+          // Converts the start times to CivilSecond for comparison.
+          absl::CivilSecond merged_start_time =
+              ConvertEventTimeRangeToCivilSecond(
+                  merged_event_time_range.start_event_time());
+          absl::CivilSecond current_start_time =
+              ConvertEventTimeRangeToCivilSecond(
+                  event_time_range.start_event_time());
+          if (current_start_time < merged_start_time) {
+            *merged_event_time_range.mutable_start_event_time() =
+                event_time_range.start_event_time();
+          }
+        } else {
+          // If the merged event time range does not have a start time, but the
+          // current event time range does, then we should set the merged event
+          // time range's start time to the current event time range's start
+          // time.
+          *merged_event_time_range.mutable_start_event_time() =
+              event_time_range.start_event_time();
+        }
+      }
+
+      // Expands the merged end time if necessary.
+      if (event_time_range.has_end_event_time()) {
+        if (merged_event_time_range.has_end_event_time()) {
+          // Converts the end times to CivilSecond for comparison.
+          absl::CivilSecond merged_end_time =
+              ConvertEventTimeRangeToCivilSecond(
+                  merged_event_time_range.end_event_time());
+          absl::CivilSecond current_end_time =
+              ConvertEventTimeRangeToCivilSecond(
+                  event_time_range.end_event_time());
+          if (current_end_time > merged_end_time) {
+            *merged_event_time_range.mutable_end_event_time() =
+                event_time_range.end_event_time();
+          }
+        } else {
+          // If the merged event time range does not have an end time, but the
+          // current event time range does, then we should set the merged event
+          // time range's end time to the current event time range's end time.
+          *merged_event_time_range.mutable_end_event_time() =
+              event_time_range.end_event_time();
+        }
+      }
+    }
+  }
+  return merged_event_time_range;
+}
+
+// Converts example query results to client report wire format tensors.
+// Example query results order must be the same as
+// example_query_spec.example_queries.
 absl::Status GenerateAggregationTensorsFromStructuredResults(
     CheckpointBuilder& checkpoint_builder,
     const std::vector<
@@ -221,6 +293,25 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
             PlanOutcome::kExampleIteratorError,
             absl::DataLossError("Unexpected example query result format"));
       }
+      for (const auto& [query_name, event_time_range] :
+           example_query_result.stats().event_time_range()) {
+        if (event_time_range.has_start_event_time() &&
+            !event_time_range.has_end_event_time()) {
+          return PlanResult(
+              PlanOutcome::kExampleIteratorError,
+              absl::InvalidArgumentError("Start event time is specified, but "
+                                         "end event time is not for query: " +
+                                         query_name));
+        }
+        if (!event_time_range.has_start_event_time() &&
+            event_time_range.has_end_event_time()) {
+          return PlanResult(
+              PlanOutcome::kExampleIteratorError,
+              absl::InvalidArgumentError("End event time is specified, but "
+                                         "start event time is not for query: " +
+                                         query_name));
+        }
+      }
       // We currently use the number of example query output rows as the
       // 'example count' for the purpose of diagnostic logs. We may want to
       // reconsider this in the future and introduce a proper notion of the
@@ -268,6 +359,9 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
       auto checkpoint = checkpoint_builder->Build();
       if (checkpoint.ok()) {
         plan_result.federated_compute_checkpoint = std::move(*checkpoint);
+        auto event_time_range =
+            GetEventTimeRange(structured_example_query_results);
+        plan_result.event_time_range = std::move(event_time_range);
       } else {
         status = checkpoint.status();
       }

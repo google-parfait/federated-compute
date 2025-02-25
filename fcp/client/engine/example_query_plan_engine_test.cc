@@ -25,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include "google/type/datetime.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/flat_hash_map.h"
@@ -37,6 +38,7 @@
 #include "fcp/client/client_runner.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/event_time_range.pb.h"
 #include "fcp/client/example_query_result.pb.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/tensorflow/tensorflow_runner.h"
@@ -657,6 +659,371 @@ TEST_F(ExampleQueryPlanEngineTest,
       {kOutputStringTensorName, string_tensor->ToProto().SerializeAsString()}};
 
   ASSERT_THAT(*tensors, UnorderedElementsAreArray(expected_tensors));
+}
+
+TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithEventTimeRange) {
+  Initialize();
+
+  ExampleQuerySpec::OutputVectorSpec float_vector_spec;
+  float_vector_spec.set_vector_name("float_vector");
+  float_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::FLOAT);
+  ExampleQuerySpec::OutputVectorSpec string_vector_spec;
+  // Same vector name as in the other ExampleQuery, but with a different output
+  // one to make sure these vectors are distinguished in
+  // example_query_plan_engine.
+  string_vector_spec.set_vector_name(kOutputStringVectorName);
+  string_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::STRING);
+
+  ExampleQuerySpec::ExampleQuery second_example_query;
+  second_example_query.mutable_example_selector()->set_collection_uri(
+      "app:/second_collection");
+  (*second_example_query.mutable_output_vector_specs())["float_tensor"] =
+      float_vector_spec;
+  (*second_example_query
+        .mutable_output_vector_specs())["another_string_tensor"] =
+      string_vector_spec;
+  client_only_plan_.mutable_phase()
+      ->mutable_example_query_spec()
+      ->mutable_example_queries()
+      ->Add(std::move(second_example_query));
+
+  AggregationConfig aggregation_config;
+  aggregation_config.mutable_tf_v1_checkpoint_aggregation();
+  (*client_only_plan_.mutable_phase()
+        ->mutable_federated_example_query()
+        ->mutable_aggregations())["float_tensor"] = aggregation_config;
+
+  ExampleQueryResult second_example_query_result;
+  ExampleQueryResult::VectorData::Values float_values;
+  float_values.mutable_float_values()->add_value(0.24f);
+  float_values.mutable_float_values()->add_value(0.42f);
+  float_values.mutable_float_values()->add_value(0.33f);
+  ExampleQueryResult::VectorData::Values string_values;
+  string_values.mutable_string_values()->add_value("another_string_value");
+  (*second_example_query_result.mutable_vector_data()
+        ->mutable_vectors())["float_vector"] = float_values;
+  (*second_example_query_result.mutable_vector_data()
+        ->mutable_vectors())[kOutputStringVectorName] = string_values;
+  EventTimeRange event_time_range;
+  event_time_range.mutable_start_event_time()->set_year(2024);
+  event_time_range.mutable_start_event_time()->set_month(1);
+  event_time_range.mutable_start_event_time()->set_day(1);
+  event_time_range.mutable_end_event_time()->set_year(2024);
+  event_time_range.mutable_end_event_time()->set_month(1);
+  event_time_range.mutable_end_event_time()->set_day(7);
+  second_example_query_result.mutable_stats()
+      ->mutable_event_time_range()
+      ->insert({"query_name", event_time_range});
+  std::string example = second_example_query_result.SerializeAsString();
+
+  Dataset::ClientDataset dataset;
+  dataset.set_client_id("second_client_id");
+  dataset.add_example(example);
+  Dataset second_dataset;
+  second_dataset.mutable_client_data()->Add(std::move(dataset));
+
+  example_iterator_factory_ = std::make_unique<TwoExampleIteratorsFactory>(
+      [&dataset = dataset_](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      [&dataset = second_dataset](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      kCollectionUri, "app:/second_collection");
+
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_,
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+  engine::PlanResult result = plan_engine.RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+
+  ASSERT_THAT(result.event_time_range, EqualsProto(event_time_range));
+}
+
+TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
+  Initialize();
+
+  ExampleQuerySpec::OutputVectorSpec float_vector_spec;
+  float_vector_spec.set_vector_name("float_vector");
+  float_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::FLOAT);
+  ExampleQuerySpec::OutputVectorSpec string_vector_spec;
+  // Same vector name as in the other ExampleQuery, but with a different output
+  // one to make sure these vectors are distinguished in
+  // example_query_plan_engine.
+  string_vector_spec.set_vector_name(kOutputStringVectorName);
+  string_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::STRING);
+
+  ExampleQuerySpec::ExampleQuery second_example_query;
+  second_example_query.mutable_example_selector()->set_collection_uri(
+      "app:/second_collection");
+  (*second_example_query.mutable_output_vector_specs())["float_tensor"] =
+      float_vector_spec;
+  (*second_example_query
+        .mutable_output_vector_specs())["another_string_tensor"] =
+      string_vector_spec;
+  client_only_plan_.mutable_phase()
+      ->mutable_example_query_spec()
+      ->mutable_example_queries()
+      ->Add(std::move(second_example_query));
+
+  AggregationConfig aggregation_config;
+  aggregation_config.mutable_tf_v1_checkpoint_aggregation();
+  (*client_only_plan_.mutable_phase()
+        ->mutable_federated_example_query()
+        ->mutable_aggregations())["float_tensor"] = aggregation_config;
+
+  ExampleQueryResult example_query_result;
+  ExampleQueryResult::VectorData::Values int_values;
+  int_values.mutable_int64_values()->add_value(42);
+  int_values.mutable_int64_values()->add_value(24);
+  (*example_query_result.mutable_vector_data()
+        ->mutable_vectors())[kOutputIntVectorName] = int_values;
+  ExampleQueryResult::VectorData::Values string_values;
+  string_values.mutable_string_values()->add_value("value1");
+  string_values.mutable_string_values()->add_value("value2");
+  (*example_query_result.mutable_vector_data()
+        ->mutable_vectors())[kOutputStringVectorName] = string_values;
+  EventTimeRange event_time_range;
+  event_time_range.mutable_start_event_time()->set_year(2024);
+  event_time_range.mutable_start_event_time()->set_month(1);
+  event_time_range.mutable_start_event_time()->set_day(1);
+  event_time_range.mutable_start_event_time()->set_hours(2);
+  event_time_range.mutable_end_event_time()->set_year(2024);
+  event_time_range.mutable_end_event_time()->set_month(1);
+  event_time_range.mutable_end_event_time()->set_day(1);
+  event_time_range.mutable_end_event_time()->set_hours(2);
+  example_query_result.mutable_stats()->mutable_event_time_range()->insert(
+      {"query_name", event_time_range});
+
+  Dataset::ClientDataset client_dataset;
+  client_dataset.set_client_id("client_id");
+  client_dataset.add_example(example_query_result.SerializeAsString());
+  Dataset dataset;
+  dataset.mutable_client_data()->Add(std::move(client_dataset));
+
+  ExampleQueryResult second_example_query_result;
+  ExampleQueryResult::VectorData::Values float_values;
+  float_values.mutable_float_values()->add_value(0.24f);
+  float_values.mutable_float_values()->add_value(0.42f);
+  float_values.mutable_float_values()->add_value(0.33f);
+  ExampleQueryResult::VectorData::Values second_string_values;
+  second_string_values.mutable_string_values()->add_value(
+      "another_string_value");
+  (*second_example_query_result.mutable_vector_data()
+        ->mutable_vectors())["float_vector"] = float_values;
+  (*second_example_query_result.mutable_vector_data()
+        ->mutable_vectors())[kOutputStringVectorName] = second_string_values;
+  EventTimeRange second_event_time_range;
+  second_event_time_range.mutable_start_event_time()->set_year(2024);
+  second_event_time_range.mutable_start_event_time()->set_month(1);
+  second_event_time_range.mutable_start_event_time()->set_day(1);
+  second_event_time_range.mutable_start_event_time()->set_hours(1);
+  second_event_time_range.mutable_start_event_time()->set_minutes(1);
+  second_event_time_range.mutable_end_event_time()->set_year(2024);
+  second_event_time_range.mutable_end_event_time()->set_month(1);
+  second_event_time_range.mutable_end_event_time()->set_day(2);
+  second_event_time_range.mutable_end_event_time()->set_hours(1);
+  second_event_time_range.mutable_end_event_time()->set_minutes(1);
+  second_example_query_result.mutable_stats()
+      ->mutable_event_time_range()
+      ->insert({"query_name", second_event_time_range});
+
+  Dataset::ClientDataset second_client_dataset;
+  second_client_dataset.set_client_id("second_client_id");
+  second_client_dataset.add_example(
+      second_example_query_result.SerializeAsString());
+  Dataset second_dataset;
+  second_dataset.mutable_client_data()->Add(std::move(second_client_dataset));
+
+  example_iterator_factory_ = std::make_unique<TwoExampleIteratorsFactory>(
+      [&dataset = dataset](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      [&dataset = second_dataset](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      kCollectionUri, "app:/second_collection");
+
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_,
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+  engine::PlanResult result = plan_engine.RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+
+  ASSERT_THAT(result.event_time_range, EqualsProto(second_event_time_range));
+}
+
+TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
+  Initialize();
+
+  ExampleQuerySpec::OutputVectorSpec float_vector_spec;
+  float_vector_spec.set_vector_name("float_vector");
+  float_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::FLOAT);
+  ExampleQuerySpec::OutputVectorSpec string_vector_spec;
+  // Same vector name as in the other ExampleQuery, but with a different output
+  // one to make sure these vectors are distinguished in
+  // example_query_plan_engine.
+  string_vector_spec.set_vector_name(kOutputStringVectorName);
+  string_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::STRING);
+
+  ExampleQuerySpec::ExampleQuery second_example_query;
+  second_example_query.mutable_example_selector()->set_collection_uri(
+      "app:/second_collection");
+  (*second_example_query.mutable_output_vector_specs())["float_tensor"] =
+      float_vector_spec;
+  (*second_example_query
+        .mutable_output_vector_specs())["another_string_tensor"] =
+      string_vector_spec;
+  client_only_plan_.mutable_phase()
+      ->mutable_example_query_spec()
+      ->mutable_example_queries()
+      ->Add(std::move(second_example_query));
+
+  AggregationConfig aggregation_config;
+  aggregation_config.mutable_tf_v1_checkpoint_aggregation();
+  (*client_only_plan_.mutable_phase()
+        ->mutable_federated_example_query()
+        ->mutable_aggregations())["float_tensor"] = aggregation_config;
+
+  ExampleQueryResult example_query_result;
+  ExampleQueryResult::VectorData::Values int_values;
+  int_values.mutable_int64_values()->add_value(42);
+  int_values.mutable_int64_values()->add_value(24);
+  (*example_query_result.mutable_vector_data()
+        ->mutable_vectors())[kOutputIntVectorName] = int_values;
+  ExampleQueryResult::VectorData::Values string_values;
+  string_values.mutable_string_values()->add_value("value1");
+  string_values.mutable_string_values()->add_value("value2");
+  (*example_query_result.mutable_vector_data()
+        ->mutable_vectors())[kOutputStringVectorName] = string_values;
+  EventTimeRange event_time_range;
+  event_time_range.mutable_start_event_time()->set_year(2024);
+  event_time_range.mutable_start_event_time()->set_month(1);
+  event_time_range.mutable_start_event_time()->set_day(2);
+  event_time_range.mutable_start_event_time()->set_hours(1);
+  event_time_range.mutable_start_event_time()->set_minutes(1);
+  event_time_range.mutable_end_event_time()->set_year(2024);
+  event_time_range.mutable_end_event_time()->set_month(1);
+  event_time_range.mutable_end_event_time()->set_day(3);
+  event_time_range.mutable_end_event_time()->set_hours(1);
+  event_time_range.mutable_end_event_time()->set_minutes(1);
+  example_query_result.mutable_stats()->mutable_event_time_range()->insert(
+      {"query_name", event_time_range});
+
+  Dataset::ClientDataset client_dataset;
+  client_dataset.set_client_id("client_id");
+  client_dataset.add_example(example_query_result.SerializeAsString());
+  Dataset dataset;
+  dataset.mutable_client_data()->Add(std::move(client_dataset));
+
+  ExampleQueryResult second_example_query_result;
+  ExampleQueryResult::VectorData::Values float_values;
+  float_values.mutable_float_values()->add_value(0.24f);
+  float_values.mutable_float_values()->add_value(0.42f);
+  float_values.mutable_float_values()->add_value(0.33f);
+  ExampleQueryResult::VectorData::Values second_string_values;
+  second_string_values.mutable_string_values()->add_value(
+      "another_string_value");
+  (*second_example_query_result.mutable_vector_data()
+        ->mutable_vectors())["float_vector"] = float_values;
+  (*second_example_query_result.mutable_vector_data()
+        ->mutable_vectors())[kOutputStringVectorName] = second_string_values;
+  EventTimeRange second_event_time_range;
+  second_event_time_range.mutable_start_event_time()->set_year(2024);
+  second_event_time_range.mutable_start_event_time()->set_month(1);
+  second_event_time_range.mutable_start_event_time()->set_day(2);
+  second_event_time_range.mutable_end_event_time()->set_year(2024);
+  second_event_time_range.mutable_end_event_time()->set_month(1);
+  second_event_time_range.mutable_end_event_time()->set_day(3);
+  second_example_query_result.mutable_stats()
+      ->mutable_event_time_range()
+      ->insert({"query_name", second_event_time_range});
+
+  Dataset::ClientDataset second_client_dataset;
+  second_client_dataset.set_client_id("second_client_id");
+  second_client_dataset.add_example(
+      second_example_query_result.SerializeAsString());
+  Dataset second_dataset;
+  second_dataset.mutable_client_data()->Add(std::move(second_client_dataset));
+
+  example_iterator_factory_ = std::make_unique<TwoExampleIteratorsFactory>(
+      [&dataset = dataset](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      [&dataset = second_dataset](
+          const google::internal::federated::plan::ExampleSelector& selector) {
+        return std::make_unique<SimpleExampleIterator>(dataset);
+      },
+      kCollectionUri, "app:/second_collection");
+
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_,
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+  engine::PlanResult result = plan_engine.RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+
+  EventTimeRange expected_event_time_range;
+  expected_event_time_range.mutable_start_event_time()->set_year(2024);
+  expected_event_time_range.mutable_start_event_time()->set_month(1);
+  expected_event_time_range.mutable_start_event_time()->set_day(2);
+  expected_event_time_range.mutable_end_event_time()->set_year(2024);
+  expected_event_time_range.mutable_end_event_time()->set_month(1);
+  expected_event_time_range.mutable_end_event_time()->set_day(3);
+  expected_event_time_range.mutable_end_event_time()->set_hours(1);
+  expected_event_time_range.mutable_end_event_time()->set_minutes(1);
+  ASSERT_THAT(result.event_time_range, EqualsProto(expected_event_time_range));
+}
+
+TEST_F(ExampleQueryPlanEngineTest, MissingEndEventTimeFails) {
+  Initialize();
+  EventTimeRange event_time_range;
+  event_time_range.mutable_start_event_time()->set_year(2024);
+  event_time_range.mutable_start_event_time()->set_month(1);
+  event_time_range.mutable_start_event_time()->set_day(1);
+  event_time_range.mutable_start_event_time()->set_hours(2);
+
+  example_query_result_.mutable_stats()->mutable_event_time_range()->insert(
+      {"query_name", event_time_range});
+
+  Dataset::ClientDataset client_dataset;
+  client_dataset.set_client_id("client_id");
+  auto example = example_query_result_.SerializeAsString();
+  client_dataset.add_example(example);
+  Dataset dataset;
+  dataset.mutable_client_data()->Add(std::move(client_dataset));
+
+  example_iterator_factory_ =
+      std::make_unique<FunctionalExampleIteratorFactory>(
+          [&dataset = dataset](
+              const google::internal::federated::plan::ExampleSelector&
+                  selector) {
+            return std::make_unique<SimpleExampleIterator>(dataset);
+          });
+  EXPECT_CALL(mock_opstats_logger_,
+              UpdateDatasetStats(kCollectionUri, 1, example.size()));
+
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_,
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+  engine::PlanResult result = plan_engine.RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+
+  EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
 
 TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {

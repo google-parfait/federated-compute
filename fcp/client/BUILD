@@ -850,6 +850,11 @@ proto_library(
     deps = ["@com_google_googleapis//google/type:datetime_proto"],
 )
 
+cc_proto_library(
+    name = "event_time_range_cc_proto",
+    deps = [":event_time_range_proto"],
+)
+
 # --------------------------------------------------------------------
 # task_result_info.proto
 
