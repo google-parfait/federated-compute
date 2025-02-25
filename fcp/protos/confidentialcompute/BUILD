@@ -323,3 +323,14 @@ cc_grpc_library(
     grpc_only = True,
     deps = [":program_worker_cc_proto"],
 )
+
+proto_library(
+    name = "kms_proto",
+    srcs = ["kms.proto"],
+    deps = [
+        "@com_google_protobuf//:duration_proto",
+        "@com_google_protobuf//:timestamp_proto",
+        "@oak//proto/attestation:evidence_proto",
+        "@oak//proto/crypto:crypto_proto",
+    ],
+)
