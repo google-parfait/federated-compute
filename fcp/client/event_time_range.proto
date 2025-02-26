@@ -30,6 +30,10 @@ option java_multiple_files = true;
 // Note that if a start_event_time is specified, an end_event_time should
 // always be specified. And if end_event_time is specified, start_event_time
 // should always be specified as well.
+// In the case where end_event_time == start_event_time,  this is interpreted as
+// a 'whole' time range up to the granularity of the timestamp, e.g. if the
+// timestamp has values up to 'day' granularity then the time range is
+// interpreted as that whole day.
 message EventTimeRange {
   // If specified, start_event_time is the inclusive start time of the event
   // time range.
