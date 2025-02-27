@@ -325,6 +325,28 @@ cc_grpc_library(
 )
 
 proto_library(
+    name = "data_read_write_proto",
+    srcs = ["data_read_write.proto"],
+    deps = [
+        ":confidential_transform_proto",
+        "@com_google_protobuf//:any_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "data_read_write_cc_proto",
+    deps = [":data_read_write_proto"],
+)
+
+cc_grpc_library(
+    name = "data_read_write_cc_grpc",
+    srcs = [":data_read_write_proto"],
+    generate_mocks = True,
+    grpc_only = True,
+    deps = [":data_read_write_cc_proto"],
+)
+
+proto_library(
     name = "kms_proto",
     srcs = ["kms.proto"],
     deps = [
