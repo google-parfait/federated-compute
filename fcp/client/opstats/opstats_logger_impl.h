@@ -132,7 +132,6 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   OperationalStats::PhaseStats current_phase_stats_ ABSL_GUARDED_BY(mutex_);
   NetworkStats accumulated_network_stats_ ABSL_GUARDED_BY(mutex_);
   const bool log_min_sep_index_to_phase_stats_;
-  const bool check_opstats_logger_method_calling_order_;
   absl::Mutex mutex_;
 };
 

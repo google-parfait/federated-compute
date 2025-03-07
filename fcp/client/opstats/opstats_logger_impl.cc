@@ -53,9 +53,7 @@ OpStatsLoggerImpl::OpStatsLoggerImpl(std::unique_ptr<OpStatsDb> db,
     : db_(std::move(db)),
       log_manager_(log_manager),
       log_min_sep_index_to_phase_stats_(
-          flags->log_min_sep_index_to_phase_stats()),
-      check_opstats_logger_method_calling_order_(
-          flags->check_opstats_logger_method_calling_order()) {
+          flags->log_min_sep_index_to_phase_stats()) {
   log_manager_->LogDiag(DebugDiagCode::TRAINING_OPSTATS_ENABLED);
   log_manager_->LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_EXPECTED);
 
@@ -81,16 +79,12 @@ bool OpStatsLoggerImpl::IsInitializationEvent(
 void OpStatsLoggerImpl::AddEventAndSetTaskName(
     const std::string& task_name, OperationalStats::Event::EventKind event) {
   absl::MutexLock lock(&mutex_);
-  if (current_phase_stats_.phase() !=
-      OperationalStats::PhaseStats::UNSPECIFIED) {
-    AddNewEventToCurrentPhaseStats(event);
-    current_phase_stats_.set_task_name(task_name);
-  } else {
-    FCP_CHECK(!check_opstats_logger_method_calling_order_)
-        << "AddEventAndSetTaskName called before StartLoggingForPhase";
-    AddNewEventToStats(event);
-    stats_.set_task_name(task_name);
-  }
+  FCP_CHECK(current_phase_stats_.phase() !=
+            OperationalStats::PhaseStats::UNSPECIFIED)
+      << "AddEventAndSetTaskName called before StartLoggingForPhase";
+
+  AddNewEventToCurrentPhaseStats(event);
+  current_phase_stats_.set_task_name(task_name);
 }
 
 void OpStatsLoggerImpl::AddEvent(OperationalStats::Event::EventKind event) {
@@ -99,8 +93,7 @@ void OpStatsLoggerImpl::AddEvent(OperationalStats::Event::EventKind event) {
       OperationalStats::PhaseStats::UNSPECIFIED) {
     AddNewEventToCurrentPhaseStats(event);
   } else {
-    FCP_CHECK(!check_opstats_logger_method_calling_order_ ||
-              IsInitializationEvent(event))
+    FCP_CHECK(IsInitializationEvent(event))
         << "AddEvent called before StartLoggingForPhase";
     // Initialization events don't belong to any phase, we'll log it at the
     // top level of an OperationalStats message.
@@ -120,8 +113,7 @@ void OpStatsLoggerImpl::AddEventWithErrorMessage(
       current_phase_stats_.set_error_message(error_message);
     }
   } else {
-    FCP_CHECK(!check_opstats_logger_method_calling_order_ ||
-              IsInitializationEvent(event))
+    FCP_CHECK(IsInitializationEvent(event))
         << "AddEventWithErrorMessage called before "
         << "StartLoggingForPhase";
     AddNewEventToStats(event);
@@ -135,13 +127,10 @@ void OpStatsLoggerImpl::AddEventWithErrorMessage(
 void OpStatsLoggerImpl::SetMinSepPolicyIndex(int64_t current_index) {
   absl::MutexLock lock(&mutex_);
   if (log_min_sep_index_to_phase_stats_) {
-    if (current_phase_stats_.phase() !=
-        OperationalStats::PhaseStats::UNSPECIFIED) {
-      current_phase_stats_.set_min_sep_policy_index(current_index);
-    } else {
-      FCP_CHECK(!check_opstats_logger_method_calling_order_)
-          << "SetMinSepPolicyIndex called before StartLoggingForPhase";
-    }
+    FCP_CHECK(current_phase_stats_.phase() !=
+              OperationalStats::PhaseStats::UNSPECIFIED)
+        << "SetMinSepPolicyIndex called before StartLoggingForPhase";
+    current_phase_stats_.set_min_sep_policy_index(current_index);
   } else {
     stats_.set_min_sep_policy_index(current_index);
   }
@@ -160,15 +149,11 @@ void OpStatsLoggerImpl::UpdateDatasetStats(
     int64_t additional_example_size_bytes) {
   absl::MutexLock lock(&mutex_);
   OperationalStats::DatasetStats* dataset_stats;
-  if (current_phase_stats_.phase() !=
-      OperationalStats::PhaseStats::UNSPECIFIED) {
-    dataset_stats =
-        &(*current_phase_stats_.mutable_dataset_stats())[collection_uri];
-  } else {
-    FCP_CHECK(!check_opstats_logger_method_calling_order_)
-        << "UpdateDatasetStats called before StartLoggingForPhase";
-    dataset_stats = &(*stats_.mutable_dataset_stats())[collection_uri];
-  }
+  FCP_CHECK(current_phase_stats_.phase() !=
+            OperationalStats::PhaseStats::UNSPECIFIED)
+      << "UpdateDatasetStats called before StartLoggingForPhase";
+  dataset_stats =
+      &(*current_phase_stats_.mutable_dataset_stats())[collection_uri];
 
   dataset_stats->set_num_examples_read(dataset_stats->num_examples_read() +
                                        additional_example_count);
@@ -308,14 +293,11 @@ void OpStatsLoggerImpl::StopLoggingForTheCurrentPhase() {
   absl::MutexLock lock(&mutex_);
 
   // Only add the current PhaseStats when it's not empty.
-  if (current_phase_stats_.phase() !=
-      OperationalStats::PhaseStats::UNSPECIFIED) {
-    *stats_.add_phase_stats() = current_phase_stats_;
-    current_phase_stats_ = OperationalStats::PhaseStats();
-  } else {
-    FCP_CHECK(!check_opstats_logger_method_calling_order_)
-        << "StopLoggingForTheCurrentPhase called before StartLoggingForPhase";
-  }
+  FCP_CHECK(current_phase_stats_.phase() !=
+            OperationalStats::PhaseStats::UNSPECIFIED)
+      << "StopLoggingForTheCurrentPhase called before StartLoggingForPhase";
+  *stats_.add_phase_stats() = current_phase_stats_;
+  current_phase_stats_ = OperationalStats::PhaseStats();
 }
 
 std::unique_ptr<OpStatsLogger> CreateOpStatsLogger(

@@ -177,68 +177,7 @@ class OpStatsLoggerImplTest : public testing::Test {
   StrictMock<MockLogManager> mock_log_manager_;
 };
 
-TEST_F(OpStatsLoggerImplTest, SetTaskName) {
-  auto start_time = TimeUtil::GetCurrentTime();
-  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/3);
-
-  auto opstats_logger =
-      CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
-                          kSessionName, kPopulationName);
-  opstats_logger->AddEventAndSetTaskName(
-      kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-
-  opstats_logger.reset();
-
-  auto opstats_logger_no_population = CreateOpStatsLogger(
-      base_dir_, &mock_flags_, &mock_log_manager_, kSessionName,
-      /*population_name=*/"");
-  opstats_logger_no_population->AddEventAndSetTaskName(
-      kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-
-  opstats_logger_no_population.reset();
-
-  auto opstats_logger_no_session =
-      CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
-                          /*session_name=*/"", kPopulationName);
-  opstats_logger_no_session->AddEventAndSetTaskName(
-      kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-
-  opstats_logger_no_session.reset();
-
-  auto db = PdsBackedOpStatsDb::Create(
-      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
-  ASSERT_OK(db);
-  auto data = (*db)->Read();
-  ASSERT_OK(data);
-
-  OpStatsSequence expected;
-  // Add the first run
-  auto new_opstats = expected.add_opstats();
-  new_opstats->set_session_name(kSessionName);
-  new_opstats->set_population_name(kPopulationName);
-  new_opstats->set_task_name(kTaskName);
-  new_opstats->add_events()->set_event_type(
-      OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-  // Add the second run
-  new_opstats = expected.add_opstats();
-  new_opstats->set_session_name(kSessionName);
-  new_opstats->set_task_name(kTaskName);
-  new_opstats->add_events()->set_event_type(
-      OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-  // Add the third run
-  new_opstats = expected.add_opstats();
-  new_opstats->set_population_name(kPopulationName);
-  new_opstats->set_task_name(kTaskName);
-  new_opstats->add_events()->set_event_type(
-      OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
-}
-
 TEST_F(OpStatsLoggerImplTest, SetTaskNameWithoutStartPhaseLogging) {
-  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
-      .WillRepeatedly(Return(true));
   EXPECT_DEATH(
       {
         auto opstats_logger =
@@ -258,6 +197,7 @@ TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
   auto opstats_logger =
       CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
                           kSessionName, kPopulationName);
+  opstats_logger->StartLoggingForPhase(OperationalStats::PhaseStats::CHECKIN);
   opstats_logger->AddEventAndSetTaskName(
       kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
   opstats_logger.reset();
@@ -278,6 +218,8 @@ TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
   auto opstats_logger_no_population = CreateOpStatsLogger(
       base_dir_, &mock_flags_, &mock_log_manager_, kSessionName,
       /*population_name=*/"");
+  opstats_logger_no_population->StartLoggingForPhase(
+      OperationalStats::PhaseStats::CHECKIN);
   opstats_logger_no_population->AddEventAndSetTaskName(
       kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
 
@@ -294,59 +236,15 @@ TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
   OpStatsSequence expected;
   auto new_opstats = expected.add_opstats();
   new_opstats->set_session_name(kSessionName);
-  new_opstats->set_task_name(kTaskName);
-  new_opstats->add_events()->set_event_type(
+  auto phase_stats = new_opstats->add_phase_stats();
+  phase_stats->set_phase(OperationalStats::PhaseStats::CHECKIN);
+  phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
-}
-
-TEST_F(OpStatsLoggerImplTest, AddEvent) {
-  auto start_time = TimeUtil::GetCurrentTime();
-  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/2);
-
-  auto opstats_logger =
-      CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
-                          kSessionName, kPopulationName);
-  opstats_logger->AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
-  opstats_logger.reset();
-
-  auto opstats_logger_no_population = CreateOpStatsLogger(
-      base_dir_, &mock_flags_, &mock_log_manager_, kSessionName,
-      /*population_name=*/"");
-  opstats_logger_no_population->AddEvent(
-      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
-  opstats_logger_no_population->AddEvent(
-      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
-  opstats_logger_no_population.reset();
-
-  auto db = PdsBackedOpStatsDb::Create(
-      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
-  ASSERT_OK(db);
-  auto data = (*db)->Read();
-  ASSERT_OK(data);
-
-  OpStatsSequence expected;
-  // Add the first run
-  auto new_opstats = expected.add_opstats();
-  new_opstats->set_session_name(kSessionName);
-  new_opstats->set_population_name(kPopulationName);
-  new_opstats->add_events()->set_event_type(
-      OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
-  // Add the second run
-  new_opstats = expected.add_opstats();
-  new_opstats->set_session_name(kSessionName);
-  new_opstats->add_events()->set_event_type(
-      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
-  new_opstats->add_events()->set_event_type(
-      OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
-
+  phase_stats->set_task_name(kTaskName);
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
 TEST_F(OpStatsLoggerImplTest, AddEventWithoutStartPhaseLogging) {
-  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
-      .WillRepeatedly(Return(true));
   EXPECT_DEATH(
       {
         auto opstats_logger =
@@ -360,8 +258,6 @@ TEST_F(OpStatsLoggerImplTest, AddEventWithoutStartPhaseLogging) {
 
 TEST_F(OpStatsLoggerImplTest, AddInitializationEventWithoutStartPhaseLogging) {
   auto start_time = TimeUtil::GetCurrentTime();
-  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
-      .WillRepeatedly(Return(true));
 
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
   auto opstats_logger =
@@ -398,12 +294,15 @@ TEST_F(OpStatsLoggerImplTest, AddEventAfterTtl) {
   auto opstats_logger =
       CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
                           kSessionName, kPopulationName);
+  opstats_logger->StartLoggingForPhase(OperationalStats::PhaseStats::CHECKIN);
   opstats_logger->AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
   opstats_logger.reset();
 
   auto opstats_logger_no_population = CreateOpStatsLogger(
       base_dir_, &mock_flags_, &mock_log_manager_, kSessionName,
       /*population_name=*/"");
+  opstats_logger_no_population->StartLoggingForPhase(
+      OperationalStats::PhaseStats::CHECKIN);
   opstats_logger_no_population->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
   opstats_logger_no_population->AddEvent(
@@ -421,50 +320,18 @@ TEST_F(OpStatsLoggerImplTest, AddEventAfterTtl) {
   OpStatsSequence expected;
   auto new_opstats = expected.add_opstats();
   new_opstats->set_session_name(kSessionName);
-  new_opstats->add_events()->set_event_type(
+  auto phase_stats = new_opstats->add_phase_stats();
+  phase_stats->set_phase(OperationalStats::PhaseStats::CHECKIN);
+  phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
-  new_opstats->add_events()->set_event_type(
+  phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
-
-  CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
-}
-
-TEST_F(OpStatsLoggerImplTest, AddEventWithErrorMessage) {
-  auto start_time = TimeUtil::GetCurrentTime();
-  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
-
-  auto opstats_logger =
-      CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
-                          kSessionName, kPopulationName);
-  opstats_logger->AddEventWithErrorMessage(
-      OperationalStats::Event::EVENT_KIND_ERROR_IO, "first error");
-  opstats_logger->AddEventWithErrorMessage(
-      OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW, "second error");
-  opstats_logger.reset();
-
-  auto db = PdsBackedOpStatsDb::Create(
-      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
-  auto data = (*db)->Read();
-  ASSERT_OK(data);
-
-  OpStatsSequence expected;
-  auto new_opstats = expected.add_opstats();
-  new_opstats->set_session_name(kSessionName);
-  new_opstats->set_population_name(kPopulationName);
-  new_opstats->add_events()->set_event_type(
-      OperationalStats::Event::EVENT_KIND_ERROR_IO);
-  new_opstats->add_events()->set_event_type(
-      OperationalStats::Event::EVENT_KIND_ERROR_TENSORFLOW);
-  new_opstats->set_error_message("first error");
 
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
 TEST_F(OpStatsLoggerImplTest,
        AddEventWithErrorMessageWithoutStartPhaseLogging) {
-  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
-      .WillRepeatedly(Return(true));
   EXPECT_DEATH(
       {
         auto opstats_logger =
@@ -487,6 +354,7 @@ TEST_F(OpStatsLoggerImplTest, SetMinSepPolicyIndex) {
   auto opstats_logger =
       CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
                           kSessionName, kPopulationName);
+  opstats_logger->StartLoggingForPhase(OperationalStats::PhaseStats::CHECKIN);
   opstats_logger->AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
   opstats_logger->SetMinSepPolicyIndex(1);
 
@@ -504,16 +372,15 @@ TEST_F(OpStatsLoggerImplTest, SetMinSepPolicyIndex) {
   new_opstats->set_session_name(kSessionName);
   new_opstats->set_population_name(kPopulationName);
   new_opstats->set_min_sep_policy_index(1);
-  new_opstats->add_events()->set_event_type(
+  auto phase_stats = new_opstats->add_phase_stats();
+  phase_stats->set_phase(OperationalStats::PhaseStats::CHECKIN);
+  phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
 
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
 TEST_F(OpStatsLoggerImplTest, SetMinSepPolicyIndexWithoutStartPhaseLogging) {
-  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
-      .WillRepeatedly(Return(true));
-
   EXPECT_CALL(mock_flags_, log_min_sep_index_to_phase_stats())
       .WillRepeatedly(Return(true));
 
@@ -527,53 +394,8 @@ TEST_F(OpStatsLoggerImplTest, SetMinSepPolicyIndexWithoutStartPhaseLogging) {
       "SetMinSepPolicyIndex called before StartLoggingForPhase");
 }
 
-TEST_F(OpStatsLoggerImplTest, UpdateDatasetStats) {
-  const std::string kCollectionUri = "app:/collection_uri";
-  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
-  auto opstats_logger =
-      CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
-                          kSessionName, kPopulationName);
-  const std::string kCollectionUriOther = "app:/collection_uri_other";
-  opstats_logger->UpdateDatasetStats(kCollectionUri,
-                                     /*additional_example_count=*/100,
-                                     /*additional_example_size_bytes=*/1000);
-  opstats_logger->UpdateDatasetStats(kCollectionUriOther,
-                                     /*additional_example_count=*/200,
-                                     /*additional_example_size_bytes=*/2000);
-  opstats_logger->UpdateDatasetStats(kCollectionUri,
-                                     /*additional_example_count=*/300,
-                                     /*additional_example_size_bytes=*/3000);
-  opstats_logger.reset();
-
-  auto db = PdsBackedOpStatsDb::Create(
-      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
-  auto data = (*db)->Read();
-  ASSERT_OK(data);
-
-  OpStatsSequence expected;
-  auto new_opstats = expected.add_opstats();
-  new_opstats->set_session_name(kSessionName);
-  new_opstats->set_population_name(kPopulationName);
-  OperationalStats::DatasetStats dataset_stats;
-  dataset_stats.set_num_examples_read(400);
-  dataset_stats.set_num_bytes_read(4000);
-  (*new_opstats->mutable_dataset_stats())[kCollectionUri] =
-      std::move(dataset_stats);
-  OperationalStats::DatasetStats dataset_stats_other;
-  dataset_stats_other.set_num_examples_read(200);
-  dataset_stats_other.set_num_bytes_read(2000);
-  (*new_opstats->mutable_dataset_stats())[kCollectionUriOther] =
-      std::move(dataset_stats_other);
-
-  (*data).clear_earliest_trustworthy_time();
-  EXPECT_THAT(*data, EqualsProto(expected));
-}
-
 TEST_F(OpStatsLoggerImplTest, UpdateDatasetStatsWithoutStartPhaseLogging) {
   const std::string kCollectionUri = "app:/collection_uri";
-  EXPECT_CALL(mock_flags_, check_opstats_logger_method_calling_order())
-      .WillRepeatedly(Return(true));
   EXPECT_DEATH(
       {
         auto opstats_logger =
@@ -593,6 +415,8 @@ TEST_F(OpStatsLoggerImplTest, RecordCollectionFirstAccessTime) {
   const std::string kCollectionUri = "app:/collection_uri";
   const std::string kCollectionUriOther = "app:/collection_uri_other";
   absl::Time collection_first_access_time = absl::Now();
+  opstats_logger->StartLoggingForPhase(
+      OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger->RecordCollectionFirstAccessTime(kCollectionUri,
                                                   collection_first_access_time);
   opstats_logger->UpdateDatasetStats(kCollectionUri,
@@ -613,57 +437,21 @@ TEST_F(OpStatsLoggerImplTest, RecordCollectionFirstAccessTime) {
   auto new_opstats = expected.add_opstats();
   new_opstats->set_session_name(kSessionName);
   new_opstats->set_population_name(kPopulationName);
+  auto phase_stats = new_opstats->add_phase_stats();
+  phase_stats->set_phase(OperationalStats::PhaseStats::COMPUTATION);
   OperationalStats::DatasetStats dataset_stats;
   dataset_stats.set_num_examples_read(100);
   dataset_stats.set_num_bytes_read(1000);
   *dataset_stats.mutable_first_access_timestamp() =
       ::fcp::TimeUtil::ConvertAbslToProtoTimestamp(
           collection_first_access_time);
-  (*new_opstats->mutable_dataset_stats())[kCollectionUri] =
+  (*phase_stats->mutable_dataset_stats())[kCollectionUri] =
       std::move(dataset_stats);
   OperationalStats::DatasetStats dataset_stats_other;
   dataset_stats_other.set_num_examples_read(200);
   dataset_stats_other.set_num_bytes_read(2000);
-  (*new_opstats->mutable_dataset_stats())[kCollectionUriOther] =
+  (*phase_stats->mutable_dataset_stats())[kCollectionUriOther] =
       std::move(dataset_stats_other);
-
-  (*data).clear_earliest_trustworthy_time();
-  EXPECT_THAT(*data, EqualsProto(expected));
-}
-
-TEST_F(OpStatsLoggerImplTest, SetNetworkStats) {
-  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1);
-
-  auto opstats_logger =
-      CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
-                          kSessionName, kPopulationName);
-  opstats_logger->SetNetworkStats(
-      {.bytes_downloaded = 102,
-       .bytes_uploaded = 103,
-       .network_duration = absl::Milliseconds(104)});
-  opstats_logger->SetNetworkStats(
-      {.bytes_downloaded = 202,
-       .bytes_uploaded = 203,
-       .network_duration = absl::Milliseconds(204)});
-  opstats_logger.reset();
-
-  auto db = PdsBackedOpStatsDb::Create(
-      base_dir_, mock_flags_.opstats_ttl_days() * absl::Hours(24),
-      mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes());
-  ASSERT_OK(db);
-  auto data = (*db)->Read();
-  ASSERT_OK(data);
-
-  OpStatsSequence expected;
-  auto new_opstats = expected.add_opstats();
-  new_opstats->set_session_name(kSessionName);
-  new_opstats->set_population_name(kPopulationName);
-  // The bytes_downloaded/bytes_uploaded fields should not be set anymore
-  new_opstats->set_chunking_layer_bytes_downloaded(202);
-  new_opstats->set_chunking_layer_bytes_uploaded(203);
-  // The new network_duration field should be set now.
-  new_opstats->mutable_network_duration()->set_nanos(
-      static_cast<int32_t>(absl::ToInt64Nanoseconds(absl::Milliseconds(204))));
 
   (*data).clear_earliest_trustworthy_time();
   EXPECT_THAT(*data, EqualsProto(expected));
@@ -705,18 +493,24 @@ TEST_F(OpStatsLoggerImplTest, AddEventCommitAddMoreEvents) {
   auto opstats_logger =
       CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
                           kSessionName, kPopulationName);
+  opstats_logger->StartLoggingForPhase(OperationalStats::PhaseStats::CHECKIN);
   opstats_logger->AddEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
   opstats_logger.reset();
 
   auto opstats_logger_no_population = CreateOpStatsLogger(
       base_dir_, &mock_flags_, &mock_log_manager_, kSessionName,
       /*population_name=*/"");
+  opstats_logger_no_population->StartLoggingForPhase(
+      OperationalStats::PhaseStats::ELIGIBILITY_EVAL_CHECKIN);
   opstats_logger_no_population->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
   ASSERT_OK(opstats_logger_no_population->CommitToStorage());
   opstats_logger_no_population->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
+  opstats_logger_no_population->StopLoggingForTheCurrentPhase();
   ASSERT_OK(opstats_logger_no_population->CommitToStorage());
+  opstats_logger_no_population->StartLoggingForPhase(
+      OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger_no_population->AddEvent(
       OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
   opstats_logger_no_population.reset();
@@ -730,19 +524,26 @@ TEST_F(OpStatsLoggerImplTest, AddEventCommitAddMoreEvents) {
 
   OpStatsSequence expected;
   // Add the first run
-  auto second_run = expected.add_opstats();
-  second_run->set_session_name(kSessionName);
-  second_run->set_population_name(kPopulationName);
-  second_run->add_events()->set_event_type(
+  auto first_run = expected.add_opstats();
+  first_run->set_session_name(kSessionName);
+  first_run->set_population_name(kPopulationName);
+  auto phase_stats = first_run->add_phase_stats();
+  phase_stats->set_phase(OperationalStats::PhaseStats::CHECKIN);
+  phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED);
   // Add the second run
-  second_run = expected.add_opstats();
+  auto second_run = expected.add_opstats();
   second_run->set_session_name(kSessionName);
-  second_run->add_events()->set_event_type(
+  auto second_phase_stats = second_run->add_phase_stats();
+  second_phase_stats->set_phase(
+      OperationalStats::PhaseStats::ELIGIBILITY_EVAL_CHECKIN);
+  second_phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
-  second_run->add_events()->set_event_type(
+  second_phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
-  second_run->add_events()->set_event_type(
+  auto third_phase_stats = second_run->add_phase_stats();
+  third_phase_stats->set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  third_phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
 
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
@@ -759,13 +560,17 @@ TEST_F(OpStatsLoggerImplTest, MisconfiguredTtlMultipleCommit) {
   auto opstats_logger = std::make_unique<OpStatsLoggerImpl>(
       std::move(db_zero_ttl), &mock_log_manager_, &mock_flags_, kSessionName,
       kPopulationName);
-
+  opstats_logger->StartLoggingForPhase(
+      OperationalStats::PhaseStats::ELIGIBILITY_EVAL_CHECKIN);
   opstats_logger->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
   ASSERT_OK(opstats_logger->CommitToStorage());
   opstats_logger->AddEvent(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
   ASSERT_OK(opstats_logger->CommitToStorage());
+  opstats_logger->StopLoggingForTheCurrentPhase();
+  opstats_logger->StartLoggingForPhase(
+      OperationalStats::PhaseStats::COMPUTATION);
   opstats_logger->AddEvent(
       OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
   opstats_logger.reset();
@@ -783,11 +588,16 @@ TEST_F(OpStatsLoggerImplTest, MisconfiguredTtlMultipleCommit) {
   auto expected_stats = expected.add_opstats();
   expected_stats->set_population_name(kPopulationName);
   expected_stats->set_session_name(kSessionName);
-  expected_stats->add_events()->set_event_type(
+  auto phase_stats = expected_stats->add_phase_stats();
+  phase_stats->set_phase(
+      OperationalStats::PhaseStats::ELIGIBILITY_EVAL_CHECKIN);
+  phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_CHECKIN_STARTED);
-  expected_stats->add_events()->set_event_type(
+  phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_ELIGIBILITY_REJECTED);
-  expected_stats->add_events()->set_event_type(
+  auto another_phase_stats = expected_stats->add_phase_stats();
+  another_phase_stats->set_phase(OperationalStats::PhaseStats::COMPUTATION);
+  another_phase_stats->add_events()->set_event_type(
       OperationalStats::Event::EVENT_KIND_TRAIN_NOT_STARTED);
 
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
