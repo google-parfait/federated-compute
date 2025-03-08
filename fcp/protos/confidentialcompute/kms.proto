@@ -18,8 +18,10 @@ package fcp.confidentialcompute;
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
+import "google/rpc/status.proto";
 import "proto/attestation/evidence.proto";
 import "proto/crypto/crypto.proto";
+import "proto/session/session.proto";
 
 option java_multiple_files = true;
 
@@ -316,4 +318,15 @@ message ReleaseResultsResponse {
 
   // The updated state of the pipeline(s).
   repeated LogicalPipelineState logical_pipeline_states = 2;
+}
+
+// A oak.session.v1.SessionResponse wrapper to allow application-level failures
+// to be returned from the TCP Actor. This message is not part of the public
+// KMS API.
+message SessionResponseWithStatus {
+  // The status of the response. If not OK, `response` should be ignored.
+  google.rpc.Status status = 1;
+
+  // The session response.
+  oak.session.v1.SessionResponse response = 2;
 }
