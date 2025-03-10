@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// LINT: LEGACY_NAMES
 syntax = "proto3";
 
 package fcp.confidentialcompute;
@@ -78,6 +79,8 @@ enum GemmaModel {
   GEMMA_TINY = 1;
   GEMMA_2B = 2;
   GEMMA2_2B = 3;
+  GEMMA_7B = 4;
+  GEMMA2_9B = 5;
 }
 
 // An enum of Gemma model training types supported for inference in TEE. Details
