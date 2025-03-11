@@ -280,6 +280,16 @@ proto_library(
     ],
 )
 
+cc_proto_library(
+    name = "access_policy_endorsement_options_cc_proto",
+    deps = [":access_policy_endorsement_options_proto"],
+)
+
+java_proto_library(
+    name = "access_policy_endorsement_options_java_proto",
+    deps = [":access_policy_endorsement_options_proto"],
+)
+
 proto_library(
     name = "private_inference_proto",
     srcs = ["private_inference.proto"],
@@ -293,16 +303,6 @@ cc_proto_library(
 py_proto_library(
     name = "private_inference_py_pb2",
     deps = [":private_inference_proto"],
-)
-
-cc_proto_library(
-    name = "access_policy_endorsement_options_cc_proto",
-    deps = [":access_policy_endorsement_options_proto"],
-)
-
-java_proto_library(
-    name = "access_policy_endorsement_options_java_proto",
-    deps = [":access_policy_endorsement_options_proto"],
 )
 
 proto_library(
