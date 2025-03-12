@@ -347,6 +347,27 @@ cc_grpc_library(
 )
 
 proto_library(
+    name = "computation_delegation_proto",
+    srcs = ["computation_delegation.proto"],
+    deps = [
+        "@com_google_protobuf//:any_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "computation_delegation_cc_proto",
+    deps = [":computation_delegation_proto"],
+)
+
+cc_grpc_library(
+    name = "computation_delegation_cc_grpc",
+    srcs = [":computation_delegation_proto"],
+    generate_mocks = True,
+    grpc_only = True,
+    deps = [":computation_delegation_cc_proto"],
+)
+
+proto_library(
     name = "kms_proto",
     srcs = ["kms.proto"],
     deps = [
