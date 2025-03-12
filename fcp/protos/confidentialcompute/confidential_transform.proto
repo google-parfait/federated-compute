@@ -345,6 +345,10 @@ message FinalizeRequest {
 // algorithm. Multiple ReadResponses may be sent in sequence if the
 // blob is large.
 message ReadResponse {
+  // Configuration sent with the first ReadResponse for a finalized
+  // blob to include any supplementary information needed to decrypt or
+  // otherwise process the blob.
+  google.protobuf.Any first_response_configuration = 4;
   // Metadata about the blob being read from the TEE.
   BlobMetadata first_response_metadata = 1;
   // Indicates that this is the last chunk of data for the current blob.
