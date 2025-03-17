@@ -70,15 +70,20 @@ service ConfidentialTransform {
   //    the next blob, never interleaving chunks of different blobs.
   // 4. Once the write completes (OnWriteDone), the client may go back to step 3
   //    without waiting for a WriteFinishedResponse.
-  // 5. When the server finishes incorporating a blob into the session,
-  //    (which may happen concurrently with additional blobs being
-  //    written to the server) it will send a WriteFinishedResponse.
+  // 5. When the server finishes processing a blob, (which may happen
+  //    concurrently with additional blobs being written to the server) it will
+  //    send a WriteFinishedResponse.
   // 6. Steps 3-5 can be repeated any number of times.
-  // 7. A single FinalizeRequest is sent, after which the session is
+  // 7. The client will send a CommitRequest to indicate that it has finished
+  //    writing all blobs and that all blobs written prior to the commit can now
+  //    be incorporated into the session.
+  // 8. The server will respond with a CommitResponse to acknowledge that the
+  //    blobs were committed.
+  // 9. A single FinalizeRequest is sent, after which the session is
   //    immutable. No more requests will be accepted by the server.
-  // 8. One or more ReadResponses are sent by the server to pass a
+  // 10. One or more ReadResponses are sent by the server to pass a
   //    blob produced by the session in chunks.
-  // 9. Step 8 may be repeated if multiple blobs were produced
+  // 11. Step 10 may be repeated if multiple blobs were produced
   //    by the session.
   rpc Session(stream SessionRequest) returns (stream SessionResponse) {}
 }
@@ -164,6 +169,7 @@ message SessionRequest {
   oneof kind {
     ConfigureRequest configure = 1;
     WriteRequest write = 2;
+    CommitRequest commit = 4;
     FinalizeRequest finalize = 3;
   }
 }
@@ -174,6 +180,7 @@ message SessionResponse {
   oneof kind {
     ConfigureResponse configure = 1;
     WriteFinishedResponse write = 2;
+    CommitResponse commit = 4;
     ReadResponse read = 3;
   }
 }
@@ -309,32 +316,45 @@ message WriteRequest {
   // configuration would then specify which operation to use to incorporate the
   // blob into the session.
   google.protobuf.Any first_request_configuration = 2;
-  // Indicates that this is the final WriteRequest for a given blob, and
-  // that the blob should be decrypted and incorporated into the
-  // session.
+  // Indicates that this is the final WriteRequest for a given blob.
   bool commit = 3;
   // A chunk of data for the blob being written.
   bytes data = 4
       ;
 }
 
-// Acknowledges successful receipt of all chunks of an encrypted blob
-// and the fact that the blob was incorporated into the session using
-// the first_request_configuration.
+// Acknowledges successful receipt of all chunks of an encrypted blob.
 message WriteFinishedResponse {
   // The total number of bytes that have been written for the
   // blob.
   int64 committed_size_bytes = 1;
-  // Status of incorporating the blob into the Session. If not OK,
-  // indicates that the blob wasn't successfully incorporated, with
-  // the error message providing more information. Even if this status
-  // is not OK, the Session should still be in a safe state to continue
-  // using. Errors that would cause the Session to be in an invalid
-  // state should cause the Session bidirectional stream to fail
+  // Status of writing the blob to the session. If not OK, indicates that the
+  // blob wasn't successfully processed, with the error message providing more
+  // information. Even if this status is not OK, the Session should still be in
+  // a safe state to continue using. Errors that would cause the Session to be
+  // in an invalid state should cause the Session bidirectional stream to fail
   // with an error.
   google.rpc.Status status = 2;
 
   reserved 3;
+}
+
+// Request to incorporate all previously written blobs into the session.
+message CommitRequest {
+  // Application-specific configuration specifying how to commit the previously
+  // written blobs. This may not be necessary for all applications.
+  google.protobuf.Any configuration = 1;
+}
+
+// Acknowledges the successful commit of all previously written blobs.
+message CommitResponse {
+  // Status of committing the previously written blobs to the session. If not
+  // OK, indicates that the blobs weren't successfully committed, with the error
+  // message providing more information. Even if this status is not OK, the
+  // Session should still be in a safe state to continue using. Errors that
+  // would cause the Session to be in an invalid state should cause the Session
+  // bidirectional stream to fail with an error.
+  google.rpc.Status status = 1;
 }
 
 // Request to finalize the session by running a finalization
