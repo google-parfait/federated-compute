@@ -290,6 +290,11 @@ java_proto_library(
     deps = [":access_policy_endorsement_options_proto"],
 )
 
+py_proto_library(
+    name = "access_policy_endorsement_options_py_pb2",
+    deps = [":access_policy_endorsement_options_proto"],
+)
+
 proto_library(
     name = "private_inference_proto",
     srcs = ["private_inference.proto"],
