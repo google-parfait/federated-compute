@@ -18,6 +18,7 @@ package fcp.confidentialcompute;
 
 import "google/protobuf/any.proto";
 import "google/rpc/status.proto";
+import "proto/crypto/crypto.proto";
 
 // API for an untrusted companion app to communicate with a container
 // TEE over a gRPC channel.
@@ -31,23 +32,21 @@ service ConfidentialTransform {
   // lifetime of the TEE, prior to any other RPCs on this service.
   rpc Initialize(InitializeRequest) returns (InitializeResponse) {}
 
-  // A client-streaming version of Initialize if the configuration is too large
-  // to fit in a single gRPC message.
-  // The StreamInitialize method is a client streaming RPC so multiple
-  // Initialize requests can be sent. The expected order of inner message types
-  // is the following:
+  // A client-streaming version of Initialize.
+  // The StreamInitialize method is a client-streaming RPC so multiple
+  // StreamInitialize requests can be sent. The expected order of inner message
+  // types is the following:
   // 1. Optionally the client will send a sequence of
   //    WriteConfigurationRequests, to write a blob of configuration data in
   //    chunks, starting with a WriteConfigurationRequest where
   //    first_request_metadata is set, and concluding with a
   //    WriteConfigurationRequest where commit is true. This step may be
   //    repeated for multiple configuration blobs.
-  // 2. The client sends an InitializeRequest which contains a proto
-  //    configuration and max_num_sessions, both of which the TEE will parse.
-  //    The proto configuration may refer to larger configuration blobs passed
-  //    via WriteConfigurationRequests.
-  // 3. The server responds with an InitializeResponse or fails if the
-  //    configuration cannot be parsed.
+  // 2. The client sends an InitializeRequest which contains a
+  //    container-specific proto configuration, max_num_sessions, decryption
+  //    keys, and container-specific constraints. The proto configuration may
+  //    refer to larger configuration blobs passed via
+  //    WriteConfigurationRequests.
   // Either this method or Initialize must be called exactly once for the
   // lifetime of the TEE, prior to any other RPCs on this service.
   rpc StreamInitialize(stream StreamInitializeRequest)
@@ -98,6 +97,13 @@ message InitializeRequest {
   // The maximum number of sessions the trusted application can have open at
   // once.
   uint32 max_num_sessions = 2;
+
+  // Serialized and encrypted
+  // fcp.confidentialcompute.AuthorizeConfidentialTransformResponse.ProtectedResponse,
+  // encrypted using the TEE's application encryption key and
+  // therefore only accessible to the TEE.
+  // Contains the decyption keys that the TEE needs to access all inputs.
+  oak.crypto.v1.EncryptedRequest protected_response = 3;
 }
 
 // Polymorphic request message for the streaming version of InitializeRequest,
