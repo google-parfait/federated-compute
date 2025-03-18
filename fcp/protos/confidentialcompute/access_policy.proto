@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+import "google/protobuf/any.proto";
 import "proto/attestation/reference_value.proto";
 
 option java_multiple_files = true;
@@ -126,6 +127,14 @@ message PipelineVariantPolicy {
     // will assign to the outputs, which is necessary to ensure that the outputs
     // will be subject to the correct rules for further transformation.
     ApplicationMatcher application = 2;
+
+    // Application-specific constraints on the transform's configuration. The
+    // transform will verify these constraints before processing any encrypted
+    // data.
+    //
+    // This field replaces `application.config_properties` when using the
+    // KeyManagementService API; it is ignored when using the Ledger API.
+    google.protobuf.Any config_constraints = 5;
 
     // Limits on the application's access to the data.
     AccessBudget access_budget = 3;

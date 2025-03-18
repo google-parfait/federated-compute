@@ -24,6 +24,7 @@ proto_library(
     name = "access_policy_proto",
     srcs = ["access_policy.proto"],
     deps = [
+        "@com_google_protobuf//:any_proto",
         "@oak//proto/attestation:reference_value_proto",
     ],
 )
@@ -378,6 +379,7 @@ proto_library(
     srcs = ["kms.proto"],
     deps = [
         "@com_google_googleapis//google/rpc:status_proto",
+        "@com_google_protobuf//:any_proto",
         "@com_google_protobuf//:duration_proto",
         "@com_google_protobuf//:timestamp_proto",
         "@oak//proto/attestation:evidence_proto",

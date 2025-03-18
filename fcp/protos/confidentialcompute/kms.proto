@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+import "google/protobuf/any.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "google/rpc/status.proto";
@@ -287,6 +288,13 @@ message AuthorizeConfidentialTransformResponse {
   message AssociatedData {
     // The KMS's cluster public key (see ClusterPublicKey).
     bytes cluster_public_key = 1;
+
+    // Application-specific constraints on transform configuration, such as
+    // (delta, epsilon) bounds. The transform must verify these constraints
+    // before using any of the associated decryption keys. The constraints must
+    // be considered to be unsatisfied if the message type is not known to the
+    // transform or if the message contains any unknown fields.
+    google.protobuf.Any config_constraints = 2;
   }
 }
 
