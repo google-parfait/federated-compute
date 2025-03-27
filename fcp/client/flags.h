@@ -204,6 +204,13 @@ class Flags {
 
   // If true, the minimum separation policy index will be logged to PhaseStats.
   virtual bool log_min_sep_index_to_phase_stats() const { return false; }
+
+  // If true, the event time data upload is enabled.
+  virtual bool enable_event_time_data_upload() const { return false; }
+
+  // If true, the blob header will be added to the HTTP headers for confidential
+  // compute uploads.
+  virtual bool enable_blob_header_in_http_headers() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
