@@ -184,11 +184,6 @@ class Flags {
   // If true, confidential aggregation is advertised & can be used for uploads.
   virtual bool enable_confidential_aggregation() const { return false; }
 
-  // If true, client endorsement verification is enabled.
-  virtual bool enable_access_policy_endorsement_verification() const {
-    return false;
-  }
-
   // If true, the minimum separation policy will first check if the OpStatsDb's
   // earliest trustworthy time is earlier than the required minimum
   // trustworthiness period.

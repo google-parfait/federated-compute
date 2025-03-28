@@ -703,8 +703,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_direct_data_upload_task, (), (const, override));
   MOCK_METHOD(bool, enable_relative_uri_prefix, (), (const, override));
   MOCK_METHOD(bool, log_min_sep_index_to_phase_stats, (), (const, override));
-  MOCK_METHOD(bool, enable_access_policy_endorsement_verification, (),
-              (const, override));
   MOCK_METHOD(int32_t, http_retry_max_attempts, (), (const, override));
 };
 

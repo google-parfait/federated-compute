@@ -877,12 +877,10 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
         task_resources[0]->confidential_data_access_policy;
     default_task_info_.confidential_data_access_policy =
         result.confidential_agg_info->data_access_policy;
-    if (flags_->enable_access_policy_endorsement_verification()) {
-      result.confidential_agg_info->signed_endorsements =
-          task_resources[0]->signed_endorsements;
-      default_task_info_.signed_endorsements =
-          result.confidential_agg_info->signed_endorsements;
-    }
+    result.confidential_agg_info->signed_endorsements =
+        task_resources[0]->signed_endorsements;
+    default_task_info_.signed_endorsements =
+        result.confidential_agg_info->signed_endorsements;
   }
   object_state_ = ObjectState::kCheckinAccepted;
   return std::move(result);
@@ -1139,22 +1137,18 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
       if (task_assignment.confidential_agg_info.has_value()) {
         task_assignment.confidential_agg_info->data_access_policy =
             std::move((*payloads)->confidential_data_access_policy);
-        if (flags_->enable_access_policy_endorsement_verification()) {
-          // If the task does not use SignedEndorsements, this will be an empty
-          // Cord.
-          task_assignment.confidential_agg_info->signed_endorsements =
-              std::move((*payloads)->signed_endorsements);
-        }
+        // If the task does not use SignedEndorsements, this will be an empty
+        // Cord.
+        task_assignment.confidential_agg_info->signed_endorsements =
+            std::move((*payloads)->signed_endorsements);
         // Store the serialized data access policy in the PerTaskInfo, since
         // we need to calculate a hash over it at upload time.
         task_info_map_[task_assignment.task_identifier]
             .confidential_data_access_policy =
             task_assignment.confidential_agg_info->data_access_policy;
         // Also need the SignedEndorsements in the task info map.
-        if (flags_->enable_access_policy_endorsement_verification()) {
-          task_info_map_[task_assignment.task_identifier].signed_endorsements =
-              task_assignment.confidential_agg_info->signed_endorsements;
-        }
+        task_info_map_[task_assignment.task_identifier].signed_endorsements =
+            task_assignment.confidential_agg_info->signed_endorsements;
       }
       result.task_assignments[task_assignment.task_name] =
           std::move(task_assignment);
