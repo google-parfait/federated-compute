@@ -335,6 +335,7 @@ message SessionResponseWithStatus {
   // The status of the response. If not OK, `response` should be ignored.
   google.rpc.Status status = 1;
 
-  // The session response.
+  // The session response. If the request did not result in a response, which is
+  // possible for some handshake messages, this field will not be set.
   oak.session.v1.SessionResponse response = 2;
 }
