@@ -57,12 +57,23 @@ cc_proto_library(
 proto_library(
     name = "blob_header_proto",
     srcs = ["blob_header.proto"],
-    deps = ["//fcp/client:event_time_range_proto"],
+    deps = [":payload_metadata_proto"],
 )
 
 cc_proto_library(
     name = "blob_header_cc_proto",
     deps = [":blob_header_proto"],
+)
+
+proto_library(
+    name = "payload_metadata_proto",
+    srcs = ["payload_metadata.proto"],
+    deps = ["//fcp/client:event_time_range_proto"],
+)
+
+cc_proto_library(
+    name = "payload_metadata_cc_proto",
+    deps = [":payload_metadata_proto"],
 )
 
 proto_library(

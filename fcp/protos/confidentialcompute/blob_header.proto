@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
-import "fcp/client/event_time_range.proto";
+import "fcp/protos/confidentialcompute/payload_metadata.proto";
 
 option java_multiple_files = true;
 
@@ -43,6 +43,8 @@ message BlobHeader {
   // be 0 for non-derived blobs.
   uint32 access_policy_node_id = 4;
 
-  // The event time range of the blob.
-  client.EventTimeRange event_time_range = 6;
+  // The metadata about the data blob to be uploaded to the server.
+  PayloadMetadata payload_metadata = 7;
+
+  reserved 6;
 }

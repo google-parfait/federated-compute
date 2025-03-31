@@ -379,7 +379,7 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
       example_iterator_query_recorder, tensorflow_runner_factory);
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_plan.phase().example_query_spec(), checkpoint_output_filename,
-      use_client_report_wire_format);
+      use_client_report_wire_format, flags->enable_event_time_data_upload());
   PlanResultAndCheckpointFile result(std::move(plan_result));
   result.checkpoint_filename = checkpoint_output_filename;
   return result;

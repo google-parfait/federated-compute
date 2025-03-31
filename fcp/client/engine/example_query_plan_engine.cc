@@ -34,6 +34,7 @@
 #include "fcp/client/converters.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/event_time_range.pb.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/example_query_result.pb.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -238,7 +239,7 @@ ExampleQueryPlanEngine::ExampleQueryPlanEngine(
 PlanResult ExampleQueryPlanEngine::RunPlan(
     const ExampleQuerySpec& example_query_spec,
     const std::string& output_checkpoint_filename,
-    bool use_client_report_wire_format) {
+    bool use_client_report_wire_format, bool enable_event_time_data_upload) {
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
   std::vector<std::pair<ExampleQuerySpec::ExampleQuery, ExampleQueryResult>>
@@ -293,23 +294,25 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
             PlanOutcome::kExampleIteratorError,
             absl::DataLossError("Unexpected example query result format"));
       }
-      for (const auto& [query_name, event_time_range] :
-           example_query_result.stats().event_time_range()) {
-        if (event_time_range.has_start_event_time() &&
-            !event_time_range.has_end_event_time()) {
-          return PlanResult(
-              PlanOutcome::kExampleIteratorError,
-              absl::InvalidArgumentError("Start event time is specified, but "
-                                         "end event time is not for query: " +
-                                         query_name));
-        }
-        if (!event_time_range.has_start_event_time() &&
-            event_time_range.has_end_event_time()) {
-          return PlanResult(
-              PlanOutcome::kExampleIteratorError,
-              absl::InvalidArgumentError("End event time is specified, but "
-                                         "start event time is not for query: " +
-                                         query_name));
+      if (enable_event_time_data_upload) {
+        for (const auto& [query_name, event_time_range] :
+             example_query_result.stats().event_time_range()) {
+          if (event_time_range.has_start_event_time() &&
+              !event_time_range.has_end_event_time()) {
+            return PlanResult(
+                PlanOutcome::kExampleIteratorError,
+                absl::InvalidArgumentError("Start event time is specified, but "
+                                           "end event time is not for query: " +
+                                           query_name));
+          }
+          if (!event_time_range.has_start_event_time() &&
+              event_time_range.has_end_event_time()) {
+            return PlanResult(PlanOutcome::kExampleIteratorError,
+                              absl::InvalidArgumentError(
+                                  "End event time is specified, but "
+                                  "start event time is not for query: " +
+                                  query_name));
+          }
         }
       }
       // We currently use the number of example query output rows as the
@@ -359,9 +362,10 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
       auto checkpoint = checkpoint_builder->Build();
       if (checkpoint.ok()) {
         plan_result.federated_compute_checkpoint = std::move(*checkpoint);
-        auto event_time_range =
-            GetEventTimeRange(structured_example_query_results);
-        plan_result.event_time_range = std::move(event_time_range);
+        if (enable_event_time_data_upload) {
+          *plan_result.payload_metadata.mutable_event_time_range() =
+              GetEventTimeRange(structured_example_query_results);
+        }
       } else {
         status = checkpoint.status();
       }

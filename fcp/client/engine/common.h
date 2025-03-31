@@ -33,12 +33,12 @@
 #include "absl/time/time.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
-#include "fcp/client/event_time_range.pb.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/stats.h"
+#include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/tensorflow/external_dataset.h"
@@ -71,11 +71,8 @@ struct PlanResult {
   // Only set if 'outcome' is 'kSuccess' and the federated compute wire format
   // is enabled, otherwise this is empty.
   absl::Cord federated_compute_checkpoint;
-  // The hint of the smallest consecutive time range of the query results stored
-  // in federated_compute_checkpoint field.
-  // Only set if 'outcome' is 'kSuccess' and the federated compute wire format
-  // is enabled.
-  ::fcp::client::EventTimeRange event_time_range;
+  // Payload metadata to be uploaded to the server.
+  ::fcp::confidentialcompute::PayloadMetadata payload_metadata;
   // When the outcome is `kSuccess`, the status is ok. Otherwise, this status
   // contain the original error status which leads to the PlanOutcome.
   absl::Status original_status;

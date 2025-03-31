@@ -52,7 +52,7 @@ class ExampleQueryPlanEngine {
       const google::internal::federated::plan::ExampleQuerySpec&
           example_query_spec,
       const std::string& output_checkpoint_filename,
-      bool use_client_report_wire_format);
+      bool use_client_report_wire_format, bool enable_event_time_data_upload);
 
  private:
   std::vector<ExampleIteratorFactory*> example_iterator_factories_;

@@ -339,7 +339,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceeds) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -432,7 +433,8 @@ TEST_F(ExampleQueryPlanEngineTest, MultipleQueries) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -528,7 +530,8 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -561,7 +564,8 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecTypeMismatch) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -576,7 +580,8 @@ TEST_F(ExampleQueryPlanEngineTest, FactoryNotFound) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -591,7 +596,8 @@ TEST_F(ExampleQueryPlanEngineTest, NoIteratorCreated) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -618,7 +624,8 @@ TEST_F(ExampleQueryPlanEngineTest, InvalidExampleQueryResultFormat) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -636,7 +643,8 @@ TEST_F(ExampleQueryPlanEngineTest,
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -738,11 +746,13 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithEventTimeRange) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/true);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
-  ASSERT_THAT(result.event_time_range, EqualsProto(event_time_range));
+  ASSERT_THAT(result.payload_metadata.event_time_range(),
+              EqualsProto(event_time_range));
 }
 
 TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
@@ -856,11 +866,13 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/true);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
-  ASSERT_THAT(result.event_time_range, EqualsProto(second_event_time_range));
+  ASSERT_THAT(result.payload_metadata.event_time_range(),
+              EqualsProto(second_event_time_range));
 }
 
 TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
@@ -972,7 +984,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/true);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -985,7 +998,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
   expected_event_time_range.mutable_end_event_time()->set_day(3);
   expected_event_time_range.mutable_end_event_time()->set_hours(1);
   expected_event_time_range.mutable_end_event_time()->set_minutes(1);
-  ASSERT_THAT(result.event_time_range, EqualsProto(expected_event_time_range));
+  ASSERT_THAT(result.payload_metadata.event_time_range(),
+              EqualsProto(expected_event_time_range));
 }
 
 TEST_F(ExampleQueryPlanEngineTest, MissingEndEventTimeFails) {
@@ -1021,7 +1035,8 @@ TEST_F(ExampleQueryPlanEngineTest, MissingEndEventTimeFails) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/true);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -1077,7 +1092,8 @@ TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1167,7 +1183,8 @@ TEST_F(ExampleQueryPlanEngineTest, TwoQueryDirectDataUploadTaskSucceeds) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1275,7 +1292,8 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/true);
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
