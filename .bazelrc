@@ -41,6 +41,9 @@ build --define=absl=1
 build --incompatible_enable_cc_toolchain_resolution
 build --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1 --incompatible_strict_action_env
 
+# Use a hermetic Java toolchain.
+common --java_runtime_version=remotejdk_11
+
 # This results in -Werror for all FCP code, but nothing we pull in via
 # repository rules (those labels have a @ prefix).
 build --per_file_copt=+^//@-Werror
