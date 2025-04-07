@@ -93,9 +93,8 @@ TEST(OakRustAttestationTest, DefaultValuesDoNotVerifySuccessfully) {
   encryption_config.mutable_attestation_evidence();
 
   // Use an empty ReferenceValues input.
-  ReferenceValues reference_values;
   OakRustAttestationVerifier verifier(
-      reference_values, {},
+      ReferenceValues(), ReferenceValues(), {},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       LogPrettyPrintedVerificationRecord);
 
@@ -126,7 +125,7 @@ TEST(OakRustAttestationTest,
   // This verifier will only accept attestation evidence matching the reference
   // values defined above, and will only accept the given access policy.
   OakRustAttestationVerifier verifier(
-      reference_values,
+      reference_values, ReferenceValues(),
       {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       LogPrettyPrintedVerificationRecord);
@@ -156,7 +155,7 @@ TEST(OakRustAttestationTest, KnownValidEncryptionConfigAndMismatchingPolicy) {
   // This verifier will not accept any inputs, since the policy allowlist
   // doesn't match the actual policy.
   OakRustAttestationVerifier verifier(
-      reference_values, {"mismatching policy hash"},
+      reference_values, ReferenceValues(), {"mismatching policy hash"},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       LogPrettyPrintedVerificationRecord);
 
@@ -186,7 +185,7 @@ TEST(OakRustAttestationTest,
   // This verifier will not accept any inputs, since the policy allowlist is
   // empty.
   OakRustAttestationVerifier verifier(
-      reference_values, {},
+      reference_values, ReferenceValues(), {},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       LogPrettyPrintedVerificationRecord);
 
@@ -207,7 +206,7 @@ TEST(OakRustAttestationTest,
   // This verifier will not accept any inputs, since the policy allowlist is
   // empty.
   OakRustAttestationVerifier verifier(
-      reference_values, {},
+      reference_values, ReferenceValues(), {},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       LogPrettyPrintedVerificationRecord);
 
@@ -221,14 +220,135 @@ TEST(OakRustAttestationTest,
               HasSubstr("Data access policy not in allowlist"));
 }
 
+// Ensures that mismatching primary reference values and empty secondary
+// reference values (which should also be considered 'non-matching') fails
+// verification.
 TEST(OakRustAttestationTest,
-     KnownEncryptionConfigAndMismatchingReferencevalues) {
+     KnownEncryptionConfigAndMismatchingPrimaryRvsAndEmptySecondaryRvs) {
+  ConfidentialEncryptionConfig encryption_config =
+      GetKnownValidEncryptionConfig();
+  ReferenceValues mismatching_reference_values = GetKnownValidReferenceValues();
+  // Mess with the application layer digest value to ensure it won't match the
+  // values in the ConfidentialEncryptionConfig.
+  (*mismatching_reference_values.mutable_oak_restricted_kernel()
+        ->mutable_application_layer()
+        ->mutable_binary()
+        ->mutable_digests()
+        ->mutable_digests(0)
+        ->mutable_sha2_256())[0] += 1;
+
+  // Create a valid access policy proto with some non-default content.
+  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
+    transforms {
+      src: 0
+      application { tag: "bar" }
+    }
+  )pb");
+  auto access_policy_bytes = access_policy.SerializeAsString();
+  // This verifier will not accept the encryption config provided, due to the
+  // mismatching digest (and the secondary reference values being empty).
+  OakRustAttestationVerifier verifier(
+      mismatching_reference_values, ReferenceValues(),
+      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
+      confidentialcompute::AccessPolicyEndorsementOptions(),
+      LogPrettyPrintedVerificationRecord);
+
+  // Ensure that the verification *does not* succeed.
+  auto result = verifier.Verify(absl::Cord(access_policy_bytes),
+                                confidentialcompute::SignedEndorsements(),
+                                encryption_config);
+  EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kFailedPrecondition));
+  EXPECT_THAT(result.status().message(),
+              HasSubstr("Attestation verification failed for both primary and "
+                        "secondary reference values"));
+}
+
+// Ensures that mismatching primary reference values and empty secondary
+// reference values (which should also be considered 'non-matching') fails
+// verification.
+TEST(OakRustAttestationTest,
+     KnownEncryptionConfigAndEmptyPrimaryRvsAndMismatchingSecondaryRvs) {
+  ConfidentialEncryptionConfig encryption_config =
+      GetKnownValidEncryptionConfig();
+  ReferenceValues mismatching_reference_values = GetKnownValidReferenceValues();
+  // Mess with the application layer digest value to ensure it won't match the
+  // values in the ConfidentialEncryptionConfig.
+  (*mismatching_reference_values.mutable_oak_restricted_kernel()
+        ->mutable_application_layer()
+        ->mutable_binary()
+        ->mutable_digests()
+        ->mutable_digests(0)
+        ->mutable_sha2_256())[0] += 1;
+
+  // Create a valid access policy proto with some non-default content.
+  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
+    transforms {
+      src: 0
+      application { tag: "bar" }
+    }
+  )pb");
+  auto access_policy_bytes = access_policy.SerializeAsString();
+  // This verifier will not accept the encryption config provided, due to the
+  // mismatching digest (and the secondary reference values being empty).
+  OakRustAttestationVerifier verifier(
+      ReferenceValues(), mismatching_reference_values,
+      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
+      confidentialcompute::AccessPolicyEndorsementOptions(),
+      LogPrettyPrintedVerificationRecord);
+
+  // Ensure that the verification *does not* succeed.
+  auto result = verifier.Verify(absl::Cord(access_policy_bytes),
+                                confidentialcompute::SignedEndorsements(),
+                                encryption_config);
+  EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kFailedPrecondition));
+  EXPECT_THAT(result.status().message(),
+              HasSubstr("Attestation verification failed for both primary and "
+                        "secondary reference values"));
+}
+
+// Ensures that an empty primary reference values (which should be considered
+// 'non-matching') properly falls back to the matching secondary reference
+// values.
+TEST(OakRustAttestationTest,
+     KnownValidEncryptionConfigEmptyPrimaryRvsAndMatchingSecondaryRvs) {
   ConfidentialEncryptionConfig encryption_config =
       GetKnownValidEncryptionConfig();
   ReferenceValues reference_values = GetKnownValidReferenceValues();
+
+  // Create a valid access policy proto with some non-default content.
+  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
+    transforms {
+      src: 0
+      application { tag: "foo" }
+    }
+  )pb");
+  auto access_policy_bytes = access_policy.SerializeAsString();
+  // This verifier will only accept attestation evidence matching the reference
+  // values defined above, and will only accept the given access policy.
+  OakRustAttestationVerifier verifier(
+      ReferenceValues(), reference_values,
+      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
+      confidentialcompute::AccessPolicyEndorsementOptions(),
+      LogPrettyPrintedVerificationRecord);
+
+  // Ensure that the verification succeeds.
+  auto result = verifier.Verify(absl::Cord(access_policy_bytes),
+                                confidentialcompute::SignedEndorsements(),
+                                encryption_config);
+  ASSERT_OK(result);
+}
+
+// Ensures that a non-empty but mismatching primary reference values (which
+// should be considered 'non-matching') properly falls back to the matching
+// secondary reference values.
+TEST(OakRustAttestationTest,
+     KnownEncryptionConfigAndMismatchingPrimaryRvsButMatchingSecondaryRvs) {
+  ConfidentialEncryptionConfig encryption_config =
+      GetKnownValidEncryptionConfig();
+  ReferenceValues mismatching_reference_values = GetKnownValidReferenceValues();
   // Mess with the application layer digest value to ensure it won't match the
   // values in the ConfidentialEncryptionConfig.
-  (*reference_values.mutable_oak_restricted_kernel()
+  (*mismatching_reference_values.mutable_oak_restricted_kernel()
         ->mutable_application_layer()
         ->mutable_binary()
         ->mutable_digests()
@@ -246,7 +366,7 @@ TEST(OakRustAttestationTest,
   // This verifier will not accept the encryption config provided, due to the
   // mismatching digest.
   OakRustAttestationVerifier verifier(
-      reference_values,
+      mismatching_reference_values, GetKnownValidReferenceValues(),
       {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       LogPrettyPrintedVerificationRecord);
@@ -255,11 +375,11 @@ TEST(OakRustAttestationTest,
   auto result = verifier.Verify(absl::Cord(access_policy_bytes),
                                 confidentialcompute::SignedEndorsements(),
                                 encryption_config);
-  EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kFailedPrecondition));
-  EXPECT_THAT(result.status().message(),
-              HasSubstr("Attestation verification failed"));
+  ASSERT_OK(result);
 }
 
+// Ensures that empty primary and secondary reference values (which should be
+// considered 'non-matching') fails verification.
 TEST(OakRustAttestationTest, KnownEncryptionConfigAndEmptyReferencevalues) {
   ConfidentialEncryptionConfig encryption_config =
       GetKnownValidEncryptionConfig();
@@ -275,7 +395,7 @@ TEST(OakRustAttestationTest, KnownEncryptionConfigAndEmptyReferencevalues) {
   // This verifier will not accept the encryption config provided, due to the
   // reference values being invalid (an empty, uninitialized proto).
   OakRustAttestationVerifier verifier(
-      ReferenceValues(),
+      ReferenceValues(), ReferenceValues(),
       {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       LogPrettyPrintedVerificationRecord);
@@ -306,7 +426,7 @@ TEST(OakRustAttestationTest,
   // This verifier will not accept any inputs when using SignedEndorsements,
   // since there are no EndorsementReferenceValues for the access policy.
   OakRustAttestationVerifier verifier(
-      reference_values, {},
+      reference_values, ReferenceValues(), {},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       LogPrettyPrintedVerificationRecord);
 
@@ -337,7 +457,7 @@ TEST(OakRustAttestationTest, MultipleSignedEndorsementsFails) {
   // This verifier will not accept any inputs when using SignedEndorsements,
   // since there are no EndorsementReferenceValues for the access policy.
   OakRustAttestationVerifier verifier(
-      reference_values, {},
+      reference_values, ReferenceValues(), {},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       LogPrettyPrintedVerificationRecord);
 
@@ -371,7 +491,8 @@ TEST(OakRustAttestationTest,
       GetFakeAccessPolicyEndorsementOptions(2);
   // This verifier will not accept any inputs when using SignedEndorsements,
   // since there are no EndorsementReferenceValues for the access policy.
-  OakRustAttestationVerifier verifier(reference_values, {}, endorsement_options,
+  OakRustAttestationVerifier verifier(reference_values, ReferenceValues(), {},
+                                      endorsement_options,
                                       LogPrettyPrintedVerificationRecord);
 
   confidentialcompute::SignedEndorsements signed_endorsements =
@@ -402,7 +523,7 @@ TEST(OakRustAttestationTest, HasSignedEndorsementButNoEndorsementInside) {
   // This verifier will not accept any inputs when using SignedEndorsements,
   // since there are no EndorsementReferenceValues for the access policy.
   OakRustAttestationVerifier verifier(
-      reference_values, {},
+      reference_values, ReferenceValues(), {},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       LogPrettyPrintedVerificationRecord);
 
@@ -444,7 +565,7 @@ TEST(OakRustAttestationTest,
   // This verifier will only accept attestation evidence matching the reference
   // values defined above, and will only accept the given access policy.
   OakRustAttestationVerifier verifier(
-      reference_values,
+      reference_values, ReferenceValues(),
       {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
       confidentialcompute::AccessPolicyEndorsementOptions(),
       [&verification_record](

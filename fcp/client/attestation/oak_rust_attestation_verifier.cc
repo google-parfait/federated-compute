@@ -60,10 +60,10 @@ using ::oak::attestation::v1::EndorsementDetails;
 // See https://www.iana.org/assignments/cose/cose.xhtml.
 constexpr int64_t kAlgorithmES256 = -7;
 
-absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
-    const absl::Cord& access_policy,
-    const confidentialcompute::SignedEndorsements& signed_endorsements,
-    const ConfidentialEncryptionConfig& encryption_config) {
+namespace {
+absl::StatusOr<AttestationResults> VerifyPublicKeyAttestation(
+    const ConfidentialEncryptionConfig& encryption_config,
+    const oak::attestation::v1::ReferenceValues& public_key_reference_values) {
   // Validate the attestation evidence provided in the encryption config, using
   // the `public_key_reference_values_` provided to us at construction time.
   FCP_ASSIGN_OR_RETURN(
@@ -71,12 +71,39 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
       fcp::client::rust::oak_attestation_verification_ffi::VerifyAttestation(
           absl::Now(), encryption_config.attestation_evidence(),
           encryption_config.attestation_endorsements(),
-          public_key_reference_values_));
+          public_key_reference_values));
 
   if (attestation_results.status() != AttestationResults::STATUS_SUCCESS) {
     return absl::FailedPreconditionError(absl::Substitute(
-        "Attestation verification failed (status: $0, reason: $1).",
-        attestation_results.status(), attestation_results.reason()));
+        "(status: $0, reason: $1)", attestation_results.status(),
+        attestation_results.reason()));
+  }
+  return attestation_results;
+}
+}  // namespace
+
+absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
+    const absl::Cord& access_policy,
+    const confidentialcompute::SignedEndorsements& signed_endorsements,
+    const ConfidentialEncryptionConfig& encryption_config) {
+  absl::StatusOr<AttestationResults> attestation_results =
+      VerifyPublicKeyAttestation(encryption_config,
+                                 public_key_reference_values_);
+  if (!attestation_results.ok()) {
+    absl::StatusOr<AttestationResults> attestation_results_secondary =
+        public_key_reference_values_secondary_.type_case() ==
+                oak::attestation::v1::ReferenceValues::TYPE_NOT_SET
+            ? absl::NotFoundError("No secondary reference values provided.")
+            : VerifyPublicKeyAttestation(
+                  encryption_config, public_key_reference_values_secondary_);
+    if (!attestation_results_secondary.ok()) {
+      return absl::FailedPreconditionError(absl::Substitute(
+          "Attestation verification failed for both primary and secondary "
+          "reference values: $0, $1",
+          attestation_results.status(),
+          attestation_results_secondary.status()));
+    }
+    attestation_results = attestation_results_secondary;
   }
 
   // Ensure that the provided data access policy parses correctly.
@@ -185,7 +212,7 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
 
   // Now verify the CWT signature.
   auto signature_verifier = EcdsaP256R1SignatureVerifier::Create(
-      attestation_results.signing_public_key());
+      attestation_results->extracted_evidence().signing_public_key());
   if (!signature_verifier.ok()) {
     return absl::Status(
         signature_verifier.status().code(),
