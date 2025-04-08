@@ -242,6 +242,7 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
     bool use_client_report_wire_format, bool enable_event_time_data_upload) {
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
+  bool has_event_time_range = false;
   std::vector<std::pair<ExampleQuerySpec::ExampleQuery, ExampleQueryResult>>
       structured_example_query_results;
   absl::flat_hash_map<std::string, std::vector<std::string>>
@@ -294,6 +295,8 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
             PlanOutcome::kExampleIteratorError,
             absl::DataLossError("Unexpected example query result format"));
       }
+      // If the example query result stats have event_time_range set, validate
+      // that both start and end are set.
       if (enable_event_time_data_upload) {
         for (const auto& [query_name, event_time_range] :
              example_query_result.stats().event_time_range()) {
@@ -312,6 +315,10 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
                                   "End event time is specified, but "
                                   "start event time is not for query: " +
                                   query_name));
+          }
+          if (event_time_range.has_start_event_time() &&
+              event_time_range.has_end_event_time()) {
+            has_event_time_range = true;
           }
         }
       }
@@ -362,9 +369,14 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
       auto checkpoint = checkpoint_builder->Build();
       if (checkpoint.ok()) {
         plan_result.federated_compute_checkpoint = std::move(*checkpoint);
-        if (enable_event_time_data_upload) {
-          *plan_result.payload_metadata.mutable_event_time_range() =
+        // If event time data upload is enabled, and the example query results
+        // have event time ranges, then we should set the payload metadata in
+        // the plan result.
+        if (enable_event_time_data_upload && has_event_time_range) {
+          confidentialcompute::PayloadMetadata payload_metadata;
+          *payload_metadata.mutable_event_time_range() =
               GetEventTimeRange(structured_example_query_results);
+          plan_result.payload_metadata = std::move(payload_metadata);
         }
       } else {
         status = checkpoint.status();

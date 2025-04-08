@@ -19,6 +19,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -72,7 +73,7 @@ struct PlanResult {
   // is enabled, otherwise this is empty.
   absl::Cord federated_compute_checkpoint;
   // Payload metadata to be uploaded to the server.
-  ::fcp::confidentialcompute::PayloadMetadata payload_metadata;
+  std::optional<::fcp::confidentialcompute::PayloadMetadata> payload_metadata;
   // When the outcome is `kSuccess`, the status is ok. Otherwise, this status
   // contain the original error status which leads to the PlanOutcome.
   absl::Status original_status;

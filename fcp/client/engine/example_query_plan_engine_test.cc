@@ -751,7 +751,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithEventTimeRange) {
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
-  ASSERT_THAT(result.payload_metadata.event_time_range(),
+  ASSERT_TRUE(result.payload_metadata.has_value());
+  ASSERT_THAT(result.payload_metadata->event_time_range(),
               EqualsProto(event_time_range));
 }
 
@@ -871,7 +872,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
-  ASSERT_THAT(result.payload_metadata.event_time_range(),
+  ASSERT_TRUE(result.payload_metadata.has_value());
+  ASSERT_THAT(result.payload_metadata->event_time_range(),
               EqualsProto(second_event_time_range));
 }
 
@@ -998,7 +1000,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
   expected_event_time_range.mutable_end_event_time()->set_day(3);
   expected_event_time_range.mutable_end_event_time()->set_hours(1);
   expected_event_time_range.mutable_end_event_time()->set_minutes(1);
-  ASSERT_THAT(result.payload_metadata.event_time_range(),
+  ASSERT_TRUE(result.payload_metadata.has_value());
+  ASSERT_THAT(result.payload_metadata->event_time_range(),
               EqualsProto(expected_event_time_range));
 }
 

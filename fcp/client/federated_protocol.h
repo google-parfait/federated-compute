@@ -32,6 +32,7 @@
 #include "absl/time/time.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/stats.h"
+#include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/task_assignments.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -308,6 +309,8 @@ class FederatedProtocol {
   //        engine. Does not include time spent on downloading the plan.
   // @param task_identifier the identifier of the task, this field is only
   //        filled when the task is assigned via multiple task assignment.
+  // @param payload_metadata the metadata of the payload, to be included in each
+  // uploaded data blob header.
   // Returns:
   // - On success, OK.
   // - On error (e.g. an interruption, network error, or other unexpected
@@ -321,7 +324,8 @@ class FederatedProtocol {
   //   - any server-provided error code.
   virtual absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
-      std::optional<std::string> task_identifier) = 0;
+      std::optional<std::string> task_identifier,
+      std::optional<confidentialcompute::PayloadMetadata> payload_metadata) = 0;
 
   // Reports the unsuccessful result of a federated computation to the server.
   // Must only be called once and after a successful call to Checkin().

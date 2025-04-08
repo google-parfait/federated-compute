@@ -91,6 +91,7 @@ using ::fcp::confidential_compute::EncryptMessageResult;
 using ::fcp::confidential_compute::MessageEncryptor;
 using ::fcp::confidential_compute::OkpKey;
 using ::fcp::confidentialcompute::BlobHeader;
+using ::fcp::confidentialcompute::PayloadMetadata;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::AbortAggregationRequest;
 using ::google::internal::federatedcompute::v1::
@@ -1161,7 +1162,8 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
 
 absl::Status HttpFederatedProtocol::ReportCompleted(
     ComputationResults results, absl::Duration plan_duration,
-    std::optional<std::string> task_identifier) {
+    std::optional<std::string> task_identifier,
+    std::optional<PayloadMetadata> payload_metadata) {
   FCP_LOG(INFO) << "Reporting outcome: " << static_cast<int>(engine::COMPLETED);
   PerTaskInfo* task_info;
   if (task_identifier.has_value()) {
@@ -1184,7 +1186,8 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
     if (std::find_if(results.begin(), results.end(),
                      find_secagg_tensor_lambda) == results.end()) {
       return ReportViaSimpleOrConfidentialAggregation(
-          std::move(results), plan_duration, *task_info);
+          std::move(results), plan_duration, *task_info,
+          std::move(payload_metadata));
     } else {
       return ReportViaSecureAggregation(std::move(results), plan_duration,
                                         *task_info);
@@ -1193,10 +1196,12 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
     switch (task_info->aggregation_type) {
       case AggregationType::kSimpleAggregation:
         return ReportViaSimpleOrConfidentialAggregation(
-            std::move(results), plan_duration, *task_info);
+            std::move(results), plan_duration, *task_info,
+            std::move(payload_metadata));
       case AggregationType::kConfidentialAggregation:
         return ReportViaSimpleOrConfidentialAggregation(
-            std::move(results), plan_duration, *task_info);
+            std::move(results), plan_duration, *task_info,
+            std::move(payload_metadata));
       case AggregationType::kSecureAggregation:
         return ReportViaSecureAggregation(std::move(results), plan_duration,
                                           *task_info);
@@ -1210,7 +1215,7 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
 
 absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
     ComputationResults results, absl::Duration plan_duration,
-    PerTaskInfo& task_info) {
+    PerTaskInfo& task_info, std::optional<PayloadMetadata> payload_metadata) {
   // TODO: b/307312707 -  Remove the kUnknown check once the
   // Flags::enable_confidential_aggregation() flag is removed.
   FCP_CHECK(task_info.aggregation_type == AggregationType::kUnknown ||
@@ -1270,10 +1275,11 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
     FCP_ASSIGN_OR_RETURN(
         OkpKey parsed_public_key,
         ValidateConfidentialEncryptionConfig(task_info, *encryption_config));
-    FCP_ASSIGN_OR_RETURN(data_to_upload,
-                         EncryptPayloadForConfidentialAggregation(
-                             task_info, parsed_public_key,
-                             encryption_config->public_key(), result_data));
+    FCP_ASSIGN_OR_RETURN(
+        data_to_upload,
+        EncryptPayloadForConfidentialAggregation(
+            task_info, parsed_public_key, encryption_config->public_key(),
+            result_data, std::move(payload_metadata)));
   } else {
     data_to_upload = std::move(result_data);
   }
@@ -1544,7 +1550,8 @@ HttpFederatedProtocol::ValidateConfidentialEncryptionConfig(
 absl::StatusOr<std::string>
 HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
     PerTaskInfo& task_info, const OkpKey& parsed_public_key,
-    const std::string& serialized_public_key, std::string inner_payload) {
+    const std::string& serialized_public_key, std::string inner_payload,
+    std::optional<PayloadMetadata> payload_metadata) {
   FCP_CHECK(task_info.confidential_data_access_policy.has_value());
 
   BlobHeader blob_header;
@@ -1553,6 +1560,10 @@ HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
   blob_header.set_access_policy_sha256(
       ComputeSHA256(*task_info.confidential_data_access_policy));
   blob_header.set_key_id(parsed_public_key.key_id);
+  if (payload_metadata.has_value()) {
+    *blob_header.mutable_payload_metadata() =
+        std::move(payload_metadata.value());
+  }
   std::string serialized_blob_header = blob_header.SerializeAsString();
 
   // Compress the payload before we encrypt it.

@@ -50,6 +50,7 @@
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/stats.h"
 #include "fcp/confidentialcompute/cose.h"
+#include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/common.pb.h"
@@ -105,7 +106,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
 
   absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
-      std::optional<std::string> task_identifier) override;
+      std::optional<std::string> task_identifier,
+      std::optional<confidentialcompute::PayloadMetadata> payload_metadata)
+      override;
 
   absl::Status ReportNotCompleted(
       engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
@@ -220,7 +223,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // aggregation.
   absl::Status ReportViaSimpleOrConfidentialAggregation(
       ComputationResults results, absl::Duration plan_duration,
-      PerTaskInfo& task_info);
+      PerTaskInfo& task_info,
+      std::optional<confidentialcompute::PayloadMetadata> payload_metadata);
   // Helper function to perform a StartDataUploadRequest and a ReportTaskResult
   // request concurrently.
   // This method will only return the response from the StartDataUploadRequest.
@@ -255,7 +259,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   absl::StatusOr<std::string> EncryptPayloadForConfidentialAggregation(
       PerTaskInfo& task_info,
       const fcp::confidential_compute::OkpKey& parsed_public_key,
-      const std::string& serialized_public_key, std::string inner_payload);
+      const std::string& serialized_public_key, std::string inner_payload,
+      std::optional<confidentialcompute::PayloadMetadata> payload_metadata);
 
   // Helper function to perform data upload using the ByteStream protocol, used
   // during simple or confidential aggregation.
