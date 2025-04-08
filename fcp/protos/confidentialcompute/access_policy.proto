@@ -87,6 +87,25 @@ message DataAccessPolicy {
   map<string, LogicalPipelinePolicy> pipelines = 3;
 }
 
+// A copy of DataAccessPolicy that contains the PipelineVariantPolicy messages
+// as bytes. This message is useful for extracting serialized
+// PipelineVariantPolicy messages without deserializing and re-serializing them,
+// which can result in different representations because proto serialization is
+// not canonical:
+// https://protobuf.dev/programming-guides/serialization-not-canonical/.
+//
+// This message should contain the subset of DataAccessPolicy fields needed to
+// extract the serialized PipelineVariantPolicy messages; all tags must match.
+// TODO: b/390344558 - rename DataAccessPolicyWithSerializedVariants to
+// AuthorizedLogicalPipelinePoliciesWithSerializedVariants.
+message DataAccessPolicyWithSerializedVariants {
+  message LogicalPipelinePolicy {
+    repeated bytes instances = 1;
+  }
+
+  map<string, LogicalPipelinePolicy> pipelines = 3;
+}
+
 message LogicalPipelinePolicy {
   // Policies for each pipeline instance that can serve as this logical
   // pipeline. This fully specifies the data flow between worker stages as well
