@@ -268,12 +268,15 @@ message AuthorizeConfidentialTransformResponse {
     //   -65537: HPKE-Base-X25519-SHA256-AES128GCM
     repeated bytes decryption_keys = 1;
 
-    // A COSE Key containing the public key to use to encrypt outputs. While
-    // this is a public key, it is not sent in the clear to make it more
-    // difficult for an attacker to fake an intermediate result. Nevertheless, a
-    // transform that's sensitive to such an attack should additionally verify
-    // the provenance of its inputs. The COSE Key will contain at least the
-    // following parameters:
+    // COSE Keys containing the public keys to use to encrypt outputs. There
+    // will be one key per destination node id in the access policy, and keys
+    // will be returned in the same order. Pipelines with multiple outputs
+    // should use the access policy's config constraints to attach semantic
+    // meaning to each key. While these are public keys, they are not sent in
+    // the clear to make it more difficult for an attacker to fake an
+    // intermediate result. Nevertheless, a transform that's sensitive to such
+    // an attack should additionally verify the provenance of its inputs. The
+    // COSE Keys will contain at least the following parameters:
     //
     // COSE Key Parameters (https://www.iana.org/assignments/cose/cose.xhtml)
     //        1: Key Type (int)
@@ -282,7 +285,7 @@ message AuthorizeConfidentialTransformResponse {
     //
     // Supported COSE Algorithms:
     //   -65537: HPKE-Base-X25519-SHA256-AES128GCM
-    bytes result_encryption_key = 2;
+    repeated bytes result_encryption_keys = 2;
   }
 
   message AssociatedData {

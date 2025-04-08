@@ -137,8 +137,17 @@ message PipelineVariantPolicy {
   repeated AccessBudget shared_access_budgets = 2;
 
   message Transform {
-    // The numeric id of the source blob in the graph.
+    // The numeric id of the source blobs in the graph that this transform may
+    // access.
     uint32 src = 1;
+
+    // The numeric id(s) of the source blobs in the graph that this transform
+    // may access. If non-empty, this field is used instead of `src`.
+    repeated uint32 src_node_ids = 6;
+
+    // The numeric id(s) of output blobs in the graph that this transform may
+    // produce. This field is ignored by the Ledger API.
+    repeated uint32 dst_node_ids = 7;
 
     // A matcher for the properties of the application being authorized.
     // If the transform should encrypt outputs, this should include fields that
@@ -155,11 +164,15 @@ message PipelineVariantPolicy {
     // KeyManagementService API; it is ignored when using the Ledger API.
     google.protobuf.Any config_constraints = 5;
 
-    // Limits on the application's access to the data.
+    // Limits on the application's access to the data accessed by this pipeline
+    // as described by `src`/`src_node_ids`. The budget applies to all source
+    // ids in the same way; if sources should have separate budgets, they should
+    // be listed in separate transforms.
     AccessBudget access_budget = 3;
 
     // The indices of shared AccessBudgets this transform is also subject to.
-    // *All* budgets must allow the usage for access to be granted.
+    // *All* budgets must allow the usage for access to be granted to a source
+    // blob.
     repeated uint32 shared_access_budget_indices = 4;
   }
 }
