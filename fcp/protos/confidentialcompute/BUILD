@@ -393,6 +393,7 @@ proto_library(
         "@com_google_protobuf//:any_proto",
         "@com_google_protobuf//:duration_proto",
         "@com_google_protobuf//:timestamp_proto",
+        "@oak//proto/attestation:endorsement_proto",
         "@oak//proto/attestation:evidence_proto",
         "@oak//proto/crypto:crypto_proto",
         "@oak//proto/session:session_proto",

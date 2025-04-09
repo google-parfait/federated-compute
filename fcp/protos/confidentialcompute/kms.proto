@@ -20,6 +20,7 @@ import "google/protobuf/any.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "google/rpc/status.proto";
+import "proto/attestation/endorsement.proto";
 import "proto/attestation/evidence.proto";
 import "proto/crypto/crypto.proto";
 import "proto/session/session.proto";
@@ -235,6 +236,9 @@ message AuthorizeConfidentialTransformRequest {
 
   // The attestation evidence for the transform requesting access.
   oak.attestation.v1.Evidence evidence = 3;
+
+  // The attestation endorsements for the transform requesting access.
+  oak.attestation.v1.Endorsements endorsements = 5;
 
   // Optional tag to disambiguate between otherwise identical accesses in the
   // policy. This field is an orchestration-level hint, not something attested
