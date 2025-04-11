@@ -386,7 +386,7 @@ def pack_tff_value(
     elif isinstance(type_spec, federated_language.StructType):
       return federated_language.StructType(
           (elem_name, remove_federated_types(elem_type))
-          for elem_name, elem_type in tff.structure.iter_elements(type_spec)
+          for elem_name, elem_type in type_spec.items()
       )
     else:
       raise ValueError(

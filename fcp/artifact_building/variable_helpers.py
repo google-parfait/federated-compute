@@ -203,13 +203,16 @@ def variable_names_from_type(
     return variable_names_from_type(tff_type.member, name)
   elif isinstance(tff_type, federated_language.StructType):
     result = []
-    fields = tff.structure.iter_elements(tff_type)
+    fields = tff_type.items()
     for index, (field_name, field_type) in enumerate(fields):
       # Default the name of the element to its index so that we don't wind up
       # with multiple child fields listed under `/v/`
       field_name = field_name or str(index)
       result.extend(
-          variable_names_from_type(field_type, name=name + '/' + field_name)
+          variable_names_from_type(
+              field_type,  # pytype: disable=wrong-arg-types
+              name=name + '/' + field_name,
+          )
       )
     return result
   else:
@@ -288,13 +291,16 @@ def get_flattened_tensor_specs(
     return get_flattened_tensor_specs(tff_type.member, name)
   elif isinstance(tff_type, federated_language.StructType):
     result = []
-    fields = tff.structure.iter_elements(tff_type)
+    fields = tff_type.items()
     for index, (field_name, field_type) in enumerate(fields):
       # Default the name of the element to its index so that we don't wind up
       # with multiple child fields listed under `/v/`
       field_name = field_name or str(index)
       result.extend(
-          get_flattened_tensor_specs(field_type, name=name + '/' + field_name)
+          get_flattened_tensor_specs(
+              field_type,  # pytype: disable=wrong-arg-types
+              name=name + '/' + field_name,
+          )
       )
     return result
   else:
