@@ -135,6 +135,11 @@ cc_grpc_library(
     deps = [":confidential_transform_cc_proto"],
 )
 
+py_proto_library(
+    name = "confidential_transform_py_proto",
+    deps = [":confidential_transform_proto"],
+)
+
 # Using tf_proto_library to get dependencies to TF protos built correctly.
 tf_proto_library(
     name = "tff_worker_configuration_proto",
@@ -362,6 +367,17 @@ cc_grpc_library(
     generate_mocks = True,
     grpc_only = True,
     deps = [":data_read_write_cc_proto"],
+)
+
+py_proto_library(
+    name = "data_read_write_py_proto",
+    deps = [":data_read_write_proto"],
+)
+
+py_grpc_library(
+    name = "data_read_write_py_grpc",
+    srcs = [":data_read_write_proto"],
+    deps = [":data_read_write_py_proto"],
 )
 
 proto_library(

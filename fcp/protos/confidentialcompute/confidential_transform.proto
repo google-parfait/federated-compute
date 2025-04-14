@@ -214,7 +214,10 @@ message BlobMetadata {
   }
 
   // Metadata for unencrypted data.
-  message Unencrypted {}
+  message Unencrypted {
+    // An identifier for the blob.
+    bytes blob_id = 1;
+  }
 
   // Metadata for plaintext encrypted with AEAD, with the symmetric key
   // then encrypted with HPKE.
