@@ -136,9 +136,6 @@ NestedDataSpec = Union[DataSpec, dict[str, 'NestedDataSpec']]
 def generate_example_selector_bytes_list(ds: NestedDataSpec):
   """Returns an ordered list of the bytes of each DataSpec's example selector.
 
-  The order aligns with the order of a struct given by
-  tff.structure.to_elements().
-
   Args:
     ds: A `NestedDataSpec`.
   """

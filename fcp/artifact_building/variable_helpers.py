@@ -137,14 +137,17 @@ def create_vars_for_tff_type(
   else:  # federated_language.StructType
     result = []
     with tf.compat.v1.variable_scope(name):
-      fields = tff.structure.to_elements(tff_type)
-      for index, (field_name, field_type) in enumerate(fields):
+      for index, (field_name, field_type) in enumerate(tff_type.items()):
         # Default the name of the element to its index so that we don't wind up
         # with multiple child fields listed under `/v/`
         if field_name is None:
           field_name = str(index)
         result.extend(
-            create_vars_for_tff_type(field_type, name=field_name, **kwargs)
+            create_vars_for_tff_type(
+                field_type,  # pytype: disable=wrong-arg-types
+                name=field_name,
+                **kwargs,
+            )
         )
     return result
 

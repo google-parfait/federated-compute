@@ -43,9 +43,6 @@ def generate_example_selector_placeholders(
 ):
   """Generates list of tff.compat.v1.placeholders for each leaf in a type spec.
 
-  The order of the placeholders aligns with the order given by
-  tff.structure.to_elements().
-
   Placeholders will be named by concatenating the name_prefix arg with the list
   of indexes at each level of the struct to get to the placeholder's leaf in the
   federated_language.Type.
@@ -73,9 +70,8 @@ def generate_example_selector_placeholders(
     # only have a single placeholder for the `ExampleSelector`.
     return [tf.compat.v1.placeholder(tf.string, shape=[], name=name_prefix)]
   elif isinstance(type_spec, federated_language.StructType):
-    type_spec_elements = tff.structure.to_elements(type_spec)
     placeholders = []
-    for element_index, (_, element_type) in enumerate(type_spec_elements):
+    for element_index, (_, element_type) in enumerate(type_spec.items()):
       placeholders.extend(
           generate_example_selector_placeholders(
               element_type, f'{name_prefix}_{element_index}'
@@ -547,9 +543,8 @@ def make_data_sources_with_dataspec(
       )
     ds = tff.structure.from_container(ds)
     assert isinstance(ds, tff.structure.Struct)
-    type_spec_elements = tff.structure.to_elements(type_spec)
     data_spec_elements = tff.structure.to_elements(ds)
-    type_spec_element_names = [str(k) for k, _ in type_spec_elements]
+    type_spec_element_names = [str(k) for k, _ in type_spec.items()]
     data_spec_element_names = [str(k) for k, _ in data_spec_elements]
     if type_spec_element_names != data_spec_element_names:
       raise TypeError(
@@ -558,7 +553,7 @@ def make_data_sources_with_dataspec(
           )
       )
     elements = []
-    for element_index, (_, element_type) in enumerate(type_spec_elements):
+    for element_index, (_, element_type) in enumerate(type_spec.items()):
       elements.extend(
           make_data_sources_with_dataspec(element_type, ds[element_index])
       )
@@ -625,9 +620,8 @@ def make_data_sources_without_dataspec(
     _validate_data_comp(data_comp, type_spec)
     return [data_comp]
   elif isinstance(type_spec, federated_language.StructType):
-    type_spec_elements = tff.structure.to_elements(type_spec)
     elements = []
-    for _, element_type in type_spec_elements:
+    for _, element_type in type_spec.items():
       elements.extend(make_data_sources_without_dataspec(element_type))
     return elements
   else:
