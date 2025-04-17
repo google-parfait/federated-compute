@@ -177,6 +177,9 @@ message SessionResponse {
 message ConfigureRequest {
   // Implementation-specific configuration to be passed to the TEE.
   google.protobuf.Any configuration = 1;
+  // Chunk size for the resulting blobs produced by the session and returned by
+  // ReadResponse.
+  uint32 chunk_size = 2;
 }
 
 // Message acknowledging creation of a session with a configuration
