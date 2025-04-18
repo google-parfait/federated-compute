@@ -33,6 +33,12 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "private_state",
+    hdrs = ["private_state.h"],
+    visibility = ["//visibility:public"],
+)
+
 cc_test(
     name = "client_payload_test",
     srcs = ["client_payload_test.cc"],
