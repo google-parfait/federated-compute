@@ -169,6 +169,7 @@ message DeriveKeysResponse {
   // CWT Claims (https://www.iana.org/assignments/cwt/cwt.xhtml)
   //   -65537: COSE_Key containing the public key parameters (bstr)
   //        4: Expiration Time (int)
+  //        5: Not Before (int)
   //        6: Issued At (int)
   //
   // COSE Key Parameters (https://www.iana.org/assignments/cose/cose.xhtml)
@@ -256,7 +257,22 @@ message AuthorizeConfidentialTransformResponse {
   // KMS's cluster key. This endorsement proves provenance for signed outputs
   // produced by the transform.
   //
-  // TODO: b/398874186 - Document the format of this endorsement.
+  // The signing key endorsement is a CWT (RFC 8392) signed by the cluster
+  // signing key and containing at least the following claims and parameters:
+  //
+  // CWT Claims (https://www.iana.org/assignments/cwt/cwt.xhtml)
+  //   -65542: Transform's authorized output node ids ([+ uint])
+  //   -65541: Transform index in the access policy (uint)
+  //   -65540: Pipeline Invocation ID (bstr)
+  //   -65539: Logical Pipeline Name (tstr)
+  //   -65537: COSE_Key containing the public key parameters (bstr)
+  //        4: Expiration Time (int)
+  //        5: Not Before (int)
+  //        6: Issued At (int)
+  //
+  // COSE Key Parameters (https://www.iana.org/assignments/cose/cose.xhtml)
+  //        1: Key Type (int)
+  //        3: Algorithm (int)
   bytes signing_key_endorsement = 2;
 
   message ProtectedResponse {
@@ -316,7 +332,28 @@ message ReleaseResultsRequest {
     // encrypted using result_encryption_key from the
     // AuthorizeConfidentialTransformResponse.
     //
-    // TODO: b/398874186 - Document the format of the release token.
+    // The COSE_Sign1 structure's payload should be a serialized CoseEncrypt0
+    // structure containing the decryption key and claims describing the
+    // required changes to the logical pipeline state. The KMS does not inspect
+    // the plaintext, but transforms are encourages to use a COSE_Key or some
+    // other self-describing structure to hold the decryption key. At least the
+    // following parameters must be present:
+    //
+    // COSE_Sign1 Parameters (https://www.iana.org/assignments/cose/cose.xhtml)
+    //        3: Algorithm (int)
+    //
+    // Supported COSE_Sign1 Algorithms:
+    //       -7: ES256 (ECDSA w/ SHA-256)
+    //
+    // COSE_Encrypt0 Parameters
+    //   -65539: Updated Logical Pipeline State (bstr)
+    //   -65538: Initial Logical Pipeline State (bstr / null)
+    //   -65537: HPKE Encapsulated Key (bstr)
+    //        3: Algorithm (int)
+    //        4: Key ID (bstr)
+    //
+    // Supported COSE_Encrypt0 Algorithms:
+    //   -65537: HPKE-Base-X25519-SHA256-AES128GCM
     bytes release_token = 1;
 
     // The signing_key_endorsement for the transform TEE that produced the

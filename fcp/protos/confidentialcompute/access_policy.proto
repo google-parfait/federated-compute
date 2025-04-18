@@ -154,6 +154,7 @@ message PipelineVariantPolicy {
     // represent the possible node IDs in this policy graph that the application
     // will assign to the outputs, which is necessary to ensure that the outputs
     // will be subject to the correct rules for further transformation.
+    // This field is required when using the KeyManagementService API.
     ApplicationMatcher application = 2;
 
     // Application-specific constraints on the transform's configuration. The
@@ -185,7 +186,8 @@ message ApplicationMatcher {
   optional string tag = 1;
 
   // Oak ReferenceValues specifying the binaries running at each layer of the
-  // DICE attestation.
+  // DICE attestation. This field is required when using the
+  // KeyManagementService API.
   oak.attestation.v1.ReferenceValues reference_values = 2;
 
   // Matchers for the application's configuration-derived properties.
