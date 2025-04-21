@@ -100,7 +100,7 @@ message DataAccessPolicy {
 // AuthorizedLogicalPipelinePoliciesWithSerializedVariants.
 message DataAccessPolicyWithSerializedVariants {
   message LogicalPipelinePolicy {
-    repeated bytes instances = 1;
+    repeated bytes instances = 1 [ctype = CORD];
   }
 
   map<string, LogicalPipelinePolicy> pipelines = 3;
