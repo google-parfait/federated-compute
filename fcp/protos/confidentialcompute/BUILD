@@ -415,3 +415,13 @@ proto_library(
         "@oak//proto/session:session_proto",
     ],
 )
+
+proto_library(
+    name = "program_executor_tee_proto",
+    srcs = ["program_executor_tee_config.proto"],
+)
+
+cc_proto_library(
+    name = "program_executor_tee_cc_proto",
+    deps = [":program_executor_tee_proto"],
+)
