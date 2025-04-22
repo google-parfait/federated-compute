@@ -378,5 +378,6 @@ message ReadResponse {
   // Indicates that this is the last chunk of data for the current blob.
   bool finish_read = 2;
   // A chunk of data read from the blob.
-  bytes data = 3;
+  bytes data = 3
+      ;
 }
