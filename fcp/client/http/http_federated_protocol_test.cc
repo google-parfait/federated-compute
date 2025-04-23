@@ -3632,6 +3632,148 @@ TEST_F(HttpFederatedProtocolTest,
               HasSubstr("attestation verification failed"));
 }
 
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedViaConfidentialAggWithBlobHeaderInHttpHeaderSuccess) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, enable_blob_header_in_http_headers)
+      .WillRepeatedly(Return(true));
+  // Issue an eligibility eval checkin first.
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*enable_confidential_aggregation*/ true));
+  std::string serialized_access_policy = "the access policy";
+  ASSERT_OK(RunSuccessfulCheckin(
+      /*report_eligibility_eval_result*/ true,
+      /*confidential_data_access_policy=*/serialized_access_policy));
+
+  // Create a fake checkpoint with 32 'X'.
+  std::string checkpoint_str(32, 'X');
+  ComputationResults results;
+  results.emplace("tensorflow_checkpoint", checkpoint_str);
+  absl::Duration plan_duration = absl::Minutes(5);
+
+  // Generate a new public key, which we'll pass to the client in the
+  // ConfidentialEncryptionConfig. We'll use the decryptor from which the public
+  // key was generated to validate the encrypted payload at the end of the test.
+  fcp::confidential_compute::MessageDecryptor decryptor;
+  auto encoded_public_key =
+      decryptor
+          .GetPublicKey(
+              [](absl::string_view payload) { return "fakesignature"; }, 0)
+          .value();
+  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
+  ASSERT_OK(parsed_public_key);
+  ASSERT_TRUE(parsed_public_key->public_key.has_value());
+
+  // Note: we don't specify any attestation evidence nor attestation
+  // endorsements in the encryption config, since we can't generate valid
+  // attestations in a test anyway.
+  ConfidentialEncryptionConfig encryption_config;
+  encryption_config.set_public_key(encoded_public_key);
+  // Empty SignedEndorsements since the task does not use endorsements.
+  confidentialcompute::SignedEndorsements signed_endorsements;
+
+  // Ensure that the server's attestation evidence is considered valid.
+  EXPECT_CALL(
+      *mock_attestation_verifier_,
+      Verify(Eq(serialized_access_policy), _, EqualsProto(encryption_config)))
+      .WillRepeatedly(
+          [=](const absl::Cord& access_policy,
+              const confidentialcompute::SignedEndorsements&
+                  signed_endorsements,
+              const ConfidentialEncryptionConfig& encryption_config) {
+            return attestation::AlwaysPassingAttestationVerifier().Verify(
+                access_policy, signed_endorsements, encryption_config);
+          });
+
+  ExpectSuccessfulReportTaskResultRequest(
+      "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
+      "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
+      kAggregationSessionId, kTaskName, plan_duration);
+  ExpectSuccessfulStartAggregationDataUploadRequest(
+      "https://aggregation.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/"
+      "clients/AUTHORIZATION_TOKEN:startdataupload?%24alt=proto",
+      kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri,
+      false, encryption_config);
+
+  // Capture the raw uploaded data so we can subsequently validate that it was
+  // properly encrypted with the public key that was provided to the client.
+  std::string uploaded_data;
+  HeaderList headers;
+  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
+                                     "https://bytestream.uri/upload/v1/media/"
+                                     "CHECKPOINT_RESOURCE?upload_protocol=raw",
+                                     HttpRequest::Method::kPost, _, _)))
+      .WillOnce([&uploaded_data,
+                 &headers](MockHttpClient::SimpleHttpRequest request) {
+        uploaded_data = request.body;
+        headers = request.headers;
+        return CreateEmptySuccessHttpResponse();
+      });
+
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
+      /*confidential_aggregation=*/true);
+
+  confidentialcompute::PayloadMetadata payload_metadata;
+  payload_metadata.mutable_event_time_range()
+      ->mutable_start_event_time()
+      ->set_year(2025);
+  payload_metadata.mutable_event_time_range()
+      ->mutable_start_event_time()
+      ->set_month(1);
+  payload_metadata.mutable_event_time_range()
+      ->mutable_start_event_time()
+      ->set_day(1);
+  payload_metadata.mutable_event_time_range()
+      ->mutable_end_event_time()
+      ->set_year(2025);
+  payload_metadata.mutable_event_time_range()
+      ->mutable_end_event_time()
+      ->set_month(1);
+  payload_metadata.mutable_event_time_range()
+      ->mutable_end_event_time()
+      ->set_day(7);
+  EXPECT_OK(federated_protocol_->ReportCompleted(
+      std::move(results), plan_duration, std::nullopt, payload_metadata));
+
+  // Validate that the payload can be parsed and that the ciphertext can be
+  // decrypted using the decryptor that generated the public encryption key.
+  absl::StatusOr<confidential_compute::ClientPayloadHeader> payload_header;
+  absl::string_view ciphertext;
+  {
+    absl::string_view uploaded_data_view(uploaded_data);
+    payload_header =
+        fcp::confidential_compute::DecodeAndConsumeClientPayloadHeader(
+            uploaded_data_view);
+    ASSERT_OK(payload_header);
+    // The uploaded_data_view now contains just the ciphertext.
+    ciphertext = uploaded_data_view;
+    EXPECT_THAT(payload_header->serialized_blob_header, IsEmpty());
+  }
+
+  // Validate the blob header values.
+  bool found_blob_header = false;
+  for (const auto& header : headers) {
+    if (header.first == "x-goog-blob-header") {
+      found_blob_header = true;
+      ::fcp::confidentialcompute::BlobHeader blob_header;
+      ASSERT_TRUE(blob_header.ParseFromString(header.second));
+      EXPECT_EQ(blob_header.access_policy_sha256(),
+                ComputeSHA256(serialized_access_policy));
+      EXPECT_EQ(blob_header.access_policy_node_id(), 0);
+      EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
+      EXPECT_EQ(blob_header.key_id(), parsed_public_key->public_key->key_id);
+      EXPECT_THAT(blob_header.payload_metadata(),
+                  EqualsProto(payload_metadata));
+    }
+  }
+  ASSERT_TRUE(found_blob_header);
+}
+
 // TODO: b/307312707 -  Add a test for confidential aggregation with multiple
 // task assignment.
 

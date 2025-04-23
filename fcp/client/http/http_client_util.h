@@ -42,6 +42,7 @@ inline static constexpr char kApiKeyHdr[] = "x-goog-api-key";
 inline static constexpr char kIdentityEncodingHdrValue[] = "identity";
 inline static constexpr char kGzipEncodingHdrValue[] = "gzip";
 inline static constexpr char kProtobufContentType[] = "application/x-protobuf";
+inline static constexpr char kBlobHeader[] = "x-goog-blob-header";
 
 // A non-exhaustive enumeration of common HTTP response codes.
 // Note this is purposely *not* an "enum class", to allow easy comparisons

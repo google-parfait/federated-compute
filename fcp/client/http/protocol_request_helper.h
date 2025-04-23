@@ -77,6 +77,14 @@ class ProtocolRequestCreator {
       HttpRequest::Method method, std::string request_body,
       bool is_protobuf_encoded) const;
 
+  // Creates an `HttpRequest` with base uri, request headers, compression
+  // setting and additional headers.
+  absl::StatusOr<std::unique_ptr<HttpRequest>>
+  CreateProtocolRequestWithAdditionalHeaders(
+      absl::string_view uri_path_suffix, QueryParams params,
+      HttpRequest::Method method, std::string request_body,
+      bool is_protobuf_encoded, HeaderList additional_headers) const;
+
   // Creates an `HttpRequest` for getting the result of a
   // `google.longrunning.operation`. Note that the request body is empty,
   // because its only field (`name`) is included in the URI instead. Also note
@@ -95,7 +103,8 @@ class ProtocolRequestCreator {
   absl::StatusOr<std::unique_ptr<HttpRequest>> CreateHttpRequest(
       absl::string_view uri_path_suffix, QueryParams params,
       HttpRequest::Method method, std::string request_body,
-      bool is_protobuf_encoded, bool use_compression) const;
+      bool is_protobuf_encoded, bool use_compression,
+      HeaderList additional_headers) const;
   // The URI to use for the next protocol request. See `ForwardingInfo`.
   std::string next_request_base_uri_;
   // The API key used for requests.

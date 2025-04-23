@@ -216,9 +216,19 @@ ProtocolRequestCreator::CreateProtocolRequest(absl::string_view uri_path_suffix,
                                               HttpRequest::Method method,
                                               std::string request_body,
                                               bool is_protobuf_encoded) const {
+  return CreateProtocolRequestWithAdditionalHeaders(
+      uri_path_suffix, std::move(params), method, std::move(request_body),
+      is_protobuf_encoded, /*additional_headers=*/{});
+}
+
+absl::StatusOr<std::unique_ptr<HttpRequest>>
+ProtocolRequestCreator::CreateProtocolRequestWithAdditionalHeaders(
+    absl::string_view uri_path_suffix, QueryParams params,
+    HttpRequest::Method method, std::string request_body,
+    bool is_protobuf_encoded, HeaderList additional_headers) const {
   return CreateHttpRequest(uri_path_suffix, std::move(params), method,
                            std::move(request_body), is_protobuf_encoded,
-                           use_compression_);
+                           use_compression_, additional_headers);
 }
 
 absl::StatusOr<std::unique_ptr<HttpRequest>>
@@ -228,7 +238,8 @@ ProtocolRequestCreator::CreateGetOperationRequest(
                        CreateGetOperationUriSuffix(operation_name));
   return CreateHttpRequest(uri_path_suffix, {}, HttpRequest::Method::kGet, "",
                            /*is_protobuf_encoded=*/true,
-                           /*use_compression=*/false);
+                           /*use_compression=*/false,
+                           /*additional_headers=*/{});
 }
 
 absl::StatusOr<std::unique_ptr<HttpRequest>>
@@ -238,7 +249,8 @@ ProtocolRequestCreator::CreateCancelOperationRequest(
                        CreateCancelOperationUriSuffix(operation_name));
   return CreateHttpRequest(uri_path_suffix, {}, HttpRequest::Method::kPost, "",
                            /*is_protobuf_encoded=*/true,
-                           /*use_compression=*/false);
+                           /*use_compression=*/false,
+                           /*additional_headers=*/{});
 }
 
 absl::StatusOr<std::unique_ptr<HttpRequest>>
@@ -247,7 +259,8 @@ ProtocolRequestCreator::CreateHttpRequest(absl::string_view uri_path_suffix,
                                           HttpRequest::Method method,
                                           std::string request_body,
                                           bool is_protobuf_encoded,
-                                          bool use_compression) const {
+                                          bool use_compression,
+                                          HeaderList additional_headers) const {
   HeaderList request_headers = next_request_headers_;
   request_headers.push_back({kApiKeyHdr, api_key_});
   if (is_protobuf_encoded) {
@@ -260,6 +273,8 @@ ProtocolRequestCreator::CreateHttpRequest(absl::string_view uri_path_suffix,
     // https://cloud.google.com/apis/docs/system-parameters#http_mapping
     params["%24alt"] = "proto";
   }
+  request_headers.insert(request_headers.end(), additional_headers.begin(),
+                         additional_headers.end());
   std::string uri_with_params = std::string(uri_path_suffix);
   if (!params.empty()) {
     uri_with_params = CreateUriSuffixFromPathAndParams(uri_path_suffix, params);

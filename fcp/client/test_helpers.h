@@ -710,6 +710,7 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, log_min_sep_index_to_phase_stats, (), (const, override));
   MOCK_METHOD(int32_t, http_retry_max_attempts, (), (const, override));
   MOCK_METHOD(bool, enable_event_time_data_upload, (), (const, override));
+  MOCK_METHOD(bool, enable_blob_header_in_http_headers, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

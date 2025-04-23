@@ -170,6 +170,31 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
   EXPECT_EQ(actual_body, expected_body);
 }
 
+TEST(ProtocolRequestCreatorTest, CreateProtocolRequestWithAdditionalHeaders) {
+  ProtocolRequestCreator creator("https://initial.uri", kApiKey, HeaderList(),
+                                 /*use_compression=*/false);
+  std::string expected_body = "expected_body";
+  auto request = creator.CreateProtocolRequestWithAdditionalHeaders(
+      "/v1/request", QueryParams(), HttpRequest::Method::kPost, expected_body,
+      /*is_protobuf_encoded=*/false,
+      HeaderList{{"x-header1", "header-value1"}});
+
+  ASSERT_OK(request);
+  EXPECT_EQ((*request)->uri(), "https://initial.uri/v1/request");
+  EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
+  EXPECT_THAT(
+      (*request)->extra_headers(),
+      UnorderedElementsAre(
+          Header{"x-goog-api-key", "API_KEY"},
+          Header{"x-header1", "header-value1"},
+          Header{"Content-Length", std::to_string(expected_body.size())}));
+  EXPECT_TRUE((*request)->HasBody());
+  std::string actual_body;
+  actual_body.resize(expected_body.size());
+  ASSERT_OK((*request)->ReadBody(actual_body.data(), expected_body.size()));
+  EXPECT_EQ(actual_body, expected_body);
+}
+
 TEST(ProtocolRequestCreatorTest, CreateProtobufEncodedProtocolRequest) {
   ProtocolRequestCreator creator("https://initial.uri", kApiKey, HeaderList(),
                                  /*use_compression=*/false);

@@ -1271,21 +1271,42 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
   }
 
   std::string data_to_upload;
+  std::string serialized_blob_header = "";
   if (confidential_aggregation) {
     FCP_ASSIGN_OR_RETURN(
         OkpKey parsed_public_key,
         ValidateConfidentialEncryptionConfig(task_info, *encryption_config));
+    // This is pulled out here because depending on the
+    // enable_blob_header_in_http_headers flag, we will either put the header in
+    // the encrypted payload or in the http headers.
+    BlobHeader blob_header;
+    blob_header.set_blob_id(fcp::RandomToken::Generate().ToString());
+    // TODO: b/307312707 - Remove the need to compute the SHA256 hash twice.
+    blob_header.set_access_policy_sha256(
+        ComputeSHA256(*task_info.confidential_data_access_policy));
+    blob_header.set_key_id(parsed_public_key.key_id);
+    if (payload_metadata.has_value()) {
+      *blob_header.mutable_payload_metadata() =
+          std::move(payload_metadata.value());
+    }
+    serialized_blob_header = blob_header.SerializeAsString();
+
     FCP_ASSIGN_OR_RETURN(
         data_to_upload,
         EncryptPayloadForConfidentialAggregation(
             task_info, parsed_public_key, encryption_config->public_key(),
-            result_data, std::move(payload_metadata)));
+            result_data, serialized_blob_header));
   } else {
     data_to_upload = std::move(result_data);
   }
 
-  auto upload_status =
-      UploadDataViaByteStreamProtocol(std::move(data_to_upload), task_info);
+  auto upload_status = UploadDataViaByteStreamProtocol(
+      std::move(data_to_upload), task_info,
+      // Passes the blob header when the enable_blob_header_in_http_headers flag
+      // is enabled.
+      flags_->enable_blob_header_in_http_headers()
+          ? std::make_optional(serialized_blob_header)
+          : std::nullopt);
   if (!upload_status.ok()) {
     task_info.state = ObjectState::kReportFailedPermanentError;
     if (upload_status.code() != absl::StatusCode::kAborted) {
@@ -1551,20 +1572,8 @@ absl::StatusOr<std::string>
 HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
     PerTaskInfo& task_info, const OkpKey& parsed_public_key,
     const std::string& serialized_public_key, std::string inner_payload,
-    std::optional<PayloadMetadata> payload_metadata) {
+    const std::string& serialized_blob_header) {
   FCP_CHECK(task_info.confidential_data_access_policy.has_value());
-
-  BlobHeader blob_header;
-  blob_header.set_blob_id(fcp::RandomToken::Generate().ToString());
-  // TODO: b/307312707 - Remove the need to compute the SHA256 hash twice.
-  blob_header.set_access_policy_sha256(
-      ComputeSHA256(*task_info.confidential_data_access_policy));
-  blob_header.set_key_id(parsed_public_key.key_id);
-  if (payload_metadata.has_value()) {
-    *blob_header.mutable_payload_metadata() =
-        std::move(payload_metadata.value());
-  }
-  std::string serialized_blob_header = blob_header.SerializeAsString();
 
   // Compress the payload before we encrypt it.
   absl::StatusOr<std::string> compressed_payload =
@@ -1600,29 +1609,39 @@ HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
 
   // Lastly, encode the ciphertext as well as the keys and blob header into a
   // single string, to be uploaded via the protocol.
+  auto client_payload_header = confidential_compute::ClientPayloadHeader{
+      .encrypted_symmetric_key =
+          std::move(encryption_result->encrypted_symmetric_key),
+      .encapsulated_public_key = std::move(encryption_result->encapped_key),
+      .is_gzip_compressed = true,
+  };
+  if (!flags_->enable_blob_header_in_http_headers()) {
+    client_payload_header.serialized_blob_header = serialized_blob_header;
+  }
   return confidential_compute::EncodeClientPayload(
-      confidential_compute::ClientPayloadHeader{
-          .encrypted_symmetric_key =
-              std::move(encryption_result->encrypted_symmetric_key),
-          .encapsulated_public_key = std::move(encryption_result->encapped_key),
-          .serialized_blob_header = std::move(serialized_blob_header),
-          .is_gzip_compressed = true,
-      },
-      encryption_result->ciphertext);
+      std::move(client_payload_header), encryption_result->ciphertext);
 }
 
 absl::Status HttpFederatedProtocol::UploadDataViaByteStreamProtocol(
-    std::string tf_checkpoint, PerTaskInfo& task_info) {
+    std::string tf_checkpoint, PerTaskInfo& task_info,
+    std::optional<std::string> serialized_blob_header) {
   FCP_LOG(INFO) << "Uploading checkpoint with simple aggregation.";
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,
       CreateByteStreamUploadUriSuffix(task_info.aggregation_resource_name));
+  HeaderList additional_headers;
+  if (serialized_blob_header.has_value()) {
+    additional_headers.push_back(
+        {kBlobHeader, std::move(serialized_blob_header.value())});
+  }
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
-      task_info.data_upload_request_creator->CreateProtocolRequest(
-          uri_suffix, {{"upload_protocol", "raw"}}, HttpRequest::Method::kPost,
-          std::move(tf_checkpoint),
-          /*is_protobuf_encoded=*/false));
+      task_info.data_upload_request_creator
+          ->CreateProtocolRequestWithAdditionalHeaders(
+              uri_suffix, {{"upload_protocol", "raw"}},
+              HttpRequest::Method::kPost, std::move(tf_checkpoint),
+              /*is_protobuf_encoded=*/false, additional_headers));
+
   FCP_LOG(INFO) << "ByteStream.Write request URI is: " << http_request->uri();
   auto http_response = protocol_request_helper_.PerformProtocolRequest(
       std::move(http_request), *interruptible_runner_);
