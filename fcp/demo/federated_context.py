@@ -14,7 +14,7 @@
 """TFF FederatedContext subclass for the demo Federated Computation platform."""
 
 import asyncio
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Mapping
 import socket
 import ssl
 import threading
@@ -194,7 +194,7 @@ class FederatedContext(federated_language.program.FederatedContext):
 
   def _parse_arg(self, arg: tff.structure.Struct) -> tuple[
       Union[
-          tff.structure.Struct,
+          Mapping[str, object],
           tf.Tensor,
           federated_language.program.MaterializableValueReference,
       ],
@@ -206,7 +206,7 @@ class FederatedContext(federated_language.program.FederatedContext):
 
     state, config = arg
     if attr.has(type(state)):
-      state = tff.structure.from_container(state, recursive=True)
+      state = attr.asdict(state, recurse=True)
     if not self._is_state_structure_of_allowed_types(state):
       raise TypeError(
           'arg[0] must be a value or structure of values of '
