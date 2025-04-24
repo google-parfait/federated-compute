@@ -73,6 +73,7 @@ enum CoseKeyParameter {
   // OKP parameters.
   kOkpCrv = -1,
   kOkpX = -2,
+  kOkpD = -4,
 
   // Symmetric parameters.
   kSymmetricK = -1,
@@ -282,6 +283,15 @@ absl::StatusOr<OkpKey> OkpKey::Decode(absl::string_view encoded) {
                          value->asBstr()->value().end());
         break;
 
+      case CoseKeyParameter::kOkpD:
+        if (value->type() != cppbor::BSTR) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("unsupported d type ", value->type()));
+        }
+        okp_key.d.assign(value->asBstr()->value().begin(),
+                         value->asBstr()->value().end());
+        break;
+
       default:
         break;
     }
@@ -308,6 +318,9 @@ absl::StatusOr<std::string> OkpKey::Encode() const {
   }
   if (!x.empty()) {
     map.add(CoseKeyParameter::kOkpX, Bstr(x));
+  }
+  if (!d.empty()) {
+    map.add(CoseKeyParameter::kOkpD, Bstr(d));
   }
   return map.toString();
 }

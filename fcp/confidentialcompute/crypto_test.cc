@@ -20,6 +20,7 @@
 #include <cstring>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include "google/protobuf/struct.pb.h"
 #include "gmock/gmock.h"
@@ -48,7 +49,7 @@ using ::testing::HasSubstr;
 using ::testing::Return;
 using ::testing::SaveArg;
 
-// Helper function to generate a new public and private key pair.
+// Helper function to generate a new public and private key pair (HPKE_KEY).
 // This function uses output parameters because ScopedEVP_HPKE_KEY is not
 // movable in older versions of BoringSSL.
 void GenerateKeyPair(const EVP_HPKE_KEM& kem, std::string& public_key,
@@ -61,6 +62,26 @@ void GenerateKeyPair(const EVP_HPKE_KEM& kem, std::string& public_key,
                &public_key_len, public_key.size()),
            1);
   public_key.resize(public_key_len);
+}
+
+// Helper function to generate a new public and private key pair (raw strings).
+std::pair<std::string, std::string> GenerateKeyPair(const EVP_HPKE_KEM& kem) {
+  bssl::ScopedEVP_HPKE_KEY key;
+  CHECK_EQ(EVP_HPKE_KEY_generate(key.get(), &kem), 1);
+  size_t key_len;
+  std::string public_key(EVP_HPKE_MAX_PUBLIC_KEY_LENGTH, '\0');
+  CHECK_EQ(EVP_HPKE_KEY_public_key(
+               key.get(), reinterpret_cast<uint8_t*>(public_key.data()),
+               &key_len, public_key.size()),
+           1);
+  public_key.resize(key_len);
+  std::string private_key(EVP_HPKE_MAX_PRIVATE_KEY_LENGTH, '\0');
+  CHECK_EQ(EVP_HPKE_KEY_private_key(
+               key.get(), reinterpret_cast<uint8_t*>(private_key.data()),
+               &key_len, private_key.size()),
+           1);
+  private_key.resize(key_len);
+  return {public_key, private_key};
 }
 
 TEST(CryptoTest, GetNextBlobNonceSucceedsAndIncrementsCounter) {
@@ -419,6 +440,81 @@ TEST(CryptoTest, EncryptRewrapKeyAndDecrypt) {
   EXPECT_EQ(decoded_symmetric_key->algorithm,
             crypto_internal::kAeadAes128GcmSivFixedNonce);
   EXPECT_NE(decoded_symmetric_key->k, "");
+}
+
+TEST(CryptoTest, EncryptAndDecryptWithProvidedKey) {
+  auto [raw_public_key, raw_private_key] =
+      GenerateKeyPair(*EVP_hpke_x25519_hkdf_sha256());
+  absl::StatusOr<std::string> public_cwt = OkpCwt{
+      .public_key = OkpKey{
+          .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+          .curve = crypto_internal::kX25519,
+          .x = raw_public_key,
+      }}.Encode();
+  ASSERT_OK(public_cwt);
+  absl::StatusOr<std::string> private_key =
+      OkpKey{
+          .key_id = "key-id",
+          .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+          .curve = crypto_internal::kX25519,
+          .d = raw_private_key,
+      }
+          .Encode();
+  ASSERT_OK(private_key);
+
+  std::string message = "some plaintext message";
+  std::string associated_data = "plaintext associated data";
+
+  MessageEncryptor encryptor;
+  MessageDecryptor decryptor({}, {*private_key});
+
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.Encrypt(message, *public_cwt, associated_data);
+  ASSERT_OK(encrypt_result);
+
+  absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
+      encrypt_result->ciphertext, associated_data,
+      encrypt_result->encrypted_symmetric_key, associated_data,
+      encrypt_result->encapped_key, "key-id");
+  ASSERT_OK(decrypt_result);
+  EXPECT_EQ(*decrypt_result, message);
+}
+
+TEST(CryptoTest, EncryptAndDecryptCanIgnoreProvidedKey) {
+  auto [raw_public_key, raw_private_key] =
+      GenerateKeyPair(*EVP_hpke_x25519_hkdf_sha256());
+  absl::StatusOr<std::string> private_key =
+      OkpKey{
+          .key_id = "key-id",
+          .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+          .curve = crypto_internal::kX25519,
+          .d = raw_private_key,
+      }
+          .Encode();
+  ASSERT_OK(private_key);
+
+  std::string message = "some plaintext message";
+  std::string associated_data = "plaintext associated data";
+
+  MessageEncryptor encryptor;
+  MessageDecryptor decryptor({}, {*private_key});
+
+  absl::StatusOr<std::string> recipient_public_key =
+      decryptor.GetPublicKey([](absl::string_view) { return ""; }, 0);
+  ASSERT_OK(recipient_public_key);
+
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.Encrypt(message, *recipient_public_key, associated_data);
+  ASSERT_OK(encrypt_result);
+
+  // Even though decryption keys were provided, it should still be possible to
+  // decrypt using the MessageDecryptor's internal key.
+  absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
+      encrypt_result->ciphertext, associated_data,
+      encrypt_result->encrypted_symmetric_key, associated_data,
+      encrypt_result->encapped_key, "key-id");
+  ASSERT_OK(decrypt_result);
+  EXPECT_EQ(*decrypt_result, message);
 }
 
 TEST(CryptoTest, EncryptWithInvalidPublicKeyFails) {
@@ -793,6 +889,43 @@ TEST(CryptoTest, DecryptWithInvalidAlgorithmFails) {
                         rewrapped_symmetric_key_result->encrypted_symmetric_key,
                         symmetric_key_associated_data,
                         rewrapped_symmetric_key_result->encapped_key);
+  EXPECT_THAT(decrypt_result, fcp::IsCode(INVALID_ARGUMENT));
+}
+
+TEST(CryptoTest, DecryptWithWrongKeyIdFails) {
+  auto [raw_public_key, raw_private_key] =
+      GenerateKeyPair(*EVP_hpke_x25519_hkdf_sha256());
+  absl::StatusOr<std::string> public_cwt = OkpCwt{
+      .public_key = OkpKey{
+          .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+          .curve = crypto_internal::kX25519,
+          .x = raw_public_key,
+      }}.Encode();
+  ASSERT_OK(public_cwt);
+  absl::StatusOr<std::string> private_key =
+      OkpKey{
+          .key_id = "key-id",
+          .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+          .curve = crypto_internal::kX25519,
+          .d = raw_private_key,
+      }
+          .Encode();
+  ASSERT_OK(private_key);
+
+  std::string message = "some plaintext message";
+  std::string associated_data = "plaintext associated data";
+
+  MessageEncryptor encryptor;
+  MessageDecryptor decryptor({}, {*private_key});
+
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.Encrypt(message, *public_cwt, associated_data);
+  ASSERT_OK(encrypt_result);
+
+  absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
+      encrypt_result->ciphertext, associated_data,
+      encrypt_result->encrypted_symmetric_key, associated_data,
+      encrypt_result->encapped_key, "other-id");
   EXPECT_THAT(decrypt_result, fcp::IsCode(INVALID_ARGUMENT));
 }
 

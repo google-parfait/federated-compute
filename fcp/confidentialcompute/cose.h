@@ -29,12 +29,13 @@
 
 namespace fcp::confidential_compute {
 
-// A Cose_Key struct for an Octet Key Pair (OKP) public key.
+// A Cose_Key struct for an Octet Key Pair (OKP) public or private key.
 struct OkpKey {
   std::string key_id;
   std::optional<int64_t> algorithm;
   std::optional<int64_t> curve;
   std::string x;
+  std::string d;
 
   // CBOR-decodes an OkpKey.
   static absl::StatusOr<OkpKey> Decode(absl::string_view encoded);

@@ -19,9 +19,11 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "google/protobuf/struct.pb.h"
 #include "absl/cleanup/cleanup.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -70,6 +72,38 @@ std::string GenerateBlobNonce(std::string session_nonce, uint32_t counter) {
               sizeof(uint32_t));
   return blob_nonce;
 }
+
+// Parses serialized COSE_Key decryption keys and converts them to
+// EVP_HPKE_KEYs, grouped by key ID.
+absl::flat_hash_map<std::string, std::vector<bssl::ScopedEVP_HPKE_KEY>>
+ProcessDecryptionKeys(const std::vector<absl::string_view>& decryption_keys) {
+  absl::flat_hash_map<std::string, std::vector<bssl::ScopedEVP_HPKE_KEY>>
+      processed_keys;
+  for (absl::string_view decryption_key : decryption_keys) {
+    absl::StatusOr<OkpKey> key = OkpKey::Decode(decryption_key);
+    if (!key.ok()) {
+      FCP_LOG(WARNING) << "Skipping invalid key: " << key.status();
+      continue;
+    }
+    if (key->algorithm != crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm ||
+        key->curve != crypto_internal::kX25519) {
+      FCP_LOG(WARNING) << "Skipping key with unsupported algorithm or curve";
+      continue;
+    }
+
+    bssl::ScopedEVP_HPKE_KEY hpke_key;
+    if (EVP_HPKE_KEY_init(hpke_key.get(), EVP_hpke_x25519_hkdf_sha256(),
+                          reinterpret_cast<const uint8_t*>(key->d.data()),
+                          key->d.size()) != 1) {
+      FCP_LOG(WARNING) << "Skipping key with invalid private key";
+      continue;
+    }
+
+    processed_keys[key->key_id].push_back(std::move(hpke_key));
+  }
+  return processed_keys;
+}
+
 }  // namespace
 
 NonceChecker::NonceChecker() {
@@ -191,8 +225,11 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
   };
 }
 
-MessageDecryptor::MessageDecryptor(google::protobuf::Struct config_properties)
+MessageDecryptor::MessageDecryptor(
+    google::protobuf::Struct config_properties,
+    const std::vector<absl::string_view>& decryption_keys)
     : config_properties_(std::move(config_properties)),
+      decryption_keys_(ProcessDecryptionKeys(decryption_keys)),
       hpke_kem_(EVP_hpke_x25519_hkdf_sha256()),
       hpke_kdf_(EVP_hpke_hkdf_sha256()),
       hpke_aead_(EVP_hpke_aes_128_gcm()),
@@ -236,19 +273,25 @@ absl::StatusOr<std::string> MessageDecryptor::Decrypt(
     absl::string_view ciphertext, absl::string_view ciphertext_associated_data,
     absl::string_view encrypted_symmetric_key,
     absl::string_view encrypted_symmetric_key_associated_data,
-    absl::string_view encapped_key) const {
-  FCP_ASSIGN_OR_RETURN(
-      std::string symmetric_key,
-      crypto_internal::UnwrapSymmetricKey(
-          hpke_key_.get(), hpke_kdf_, hpke_aead_, encrypted_symmetric_key,
-          encapped_key, encrypted_symmetric_key_associated_data));
+    absl::string_view encapped_key, absl::string_view key_id) const {
+  std::optional<std::string> symmetric_key =
+      UnwrapSymmetricKeyWithDecryptionKeys(
+          encrypted_symmetric_key, encrypted_symmetric_key_associated_data,
+          encapped_key, key_id);
+  if (!symmetric_key.has_value()) {
+    FCP_ASSIGN_OR_RETURN(
+        symmetric_key,
+        crypto_internal::UnwrapSymmetricKey(
+            hpke_key_.get(), hpke_kdf_, hpke_aead_, encrypted_symmetric_key,
+            encapped_key, encrypted_symmetric_key_associated_data));
+  }
   // Cleanse the memory containing the symmetric key upon exiting the scope so
   // the key cannot be accessed outside this function.
   absl::Cleanup symmetric_key_cleanup = [&symmetric_key]() {
-    OPENSSL_cleanse(symmetric_key.data(), symmetric_key.size());
+    OPENSSL_cleanse(symmetric_key->data(), symmetric_key->size());
   };
 
-  FCP_ASSIGN_OR_RETURN(SymmetricKey key, SymmetricKey::Decode(symmetric_key));
+  FCP_ASSIGN_OR_RETURN(SymmetricKey key, SymmetricKey::Decode(*symmetric_key));
   absl::Cleanup key_cleanup = [&key]() {
     OPENSSL_cleanse(key.k.data(), key.k.size());
   };
@@ -282,6 +325,37 @@ absl::StatusOr<std::string> MessageDecryptor::Decrypt(
   }
   plaintext.resize(plaintext_len);
   return plaintext;
+}
+
+std::optional<std::string>
+MessageDecryptor::UnwrapSymmetricKeyWithDecryptionKeys(
+    absl::string_view encrypted_symmetric_key,
+    absl::string_view encrypted_symmetric_key_associated_data,
+    absl::string_view encapped_key, absl::string_view key_id) const {
+  // Fail immediately if no decryption keys were provided or if a key_id wasn't
+  // provided.
+  if (decryption_keys_.empty() || key_id.empty()) {
+    return std::nullopt;
+  }
+
+  // Attempt to decrypt with each key with a matching key ID. If all matching
+  // keys fail, return nullopt so that the caller can attempt to decrypt with
+  // the internally generated key (just in case the MessageDecryptor is being
+  // used to decrypt a mix of inputs using the Ledger and KMS).
+  auto it = decryption_keys_.find(key_id);
+  if (it == decryption_keys_.end()) {
+    return std::nullopt;
+  }
+  for (const auto& hpke_key : it->second) {
+    absl::StatusOr<std::string> symmetric_key =
+        crypto_internal::UnwrapSymmetricKey(
+            hpke_key.get(), hpke_kdf_, hpke_aead_, encrypted_symmetric_key,
+            encapped_key, encrypted_symmetric_key_associated_data);
+    if (symmetric_key.ok()) {
+      return *std::move(symmetric_key);
+    }
+  }
+  return std::nullopt;
 }
 
 EcdsaP256R1Signer EcdsaP256R1Signer::Create() {

@@ -48,14 +48,16 @@ TEST(OkpKeyTest, EncodeFull) {
                    .algorithm = 7,
                    .curve = 45,
                    .x = "x-value",
+                   .d = "d-value",
                })
                   .Encode(),
-              IsOkAndHolds("\xa5"             // map with 5 items:
-                           "\x01\x01"         // key type (1): OKP (1)
-                           "\x02\x46key-id"   // key id (2): b"key-id"
-                           "\x03\x07"         // algorithm (3): 7
-                           "\x20\x18\x2d"     // curve (-1): 45
-                           "\x21\x47x-value"  // x (-2): b"x-value"
+              IsOkAndHolds("\xa6"                // map with 6 items:
+                           "\x01\x01"            // key type (1): OKP (1)
+                           "\x02\x46key-id"      // key id (2): b"key-id"
+                           "\x03\x07"            // algorithm (3): 7
+                           "\x20\x18\x2d"        // curve (-1): 45
+                           "\x21\x47x-value"     // x (-2): b"x-value"
+                           "\x23\x47\x64-value"  // d (-4): b"d-value"
                            ));
 }
 

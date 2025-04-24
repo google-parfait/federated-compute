@@ -30,10 +30,13 @@
 #define FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "google/protobuf/struct.pb.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -130,8 +133,13 @@ class MessageEncryptor {
 class MessageDecryptor {
  public:
   // Constructs a new MessageDecryptor. If set, the provided config_properties
-  // will be included in the public key claims.
-  explicit MessageDecryptor(google::protobuf::Struct config_properties = {});
+  // will be included in the public key claims. The MessageDecryptor may be
+  // provided with a list of decryption keys to use in addition to the
+  // internally generated key; these keys should be encoded as serialized
+  // COSE_Keys. Any invalid keys will be ignored.
+  explicit MessageDecryptor(
+      google::protobuf::Struct config_properties = {},
+      const std::vector<absl::string_view>& decryption_keys = {});
 
   // MessageDecryptor is not copyable or moveable due to the use of
   // bssl::ScopedEVP_HPKE_KEY.
@@ -171,10 +179,20 @@ class MessageDecryptor {
       absl::string_view ciphertext_associated_data,
       absl::string_view encrypted_symmetric_key,
       absl::string_view encrypted_symmetric_key_associated_data,
-      absl::string_view encapped_key) const;
+      absl::string_view encapped_key, absl::string_view key_id = "") const;
 
  private:
+  // Attempts to unwraps the encrypted symmetric key using the decryption keys
+  // provided in the constructor. Returns nullopt if decryption is not
+  // successful.
+  std::optional<std::string> UnwrapSymmetricKeyWithDecryptionKeys(
+      absl::string_view encrypted_symmetric_key,
+      absl::string_view encrypted_symmetric_key_associated_data,
+      absl::string_view encapped_key, absl::string_view key_id) const;
+
   const google::protobuf::Struct config_properties_;
+  const absl::flat_hash_map<std::string, std::vector<bssl::ScopedEVP_HPKE_KEY>>
+      decryption_keys_;
   const EVP_HPKE_KEM* hpke_kem_;
   const EVP_HPKE_KDF* hpke_kdf_;
   const EVP_HPKE_AEAD* hpke_aead_;

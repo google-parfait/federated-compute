@@ -134,6 +134,7 @@ cc_library(
         "//fcp/protos/confidentialcompute:confidential_transform_cc_proto",
         "@boringssl//:crypto",
         "@com_google_absl//absl/cleanup",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
