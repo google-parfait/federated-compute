@@ -290,8 +290,14 @@ absl::StatusOr<std::string> MessageDecryptor::Decrypt(
   absl::Cleanup symmetric_key_cleanup = [&symmetric_key]() {
     OPENSSL_cleanse(symmetric_key->data(), symmetric_key->size());
   };
+  return DecryptReleasedResult(ciphertext, ciphertext_associated_data,
+                               *symmetric_key);
+}
 
-  FCP_ASSIGN_OR_RETURN(SymmetricKey key, SymmetricKey::Decode(*symmetric_key));
+absl::StatusOr<std::string> MessageDecryptor::DecryptReleasedResult(
+    absl::string_view ciphertext, absl::string_view associated_data,
+    absl::string_view symmetric_key) const {
+  FCP_ASSIGN_OR_RETURN(SymmetricKey key, SymmetricKey::Decode(symmetric_key));
   absl::Cleanup key_cleanup = [&key]() {
     OPENSSL_cleanse(key.k.data(), key.k.size());
   };
@@ -315,8 +321,8 @@ absl::StatusOr<std::string> MessageDecryptor::Decrypt(
           reinterpret_cast<const uint8_t*>(kNonce.data()), kNonce.size(),
           reinterpret_cast<const uint8_t*>(ciphertext.data()),
           ciphertext.size(),
-          reinterpret_cast<const uint8_t*>(ciphertext_associated_data.data()),
-          ciphertext_associated_data.size()) != 1) {
+          reinterpret_cast<const uint8_t*>(associated_data.data()),
+          associated_data.size()) != 1) {
     // Clear the plaintext buffer in case partial data was written.
     OPENSSL_cleanse(plaintext.data(), ciphertext.size());
     return FCP_STATUS(fcp::INVALID_ARGUMENT)

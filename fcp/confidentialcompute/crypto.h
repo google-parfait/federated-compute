@@ -181,6 +181,19 @@ class MessageDecryptor {
       absl::string_view encrypted_symmetric_key_associated_data,
       absl::string_view encapped_key, absl::string_view key_id = "") const;
 
+  // Decrypts `ciphertext` using a symmetric key returned by
+  // `/KeyManagementService.ReleaseResults`.
+  //
+  // This effectively runs the second half of the `Decrypt` function above:
+  // ReleaseResults handles the first half (unwrapping the symmetric key), and
+  // this function handles decryption of the ciphertext using that key.
+  //
+  // The ciphertext to decrypt should have been produced by
+  // `MessageEncryptor::Encrypt` or an equivalent implementation.
+  absl::StatusOr<std::string> DecryptReleasedResult(
+      absl::string_view ciphertext, absl::string_view associated_data,
+      absl::string_view symmetric_key) const;
+
  private:
   // Attempts to unwraps the encrypted symmetric key using the decryption keys
   // provided in the constructor. Returns nullopt if decryption is not

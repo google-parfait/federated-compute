@@ -929,6 +929,68 @@ TEST(CryptoTest, DecryptWithWrongKeyIdFails) {
   EXPECT_THAT(decrypt_result, fcp::IsCode(INVALID_ARGUMENT));
 }
 
+TEST(CryptoTest, DecryptReleasedResult) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "associated data";
+
+  // Encrypt the symmetric key with a known public key.
+  const EVP_HPKE_KEM* kem = EVP_hpke_x25519_hkdf_sha256();
+  const EVP_HPKE_KDF* kdf = EVP_hpke_hkdf_sha256();
+  const EVP_HPKE_AEAD* aead = EVP_hpke_aes_128_gcm();
+  std::string public_key;
+  bssl::ScopedEVP_HPKE_KEY private_key;
+  GenerateKeyPair(*kem, public_key, private_key);
+  absl::StatusOr<std::string> cwt = OkpCwt{
+      .public_key = OkpKey{
+          .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+          .curve = crypto_internal::kX25519,
+          .x = public_key,
+      }}.Encode();
+  ASSERT_OK(cwt);
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      MessageEncryptor().Encrypt(message, *cwt, associated_data);
+  ASSERT_OK(encrypt_result);
+
+  // Unwrap the symmetric key.
+  absl::StatusOr<std::string> symmetric_key =
+      crypto_internal::UnwrapSymmetricKey(
+          private_key.get(), kdf, aead, encrypt_result->encrypted_symmetric_key,
+          encrypt_result->encapped_key, associated_data);
+  ASSERT_OK(symmetric_key);
+
+  // The message should be decryptable using the symmetric key.
+  absl::StatusOr<std::string> decrypt_result =
+      MessageDecryptor().DecryptReleasedResult(encrypt_result->ciphertext,
+                                               associated_data, *symmetric_key);
+  ASSERT_OK(decrypt_result);
+  EXPECT_EQ(*decrypt_result, message);
+}
+
+TEST(CryptoTest, DecryptReleasedFailsWithInvalidSymmetricKey) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "associated data";
+
+  // Encrypt the symmetric key with a known public key.
+  std::string public_key;
+  bssl::ScopedEVP_HPKE_KEY private_key;
+  GenerateKeyPair(*EVP_hpke_x25519_hkdf_sha256(), public_key, private_key);
+  absl::StatusOr<std::string> cwt = OkpCwt{
+      .public_key = OkpKey{
+          .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+          .curve = crypto_internal::kX25519,
+          .x = public_key,
+      }}.Encode();
+  ASSERT_OK(cwt);
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      MessageEncryptor().Encrypt(message, *cwt, associated_data);
+  ASSERT_OK(encrypt_result);
+
+  absl::StatusOr<std::string> decrypt_result =
+      MessageDecryptor().DecryptReleasedResult(encrypt_result->ciphertext,
+                                               associated_data, "invalid");
+  EXPECT_THAT(decrypt_result, fcp::IsCode(INVALID_ARGUMENT));
+}
+
 TEST(EcdsaP256R1SignatureVerifierTest, VerifierWithInvalidPublicKeyFails) {
   // Verify a real signature with a bogus public key, which should fail.
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
