@@ -27,6 +27,7 @@
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "fcp/base/digest.h"
@@ -181,11 +182,20 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
                     serialized_symmetric_key.size());
   };
 
-  FCP_ASSIGN_OR_RETURN(OkpCwt cwt, OkpCwt::Decode(recipient_public_key));
-  if (!cwt.public_key ||
-      cwt.public_key->algorithm !=
-          crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm ||
-      cwt.public_key->curve != crypto_internal::kX25519) {
+  // All (untagged) CWTs start with '\x84' (4 element array). COSE_Keys are a
+  // map type, so they always have a different prefix.
+  OkpKey okp_key;
+  if (absl::StartsWith(recipient_public_key, "\x84")) {
+    FCP_ASSIGN_OR_RETURN(OkpCwt cwt, OkpCwt::Decode(recipient_public_key));
+    if (!cwt.public_key) {
+      return absl::InvalidArgumentError("CWT has no public key");
+    }
+    okp_key = std::move(*cwt.public_key);
+  } else {
+    FCP_ASSIGN_OR_RETURN(okp_key, OkpKey::Decode(recipient_public_key));
+  }
+  if (okp_key.algorithm != crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm ||
+      okp_key.curve != crypto_internal::kX25519) {
     return absl::InvalidArgumentError("unsupported public key");
   }
 
@@ -214,8 +224,8 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
   FCP_ASSIGN_OR_RETURN(
       crypto_internal::WrapSymmetricKeyResult wrap_symmetric_key_result,
       crypto_internal::WrapSymmetricKey(hpke_kem_, hpke_kdf_, hpke_aead_,
-                                        serialized_symmetric_key,
-                                        cwt.public_key->x, associated_data));
+                                        serialized_symmetric_key, okp_key.x,
+                                        associated_data));
 
   return EncryptMessageResult{
       .ciphertext = std::move(ciphertext),

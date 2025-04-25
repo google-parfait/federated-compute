@@ -517,6 +517,36 @@ TEST(CryptoTest, EncryptAndDecryptCanIgnoreProvidedKey) {
   EXPECT_EQ(*decrypt_result, message);
 }
 
+TEST(CryptoTest, EncryptWithCoseKey) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "plaintext associated data";
+
+  MessageEncryptor encryptor;
+  MessageDecryptor decryptor;
+
+  // Extract the COSE_Key from the recipient's public key. The MessageEncryptor
+  // should support that format as well.
+  absl::StatusOr<std::string> recipient_public_key =
+      decryptor.GetPublicKey([](absl::string_view) { return ""; }, 0);
+  ASSERT_OK(recipient_public_key);
+  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(*recipient_public_key);
+  ASSERT_OK(cwt);
+  ASSERT_TRUE(cwt->public_key);
+  absl::StatusOr<std::string> cose_key = cwt->public_key->Encode();
+  ASSERT_OK(cose_key);
+
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.Encrypt(message, *cose_key, associated_data);
+  ASSERT_OK(encrypt_result);
+
+  absl::StatusOr<std::string> decrypt_result =
+      decryptor.Decrypt(encrypt_result->ciphertext, associated_data,
+                        encrypt_result->encrypted_symmetric_key,
+                        associated_data, encrypt_result->encapped_key);
+  ASSERT_OK(decrypt_result);
+  EXPECT_EQ(*decrypt_result, message);
+}
+
 TEST(CryptoTest, EncryptWithInvalidPublicKeyFails) {
   std::string message = "some plaintext message";
   std::string associated_data = "plaintext associated data";

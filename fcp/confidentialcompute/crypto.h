@@ -116,6 +116,8 @@ class MessageEncryptor {
  public:
   MessageEncryptor();
 
+  // Encrypts a message with the specified public key, which may be either a
+  // serialized CWT or a serialized COSE_Key.
   absl::StatusOr<EncryptMessageResult> Encrypt(
       absl::string_view plaintext, absl::string_view recipient_public_key,
       absl::string_view associated_data) const;
