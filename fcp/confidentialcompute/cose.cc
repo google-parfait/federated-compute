@@ -85,12 +85,12 @@ enum CoseKeyType {
   kSymmetric = 4,
 };
 
-// Builds the protected header for a CWT, which is a map encoded as a bstr.
-absl::StatusOr<std::vector<uint8_t>> BuildCwtProtectedHeader(
-    const OkpCwt& cwt) {
+// Builds the protected header for a COSE structure, which is a map encoded as a
+// bstr.
+std::vector<uint8_t> BuildProtectedHeader(std::optional<int64_t> algorithm) {
   Map map;
-  if (cwt.algorithm) {
-    map.add(CoseHeaderParameter::kHdrAlg, *cwt.algorithm);
+  if (algorithm) {
+    map.add(CoseHeaderParameter::kHdrAlg, *algorithm);
   }
   return map.encode();
 }
@@ -117,19 +117,19 @@ absl::StatusOr<std::vector<uint8_t>> BuildCwtPayload(const OkpCwt& cwt) {
   return map.encode();
 }
 
-// Parses a serialized CWT protected header and updates the OkpCwt.
-absl::Status ParseCwtProtectedHeader(
-    const std::vector<uint8_t>& serialized_header, OkpCwt& cwt) {
-  auto [payload, end_pos, error] =
-      cppbor::parse(serialized_header.data(), serialized_header.size());
+// Parses a serialized protected header from a COSE structure and sets the
+// corresponding output variables (if non-null).
+absl::Status ParseProtectedHeader(const std::vector<uint8_t>& serialized_header,
+                                  std::optional<int64_t>* algorithm) {
+  auto [payload, end_pos, error] = cppbor::parse(serialized_header);
   if (!error.empty()) {
     return absl::InvalidArgumentError(
-        absl::StrCat("failed to decode CWT protected header: ", error));
+        absl::StrCat("failed to decode protected header: ", error));
   } else if (end_pos != serialized_header.data() + serialized_header.size()) {
     return absl::InvalidArgumentError(
-        "failed to decode CWT protected header: input contained extra data");
+        "failed to decode protected header: input contained extra data");
   } else if (payload->type() != cppbor::MAP) {
-    return absl::InvalidArgumentError("CWT protected header is invalid");
+    return absl::InvalidArgumentError("protected header is invalid");
   }
 
   // Process the parameters map.
@@ -137,11 +137,13 @@ absl::Status ParseCwtProtectedHeader(
     if (key->asInt() == nullptr) continue;  // Ignore other key types.
     switch (key->asInt()->value()) {
       case CoseHeaderParameter::kHdrAlg:
-        if (value->asInt() == nullptr) {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "unsupported algorithm parameter type ", value->type()));
+        if (algorithm) {
+          if (value->asInt() == nullptr) {
+            return absl::InvalidArgumentError(absl::StrCat(
+                "unsupported algorithm parameter type ", value->type()));
+          }
+          *algorithm = value->asInt()->value();
         }
-        cwt.algorithm = value->asInt()->value();
         break;
 
       default:
@@ -151,7 +153,7 @@ absl::Status ParseCwtProtectedHeader(
   return absl::OkStatus();
 }
 
-// Parses a serialized CWT payload and updated the OkpCwt.
+// Parses a serialized CWT payload and updates the OkpCwt.
 absl::Status ParseCwtPayload(const std::vector<uint8_t>& serialized_payload,
                              OkpCwt& cwt) {
   auto [payload, end_pos, error] =
@@ -217,6 +219,82 @@ absl::Status ParseCwtPayload(const std::vector<uint8_t>& serialized_payload,
     }
   }
   return absl::OkStatus();
+}
+
+// Builds a Sig_structure object for a COSE_Sign or COSE_Sign1 structure.
+// See RFC 9052 section 4.4 for the contents of the Sig_structure.
+std::string BuildSigStructure(
+    std::vector<uint8_t> body_protected,
+    std::optional<std::vector<uint8_t>> sign_protected, absl::string_view aad,
+    std::vector<uint8_t> payload) {
+  Array sig_structure;
+  sig_structure.add(sign_protected ? "Signature" : "Signature1");
+  sig_structure.add(std::move(body_protected));
+  if (sign_protected) {
+    sig_structure.add(std::move(*sign_protected));
+  }
+  sig_structure.add(Bstr(aad.begin(), aad.end()));
+  sig_structure.add(std::move(payload));
+  return sig_structure.toString();
+}
+
+// Parses a serialized COSE_Sign or COSE_Sign1 structure and returns the
+// protected header, signer protected header (COSE_Sign only), payload, and
+// signature.
+absl::StatusOr<
+    std::tuple<std::vector<uint8_t>, std::optional<std::vector<uint8_t>>,
+               std::vector<uint8_t>, std::vector<uint8_t>>>
+ParseCoseSign(absl::string_view encoded) {
+  auto [item, end_pos, error] = cppbor::parse(
+      reinterpret_cast<const uint8_t*>(encoded.data()), encoded.size());
+  if (!error.empty()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("failed to decode COSE_Sign: ", error));
+  } else if (end_pos != reinterpret_cast<const uint8_t*>(encoded.data()) +
+                            encoded.size()) {
+    return absl::InvalidArgumentError(
+        "failed to decode COSE_Sign: input contained extra data");
+  } else if (auto array = item->asArray();
+             array == nullptr || array->size() != 4 ||
+             array->get(0)->type() != cppbor::BSTR ||
+             array->get(1)->type() != cppbor::MAP ||
+             array->get(2)->type() != cppbor::BSTR) {
+    return absl::InvalidArgumentError("COSE_Sign is invalid");
+  }
+
+  // Extract the signature and signer protected header (COSE_Sign only).
+  std::optional<std::vector<uint8_t>> sign_protected;
+  std::optional<std::vector<uint8_t>> signature;
+  switch (auto& component = item->asArray()->get(3); component->type()) {
+    case cppbor::BSTR:
+      // If the 4th element is a bstr, we're decoding a COSE_Sign1 structure.
+      signature = component->asBstr()->moveValue();
+      break;
+
+    case cppbor::ARRAY:
+      // If the 4th element is an array, we're decoding a COSE_Sign structure.
+      // Use the signature and protected header from the first COSE_Signature,
+      // which is a (protected header, unprotected header, signature) tuple.
+      if (cppbor::Array* sigs = component->asArray(); sigs->size() > 0) {
+        if (cppbor::Array* sig = sigs->get(0)->asArray();
+            sig->size() == 3 && sig->get(0)->type() == cppbor::BSTR &&
+            sig->get(0)->type() == cppbor::BSTR) {
+          sign_protected = sig->get(0)->asBstr()->moveValue();
+          signature = sig->get(2)->asBstr()->moveValue();
+        }
+      }
+      break;
+
+    default:
+      break;
+  }
+  if (!signature) {
+    return absl::InvalidArgumentError("COSE_Sign is invalid");
+  }
+
+  return std::make_tuple(
+      item->asArray()->get(0)->asBstr()->moveValue(), std::move(sign_protected),
+      item->asArray()->get(2)->asBstr()->moveValue(), std::move(*signature));
 }
 
 }  // namespace
@@ -396,131 +474,48 @@ absl::StatusOr<std::string> SymmetricKey::Encode() const {
 
 absl::StatusOr<std::string> OkpCwt::BuildSigStructureForSigning(
     absl::string_view aad) const {
-  // See RFC 9052 section 4.4 for the contents of the signature structure.
-  FCP_ASSIGN_OR_RETURN(std::vector<uint8_t> protected_header,
-                       BuildCwtProtectedHeader(*this));
+  std::vector<uint8_t> protected_header = BuildProtectedHeader(algorithm);
   FCP_ASSIGN_OR_RETURN(std::vector<uint8_t> payload, BuildCwtPayload(*this));
-  return Array("Signature1", std::move(protected_header),
-               Bstr(aad.begin(), aad.end()), std::move(payload))
-      .toString();
+  return BuildSigStructure(std::move(protected_header), std::nullopt, aad,
+                           std::move(payload));
 }
 
 absl::StatusOr<std::string> OkpCwt::GetSigStructureForVerifying(
     absl::string_view encoded, absl::string_view aad) {
-  auto [item, end_pos, error] = cppbor::parse(
-      reinterpret_cast<const uint8_t*>(encoded.data()), encoded.size());
-  if (!error.empty()) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("failed to decode CWT: ", error));
-  } else if (end_pos != reinterpret_cast<const uint8_t*>(encoded.data()) +
-                            encoded.size()) {
-    return absl::InvalidArgumentError(
-        "failed to decode CWT: input contained extra data");
-  } else if (auto array = item->asArray();
-             array == nullptr || array->size() != 4 ||
-             array->get(0)->type() != cppbor::BSTR ||
-             array->get(2)->type() != cppbor::BSTR) {
-    return absl::InvalidArgumentError("CWT is invalid");
-  }
-
-  // If the 4th element is an array, we're verifying a COSE_Sign structure, not
-  // a COSE_Sign1 structure. Include the protected header from the first
-  // COSE_Signature in the signature structure.
-  std::optional<Bstr> sign_protected;
-  if (item->asArray()->get(3)->type() == cppbor::ARRAY) {
-    if (cppbor::Array* sigs = item->asArray()->get(3)->asArray();
-        sigs->size() > 0 && sigs->get(0)->type() == cppbor::ARRAY &&
-        sigs->get(0)->asArray()->size() == 3 &&
-        sigs->get(0)->asArray()->get(0)->type() == cppbor::BSTR) {
-      sign_protected = std::move(*sigs->get(0)->asArray()->get(0)->asBstr());
-    } else {
-      return absl::InvalidArgumentError("CWT is invalid");
-    }
-  }
-
-  Array sig_structure;
-  sig_structure.add(sign_protected ? "Signature" : "Signature1");
-  sig_structure.add(std::move(*item->asArray()->get(0)->asBstr()));
-  if (sign_protected) {
-    sig_structure.add(std::move(*sign_protected));
-  }
-  sig_structure.add(Bstr(aad.begin(), aad.end()));
-  sig_structure.add(std::move(*item->asArray()->get(2)->asBstr()));
-  return sig_structure.toString();
+  std::vector<uint8_t> body_protected, payload;
+  std::optional<std::vector<uint8_t>> sign_protected;
+  FCP_ASSIGN_OR_RETURN(
+      std::tie(body_protected, sign_protected, payload, std::ignore),
+      ParseCoseSign(encoded));
+  return BuildSigStructure(std::move(body_protected), std::move(sign_protected),
+                           aad, std::move(payload));
 }
 
 absl::StatusOr<OkpCwt> OkpCwt::Decode(absl::string_view encoded) {
-  auto [item, end_pos, error] = cppbor::parse(
-      reinterpret_cast<const uint8_t*>(encoded.data()), encoded.size());
-  if (!error.empty()) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("failed to decode CWT: ", error));
-  } else if (end_pos != reinterpret_cast<const uint8_t*>(encoded.data()) +
-                            encoded.size()) {
-    return absl::InvalidArgumentError(
-        "failed to decode CWT: input contained extra data");
-  } else if (auto array = item->asArray();
-             array == nullptr || array->size() != 4 ||
-             array->get(0)->type() != cppbor::BSTR ||
-             array->get(1)->type() != cppbor::MAP ||
-             array->get(2)->type() != cppbor::BSTR) {
-    return absl::InvalidArgumentError("CWT is invalid");
-  }
-
-  // Extract the signature and protected header.
+  std::vector<uint8_t> body_protected, payload, signature;
+  std::optional<std::vector<uint8_t>> sign_protected;
+  FCP_ASSIGN_OR_RETURN(
+      std::tie(body_protected, sign_protected, payload, signature),
+      ParseCoseSign(encoded));
   OkpCwt cwt;
-  bool parsed_signature_and_protected_header = false;
-  switch (auto& component = item->asArray()->get(3); component->type()) {
-    case cppbor::BSTR: {
-      // If the 4th element is a bstr, we're decoding a COSE_Sign1 structure.
-      parsed_signature_and_protected_header = true;
-      FCP_RETURN_IF_ERROR(ParseCwtProtectedHeader(
-          item->asArray()->get(0)->asBstr()->value(), cwt));
-      cwt.signature = std::string(component->asBstr()->value().begin(),
-                                  component->asBstr()->value().end());
-      break;
-    }
-
-    case cppbor::ARRAY:
-      // If the 4th element is an array, we're decoding a COSE_Sign structure.
-      // Use the signature and protected header from the first COSE_Signature,
-      // which is a (protected header, unprotected header, signature) tuple.
-      if (cppbor::Array* sigs = component->asArray(); sigs->size() > 0) {
-        if (cppbor::Array* sig = sigs->get(0)->asArray();
-            sig->size() == 3 && sig->get(0)->type() == cppbor::BSTR &&
-            sig->get(0)->type() == cppbor::BSTR) {
-          parsed_signature_and_protected_header = true;
-          FCP_RETURN_IF_ERROR(
-              ParseCwtProtectedHeader(sig->get(0)->asBstr()->value(), cwt));
-          cwt.signature = std::string(sig->get(2)->asBstr()->value().begin(),
-                                      sig->get(2)->asBstr()->value().end());
-        }
-      }
-      break;
-
-    default:
-      break;
-  }
-  if (!parsed_signature_and_protected_header) {
-    return absl::InvalidArgumentError("CWT is invalid");
-  }
-
-  // Process the claims.
-  FCP_RETURN_IF_ERROR(
-      ParseCwtPayload(item->asArray()->get(2)->asBstr()->value(), cwt));
-
+  // When decoding a COSE_Sign structure, information will be in the signer
+  // protected header instead of the body protected header.
+  FCP_RETURN_IF_ERROR(ParseProtectedHeader(
+      sign_protected ? *sign_protected : body_protected, &cwt.algorithm));
+  FCP_RETURN_IF_ERROR(ParseCwtPayload(payload, cwt));
+  cwt.signature = std::string(signature.begin(), signature.end());
   return cwt;
 }
 
 absl::StatusOr<std::string> OkpCwt::Encode() const {
   // See RFC 9052 section 4.2 for the contents of the COSE_Sign1 structure.
-  FCP_ASSIGN_OR_RETURN(std::vector<uint8_t> protected_header,
-                       BuildCwtProtectedHeader(*this));
-  Map unprotected_header;
+  Array array;
+  array.add(BuildProtectedHeader(algorithm));
+  array.add(Map());  // unprotected header
   FCP_ASSIGN_OR_RETURN(std::vector<uint8_t> payload, BuildCwtPayload(*this));
-  return Array(std::move(protected_header), std::move(unprotected_header),
-               std::move(payload), Bstr(signature))
-      .toString();
+  array.add(std::move(payload));
+  array.add(Bstr(signature));
+  return array.toString();
 }
 
 #else  // defined(FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG)
