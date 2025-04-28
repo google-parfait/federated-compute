@@ -157,8 +157,9 @@ message RotateKeysetResponse {}
 message DeriveKeysRequest {
   uint64 keyset_id = 1;
 
-  // The AuthorizedLogicalPipelines messages for which keys should be derived.
-  repeated bytes authorized_logical_pipelines_hashes = 2;
+  // SHA-256 hashes of the AuthorizedLogicalPipelines messages for which keys
+  // should be derived.
+  repeated bytes authorized_logical_pipeline_policies_hashes = 2;
 }
 
 message DeriveKeysResponse {
