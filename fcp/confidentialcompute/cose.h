@@ -88,6 +88,65 @@ struct OkpCwt {
   absl::StatusOr<std::string> Encode() const;
 };
 
+// A ReleaseToken structure used by the KeyManagementService API. A ReleaseToken
+// contains a signed and encrypted symmetric key, along with the logical
+// pipeline state change that the KMS must perform to release the key.
+struct ReleaseToken {
+  std::optional<int64_t> signing_algorithm;
+  std::optional<int64_t> encryption_algorithm;
+  std::optional<std::string> encryption_key_id;
+  // In addition to being present or absent in the ReleaseToken, `src_state` can
+  // be set to a string value or to null (indicating that no state exists for
+  // the pipeline). Since null and "" are distinct encoded values, they're
+  // exposed as distinct values here as well by using a nested std::optional.
+  std::optional<std::optional<std::string>> src_state;
+  std::optional<std::string> dst_state;
+  std::string encrypted_payload;
+  std::optional<std::string> encapped_key;
+  std::string signature;
+
+  // Returns the canonical Enc_structure used as AAD for the encrypted payload.
+  // This includes the `encryption_algorithm`, `encryption_key_id`,`src_state`,
+  // and `dst_state` fields. Note that this SHOULD NOT be used when decrypting
+  // a ReleaseToken payload as it only includes the known/supported parameters;
+  // use `GetEncStructureForDecrypting` instead.
+  absl::StatusOr<std::string> BuildEncStructureForEncrypting(
+      absl::string_view aad) const;
+
+  // Returns the canonical Enc_structure used  as ADD for the encrypted payload.
+  // This function does not perform validation of the ReleaseToken beyond what
+  // is needed to generate the Enc_structure.
+  //
+  // Note: Since decoding ReleaseTokens is normally handled by the KMS, this
+  // function is primarily for use in tests.
+  static absl::StatusOr<std::string> GetEncStructureForDecrypting(
+      absl::string_view encoded, absl::string_view aad);
+
+  // Returns the canonical Sig_structure object containing the protected
+  // portions of the ReleaseToken. This is the portion of the ReleaseToken that
+  // should be signed. Note that this SHOULD NOT be used when verifying the
+  // signature of a ReleaseToken as it only includes the known/supported
+  // parameters; use `GetSigStructureForVerifying` instead.
+  absl::StatusOr<std::string> BuildSigStructureForSigning(
+      absl::string_view aad) const;
+
+  // Returns the canonical Sig_structure object containing the protected
+  // portions of a ReleaseToken. This is the portion of the ReleaseToken that is
+  // signed. This function does not perform validation of the ReleaseToken
+  // beyond what is needed to generate the Sig_structure.
+  //
+  // Note: Since decoding ReleaseTokens is normally handled by the KMS, this
+  // function is primarily for use in tests.
+  static absl::StatusOr<std::string> GetSigStructureForVerifying(
+      absl::string_view encoded, absl::string_view aad);
+
+  // CBOR-decodes a ReleaseToken.
+  static absl::StatusOr<ReleaseToken> Decode(absl::string_view encoded);
+
+  // CBOR-encodes a ReleaseToken.
+  absl::StatusOr<std::string> Encode() const;
+};
+
 }  // namespace fcp::confidential_compute
 
 #endif  // FCP_CONFIDENTIALCOMPUTE_COSE_H_

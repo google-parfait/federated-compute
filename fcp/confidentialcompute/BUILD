@@ -94,6 +94,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//fcp/base",
+        "@com_google_absl//absl/base",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

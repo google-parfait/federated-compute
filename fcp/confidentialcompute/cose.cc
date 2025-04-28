@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/casts.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -61,6 +62,13 @@ enum CwtClaim {
 // COSE Header parameters; see https://www.iana.org/assignments/cose/cose.xhtml.
 enum CoseHeaderParameter {
   kHdrAlg = 1,
+  kHdrKid = 4,
+
+  // Parameters in the private space (-65537 and below).
+  // See ../protos/confidentialcompute/cbor_ids.md.
+  kEncapsulatedKey = -65537,
+  kSrcState = -65538,
+  kDstState = -65539,
 };
 
 // COSE Key parameters; see https://www.iana.org/assignments/cose/cose.xhtml.
@@ -87,10 +95,22 @@ enum CoseKeyType {
 
 // Builds the protected header for a COSE structure, which is a map encoded as a
 // bstr.
-std::vector<uint8_t> BuildProtectedHeader(std::optional<int64_t> algorithm) {
+std::vector<uint8_t> BuildProtectedHeader(
+    std::optional<int64_t> algorithm,
+    const std::optional<std::optional<std::string>>& src_state,
+    const std::optional<std::string>& dst_state) {
   Map map;
   if (algorithm) {
     map.add(CoseHeaderParameter::kHdrAlg, *algorithm);
+  }
+  if (src_state) {
+    map.add(CoseHeaderParameter::kSrcState,
+            *src_state ? absl::implicit_cast<std::unique_ptr<cppbor::Item>>(
+                             std::make_unique<Bstr>(**src_state))
+                       : std::make_unique<cppbor::Null>());
+  }
+  if (dst_state) {
+    map.add(CoseHeaderParameter::kDstState, Bstr(*dst_state));
   }
   return map.encode();
 }
@@ -119,8 +139,11 @@ absl::StatusOr<std::vector<uint8_t>> BuildCwtPayload(const OkpCwt& cwt) {
 
 // Parses a serialized protected header from a COSE structure and sets the
 // corresponding output variables (if non-null).
-absl::Status ParseProtectedHeader(const std::vector<uint8_t>& serialized_header,
-                                  std::optional<int64_t>* algorithm) {
+absl::Status ParseProtectedHeader(
+    const std::vector<uint8_t>& serialized_header,
+    std::optional<int64_t>* algorithm,
+    std::optional<std::optional<std::string>>* src_state,
+    std::optional<std::string>* dst_state) {
   auto [payload, end_pos, error] = cppbor::parse(serialized_header);
   if (!error.empty()) {
     return absl::InvalidArgumentError(
@@ -143,6 +166,32 @@ absl::Status ParseProtectedHeader(const std::vector<uint8_t>& serialized_header,
                 "unsupported algorithm parameter type ", value->type()));
           }
           *algorithm = value->asInt()->value();
+        }
+        break;
+
+      case CoseHeaderParameter::kSrcState:
+        if (src_state) {
+          if (value->type() == cppbor::SIMPLE &&
+              value->asSimple()->simpleType() == cppbor::NULL_T) {
+            *src_state = std::optional<std::string>(std::nullopt);
+          } else if (value->type() == cppbor::BSTR) {
+            *src_state = std::string(value->asBstr()->value().begin(),
+                                     value->asBstr()->value().end());
+          } else {
+            return absl::InvalidArgumentError(
+                absl::StrCat("unsupported src_state type ", value->type()));
+          }
+        }
+        break;
+
+      case CoseHeaderParameter::kDstState:
+        if (dst_state) {
+          if (value->type() != cppbor::BSTR) {
+            return absl::InvalidArgumentError(
+                absl::StrCat("unsupported dst_state type ", value->type()));
+          }
+          *dst_state = std::string(value->asBstr()->value().begin(),
+                                   value->asBstr()->value().end());
         }
         break;
 
@@ -295,6 +344,61 @@ ParseCoseSign(absl::string_view encoded) {
   return std::make_tuple(
       item->asArray()->get(0)->asBstr()->moveValue(), std::move(sign_protected),
       item->asArray()->get(2)->asBstr()->moveValue(), std::move(*signature));
+}
+
+// Builds the payload for a ReleaseToken, which is a COSE_Encrypt0 object
+// encoded as a bstr. See also RFC 9052 section 5.2.
+std::vector<uint8_t> BuildReleaseTokenPayload(const ReleaseToken& token) {
+  Array array;
+  array.add(BuildProtectedHeader(token.encryption_algorithm, token.src_state,
+                                 token.dst_state));
+
+  Map unprotected_header;
+  if (token.encryption_key_id) {
+    unprotected_header.add(CoseHeaderParameter::kHdrKid,
+                           Bstr(*token.encryption_key_id));
+  }
+  if (token.encapped_key) {
+    unprotected_header.add(CoseHeaderParameter::kEncapsulatedKey,
+                           Bstr(*token.encapped_key));
+  }
+  array.add(std::move(unprotected_header));
+
+  array.add(Bstr(token.encrypted_payload));
+  return array.encode();
+}
+
+// Builds a Enc_structure object for a COSE_Encrypt0 structure.
+// See RFC 9052 section 5.3 for the contents of the Enc_structure.
+std::string BuildEncStructure(std::vector<uint8_t> protected_header,
+                              absl::string_view aad) {
+  Array enc_structure;
+  enc_structure.add("Encrypt0");
+  enc_structure.add(std::move(protected_header));
+  enc_structure.add(Bstr(aad.begin(), aad.end()));
+  return enc_structure.toString();
+}
+
+// Parses a serialized ReleaseToken payload and updated the ReleaseToken.
+absl::StatusOr<std::tuple<std::vector<uint8_t>, Map, std::vector<uint8_t>>>
+ParseCoseEncrypt0(const std::vector<uint8_t>& encoded) {
+  auto [payload, end_pos, error] = cppbor::parse(encoded);
+  if (!error.empty()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("failed to decode COSE_Encrypt0: ", error));
+  } else if (end_pos != encoded.data() + encoded.size()) {
+    return absl::InvalidArgumentError(
+        "failed to decode COSE_Encrypt0: input contained extra data");
+  } else if (Array* array = payload->asArray();
+             array == nullptr || array->size() != 3 ||
+             array->get(0)->type() != cppbor::BSTR ||
+             array->get(1)->type() != cppbor::MAP ||
+             array->get(2)->type() != cppbor::BSTR) {
+    return absl::InvalidArgumentError("COSE_Encrypt0 is invalid");
+  }
+  return std::make_tuple(payload->asArray()->get(0)->asBstr()->moveValue(),
+                         std::move(*payload->asArray()->get(1)->asMap()),
+                         payload->asArray()->get(2)->asBstr()->moveValue());
 }
 
 }  // namespace
@@ -474,7 +578,9 @@ absl::StatusOr<std::string> SymmetricKey::Encode() const {
 
 absl::StatusOr<std::string> OkpCwt::BuildSigStructureForSigning(
     absl::string_view aad) const {
-  std::vector<uint8_t> protected_header = BuildProtectedHeader(algorithm);
+  std::vector<uint8_t> protected_header =
+      BuildProtectedHeader(algorithm, /*src_state=*/std::nullopt,
+                           /*dst_state=*/std::nullopt);
   FCP_ASSIGN_OR_RETURN(std::vector<uint8_t> payload, BuildCwtPayload(*this));
   return BuildSigStructure(std::move(protected_header), std::nullopt, aad,
                            std::move(payload));
@@ -501,7 +607,9 @@ absl::StatusOr<OkpCwt> OkpCwt::Decode(absl::string_view encoded) {
   // When decoding a COSE_Sign structure, information will be in the signer
   // protected header instead of the body protected header.
   FCP_RETURN_IF_ERROR(ParseProtectedHeader(
-      sign_protected ? *sign_protected : body_protected, &cwt.algorithm));
+      sign_protected ? *sign_protected : body_protected, &cwt.algorithm,
+      /*src_state=*/nullptr,
+      /*dst_state=*/nullptr));
   FCP_RETURN_IF_ERROR(ParseCwtPayload(payload, cwt));
   cwt.signature = std::string(signature.begin(), signature.end());
   return cwt;
@@ -510,10 +618,109 @@ absl::StatusOr<OkpCwt> OkpCwt::Decode(absl::string_view encoded) {
 absl::StatusOr<std::string> OkpCwt::Encode() const {
   // See RFC 9052 section 4.2 for the contents of the COSE_Sign1 structure.
   Array array;
-  array.add(BuildProtectedHeader(algorithm));
+  array.add(BuildProtectedHeader(algorithm, /*src_state=*/std::nullopt,
+                                 /*dst_state=*/std::nullopt));
   array.add(Map());  // unprotected header
   FCP_ASSIGN_OR_RETURN(std::vector<uint8_t> payload, BuildCwtPayload(*this));
   array.add(std::move(payload));
+  array.add(Bstr(signature));
+  return array.toString();
+}
+
+absl::StatusOr<std::string> ReleaseToken::BuildEncStructureForEncrypting(
+    absl::string_view aad) const {
+  std::vector<uint8_t> protected_header =
+      BuildProtectedHeader(encryption_algorithm, src_state, dst_state);
+  return BuildEncStructure(std::move(protected_header), aad);
+}
+
+absl::StatusOr<std::string> ReleaseToken::GetEncStructureForDecrypting(
+    absl::string_view encoded, absl::string_view aad) {
+  std::vector<uint8_t> payload;
+  FCP_ASSIGN_OR_RETURN(std::tie(std::ignore, std::ignore, payload, std::ignore),
+                       ParseCoseSign(encoded));
+  std::vector<uint8_t> protected_header;
+  FCP_ASSIGN_OR_RETURN(std::tie(protected_header, std::ignore, std::ignore),
+                       ParseCoseEncrypt0(payload));
+  return BuildEncStructure(std::move(protected_header), aad);
+}
+
+absl::StatusOr<std::string> ReleaseToken::BuildSigStructureForSigning(
+    absl::string_view aad) const {
+  std::vector<uint8_t> protected_header =
+      BuildProtectedHeader(signing_algorithm, /*src_state=*/std::nullopt,
+                           /*dst_state=*/std::nullopt);
+  std::vector<uint8_t> payload = BuildReleaseTokenPayload(*this);
+  return BuildSigStructure(std::move(protected_header), std::nullopt, aad,
+                           std::move(payload));
+}
+
+absl::StatusOr<std::string> ReleaseToken::GetSigStructureForVerifying(
+    absl::string_view encoded, absl::string_view aad) {
+  // Like a CWT, a ReleaseToken is also a COSE_Sign1 object, so the
+  // Sig_structure is the same.
+  return OkpCwt::GetSigStructureForVerifying(encoded, aad);
+}
+
+absl::StatusOr<ReleaseToken> ReleaseToken::Decode(absl::string_view encoded) {
+  ReleaseToken token;
+
+  // Parse the outer COSE_Sign1 structure.
+  std::vector<uint8_t> protected_header, payload, signature;
+  FCP_ASSIGN_OR_RETURN(
+      std::tie(protected_header, std::ignore, payload, signature),
+      ParseCoseSign(encoded));
+  FCP_RETURN_IF_ERROR(
+      ParseProtectedHeader(protected_header, &token.signing_algorithm,
+                           /*src_state=*/nullptr, /*dst_state=*/nullptr));
+  token.signature = std::string(signature.begin(), signature.end());
+
+  // Parse the inner COSE_Encrypt0 structure.
+  Map unprotected_header;
+  FCP_ASSIGN_OR_RETURN(std::tie(protected_header, unprotected_header, payload),
+                       ParseCoseEncrypt0(payload));
+  FCP_RETURN_IF_ERROR(ParseProtectedHeader(protected_header,
+                                           &token.encryption_algorithm,
+                                           &token.src_state, &token.dst_state));
+  token.encrypted_payload = std::string(payload.begin(), payload.end());
+
+  // Process the COSE_Encrypt0 unprotected header.
+  for (const auto& [key, value] : unprotected_header) {
+    if (key->asInt() == nullptr) continue;  // Ignore other key types.
+    switch (key->asInt()->value()) {
+      case CoseHeaderParameter::kHdrKid:
+        if (value->type() != cppbor::BSTR) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("unsupported kid type ", value->type()));
+        }
+        token.encryption_key_id = std::string(value->asBstr()->value().begin(),
+                                              value->asBstr()->value().end());
+        break;
+
+      case CoseHeaderParameter::kEncapsulatedKey:
+        if (value->type() != cppbor::BSTR) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "unsupported encapsulated key type ", value->type()));
+        }
+        token.encapped_key = std::string(value->asBstr()->value().begin(),
+                                         value->asBstr()->value().end());
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  return token;
+}
+
+absl::StatusOr<std::string> ReleaseToken::Encode() const {
+  // See RFC 9052 section 4.2 for the contents of the COSE_Sign1 structure.
+  Array array;
+  array.add(BuildProtectedHeader(signing_algorithm, /*src_state=*/std::nullopt,
+                                 /*dst_state=*/std::nullopt));
+  array.add(Map());  // unprotected header
+  array.add(BuildReleaseTokenPayload(*this));
   array.add(Bstr(signature));
   return array.toString();
 }
@@ -557,6 +764,40 @@ absl::StatusOr<OkpCwt> OkpCwt::Decode(absl::string_view encoded) {
 }
 
 absl::StatusOr<std::string> OkpCwt::Encode() const {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> ReleaseToken::BuildEncStructureForEncrypting(
+    absl::string_view aad) const {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> ReleaseToken::GetEncStructureForDecrypting(
+    absl::string_view encoded, absl::string_view aad) {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> ReleaseToken::BuildSigStructureForSigning(
+    absl::string_view aad) const {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> ReleaseToken::GetSigStructureForVerifying(
+    absl::string_view encoded, absl::string_view aad) {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<ReleaseToken> ReleaseToken::Decode(absl::string_view encoded) {
+  return absl::UnimplementedError(
+      "Confidential Aggregation is not supported on this platform.");
+}
+
+absl::StatusOr<std::string> ReleaseToken::Encode() const {
   return absl::UnimplementedError(
       "Confidential Aggregation is not supported on this platform.");
 }

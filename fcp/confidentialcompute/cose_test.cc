@@ -402,5 +402,280 @@ TEST(OkpCwtTest, VerifyAndDecodeCoseSign) {
   EXPECT_NE(cwt->public_key->x, "");
 }
 
+TEST(ReleaseTokenTest, EncodeEmpty) {
+  EXPECT_THAT(
+      ReleaseToken().Encode(),
+      IsOkAndHolds(
+          "\x84"      // array with 4 items:
+          "\x41\xa0"  // bstr containing empty map (protected headers)
+          "\xa0"      // empty map (unprotected headers)
+          "\x45\x83"  // bstr containing an array with 3 items: (COSE_Encrypt0)
+          "\x41\xa0"  // bstr containing empty map (protected headers)
+          "\xa0"      // empty map (unprotected headers)
+          "\x40"      // b"" (encrypted payload)
+          "\x40"      // b"" (signature)
+          ));
+}
+
+TEST(ReleaseTokenTest, EncodeFull) {
+  EXPECT_THAT(
+      (ReleaseToken{
+           .signing_algorithm = 1,
+           .encryption_algorithm = 2,
+           .encryption_key_id = "key-id",
+           .src_state = "old-state",
+           .dst_state = "new-state",
+           .encrypted_payload = "payload",
+           .encapped_key = "key",
+           .signature = "signature",
+       })
+          .Encode(),
+      IsOkAndHolds(absl::string_view(
+          "\x84"              // array with 4 items:
+          "\x43\xa1\x01\x01"  // bstr containing { alg: 1 } (protected headers)
+          "\xa0"              // empty map (unprotected headers)
+          "\x58\x3e\x83"      // bstr containing an array with 3 items:
+                              // (COSE_Encrypt0)
+          "\x58\x21\xa3"      // bstr containing a map with 3 items:
+                              // (protected headers)
+          "\x01\x02"          // alg: 2
+          "\x3a\x00\x01\x00\x01\x49old-state"  // -65538: b"old-state"
+          "\x3a\x00\x01\x00\x02\x49new-state"  // -65539: b"new-state"
+          "\xa2"            // map with 2 items: (unprotected headers)
+          "\x04\x46key-id"  // key_id: b"key-id"
+          "\x3a\x00\x01\x00\x00\x43key"  // encapped_key: b"key"
+          "\x47payload"                  // b"encrypted-payload" (payload)
+          "\x49signature",               // b"signature" (signature)
+          80)));
+}
+
+TEST(ReleaseTokenTest, EncodeNullSrcState) {
+  EXPECT_THAT(
+      (ReleaseToken{
+           .src_state = std::optional<std::string>(std::nullopt),
+       })
+          .Encode(),
+      IsOkAndHolds(absl::string_view(
+          "\x84"      // array with 4 items:
+          "\x41\xa0"  // bstr containing empty map (protected headers)
+          "\xa0"      // empty map (unprotected headers)
+          "\x4b\x83"  // bstr containing an array with 3 items:
+                      // (COSE_Encrypt0)
+          "\x47\xa1\x3a\x00\x01\x00\x01\xf6"  // bstr containing { src_state:
+                                              // null } (protected headers)
+          "\xa0"                              // empty map (unprotected headers)
+          "\x40"                              // b"" (payload)
+          "\x40",                             // b"" (signature)
+          17)));
+}
+
+TEST(ReleaseTokenTest, DecodeEmpty) {
+  absl::StatusOr<ReleaseToken> release_token =
+      ReleaseToken::Decode("\x84\x41\xa0\xa0\x45\x83\x41\xa0\xa0\x40\x40");
+  ASSERT_OK(release_token);
+  EXPECT_EQ(release_token->signing_algorithm, std::nullopt);
+  EXPECT_EQ(release_token->encryption_algorithm, std::nullopt);
+  EXPECT_EQ(release_token->encryption_key_id, std::nullopt);
+  EXPECT_EQ(release_token->src_state, std::nullopt);
+  EXPECT_EQ(release_token->dst_state, std::nullopt);
+  EXPECT_EQ(release_token->encrypted_payload, "");
+  EXPECT_EQ(release_token->encapped_key, std::nullopt);
+  EXPECT_EQ(release_token->signature, "");
+}
+
+TEST(ReleaseTokenTest, DecodeFull) {
+  absl::StatusOr<ReleaseToken> release_token =
+      ReleaseToken::Decode(absl::string_view(
+          "\x84\x43\xa1\x01\x01\xa0\x58\x3e\x83\x58\x21\xa3\x01\x02\x3a\x00\x01"
+          "\x00\x01\x49old-state\x3a\x00\x01\x00\x02\x49new-state\xa2\x04\x46ke"
+          "y-id\x3a\x00\x01\x00\x00\x43key\x47payload\x49signature",
+          80));
+  ASSERT_OK(release_token);
+  EXPECT_EQ(release_token->signing_algorithm, 1);
+  EXPECT_EQ(release_token->encryption_algorithm, 2);
+  EXPECT_EQ(release_token->encryption_key_id, "key-id");
+  EXPECT_EQ(release_token->src_state, "old-state");
+  EXPECT_EQ(release_token->dst_state, "new-state");
+  EXPECT_EQ(release_token->encrypted_payload, "payload");
+  EXPECT_EQ(release_token->encapped_key, "key");
+  EXPECT_EQ(release_token->signature, "signature");
+}
+
+TEST(ReleaseTokenTest, DecodeNullSrcState) {
+  absl::StatusOr<ReleaseToken> release_token = ReleaseToken::Decode(
+      absl::string_view("\x84\x41\xa0\xa0\x4b\x83\x47\xa1\x3a\x00\x01\x00\x01"
+                        "\xf6\xa0\x40\x40",
+                        17));
+  ASSERT_OK(release_token);
+  ASSERT_TRUE(release_token->src_state.has_value());
+  EXPECT_EQ(*release_token->src_state, std::nullopt);
+}
+
+TEST(ReleaseTokenTest, DecodeInvalidCoseSign1) {
+  EXPECT_THAT(ReleaseToken::Decode(""),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode("\xa3"),  // map with 3 items
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      ReleaseToken::Decode("\xa0 extra"),  // map with 0 items + " extra"
+      IsCode(absl::StatusCode::kInvalidArgument));
+
+  // Even if the CBOR is valid, the top-level structure must be a 4-element
+  // array.
+  EXPECT_THAT(ReleaseToken::Decode("\xa0"),  // map with 0 items
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode("\x80"),  // array with 0 items
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      ReleaseToken::Decode("\x83\x41\xa0\xa0\x41\xa0"),  // array with 3 items
+      IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode(  // array with 5 items
+                  "\x85\x41\xa0\xa0\x41\xa0\x40\x40"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+
+  // The COSE_Sign1 array entry types must be bstr, map, bstr, bstr.
+  // "\x84\x41\xa0\xa0\x45\x83\x41\xa0\xa0\x40\x40" is valid.
+  EXPECT_THAT(ReleaseToken::Decode(  // 1st not bstr
+                  "\x84\xa0\xa0\x45\x83\x41\xa0\xa0\x40\x40"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode(  // 2nd not map
+                  "\x84\x41\xa0\x40\x45\x83\x41\xa0\xa0\x40\x40"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode("\x84\x41\xa0\xa0\xa0\x40"),  // 3rd not bstr
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode(  // 4th not bstr
+                  "\x84\x41\xa0\xa0\x45\x83\x41\xa0\xa0\x40\xa0"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(ReleaseTokenTest, DecodeInvalidCoseEncrypt0) {
+  // The serialized COSE_Encrypt0 is wrapped in a COSE_Sign1 structure:
+  // "\x84\x41\xa0\xa0\x4N<COSE_Encrypt0>\x40" is valid.
+
+  EXPECT_THAT(ReleaseToken::Decode("\x84\x41\xa0\xa0\x40\x40"),  // empty string
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      ReleaseToken::Decode("\x84\x41\xa0\xa0\x41\xa3\x40"),  // map with 3 items
+      IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode(  // map with 0 items + " extra"
+                  "\x84\x41\xa0\xa0\x47\xa0 extra\x40"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+
+  // Even if the CBOR is valid, the top-level structure must be a 4-element
+  // array.
+  EXPECT_THAT(
+      ReleaseToken::Decode("\x84\x41\xa0\xa0\x41\xa0\x40"),  // map with 0 items
+      IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode(  // array with 0 items
+                  "\x84\x41\xa0\xa0\x41\x80\x40"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode(  // array with 2 items
+                  "\x84\x41\xa0\xa0\x44\x82\x41\xa0\xa0\x40"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode(  // array with 4 items
+                  "\x84\x41\xa0\xa0\x46\x84\x41\xa0\xa0\x40\x40\x40"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+
+  // The COSE_Encrypt0 array entry types must be bstr, map, bstr.
+  // "\x84\x41\xa0\xa0\x45\x83\x41\xa0\xa0\x40\x40" is valid.
+  EXPECT_THAT(ReleaseToken::Decode(  // 1st not bstr
+                  "\x84\x41\xa0\xa0\x44\x83\xa0\xa0\x40\x40"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode(  // 2nd not map
+                  "\x84\x41\xa0\xa0\x45\x83\x41\xa0\x40\x40\x40"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ReleaseToken::Decode(  // 3rd not bstr
+                  "\x84\x41\xa0\xa0\x45\x83\x41\xa0\xa0\xa0\x40"),
+              IsCode(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(ReleaseTokenTest, BuildEncStructureForEncrypting) {
+  EXPECT_THAT((ReleaseToken{
+                   .signing_algorithm = 1,
+                   .encryption_algorithm = 2,
+                   .encryption_key_id = "key-id",
+                   .src_state = "old-state",
+                   .dst_state = "new-state",
+                   .encrypted_payload = "payload",
+                   .encapped_key = "key",
+                   .signature = "signature",
+               })
+                  .BuildEncStructureForEncrypting("aad"),
+              IsOkAndHolds(absl::string_view(
+                  "\x83"             // array with 3 items:
+                  "\x68\x45ncrypt0"  // "Encrypt0"
+                  "\x58\x21\xa3"     // bstr containing a map with 3 items:
+                  "\x01\x02"         // alg: 2
+                  "\x3a\x00\x01\x00\x01\x49old-state"  // -65538: b"old-state"
+                  "\x3a\x00\x01\x00\x02\x49new-state"  // -65539: b"new-state"
+                  "\x43\x61\x61\x64",                  // b"aad"
+                  49)));
+}
+
+TEST(ReleaseTokenTest, GetEncStructureForDecrypting) {
+  EXPECT_THAT(ReleaseToken::GetEncStructureForDecrypting(
+                  absl::string_view(
+                      "\x84\x43\xa1\x01\x01\xa0\x58\x3e\x83\x58\x21\xa3\x01\x02"
+                      "\x3a\x00\x01\x00\x01\x49old-state\x3a\x00\x01\x00\x02"
+                      "\x49new-state\xa2\x04\x46key-id\x3a\x00\x01\x00\x00\x43"
+                      "key\x47payload\x49signature",
+                      80),
+                  "aad"),
+              IsOkAndHolds(absl::string_view(
+                  "\x83"             // array with 3 items:
+                  "\x68\x45ncrypt0"  // "Encrypt0"
+                  "\x58\x21\xa3"     // bstr containing a map with 3 items:
+                  "\x01\x02"         // alg: 2
+                  "\x3a\x00\x01\x00\x01\x49old-state"  // -65538: b"old-state"
+                  "\x3a\x00\x01\x00\x02\x49new-state"  // -65539: b"new-state"
+                  "\x43\x61\x61\x64",                  // b"aad"
+                  49)));
+}
+
+TEST(ReleaseTokenTest, BuildSigStructureForSigning) {
+  EXPECT_THAT((ReleaseToken{
+                   .signing_algorithm = 1,
+                   .encryption_algorithm = 2,
+                   .encryption_key_id = "key-id",
+                   .src_state = "old-state",
+                   .dst_state = "new-state",
+                   .encrypted_payload = "payload",
+                   .encapped_key = "key",
+                   .signature = "signature",
+               })
+                  .BuildSigStructureForSigning("aad"),
+              IsOkAndHolds(absl::string_view(
+                  "\x84"              // array with 4 items:
+                  "\x6aSignature1"    // "Signature1"
+                  "\x43\xa1\x01\x01"  // bstr containing { alg: 1 }
+                  "\x43\x61\x61\x64"  // b"aad"
+                  // bstr containing COSE_Encrypt0
+                  "\x58\x3e\x83\x58\x21\xa3\x01\x02\x3a\x00\x01\x00\x01\x49old-"
+                  "state\x3a\x00\x01\x00\x02\x49new-state\xa2\x04\x46key-"
+                  "id\x3a\x00\x01\x00\x00\x43key\x47payload",
+                  84)));
+}
+
+TEST(ReleaseTokenTest, GetSigStructureForVerifying) {
+  EXPECT_THAT(ReleaseToken::GetSigStructureForVerifying(
+                  absl::string_view(
+                      "\x84\x43\xa1\x01\x01\xa0\x58\x3e\x83\x58\x21\xa3\x01\x02"
+                      "\x3a\x00\x01\x00\x01\x49old-state\x3a\x00\x01\x00\x02"
+                      "\x49new-state\xa2\x04\x46key-id\x3a\x00\x01\x00\x00\x43"
+                      "key\x47payload\x49signature",
+                      80),
+                  "aad"),
+              IsOkAndHolds(absl::string_view(
+                  "\x84"              // array with 4 items:
+                  "\x6aSignature1"    // "Signature1"
+                  "\x43\xa1\x01\x01"  // bstr containing { alg: 1 }
+                  "\x43\x61\x61\x64"  // b"aad"
+                  // bstr containing COSE_Encrypt0
+                  "\x58\x3e\x83\x58\x21\xa3\x01\x02\x3a\x00\x01\x00\x01\x49old-"
+                  "state\x3a\x00\x01\x00\x02\x49new-state\xa2\x04\x46key-"
+                  "id\x3a\x00\x01\x00\x00\x43key\x47payload",
+                  84)));
+}
+
 }  // namespace
 }  // namespace fcp::confidential_compute
