@@ -42,6 +42,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "fcp/protos/confidentialcompute/confidential_transform.pb.h"
+#include "cc/crypto/signing_key.h"
 #include "openssl/base.h"
 #include "openssl/ec_key.h"  // // IWYU pragma: keep, needed for bssl::UniquePtr<EC_KEY>
 #include "openssl/hpke.h"
@@ -98,6 +99,7 @@ struct EncryptMessageResult {
   std::string ciphertext;
   std::string encapped_key;
   std::string encrypted_symmetric_key;
+  std::string release_token;
 };
 
 // Encrypts messages for particular intended recipients.
@@ -122,7 +124,32 @@ class MessageEncryptor {
       absl::string_view plaintext, absl::string_view recipient_public_key,
       absl::string_view associated_data) const;
 
+  // Encrypts a message with the specified public key and generates a "release
+  // token" that can be passed to the CFC KMS to release the decryption key.
+  // Like with `Encrypt`, the public key may be either a serialized CWT or a
+  // serialized COSE_Key.
+  //
+  // The KMS will only reveal the decryption key if the logical pipeline's state
+  // can be updated from `src_state` to `dst_state`. See the KMS API docs in
+  // ../protos/confidentialcompute/kms.proto.
+  absl::StatusOr<EncryptMessageResult> EncryptForRelease(
+      absl::string_view plaintext, absl::string_view recipient_public_key,
+      absl::string_view associated_data,
+      std::optional<absl::string_view> src_state, absl::string_view dst_state,
+      oak::crypto::SigningKeyHandle& signing_key) const;
+
  private:
+  // Encrypts a message with the specified public key and optionally generates a
+  // release token if `signing_key` is non-null.
+  //
+  // This function implements the common functionality for `Encrypt` and
+  // `EncryptForRelease`.
+  absl::StatusOr<EncryptMessageResult> EncryptInternal(
+      absl::string_view plaintext, absl::string_view recipient_public_key,
+      absl::string_view associated_data,
+      std::optional<absl::string_view> src_state, absl::string_view dst_state,
+      oak::crypto::SigningKeyHandle* signing_key) const;
+
   const EVP_HPKE_KEM* hpke_kem_;
   const EVP_HPKE_KDF* hpke_kdf_;
   const EVP_HPKE_AEAD* hpke_aead_;
@@ -287,6 +314,7 @@ namespace crypto_internal {
 
 // Supported COSE Algorithms; see ../protos/confidentialcompute/cbor_ids.md.
 enum CoseAlgorithm {
+  kEs256 = -7,
   kHpkeBaseX25519Sha256Aes128Gcm = -65537,
   kAeadAes128GcmSivFixedNonce = -65538,
 };

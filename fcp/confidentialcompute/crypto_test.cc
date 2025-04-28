@@ -35,6 +35,8 @@
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/protos/confidentialcompute/confidential_transform.pb.h"
 #include "fcp/testing/testing.h"
+#include "cc/crypto/signing_key.h"
+#include "proto/crypto/crypto.pb.h"
 #include "openssl/base.h"
 #include "openssl/hpke.h"
 
@@ -46,6 +48,9 @@ using ::fcp::confidentialcompute::BlobMetadata;
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::HasSubstr;
+using ::testing::IsEmpty;
+using ::testing::Not;
+using ::testing::Optional;
 using ::testing::Return;
 using ::testing::SaveArg;
 
@@ -83,6 +88,12 @@ std::pair<std::string, std::string> GenerateKeyPair(const EVP_HPKE_KEM& kem) {
   private_key.resize(key_len);
   return {public_key, private_key};
 }
+
+class MockSigningKeyHandle : public oak::crypto::SigningKeyHandle {
+ public:
+  MOCK_METHOD(absl::StatusOr<oak::crypto::v1::Signature>, Sign,
+              (absl::string_view message), (override));
+};
 
 TEST(CryptoTest, GetNextBlobNonceSucceedsAndIncrementsCounter) {
   std::string session_nonce = "session_nonce";
@@ -545,6 +556,81 @@ TEST(CryptoTest, EncryptWithCoseKey) {
                         associated_data, encrypt_result->encapped_key);
   ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
+}
+
+TEST(CryptoTest, EncryptForRelease) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "plaintext associated data";
+
+  MessageEncryptor encryptor;
+  MessageDecryptor decryptor;
+
+  absl::StatusOr<std::string> recipient_public_key =
+      decryptor.GetPublicKey([](absl::string_view) { return ""; }, 0);
+  ASSERT_OK(recipient_public_key);
+  // MessageDecryptor::GetPublicKey doesn't set the key_id field, so set it
+  // manually.
+  absl::StatusOr<OkpCwt> recipient_cwt = OkpCwt::Decode(*recipient_public_key);
+  ASSERT_OK(recipient_cwt);
+  ASSERT_TRUE(recipient_cwt->public_key.has_value());
+  recipient_cwt->public_key->key_id = "key-id";
+  recipient_public_key = recipient_cwt->Encode();
+  ASSERT_OK(recipient_public_key);
+
+  MockSigningKeyHandle signing_key;
+  oak::crypto::v1::Signature fake_signature;
+  fake_signature.set_signature("signature");
+  ON_CALL(signing_key, Sign(_)).WillByDefault(Return(fake_signature));
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.EncryptForRelease(message, *recipient_public_key,
+                                  associated_data, "src-state", "dst-state",
+                                  signing_key);
+  ASSERT_OK(encrypt_result);
+
+  absl::StatusOr<std::string> decrypt_result =
+      decryptor.Decrypt(encrypt_result->ciphertext, associated_data,
+                        encrypt_result->encrypted_symmetric_key,
+                        associated_data, encrypt_result->encapped_key);
+  ASSERT_OK(decrypt_result);
+  ASSERT_EQ(*decrypt_result, message);
+
+  absl::StatusOr<ReleaseToken> release_token =
+      ReleaseToken::Decode(encrypt_result->release_token);
+  ASSERT_OK(release_token);
+  EXPECT_THAT(release_token->signing_algorithm, Optional(Not(0)));
+  EXPECT_THAT(release_token->encryption_algorithm, Optional(Not(0)));
+  EXPECT_EQ(release_token->encryption_key_id, "key-id");
+  EXPECT_EQ(release_token->src_state, "src-state");
+  EXPECT_EQ(release_token->dst_state, "dst-state");
+  EXPECT_THAT(release_token->encrypted_payload, Not(IsEmpty()));
+  EXPECT_THAT(release_token->encapped_key, Optional(Not(IsEmpty())));
+  EXPECT_EQ(release_token->signature, "signature");
+}
+
+TEST(CryptoTest, EncryptForReleaseWithNullSrcState) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "plaintext associated data";
+
+  MessageEncryptor encryptor;
+  MessageDecryptor decryptor;
+
+  absl::StatusOr<std::string> recipient_public_key =
+      decryptor.GetPublicKey([](absl::string_view) { return ""; }, 0);
+  ASSERT_OK(recipient_public_key);
+
+  MockSigningKeyHandle signing_key;
+  ON_CALL(signing_key, Sign(_))
+      .WillByDefault(Return(oak::crypto::v1::Signature()));
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.EncryptForRelease(message, *recipient_public_key,
+                                  associated_data, std::nullopt, "dst-state",
+                                  signing_key);
+  ASSERT_OK(encrypt_result);
+
+  absl::StatusOr<ReleaseToken> release_token =
+      ReleaseToken::Decode(encrypt_result->release_token);
+  ASSERT_OK(release_token);
+  EXPECT_THAT(release_token->src_state, Optional(std::nullopt));
 }
 
 TEST(CryptoTest, EncryptWithInvalidPublicKeyFails) {

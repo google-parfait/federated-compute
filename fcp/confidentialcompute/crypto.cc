@@ -33,6 +33,7 @@
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/confidentialcompute/cose.h"
+#include "cc/crypto/signing_key.h"
 #include "openssl/aead.h"
 #include "openssl/base.h"
 #include "openssl/bn.h"
@@ -164,6 +165,25 @@ MessageEncryptor::MessageEncryptor()
 absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
     absl::string_view plaintext, absl::string_view recipient_public_key,
     absl::string_view associated_data) const {
+  return EncryptInternal(plaintext, recipient_public_key, associated_data,
+                         /*src_state=*/std::nullopt, /*dst_state=*/"",
+                         /*signing_key=*/nullptr);
+}
+
+absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptForRelease(
+    absl::string_view plaintext, absl::string_view recipient_public_key,
+    absl::string_view associated_data,
+    std::optional<absl::string_view> src_state, absl::string_view dst_state,
+    oak::crypto::SigningKeyHandle& signing_key) const {
+  return EncryptInternal(plaintext, recipient_public_key, associated_data,
+                         src_state, dst_state, &signing_key);
+}
+
+absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
+    absl::string_view plaintext, absl::string_view recipient_public_key,
+    absl::string_view associated_data,
+    std::optional<absl::string_view> src_state, absl::string_view dst_state,
+    oak::crypto::SigningKeyHandle* signing_key) const {
   SymmetricKey symmetric_key{
       .algorithm = crypto_internal::kAeadAes128GcmSivFixedNonce,
       .k = std::string(EVP_AEAD_key_length(aead_), '\0'),
@@ -227,11 +247,44 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
                                         serialized_symmetric_key, okp_key.x,
                                         associated_data));
 
+  // If a release token was requested, generate it.
+  std::string serialized_release_token;
+  if (signing_key != nullptr) {
+    ReleaseToken release_token{
+        .signing_algorithm = crypto_internal::kEs256,
+        .encryption_algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+        .encryption_key_id = std::move(okp_key.key_id),
+        .src_state = src_state ? std::make_optional<std::string>(*src_state)
+                               : std::nullopt,
+        .dst_state = std::string(dst_state),
+    };
+    FCP_ASSIGN_OR_RETURN(
+        std::string enc_structure,
+        release_token.BuildEncStructureForEncrypting(/*aad=*/""));
+    FCP_ASSIGN_OR_RETURN(
+        crypto_internal::WrapSymmetricKeyResult wrap_symmetric_key_result,
+        crypto_internal::WrapSymmetricKey(hpke_kem_, hpke_kdf_, hpke_aead_,
+                                          serialized_symmetric_key, okp_key.x,
+                                          enc_structure));
+    release_token.encrypted_payload =
+        std::move(wrap_symmetric_key_result.encrypted_symmetric_key),
+    release_token.encapped_key =
+        std::move(wrap_symmetric_key_result.encapped_key);
+
+    FCP_ASSIGN_OR_RETURN(std::string sig_structure,
+                         release_token.BuildSigStructureForSigning(/*aad=*/""));
+    FCP_ASSIGN_OR_RETURN(oak::crypto::v1::Signature signature,
+                         signing_key->Sign(sig_structure));
+    release_token.signature = std::move(*signature.mutable_signature());
+    FCP_ASSIGN_OR_RETURN(serialized_release_token, release_token.Encode());
+  }
+
   return EncryptMessageResult{
       .ciphertext = std::move(ciphertext),
       .encapped_key = std::move(wrap_symmetric_key_result.encapped_key),
       .encrypted_symmetric_key =
           std::move(wrap_symmetric_key_result.encrypted_symmetric_key),
+      .release_token = std::move(serialized_release_token),
   };
 }
 
