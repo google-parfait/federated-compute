@@ -318,6 +318,10 @@ message AuthorizeConfidentialTransformResponse {
     // be considered to be unsatisfied if the message type is not known to the
     // transform or if the message contains any unknown fields.
     google.protobuf.Any config_constraints = 2;
+
+    // SHA-256 hashes of all the AuthorizedLogicalPipelinePolicies authorizing
+    // this pipeline invocation.
+    repeated bytes authorized_logical_pipeline_policies_hashes = 3;
   }
 }
 
