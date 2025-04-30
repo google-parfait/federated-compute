@@ -29,12 +29,16 @@ message FedSqlContainerInitializeConfiguration {
   // This field is only used by trusted services. If this field is empty then
   // the trusted FedSQL service will not encrypt its outputs that are created
   // with FINALIZATION_TYPE_SERIALIZE.
+  // This field is only required when using Ledger API, it is ignored when using
+  // the KeyManagementService API since outputs are always encrypted.
   uint32 serialize_output_access_policy_node_id = 2;
 
   // The numerical identifier for the reported result of the FedSQL session.
   // This field is only used by trusted services. If this field is empty then
   // the trusted FedSQL service will not encrypt its outputs that are created
   // with FINALIZATION_TYPE_REPORT.
+  // This field is only required when using Ledger API, it is ignored when using
+  // the KeyManagementService API since outputs are always encrypted.
   uint32 report_output_access_policy_node_id = 3;
 
   // The table schema for the data that can be joined with the device uploaded
@@ -78,4 +82,17 @@ message FedSqlContainerFinalizeConfiguration {
   AggCoreFinalizationType type = 1;
 
   reserved 2;
+}
+
+// Config constraints for the FedSQL container that must be validated before any
+// of the blobs written to the container are decrypted.
+// This is required when using the KeyManagementService API, it is ignored when
+// using the Ledger API.
+message FedSqlContainerConfigConstraints {
+  // DP parameters for the FedSQL container.
+  double epsilon = 1;
+  double delta = 2;
+
+  // The uri of the aggregation intrinsic to use with AggCore.
+  string intrinsic_uri = 3;
 }
