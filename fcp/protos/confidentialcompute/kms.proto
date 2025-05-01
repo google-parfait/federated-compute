@@ -94,7 +94,8 @@ service KeyManagementService {
 
   // Releases one or more pipeline results by returning their decryption keys to
   // the untrusted space. Results may only be released if the logical pipelines'
-  // states can be updated to the desired values via a test-and-set operation.
+  // states can be updated to the desired values via a compare-and-set
+  // operation.
   //
   // When releasing multiple results, decryption keys will only be returned if
   // ALL results can be released. To accomodate pipelines that release multiple
