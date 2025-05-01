@@ -416,6 +416,11 @@ proto_library(
     ],
 )
 
+cc_proto_library(
+    name = "kms_cc_proto",
+    deps = [":kms_proto"],
+)
+
 proto_library(
     name = "program_executor_tee_proto",
     srcs = ["program_executor_tee_config.proto"],
