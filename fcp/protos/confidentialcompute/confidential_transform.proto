@@ -238,6 +238,7 @@ message BlobMetadata {
     oneof symmetric_key_associated_data_components {
       LedgerAssociatedData ledger_symmetric_key_associated_data = 3;
       RewrappedAssociatedData rewrapped_symmetric_key_associated_data = 4;
+      KmsAssociatedData kms_symmetric_key_associated_data = 8;
     }
 
     // The ephemeral Diffie-Hellman key needed to derive the symmetric key used
@@ -280,6 +281,16 @@ message BlobMetadata {
       // Unique nonce for this blob to protect against replay attacks by an
       // untrusted portion of the stack.
       bytes nonce = 2;
+    }
+
+    // This field replaces LedgerAssociatedData when using KMS.
+    // Components which will be appended together to create the associated data
+    // to be used for decryption of the symmetric key by a trusted worker that
+    // is pre-authorized by KMS. This associated data should be used along with
+    // decryption keys provided by KMS.
+    message KmsAssociatedData {
+      // A serialized `fcp.confidentialcompute.BlobHeader`.
+      bytes record_header = 1;
     }
 
     // The ID of the blob. This must match the ID in the blob's
