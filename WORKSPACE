@@ -97,13 +97,13 @@ load("@pypi//:requirements.bzl", "install_deps")  # buildifier: disable=load-on-
 install_deps()
 
 # Use a newer version of BoringSSL than what TF gives us, so we can use
-# functions like `EC_group_p256` (which was added in commit
-# 417069f8b2fd6dd4f8c2f5f69de7c038a2397050).
+# functions like `EC_group_p256` and `ECDSA_sign_p1363`(which was added in commit
+# 34492c89a8e381e0e856a686cc71b1eb5bd728db).
 http_archive(
     name = "boringssl",
-    sha256 = "5d6be8b65198828b151e7e4a83c3e4d76b892c43c3fb01c63f03de62b420b70f",
-    strip_prefix = "boringssl-47e850c41f43350699e1325a134ec88269cabe6b",
-    urls = ["https://github.com/google/boringssl/archive/47e850c41f43350699e1325a134ec88269cabe6b.tar.gz"],
+    sha256 = "61f9abae8ccc7a3d0aa27db97364ab6187383441c8d11dfe315065cd612c5e8f",
+    strip_prefix = "boringssl-34492c89a8e381e0e856a686cc71b1eb5bd728db",
+    urls = ["https://github.com/google/boringssl/archive/34492c89a8e381e0e856a686cc71b1eb5bd728db.tar.gz"],
 )
 
 http_archive(

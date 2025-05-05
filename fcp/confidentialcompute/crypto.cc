@@ -36,7 +36,6 @@
 #include "cc/crypto/signing_key.h"
 #include "openssl/aead.h"
 #include "openssl/base.h"
-#include "openssl/bn.h"
 #include "openssl/ec.h"
 #include "openssl/ec_key.h"
 #include "openssl/ecdsa.h"
@@ -55,10 +54,6 @@ constexpr absl::string_view kNonce =
 
 // The HPKE info field.
 constexpr absl::string_view kInfo;
-
-// The expected length of COSE ECDSA256 signatures, when encoded as per RFC 8152
-// section 8.1.
-constexpr size_t kCoseP256SignatureLen = 64;
 
 namespace {
 // The size of the session-level nonce.
@@ -471,26 +466,16 @@ std::string EcdsaP256R1Signer::Sign(absl::string_view data) const {
   auto data_digest = ComputeSHA256(data);
 
   // Calculate the signature over the digest.
-  bssl::UniquePtr<ECDSA_SIG> sig(
-      ECDSA_do_sign(reinterpret_cast<uint8_t*>(data_digest.data()),
-                    data_digest.size(), key_.get()));
-  FCP_CHECK(sig) << "Failed to calculate signature: "
-                 << ERR_reason_error_string(ERR_get_error());
-
-  // Return the signature as by concatenating the R and S signature components
-  // as 32 byte long big endian integers.
-  std::string signature_buf(kCoseP256SignatureLen, '\0');
-  FCP_CHECK(BN_bn2bin_padded(reinterpret_cast<uint8_t*>(signature_buf.data()),
-                             kCoseP256SignatureLen / 2,
-                             ECDSA_SIG_get0_r(sig.get())) == 1)
-      << "Failed to serialize signature R value: "
+  size_t signature_len = ECDSA_size_p1363(key_.get());
+  std::string signature_buf(signature_len, '\0');
+  FCP_CHECK(
+      ECDSA_sign_p1363(reinterpret_cast<const uint8_t*>(data_digest.data()),
+                       data_digest.size(),
+                       reinterpret_cast<uint8_t*>(signature_buf.data()),
+                       &signature_len, signature_buf.size(), key_.get()) == 1)
+      << "Failed to calculate signature: "
       << ERR_reason_error_string(ERR_get_error());
-  FCP_CHECK(BN_bn2bin_padded(reinterpret_cast<uint8_t*>(signature_buf.data()) +
-                                 kCoseP256SignatureLen / 2,
-                             kCoseP256SignatureLen / 2,
-                             ECDSA_SIG_get0_s(sig.get())) == 1)
-      << "Failed to serialize signature S value: "
-      << ERR_reason_error_string(ERR_get_error());
+  signature_buf.resize(signature_len);
   return signature_buf;
 }
 
@@ -525,45 +510,11 @@ absl::Status EcdsaP256R1SignatureVerifier::Verify(
   // Compute a digest over the data.
   auto digest = ComputeSHA256(data);
 
-  // Parse the signature.
-  if (signature.size() != kCoseP256SignatureLen) {
-    return FCP_STATUS(fcp::INVALID_ARGUMENT)
-           << "Invalid signature size: " << signature.size() << " - "
-           << ERR_reason_error_string(ERR_get_error());
-  }
-  bssl::UniquePtr<BIGNUM> r(
-      BN_bin2bn(reinterpret_cast<const uint8_t*>(signature.data()),
-                kCoseP256SignatureLen / 2, nullptr));
-  if (!r) {
-    return FCP_STATUS(fcp::INVALID_ARGUMENT)
-           << "Failed to convert signature R value to BIGNUM: "
-           << ERR_reason_error_string(ERR_get_error());
-  }
-  bssl::UniquePtr<BIGNUM> s(
-      BN_bin2bn(reinterpret_cast<const uint8_t*>(signature.data() +
-                                                 kCoseP256SignatureLen / 2),
-                kCoseP256SignatureLen / 2, nullptr));
-  if (!s) {
-    return FCP_STATUS(fcp::INVALID_ARGUMENT)
-           << "Failed to convert signature S value to BIGNUM: "
-           << ERR_reason_error_string(ERR_get_error());
-  }
-
-  // Initialize the signature based on the parsed R and S values.
-  bssl::UniquePtr<ECDSA_SIG> sig(ECDSA_SIG_new());
-  FCP_CHECK(sig) << "Failed to allocate ECDSA_SIG: "
-                 << ERR_reason_error_string(ERR_get_error());
-  // Note: ECDSA_SIG_set0 takes ownership of the `r` and `s` values, so we must
-  // use `release()`.
-  if (ECDSA_SIG_set0(sig.get(), r.release(), s.release()) != 1) {
-    return FCP_STATUS(fcp::INVALID_ARGUMENT)
-           << "Failed to set signature: "
-           << ERR_reason_error_string(ERR_get_error());
-  }
-
   // Verify the signature over the digest.
-  if (ECDSA_do_verify(reinterpret_cast<const uint8_t*>(digest.data()),
-                      digest.size(), sig.get(), public_key_.get()) != 1) {
+  if (ECDSA_verify_p1363(reinterpret_cast<const uint8_t*>(digest.data()),
+                         digest.size(),
+                         reinterpret_cast<const uint8_t*>(signature.data()),
+                         signature.size(), public_key_.get()) != 1) {
     return FCP_STATUS(fcp::INVALID_ARGUMENT)
            << "Invalid signature: " << signature << " - "
            << ERR_reason_error_string(ERR_get_error());
