@@ -68,6 +68,17 @@ message FedSqlContainerWriteConfiguration {
   AggCoreAggregationType type = 1;
 }
 
+// Configures the range of blobs to commit. This is specified through
+// `CommitRequest.configuration`.
+message FedSqlContainerCommitConfiguration {
+  message Range {
+    int64 start = 1;
+    int64 end = 2;
+  }
+  // The range of blobs to commit.
+  Range range = 1;
+}
+
 enum AggCoreFinalizationType {
   FINALIZATION_TYPE_UNSPECIFIED = 0;
   // Return noised results from the checkpoint aggregator.
@@ -76,7 +87,7 @@ enum AggCoreFinalizationType {
   FINALIZATION_TYPE_SERIALIZE = 2;
 }
 
-// Configures how a blob should be aggregated by the trusted AggCore container.
+// Configures how a result should be output by the trusted AggCore container.
 // This is specified through `FinalizeRequest.configuration`.
 message FedSqlContainerFinalizeConfiguration {
   AggCoreFinalizationType type = 1;
