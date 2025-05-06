@@ -362,8 +362,14 @@ message CommitResponse {
   // bidirectional stream to fail with an error.
   google.rpc.Status status = 1;
 
-  // The total number of input bytes that have been committed to the session.
-  int64 committed_size_bytes = 2;
+  // Stats about the commit operation.
+  message CommitStats {
+    int32 num_inputs_committed = 1;
+    repeated google.rpc.Status ignored_errors = 2;
+  }
+
+  CommitStats stats = 3;
+  reserved 2;
 }
 
 // Request to finalize the session by running a finalization
