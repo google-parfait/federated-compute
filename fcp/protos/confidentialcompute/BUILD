@@ -34,6 +34,11 @@ cc_proto_library(
     deps = [":access_policy_proto"],
 )
 
+java_proto_library(
+    name = "access_policy_java_proto",
+    deps = [":access_policy_proto"],
+)
+
 py_proto_library(
     name = "access_policy_py_pb2",
     deps = [":access_policy_proto"],

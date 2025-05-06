@@ -19,6 +19,7 @@ package fcp.confidentialcompute;
 import "google/protobuf/any.proto";
 import "proto/attestation/reference_value.proto";
 
+option java_package = "com.google.intelligence.fcp.confidentialcompute";
 option java_multiple_files = true;
 
 // A `DataAccessPolicy` governs access to client uploads. It authorizes a set of
