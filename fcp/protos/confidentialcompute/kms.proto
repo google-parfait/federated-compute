@@ -195,6 +195,13 @@ message LogicalPipelineState {
 
   // The pipeline's current state.
   bytes value = 2;
+
+  // The time the pipeline state expires, or unset if no expiration. The state
+  // is guaranteed to expire after all inputs whose processing contributed to
+  // the state. In other words, the expiration will be at least as large as the
+  // expiration time of all keys (including for intermediate results) shared
+  // with any pipeline invocation that updated the state.
+  google.protobuf.Timestamp expiration = 3;
 }
 
 message RegisterPipelineInvocationRequest {
