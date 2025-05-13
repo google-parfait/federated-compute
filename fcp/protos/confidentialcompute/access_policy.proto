@@ -140,10 +140,11 @@ message PipelineVariantPolicy {
   message Transform {
     // The numeric id of the source blobs in the graph that this transform may
     // access.
-    uint32 src = 1;
+    // Deprecated: use src_node_ids instead.
+    uint32 src = 1 [deprecated = true];
 
     // The numeric id(s) of the source blobs in the graph that this transform
-    // may access. If non-empty, this field is used instead of `src`.
+    // may access.
     repeated uint32 src_node_ids = 6;
 
     // The numeric id(s) of output blobs in the graph that this transform may
