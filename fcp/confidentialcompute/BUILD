@@ -203,3 +203,111 @@ cc_test(
         "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
     ],
 )
+
+cc_library(
+    name = "constants",
+    hdrs = ["constants.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "tee_executor_value",
+    srcs = ["tee_executor_value.cc"],
+    hdrs = ["tee_executor_value.h"],
+    copts = ["-Wthread-safety-analysis"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":constants",
+        "//fcp/base",
+        "//fcp/protos/confidentialcompute:file_info_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+        "@federated_language//federated_language/proto:computation_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "tee_executor_value_test",
+    srcs = ["tee_executor_value_test.cc"],
+    deps = [
+        ":tee_executor_value",
+        "//fcp/testing",
+        "//fcp/testing:parse_text_proto",
+        "@com_google_googletest//:gtest_main",
+        "@federated_language//federated_language/proto:computation_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:value_test_utils",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)
+
+cc_library(
+    name = "test_utils",
+    testonly = 1,
+    srcs = ["test_utils.cc"],
+    hdrs = ["test_utils.h"],
+    copts = ["-Wthread-safety-analysis"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//fcp/protos/confidentialcompute:file_info_cc_proto",
+        "@com_google_protobuf//:protobuf",
+        "@federated_language//federated_language/proto:computation_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)
+
+cc_library(
+    name = "composing_tee_executor",
+    srcs = ["composing_tee_executor.cc"],
+    hdrs = ["composing_tee_executor.h"],
+    copts = ["-Wthread-safety-analysis"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":constants",
+        ":tee_executor_value",
+        "//fcp/base",
+        "//fcp/protos/confidentialcompute:file_info_cc_proto",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+        "@federated_language//federated_language/proto:array_cc_proto",
+        "@federated_language//federated_language/proto:computation_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:cardinalities",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:composing_executor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:executor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:threading",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "composing_tee_executor_test",
+    srcs = ["composing_tee_executor_test.cc"],
+    copts = ["-Wthread-safety-analysis"],
+    deps = [
+        ":composing_tee_executor",
+        ":constants",
+        ":test_utils",
+        "//fcp/testing",
+        "//fcp/testing:parse_text_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+        "@federated_language//federated_language/proto:computation_cc_proto",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/core/platform:status_matchers",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:cardinalities",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:composing_executor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:executor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:executor_test_base",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:mock_executor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:value_test_utils",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)

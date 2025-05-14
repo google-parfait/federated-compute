@@ -171,6 +171,7 @@ http_archive(
     name = "org_tensorflow_federated",
     patches = [
         "//fcp/patches:tensorflow_federated_deps.patch",
+        "//fcp/patches:tensorflow_federated_executors.patch",
     ],
     sha256 = "599b886aa63d10728d3acd9d1aea5c71f571110fd99c2b3cad317f3c33d725eb",
     strip_prefix = "tensorflow-federated-4b152349a49cb8131835106243334f4f43bcff14",
