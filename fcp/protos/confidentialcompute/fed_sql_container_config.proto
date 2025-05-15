@@ -107,3 +107,12 @@ message FedSqlContainerConfigConstraints {
   // The uri of the aggregation intrinsic to use with AggCore.
   string intrinsic_uri = 3;
 }
+
+// Configuration associated with the final result produced by the FedSQL
+// container.
+message FedSqlContainerResultConfiguration {
+  // Release Token signed by the worker TEE's application signing key.
+  // This is passed back to the untrusted space so that it can use it to request
+  // KMS to release the final results.
+  bytes release_token = 1;
+}
