@@ -17,6 +17,7 @@ syntax = "proto3";
 package fcp.confidentialcompute;
 
 import "google/protobuf/any.proto";
+import "fcp/protos/confidentialcompute/access_policy.proto";
 import "fcp/protos/confidentialcompute/private_inference.proto";
 import "tensorflow_federated/cc/core/impl/aggregation/protocol/configuration.proto";
 
@@ -106,6 +107,9 @@ message FedSqlContainerConfigConstraints {
 
   // The uri of the aggregation intrinsic to use with AggCore.
   string intrinsic_uri = 3;
+
+  // Defines limits on the accesses to blobs.
+  AccessBudget access_budget = 4;
 }
 
 // Configuration associated with the final result produced by the FedSQL
