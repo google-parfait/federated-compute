@@ -29,3 +29,4 @@ key    | type | description
 -65540 | bstr | id of the pipeline invocation to which a transform belongs
 -65541 | uint | index of the Transform message in an fcp.confidentialcompute.PipelineVariantPolicy that a transform matched
 -65542 | [+ uint] | ids of the output nodes a transform is authorized to produce. This matches dst_node_ids in the fcp.confidentialcompute.PipelineVariantPolicy's Transform
+-65543 | bstr | SHA-256 hash of the access policy used by the KMS to derive an encryption key

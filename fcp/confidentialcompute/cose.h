@@ -63,6 +63,7 @@ struct OkpCwt {
   std::optional<absl::Time> expiration_time;
   std::optional<OkpKey> public_key;
   google::protobuf::Struct config_properties;
+  std::string access_policy_sha256;
   std::string signature;
 
   // Returns the canonical Sig_structure object containing the protected

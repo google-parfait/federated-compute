@@ -119,8 +119,9 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
   // `parsed_access_policy.SerializeAsString()`, because the re-serialized
   // representation may differ slightly from the original serialization (e.g.
   // due non-deterministic map serialization).
-  auto access_policy_hash =
-      absl::BytesToHexString(ComputeSHA256(access_policy));
+  std::string raw_access_policy_hash = ComputeSHA256(access_policy);
+  std::string access_policy_hash =
+      absl::BytesToHexString(raw_access_policy_hash);
 
   if (signed_endorsements.signed_endorsement().empty()) {
     // If we have an empty SignedEndorsements proto, we'll use the legacy
@@ -196,6 +197,14 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
   if (!cwt->algorithm.has_value() || *cwt->algorithm != kAlgorithmES256) {
     return absl::FailedPreconditionError(absl::Substitute(
         "Unsupported COSE signing algorithm ($0).", *cwt->algorithm));
+  }
+
+  // If the CWT includes a claim for the access policy hash (KMS only), ensure
+  // that it matches the access policy we received.
+  if (!cwt->access_policy_sha256.empty() &&
+      cwt->access_policy_sha256 != raw_access_policy_hash) {
+    return absl::FailedPreconditionError(
+        "access_policy_sha256 claim does not match the access policy.");
   }
 
   // Extract the protected parts of the CWT (the COSE Sig_structure), which are

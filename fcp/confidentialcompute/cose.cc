@@ -54,9 +54,10 @@ enum CwtClaim {
   // this project and
   // https://github.com/project-oak/oak/blob/main/oak_dice/src/cert.rs for Oak
   // claims.
-  kPublicKey = -65537,         // Claim containing serialized public key.
-  kConfigProperties = -65538,  // Claim containing configuration properties.
-  kOakPublicKey = -4670552,    // Oak claim containing serialized public key.
+  kPublicKey = -65537,           // Claim containing serialized public key.
+  kConfigProperties = -65538,    // Claim containing configuration properties.
+  kAccessPolicySha256 = -65543,  // Claim containing access policy hash.
+  kOakPublicKey = -4670552,      // Oak claim containing serialized public key.
 };
 
 // COSE Header parameters; see https://www.iana.org/assignments/cose/cose.xhtml.
@@ -133,6 +134,9 @@ absl::StatusOr<std::vector<uint8_t>> BuildCwtPayload(const OkpCwt& cwt) {
   if (!cwt.config_properties.fields().empty()) {
     map.add(CwtClaim::kConfigProperties,
             Bstr(cwt.config_properties.SerializeAsString()));
+  }
+  if (!cwt.access_policy_sha256.empty()) {
+    map.add(CwtClaim::kAccessPolicySha256, Bstr(cwt.access_policy_sha256));
   }
   return map.encode();
 }
@@ -261,6 +265,15 @@ absl::Status ParseCwtPayload(const std::vector<uint8_t>& serialized_payload,
                 static_cast<int>(value->asBstr()->value().size()))) {
           return absl::InvalidArgumentError("failed to parse configuration");
         }
+        break;
+
+      case CwtClaim::kAccessPolicySha256:
+        if (value->type() != cppbor::BSTR) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "unsupported access_policy_sha256 type ", value->type()));
+        }
+        cwt.access_policy_sha256.assign(value->asBstr()->value().begin(),
+                                        value->asBstr()->value().end());
         break;
 
       default:

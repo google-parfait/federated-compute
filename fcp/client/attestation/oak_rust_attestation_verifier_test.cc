@@ -541,6 +541,83 @@ TEST(OakRustAttestationTest, HasSignedEndorsementButNoEndorsementInside) {
               HasSubstr("SignedEndorsement does not contain an endorsement."));
 }
 
+// Ensures that verification fails if the public key contains an
+// access_policy_sha256 claim that doesn't match the access policy.
+TEST(OakRustAttestationTest,
+     KnownEncryptionConfigAndMismatchingAccessPolicyHashClaim) {
+  ConfidentialEncryptionConfig encryption_config =
+      GetKnownValidEncryptionConfig();
+  absl::StatusOr<OkpCwt> parsed_key =
+      OkpCwt::Decode(encryption_config.public_key());
+  ASSERT_OK(parsed_key);
+  parsed_key->access_policy_sha256 = "mismatching_access_policy_hash";
+  encryption_config.set_public_key(parsed_key->Encode().value());
+
+  // Create a valid access policy proto with some non-default content.
+  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
+    transforms {
+      src: 0
+      application { tag: "bar" }
+    }
+  )pb");
+  auto access_policy_bytes = access_policy.SerializeAsString();
+  OakRustAttestationVerifier verifier(
+      GetKnownValidReferenceValues(), ReferenceValues(),
+      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
+      confidentialcompute::AccessPolicyEndorsementOptions(),
+      LogPrettyPrintedVerificationRecord);
+
+  auto result = verifier.Verify(absl::Cord(access_policy_bytes),
+                                confidentialcompute::SignedEndorsements(),
+                                encryption_config);
+  EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kFailedPrecondition));
+  EXPECT_THAT(
+      result.status().message(),
+      HasSubstr(
+          "access_policy_sha256 claim does not match the access policy."));
+}
+
+// Ensures that access_policy_sha256 claim verification succeeds if does match
+// the access policy.
+TEST(OakRustAttestationTest,
+     KnownEncryptionConfigAndMatchingAccessPolicyHashClaim) {
+  ConfidentialEncryptionConfig encryption_config =
+      GetKnownValidEncryptionConfig();
+
+  // Create a valid access policy proto with some non-default content.
+  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
+    transforms {
+      src: 0
+      application { tag: "bar" }
+    }
+  )pb");
+  auto access_policy_bytes = access_policy.SerializeAsString();
+
+  // Add an access_policy_sha256 claim that matches the access policy.
+  absl::StatusOr<OkpCwt> parsed_key =
+      OkpCwt::Decode(encryption_config.public_key());
+  ASSERT_OK(parsed_key);
+  parsed_key->access_policy_sha256 = ComputeSHA256(access_policy_bytes);
+  encryption_config.set_public_key(parsed_key->Encode().value());
+
+  OakRustAttestationVerifier verifier(
+      GetKnownValidReferenceValues(), ReferenceValues(),
+      {absl::BytesToHexString(ComputeSHA256(access_policy_bytes))},
+      confidentialcompute::AccessPolicyEndorsementOptions(),
+      LogPrettyPrintedVerificationRecord);
+
+  auto result = verifier.Verify(absl::Cord(access_policy_bytes),
+                                confidentialcompute::SignedEndorsements(),
+                                encryption_config);
+  // The access_policy_sha256 step should succeed, but since we modified the
+  // public key, the signature verification will fail.
+  // TODO: b/418269101 - Ensure this test succeeds once we have test data that
+  // includes an access_policy_sha256 claim.
+  EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kFailedPrecondition));
+  EXPECT_THAT(result.status().message(),
+              HasSubstr("Signature verification failed"));
+}
+
 // Tests whether the AttestationVerificationRecord emitted by the
 // OakRustAttestationVerifier contains sufficient information to allow someone
 // to re-do the verification (e.g. on their computer, by calling into the Oak

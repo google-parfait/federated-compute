@@ -146,6 +146,8 @@ message ConfidentialEncryptionConfig {
   // parameters:
   //
   // CWT Claims (https://www.iana.org/assignments/cwt/cwt.xhtml)
+  //   -65543: SHA-256 hash of the access policy used to derive the key (KMS
+  //           only)
   //   -65537: COSE_Key containing the public key parameters (bstr)
   //        4: Expiration Time (int)
   //        6: Issued At (int)

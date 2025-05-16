@@ -169,6 +169,7 @@ message DeriveKeysResponse {
   // contain at least the following claims and parameters:
   //
   // CWT Claims (https://www.iana.org/assignments/cwt/cwt.xhtml)
+  //   -65543: SHA-256 hash of the access policy used to derive the key
   //   -65537: COSE_Key containing the public key parameters (bstr)
   //        4: Expiration Time (int)
   //        5: Not Before (int)

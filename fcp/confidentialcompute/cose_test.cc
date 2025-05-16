@@ -267,6 +267,7 @@ TEST(OkpCwtTest, EncodeFull) {
            .expiration_time = absl::FromUnixSeconds(2000),
            .public_key = OkpKey(),
            .config_properties = config_properties,
+           .access_policy_sha256 = "hash",
            .signature = "signature",
        })
           .Encode(),
@@ -274,7 +275,7 @@ TEST(OkpCwtTest, EncodeFull) {
           "\x84"              // array with 4 items:
           "\x43\xa1\x01\x07"  // bstr containing { alg: 7 } (protected headers)
           "\xa0"              // empty map (unprotected headers)
-          "\x58\x21\xa4"      // bstr containing a map with 4 items: (claims)
+          "\x58\x2b\xa5"      // bstr containing a map with 5 items: (claims)
           "\x04\x19\x07\xd0"  // expiration time (4) = 2000
           "\x06\x19\x03\xe8"  // issued at (6) = 1000
           "\x3a\x00\x01\x00\x00\x43\xa1\x01\x01"  // public key (-65537)
@@ -286,8 +287,10 @@ TEST(OkpCwtTest, EncodeFull) {
           "\x20\x01"                              //     bool_value (4): true
                                                   //   }
                                                   // }
+          "\x3a\x00\x01\x00\x06\x44hash"  // access_policy_sha256 (-65543) =
+                                          // b"hash"
           "\x49signature",
-          51)));
+          61)));
 }
 
 TEST(OkpCwtTest, DecodeEmpty) {
@@ -297,15 +300,16 @@ TEST(OkpCwtTest, DecodeEmpty) {
   EXPECT_EQ(key->expiration_time, std::nullopt);
   EXPECT_EQ(key->public_key, std::nullopt);
   EXPECT_THAT(key->config_properties, EqualsProto(""));
+  EXPECT_EQ(key->access_policy_sha256, "");
   EXPECT_EQ(key->signature, "");
 }
 
 TEST(OkpCwtTest, DecodeFull) {
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(absl::string_view(
-      "\x84\x43\xa1\x01\x07\xa0\x58\x21\xa4\x04\x19\x07\xd0\x06\x19\x03\xe8\x3a"
+      "\x84\x43\xa1\x01\x07\xa0\x58\x2b\xa5\x04\x19\x07\xd0\x06\x19\x03\xe8\x3a"
       "\x00\x01\x00\x00\x43\xa1\x01\x01\x3a\x00\x01\x00\x01\x49\x0a\x07\x0a\x01"
-      "x\x12\x02\x20\x01\x49signature",
-      51));
+      "x\x12\x02\x20\x01\x3a\x00\x01\x00\x06\x44hash\x49signature",
+      61));
   ASSERT_OK(cwt);
   EXPECT_EQ(cwt->issued_at, absl::FromUnixSeconds(1000));
   EXPECT_EQ(cwt->expiration_time, absl::FromUnixSeconds(2000));
@@ -316,6 +320,7 @@ TEST(OkpCwtTest, DecodeFull) {
                   value { bool_value: true }
                 }
               )pb"));
+  EXPECT_EQ(cwt->access_policy_sha256, "hash");
   EXPECT_EQ(cwt->signature, "signature");
 }
 
