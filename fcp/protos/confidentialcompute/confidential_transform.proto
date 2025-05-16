@@ -402,3 +402,16 @@ message ReadResponse {
   bytes data = 3
       ;
 }
+
+// Configuration associated with the final result produced by the container.
+// This is returned as part of `ReadResponse.first_response_configuration` when
+// reading the final result from the container.
+message FinalResultConfiguration {
+  // Release Token signed by the worker TEE's application signing key.
+  // This is passed back to the untrusted space so that it can use it to request
+  // KMS to release the final results.
+  bytes release_token = 1;
+
+  // The application specific configuration associated with the final result.
+  google.protobuf.Any application_configuration = 2;
+}
