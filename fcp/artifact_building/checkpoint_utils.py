@@ -469,7 +469,7 @@ def variable_names_from_structure(
     return [name]
   elif isinstance(tff_structure, tff.structure.Struct):
     result = []
-    fields = tff.structure.iter_elements(tff_structure)
+    fields = tff.structure.to_elements(tff_structure)
     for index, (field_name, field_type) in enumerate(fields):
       # Default the name of the element to its index so that we don't wind up
       # with multiple child fields listed under `/v/`
