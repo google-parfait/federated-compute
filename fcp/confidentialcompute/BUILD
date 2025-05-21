@@ -316,6 +316,7 @@ cc_library(
     name = "lambda_runner",
     hdrs = ["lambda_runner.h"],
     copts = ["-Wthread-safety-analysis"],
+    visibility = ["//visibility:public"],
     deps = [
         "@com_google_absl//absl/status:statusor",
         "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
@@ -327,6 +328,7 @@ cc_library(
     testonly = 1,
     hdrs = ["mock_lambda_runner.h"],
     copts = ["-Wthread-safety-analysis"],
+    visibility = ["//visibility:public"],
     deps = [
         ":lambda_runner",
         "@com_google_absl//absl/status:statusor",
@@ -339,6 +341,7 @@ cc_library(
     srcs = ["tee_executor.cc"],
     hdrs = ["tee_executor.h"],
     copts = ["-Wthread-safety-analysis"],
+    visibility = ["//visibility:public"],
     deps = [
         ":constants",
         ":lambda_runner",
