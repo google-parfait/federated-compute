@@ -311,3 +311,72 @@ cc_test(
         "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
     ],
 )
+
+cc_library(
+    name = "lambda_runner",
+    hdrs = ["lambda_runner.h"],
+    copts = ["-Wthread-safety-analysis"],
+    deps = [
+        "@com_google_absl//absl/status:statusor",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)
+
+cc_library(
+    name = "mock_lambda_runner",
+    testonly = 1,
+    hdrs = ["mock_lambda_runner.h"],
+    copts = ["-Wthread-safety-analysis"],
+    deps = [
+        ":lambda_runner",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
+    name = "tee_executor",
+    srcs = ["tee_executor.cc"],
+    hdrs = ["tee_executor.h"],
+    copts = ["-Wthread-safety-analysis"],
+    deps = [
+        ":constants",
+        ":lambda_runner",
+        ":tee_executor_value",
+        "//fcp/base",
+        "//fcp/protos/confidentialcompute:file_info_cc_proto",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+        "@federated_language//federated_language/proto:array_cc_proto",
+        "@federated_language//federated_language/proto:computation_cc_proto",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:executor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:threading",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "tee_executor_test",
+    srcs = ["tee_executor_test.cc"],
+    copts = ["-Wthread-safety-analysis"],
+    deps = [
+        ":constants",
+        ":mock_lambda_runner",
+        ":tee_executor",
+        ":test_utils",
+        "//fcp/testing",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
+        "@org_tensorflow//tensorflow/core:protos_all_cc",
+        "@org_tensorflow//tensorflow/core/platform:status_matchers",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:executor",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:executor_test_base",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:value_test_utils",
+        "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)
