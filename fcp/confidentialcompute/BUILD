@@ -214,7 +214,6 @@ cc_library(
     name = "tee_executor_value",
     srcs = ["tee_executor_value.cc"],
     hdrs = ["tee_executor_value.h"],
-    copts = ["-Wthread-safety-analysis"],
     visibility = ["//visibility:public"],
     deps = [
         ":constants",
@@ -248,7 +247,6 @@ cc_library(
     testonly = 1,
     srcs = ["test_utils.cc"],
     hdrs = ["test_utils.h"],
-    copts = ["-Wthread-safety-analysis"],
     visibility = ["//visibility:public"],
     deps = [
         "//fcp/protos/confidentialcompute:file_info_cc_proto",
@@ -262,7 +260,6 @@ cc_library(
     name = "composing_tee_executor",
     srcs = ["composing_tee_executor.cc"],
     hdrs = ["composing_tee_executor.h"],
-    copts = ["-Wthread-safety-analysis"],
     visibility = ["//visibility:public"],
     deps = [
         ":constants",
@@ -289,7 +286,6 @@ cc_library(
 cc_test(
     name = "composing_tee_executor_test",
     srcs = ["composing_tee_executor_test.cc"],
-    copts = ["-Wthread-safety-analysis"],
     deps = [
         ":composing_tee_executor",
         ":constants",
@@ -315,7 +311,6 @@ cc_test(
 cc_library(
     name = "lambda_runner",
     hdrs = ["lambda_runner.h"],
-    copts = ["-Wthread-safety-analysis"],
     visibility = ["//visibility:public"],
     deps = [
         "@com_google_absl//absl/status:statusor",
@@ -327,7 +322,6 @@ cc_library(
     name = "mock_lambda_runner",
     testonly = 1,
     hdrs = ["mock_lambda_runner.h"],
-    copts = ["-Wthread-safety-analysis"],
     visibility = ["//visibility:public"],
     deps = [
         ":lambda_runner",
@@ -340,7 +334,6 @@ cc_library(
     name = "tee_executor",
     srcs = ["tee_executor.cc"],
     hdrs = ["tee_executor.h"],
-    copts = ["-Wthread-safety-analysis"],
     visibility = ["//visibility:public"],
     deps = [
         ":constants",
@@ -364,7 +357,6 @@ cc_library(
 cc_test(
     name = "tee_executor_test",
     srcs = ["tee_executor_test.cc"],
-    copts = ["-Wthread-safety-analysis"],
     deps = [
         ":constants",
         ":mock_lambda_runner",
