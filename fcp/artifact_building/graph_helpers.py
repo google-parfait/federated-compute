@@ -541,11 +541,8 @@ def make_data_sources_with_dataspec(
           f'the structure of the type {type_spec}. '
           'Found single `DataSpec` instead.'
       )
-    ds = tff.structure.from_container(ds)
-    assert isinstance(ds, tff.structure.Struct)
-    data_spec_elements = tff.structure.to_elements(ds)
     type_spec_element_names = [str(k) for k, _ in type_spec.items()]
-    data_spec_element_names = [str(k) for k, _ in data_spec_elements]
+    data_spec_element_names = list(ds.keys())
     if type_spec_element_names != data_spec_element_names:
       raise TypeError(
           'Type vs. data spec elements names mismatch: {} vs. {}.'.format(
@@ -553,10 +550,8 @@ def make_data_sources_with_dataspec(
           )
       )
     elements = []
-    for element_index, (_, element_type) in enumerate(type_spec.items()):
-      elements.extend(
-          make_data_sources_with_dataspec(element_type, ds[element_index])
-      )
+    for element, (_, element_type) in zip(ds.values(), type_spec.items()):
+      elements.extend(make_data_sources_with_dataspec(element_type, element))
     return elements
   else:
     raise ValueError(
