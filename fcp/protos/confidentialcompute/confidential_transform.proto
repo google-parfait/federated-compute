@@ -380,9 +380,9 @@ message FinalizeRequest {
   // specifies this.
   google.protobuf.Any configuration = 2;
 
-  // The current state associated with the application to which the trusted
+  // The current state associated with the pipeline to which the trusted
   // container belongs. This field is optional.
-  bytes application_state = 3;
+  bytes pipeline_state = 3;
 }
 
 // A response reading a chunk of a blob from the TEE, which will be
