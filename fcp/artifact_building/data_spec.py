@@ -13,7 +13,7 @@
 # limitations under the License.
 """A class to specify on-device dataset inputs."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Optional, Union
 
 import federated_language
@@ -106,18 +106,15 @@ class DataSpec:
     return self.preprocessing_comp.type_signature.result
 
 
-def is_data_spec_or_structure(x: Any) -> bool:
+def is_data_spec_or_structure(obj: object) -> bool:
   """Returns True iff `x` is either a `DataSpec` or a nested structure of it."""
-  if x is None:
-    return False
-  if isinstance(x, DataSpec):
+  if isinstance(obj, DataSpec):
     return True
-  try:
-    x = tff.structure.from_container(x)
-    return all(
-        is_data_spec_or_structure(y) for _, y in tff.structure.to_elements(x)
-    )
-  except TypeError:
+  elif isinstance(obj, Mapping):
+    return all(is_data_spec_or_structure(x) for x in obj.values())
+  elif isinstance(obj, Sequence) and not isinstance(obj, str):
+    return all(is_data_spec_or_structure(x) for x in obj)
+  else:
     return False
 
 
