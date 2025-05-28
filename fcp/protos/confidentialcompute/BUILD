@@ -407,6 +407,17 @@ cc_grpc_library(
     deps = [":computation_delegation_cc_proto"],
 )
 
+py_proto_library(
+    name = "computation_delegation_py_proto",
+    deps = [":computation_delegation_proto"],
+)
+
+py_grpc_library(
+    name = "computation_delegation_py_grpc",
+    srcs = [":computation_delegation_proto"],
+    deps = [":computation_delegation_py_proto"],
+)
+
 proto_library(
     name = "kms_proto",
     srcs = ["kms.proto"],
