@@ -137,6 +137,16 @@ message StartTaskAssignmentRequest {
 
   // The client's capabilities when downloading and processing resources.
   ResourceCapabilities resource_capabilities = 6;
+
+  // The attestation measurement providing evidence of integrity for this
+  // client. The measurement should be bound to the session_id value in this
+  // request.
+  //
+  // Note that the previous `EligibilityEvalTaskRequest` could have set this
+  // field to an attestation measurement not tied to the session_id. In that
+  // case this field will be ignored, since the attestation was already verified
+  // for the client.
+  AttestationMeasurement attestation_measurement = 7;
 }
 
 message StartTaskAssignmentMetadata {
@@ -182,6 +192,16 @@ message PerformMultipleTaskAssignmentsRequest {
   // /EligibilityEvalTasks.RequestEligibilityEvalTask).
   repeated string task_names = 5
       ;
+
+  // The attestation measurement providing evidence of integrity for this
+  // client. The measurement should be bound to the session_id value in this
+  // request.
+  //
+  // Note that the previous `EligibilityEvalTaskRequest` could have set this
+  // field to an attestation measurement not tied to the session_id. In that
+  // case this field will be ignored, since the attestation was already verified
+  // for the client.
+  AttestationMeasurement attestation_measurement = 7;
 }
 
 message PerformMultipleTaskAssignmentsResponse {
