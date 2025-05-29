@@ -28,4 +28,8 @@ message ProgramExecutorTeeInitializeConfig {
   bytes program = 3;
   // The port number of the untrusted server to handle requests from the TEE.
   int32 outgoing_server_port = 4;
+  // Worker bns addresses representing workers that are available to use for
+  // distributed execution of the program. If empty, the program will execute
+  // entirely within the program executor TEE.
+  repeated string worker_bns_addresses = 5;
 }
