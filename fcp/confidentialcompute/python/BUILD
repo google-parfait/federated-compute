@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 package(
     default_visibility = ["//fcp:internal"],
@@ -23,4 +23,28 @@ py_library(
     name = "constants",
     srcs = ["constants.py"],
     visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "min_sep_data_source",
+    srcs = ["min_sep_data_source.py"],
+    deps = [
+        ":constants",
+        "//fcp/protos/confidentialcompute:file_info_py_pb2",
+        "@com_google_protobuf//:protobuf_python",
+        "@federated_language//federated_language",
+        "@federated_language//federated_language/proto:computation_py_pb2",
+        "@federated_language//federated_language/proto:data_type_py_pb2",
+    ],
+)
+
+py_test(
+    name = "min_sep_data_source_test",
+    srcs = ["min_sep_data_source_test.py"],
+    deps = [
+        ":min_sep_data_source",
+        "//fcp/protos/confidentialcompute:file_info_py_pb2",
+        "@federated_language//federated_language/proto:computation_py_pb2",
+        "@pypi_absl_py//:pkg",
+    ],
 )
