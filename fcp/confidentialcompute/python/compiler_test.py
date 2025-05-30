@@ -17,7 +17,7 @@ import federated_language
 import numpy as np
 import tensorflow_federated as tff
 
-from fcp.confidentialcompute import compiler
+from fcp.confidentialcompute.python import compiler
 
 
 # Helper function to create the input to the AccumulateLambda computation.
