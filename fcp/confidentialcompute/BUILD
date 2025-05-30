@@ -1,18 +1,6 @@
-# Copyright 2023 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 package(
     default_visibility = ["//fcp:internal"],
@@ -373,5 +361,27 @@ cc_test(
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:executor_test_base",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/executors:value_test_utils",
         "@org_tensorflow_federated//tensorflow_federated/proto/v0:executor_cc_proto",
+    ],
+)
+
+py_library(
+    name = "compiler",
+    srcs = ["compiler.py"],
+    deps = [
+        "@federated_language//federated_language",
+        "@org_tensorflow_federated//tensorflow_federated",
+        "@pypi_immutabledict//:pkg",
+    ],
+)
+
+py_test(
+    name = "compiler_test",
+    srcs = ["compiler_test.py"],
+    deps = [
+        ":compiler",
+        "@federated_language//federated_language",
+        "@org_tensorflow_federated//tensorflow_federated",
+        "@pypi_absl_py//:pkg",
+        "@pypi_numpy//:pkg",
     ],
 )
