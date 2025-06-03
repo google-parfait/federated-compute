@@ -127,8 +127,8 @@ void TestTracingRecorder::UninstallAsThreadLocal() {
 }
 
 struct RecordComparison {
-  bool const operator()(TestTracingRecorder::Record* r1,
-                        TestTracingRecorder::Record* r2) const {
+  bool operator()(TestTracingRecorder::Record* r1,
+                  TestTracingRecorder::Record* r2) const {
     return r1->id < r2->id;
   }
 };
