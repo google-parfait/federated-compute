@@ -169,9 +169,9 @@ constexpr auto UNAUTHENTICATED = StatusCode::kUnauthenticated;
 
 namespace internal {
 /** Functions to assist with FCP_RETURN_IF_ERROR() */
-inline const Status AsStatus(const Status& status) { return status; }
+inline Status AsStatus(const Status& status) { return status; }
 template <typename T>
-inline const Status AsStatus(const StatusOr<T>& status_or) {
+inline Status AsStatus(const StatusOr<T>& status_or) {
   return status_or.status();
 }
 }  // namespace internal
