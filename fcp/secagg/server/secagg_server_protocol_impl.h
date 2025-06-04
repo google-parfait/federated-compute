@@ -135,36 +135,35 @@ class SecAggServerProtocolImpl {
   }
 
   // Returns the number of neighbors of each client.
-  inline const int number_of_neighbors() const {
+  inline int number_of_neighbors() const {
     return secret_sharing_graph()->GetDegree();
   }
 
   // Returns the minimum number of neighbors of a client that must not drop-out
   // for that client's contribution to be included in the sum. This corresponds
   // to the threshold in the shamir secret sharing of self and pairwise masks.
-  inline const int minimum_surviving_neighbors_for_reconstruction() const {
+  inline int minimum_surviving_neighbors_for_reconstruction() const {
     return secret_sharing_graph()->GetThreshold();
   }
 
   // Returns client_id's ith neighbor.
   // This function assumes that 0 <= i < number_of_neighbors() and will throw a
   // runtime error if that's not the case
-  inline const int GetNeighbor(int client_id, int i) const {
+  inline int GetNeighbor(int client_id, int i) const {
     return secret_sharing_graph()->GetNeighbor(client_id, i);
   }
 
   // Returns the index of client_id_2 in the list of neighbors of client_id_1,
   // if present
-  inline const std::optional<int> GetNeighborIndex(int client_id_1,
-                                                   int client_id_2) const {
+  inline std::optional<int> GetNeighborIndex(int client_id_1,
+                                             int client_id_2) const {
     return secret_sharing_graph()->GetNeighborIndex(client_id_1, client_id_2);
   }
 
   // Returns the index of client_id_2 in the list of neighbors of client_id_1
   // This function assumes that client_id_1 and client_id_2 are neighbors, and
   // will throw a runtime error if that's not the case
-  inline const int GetNeighborIndexOrDie(int client_id_1,
-                                         int client_id_2) const {
+  inline int GetNeighborIndexOrDie(int client_id_1, int client_id_2) const {
     auto index =
         secret_sharing_graph()->GetNeighborIndex(client_id_1, client_id_2);
     FCP_CHECK(index.has_value());
@@ -173,13 +172,13 @@ class SecAggServerProtocolImpl {
 
   // Returns true if clients client_id_1 and client_id_1 are neighbors, else
   // false.
-  inline const bool AreNeighbors(int client_id_1, int client_id_2) const {
+  inline bool AreNeighbors(int client_id_1, int client_id_2) const {
     return secret_sharing_graph()->AreNeighbors(client_id_1, client_id_2);
   }
 
   // Returns true if client_id_1 is an outgoing neighbor of client_id_2, else
   // false.
-  inline const bool IsOutgoingNeighbor(int client_id_1, int client_id_2) const {
+  inline bool IsOutgoingNeighbor(int client_id_1, int client_id_2) const {
     return secret_sharing_graph()->IsOutgoingNeighbor(client_id_1, client_id_2);
   }
 

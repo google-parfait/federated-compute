@@ -40,26 +40,26 @@ class SecAggServerState {
  public:
   // Returns the number of clients selected to be in the cohort for this
   // instance of Secure Aggregation.
-  inline const size_t total_number_of_clients() const {
+  inline size_t total_number_of_clients() const {
     return impl_->total_number_of_clients();
   }
 
   // Returns the number of neighbors of each client.
-  inline const int number_of_neighbors() const {
+  inline int number_of_neighbors() const {
     return impl_->number_of_neighbors();
   }
 
   // Returns the minimum number of neighbors of a client that must not drop-out
   // for that client's contribution to be included in the sum. This corresponds
   // to the threshold in the shamir secret sharing of self and pairwise masks.
-  inline const int minimum_surviving_neighbors_for_reconstruction() const {
+  inline int minimum_surviving_neighbors_for_reconstruction() const {
     return impl_->minimum_surviving_neighbors_for_reconstruction();
   }
 
   // Returns the index of client_id_2 in the list of neighbors of client_id_1,
   // if present
-  inline const std::optional<int> GetNeighborIndex(int client_id_1,
-                                                   int client_id_2) const {
+  inline std::optional<int> GetNeighborIndex(int client_id_1,
+                                             int client_id_2) const {
     return impl_->GetNeighborIndex(client_id_1, client_id_2);
   }
 
@@ -201,7 +201,7 @@ class SecAggServerState {
 
   // Returns the minimum threshold number of clients that need to send valid
   // responses in order for the protocol to proceed from one round to the next.
-  inline const int minimum_number_of_clients_to_proceed() const {
+  inline int minimum_number_of_clients_to_proceed() const {
     return impl_->minimum_number_of_clients_to_proceed();
   }
 
