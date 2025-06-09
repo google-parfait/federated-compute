@@ -170,9 +170,8 @@ class FederatedContext(federated_language.program.FederatedContext):
   ) -> bool:
     """Checks if each node in `structure` is an allowed type for `state`."""
     if isinstance(structure, tff.structure.Struct):
-      structure = tff.structure.flatten(structure)
-    else:
-      structure = tree.flatten(structure)
+      structure = tff.structure.to_odict_or_tuple(structure)
+    structure = tree.flatten(structure)
     for item in structure:
       if not (
           tf.is_tensor(item)
