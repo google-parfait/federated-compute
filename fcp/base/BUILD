@@ -527,6 +527,7 @@ cc_library(
         "digest.h",
     ],
     copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         ":base",
         "@boringssl//:crypto",
