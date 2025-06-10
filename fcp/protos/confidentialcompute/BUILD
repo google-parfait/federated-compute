@@ -111,10 +111,6 @@ cc_proto_library(
 proto_library(
     name = "pipeline_transform_proto",
     srcs = ["pipeline_transform.proto"],
-    deps = [
-        "@com_google_protobuf//:any_proto",
-        "@oak//proto/micro_rpc:options_proto",
-    ],
 )
 
 proto_library(
@@ -170,23 +166,9 @@ cc_proto_library(
     deps = [":pipeline_transform_proto"],
 )
 
-cc_grpc_library(
-    name = "pipeline_transform_cc_grpc",
-    srcs = [":pipeline_transform_proto"],
-    generate_mocks = True,
-    grpc_only = True,
-    deps = [":pipeline_transform_cc_proto"],
-)
-
 py_proto_library(
     name = "pipeline_transform_py_proto",
     deps = [":pipeline_transform_proto"],
-)
-
-py_grpc_library(
-    name = "pipeline_transform_py_grpc",
-    srcs = [":pipeline_transform_proto"],
-    deps = [":pipeline_transform_py_proto"],
 )
 
 # Use tf_proto_library to build the dependencies correctly
