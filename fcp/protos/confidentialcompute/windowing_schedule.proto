@@ -1,0 +1,81 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+package fcp.confidentialcompute;
+
+import "google/type/date.proto";
+import "google/type/timeofday.proto";
+
+option java_multiple_files = true;
+
+// A schedule that defines time windows.
+//
+// This will be used to define trusted pipeline aggregation windows, DP time
+// units, and privacy ID rotation windows.
+message WindowingSchedule {
+  oneof schedule {
+    CivilTimeWindowSchedule civil_time_window_schedule = 1;
+  }
+
+  // A schedule that defines windows in terms of civil time.
+  message CivilTimeWindowSchedule {
+    // Together, the start date and start time define the start of the window.
+    // They must match the `TimePeriod.Unit` below:
+    // - TimePeriod.Unit.DAYS: `start_time` fields must all be 0 (ie. the field
+    // is unset).
+    // - TimePeriod.Unit.MONTHS: `start_date.day` and all `start_time` fields
+    // must be 0.
+    // - TimePeriod.Unit.YEARS: `start_date.month`, `start_date.day`, and all
+    // `start_time` fields must be 0.
+    google.type.Date start_date = 1;
+    google.type.TimeOfDay start_time = 2;
+    enum TimeZoneScheme {
+      // The time zone is ignored.
+      IGNORE = 0;
+    }
+    // Defines how the time zone is handled.
+    TimeZoneScheme time_zone_scheme = 3;
+
+    message TimePeriod {
+      enum Unit {
+        UNIT_UNSPECIFIED = 0;
+        HOURS = 1;
+        DAYS = 2;
+        MONTHS = 3;
+        YEARS = 4;
+      }
+      int32 size = 1;
+      Unit unit = 2;
+    }
+
+    // The size of each window, as a civil time period. When `shift` is equal to
+    // `size`, CivilTimeWindowSchedule defines tumbling windows. Initially we
+    // will only support tumbling windows.
+    //
+    // Note that this time period does not necessarily correspond
+    // to the duration in physical time. For example, if the time_zone_scheme =
+    // IGNORE, the duration of a window with the size = {size:
+    // 1, unit: HOURS} is longer than 1 physical hour.
+    TimePeriod size = 4;
+
+    // The time period by which each subsequent window is shifted from the
+    // previous window.
+    //
+    // For sliding windows, this is often refered to as the "period" of the
+    // window, however, we don't use that term to avoid confusion with civil
+    // time periods.
+    TimePeriod shift = 5;
+  }
+}

@@ -429,3 +429,12 @@ cc_proto_library(
     name = "program_executor_tee_cc_proto",
     deps = [":program_executor_tee_proto"],
 )
+
+proto_library(
+    name = "windowing_schedule_proto",
+    srcs = ["windowing_schedule.proto"],
+    deps = [
+        "@com_google_googleapis//google/type:date_proto",
+        "@com_google_googleapis//google/type:timeofday_proto",
+    ],
+)
