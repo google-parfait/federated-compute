@@ -449,6 +449,8 @@ message OpStatsSequence {
   // A timestamp that marks when we can start to trust the data in the
   // OpStatsDb. Any event happens before this time is missing or removed.
   google.protobuf.Timestamp earliest_trustworthy_time = 2;
+  // The seed used to generate source IDs.
+  SourceIdSeed source_id_seed = 3;
 }
 
 // Selection criteria for op stats data.
@@ -474,4 +476,20 @@ message OpStatsSelectionCriteria {
   // current task, or no entries if there was no successful contribution.
   // `start_time` and `end_time are ignored.
   bool last_successful_contribution = 3;
+}
+
+// The seed used to generate source IDs, which are used to generate partition
+// keys and privacy IDs.
+//
+// Privacy IDs are user IDs that optionally rotate. They are stored in the
+// encrypted part of an upload that is confidentially aggregated - this means
+// that they are only accessible within the TEE.
+//
+// Partition keys are coarse-grained proxies for privacy IDs - many privacy IDs
+// map to the same partition key. Partition keys are stored in the unencrypted
+// part of an upload.
+message SourceIdSeed {
+  // A randomly generated salt. This salt is expected to remain constant for as
+  // long as the OpStats database persists or until explicitly reset."
+  bytes salt = 1;
 }
