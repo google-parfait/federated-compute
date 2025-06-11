@@ -39,9 +39,9 @@ class Key {
     return reinterpret_cast<const uint8_t*>(data_.c_str());
   }
 
-  inline const int size() const { return data_.size(); }
+  inline int size() const { return data_.size(); }
 
-  inline const std::string AsString() const { return data_; }
+  inline std::string AsString() const { return data_; }
 
   friend inline bool operator==(const Key& lhs, const Key& rhs) {
     return lhs.data_ == rhs.data_;
