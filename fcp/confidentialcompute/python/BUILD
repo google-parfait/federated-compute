@@ -26,6 +26,36 @@ py_library(
 )
 
 py_library(
+    name = "dp_mf_aggregator",
+    srcs = ["dp_mf_aggregator.py"],
+    tags = ["nokokoro"],
+    deps = [
+        "//third_party/py/jax",
+        "//third_party/py/jax/experimental/jax2tf",
+        "//third_party/py/jax_privacy",
+        "//third_party/py/jax_privacy/experimental:gradient_clipping",
+        "//third_party/py/tensorflow:tensorflow_no_contrib",
+        "@federated_language//federated_language",
+        "@org_tensorflow_federated//tensorflow_federated",
+    ],
+)
+
+py_test(
+    name = "dp_mf_aggregator_test",
+    srcs = ["dp_mf_aggregator_test.py"],
+    tags = ["nokokoro"],
+    deps = [
+        ":dp_mf_aggregator",
+        "//third_party/py/jax",
+        "//third_party/py/jax_privacy",
+        "//third_party/py/tensorflow:tensorflow_no_contrib",
+        "@federated_language//federated_language",
+        "@pypi_absl_py//:pkg",
+        "@pypi_numpy//:pkg",
+    ],
+)
+
+py_library(
     name = "min_sep_data_source",
     srcs = ["min_sep_data_source.py"],
     deps = [
