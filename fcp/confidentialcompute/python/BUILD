@@ -29,6 +29,7 @@ py_library(
     name = "dp_mf_aggregator",
     srcs = ["dp_mf_aggregator.py"],
     tags = ["nokokoro"],
+    visibility = ["//visibility:public"],
     deps = [
         "//third_party/py/jax",
         "//third_party/py/jax/experimental/jax2tf",
@@ -58,6 +59,7 @@ py_test(
 py_library(
     name = "min_sep_data_source",
     srcs = ["min_sep_data_source.py"],
+    visibility = ["//visibility:public"],
     deps = [
         ":constants",
         "//fcp/protos/confidentialcompute:file_info_py_pb2",
