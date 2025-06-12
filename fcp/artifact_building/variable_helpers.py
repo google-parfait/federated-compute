@@ -18,6 +18,7 @@ from typing import Optional, Union
 import federated_language
 import tensorflow as tf
 import tensorflow_federated as tff
+import tree
 
 from fcp.artifact_building import tensor_utils
 from fcp.artifact_building import type_checks
@@ -378,7 +379,7 @@ def get_grouped_input_tensor_specs_for_aggregations(
         value,
         tff.framework.Struct,
     ):
-      inner_values = tff.structure.flatten(value)
+      inner_values = tree.flatten(tff.structure.to_odict_or_tuple(value))
     else:
       inner_values = [value]
 
@@ -512,7 +513,9 @@ def get_grouped_output_tensor_specs_for_aggregations(
     # If the output is a struct, select the appropriate number of
     # TensorflowSpecs.
     if isinstance(local_type.member, federated_language.StructType):
-      num_specs = len(tff.structure.flatten(local_type.member))
+      num_specs = len(
+          tree.flatten(tff.structure.to_odict_or_tuple(local_type.member))
+      )
       tensor_specs = output_tensor_specs[
           output_tensor_spec_index : output_tensor_spec_index + num_specs
       ]

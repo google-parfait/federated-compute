@@ -29,6 +29,7 @@ py_library(
         "//fcp/protos:plan_py_pb2",
         "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
+        "@pypi_dm_tree//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
     ],
@@ -279,6 +280,7 @@ py_library(
         ":type_checks",
         "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
+        "@pypi_dm_tree//:pkg",
         "@pypi_tensorflow//:pkg",
     ],
 )

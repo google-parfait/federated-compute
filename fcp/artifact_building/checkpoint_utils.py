@@ -21,6 +21,7 @@ import federated_language
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
+import tree
 
 from fcp.artifact_building import artifact_constants
 from fcp.artifact_building import tensor_utils
@@ -116,7 +117,13 @@ def create_server_checkpoint_vars_and_savepoint(
           write_metrics_to_checkpoint,
       )
 
-    has_metrics = bool(tff.structure.flatten(server_metrics_type))
+    if isinstance(server_metrics_type, federated_language.StructType):
+      flattened = tree.flatten(
+          tff.structure.to_odict_or_tuple(server_metrics_type)
+      )
+    else:
+      flattened = [server_metrics_type]
+    has_metrics = bool(flattened)
     if has_metrics and write_metrics_to_checkpoint:
       var_names.extend(list(map(tensor_utils.bare_name, metric_vars)))
 
@@ -501,8 +508,10 @@ def is_structure_of_allowed_types(
     ]
 ) -> bool:
   """Checks if each node in `structure` is an allowed type for serialization."""
-  flattened_structure = tff.structure.flatten(structure)
-  for item in flattened_structure:
+  if isinstance(structure, tff.structure.Struct):
+    structure = tff.structure.to_odict_or_tuple(structure)
+  flattened = tree.flatten(structure)
+  for item in flattened:
     if not (
         tf.is_tensor(item)
         or isinstance(item, (np.ndarray, np.number, int, float, str, bytes))
