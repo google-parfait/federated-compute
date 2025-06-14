@@ -109,11 +109,6 @@ cc_proto_library(
 )
 
 proto_library(
-    name = "pipeline_transform_proto",
-    srcs = ["pipeline_transform.proto"],
-)
-
-proto_library(
     name = "confidential_transform_proto",
     srcs = ["confidential_transform.proto"],
     deps = [
@@ -159,16 +154,6 @@ alias(
 alias(
     name = "tff_worker_configuration_py_proto",
     actual = "tff_worker_configuration_proto_py",
-)
-
-cc_proto_library(
-    name = "pipeline_transform_cc_proto",
-    deps = [":pipeline_transform_proto"],
-)
-
-py_proto_library(
-    name = "pipeline_transform_py_proto",
-    deps = [":pipeline_transform_proto"],
 )
 
 # Use tf_proto_library to build the dependencies correctly
