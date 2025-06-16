@@ -656,6 +656,7 @@ tf_custom_op_py_library(
 # Test `MakeSlicesSelectorExampleSelector` using Python.
 py_test(
     name = "make_slices_selector_example_selector_test",
+    testonly = True,
     srcs = ["make_slices_selector_example_selector_test.py"],
     deps = [
         ":make_slices_selector_example_selector_py",
@@ -726,6 +727,7 @@ tf_custom_op_py_library(
 # Test `AppendSlices` and `MergeAppendedSlices` using Python.
 py_test(
     name = "append_slices_test",
+    testonly = True,
     srcs = ["append_slices_test.py"],
     deps = [
         ":append_slices_py",
@@ -794,6 +796,7 @@ tf_custom_op_py_library(
 # Test `DeleteFile` using Python.
 py_test(
     name = "delete_file_test",
+    testonly = True,
     srcs = ["delete_file_test.py"],
     deps = [
         ":delete_file_py",
@@ -859,6 +862,7 @@ tf_custom_op_py_library(
 # Test `TensorName` using Python.
 py_test(
     name = "tensor_name_test",
+    testonly = True,
     srcs = ["tensor_name_test.py"],
     deps = [
         ":tensor_name_py",

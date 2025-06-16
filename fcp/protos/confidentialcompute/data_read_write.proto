@@ -50,7 +50,7 @@ message ReadResponse {
 }
 
 // Request to write data out from the TEE. This can be used to store
-// program-commited data and release non-encrypted data.
+// program-committed data and release non-encrypted data.
 message WriteRequest {
   // Metadata about the blob being written out by the TEE, sent with the
   // first WriteRequest for a blob.
@@ -64,7 +64,8 @@ message WriteRequest {
 
 // Write response.
 message WriteResponse {
-  // For writing program-commited data this reply can be the URI of the stored
-  // data. For releasing non-encrypted data this reply can be a status.
-  google.protobuf.Any reply = 1;
+  // Deprecated.
+  google.protobuf.Any reply = 1 [deprecated = true];
+  // The URI of the written data.
+  string file_uri = 2;
 }
