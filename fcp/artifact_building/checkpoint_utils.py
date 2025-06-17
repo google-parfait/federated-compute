@@ -14,7 +14,7 @@
 """Helper methods for working with demo server checkpoints."""
 
 import collections
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Optional, Union
 
 import federated_language
@@ -498,6 +498,8 @@ def variable_names_from_structure(
 def is_structure_of_allowed_types(
     structure: Union[
         tff.structure.Struct,
+        Mapping[str, object],
+        Sequence[object],
         tf.Tensor,
         np.ndarray,
         np.number,
@@ -505,7 +507,7 @@ def is_structure_of_allowed_types(
         float,
         str,
         bytes,
-    ]
+    ],
 ) -> bool:
   """Checks if each node in `structure` is an allowed type for serialization."""
   if isinstance(structure, tff.structure.Struct):
@@ -521,42 +523,55 @@ def is_structure_of_allowed_types(
 
 
 def save_tff_structure_to_checkpoint(
-    tff_structure: Union[tff.structure.Struct, tf.Tensor],
+    structure: Union[tff.structure.Struct, tf.Tensor],
     ordered_var_names: list[str],
     output_checkpoint_path: str,
 ) -> None:
   """Saves a TFF structure to a checkpoint file.
 
-  The input `tff_structure` is a either `tff.structure.Struct` or a single
-  `tf.Tensor`. This function saves `tff_structure` to a checkpoint file using
+  The input `structure` is a either `tff.structure.Struct` or a single
+  `tf.Tensor`. This function saves `structure` to a checkpoint file using
   variable names supplied via the `ordered_var_names` argument.
 
   Args:
-    tff_structure: A `tff.structure.Struct` of values or a single value. Each
-      leaf in the structure must be a value serializable to a TensorFlow
-      checkpoint.
+    structure: A `tff.structure.Struct` of values or a single value. Each leaf
+      in the structure must be a value serializable to a TensorFlow checkpoint.
     ordered_var_names: The list of variable names for the values that appear in
-      `tff_structure` after calling `tff.structure.flatten()`.
+      `structure` after calling `tff.structure.flatten()`.
     output_checkpoint_path: A string specifying the path to the output
       checkpoint file.
 
   Raises:
-    TypeError: If not all leaves in `tff_structure` are of allowed types.
-    ValueError: If the number of `tf.Tensor`s in `tff_structure` does not match
+    TypeError: If not all leaves in `structure` are of allowed types.
+    ValueError: If the number of `tf.Tensor`s in `structure` does not match
       the size of `ordered_var_names`.
   """
-  if not is_structure_of_allowed_types(tff_structure):
+  if isinstance(structure, tff.structure.Struct):
+    structure = tff.structure.to_odict_or_tuple(structure)
+
+  if not is_structure_of_allowed_types(structure):
     raise TypeError(
-        'Not all leaves in `tff_structure` are `tf.Tensor`s, '
+        'Not all leaves in `structure` are `tf.Tensor`s, '
         '`np.ndarray`s, `np.number`s, or Python scalars. Got: '
-        f'{tff.structure.map_structure(type, tff_structure)!r})'
+        f'{tree.map_structure(type, structure)!r})'
     )
 
-  tensors = tff.structure.flatten(tff_structure)
+  def _to_sequence(obj):
+    if isinstance(obj, Mapping):
+      return list(obj.values())
+    else:
+      return None
+
+  # IMPORTANT: Removing `Mapping` types is required because for `Mapping` types
+  # `tree.flatten` will sort the items by key before return the values and this
+  # function only care about the order of the values not their keys.
+  structure = tree.traverse(_to_sequence, structure, top_down=False)
+  tensors = tree.flatten(structure)
+
   if len(tensors) != len(ordered_var_names):
     raise ValueError(
         'The length of `ordered_var_names` does not match the '
-        'number of tensors in `tff_structure`:'
+        'number of tensors in `structure`:'
         f'{len(ordered_var_names)} != {len(tensors)}'
     )
 
