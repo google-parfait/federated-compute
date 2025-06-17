@@ -167,6 +167,7 @@ cc_library(
         "//fcp/base",
         "//fcp/base:clock",
         "//fcp/base:digest",
+        "//fcp/base:random_token",
         "//fcp/client/cache:file_backed_resource_cache",
         "//fcp/client/cache:resource_cache",
         "//fcp/client/engine:common",

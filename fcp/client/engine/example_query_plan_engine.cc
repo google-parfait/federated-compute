@@ -19,6 +19,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -29,6 +30,7 @@
 #include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/civil_time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/client/converters.h"
@@ -239,7 +241,8 @@ ExampleQueryPlanEngine::ExampleQueryPlanEngine(
 PlanResult ExampleQueryPlanEngine::RunPlan(
     const ExampleQuerySpec& example_query_spec,
     const std::string& output_checkpoint_filename,
-    bool use_client_report_wire_format, bool enable_event_time_data_upload) {
+    bool use_client_report_wire_format, bool enable_event_time_data_upload,
+    std::optional<absl::string_view> source_id, bool uses_confidential_agg) {
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
   bool has_event_time_range = false;
@@ -249,6 +252,8 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
       direct_example_query_results;
   for (const auto& example_query : example_query_spec.example_queries()) {
     const ExampleSelector& selector = example_query.example_selector();
+    // TODO: b/422862369 - try to parse the selection criteria to get the
+    // privacy ID rotation schedule and num_partitions.
     ExampleIteratorFactory* example_iterator_factory =
         FindExampleIteratorFactory(selector, example_iterator_factories_);
     if (example_iterator_factory == nullptr) {
@@ -369,6 +374,10 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
       auto checkpoint = checkpoint_builder->Build();
       if (checkpoint.ok()) {
         plan_result.federated_compute_checkpoint = std::move(*checkpoint);
+        // TODO: b/422862369 - derive the privacy ID and partition keys for each
+        // example if the task uses confidential aggregation and has
+        // num_partitions set in the SelectionCriteria.
+
         // If event time data upload is enabled, and the example query results
         // have event time ranges, then we should set the payload metadata in
         // the plan result.

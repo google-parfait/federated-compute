@@ -17,10 +17,12 @@
 #define FCP_CLIENT_ENGINE_EXAMPLE_QUERY_PLAN_ENGINE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "absl/functional/any_invocable.h"
+#include "absl/strings/string_view.h"
 #include "fcp/client/engine/common.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/example_iterator_query_recorder.h"
@@ -52,7 +54,8 @@ class ExampleQueryPlanEngine {
       const google::internal::federated::plan::ExampleQuerySpec&
           example_query_spec,
       const std::string& output_checkpoint_filename,
-      bool use_client_report_wire_format, bool enable_event_time_data_upload);
+      bool use_client_report_wire_format, bool enable_event_time_data_upload,
+      std::optional<absl::string_view> source_id, bool uses_confidential_agg);
 
  private:
   std::vector<ExampleIteratorFactory*> example_iterator_factories_;

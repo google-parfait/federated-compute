@@ -21,6 +21,7 @@
 #include <filesystem>  // NOLINT(build/c++17)
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -340,7 +341,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceeds) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -434,7 +436,8 @@ TEST_F(ExampleQueryPlanEngineTest, MultipleQueries) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -531,7 +534,8 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -565,7 +569,8 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecTypeMismatch) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -581,7 +586,8 @@ TEST_F(ExampleQueryPlanEngineTest, FactoryNotFound) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -597,7 +603,8 @@ TEST_F(ExampleQueryPlanEngineTest, NoIteratorCreated) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -625,7 +632,8 @@ TEST_F(ExampleQueryPlanEngineTest, InvalidExampleQueryResultFormat) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -644,7 +652,8 @@ TEST_F(ExampleQueryPlanEngineTest,
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -747,7 +756,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithEventTimeRange) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
-      /*enable_event_time_data_upload=*/true);
+      /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -868,7 +878,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
-      /*enable_event_time_data_upload=*/true);
+      /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -987,7 +998,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
-      /*enable_event_time_data_upload=*/true);
+      /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1039,7 +1051,8 @@ TEST_F(ExampleQueryPlanEngineTest, MissingEndEventTimeFails) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
-      /*enable_event_time_data_upload=*/true);
+      /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -1096,7 +1109,8 @@ TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1187,7 +1201,8 @@ TEST_F(ExampleQueryPlanEngineTest, TwoQueryDirectDataUploadTaskSucceeds) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1296,7 +1311,8 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
-      /*enable_event_time_data_upload=*/false);
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 

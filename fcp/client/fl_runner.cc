@@ -45,6 +45,7 @@
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
+#include "fcp/base/random_token.h"
 #include "fcp/client/cache/file_backed_resource_cache.h"
 #include "fcp/client/cache/resource_cache.h"
 #include "fcp/client/diag_codes.pb.h"
@@ -93,6 +94,7 @@ using ::fcp::client::opstats::OpStatsLogger;
 using ::fcp::confidentialcompute::PayloadMetadata;
 using ::google::internal::federated::plan::AggregationConfig;
 using ::google::internal::federated::plan::ClientOnlyPlan;
+using ::google::internal::federated::plan::ClientPhase;
 using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federated::plan::TensorflowSpec;
@@ -302,26 +304,40 @@ absl::Status ValidateDirectExampleQuery(
   return absl::OkStatus();
 }
 
+struct CheckinResult {
+  std::string task_name;
+  ClientOnlyPlan plan;
+  int32_t minimum_clients_in_server_visible_aggregate;
+  std::string checkpoint_input_filename;
+  std::string computation_id;
+  std::string federated_select_uri_template;
+  std::string aggregation_session_id;
+  std::optional<FederatedProtocol::ConfidentialAggInfo> confidential_agg_info;
+  std::string task_identifier;
+};
+
 PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     OpStatsLogger* opstats_logger, const Flags* flags,
     ExampleIteratorQueryRecorder* example_iterator_query_recorder,
     const TensorflowRunnerFactory& tensorflow_runner_factory,
-    const ClientOnlyPlan& client_plan,
-    const std::string& checkpoint_output_filename) {
-  if (!client_plan.phase().has_example_query_spec()) {
+    const CheckinResult& checkin_result,
+    const std::string& checkpoint_output_filename,
+    std::optional<absl::string_view> source_id_seed) {
+  const ClientPhase& client_phase = checkin_result.plan.phase();
+  if (!client_phase.has_example_query_spec()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
         engine::PlanOutcome::kInvalidArgument,
         absl::InvalidArgumentError("Plan must include ExampleQuerySpec")));
   }
-  if (!client_plan.phase().has_federated_example_query()) {
+  if (!client_phase.has_federated_example_query()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
         engine::PlanOutcome::kInvalidArgument,
         absl::InvalidArgumentError("Invalid ExampleQuerySpec-based plan")));
   }
 
   const auto& aggregations =
-      client_plan.phase().federated_example_query().aggregations();
+      client_phase.federated_example_query().aggregations();
   auto protocol_config = ExtractProtocolConfigCase(aggregations);
   if (!protocol_config.ok()) {
     return PlanResultAndCheckpointFile(engine::PlanResult(
@@ -331,7 +347,7 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
   const bool enable_direct_data_upload_task =
       flags->enable_direct_data_upload_task();
   for (const auto& example_query :
-       client_plan.phase().example_query_spec().example_queries()) {
+       client_phase.example_query_spec().example_queries()) {
     if (!(example_query.output_vector_specs().empty() ^
           example_query.direct_output_tensor_name().empty())) {
       return PlanResultAndCheckpointFile(engine::PlanResult(
@@ -379,9 +395,15 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
   engine::ExampleQueryPlanEngine plan_engine(
       example_iterator_factories, opstats_logger,
       example_iterator_query_recorder, tensorflow_runner_factory);
+  std::optional<std::string> source_id =
+      source_id_seed.has_value()
+          ? std::make_optional(ComputeSHA256(
+                absl::StrCat(*source_id_seed, checkin_result.task_name)))
+          : std::nullopt;
   engine::PlanResult plan_result = plan_engine.RunPlan(
-      client_plan.phase().example_query_spec(), checkpoint_output_filename,
-      use_client_report_wire_format, flags->enable_event_time_data_upload());
+      client_phase.example_query_spec(), checkpoint_output_filename,
+      use_client_report_wire_format, flags->enable_event_time_data_upload(),
+      source_id, checkin_result.confidential_agg_info.has_value());
   PlanResultAndCheckpointFile result(std::move(plan_result));
   result.checkpoint_filename = checkpoint_output_filename;
   return result;
@@ -959,18 +981,6 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
       eligibility_eval_task.population_eligibility_spec);
 }
 
-struct CheckinResult {
-  std::string task_name;
-  ClientOnlyPlan plan;
-  int32_t minimum_clients_in_server_visible_aggregate;
-  std::string checkpoint_input_filename;
-  std::string computation_id;
-  std::string federated_select_uri_template;
-  std::string aggregation_session_id;
-  std::optional<FederatedProtocol::ConfidentialAggInfo> confidential_agg_info;
-  std::string task_identifier;
-};
-
 absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
     const FederatedProtocol::TaskAssignment& task_assignment, Files* files,
     const std::function<void(absl::string_view, absl::string_view)>&
@@ -1514,7 +1524,8 @@ RunPlanResults RunComputation(
     const TensorflowRunnerFactory& tensorflow_runner_factory,
     FLRunnerResult& fl_runner_result, const std::function<bool()>& should_abort,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time reference_time) {
+    const absl::Time reference_time,
+    std::optional<absl::string_view> source_id_seed) {
   RetryWindow report_retry_window;
   phase_logger.LogComputationStarted(checkin_result.task_name);
   absl::Time run_plan_start_time = absl::Now();
@@ -1581,7 +1592,7 @@ RunPlanResults RunComputation(
             RunPlanWithExampleQuerySpec(
                 example_iterator_factories, opstats_logger, flags,
                 example_iterator_query_recorder, tensorflow_runner_factory,
-                checkin_result.plan, checkpoint_output_filename));
+                checkin_result, checkpoint_output_filename, source_id_seed));
   } else {
     if (tensorflow_runner_factory) {
       std::unique_ptr<TensorflowRunner> tensorflow_runner =
@@ -1644,7 +1655,8 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     TensorflowRunnerFactory tensorflow_runner_factory,
     FLRunnerResult& fl_runner_result, const std::function<bool()>& should_abort,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    const absl::Time reference_time) {
+    const absl::Time reference_time,
+    std::optional<absl::string_view> source_id_seed) {
   std::vector<std::string> successful_task_names;
   // We will try to run and report each task's results, even if one of those
   // steps fails for one of the tasks
@@ -1661,7 +1673,8 @@ std::vector<std::string> HandleMultipleTaskAssignments(
         phase_logger, files, log_manager, opstats_logger, flags,
         federated_protocol, fedselect_manager, opstats_example_iterator_factory,
         example_iterator_query_recorder.get(), tensorflow_runner_factory,
-        fl_runner_result, should_abort, timing_config, reference_time);
+        fl_runner_result, should_abort, timing_config, reference_time,
+        source_id_seed);
 
     absl::Status report_result =
         ReportPlanResult(federated_protocol, phase_logger,
@@ -1686,6 +1699,22 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     env_deps->OnTaskCompleted(std::move(task_result_info));
   }
   return successful_task_names;
+}
+
+absl::StatusOr<std::string> GetOrCreateSourceIdSeed(
+    OpStatsLogger* opstats_logger) {
+  FCP_ASSIGN_OR_RETURN(opstats::OpStatsSequence opstats_sequence,
+                       opstats_logger->GetOpStatsDb()->Read());
+  if (opstats_sequence.has_source_id_seed()) {
+    return opstats_sequence.source_id_seed().salt();
+  }
+  // If the SourceIdSeed is not set, then create it.
+  std::string salt = fcp::RandomToken::Generate().ToString();
+  FCP_RETURN_IF_ERROR(opstats_logger->GetOpStatsDb()->Transform(
+      [salt](opstats::OpStatsSequence& opstats_sequence) {
+        opstats_sequence.mutable_source_id_seed()->set_salt(salt);
+      }));
+  return salt;
 }
 
 }  // namespace
@@ -1876,6 +1905,12 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     return fl_runner_result;
   }
 
+  std::optional<std::string> source_id_seed = std::nullopt;
+  if (flags->enable_event_time_data_upload()) {
+    FCP_ASSIGN_OR_RETURN(source_id_seed,
+                         GetOrCreateSourceIdSeed(opstats_logger));
+  }
+
   size_t expected_num_tasks = 0;
   std::vector<std::string> successful_task_names;
 
@@ -1894,7 +1929,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         phase_logger, files, log_manager, opstats_logger, flags,
         federated_protocol, fedselect_manager,
         &opstats_example_iterator_factory, tensorflow_runner_factory,
-        fl_runner_result, should_abort, timing_config, reference_time);
+        fl_runner_result, should_abort, timing_config, reference_time,
+        source_id_seed);
   }
 
   if (eligibility_eval_result->population_supports_single_task_assignment) {
@@ -1923,7 +1959,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           federated_protocol, fedselect_manager,
           &opstats_example_iterator_factory,
           example_iterator_query_recorder.get(), tensorflow_runner_factory,
-          fl_runner_result, should_abort, timing_config, reference_time);
+          fl_runner_result, should_abort, timing_config, reference_time,
+          source_id_seed);
 
       absl::Status report_result = ReportPlanResult(
           federated_protocol, phase_logger,

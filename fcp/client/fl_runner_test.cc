@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <filesystem>  // NOLINT(build/c++17)
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -1042,6 +1043,66 @@ void FlRunnerMultipleTaskAssignmentsTest::MockEligibilityEvalCheckIn() {
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           population_spec}));
+}
+class FlRunnerSourceIdSeedTest : public FlRunnerTestBase {
+ public:
+  FlRunnerSourceIdSeedTest() : FlRunnerTestBase() {
+    EXPECT_CALL(mock_opstats_logger_, GetOpStatsDb())
+        .WillRepeatedly(Return(&mock_opstats_db_));
+    MockEligibilityEvalDisabled();
+    // Mock the protocol flow. Have the regular check-in get rejected. This is
+    // enough to trigger GetOrCreateSourceIdSeed and then exit cleanly.
+    EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+        .WillOnce(Return(FederatedProtocol::Rejection{}));
+
+    // Mock the expected logging calls for this flow.
+    EXPECT_CALL(mock_phase_logger_,
+                SetModelIdentifier(/*model_identifier=*/""));
+    EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
+    EXPECT_CALL(mock_phase_logger_, LogCheckinTurnedAway(_, _, _));
+
+    // Enable the flag to generate a source ID seed.
+    EXPECT_CALL(mock_flags_, enable_event_time_data_upload())
+        .WillRepeatedly(Return(true));
+  }
+};
+
+TEST_F(FlRunnerSourceIdSeedTest, GeneratesSourceIdSeedWhenNoneExists) {
+  // Setup OpStats to simulate no pre-existing seed.
+  fcp::client::opstats::OpStatsSequence empty_sequence;
+  EXPECT_CALL(mock_opstats_db_, Read()).WillOnce(Return(empty_sequence));
+  std::function<void(opstats::OpStatsSequence&)> transform_fn;
+  EXPECT_CALL(mock_opstats_db_, Transform(_))
+      .WillOnce(DoAll(SaveArg<0>(&transform_fn), Return(absl::OkStatus())));
+
+  ASSERT_OK(RunFederatedComputation(
+      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
+      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
+      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
+      /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_));
+
+  opstats::OpStatsSequence sequence_to_transform;
+  transform_fn(sequence_to_transform);
+  ASSERT_TRUE(sequence_to_transform.has_source_id_seed());
+  EXPECT_FALSE(sequence_to_transform.source_id_seed().salt().empty());
+}
+
+TEST_F(FlRunnerSourceIdSeedTest, UsesExistingSourceIdSeed) {
+  // Setup OpStats to simulate a pre-existing seed.
+  fcp::client::opstats::OpStatsSequence sequence_with_seed;
+  const std::string existing_salt = "existing_salt";
+  sequence_with_seed.mutable_source_id_seed()->set_salt(existing_salt);
+  EXPECT_CALL(mock_opstats_db_, Read()).WillOnce(Return(sequence_with_seed));
+
+  // Expect that Transform is NOT called to create a new seed. The OpStatsLogger
+  // dtor will still commit, so we expect at most one call.
+  EXPECT_CALL(mock_opstats_db_, Transform(_)).Times(AtMost(1));
+
+  ASSERT_OK(RunFederatedComputation(
+      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
+      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
+      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
+      /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_));
 }
 
 TEST_F(FlRunnerImmediateAbortTest, ImmediateAbort) {
@@ -2847,6 +2908,13 @@ TEST_F(FlRunnerExampleQueryTest,
 
 TEST_F(FlRunnerExampleQueryTest, ExampleQueryWithEventTimeRange) {
   SetUpExampleQueryWithEventTimeRange();
+
+  // Mock the opstats logger to return an empty sequence so source ID creation
+  // doesn't fail.
+  EXPECT_CALL(mock_opstats_logger_, GetOpStatsDb())
+      .WillRepeatedly(Return(&mock_opstats_db_));
+  fcp::client::opstats::OpStatsSequence empty_sequence;
+  EXPECT_CALL(mock_opstats_db_, Read()).WillRepeatedly(Return(empty_sequence));
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
