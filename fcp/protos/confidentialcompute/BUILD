@@ -192,6 +192,11 @@ cc_proto_library(
     deps = [":tff_config_proto"],
 )
 
+py_proto_library(
+    name = "tff_config_py_pb2",
+    deps = [":tff_config_proto"],
+)
+
 proto_library(
     name = "fed_sql_container_config_proto",
     srcs = ["fed_sql_container_config.proto"],
