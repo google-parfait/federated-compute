@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "google/protobuf/struct.pb.h"
+#include "absl/algorithm/container.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
@@ -85,6 +86,11 @@ ProcessDecryptionKeys(const std::vector<absl::string_view>& decryption_keys) {
     if (key->algorithm != crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm ||
         key->curve != crypto_internal::kX25519) {
       FCP_LOG(WARNING) << "Skipping key with unsupported algorithm or curve";
+      continue;
+    }
+    if (!key->key_ops.empty() &&
+        absl::c_find(key->key_ops, kCoseKeyOpDecrypt) == key->key_ops.end()) {
+      FCP_LOG(WARNING) << "Skipping key without decrypt key_op";
       continue;
     }
 
@@ -181,6 +187,7 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
     oak::crypto::SigningKeyHandle* signing_key) const {
   SymmetricKey symmetric_key{
       .algorithm = crypto_internal::kAeadAes128GcmSivFixedNonce,
+      .key_ops = {kCoseKeyOpDecrypt},
       .k = std::string(EVP_AEAD_key_length(aead_), '\0'),
   };
   RAND_bytes(reinterpret_cast<uint8_t*>(symmetric_key.k.data()),
@@ -212,6 +219,11 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
   if (okp_key.algorithm != crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm ||
       okp_key.curve != crypto_internal::kX25519) {
     return absl::InvalidArgumentError("unsupported public key");
+  }
+  if (!okp_key.key_ops.empty() &&
+      absl::c_find(okp_key.key_ops, kCoseKeyOpEncrypt) ==
+          okp_key.key_ops.end()) {
+    return absl::InvalidArgumentError("public key disallows encrypt operation");
   }
 
   bssl::UniquePtr<EVP_AEAD_CTX> aead_ctx(EVP_AEAD_CTX_new(
@@ -306,6 +318,7 @@ absl::StatusOr<std::string> MessageDecryptor::GetPublicKey(
       .public_key =
           OkpKey{
               .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
+              .key_ops = {kCoseKeyOpEncrypt},
               .curve = crypto_internal::kX25519,
               .x = std::string(EVP_HPKE_MAX_PUBLIC_KEY_LENGTH, '\0'),
           },
@@ -361,6 +374,11 @@ absl::StatusOr<std::string> MessageDecryptor::DecryptReleasedResult(
   };
   if (key.algorithm != crypto_internal::kAeadAes128GcmSivFixedNonce) {
     return absl::InvalidArgumentError("unsupported symmetric key algorithm ");
+  }
+  if (!key.key_ops.empty() &&
+      absl::c_find(key.key_ops, kCoseKeyOpDecrypt) == key.key_ops.end()) {
+    return absl::InvalidArgumentError(
+        "symmetric key disallows decrypt operation");
   }
 
   bssl::UniquePtr<EVP_AEAD_CTX> aead_ctx(

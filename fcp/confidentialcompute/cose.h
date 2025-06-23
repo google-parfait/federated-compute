@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "google/protobuf/struct.pb.h"
 #include "absl/status/statusor.h"
@@ -29,10 +30,15 @@
 
 namespace fcp::confidential_compute {
 
+// COSE Key Operation values; see RFC 9052 Table 5.
+inline constexpr int64_t kCoseKeyOpEncrypt = 3;
+inline constexpr int64_t kCoseKeyOpDecrypt = 4;
+
 // A Cose_Key struct for an Octet Key Pair (OKP) public or private key.
 struct OkpKey {
   std::string key_id;
   std::optional<int64_t> algorithm;
+  std::vector<int64_t> key_ops;
   std::optional<int64_t> curve;
   std::string x;
   std::string d;
@@ -47,6 +53,7 @@ struct OkpKey {
 // A Cose_Key struct for a symmetric key.
 struct SymmetricKey {
   std::optional<int64_t> algorithm;
+  std::vector<int64_t> key_ops;
   std::string k;
 
   // CBOR-decodes a SymmetricKey.

@@ -30,6 +30,9 @@
 namespace fcp::confidential_compute {
 namespace {
 
+using ::testing::ElementsAre;
+using ::testing::IsEmpty;
+
 MATCHER_P(IsOkAndHolds, matcher, "") {
   return arg.ok() &&
          testing::ExplainMatchResult(matcher, arg.value(), result_listener);
@@ -46,15 +49,17 @@ TEST(OkpKeyTest, EncodeFull) {
   EXPECT_THAT((OkpKey{
                    .key_id = "key-id",
                    .algorithm = 7,
+                   .key_ops = {1, 2},
                    .curve = 45,
                    .x = "x-value",
                    .d = "d-value",
                })
                   .Encode(),
-              IsOkAndHolds("\xa6"                // map with 6 items:
+              IsOkAndHolds("\xa7"                // map with 7 items:
                            "\x01\x01"            // key type (1): OKP (1)
                            "\x02\x46key-id"      // key id (2): b"key-id"
                            "\x03\x07"            // algorithm (3): 7
+                           "\x04\x82\x01\x02"    // key_ops (4): [1, 2]
                            "\x20\x18\x2d"        // curve (-1): 45
                            "\x21\x47x-value"     // x (-2): b"x-value"
                            "\x23\x47\x64-value"  // d (-4): b"d-value"
@@ -66,18 +71,23 @@ TEST(OkpKeyTest, DecodeEmpty) {
   ASSERT_OK(key);
   EXPECT_EQ(key->key_id, "");
   EXPECT_EQ(key->algorithm, std::nullopt);
+  EXPECT_THAT(key->key_ops, IsEmpty());
   EXPECT_EQ(key->curve, std::nullopt);
   EXPECT_EQ(key->x, "");
+  EXPECT_EQ(key->d, "");
 }
 
 TEST(OkpKeyTest, DecodeFull) {
   absl::StatusOr<OkpKey> key = OkpKey::Decode(
-      "\xa5\x01\x01\x02\x46key-id\x03\x07\x20\x18\x2d\x21\x47x-value");
+      "\xa7\x01\x01\x02\x46key-id\x03\x07\x04\x82\x01\x02\x20\x18\x2d\x21\x47x-"
+      "value\x23\x47\x64-value");
   ASSERT_OK(key);
   EXPECT_EQ(key->key_id, "key-id");
   EXPECT_EQ(key->algorithm, 7);
+  EXPECT_THAT(key->key_ops, ElementsAre(1, 2));
   EXPECT_EQ(key->curve, 45);
   EXPECT_EQ(key->x, "x-value");
+  EXPECT_EQ(key->d, "d-value");
 }
 
 TEST(OkpKeyTest, DecodeInvalid) {
@@ -98,13 +108,15 @@ TEST(SymmetricKeyTest, EncodeEmpty) {
 TEST(SymmetricKeyTest, EncodeFull) {
   EXPECT_THAT((SymmetricKey{
                    .algorithm = 7,
+                   .key_ops = {1, 2},
                    .k = "secret",
                })
                   .Encode(),
-              IsOkAndHolds("\xa3"            // map with 3 items:
-                           "\x01\x04"        // key type (1): Symmetric (4)
-                           "\x03\x07"        // algorithm (3): 7
-                           "\x20\x46secret"  // k (-1): b"secret"
+              IsOkAndHolds("\xa4"              // map with 4 items:
+                           "\x01\x04"          // key type (1): Symmetric (4)
+                           "\x03\x07"          // algorithm (3): 7
+                           "\x04\x82\x01\x02"  // key_ops (4): [1, 2]
+                           "\x20\x46secret"    // k (-1): b"secret"
                            ));
 }
 
@@ -112,14 +124,16 @@ TEST(SymmetricKeyTest, DecodeEmpty) {
   absl::StatusOr<SymmetricKey> key = SymmetricKey::Decode("\xa1\x01\x04");
   ASSERT_OK(key);
   EXPECT_EQ(key->algorithm, std::nullopt);
+  EXPECT_THAT(key->key_ops, IsEmpty());
   EXPECT_EQ(key->k, "");
 }
 
 TEST(SymmetricKeyTest, DecodeFull) {
-  absl::StatusOr<SymmetricKey> key =
-      SymmetricKey::Decode("\xa3\x01\x04\x03\x07\x20\x46secret");
+  absl::StatusOr<SymmetricKey> key = SymmetricKey::Decode(
+      "\xa4\x01\x04\x03\x07\x04\x82\x01\x02\x20\x46secret");
   ASSERT_OK(key);
   EXPECT_EQ(key->algorithm, 7);
+  EXPECT_THAT(key->key_ops, ElementsAre(1, 2));
   EXPECT_EQ(key->k, "secret");
 }
 

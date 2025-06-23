@@ -78,6 +78,7 @@ enum CoseKeyParameter {
   kKty = 1,
   kKid = 2,
   kAlg = 3,
+  kKeyOps = 4,
 
   // OKP parameters.
   kOkpCrv = -1,
@@ -461,6 +462,20 @@ absl::StatusOr<OkpKey> OkpKey::Decode(absl::string_view encoded) {
         okp_key.algorithm = value->asInt()->value();
         break;
 
+      case CoseKeyParameter::kKeyOps:
+        if (value->asArray() == nullptr) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("unsupported key_ops type ", value->type()));
+        }
+        for (const auto& entry : *value->asArray()) {
+          if (entry->asInt() == nullptr) {
+            return absl::InvalidArgumentError(
+                absl::StrCat("unsupported key_ops entry type", entry->type()));
+          }
+          okp_key.key_ops.push_back(entry->asInt()->value());
+        }
+        break;
+
       case CoseKeyParameter::kOkpCrv:
         if (value->asInt() == nullptr) {
           return absl::InvalidArgumentError(
@@ -507,6 +522,13 @@ absl::StatusOr<std::string> OkpKey::Encode() const {
   }
   if (algorithm) {
     map.add(CoseKeyParameter::kAlg, *algorithm);
+  }
+  if (!key_ops.empty()) {
+    Array array;
+    for (int64_t key_op : key_ops) {
+      array.add(key_op);
+    }
+    map.add(CoseKeyParameter::kKeyOps, std::move(array));
   }
   if (curve) {
     map.add(CoseKeyParameter::kOkpCrv, *curve);
@@ -556,6 +578,20 @@ absl::StatusOr<SymmetricKey> SymmetricKey::Decode(absl::string_view encoded) {
         symmetric_key.algorithm = value->asInt()->value();
         break;
 
+      case CoseKeyParameter::kKeyOps:
+        if (value->asArray() == nullptr) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("unsupported key_ops type ", value->type()));
+        }
+        for (const auto& entry : *value->asArray()) {
+          if (entry->asInt() == nullptr) {
+            return absl::InvalidArgumentError(
+                absl::StrCat("unsupported key_ops entry type", entry->type()));
+          }
+          symmetric_key.key_ops.push_back(entry->asInt()->value());
+        }
+        break;
+
       case CoseKeyParameter::kSymmetricK:
         if (value->type() != cppbor::BSTR) {
           return absl::InvalidArgumentError(
@@ -582,6 +618,13 @@ absl::StatusOr<std::string> SymmetricKey::Encode() const {
   map.add(CoseKeyParameter::kKty, CoseKeyType::kSymmetric);
   if (algorithm) {
     map.add(CoseKeyParameter::kAlg, *algorithm);
+  }
+  if (!key_ops.empty()) {
+    Array array;
+    for (int64_t key_op : key_ops) {
+      array.add(key_op);
+    }
+    map.add(CoseKeyParameter::kKeyOps, std::move(array));
   }
   if (!k.empty()) {
     map.add(CoseKeyParameter::kSymmetricK, Bstr(k));
