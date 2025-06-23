@@ -7,7 +7,7 @@ import federated_language as flang
 import jax
 from jax.experimental import jax2tf
 import jax.numpy as jnp
-from jax_privacy.experimental import gradient_clipping
+from jax_privacy.experimental import clipping
 from jax_privacy.stream_privatization import gradient_privatizer as gradient_privatizer_lib
 import tensorflow as tf
 import tensorflow_federated as tff
@@ -108,11 +108,11 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
         """Clips the updates by the global l2 norm and adds them to the sum."""
 
         def jax_clipped_sum(state, client_updates):
-          clipped_updates, global_l2_norm = gradient_clipping.clip_pytree(
+          clipped_updates, global_l2_norm = clipping.clip_pytree(
               client_updates,
               clip_norm=self._l2_clip_norm,
               rescale_to_unit_norm=False,
-              provide_guarantee_for_nan=True,
+              nan_safe=True,
           )
           was_clipped = jnp.int32(global_l2_norm > self._l2_clip_norm)
           new_metrics = {'num_clipped_updates': was_clipped}

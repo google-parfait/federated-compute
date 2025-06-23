@@ -34,7 +34,7 @@ py_library(
         "//third_party/py/jax",
         "//third_party/py/jax/experimental/jax2tf",
         "//third_party/py/jax_privacy",
-        "//third_party/py/jax_privacy/experimental:gradient_clipping",
+        "//third_party/py/jax_privacy/experimental:clipping",
         "//third_party/py/tensorflow:tensorflow_no_contrib",
         "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
