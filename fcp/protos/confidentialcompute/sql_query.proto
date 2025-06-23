@@ -27,6 +27,7 @@ message ColumnSchema {
   string name = 1;
 
   // ExampleQuery output vector data type.
+  // TODO: b/425744048 - Remove this dependency on plan.proto.
   google.internal.federated.plan.ExampleQuerySpec.OutputVectorSpec.DataType
       type = 2;
 }
