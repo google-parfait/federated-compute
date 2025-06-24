@@ -58,6 +58,48 @@ cc_library(
 )
 
 cc_library(
+    name = "privacy_id_utils",
+    srcs = [
+        "privacy_id_utils.cc",
+    ],
+    hdrs = [
+        "privacy_id_utils.h",
+    ],
+    copts = FCP_COPTS,
+    visibility = default_visibility,
+    deps = [
+        "//fcp/base",
+        "//fcp/base:digest",
+        "//fcp/protos/confidentialcompute:selection_criteria_cc_proto",
+        "//fcp/protos/confidentialcompute:windowing_schedule_proto_cc",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "privacy_id_utils_test",
+    srcs = [
+        "privacy_id_utils_test.cc",
+    ],
+    copts = FCP_COPTS,
+    visibility = default_visibility,
+    deps = [
+        ":privacy_id_utils",
+        "//fcp/protos/confidentialcompute:selection_criteria_cc_proto",
+        "//fcp/protos/confidentialcompute:windowing_schedule_proto_cc",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "example_query_plan_engine",
     srcs = [
         "example_query_plan_engine.cc",
