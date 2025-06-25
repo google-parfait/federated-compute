@@ -18,17 +18,20 @@ package fcp.confidentialcompute.outgoing;
 
 import "google/protobuf/any.proto";
 
-// API for the TEE to delegate computation to a program worker.
-// Note that the requests are from the TEE and the responses are to the TEE.
+// API for a TEE to delegate computation, either to itself or to another TEE
+// on a remote worker.
+//
+// Note: Requests originate from a TEE and responses are sent back to a TEE.
 service ComputationDelegation {
-  // Executes a computation in the worker.
+  // Executes a computation either within the TEE itself or in a TEE on a remote
+  // worker.
   rpc Execute(ComputationRequest) returns (ComputationResponse) {}
 }
 
 // Request providing a computation to execute.
 // Next ID: 3
 message ComputationRequest {
-  // The computation to be executed in the worker.
+  // The computation to be executed.
   google.protobuf.Any computation = 1;
 
   // The BNS address of the worker to execute the computation.
