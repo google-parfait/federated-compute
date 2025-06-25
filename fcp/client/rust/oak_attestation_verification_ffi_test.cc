@@ -35,6 +35,8 @@
 #include "proto/attestation/reference_value.pb.h"
 #include "proto/attestation/verification.pb.h"
 #include "proto/digest.pb.h"
+#include "proto/validity.pb.h"
+#include "util/time/protoutil.h"
 
 namespace fcp::client::rust::oak_attestation_verification_ffi {
 namespace {
@@ -130,8 +132,13 @@ TEST(OakAttestationVerificationFfiTest, VerifyEndorsementSuccess) {
   EndorsementDetails details = s.value();
   EXPECT_EQ(absl::BytesToHexString(details.subject_digest().sha2_256()),
             "09ab204446287049060482d9f60fb684ff43a5b53acf317a32ac4ebfa6a5ef95");
-  EXPECT_EQ(details.validity().not_before(), 1728410765000);
-  EXPECT_EQ(details.validity().not_after(), 1759946765000);
+  ASSERT_OK_AND_ASSIGN(
+      absl::Time not_before,
+      util_time::DecodeGoogleApiProto(details.valid().not_before()));
+  ASSERT_OK_AND_ASSIGN(absl::Time not_after, util_time::DecodeGoogleApiProto(
+                                                 details.valid().not_after()));
+  EXPECT_EQ(absl::ToUnixMillis(not_before), 1728410765000);
+  EXPECT_EQ(absl::ToUnixMillis(not_after), 1759946765000);
 }
 
 }  // namespace
