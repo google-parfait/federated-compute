@@ -18,7 +18,6 @@ package google.internal.federated.plan;
 
 import "google/protobuf/any.proto";
 import "tensorflow/core/framework/tensor.proto";
-import "tensorflow/core/framework/tensor_shape.proto";
 import "tensorflow/core/framework/types.proto";
 import "tensorflow/core/protobuf/saver.proto";
 import "tensorflow/core/protobuf/struct.proto";
