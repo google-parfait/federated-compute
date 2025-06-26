@@ -14,7 +14,7 @@
 """TFF FederatedContext subclass for the demo Federated Computation platform."""
 
 import asyncio
-from collections.abc import Coroutine, Mapping
+from collections.abc import Coroutine, Mapping, Sequence
 import socket
 import ssl
 import threading
@@ -265,7 +265,7 @@ class FederatedContext(federated_language.program.FederatedContext):
           tf.Tensor,
           federated_language.program.MaterializableValueReference,
       ],
-  ) -> Union[tff.structure.Struct, tf.Tensor]:
+  ) -> Union[Mapping[str, object], Sequence[object], tf.Tensor]:
     """Dereferences any MaterializableValueReferences in a struct."""
     if isinstance(
         structure, federated_language.program.MaterializableValueReference
@@ -274,11 +274,9 @@ class FederatedContext(federated_language.program.FederatedContext):
     elif tf.is_tensor(structure):
       return structure
     elif isinstance(structure, tff.structure.Struct):
-      s = [
-          self._resolve_value_references(x)
-          for x in tff.structure.flatten(structure)
-      ]
-      return tff.structure.pack_sequence_as(structure, s)
+      structure = tff.structure.to_odict_or_tuple(structure)
+      s = [self._resolve_value_references(x) for x in tree.flatten(structure)]
+      return tree.unflatten_as(structure, s)
     else:
       raise ValueError(
           'arg[1] must be a struct, Tensor, or MaterializableValueReference.')
