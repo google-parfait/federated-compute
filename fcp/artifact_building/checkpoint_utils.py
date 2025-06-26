@@ -537,7 +537,7 @@ def save_tff_structure_to_checkpoint(
     structure: A `tff.structure.Struct` of values or a single value. Each leaf
       in the structure must be a value serializable to a TensorFlow checkpoint.
     ordered_var_names: The list of variable names for the values that appear in
-      `structure` after calling `tff.structure.flatten()`.
+      `structure` after flattening.
     output_checkpoint_path: A string specifying the path to the output
       checkpoint file.
 
