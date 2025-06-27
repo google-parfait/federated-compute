@@ -32,4 +32,6 @@ message ProgramExecutorTeeInitializeConfig {
   // distributed execution of the program. If empty, the program will execute
   // entirely within the program executor TEE.
   repeated string worker_bns_addresses = 5;
+  // The ID of the attester for establishing a secure channel with workers.
+  string attester_id = 6;
 }
