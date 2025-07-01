@@ -23,9 +23,7 @@ option java_multiple_files = true;
 // A header included with each uploaded data blob, documenting how it was
 // encrypted and how it may be used.
 message BlobHeader {
-  // A unique random identifier for the blob. This identifier is used by the
-  // Ledger to track per-blob usage limits. It can also be used by the client to
-  // revoke access.
+  // A unique random identifier for the blob.
   bytes blob_id = 1;
 
   // The identifier for the public key used to encrypt the blob.
