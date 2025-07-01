@@ -24,10 +24,7 @@ def _create_test_grad_privatizer():
     del params  # Unused.
     return np.int32(0)
 
-  def privatize(
-      *, sum_of_clipped_grads, noise_state, prng_key
-  ) -> tuple[Any, Any]:
-    del prng_key  # Unused.
+  def privatize(*, sum_of_clipped_grads, noise_state) -> tuple[Any, Any]:
     # Simple passthrough for tests, only increases the state counter. Test
     # coverage of the privatizer noise is done in the JaxPrivacy library.
     return sum_of_clipped_grads, noise_state + 1

@@ -166,7 +166,6 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
           noised_aggregate, new_noise_state = self._grad_privatizer.privatize(
               sum_of_clipped_grads=unnoised_aggregate,
               noise_state=noise_state,
-              prng_key=rng_key,
           )
           # Advance the RNG key for the next round.
           rng_key, _ = jax.random.split(rng_key)
