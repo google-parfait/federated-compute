@@ -465,3 +465,8 @@ tf_proto_library(
     name = "windowing_schedule_proto",
     srcs = ["windowing_schedule.proto"],
 )
+
+alias(
+    name = "windowing_schedule_py_pb2",
+    actual = "windowing_schedule_proto_py",
+)
