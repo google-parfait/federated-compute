@@ -6,8 +6,8 @@ import federated_language as flang
 import jax
 from jax.experimental import jax2tf
 import jax.numpy as jnp
+from jax_privacy import noise_addition
 from jax_privacy.experimental import clipping
-from jax_privacy.stream_privatization import gradient_privatizer as gradient_privatizer_lib
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -40,7 +40,7 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
   def __init__(
       self,
       *,
-      gradient_privatizer: gradient_privatizer_lib.GradientPrivatizer,
+      gradient_privatizer: noise_addition.GradientPrivatizer,
       clients_per_round: int,
       l2_clip_norm: float = 1.0,
   ):

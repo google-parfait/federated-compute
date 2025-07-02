@@ -2,7 +2,7 @@ from typing import Any
 
 from absl.testing import absltest
 import federated_language as flang
-from jax_privacy.stream_privatization import gradient_privatizer as gradient_privatizer_lib
+from jax_privacy import noise_addition
 import numpy as np
 import tensorflow as tf
 
@@ -28,7 +28,7 @@ def _create_test_grad_privatizer():
     # coverage of the privatizer noise is done in the JaxPrivacy library.
     return sum_of_clipped_grads, noise_state + 1
 
-  return gradient_privatizer_lib.GradientPrivatizer(init, privatize)
+  return noise_addition.GradientPrivatizer(init, privatize)
 
 
 class DPMFAggregatorFactoryExecutionTest(tf.test.TestCase):
