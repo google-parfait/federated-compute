@@ -1,7 +1,6 @@
 """An implementation of the DP MF aggregator using the JaxPrivacy library."""
 
 import functools
-import time
 
 import federated_language as flang
 import jax
@@ -44,18 +43,12 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
       gradient_privatizer: gradient_privatizer_lib.GradientPrivatizer,
       clients_per_round: int,
       l2_clip_norm: float = 1.0,
-      initial_rng_key: int | None = None,
   ):
     """Initializes `DPMFAggregatorFactory`."""
     if clients_per_round <= 0.0:
       raise ValueError('clients_per_round must be a positive float.')
     if l2_clip_norm <= 0.0:
       raise ValueError('l2_clip_norm must be a positive float.')
-    if initial_rng_key is None:
-      # Generate a noise seed based on the current time in milliseconds.
-      self._initial_rng_key = int(time.time() * 1_000)
-    else:
-      self._initial_rng_key = initial_rng_key
 
     self._grad_privatizer = gradient_privatizer
     self._l2_clip_norm = l2_clip_norm
@@ -73,11 +66,8 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
       def init_privatizer():
 
         def jax_init_privatizer():
-          return (
-              jax.random.key_data(jax.random.key(self._initial_rng_key)),
-              self._grad_privatizer.init(
-                  _shapes_dtypes_from_typespec(value_type)
-              ),
+          return self._grad_privatizer.init(
+              _shapes_dtypes_from_typespec(value_type)
           )
 
         return _jax2tf_convert_cpu_native(jax_init_privatizer)()
@@ -88,7 +78,7 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
         init_fn.type_signature.result,
         flang.FederatedType(value_type, flang.CLIENTS),
     )
-    def next_fn(state, value):
+    def next_fn(noise_state, value):
 
       @tff.tensorflow.computation
       def build_zero():
@@ -145,43 +135,38 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
       )
 
       @tff.tensorflow.computation
-      def finalize_noise(state, unnoised_aggregate):
+      def finalize_noise(noise_state, unnoised_aggregate):
         """Compute the noised mean.
 
         Adds noise to the unnoised sum and divides by number of clients that
         participated in the round.
 
         Args:
-          state: The 2-tuple of (rng_key, noise state). The state used to create
-            a noise slice to add to the unnoised sum this round.
+          noise_state: The state used to create a noise slice to add to the
+            unnoised sum this round.
           unnoised_aggregate: The unnoised sum to add noise to.
 
         Returns:
           The noised mean.
         """
 
-        def jax_finalize_noise(state, unnoised_aggregate):
-          rng_key, noise_state = state
-          rng_key = jax.random.wrap_key_data(rng_key)
+        def jax_finalize_noise(noise_state, unnoised_aggregate):
           noised_aggregate, new_noise_state = self._grad_privatizer.privatize(
               sum_of_clipped_grads=unnoised_aggregate,
               noise_state=noise_state,
           )
-          # Advance the RNG key for the next round.
-          rng_key, _ = jax.random.split(rng_key)
-          new_state = (jax.random.key_data(rng_key), new_noise_state)
           noised_mean = jax.tree.map(
               lambda arr: arr / self._clients_per_round,
               noised_aggregate,
           )
-          return new_state, noised_mean
+          return new_noise_state, noised_mean
 
         return _jax2tf_convert_cpu_native(jax_finalize_noise)(
-            state, unnoised_aggregate
+            noise_state, unnoised_aggregate
         )
 
       new_state, noised_aggregate = flang.federated_map(
-          finalize_noise, (state, unnoised_sum)
+          finalize_noise, (noise_state, unnoised_sum)
       )
       return tff.templates.MeasuredProcessOutput(
           new_state, noised_aggregate, metrics

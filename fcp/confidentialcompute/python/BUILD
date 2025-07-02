@@ -47,7 +47,6 @@ py_test(
     tags = ["nokokoro"],
     deps = [
         ":dp_mf_aggregator",
-        "//third_party/py/jax",
         "//third_party/py/jax_privacy",
         "//third_party/py/tensorflow:tensorflow_no_contrib",
         "@federated_language//federated_language",

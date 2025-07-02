@@ -2,7 +2,6 @@ from typing import Any
 
 from absl.testing import absltest
 import federated_language as flang
-import jax
 from jax_privacy.stream_privatization import gradient_privatizer as gradient_privatizer_lib
 import numpy as np
 import tensorflow as tf
@@ -35,12 +34,10 @@ def _create_test_grad_privatizer():
 class DPMFAggregatorFactoryExecutionTest(tf.test.TestCase):
 
   def test_execution(self):
-    initial_rng_key = 7
     dp_mf_factory = dp_mf_aggregator.DPMFAggregatorFactory(
         gradient_privatizer=_create_test_grad_privatizer(),
         clients_per_round=2,
         l2_clip_norm=1.0,
-        initial_rng_key=initial_rng_key,
     )
     process = dp_mf_factory.create(_TEST_STRUCT_TYPE)
     client_updates = [
@@ -48,9 +45,6 @@ class DPMFAggregatorFactoryExecutionTest(tf.test.TestCase):
         (np.array([0.0, 0.0, 0.0], np.float32), np.float32(1.0)),
     ]
     state = process.initialize()
-    self.assertEqual(
-        jax.random.wrap_key_data(state[0]), jax.random.key(initial_rng_key)
-    )
     output = process.next(state, client_updates)
     # Since we are using a fake pass-thru privatizer, we only expect clipped sum
     # to be returned.
@@ -66,10 +60,7 @@ class DPMFAggregatorFactoryExecutionTest(tf.test.TestCase):
             np.float32(0.5),
         ),
     )
-    self.assertNotEqual(
-        jax.random.wrap_key_data(output.state[0]),
-        jax.random.key(initial_rng_key),
-    )
+
     self.assertAllClose(output.measurements, {'num_clipped_updates': 1})
 
 
