@@ -91,6 +91,22 @@ py_library(
     ],
 )
 
+py_library(
+    name = "program_input_provider",
+    srcs = ["program_input_provider.py"],
+    visibility = ["//visibility:public"],
+    deps = ["@org_tensorflow_federated//tensorflow_federated"],
+)
+
+py_test(
+    name = "program_input_provider_test",
+    srcs = ["program_input_provider_test.py"],
+    deps = [
+        ":program_input_provider",
+        "@pypi_absl_py//:pkg",
+    ],
+)
+
 py_test(
     name = "compiler_test",
     srcs = ["compiler_test.py"],
