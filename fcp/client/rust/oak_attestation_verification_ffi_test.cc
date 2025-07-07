@@ -137,8 +137,8 @@ TEST(OakAttestationVerificationFfiTest, VerifyEndorsementSuccess) {
       util_time::DecodeGoogleApiProto(details.valid().not_before()));
   ASSERT_OK_AND_ASSIGN(absl::Time not_after, util_time::DecodeGoogleApiProto(
                                                  details.valid().not_after()));
-  EXPECT_EQ(absl::ToUnixMillis(not_before), 1728410765000);
-  EXPECT_EQ(absl::ToUnixMillis(not_after), 1759946765000);
+  EXPECT_EQ(absl::ToUnixMillis(not_before), 1728410765246);
+  EXPECT_EQ(absl::ToUnixMillis(not_after), 1759946765246);
 }
 
 }  // namespace
