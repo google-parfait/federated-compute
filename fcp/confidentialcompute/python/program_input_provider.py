@@ -13,6 +13,9 @@
 # limitations under the License.
 """Wrapper for providing inputs to a trusted federated program."""
 
+import os
+import zipfile
+
 import tensorflow_federated as tff
 
 
@@ -56,4 +59,17 @@ class ProgramInputProvider:
 
   def get_model(self, model_id: str) -> tff.learning.models.FunctionalModel:
     """Returns the `tff.learning.models.FunctionalModel` with the given id."""
-    raise NotImplementedError("get_model isn't available yet")
+    if model_id not in self._model_id_to_zip_file:
+      raise ValueError(f'Model id {model_id} not found in model_id_to_zip_file')
+    zip_file_path = self._model_id_to_zip_file[model_id]
+    model_path = os.path.join(os.path.dirname(zip_file_path), model_id)
+    try:
+      with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+        zip_ref.extractall(model_path)
+    except zipfile.BadZipFile as e:
+      raise ValueError(f'`{zip_file_path}` is not a valid ZIP file.') from e
+    except FileNotFoundError as e:
+      raise ValueError(f'ZIP file not found at `{zip_file_path}`.') from e
+    except Exception as e:
+      raise ValueError(f'An unexpected error occurred: {e}') from e
+    return tff.learning.models.load_functional_model(model_path)

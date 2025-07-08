@@ -101,7 +101,9 @@ py_test(
     srcs = ["program_input_provider_test.py"],
     deps = [
         ":program_input_provider",
+        "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
+        "@pypi_tensorflow//:pkg",
     ],
 )
 
