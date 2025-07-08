@@ -31,12 +31,11 @@ py_library(
     tags = ["nokokoro"],
     visibility = ["//visibility:public"],
     deps = [
-        "//third_party/py/jax",
-        "//third_party/py/jax/experimental/jax2tf",
-        "//third_party/py/jax_privacy",
-        "//third_party/py/tensorflow:tensorflow_no_contrib",
         "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
+        "@pypi_jax//:pkg",
+        "@pypi_jax_privacy//:pkg",
+        "@pypi_tensorflow//:pkg",
     ],
 )
 
@@ -46,11 +45,11 @@ py_test(
     tags = ["nokokoro"],
     deps = [
         ":dp_mf_aggregator",
-        "//third_party/py/jax_privacy",
-        "//third_party/py/tensorflow:tensorflow_no_contrib",
         "@federated_language//federated_language",
         "@pypi_absl_py//:pkg",
+        "@pypi_jax_privacy//:pkg",
         "@pypi_numpy//:pkg",
+        "@pypi_tensorflow//:pkg",
     ],
 )
 
