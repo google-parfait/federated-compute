@@ -26,12 +26,14 @@ message ProgramExecutorTeeInitializeConfig {
   repeated string client_ids = 2;
   // The federated program to execute.
   bytes program = 3;
-  // The port number of the untrusted server to handle requests from the TEE.
-  int32 outgoing_server_port = 4;
+  // Deprecated. Use outgoing_server_address instead.
+  int32 outgoing_server_port = 4 [deprecated = true];
   // Worker bns addresses representing workers that are available to use for
   // distributed execution of the program. If empty, the program will execute
   // entirely within the program executor TEE.
   repeated string worker_bns_addresses = 5;
   // The ID of the attester for establishing a secure channel with workers.
   string attester_id = 6;
+  // The address of the untrusted server to handle requests from the TEE.
+  string outgoing_server_address = 7;
 }
