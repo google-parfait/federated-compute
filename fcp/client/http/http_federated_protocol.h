@@ -96,13 +96,13 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       const std::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&
           task_eligibility_info,
-      std::function<void(const TaskAssignment&)> payload_uris_received_callback)
-      override;
+      std::function<void(const TaskAssignment&)> payload_uris_received_callback,
+      const std::optional<std::string>& attestation_measurement) override;
 
   absl::StatusOr<MultipleTaskAssignments> PerformMultipleTaskAssignments(
       const std::vector<std::string>& task_names,
-      const std::function<void(size_t)>& payload_uris_received_callback)
-      override;
+      const std::function<void(size_t)>& payload_uris_received_callback,
+      const std::optional<std::string>& attestation_measurement) override;
 
   absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
@@ -188,7 +188,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   PerformTaskAssignmentAndReportEligibilityEvalResultRequests(
       const std::optional<
           ::google::internal::federatedml::v2::TaskEligibilityInfo>&
-          task_eligibility_info);
+          task_eligibility_info,
+      std::optional<std::string> attestation_measurement);
 
   // Helper function for handling the 'outer' task assignment response, which
   // consists of an `Operation` which may or may not need to be polled before a
@@ -212,7 +213,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // response.
   absl::StatusOr<InMemoryHttpResponse>
   PerformMultipleTaskAssignmentsAndReportEligibilityEvalResult(
-      const std::vector<std::string>& task_names);
+      const std::vector<std::string>& task_names,
+      std::optional<std::string> attestation_measurement);
 
   absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
   HandleMultipleTaskAssignmentsInnerResponse(

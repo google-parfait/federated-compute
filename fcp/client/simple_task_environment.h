@@ -116,6 +116,11 @@ class SimpleTaskEnvironment {
     return AccessPolicyEndorsementOptions::default_instance();
   }
 
+  virtual absl::StatusOr<std::string> GetAttestationMeasurement(
+      std::string content_binding) {
+    return "";
+  }
+
  private:
   virtual bool TrainingConditionsSatisfied() = 0;
 

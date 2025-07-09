@@ -897,7 +897,7 @@ void FlRunnerExampleQueryTest::
 void FlRunnerExampleQueryTest::ExpectComputationFailureWithInvalidArgument() {
   EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
   EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -1052,7 +1052,7 @@ class FlRunnerSourceIdSeedTest : public FlRunnerTestBase {
     MockEligibilityEvalDisabled();
     // Mock the protocol flow. Have the regular check-in get rejected. This is
     // enough to trigger GetOrCreateSourceIdSeed and then exit cleanly.
-    EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+    EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
         .WillOnce(Return(FederatedProtocol::Rejection{}));
 
     // Mock the expected logging calls for this flow.
@@ -1139,7 +1139,7 @@ TEST_F(FlRunnerHttpInvalidEntryUriTest, HttpProtocolWithInvalidEntryUri) {
 
 TEST_F(FlRunnerTensorflowTaskTest, MockCheckinFails) {
   // Make the Checkin(...) method fail with a network error.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(absl::UnavailableError("foo")));
   EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
   EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
@@ -1163,7 +1163,7 @@ TEST_F(FlRunnerTensorflowTaskTest, MockCheckinFails) {
 
 // Test the case where the protocol indicates a rejection.
 TEST_F(FlRunnerTensorflowTaskTest, RejectionTest) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::Rejection{}));
 
   EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
@@ -1184,7 +1184,7 @@ TEST_F(FlRunnerTensorflowTaskTest, RejectionTest) {
 }
 
 TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlan) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1234,7 +1234,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlanWithMinSepPolicy) {
   single_task_assignment_artifacts_.plan.mutable_client_persisted_data()
       ->set_min_sep_policy_index(kMinSepPolicyCurrentIndex);
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1287,7 +1287,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
        SimpleAggregationPlanWithTaskResourcesAsAbslCord) {
   // We return the task resources as absl::Cords instead of std::strings, to
   // exercise the absl::Cord-specific code paths.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {absl::Cord(
                single_task_assignment_artifacts_.plan.SerializeAsString()),
@@ -1340,7 +1340,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
 // recent retry window is still used.
 TEST_F(FlRunnerTensorflowTaskTest,
        SimpleAggregationPlanWithReportAbortedErrorReturnsRetryWindow) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1387,7 +1387,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
 // the new behavior).
 TEST_F(FlRunnerTensorflowTaskTest,
        SimpleAggregationPlanWithReportUnavailableErrorReturnsRetryWindow) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1434,7 +1434,7 @@ TEST_F(FlRunnerTensorflowTaskTest, TfPlanLightweightComputationIdNull) {
   EXPECT_CALL(mock_flags_, enable_computation_id())
       .WillRepeatedly(Return(false));
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1483,7 +1483,7 @@ TEST_F(FlRunnerTensorflowTaskTest, TfPlanLightweightComputationIdNull) {
 }
 
 TEST_F(FlRunnerTensorflowTaskTest, SecaggPlan) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1541,7 +1541,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SecaggPlanOnlySecaggOutputTensors) {
   FederatedProtocol::SecAggInfo sec_agg_info{
       .expected_number_of_clients = 3,
       .minimum_clients_in_server_visible_aggregate = 2};
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1590,7 +1590,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SecaggPlanOnlySecaggOutputTensors) {
 }
 
 TEST_F(FlRunnerTensorflowTaskTest, AbortPlan) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1641,7 +1641,7 @@ TEST_F(FlRunnerTensorflowTaskTest, AbortPlan) {
 }
 
 TEST_F(FlRunnerTensorflowTaskTest, ExampleIteratorError) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1695,7 +1695,7 @@ TEST_F(FlRunnerTensorflowTaskTest, ExampleIteratorError) {
 TEST_F(FlRunnerTensorflowTaskTest, ComputationInvalidArgument) {
   EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
   EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1739,7 +1739,7 @@ TEST_F(FlRunnerTensorflowTaskTest, ComputationInvalidArgument) {
 }
 
 TEST_F(FlRunnerTensorflowTaskTest, MockCheckinInvalidPlan) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {"im_not_a_plan", single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -1767,7 +1767,7 @@ TEST_F(FlRunnerTensorflowTaskTest, MockCheckinInvalidPlan) {
 }
 
 TEST_F(FlRunnerTensorflowTaskTest, TaskCompletionCallbackEnabledUploadFailed) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -1865,7 +1865,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinFails) {
           kEligibilityEvalExecutionId}));
 
   // Make the subsequent Checkin(...) method fail due to interruption.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(absl::CancelledError("foo")));
 
   {
@@ -1907,7 +1907,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
           kEligibilityEvalExecutionId}));
 
   // Make the subsequent Checkin(...) method fail due to interruption.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(absl::CancelledError("foo")));
 
   {
@@ -1979,7 +1979,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinRejected) {
           kEligibilityEvalExecutionId}));
 
   // Make the subsequent Checkin(...) method return a rejection.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::Rejection{}));
 
   {
@@ -2031,7 +2031,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinSucceeds) {
   task_weight->set_weight(1);
   MockSuccessfulEligibilityPlanExecution(expected_eligibility_info);
   EXPECT_CALL(mock_federated_protocol_,
-              MockCheckin(Optional(EqualsProto(expected_eligibility_info))))
+              MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -2097,7 +2097,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
   task_weight->set_weight(1);
   MockSuccessfulEligibilityPlanExecution(expected_eligibility_info);
   EXPECT_CALL(mock_federated_protocol_,
-              MockCheckin(Optional(EqualsProto(expected_eligibility_info))))
+              MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -2168,7 +2168,7 @@ TEST_F(FlRunnerEligibilityEvalWithCriteriaTest, ComputationIdSet) {
   task_weight->set_task_name(kTaskName);
   task_weight->set_weight(1);
   EXPECT_CALL(mock_federated_protocol_,
-              MockCheckin(Optional(EqualsProto(expected_eligibility_info))))
+              MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -2250,7 +2250,7 @@ TEST_F(FlRunnerExampleQueryEligibilityEvalTest, UseExampleQueryResultFormat) {
   task_weight->set_weight(1);
 
   EXPECT_CALL(mock_federated_protocol_,
-              MockCheckin(Optional(EqualsProto(expected_eligibility_info))))
+              MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -2306,7 +2306,7 @@ TEST_F(FlRunnerExampleQueryEligibilityEvalTest, UseExampleQueryResultFormat) {
 }
 
 TEST_F(FlRunnerExampleQueryTest, TaskSucceeds) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -2369,7 +2369,7 @@ TEST_F(FlRunnerExampleQueryTest, TaskSucceeds) {
 }
 
 TEST_F(FlRunnerExampleQueryTest, FederatedComputeWireFormat) {
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -2437,7 +2437,7 @@ TEST_F(FlRunnerExampleQueryTest, FCCheckpointAggregationEnabled) {
         ->mutable_federated_example_query()
         ->mutable_aggregations())["int_tensor"] = aggregation_config;
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -2498,7 +2498,7 @@ TEST_F(FlRunnerExampleQueryTest, LightweightTaskDoesNotCreateTempFiles) {
       cache::TempFiles::Create(root_dir, &mock_log_manager_);
   ASSERT_OK(temp_files);
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -2555,7 +2555,7 @@ TEST_F(FlRunnerExampleQueryTest, NoExampleQueryIORouter) {
 
   EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
   EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -2653,7 +2653,7 @@ TEST_F(FlRunnerExampleQueryTest, ExampleQueryPlanLightweightComputation) {
           SaveArg<1>(&latest_selector_context_),
           Return(ByMove(std::make_unique<SimpleExampleIterator>(dataset_)))));
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -2754,7 +2754,7 @@ TEST_F(FlRunnerExampleQueryTest, ConfidentialAggInSelectorContext) {
   FederatedProtocol::ConfidentialAggInfo confidential_agg_info = {
       .data_access_policy = absl::Cord("data_access_policy")};
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -2804,7 +2804,7 @@ TEST_F(FlRunnerExampleQueryTest, DirectDataUploadTaskSucceeds) {
   EXPECT_CALL(mock_flags_, enable_direct_data_upload_task())
       .WillRepeatedly(Return(true));
   SetUpDirectDataUploadTask();
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -2916,7 +2916,7 @@ TEST_F(FlRunnerExampleQueryTest, ExampleQueryWithEventTimeRange) {
   fcp::client::opstats::OpStatsSequence empty_sequence;
   EXPECT_CALL(mock_opstats_db_, Read()).WillRepeatedly(Return(empty_sequence));
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
@@ -2982,7 +2982,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, EmptyPopulationSpec) {
           kEligibilityEvalExecutionId}));
 
   // The client should proceed to single task assignment directly.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -3064,7 +3064,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
               MockPerformMultipleTaskAssignments(
                   ElementsAre(std::string(kSwor24HourTaskName),
                               std::string(kRequires5ExamplesTaskName)),
-                  _))
+                  _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
 
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
@@ -3102,7 +3102,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
         return absl::OkStatus();
       });
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(Eq(std::nullopt)))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(Eq(std::nullopt), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -3255,7 +3255,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
               MockPerformMultipleTaskAssignments(
                   ElementsAre(std::string(kSwor24HourTaskName),
                               std::string(kRequires5ExamplesTaskName)),
-                  _))
+                  _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   ComputationResults multiple_task_assignment_computation_results_1;
   EXPECT_CALL(
@@ -3399,10 +3399,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsTurnedAway) {
   // Mock a multiple task assignment request which returns no task.
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _))
+                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
       .WillOnce(Return(FederatedProtocol::MultipleTaskAssignments{}));
   // The client should proceed to single task assignment directly.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -3481,10 +3481,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsIOError) {
   // Mock a multiple task assignment request which fails with IO error.
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _))
+                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
       .WillOnce(Return(absl::InternalError("Something's wrong")));
   // The client should proceed to single task assignment directly.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -3565,10 +3565,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // Mock a multiple task assignment request which is aborted by the server.
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _))
+                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
       .WillOnce(Return(absl::AbortedError("Abort")));
   // The client should proceed to single task assignment directly.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -3650,10 +3650,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // Mock a multiple task assignment request which is cancelled by the client.
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _))
+                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
       .WillOnce(Return(absl::CancelledError("Client side cancellation.")));
   // The client should proceed to single task assignment directly.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -3741,10 +3741,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       absl::InternalError("Something's wrong");
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _))
+                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   // The client should proceed to single task assignment directly.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -3845,10 +3845,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       invalid_task_assignment;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _))
+                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   // The client should proceed to single task assignment directly.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -3949,7 +3949,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
               MockPerformMultipleTaskAssignments(
                   ElementsAre(std::string(kSwor24HourTaskName),
                               std::string(kRequires5ExamplesTaskName)),
-                  _))
+                  _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   ComputationResults multiple_task_assignment_computation_results_1;
   EXPECT_CALL(
@@ -3968,7 +3968,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                               /*has_secagg_output=*/true, EqualsProto(plan_1_));
 
   // The client should proceed to single task assignment.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -4096,7 +4096,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
               MockPerformMultipleTaskAssignments(
                   ElementsAre(std::string(kSwor24HourTaskName),
                               std::string(kRequires5ExamplesTaskName)),
-                  _))
+                  _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   ComputationResults multiple_task_assignment_computation_results_1;
   EXPECT_CALL(
@@ -4129,7 +4129,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   MockSuccessfulPlanExecution(/*has_checkpoint=*/false,
                               /*has_secagg_output=*/true, EqualsProto(plan_2_));
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -4296,7 +4296,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       task_assignment_2_;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _))
+                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
 
   ComputationResults multiple_task_assignment_computation_results_1;
@@ -4424,7 +4424,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
               MockPerformMultipleTaskAssignments(
                   ElementsAre(std::string(kSwor24HourTaskName),
                               std::string(kRequires5ExamplesTaskName)),
-                  _))
+                  _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
 
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
@@ -4556,7 +4556,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
               MockPerformMultipleTaskAssignments(
                   ElementsAre(std::string(kSwor24HourTaskName),
                               std::string(kRequires5ExamplesTaskName)),
-                  _))
+                  _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   EXPECT_CALL(
       mock_federated_protocol_,
@@ -4567,7 +4567,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       MockReportCompleted(_, _, Eq(task_assignment_2_.task_identifier), _))
       .WillOnce(Return(absl::OkStatus()));
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -4646,7 +4646,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                   ElementsAre(std::string(kSwor24HourTaskName),
                               std::string(kRequires5ExamplesTaskName)),
 
-                  _))
+                  _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   EXPECT_CALL(
       mock_federated_protocol_,
@@ -4656,7 +4656,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       mock_federated_protocol_,
       MockReportNotCompleted(_, _, Eq(task_assignment_2_.task_identifier)))
       .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -4750,7 +4750,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
               MockPerformMultipleTaskAssignments(
                   ElementsAre(std::string(kSwor24HourTaskName),
                               std::string(kRequires5ExamplesTaskName)),
-                  _))
+                  _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   // First task failed upload.
   // Note: the order of the tasks that being run is task 2 then task 1.
@@ -4763,7 +4763,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       MockReportCompleted(_, _, Eq(task_assignment_1_.task_identifier), _))
       .WillOnce(Return(absl::OkStatus()));
 
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_))
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
           {single_task_assignment_artifacts_.plan.SerializeAsString(),
            single_task_assignment_artifacts_.checkpoint},
@@ -4817,6 +4817,456 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_));
 }
 
-}  // anonymous namespace
+TEST_F(FlRunnerEligibilityEvalTest,
+       AttestationMeasurementCallbackEnabled_SingleTaskAssignment) {
+  EXPECT_CALL(mock_flags_, move_device_attestation_to_start_task_assignment())
+      .WillRepeatedly(Return(true));
+
+  std::string content_binding = "test_content_binding";
+
+  // The EligibilityEvalCheckin() will result in an eval task payload being
+  // returned. This payload should be run by the runner, and the payload's
+  // TaskEligibilityInfo result should be passed to the subsequent
+  // Checkin(...) request.
+  EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
+      .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
+          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+           eligibility_eval_artifacts_.checkpoint},
+          kEligibilityEvalExecutionId,
+          eligibility_eval_artifacts_.population_eligibility_spec,
+          content_binding}));
+
+  std::string attestation_measurement = "test_attestation_measurement";
+  EXPECT_CALL(mock_task_env_, GetAttestationMeasurement(Eq(content_binding)))
+      .WillOnce(Return(attestation_measurement));
+
+  // Check that the Checkin(...) call after the EligibilityEvalCheckin() call
+  // uses the expected TaskEligibilityInfo (as generated by the test
+  // TffEligibilityEvalTask).
+  TaskEligibilityInfo expected_eligibility_info;
+  expected_eligibility_info.set_version(1);
+  TaskWeight* task_weight = expected_eligibility_info.add_task_weights();
+  task_weight->set_task_name(kTaskName);
+  task_weight->set_weight(1);
+  MockSuccessfulEligibilityPlanExecution(expected_eligibility_info);
+  EXPECT_CALL(mock_federated_protocol_,
+              MockCheckin(Optional(EqualsProto(expected_eligibility_info)),
+                          Eq(attestation_measurement)))
+      .WillOnce(Return(FederatedProtocol::TaskAssignment{
+          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+           single_task_assignment_artifacts_.checkpoint},
+          /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
+          /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
+          std::nullopt,
+          kTaskName}));
+  MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
+                              /*has_secagg_output=*/false);
+  // We expect the regular plan to execute successfully, resulting in a
+  // ReportCompleted call.
+  EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
+      .WillOnce(Return(absl::OkStatus()));
+
+  {
+    InSequence seq;
+    // The eligibility plan execution will log a set of training-related log
+    // events, followed by a full set of checkin-training-upload related log
+    // events for the regular plan.
+    ExpectEligibilityEvalLogEvents();
+    ExpectCheckinTrainingReportLogEvents();
+    EXPECT_CALL(mock_task_env_, OnTaskCompleted(IsTaskResultSuccess()))
+        .WillOnce(Return(true));
+  }
+
+  absl::StatusOr<FLRunnerResult> result = RunFederatedComputation(
+      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
+      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
+      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
+      /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
+  ASSERT_OK(result);
+  FLRunnerResult expected_result;
+  *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
+      mock_federated_protocol_.GetLatestRetryWindow());
+  expected_result.set_contribution_result(FLRunnerResult::SUCCESS);
+  expected_result.mutable_contributed_task_names()->Add(kTaskName);
+  EXPECT_THAT(*result, EqualsProto(expected_result));
+}
+
+TEST_F(FlRunnerEligibilityEvalTest,
+       AttestationMeasurementCallbackDisabled_SingleTaskAssignment) {
+  EXPECT_CALL(mock_flags_, move_device_attestation_to_start_task_assignment())
+      .WillRepeatedly(Return(false));
+
+  // The EligibilityEvalCheckin() will result in an eval task payload being
+  // returned. This payload should be run by the runner, and the payload's
+  // TaskEligibilityInfo result should be passed to the subsequent
+  // Checkin(...) request.
+  EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
+      .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
+          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+           eligibility_eval_artifacts_.checkpoint},
+          kEligibilityEvalExecutionId,
+          eligibility_eval_artifacts_.population_eligibility_spec,
+          "unused_content_binding"}));
+
+  EXPECT_CALL(mock_task_env_, GetAttestationMeasurement(_)).Times(0);
+  // Check that the Checkin(...) call after the EligibilityEvalCheckin() call
+  // uses the expected TaskEligibilityInfo (as generated by the test
+  // TffEligibilityEvalTask).
+  TaskEligibilityInfo expected_eligibility_info;
+  expected_eligibility_info.set_version(1);
+  TaskWeight* task_weight = expected_eligibility_info.add_task_weights();
+  task_weight->set_task_name(kTaskName);
+  task_weight->set_weight(1);
+  MockSuccessfulEligibilityPlanExecution(expected_eligibility_info);
+  EXPECT_CALL(mock_federated_protocol_,
+              MockCheckin(Optional(EqualsProto(expected_eligibility_info)),
+                          Eq(std::nullopt)))
+      .WillOnce(Return(FederatedProtocol::TaskAssignment{
+          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+           single_task_assignment_artifacts_.checkpoint},
+          /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
+          /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
+          std::nullopt,
+          kTaskName}));
+  MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
+                              /*has_secagg_output=*/false);
+  // We expect the regular plan to execute successfully, resulting in a
+  // ReportCompleted call.
+  EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
+      .WillOnce(Return(absl::OkStatus()));
+
+  {
+    InSequence seq;
+    // The eligibility plan execution will log a set of training-related log
+    // events, followed by a full set of checkin-training-upload related log
+    // events for the regular plan.
+    ExpectEligibilityEvalLogEvents();
+    ExpectCheckinTrainingReportLogEvents();
+    EXPECT_CALL(mock_task_env_, OnTaskCompleted(IsTaskResultSuccess()))
+        .WillOnce(Return(true));
+  }
+
+  absl::StatusOr<FLRunnerResult> result = RunFederatedComputation(
+      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
+      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
+      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
+      /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
+  ASSERT_OK(result);
+  FLRunnerResult expected_result;
+  *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
+      mock_federated_protocol_.GetLatestRetryWindow());
+  expected_result.set_contribution_result(FLRunnerResult::SUCCESS);
+  expected_result.mutable_contributed_task_names()->Add(kTaskName);
+  EXPECT_THAT(*result, EqualsProto(expected_result));
+}
+
+TEST_F(FlRunnerMultipleTaskAssignmentsTest,
+       AttestationMeasurementCallbackEnabled_MultipleTaskAssignment) {
+  EXPECT_CALL(mock_flags_, move_device_attestation_to_start_task_assignment())
+      .WillRepeatedly(Return(true));
+
+  SetUpEligibilityEvalTask();
+
+  std::string content_binding = "test_content_binding";
+
+  // Mock a successful eligibility eval checkin.
+  // Population only supports multiple task assignments.
+  PopulationEligibilitySpec population_spec;
+  auto task_info_1 = population_spec.add_task_info();
+  task_info_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_info_1->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  auto task_info_2 = population_spec.add_task_info();
+  task_info_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_info_2->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
+      .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
+          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+           eligibility_eval_artifacts_.checkpoint},
+          kEligibilityEvalExecutionId,
+          population_spec,
+          content_binding}));
+
+  TaskEligibilityInfo task_eligibility_info;
+  task_eligibility_info.set_version(1);
+  TaskWeight* task_weight_1 = task_eligibility_info.add_task_weights();
+  task_weight_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_weight_1->set_weight(1);
+  TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
+  task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight_2->set_weight(1);
+
+  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
+
+  std::string attestation_measurement = "test_attestation_measurement";
+  EXPECT_CALL(mock_task_env_, GetAttestationMeasurement(Eq(content_binding)))
+      .WillOnce(Return(attestation_measurement));
+
+  // Mock a successful multiple task assignment request.
+  FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
+  multiple_task_assignments.task_assignments[kSwor24HourTaskName] =
+      task_assignment_1_;
+  multiple_task_assignments.task_assignments[kRequires5ExamplesTaskName] =
+      task_assignment_2_;
+  // Let the second task share the same aggregation session id as the first.
+  task_assignment_2_.aggregation_session_id =
+      kMultipleTaskAggregationSessionId1;
+  EXPECT_CALL(mock_federated_protocol_,
+              MockPerformMultipleTaskAssignments(
+                  ElementsAre(std::string(kSwor24HourTaskName),
+                              std::string(kRequires5ExamplesTaskName)),
+                  _, Eq(attestation_measurement)))
+      .WillOnce(Return(std::move(multiple_task_assignments)));
+
+  MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
+                              /*has_secagg_output=*/true, EqualsProto(plan_1_));
+
+  MockSuccessfulPlanExecution(/*has_checkpoint=*/false,
+                              /*has_secagg_output=*/true, EqualsProto(plan_2_));
+
+  ComputationResults multiple_task_assignment_computation_results_1;
+  ComputationResults multiple_task_assignment_computation_results_2;
+  EXPECT_CALL(mock_federated_protocol_,
+              MockReportCompleted(_, _, Eq(kTaskIdentifier1), _))
+      .WillOnce([&](ComputationResults reported_results,
+                    absl::Duration plan_duration,
+                    std::optional<std::string> task_identifier,
+                    std::optional<PayloadMetadata> payload_metadata) {
+        multiple_task_assignment_computation_results_1 =
+            std::move(reported_results);
+        return absl::OkStatus();
+      });
+  EXPECT_CALL(mock_federated_protocol_,
+              MockReportCompleted(_, _, Eq(kTaskIdentifier2), _))
+      .WillOnce([&](ComputationResults reported_results,
+                    absl::Duration plan_duration,
+                    std::optional<std::string> task_identifier,
+                    std::optional<PayloadMetadata> payload_metadata) {
+        multiple_task_assignment_computation_results_2 =
+            std::move(reported_results);
+        return absl::OkStatus();
+      });
+
+  // Set up PhaseLogger expectations
+  {
+    InSequence seq;
+    ExpectEventsForEligibilityEvalComputationWithThreeEligibleTasks();
+    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
+    EXPECT_CALL(mock_phase_logger_, LogMultipleTaskAssignmentsStarted());
+    EXPECT_CALL(mock_phase_logger_,
+                LogMultipleTaskAssignmentsPlanUriReceived(
+                    MockFederatedProtocol::
+                        kMultipleTaskAssignmentsPlanUriReceivedNetworkStats,
+                    _));
+    EXPECT_CALL(mock_phase_logger_,
+                LogMultipleTaskAssignmentsCompleted(
+                    MockFederatedProtocol::
+                        kMultipleTaskAssignmentsArtifactRetrievalNetworkStats,
+                    _, _, _));
+
+    EXPECT_CALL(mock_phase_logger_,
+                SetModelIdentifier(kRequires5ExamplesTaskName));
+    EXPECT_CALL(mock_phase_logger_,
+                LogComputationStarted(kRequires5ExamplesTaskName));
+    EXPECT_CALL(
+        mock_phase_logger_,
+        LogComputationCompleted(FieldsAre(Gt(0), Gt(0)),
+                                EqualsNetworkStats(NetworkStats()), _, _, _));
+    EXPECT_CALL(mock_phase_logger_, LogResultUploadStarted())
+        .WillOnce(Return(absl::OkStatus()));
+
+    EXPECT_CALL(mock_phase_logger_,
+                LogResultUploadCompleted(
+                    EqualsNetworkStats(
+                        MockFederatedProtocol::kReportCompletedNetworkStats),
+                    _, _));
+
+    EXPECT_CALL(mock_task_env_, OnTaskCompleted(IsTaskResultSuccess()))
+        .WillOnce(Return(true))
+        .RetiresOnSaturation();
+
+    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(kSwor24HourTaskName));
+    EXPECT_CALL(mock_phase_logger_, LogComputationStarted(kSwor24HourTaskName));
+    EXPECT_CALL(
+        mock_phase_logger_,
+        LogComputationCompleted(FieldsAre(Gt(0), Gt(0)),
+                                EqualsNetworkStats(NetworkStats()), _, _, _));
+    EXPECT_CALL(mock_phase_logger_, LogResultUploadStarted())
+        .WillOnce(Return(absl::OkStatus()));
+
+    EXPECT_CALL(mock_phase_logger_,
+                LogResultUploadCompleted(
+                    EqualsNetworkStats(
+                        MockFederatedProtocol::kReportCompletedNetworkStats),
+                    _, _));
+    EXPECT_CALL(mock_task_env_, OnTaskCompleted(IsTaskResultSuccess()))
+        .WillOnce(Return(true))
+        .RetiresOnSaturation();
+  }
+
+  // Call RunFederatedComputation, we don't check results in this test because
+  // we have already set expectations above.
+  ASSERT_OK(RunFederatedComputation(
+      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
+      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
+      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
+      /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_));
+}
+
+TEST_F(FlRunnerMultipleTaskAssignmentsTest,
+       AttestationMeasurementCallbackDisabled_MultipleTaskAssignment) {
+  EXPECT_CALL(mock_flags_, move_device_attestation_to_start_task_assignment())
+      .WillRepeatedly(Return(false));
+
+  SetUpEligibilityEvalTask();
+
+  std::string content_binding = "test_content_binding";
+
+  // Mock a successful eligibility eval checkin.
+  // Population only supports multiple task assignments.
+  PopulationEligibilitySpec population_spec;
+  auto task_info_1 = population_spec.add_task_info();
+  task_info_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_info_1->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  auto task_info_2 = population_spec.add_task_info();
+  task_info_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_info_2->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
+      .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
+          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+           eligibility_eval_artifacts_.checkpoint},
+          kEligibilityEvalExecutionId,
+          population_spec,
+          content_binding}));
+
+  TaskEligibilityInfo task_eligibility_info;
+  task_eligibility_info.set_version(1);
+  TaskWeight* task_weight_1 = task_eligibility_info.add_task_weights();
+  task_weight_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_weight_1->set_weight(1);
+  TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
+  task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight_2->set_weight(1);
+
+  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
+
+  EXPECT_CALL(mock_task_env_, GetAttestationMeasurement(_)).Times(0);
+
+  // Mock a successful multiple task assignment request.
+  FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
+  multiple_task_assignments.task_assignments[kSwor24HourTaskName] =
+      task_assignment_1_;
+  multiple_task_assignments.task_assignments[kRequires5ExamplesTaskName] =
+      task_assignment_2_;
+  // Let the second task share the same aggregation session id as the first.
+  task_assignment_2_.aggregation_session_id =
+      kMultipleTaskAggregationSessionId1;
+  EXPECT_CALL(mock_federated_protocol_,
+              MockPerformMultipleTaskAssignments(
+                  ElementsAre(std::string(kSwor24HourTaskName),
+                              std::string(kRequires5ExamplesTaskName)),
+                  _, Eq(std::nullopt)))
+      .WillOnce(Return(std::move(multiple_task_assignments)));
+
+  MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
+                              /*has_secagg_output=*/true, EqualsProto(plan_1_));
+
+  MockSuccessfulPlanExecution(/*has_checkpoint=*/false,
+                              /*has_secagg_output=*/true, EqualsProto(plan_2_));
+
+  ComputationResults multiple_task_assignment_computation_results_1;
+  ComputationResults multiple_task_assignment_computation_results_2;
+  EXPECT_CALL(mock_federated_protocol_,
+              MockReportCompleted(_, _, Eq(kTaskIdentifier1), _))
+      .WillOnce([&](ComputationResults reported_results,
+                    absl::Duration plan_duration,
+                    std::optional<std::string> task_identifier,
+                    std::optional<PayloadMetadata> payload_metadata) {
+        multiple_task_assignment_computation_results_1 =
+            std::move(reported_results);
+        return absl::OkStatus();
+      });
+  EXPECT_CALL(mock_federated_protocol_,
+              MockReportCompleted(_, _, Eq(kTaskIdentifier2), _))
+      .WillOnce([&](ComputationResults reported_results,
+                    absl::Duration plan_duration,
+                    std::optional<std::string> task_identifier,
+                    std::optional<PayloadMetadata> payload_metadata) {
+        multiple_task_assignment_computation_results_2 =
+            std::move(reported_results);
+        return absl::OkStatus();
+      });
+
+  // Set up PhaseLogger expectations
+  {
+    InSequence seq;
+    ExpectEventsForEligibilityEvalComputationWithThreeEligibleTasks();
+    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
+    EXPECT_CALL(mock_phase_logger_, LogMultipleTaskAssignmentsStarted());
+    EXPECT_CALL(mock_phase_logger_,
+                LogMultipleTaskAssignmentsPlanUriReceived(
+                    MockFederatedProtocol::
+                        kMultipleTaskAssignmentsPlanUriReceivedNetworkStats,
+                    _));
+    EXPECT_CALL(mock_phase_logger_,
+                LogMultipleTaskAssignmentsCompleted(
+                    MockFederatedProtocol::
+                        kMultipleTaskAssignmentsArtifactRetrievalNetworkStats,
+                    _, _, _));
+
+    EXPECT_CALL(mock_phase_logger_,
+                SetModelIdentifier(kRequires5ExamplesTaskName));
+    EXPECT_CALL(mock_phase_logger_,
+                LogComputationStarted(kRequires5ExamplesTaskName));
+    EXPECT_CALL(
+        mock_phase_logger_,
+        LogComputationCompleted(FieldsAre(Gt(0), Gt(0)),
+                                EqualsNetworkStats(NetworkStats()), _, _, _));
+    EXPECT_CALL(mock_phase_logger_, LogResultUploadStarted())
+        .WillOnce(Return(absl::OkStatus()));
+
+    EXPECT_CALL(mock_phase_logger_,
+                LogResultUploadCompleted(
+                    EqualsNetworkStats(
+                        MockFederatedProtocol::kReportCompletedNetworkStats),
+                    _, _));
+
+    EXPECT_CALL(mock_task_env_, OnTaskCompleted(IsTaskResultSuccess()))
+        .WillOnce(Return(true))
+        .RetiresOnSaturation();
+
+    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(kSwor24HourTaskName));
+    EXPECT_CALL(mock_phase_logger_, LogComputationStarted(kSwor24HourTaskName));
+    EXPECT_CALL(
+        mock_phase_logger_,
+        LogComputationCompleted(FieldsAre(Gt(0), Gt(0)),
+                                EqualsNetworkStats(NetworkStats()), _, _, _));
+    EXPECT_CALL(mock_phase_logger_, LogResultUploadStarted())
+        .WillOnce(Return(absl::OkStatus()));
+
+    EXPECT_CALL(mock_phase_logger_,
+                LogResultUploadCompleted(
+                    EqualsNetworkStats(
+                        MockFederatedProtocol::kReportCompletedNetworkStats),
+                    _, _));
+    EXPECT_CALL(mock_task_env_, OnTaskCompleted(IsTaskResultSuccess()))
+        .WillOnce(Return(true))
+        .RetiresOnSaturation();
+  }
+
+  // Call RunFederatedComputation, we don't check results in this test because
+  // we have already set expectations above.
+  ASSERT_OK(RunFederatedComputation(
+      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
+      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
+      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
+      /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_));
+}
+}  // namespace
 }  // namespace client
 }  // namespace fcp

@@ -116,6 +116,7 @@ class FederatedProtocol {
     // fl_runner.
     std::optional<google::internal::federated::plan::PopulationEligibilitySpec>
         population_eligibility_spec;
+    std::string content_binding;
   };
   // A rejection of a client by the server.
   struct Rejection {};
@@ -126,6 +127,7 @@ class FederatedProtocol {
     // fl_runner.
     std::optional<google::internal::federated::plan::PopulationEligibilitySpec>
         population_eligibility_spec;
+    std::string content_binding;
   };
   // EligibilityEvalCheckin() returns either
   // 1. an `EligibilityEvalTask` struct holding the payloads for an eligibility
@@ -256,8 +258,8 @@ class FederatedProtocol {
       const std::optional<
           google::internal::federatedml::v2::TaskEligibilityInfo>&
           task_eligibility_info,
-      std::function<void(const TaskAssignment&)>
-          payload_uris_received_callback) = 0;
+      std::function<void(const TaskAssignment&)> payload_uris_received_callback,
+      const std::optional<std::string>& attestation_measurement) = 0;
 
   // A map of task names to absl::StatusOr<TaskAssignment> returned
   // by PerformMultipleTaskAssignments. Individual
@@ -300,7 +302,8 @@ class FederatedProtocol {
   virtual absl::StatusOr<MultipleTaskAssignments>
   PerformMultipleTaskAssignments(
       const std::vector<std::string>& task_names,
-      const std::function<void(size_t)>& payload_uris_received_callback) = 0;
+      const std::function<void(size_t)>& payload_uris_received_callback,
+      const std::optional<std::string>& attestation_measurement) = 0;
 
   // Reports the result of a federated computation to the server. Must only be
   // called once and after a successful call to Checkin().

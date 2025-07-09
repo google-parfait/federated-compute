@@ -628,14 +628,15 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
         }
         result.payloads = task_resources[0]->plan_and_checkpoint_payloads;
       }
-
+      result.content_binding = response_proto.session_id();
       object_state_ = ObjectState::kEligibilityEvalEnabled;
       return std::move(result);
     }
     case EligibilityEvalTaskResponse::kNoEligibilityEvalConfigured: {
       // Nothing to do...
       object_state_ = ObjectState::kEligibilityEvalDisabled;
-      return EligibilityEvalDisabled{};
+      return EligibilityEvalDisabled{.content_binding =
+                                         response_proto.session_id()};
     }
     default:
       return absl::UnimplementedError(
@@ -677,7 +678,8 @@ absl::Status HttpFederatedProtocol::ReportEligibilityEvalErrorInternal(
 
 absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
     const std::optional<TaskEligibilityInfo>& task_eligibility_info,
-    std::function<void(const TaskAssignment&)> payload_uris_received_callback) {
+    std::function<void(const TaskAssignment&)> payload_uris_received_callback,
+    const std::optional<std::string>& attestation_measurement) {
   // Checkin(...) must follow an earlier call to EligibilityEvalCheckin() that
   // resulted in a CheckinResultPayload or an EligibilityEvalDisabled result. Or
   // it must follow a PerformMultipleTaskAssignments(...) regardless of the
@@ -706,7 +708,7 @@ absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
   // Send the request and parse the response.
   auto response = HandleTaskAssignmentOperationResponse(
       PerformTaskAssignmentAndReportEligibilityEvalResultRequests(
-          task_eligibility_info),
+          task_eligibility_info, attestation_measurement),
       payload_uris_received_callback);
 
   // Update the object state to ensure we return the correct retry delay.
@@ -717,7 +719,8 @@ absl::StatusOr<FederatedProtocol::CheckinResult> HttpFederatedProtocol::Checkin(
 
 absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
     PerformTaskAssignmentAndReportEligibilityEvalResultRequests(
-        const std::optional<TaskEligibilityInfo>& task_eligibility_info) {
+        const std::optional<TaskEligibilityInfo>& task_eligibility_info,
+        std::optional<std::string> attestation_measurement) {
   // Create and serialize the request body. Note that the `population_name`
   // and `session_id` fields are set in the URI instead of in this request
   // proto message.
@@ -733,6 +736,11 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   if (flags_->enable_confidential_aggregation()) {
     request.mutable_resource_capabilities()
         ->set_supports_confidential_aggregation(true);
+  }
+
+  if (attestation_measurement.has_value()) {
+    *request.mutable_attestation_measurement()->mutable_value() =
+        *attestation_measurement;
   }
 
   std::vector<std::unique_ptr<HttpRequest>> requests;
@@ -982,7 +990,8 @@ HttpFederatedProtocol::CreatePerTaskInfoFromTaskAssignment(
 absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
 HttpFederatedProtocol::PerformMultipleTaskAssignments(
     const std::vector<std::string>& task_names,
-    const std::function<void(size_t)>& payload_uris_received_callback) {
+    const std::function<void(size_t)>& payload_uris_received_callback,
+    const std::optional<std::string>& attestation_measurement) {
   // PerformMultipleTaskAssignments(...) must follow an earlier call to
   // EligibilityEvalCheckin() that resulted in a EligibilityEvalTask with
   // PopulationEligibilitySpec.
@@ -994,7 +1003,8 @@ HttpFederatedProtocol::PerformMultipleTaskAssignments(
   multiple_task_assignments_called_ = true;
   // Send the request and parse the response.
   auto response = HandleMultipleTaskAssignmentsInnerResponse(
-      PerformMultipleTaskAssignmentsAndReportEligibilityEvalResult(task_names),
+      PerformMultipleTaskAssignmentsAndReportEligibilityEvalResult(
+          task_names, attestation_measurement),
       payload_uris_received_callback);
 
   // Update the object state to ensure we return the correct retry delay.
@@ -1006,7 +1016,8 @@ HttpFederatedProtocol::PerformMultipleTaskAssignments(
 
 absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
     PerformMultipleTaskAssignmentsAndReportEligibilityEvalResult(
-        const std::vector<std::string>& task_names) {
+        const std::vector<std::string>& task_names,
+        std::optional<std::string> attestation_measurement) {
   // Create and serialize the request body. Note that the `population_name`
   // and `session_id` fields are set in the URI instead of in this request
   // proto message.
@@ -1020,6 +1031,10 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   }
   for (const auto& task_name : task_names) {
     *request.add_task_names() = task_name;
+  }
+  if (attestation_measurement.has_value()) {
+    *request.mutable_attestation_measurement()->mutable_value() =
+        *attestation_measurement;
   }
 
   std::vector<std::unique_ptr<HttpRequest>> requests;

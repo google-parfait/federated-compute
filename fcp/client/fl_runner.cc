@@ -731,6 +731,7 @@ struct EligibilityEvalResult {
   std::optional<TaskEligibilityInfo> task_eligibility_info;
   std::vector<std::string> task_names_for_multiple_task_assignments;
   bool population_supports_single_task_assignment = false;
+  std::string content_binding;
 };
 
 // Create an EligibilityEvalResult from a TaskEligibilityInfo and
@@ -740,7 +741,8 @@ struct EligibilityEvalResult {
 // and a vector of task names for multiple task assignment.
 EligibilityEvalResult CreateEligibilityEvalResult(
     const std::optional<TaskEligibilityInfo>& task_eligibility_info,
-    const std::optional<PopulationEligibilitySpec>& population_spec) {
+    const std::optional<PopulationEligibilitySpec>& population_spec,
+    const std::string& content_binding) {
   EligibilityEvalResult result;
   std::vector<std::string> task_names_for_multiple_task_assignments;
   if (population_spec.has_value()) {
@@ -788,6 +790,7 @@ EligibilityEvalResult CreateEligibilityEvalResult(
     result.task_names_for_multiple_task_assignments =
         std::move(task_names_for_multiple_task_assignments);
   }
+  result.content_binding = content_binding;
   return result;
 }
 
@@ -942,7 +945,8 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
             *eligibility_checkin_result);
     return CreateEligibilityEvalResult(
         /*task_eligibility_info=*/std::nullopt,
-        eligibility_eval_disabled.population_eligibility_spec);
+        eligibility_eval_disabled.population_eligibility_spec,
+        eligibility_eval_disabled.content_binding);
   }
 
   auto eligibility_eval_task = std::get<FederatedProtocol::EligibilityEvalTask>(
@@ -977,8 +981,8 @@ absl::StatusOr<EligibilityEvalResult> IssueEligibilityEvalCheckinAndRunPlan(
     return task_eligibility_info.status();
   }
   return CreateEligibilityEvalResult(
-      *task_eligibility_info,
-      eligibility_eval_task.population_eligibility_spec);
+      *task_eligibility_info, eligibility_eval_task.population_eligibility_spec,
+      eligibility_eval_task.content_binding);
 }
 
 absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
@@ -1060,7 +1064,8 @@ absl::StatusOr<CheckinResult> IssueCheckin(
     FederatedProtocol* federated_protocol,
     std::optional<TaskEligibilityInfo> task_eligibility_info,
     absl::Time reference_time, const std::string& population_name,
-    FLRunnerResult& fl_runner_result, const Flags* flags) {
+    FLRunnerResult& fl_runner_result, const Flags* flags,
+    std::optional<std::string> attestation_measurement) {
   absl::Time time_before_checkin = absl::Now();
   // We must return only stats that cover the check in phase for the log
   // events below.
@@ -1116,7 +1121,8 @@ absl::StatusOr<CheckinResult> IssueCheckin(
           };
   absl::StatusOr<FederatedProtocol::CheckinResult> checkin_result =
       federated_protocol->Checkin(task_eligibility_info,
-                                  plan_uris_received_callback);
+                                  plan_uris_received_callback,
+                                  attestation_measurement);
   UpdateRetryWindowAndNetworkStats(*federated_protocol,
                                    /*fedselect_manager=*/nullptr, phase_logger,
                                    fl_runner_result);
@@ -1320,7 +1326,7 @@ std::vector<CheckinResult> IssueMultipleTaskAssignments(
     LogManager* log_manager, Files* files,
     FederatedProtocol* federated_protocol, FLRunnerResult& fl_runner_result,
     const std::string& population_name, absl::Time reference_time,
-    const Flags* flags) {
+    const Flags* flags, std::optional<std::string> attestation_measurement) {
   absl::Time time_before_multiple_task_assignments = absl::Now();
   // We must return only stats that cover the check in phase for the log
   // events below.
@@ -1382,7 +1388,8 @@ std::vector<CheckinResult> IssueMultipleTaskAssignments(
   absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
       multiple_task_assignments =
           federated_protocol->PerformMultipleTaskAssignments(
-              task_names, multiple_tasks_uris_received_callback);
+              task_names, multiple_tasks_uris_received_callback,
+              attestation_measurement);
   UpdateRetryWindowAndNetworkStats(*federated_protocol,
                                    /*fedselect_manager=*/nullptr, phase_logger,
                                    fl_runner_result);
@@ -1911,6 +1918,13 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
                          GetOrCreateSourceIdSeed(opstats_logger));
   }
 
+  std::optional<std::string> attestation_measurement = std::nullopt;
+  if (flags->move_device_attestation_to_start_task_assignment()) {
+    FCP_ASSIGN_OR_RETURN(attestation_measurement,
+                         env_deps->GetAttestationMeasurement(
+                             eligibility_eval_result->content_binding));
+  }
+
   size_t expected_num_tasks = 0;
   std::vector<std::string> successful_task_names;
 
@@ -1923,7 +1937,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         IssueMultipleTaskAssignments(
             eligibility_eval_result->task_names_for_multiple_task_assignments,
             phase_logger, log_manager, files, federated_protocol,
-            fl_runner_result, population_name, reference_time, flags);
+            fl_runner_result, population_name, reference_time, flags,
+            attestation_measurement);
     successful_task_names = HandleMultipleTaskAssignments(
         multiple_task_assignments, federated_selector_context, env_deps,
         phase_logger, files, log_manager, opstats_logger, flags,
@@ -1942,7 +1957,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     auto checkin_result =
         IssueCheckin(phase_logger, log_manager, files, federated_protocol,
                      std::move(eligibility_eval_result->task_eligibility_info),
-                     reference_time, population_name, fl_runner_result, flags);
+                     reference_time, population_name, fl_runner_result, flags,
+                     attestation_measurement);
 
     if (checkin_result.ok()) {
       SelectorContext selector_context_with_task_details =

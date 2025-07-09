@@ -674,7 +674,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     if (eligibility_eval_enabled) {
       EXPECT_CALL(mock_eet_received_callback_,
                   Call(FieldsAre(FieldsAre("", ""), kEligibilityEvalExecutionId,
-                                 Eq(std::nullopt))));
+                                 Eq(std::nullopt), _)));
     }
 
     return federated_protocol_
@@ -762,8 +762,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     }
 
     return federated_protocol_->Checkin(
-        expected_eligibility_info,
-        mock_task_received_callback_.AsStdFunction());
+        expected_eligibility_info, mock_task_received_callback_.AsStdFunction(),
+        std::nullopt);
   }
 
   absl::StatusOr<FederatedProtocol::MultipleTaskAssignments>
@@ -850,7 +850,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         .WillOnce(Return(FakeHttpResponse(200, HeaderList(), expected_plan_2)));
 
     return federated_protocol_->PerformMultipleTaskAssignments(
-        task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+        task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
+        std::nullopt);
   }
 
   absl::Status RunSuccessfulUploadViaSimpleAgg(
@@ -1263,7 +1264,7 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   // resources are fetched.
   EXPECT_CALL(mock_eet_received_callback_,
               Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
-                             Eq(std::nullopt))));
+                             Eq(std::nullopt), _)));
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -1281,7 +1282,7 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
                       absl::Cord(expected_plan)),
                 Field(&FederatedProtocol::PlanAndCheckpointPayloads::checkpoint,
                       absl::Cord(expected_checkpoint))),
-          expected_execution_id, Eq(std::nullopt))));
+          expected_execution_id, Eq(std::nullopt), _)));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -1337,7 +1338,7 @@ TEST_F(HttpFederatedProtocolTest,
   // resources are fetched.
   EXPECT_CALL(mock_eet_received_callback_,
               Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
-                             Eq(std::nullopt))));
+                             Eq(std::nullopt), _)));
 
   EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
                                      population_eligibility_spec_uri,
@@ -1362,7 +1363,7 @@ TEST_F(HttpFederatedProtocolTest,
                 Field(&FederatedProtocol::PlanAndCheckpointPayloads::checkpoint,
                       absl::Cord(expected_checkpoint))),
           expected_execution_id,
-          Optional(EqualsProto(expected_population_eligibility_spec)))));
+          Optional(EqualsProto(expected_population_eligibility_spec)), _)));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -1400,7 +1401,7 @@ TEST_F(HttpFederatedProtocolTest,
 
   EXPECT_CALL(mock_eet_received_callback_,
               Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
-                             Eq(std::nullopt))));
+                             Eq(std::nullopt), _)));
 
   auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction());
@@ -1444,7 +1445,7 @@ TEST_F(HttpFederatedProtocolTest,
   // resources are fetched.
   EXPECT_CALL(mock_eet_received_callback_,
               Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
-                             Eq(std::nullopt))));
+                             Eq(std::nullopt), _)));
 
   EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
                                      population_eligibility_spec_uri,
@@ -1460,7 +1461,7 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_THAT(
       *eligibility_checkin_result,
       VariantWith<FederatedProtocol::EligibilityEvalDisabled>(FieldsAre(
-          Optional(EqualsProto(expected_population_eligibility_spec)))));
+          Optional(EqualsProto(expected_population_eligibility_spec)), _)));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -1509,7 +1510,7 @@ TEST_F(HttpFederatedProtocolTest,
   // resources are fetched.
   EXPECT_CALL(mock_eet_received_callback_,
               Call(FieldsAre(FieldsAre("", ""), expected_execution_id,
-                             Eq(std::nullopt))));
+                             Eq(std::nullopt), _)));
 
   EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
                                      population_eligibility_spec_uri,
@@ -1528,7 +1529,8 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_THAT(
       *eligibility_checkin_result,
       VariantWith<FederatedProtocol::EligibilityEvalTask>(FieldsAre(
-          _, _, Optional(EqualsProto(expected_population_eligibility_spec)))));
+          _, _, Optional(EqualsProto(expected_population_eligibility_spec)),
+          _)));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -1572,7 +1574,7 @@ TEST_F(HttpFederatedProtocolTest,
                       absl::Cord(expected_plan)),
                 Field(&FederatedProtocol::PlanAndCheckpointPayloads::checkpoint,
                       absl::Cord(expected_checkpoint))),
-          expected_execution_id, Eq(std::nullopt))));
+          expected_execution_id, Eq(std::nullopt), _)));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -1793,7 +1795,8 @@ TEST_F(HttpFederatedProtocolDeathTest,
   ASSERT_DEATH(
       {
         auto unused = federated_protocol_->Checkin(
-            std::nullopt, mock_task_received_callback_.AsStdFunction());
+            std::nullopt, mock_task_received_callback_.AsStdFunction(),
+            std::nullopt);
       },
       _);
 }
@@ -1820,7 +1823,8 @@ TEST_F(HttpFederatedProtocolDeathTest,
   ASSERT_DEATH(
       {
         auto unused = federated_protocol_->Checkin(
-            std::nullopt, mock_task_received_callback_.AsStdFunction());
+            std::nullopt, mock_task_received_callback_.AsStdFunction(),
+            std::nullopt);
       },
       _);
 }
@@ -1837,8 +1841,8 @@ TEST_F(HttpFederatedProtocolDeathTest,
   ASSERT_DEATH(
       {
         auto unused = federated_protocol_->Checkin(
-            TaskEligibilityInfo(),
-            mock_task_received_callback_.AsStdFunction());
+            TaskEligibilityInfo(), mock_task_received_callback_.AsStdFunction(),
+            std::nullopt);
       },
       _);
 }
@@ -1853,7 +1857,8 @@ TEST_F(HttpFederatedProtocolDeathTest, TestCheckinWithMissingEligibilityInfo) {
   ASSERT_DEATH(
       {
         auto unused = federated_protocol_->Checkin(
-            std::nullopt, mock_task_received_callback_.AsStdFunction());
+            std::nullopt, mock_task_received_callback_.AsStdFunction(),
+            std::nullopt);
       },
       _);
 }
@@ -1889,8 +1894,8 @@ TEST_F(HttpFederatedProtocolDeathTest,
   ASSERT_DEATH(
       {
         auto unused = federated_protocol_->Checkin(
-            TaskEligibilityInfo(),
-            mock_task_received_callback_.AsStdFunction());
+            TaskEligibilityInfo(), mock_task_received_callback_.AsStdFunction(),
+            std::nullopt);
       },
       _);
 }
@@ -1920,7 +1925,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsTransientError) {
 
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
-      mock_task_received_callback_.AsStdFunction());
+      mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
   EXPECT_THAT(checkin_result.status(), IsCode(UNAVAILABLE));
   // The original 503 HTTP response code should be included in the message as
@@ -1956,7 +1961,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromHttp) {
 
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
-      mock_task_received_callback_.AsStdFunction());
+      mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
   EXPECT_THAT(checkin_result.status(), IsCode(NOT_FOUND));
   // The original 503 HTTP response code should be included in the message as
@@ -2000,7 +2005,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromOperation) {
 
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
-      mock_task_received_callback_.AsStdFunction());
+      mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
   EXPECT_THAT(checkin_result.status(), IsCode(NOT_FOUND));
   EXPECT_THAT(checkin_result.status().message(),
@@ -2066,7 +2071,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterrupted) {
 
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
-      mock_task_received_callback_.AsStdFunction());
+      mock_task_received_callback_.AsStdFunction(), std::nullopt);
   EXPECT_THAT(checkin_result.status(), IsCode(CANCELLED));
   // RetryWindows were already received from the server during the eligibility
   // eval checkin, so we expect to get a 'rejected' retry window.
@@ -2146,7 +2151,7 @@ TEST_F(HttpFederatedProtocolTest,
 
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
-      mock_task_received_callback_.AsStdFunction());
+      mock_task_received_callback_.AsStdFunction(), std::nullopt);
   EXPECT_THAT(checkin_result.status(), IsCode(CANCELLED));
   // RetryWindows were already received from the server during the eligibility
   // eval checkin, so we expect to get a 'rejected' retry window.
@@ -2237,7 +2242,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterruptedCancellationTimeout) {
 
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
-      mock_task_received_callback_.AsStdFunction());
+      mock_task_received_callback_.AsStdFunction(), std::nullopt);
   EXPECT_THAT(checkin_result.status(), IsCode(CANCELLED));
   // RetryWindows were already received from the server during the eligibility
   // eval checkin, so we expect to get a 'rejected' retry window.
@@ -2278,7 +2283,8 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
 
   // Issue the regular checkin.
   auto checkin_result = federated_protocol_->Checkin(
-      expected_eligibility_info, mock_task_received_callback_.AsStdFunction());
+      expected_eligibility_info, mock_task_received_callback_.AsStdFunction(),
+      std::nullopt);
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
@@ -2315,7 +2321,7 @@ TEST_F(HttpFederatedProtocolTest,
   // Issue the regular checkin, without a TaskEligibilityInfo (since we didn't
   // receive an eligibility eval task to run during eligibility eval checkin).
   auto checkin_result = federated_protocol_->Checkin(
-      std::nullopt, mock_task_received_callback_.AsStdFunction());
+      std::nullopt, mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
@@ -2387,7 +2393,8 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
 
   // Issue the regular checkin.
   auto checkin_result = federated_protocol_->Checkin(
-      expected_eligibility_info, mock_task_received_callback_.AsStdFunction());
+      expected_eligibility_info, mock_task_received_callback_.AsStdFunction(),
+      std::nullopt);
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(
@@ -2426,7 +2433,8 @@ TEST_F(HttpFederatedProtocolTest,
       {
         auto unused = federated_protocol_->PerformMultipleTaskAssignments(
             {kMultiTaskId_1, kMultiTaskId_2},
-            mock_multiple_tasks_received_callback_.AsStdFunction());
+            mock_multiple_tasks_received_callback_.AsStdFunction(),
+            std::nullopt);
       },
       _);
 }
@@ -2566,7 +2574,7 @@ TEST_F(HttpFederatedProtocolTest,
   // Issue the regular checkin.
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
-      mock_task_received_callback_.AsStdFunction());
+      mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
   ASSERT_OK(checkin_result.status());
   EXPECT_THAT(
@@ -2628,7 +2636,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedPlanDataFetchFailed) {
   // Issue the regular checkin.
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
-      mock_task_received_callback_.AsStdFunction());
+      mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
   // The 404 error for the resource request should be reflected in the return
   // value.
@@ -2690,7 +2698,7 @@ TEST_F(HttpFederatedProtocolTest,
   // Issue the regular checkin.
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
-      mock_task_received_callback_.AsStdFunction());
+      mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
   // The 503 error for the resource request should be reflected in the return
   // value.
@@ -2737,7 +2745,8 @@ TEST_F(HttpFederatedProtocolTest,
 
   auto multiTaskAssignmentResult =
       federated_protocol_->PerformMultipleTaskAssignments(
-          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
+          std::nullopt);
   EXPECT_OK(multiTaskAssignmentResult);
   // The Checkin call is expected to return the rejected retry window from
   // the response to the first eligibility eval request.
@@ -2775,7 +2784,8 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsFailed) {
 
   auto multi_task_assignment_result =
       federated_protocol_->PerformMultipleTaskAssignments(
-          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
+          std::nullopt);
   EXPECT_THAT(multi_task_assignment_result,
               IsCode(absl::StatusCode::kUnavailable));
   EXPECT_THAT(multi_task_assignment_result.status().message(),
@@ -2821,7 +2831,8 @@ TEST_F(HttpFederatedProtocolTest,
 
   auto multi_task_assignment_result =
       federated_protocol_->PerformMultipleTaskAssignments(
-          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
+          std::nullopt);
   EXPECT_THAT(multi_task_assignment_result,
               IsCode(absl::StatusCode::kNotFound));
   EXPECT_THAT(multi_task_assignment_result.status().message(),
@@ -2904,7 +2915,8 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
 
   auto multiple_task_assignment_result =
       federated_protocol_->PerformMultipleTaskAssignments(
-          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
+          std::nullopt);
   ASSERT_OK(multiple_task_assignment_result);
   EXPECT_THAT(multiple_task_assignment_result->task_assignments,
               UnorderedElementsAre(
@@ -3009,7 +3021,8 @@ TEST_F(HttpFederatedProtocolTest,
 
   auto multiple_task_assignment_result =
       federated_protocol_->PerformMultipleTaskAssignments(
-          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
+          std::nullopt);
   // We expect the overall result is ok because the
   // PerformMultipleTaskAssignments RPC succeeded. For the task assignments
   // inside the PerformMultipleTaskAssignmentsResponse, we expect one successful
@@ -3085,7 +3098,8 @@ TEST_F(HttpFederatedProtocolTest,
 
   auto multiple_task_assignment_result =
       federated_protocol_->PerformMultipleTaskAssignments(
-          task_names, mock_multiple_tasks_received_callback_.AsStdFunction());
+          task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
+          std::nullopt);
   // We expect the overall result is ok because the
   // PerformMultipleTaskAssignments RPC succeeded. For the task assignments
   // inside the PerformMultipleTaskAssignmentsResponse, we expect one successful
@@ -4615,7 +4629,8 @@ TEST_F(HttpFederatedProtocolTest,
                                                          absl::OkStatus());
 
   ASSERT_OK(federated_protocol_->Checkin(
-      expected_eligibility_info, mock_task_received_callback_.AsStdFunction()));
+      expected_eligibility_info, mock_task_received_callback_.AsStdFunction(),
+      std::nullopt));
 }
 TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingSimpleAgg) {
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(true, false,

@@ -468,8 +468,10 @@ class MockFederatedProtocol : public FederatedProtocol {
           ::google::internal::federatedml::v2::TaskEligibilityInfo>&
           task_eligibility_info,
       std::function<void(const FederatedProtocol::TaskAssignment&)>
-          payload_uris_received_callback) final {
-    absl::StatusOr<CheckinResult> result = MockCheckin(task_eligibility_info);
+          payload_uris_received_callback,
+      const std::optional<std::string>& attestation_measurement) final {
+    absl::StatusOr<CheckinResult> result =
+        MockCheckin(task_eligibility_info, attestation_measurement);
     network_stats_ += kCheckinPlanUriReceivedNetworkStats;
     if (result.ok() &&
         std::holds_alternative<FederatedProtocol::TaskAssignment>(*result)) {
@@ -482,15 +484,18 @@ class MockFederatedProtocol : public FederatedProtocol {
   };
   MOCK_METHOD(absl::StatusOr<CheckinResult>, MockCheckin,
               (const std::optional<
-                  ::google::internal::federatedml::v2::TaskEligibilityInfo>&
-                   task_eligibility_info));
+                   ::google::internal::federatedml::v2::TaskEligibilityInfo>&
+                   task_eligibility_info,
+               std::optional<std::string> attestation_measurement));
 
   absl::StatusOr<MultipleTaskAssignments> PerformMultipleTaskAssignments(
       const std::vector<std::string>& task_names,
-      const std::function<void(size_t)>& payload_uris_received_callback) final {
+      const std::function<void(size_t)>& payload_uris_received_callback,
+      const std::optional<std::string>& attestation_measurement) final {
     absl::StatusOr<MultipleTaskAssignments> result =
         MockPerformMultipleTaskAssignments(task_names,
-                                           payload_uris_received_callback);
+                                           payload_uris_received_callback,
+                                           attestation_measurement);
     network_stats_ += kMultipleTaskAssignmentsPlanUriReceivedNetworkStats;
     if (result.ok() && !result->task_assignments.empty()) {
       payload_uris_received_callback(result->task_assignments.size());
@@ -503,7 +508,8 @@ class MockFederatedProtocol : public FederatedProtocol {
       absl::StatusOr<MultipleTaskAssignments>,
       MockPerformMultipleTaskAssignments,
       (const std::vector<std::string>& task_names,
-       const std::function<void(size_t)>& payload_uris_received_callback));
+       const std::function<void(size_t)>& payload_uris_received_callback,
+       std::optional<std::string> attestation_measurement));
 
   absl::Status ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
@@ -614,6 +620,8 @@ class MockSimpleTaskEnvironment : public SimpleTaskEnvironment {
   MOCK_METHOD(bool, TrainingConditionsSatisfied, (), (override));
   MOCK_METHOD(bool, OnTaskCompleted, (const TaskResultInfo& task_result_info),
               (override));
+  MOCK_METHOD(absl::StatusOr<std::string>, GetAttestationMeasurement,
+              (std::string content_binding), (override));
 };
 
 class MockExampleIterator : public ExampleIterator {
@@ -711,6 +719,8 @@ class MockFlags : public Flags {
   MOCK_METHOD(int32_t, http_retry_max_attempts, (), (const, override));
   MOCK_METHOD(bool, enable_event_time_data_upload, (), (const, override));
   MOCK_METHOD(bool, enable_blob_header_in_http_headers, (), (const, override));
+  MOCK_METHOD(bool, move_device_attestation_to_start_task_assignment, (),
+              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.

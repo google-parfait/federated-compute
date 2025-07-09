@@ -206,6 +206,12 @@ class Flags {
   // If true, the blob header will be added to the HTTP headers for confidential
   // compute uploads.
   virtual bool enable_blob_header_in_http_headers() const { return false; }
+
+  // If true, the attestation measurement will be moved to just before the
+  // startTaskAssignment call.
+  virtual bool move_device_attestation_to_start_task_assignment() const {
+    return false;
+  }
 };
 }  // namespace client
 }  // namespace fcp
