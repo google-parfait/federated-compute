@@ -104,6 +104,15 @@ message FedSqlContainerConfigConstraints {
   // DP parameters for the FedSQL container.
   double epsilon = 1;
   double delta = 2;
+  // The column names that are part of the DP unit.
+  repeated string dp_column_names = 5;
+  // The fcp.confidentialcompute.WindowingSchedule for the DP unit. This is an
+  // `Any` because using a WindowingSchedule would require using the
+  // `tf_proto_library` build rule for
+  // fed_sql_container_config.proto and all its dependencies.
+  // TODO: b/425744048 - Change this to a WindowingSchedule once we remove the
+  // dependency on plan.proto from sql_query.proto.
+  google.protobuf.Any dp_windowing_schedule = 6;
 
   // The uri of the aggregation intrinsic to use with AggCore.
   string intrinsic_uri = 3;
