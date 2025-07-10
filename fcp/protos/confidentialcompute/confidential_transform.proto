@@ -45,36 +45,24 @@ service ConfidentialTransform {
   // Bidirectional stream to execute a Session. A session determines the
   // scope of data.
   //
-  // The expected order of inner message types is the following:
-  // 1. The client sends a ConfigureRequest which contains proto
-  //    configuration which the TEE will parse.
-  // 2. The server responds with a ConfigureResponse to acknowledge
-  //    creation of the session with the provided configuration, or fails
-  //    the stream if the session configuration is invalid according to
-  //    any constraints specified in initialization-time configuration.
-  // 3. The client will send a sequence of WriteRequests to write a blob
-  //    of data in chunks, starting with a WriteRequest where
-  //    first_request_metadata and first_request_configuration are set,
-  //    and concluding with a WriteRequest where commit is
-  //    true. It must write all chunks of one blob before moving on to
-  //    the next blob, never interleaving chunks of different blobs.
-  // 4. Once the write completes (OnWriteDone), the client may go back to step 3
-  //    without waiting for a WriteFinishedResponse.
-  // 5. When the server finishes processing a blob, (which may happen
-  //    concurrently with additional blobs being written to the server) it will
-  //    send a WriteFinishedResponse.
-  // 6. Steps 3-5 can be repeated any number of times.
-  // 7. The client will optionally send a CommitRequest to indicate that that
-  //    any blobs cached prior to the CommitRequest can now be incorporated into
-  //    the session.
-  // 8. The server will respond with a CommitResponse to acknowledge that all
-  //    cached blobs were committed.
-  // 9. A single FinalizeRequest is sent, after which the session is
-  //    immutable. No more requests will be accepted by the server.
-  // 10. One or more ReadResponses are sent by the server to pass a
-  //    blob produced by the session in chunks.
-  // 11. Step 10 may be repeated if multiple blobs were produced
-  //    by the session.
+  // The general pattern for a session is always this following where the
+  // [Op] can be Configure, Write, Commit, or Finalize.
+  //   --> [Op]Request       - client sends a request
+  //   <-- ReadResponse      - server may write back an arbitrary number of
+  //   ...                     read responses
+  //   <-- ReadResponse
+  //   <-- [Op]Response      - server completes the [Op] response
+  //
+  // The expected order of [Op]s is the following:
+  // 1. Configure            - single ConfigureRequest in the first request
+  // 2. -- Write*            - zero or more WriteRequests
+  // 3. -- Commit (optional) - multiple write requests may be followed with a
+  //                           single commit to indicate an end of a batch.
+  // 4. Finalize             - FinalizeRequest indicates the end of a session,
+  //                           however the finalizing operation may be
+  //                           retried if necessary for the session logic.
+  //
+  // Steps 2 and 3 may be repeated any number of times.
   rpc Session(stream SessionRequest) returns (stream SessionResponse) {}
 }
 
@@ -171,6 +159,7 @@ message SessionResponse {
     WriteFinishedResponse write = 2;
     CommitResponse commit = 4;
     ReadResponse read = 3;
+    FinalizeResponse finalize = 5;
   }
 }
 
@@ -403,9 +392,25 @@ message ReadResponse {
       ;
 }
 
-// Configuration associated with the final result produced by the container.
-// This is returned as part of `ReadResponse.first_response_configuration` when
-// reading the final result from the container.
+// A response indicating that the TEE has finished finalizing the session.
+// This response must be the last response sent on the Session stream following
+// an arbitrary number of ReadResponses.
+message FinalizeResponse {
+  // Release Token signed by the worker TEE's application signing key.
+  // This is passed back to the untrusted space so that it can use it to request
+  // KMS to release the final results.
+  bytes release_token = 1;
+
+  // The application specific configuration data associated with finalization.
+  google.protobuf.Any configuration = 2;
+}
+
+// This message is deprecated. Going forward, FinalizeResponse will be used
+// instead.
+// Configuration associated with the final result produced by the
+// container. This is returned as part of
+// `ReadResponse.first_response_configuration` when reading the final result
+// from the container.
 message FinalResultConfiguration {
   // Release Token signed by the worker TEE's application signing key.
   // This is passed back to the untrusted space so that it can use it to request
