@@ -52,6 +52,9 @@ message ColumnConfiguration {
 // A message for storing logics required for prompting a model.
 message Prompt {
   string prompt_template = 1;
+  // A regex to match against the model response, if provided. Only the first
+  // match will be used.
+  string regex = 2;
 }
 
 // Configuration for running inference using Gemma models.
