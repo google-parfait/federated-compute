@@ -53,13 +53,11 @@ pub unsafe extern "C" fn fcp_rs_oak_attestation_verification_verify_attestation<
     ))
     .unwrap();
 
-    let result: AttestationResults = oak_attestation_verification::verifier::to_attestation_results(
-        &oak_attestation_verification::verifier::verify(
-            now_utc_millis,
-            &evidence,
-            &endorsements,
-            &reference_values,
-        ),
+    let result: AttestationResults = oak_attestation_verification_wrapper::verify_attestation(
+        now_utc_millis,
+        &evidence,
+        &endorsements,
+        &reference_values,
     );
 
     let serialized_result: Box<[u8]> = result.encode_to_vec().into_boxed_slice();
