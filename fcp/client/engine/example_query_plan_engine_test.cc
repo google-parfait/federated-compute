@@ -45,6 +45,7 @@
 #include "fcp/client/tensorflow/tensorflow_runner.h"
 #include "fcp/client/tensorflow/tensorflow_runner_impl.h"
 #include "fcp/client/test_helpers.h"
+#include "fcp/protos/data_type.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"  // IWYU pragma: keep
 #include "google/protobuf/io/coded_stream.h"
@@ -74,6 +75,7 @@ using ::fcp::client::ExampleQueryResult;
 using ::google::internal::federated::plan::AggregationConfig;
 using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federated::plan::Dataset;
+using ::google::internal::federated::plan::DataType;
 using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::ExampleSelector;
 using tensorflow_federated::aggregation::Tensor;
@@ -254,11 +256,10 @@ class ExampleQueryPlanEngineTest : public testing::Test {
 
     ExampleQuerySpec::OutputVectorSpec string_vector_spec;
     string_vector_spec.set_vector_name(kOutputStringVectorName);
-    string_vector_spec.set_data_type(
-        ExampleQuerySpec::OutputVectorSpec::STRING);
+    string_vector_spec.set_data_type(DataType::STRING);
     ExampleQuerySpec::OutputVectorSpec int_vector_spec;
     int_vector_spec.set_vector_name(kOutputIntVectorName);
-    int_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::INT64);
+    int_vector_spec.set_data_type(DataType::INT64);
 
     ExampleQuerySpec::ExampleQuery example_query;
     example_query.mutable_example_selector()->set_collection_uri(
@@ -373,13 +374,13 @@ TEST_F(ExampleQueryPlanEngineTest, MultipleQueries) {
 
   ExampleQuerySpec::OutputVectorSpec float_vector_spec;
   float_vector_spec.set_vector_name("float_vector");
-  float_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::FLOAT);
+  float_vector_spec.set_data_type(DataType::FLOAT);
   ExampleQuerySpec::OutputVectorSpec string_vector_spec;
   // Same vector name as in the other ExampleQuery, but with a different output
   // one to make sure these vectors are distinguished in
   // example_query_plan_engine.
   string_vector_spec.set_vector_name(kOutputStringVectorName);
-  string_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::STRING);
+  string_vector_spec.set_data_type(DataType::STRING);
 
   ExampleQuerySpec::ExampleQuery second_example_query;
   second_example_query.mutable_example_selector()->set_collection_uri(
@@ -486,7 +487,7 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
 
   ExampleQuerySpec::OutputVectorSpec new_vector_spec;
   new_vector_spec.set_vector_name("new_vector");
-  new_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::DOUBLE);
+  new_vector_spec.set_data_type(DataType::DOUBLE);
 
   ExampleQuerySpec::ExampleQuery example_query =
       client_only_plan_.phase().example_query_spec().example_queries().at(0);
@@ -545,7 +546,7 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecTypeMismatch) {
 
   ExampleQuerySpec::OutputVectorSpec new_vector_spec;
   new_vector_spec.set_vector_name("new_vector");
-  new_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::DOUBLE);
+  new_vector_spec.set_data_type(DataType::DOUBLE);
 
   ExampleQuerySpec::ExampleQuery example_query =
       client_only_plan_.phase().example_query_spec().example_queries().at(0);
@@ -683,13 +684,13 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithEventTimeRange) {
 
   ExampleQuerySpec::OutputVectorSpec float_vector_spec;
   float_vector_spec.set_vector_name("float_vector");
-  float_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::FLOAT);
+  float_vector_spec.set_data_type(DataType::FLOAT);
   ExampleQuerySpec::OutputVectorSpec string_vector_spec;
   // Same vector name as in the other ExampleQuery, but with a different output
   // one to make sure these vectors are distinguished in
   // example_query_plan_engine.
   string_vector_spec.set_vector_name(kOutputStringVectorName);
-  string_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::STRING);
+  string_vector_spec.set_data_type(DataType::STRING);
 
   ExampleQuerySpec::ExampleQuery second_example_query;
   second_example_query.mutable_example_selector()->set_collection_uri(
@@ -771,13 +772,13 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
 
   ExampleQuerySpec::OutputVectorSpec float_vector_spec;
   float_vector_spec.set_vector_name("float_vector");
-  float_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::FLOAT);
+  float_vector_spec.set_data_type(DataType::FLOAT);
   ExampleQuerySpec::OutputVectorSpec string_vector_spec;
   // Same vector name as in the other ExampleQuery, but with a different output
   // one to make sure these vectors are distinguished in
   // example_query_plan_engine.
   string_vector_spec.set_vector_name(kOutputStringVectorName);
-  string_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::STRING);
+  string_vector_spec.set_data_type(DataType::STRING);
 
   ExampleQuerySpec::ExampleQuery second_example_query;
   second_example_query.mutable_example_selector()->set_collection_uri(
@@ -893,13 +894,13 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
 
   ExampleQuerySpec::OutputVectorSpec float_vector_spec;
   float_vector_spec.set_vector_name("float_vector");
-  float_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::FLOAT);
+  float_vector_spec.set_data_type(DataType::FLOAT);
   ExampleQuerySpec::OutputVectorSpec string_vector_spec;
   // Same vector name as in the other ExampleQuery, but with a different output
   // one to make sure these vectors are distinguished in
   // example_query_plan_engine.
   string_vector_spec.set_vector_name(kOutputStringVectorName);
-  string_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::STRING);
+  string_vector_spec.set_data_type(DataType::STRING);
 
   ExampleQuerySpec::ExampleQuery second_example_query;
   second_example_query.mutable_example_selector()->set_collection_uri(
@@ -1243,11 +1244,10 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
       kCollectionUri2);
   ExampleQuerySpec::OutputVectorSpec output_vector_spec_1;
   output_vector_spec_1.set_vector_name("vector_1");
-  output_vector_spec_1.set_data_type(ExampleQuerySpec::OutputVectorSpec::INT64);
+  output_vector_spec_1.set_data_type(DataType::INT64);
   ExampleQuerySpec::OutputVectorSpec output_vector_spec_2;
   output_vector_spec_2.set_vector_name("vector_2");
-  output_vector_spec_2.set_data_type(
-      ExampleQuerySpec::OutputVectorSpec::STRING);
+  output_vector_spec_2.set_data_type(DataType::STRING);
   (*sql_example_query.mutable_output_vector_specs())[kTensorName2] =
       output_vector_spec_1;
   (*sql_example_query.mutable_output_vector_specs())[kTensorName3] =

@@ -42,6 +42,7 @@
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/tensorflow/tensorflow_runner.h"
+#include "fcp/protos/data_type.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.h"
 #include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.pb.h"
@@ -56,6 +57,7 @@ namespace engine {
 using ::fcp::client::ExampleQueryResult;
 using ::fcp::client::engine::PlanResult;
 using ::fcp::client::opstats::OpStatsLogger;
+using ::google::internal::federated::plan::DataType;
 using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::ExampleSelector;
 using tensorflow_federated::aggregation::CheckpointBuilder;
@@ -157,8 +159,8 @@ absl::Status GenerateAggregationTensorsFromStructuredResults(
       const ExampleQueryResult::VectorData::Values values = it->second;
       Tensor tensor;
       if (values.has_int32_values()) {
-        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::INT32));
+        FCP_RETURN_IF_ERROR(
+            CheckOutputVectorDataType(output_vector_spec, DataType::INT32));
         FCP_ASSIGN_OR_RETURN(
             tensor, ConvertNumericTensor<int32_t>(
                         tensorflow_federated::aggregation::DT_INT32,
@@ -166,16 +168,16 @@ absl::Status GenerateAggregationTensorsFromStructuredResults(
                         values.int32_values().value()));
 
       } else if (values.has_int64_values()) {
-        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::INT64));
+        FCP_RETURN_IF_ERROR(
+            CheckOutputVectorDataType(output_vector_spec, DataType::INT64));
         FCP_ASSIGN_OR_RETURN(
             tensor, ConvertNumericTensor<int64_t>(
                         tensorflow_federated::aggregation::DT_INT64,
                         TensorShape({values.int64_values().value_size()}),
                         values.int64_values().value()));
       } else if (values.has_string_values()) {
-        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::STRING));
+        FCP_RETURN_IF_ERROR(
+            CheckOutputVectorDataType(output_vector_spec, DataType::STRING));
         FCP_ASSIGN_OR_RETURN(
             tensor, ConvertStringTensor(
                         TensorShape({values.string_values().value_size()}),
@@ -184,16 +186,16 @@ absl::Status GenerateAggregationTensorsFromStructuredResults(
         // TODO: b/296046539 - add support for bool values type
         return absl::UnimplementedError("Bool values currently not supported.");
       } else if (values.has_float_values()) {
-        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::FLOAT));
+        FCP_RETURN_IF_ERROR(
+            CheckOutputVectorDataType(output_vector_spec, DataType::FLOAT));
         FCP_ASSIGN_OR_RETURN(
             tensor, ConvertNumericTensor<float>(
                         tensorflow_federated::aggregation::DT_FLOAT,
                         TensorShape({values.float_values().value_size()}),
                         values.float_values().value()));
       } else if (values.has_double_values()) {
-        FCP_RETURN_IF_ERROR(CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::DOUBLE));
+        FCP_RETURN_IF_ERROR(
+            CheckOutputVectorDataType(output_vector_spec, DataType::DOUBLE));
         FCP_ASSIGN_OR_RETURN(
             tensor, ConvertNumericTensor<double>(
                         tensorflow_federated::aggregation::DT_DOUBLE,

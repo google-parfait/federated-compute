@@ -43,6 +43,7 @@
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_logger.h"
+#include "fcp/protos/data_type.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
@@ -57,6 +58,7 @@ using TfLiteInputs = absl::flat_hash_map<std::string, std::string>;
 
 using ::fcp::client::InterruptibleRunner;
 using ::google::internal::federated::plan::ClientOnlyPlan;
+using ::google::internal::federated::plan::DataType;
 using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::FederatedComputeEligibilityIORouter;
 using ::google::internal::federated::plan::FederatedComputeIORouter;
@@ -90,7 +92,6 @@ std::unique_ptr<TfLiteInputs> ConstructTfLiteInputsForEligibilityEvalPlan(
   }
   return inputs;
 }
-
 
 #ifdef FCP_CLIENT_SUPPORT_TFMOBILE
 std::unique_ptr<std::vector<std::pair<std::string, tensorflow::Tensor>>>
@@ -333,21 +334,21 @@ absl::Status TensorflowRunnerImpl::WriteTFV1Checkpoint(
       absl::Status status;
       if (values.has_int32_values()) {
         FCP_RETURN_IF_ERROR(engine::CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::INT32));
+            output_vector_spec, DataType::INT32));
         int64_t size = values.int32_values().value_size();
         auto data =
             static_cast<const int32_t*>(values.int32_values().value().data());
         FCP_RETURN_IF_ERROR(WriteSlice(slice_writer, output_name, size, data));
       } else if (values.has_int64_values()) {
         FCP_RETURN_IF_ERROR(engine::CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::INT64));
+            output_vector_spec, DataType::INT64));
         int64_t size = values.int64_values().value_size();
         auto data =
             static_cast<const int64_t*>(values.int64_values().value().data());
         FCP_RETURN_IF_ERROR(WriteSlice(slice_writer, output_name, size, data));
       } else if (values.has_string_values()) {
         FCP_RETURN_IF_ERROR(engine::CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::STRING));
+            output_vector_spec, DataType::STRING));
         int64_t size = values.string_values().value_size();
         std::vector<tensorflow::tstring> tf_string_vector;
         for (const auto& value : values.string_values().value()) {
@@ -357,28 +358,28 @@ absl::Status TensorflowRunnerImpl::WriteTFV1Checkpoint(
                                        tf_string_vector.data()));
       } else if (values.has_bool_values()) {
         FCP_RETURN_IF_ERROR(engine::CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::BOOL));
+            output_vector_spec, DataType::BOOL));
         int64_t size = values.bool_values().value_size();
         auto data =
             static_cast<const bool*>(values.bool_values().value().data());
         FCP_RETURN_IF_ERROR(WriteSlice(slice_writer, output_name, size, data));
       } else if (values.has_float_values()) {
         FCP_RETURN_IF_ERROR(engine::CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::FLOAT));
+            output_vector_spec, DataType::FLOAT));
         int64_t size = values.float_values().value_size();
         auto data =
             static_cast<const float*>(values.float_values().value().data());
         FCP_RETURN_IF_ERROR(WriteSlice(slice_writer, output_name, size, data));
       } else if (values.has_double_values()) {
         FCP_RETURN_IF_ERROR(engine::CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::DOUBLE));
+            output_vector_spec, DataType::DOUBLE));
         int64_t size = values.double_values().value_size();
         auto data =
             static_cast<const double*>(values.double_values().value().data());
         FCP_RETURN_IF_ERROR(WriteSlice(slice_writer, output_name, size, data));
       } else if (values.has_bytes_values()) {
         FCP_RETURN_IF_ERROR(engine::CheckOutputVectorDataType(
-            output_vector_spec, ExampleQuerySpec::OutputVectorSpec::BYTES));
+            output_vector_spec, DataType::BYTES));
         int64_t size = values.bytes_values().value_size();
         std::vector<tensorflow::tstring> tf_string_vector;
         for (const auto& value : values.string_values().value()) {

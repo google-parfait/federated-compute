@@ -2,6 +2,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 
 from fcp.artifact_building import data_upload_plan_builder
+from fcp.protos import data_type_pb2
 from fcp.protos import plan_pb2
 
 
@@ -17,8 +18,7 @@ def _example_query_spec_factory(
     example_query.direct_output_tensor_name = output_name
   else:
     output_vector = plan_pb2.ExampleQuerySpec.OutputVectorSpec(
-        vector_name=output_name,
-        data_type=plan_pb2.ExampleQuerySpec.OutputVectorSpec.DataType.INT64,
+        vector_name=output_name, data_type=data_type_pb2.DataType.INT64
     )
     example_query.output_vector_specs[output_name].CopyFrom(output_vector)
 

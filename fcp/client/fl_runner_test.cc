@@ -60,6 +60,7 @@
 #include "fcp/client/tensorflow/tensorflow_runner_factory.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
+#include "fcp/protos/data_type.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -80,6 +81,7 @@ using ::fcp::confidentialcompute::PayloadMetadata;
 using ::google::internal::federated::plan::AggregationConfig;
 using ::google::internal::federated::plan::ClientOnlyPlan;
 using ::google::internal::federated::plan::Dataset;
+using ::google::internal::federated::plan::DataType;
 using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::ExampleSelector;
 using ::google::internal::federated::plan::Metric;
@@ -721,10 +723,10 @@ void FlRunnerExampleQueryTest::SetUp() {
 
   ExampleQuerySpec::OutputVectorSpec string_vector_spec;
   string_vector_spec.set_vector_name("string_vector");
-  string_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::STRING);
+  string_vector_spec.set_data_type(DataType::STRING);
   ExampleQuerySpec::OutputVectorSpec int_vector_spec;
   int_vector_spec.set_vector_name("int_vector");
-  int_vector_spec.set_data_type(ExampleQuerySpec::OutputVectorSpec::INT64);
+  int_vector_spec.set_data_type(DataType::INT64);
 
   ExampleQuerySpec::ExampleQuery example_query;
   example_query.mutable_example_selector()->set_collection_uri(

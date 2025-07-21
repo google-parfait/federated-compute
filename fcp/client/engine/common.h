@@ -40,6 +40,7 @@
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/stats.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
+#include "fcp/protos/data_type.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/tensorflow/external_dataset.h"
@@ -167,8 +168,7 @@ GetOutputVectorSpecs(
 absl::Status CheckOutputVectorDataType(
     const google::internal::federated::plan::ExampleQuerySpec::OutputVectorSpec&
         output_vector_spec,
-    const google::internal::federated::plan::ExampleQuerySpec::
-        OutputVectorSpec::DataType& expected_data_type);
+    const google::internal::federated::plan::DataType& expected_data_type);
 
 }  // namespace engine
 }  // namespace client

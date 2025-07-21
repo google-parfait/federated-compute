@@ -224,6 +224,7 @@ cc_test(
         "//fcp/client/engine:common",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/client/tensorflow:tensorflow_runner_factory",
+        "//fcp/protos:data_type_cc_proto",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
         "//fcp/protos:plan_cc_proto",

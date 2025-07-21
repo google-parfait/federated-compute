@@ -316,6 +316,7 @@ py_test(
     srcs = ["data_upload_plan_builder_test.py"],
     deps = [
         ":data_upload_plan_builder",
+        "//fcp/protos:data_type_py_pb2",
         "//fcp/protos:plan_py_pb2",
         "@pypi_absl_py//:pkg",
     ],

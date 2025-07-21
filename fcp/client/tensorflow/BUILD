@@ -67,6 +67,7 @@ cc_library(
         "//fcp/client/engine:example_iterator_factory",
         "//fcp/client/engine:tflite_plan_engine",
         "//fcp/client/opstats:opstats_logger",
+        "//fcp/protos:data_type_cc_proto",
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",

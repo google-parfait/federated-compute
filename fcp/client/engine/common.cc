@@ -35,6 +35,7 @@
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/simple_task_environment.h"
+#include "fcp/protos/data_type.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "tensorflow/core/protobuf/struct.pb.h"
 
@@ -222,7 +223,7 @@ GetOutputVectorSpecs(const ExampleQuerySpec::ExampleQuery& example_query) {
 
 absl::Status CheckOutputVectorDataType(
     const ExampleQuerySpec::OutputVectorSpec& output_vector_spec,
-    const ExampleQuerySpec::OutputVectorSpec::DataType& expected_data_type) {
+    const google::internal::federated::plan::DataType& expected_data_type) {
   if (output_vector_spec.data_type() != expected_data_type) {
     return absl::FailedPreconditionError(
         "Unexpected data type in the example query");

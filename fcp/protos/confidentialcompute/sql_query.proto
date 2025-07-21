@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
-import "fcp/protos/plan.proto";
+import "fcp/protos/data_type.proto";
 
 option java_package = "com.google.intelligence.fcp.confidentialcompute";
 option java_multiple_files = true;
@@ -28,8 +28,7 @@ message ColumnSchema {
 
   // ExampleQuery output vector data type.
   // TODO: b/425744048 - Remove this dependency on plan.proto.
-  google.internal.federated.plan.ExampleQuerySpec.OutputVectorSpec.DataType
-      type = 2;
+  google.internal.federated.plan.DataType type = 2;
 }
 
 // Schema information describing a SQL table.

@@ -17,6 +17,7 @@ syntax = "proto3";
 package google.internal.federated.plan;
 
 import "google/protobuf/any.proto";
+import "fcp/protos/data_type.proto";
 import "tensorflow/core/framework/tensor.proto";
 import "tensorflow/core/framework/types.proto";
 import "tensorflow/core/protobuf/saver.proto";
@@ -497,18 +498,6 @@ message ExampleQuerySpec {
   message OutputVectorSpec {
     // The output vector name.
     string vector_name = 1;
-
-    // Supported data types for the vector of information.
-    enum DataType {
-      UNSPECIFIED = 0;
-      INT32 = 1;
-      INT64 = 2;
-      BOOL = 3;
-      FLOAT = 4;
-      DOUBLE = 5;
-      BYTES = 6;
-      STRING = 7;
-    }
 
     // The data type for each entry in the vector.
     DataType data_type = 2;
