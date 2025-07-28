@@ -22,12 +22,12 @@
 #include "gtest/gtest.h"
 #include "absl/log/check.h"
 #include "absl/status/status.h"
+#include "tensorflow/core/platform/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "fcp/confidentialcompute/constants.h"
 #include "fcp/confidentialcompute/mock_lambda_runner.h"
 #include "fcp/confidentialcompute/test_utils.h"
 #include "fcp/testing/testing.h"
-#include "tensorflow/core/platform/status_matchers.h"
 #include "tensorflow/core/protobuf/error_codes.pb.h"
 #include "tensorflow_federated/cc/core/impl/executors/executor.h"
 #include "tensorflow_federated/cc/core/impl/executors/executor_test_base.h"
@@ -106,10 +106,10 @@ TEST_F(TeeExecutorTest, CreateCallInvalidIntrinsic) {
   OwnedValueId controller_res = CheckOkAndGetValue(
       test_executor_->CreateCall(controller_intrinsic, controller_arg));
 
-  EXPECT_THAT(test_executor_->Materialize(controller_res),
-              tensorflow::testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Unsupported intrinsic invalid_uri")));
+  EXPECT_THAT(
+      test_executor_->Materialize(controller_res),
+      tensorflow::testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                             HasSubstr("Unsupported intrinsic invalid_uri")));
 }
 
 TEST_F(TeeExecutorTest, CreateCallInvalidNumArgs) {
@@ -131,10 +131,9 @@ TEST_F(TeeExecutorTest, CreateCallInvalidNumArgs) {
   OwnedValueId controller_res = CheckOkAndGetValue(
       test_executor_->CreateCall(controller_agg, controller_agg_arg));
 
-  EXPECT_THAT(
-      test_executor_->Materialize(controller_res),
-      tensorflow::testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                                    HasSubstr("Expected argument of size 2")));
+  EXPECT_THAT(test_executor_->Materialize(controller_res),
+              tensorflow::testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                     HasSubstr("Expected argument of size 2")));
 }
 
 TEST_F(TeeExecutorTest, CreateCallInvalidLambdaRunnerResult) {

@@ -21,6 +21,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "tensorflow/core/platform/status_matchers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "fcp/tensorflow/serve_slices_registry.h"
@@ -28,7 +29,6 @@
 #include "tensorflow/core/framework/graph.pb.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_testutil.h"
-#include "tensorflow/core/platform/status_matchers.h"
 #include "tensorflow/core/protobuf/error_codes.pb.h"
 #include "tensorflow/core/public/session.h"
 
@@ -166,7 +166,6 @@ TEST_F(ServeSlicesOpTest, SessionRunFailsOnMissingCallback) {
   tensorflow::Tensor callback_token_tensor(callback_token->ToString());
   tensorflow::Tensor served_at_id_out;
   absl::Status status = RunSession(callback_token_tensor, served_at_id_out);
-  // Remove the cast after TF 2.12 is released and used in FCP.
   EXPECT_THAT(status, tensorflow::testing::StatusIs(
                           absl::StatusCode::kInvalidArgument,
                           HasSubstr("No `ServeSlices` callback found")));

@@ -25,13 +25,13 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "tensorflow/core/platform/status_matchers.h"
 #include "absl/strings/str_cat.h"
 #include "fcp/confidentialcompute/constants.h"
 #include "fcp/confidentialcompute/test_utils.h"
 #include "fcp/testing/parse_text_proto.h"
 #include "fcp/testing/testing.h"
 #include "federated_language/proto/computation.pb.h"
-#include "tensorflow/core/platform/status_matchers.h"
 #include "tensorflow/core/protobuf/error_codes.pb.h"
 #include "tensorflow_federated/cc/core/impl/executors/cardinalities.h"
 #include "tensorflow_federated/cc/core/impl/executors/composing_executor.h"
@@ -413,10 +413,10 @@ TEST_F(ComposingTeeExecutorTest, CreateCallInvalidIntrinsic) {
   tensorflow_federated::OwnedValueId controller_res =
       std::move(controller_res_or_status.value());
 
-  EXPECT_THAT(test_executor_->Materialize(controller_res),
-              tensorflow::testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Unsupported intrinsic invalid")));
+  EXPECT_THAT(
+      test_executor_->Materialize(controller_res),
+      tensorflow::testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                             HasSubstr("Unsupported intrinsic invalid")));
 }
 
 }  // namespace
