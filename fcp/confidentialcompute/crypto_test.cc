@@ -13,8 +13,6 @@
 // limitations under the License.
 #include "fcp/confidentialcompute/crypto.h"
 
-#include <sys/types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -29,14 +27,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/confidentialcompute/cose.h"
-#include "fcp/protos/confidentialcompute/confidential_transform.pb.h"
 #include "fcp/testing/testing.h"
-#include "cc/crypto/signing_key.h"
-#include "proto/crypto/crypto.pb.h"
 #include "openssl/base.h"
 #include "openssl/hpke.h"
 
@@ -44,7 +38,6 @@ namespace fcp {
 namespace confidential_compute {
 namespace {
 
-using ::fcp::confidentialcompute::BlobMetadata;
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::ElementsAre;
@@ -90,239 +83,6 @@ std::pair<std::string, std::string> GenerateKeyPair(const EVP_HPKE_KEM& kem) {
   return {public_key, private_key};
 }
 
-class MockSigningKeyHandle : public oak::crypto::SigningKeyHandle {
- public:
-  MOCK_METHOD(absl::StatusOr<oak::crypto::v1::Signature>, Sign,
-              (absl::string_view message), (override));
-};
-
-TEST(CryptoTest, GetNextBlobNonceSucceedsAndIncrementsCounter) {
-  std::string session_nonce = "session_nonce";
-  NonceGenerator nonce_generator(session_nonce);
-
-  uint32_t counter_0 = 0;
-  std::string expected_blob_nonce_0(session_nonce.length() + sizeof(uint32_t),
-                                    '\0');
-  std::memcpy(expected_blob_nonce_0.data(), session_nonce.data(),
-              session_nonce.length());
-  std::memcpy(expected_blob_nonce_0.data() + session_nonce.length(), &counter_0,
-              sizeof(uint32_t));
-
-  uint32_t counter_1 = 1;
-  std::string expected_blob_nonce_1(session_nonce.length() + sizeof(uint32_t),
-                                    '\0');
-  std::memcpy(expected_blob_nonce_1.data(), session_nonce.data(),
-              session_nonce.length());
-  std::memcpy(expected_blob_nonce_1.data() + session_nonce.length(), &counter_1,
-              sizeof(uint32_t));
-
-  absl::StatusOr<NonceAndCounter> actual_blob_nonce_0 =
-      nonce_generator.GetNextBlobNonce();
-  ASSERT_OK(actual_blob_nonce_0);
-  ASSERT_EQ(actual_blob_nonce_0->blob_nonce, expected_blob_nonce_0);
-  ASSERT_EQ(actual_blob_nonce_0->counter, counter_0);
-  absl::StatusOr<NonceAndCounter> actual_blob_nonce_1 =
-      nonce_generator.GetNextBlobNonce();
-  ASSERT_OK(actual_blob_nonce_1);
-  ASSERT_EQ(actual_blob_nonce_1->blob_nonce, expected_blob_nonce_1);
-  ASSERT_EQ(actual_blob_nonce_1->counter, counter_1);
-}
-
-TEST(CryptoTest, CheckBlobNonceSucceeds) {
-  NonceChecker nonce_tracker;
-  std::string session_nonce = nonce_tracker.GetSessionNonce();
-  uint32_t counter = 0;
-  std::string blob_nonce(session_nonce.length() + sizeof(uint32_t), '\0');
-  std::memcpy(blob_nonce.data(), session_nonce.data(), session_nonce.length());
-  std::memcpy(blob_nonce.data() + session_nonce.length(), &counter,
-              sizeof(uint32_t));
-  BlobMetadata metadata;
-  metadata.mutable_hpke_plus_aead_data()->set_counter(counter);
-  metadata.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce);
-
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(metadata).ok());
-}
-
-TEST(CryptoTest, CheckBlobNonceUnencryptedSucceeds) {
-  NonceChecker nonce_tracker;
-  std::string nonce_and_counter =
-      absl::StrCat(nonce_tracker.GetSessionNonce(), 0);
-  BlobMetadata metadata;
-  metadata.mutable_unencrypted();
-
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(metadata).ok());
-}
-
-TEST(CryptoTest, CheckBlobNonceWrongCounterFails) {
-  NonceChecker nonce_tracker;
-  std::string session_nonce = nonce_tracker.GetSessionNonce();
-  uint32_t counter = 0;
-  std::string blob_nonce(session_nonce.length() + sizeof(uint32_t), '\0');
-  std::memcpy(blob_nonce.data(), session_nonce.data(), session_nonce.length());
-  std::memcpy(blob_nonce.data() + session_nonce.length(), &counter,
-              sizeof(uint32_t));
-  BlobMetadata metadata;
-  metadata.mutable_hpke_plus_aead_data()->set_counter(counter);
-  metadata.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce);
-
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(metadata).ok());
-  // Reusing metadata with the same counter fails.
-  absl::Status result = nonce_tracker.CheckBlobNonce(metadata);
-  ASSERT_EQ(result.code(), absl::StatusCode::kPermissionDenied);
-  ASSERT_EQ(result.message(),
-            "Blob counter 0 is less than the minimum expected value 1; caller "
-            "may be attempting to reuse a previously seen nonce.");
-}
-
-TEST(CryptoTest, CheckBlobNonceWrongNonceFails) {
-  NonceChecker nonce_tracker;
-  std::string session_nonce = "bad nonce";
-  uint32_t counter = 0;
-  std::string blob_nonce(session_nonce.length() + sizeof(uint32_t), '\0');
-  std::memcpy(blob_nonce.data(), session_nonce.data(), session_nonce.length());
-  std::memcpy(blob_nonce.data() + session_nonce.length(), &counter,
-              sizeof(uint32_t));
-  BlobMetadata metadata;
-  metadata.mutable_hpke_plus_aead_data()->set_counter(counter);
-  metadata.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce);
-  absl::Status result = nonce_tracker.CheckBlobNonce(metadata);
-  ASSERT_EQ(result.code(), absl::StatusCode::kPermissionDenied);
-  ASSERT_EQ(result.message(),
-            "RewrappedAssociatedData nonce does not match the expected value.");
-}
-
-TEST(CryptoTest, CheckBlobNonceSkippingCounters) {
-  NonceChecker nonce_tracker;
-  std::string session_nonce = nonce_tracker.GetSessionNonce();
-  uint32_t counter_0 = 0;
-  std::string blob_nonce_0(session_nonce.length() + sizeof(uint32_t), '\0');
-  std::memcpy(blob_nonce_0.data(), session_nonce.data(),
-              session_nonce.length());
-  std::memcpy(blob_nonce_0.data() + session_nonce.length(), &counter_0,
-              sizeof(uint32_t));
-  BlobMetadata metadata_0;
-  metadata_0.mutable_hpke_plus_aead_data()->set_counter(counter_0);
-  metadata_0.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce_0);
-
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(metadata_0).ok());
-
-  // Skipping to a greater counter value should succeed.
-  uint32_t counter_5 = 5;
-  std::string blob_nonce_5(session_nonce.length() + sizeof(uint32_t), '\0');
-  std::memcpy(blob_nonce_5.data(), session_nonce.data(),
-              session_nonce.length());
-  std::memcpy(blob_nonce_5.data() + session_nonce.length(), &counter_5,
-              sizeof(uint32_t));
-  BlobMetadata metadata_5;
-  metadata_5.mutable_hpke_plus_aead_data()->set_counter(counter_5);
-  metadata_5.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce_5);
-
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(metadata_5).ok());
-
-  // Using a smaller counter value should fail, even if that specific counter
-  // has never been used.
-  uint32_t counter_1 = 1;
-  std::string blob_nonce_1(session_nonce.length() + sizeof(uint32_t), '\0');
-  std::memcpy(blob_nonce_1.data(), session_nonce.data(),
-              session_nonce.length());
-  std::memcpy(blob_nonce_1.data() + session_nonce.length(), &counter_1,
-              sizeof(uint32_t));
-  BlobMetadata metadata_1;
-  metadata_1.mutable_hpke_plus_aead_data()->set_counter(counter_1);
-  metadata_1.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce_1);
-  absl::Status result = nonce_tracker.CheckBlobNonce(metadata_1);
-  ASSERT_EQ(result.code(), absl::StatusCode::kPermissionDenied);
-  ASSERT_EQ(
-      result.message(),
-      "Blob counter 1 is less than the minimum expected value 6; caller may be "
-      "attempting to reuse a previously seen nonce.");
-}
-
-TEST(CryptoTest, CheckBlobNonceUnencryptedDoesNotAffectCounter) {
-  NonceChecker nonce_tracker;
-  std::string session_nonce = nonce_tracker.GetSessionNonce();
-  uint32_t counter_0 = 0;
-  std::string blob_nonce_0(session_nonce.length() + sizeof(uint32_t), '\0');
-  std::memcpy(blob_nonce_0.data(), session_nonce.data(),
-              session_nonce.length());
-  std::memcpy(blob_nonce_0.data() + session_nonce.length(), &counter_0,
-              sizeof(uint32_t));
-  BlobMetadata metadata_0;
-  metadata_0.mutable_hpke_plus_aead_data()->set_counter(counter_0);
-  metadata_0.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce_0);
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(metadata_0).ok());
-
-  BlobMetadata unencrypted_metadata;
-  unencrypted_metadata.mutable_unencrypted();
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(unencrypted_metadata).ok());
-
-  uint32_t counter_1 = 1;
-  std::string blob_nonce_1(session_nonce.length() + sizeof(uint32_t), '\0');
-  std::memcpy(blob_nonce_1.data(), session_nonce.data(),
-              session_nonce.length());
-  std::memcpy(blob_nonce_1.data() + session_nonce.length(), &counter_1,
-              sizeof(uint32_t));
-  BlobMetadata metadata_1;
-  metadata_1.mutable_hpke_plus_aead_data()->set_counter(counter_1);
-  metadata_1.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce_1);
-
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(metadata_1).ok());
-}
-
-TEST(CryptoTest, NonceGeneratorAndCheckerWorkTogether) {
-  NonceChecker nonce_tracker;
-  std::string session_nonce = nonce_tracker.GetSessionNonce();
-  NonceGenerator nonce_generator(session_nonce);
-  absl::StatusOr<NonceAndCounter> blob_nonce_0 =
-      nonce_generator.GetNextBlobNonce();
-  ASSERT_OK(blob_nonce_0);
-  BlobMetadata metadata_0;
-  metadata_0.mutable_hpke_plus_aead_data()->set_counter(blob_nonce_0->counter);
-  metadata_0.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce_0->blob_nonce);
-
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(metadata_0).ok());
-
-  absl::StatusOr<NonceAndCounter> blob_nonce_1 =
-      nonce_generator.GetNextBlobNonce();
-  ASSERT_OK(blob_nonce_1);
-  BlobMetadata metadata_1;
-  metadata_1.mutable_hpke_plus_aead_data()->set_counter(blob_nonce_1->counter);
-  metadata_1.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce_1->blob_nonce);
-
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(metadata_1).ok());
-
-  absl::StatusOr<NonceAndCounter> blob_nonce_2 =
-      nonce_generator.GetNextBlobNonce();
-  ASSERT_OK(blob_nonce_2);
-  BlobMetadata metadata_2;
-  metadata_2.mutable_hpke_plus_aead_data()->set_counter(blob_nonce_2->counter);
-  metadata_2.mutable_hpke_plus_aead_data()
-      ->mutable_rewrapped_symmetric_key_associated_data()
-      ->set_nonce(blob_nonce_2->blob_nonce);
-
-  ASSERT_TRUE(nonce_tracker.CheckBlobNonce(metadata_2).ok());
-}
-
 TEST(CryptoTest, GetPublicKey) {
   testing::MockFunction<absl::StatusOr<std::string>(absl::string_view)> signer;
   std::string sig_structure;
@@ -332,7 +92,7 @@ TEST(CryptoTest, GetPublicKey) {
   google::protobuf::Struct config_properties;
   (*config_properties.mutable_fields())["key"].set_string_value("value");
 
-  MessageDecryptor decryptor(config_properties);
+  MessageDecryptor decryptor(config_properties.SerializeAsString());
   absl::StatusOr<std::string> recipient_public_key =
       decryptor.GetPublicKey(signer.AsStdFunction(), 7);
   ASSERT_OK(recipient_public_key);
@@ -346,7 +106,7 @@ TEST(CryptoTest, GetPublicKey) {
   EXPECT_THAT(cwt->public_key->key_ops, ElementsAre(kCoseKeyOpEncrypt));
   EXPECT_EQ(cwt->public_key->curve, crypto_internal::kX25519);
   EXPECT_NE(cwt->public_key->x, "");
-  EXPECT_THAT(cwt->config_properties, EqualsProto(config_properties));
+  EXPECT_EQ(cwt->config_properties, config_properties.SerializeAsString());
   EXPECT_EQ(cwt->signature, "signature");
 
   // The signature structure is a COSE implementation detail, but it should at
@@ -582,14 +342,10 @@ TEST(CryptoTest, EncryptForRelease) {
   recipient_public_key = recipient_cwt->Encode();
   ASSERT_OK(recipient_public_key);
 
-  MockSigningKeyHandle signing_key;
-  oak::crypto::v1::Signature fake_signature;
-  fake_signature.set_signature("signature");
-  ON_CALL(signing_key, Sign(_)).WillByDefault(Return(fake_signature));
   absl::StatusOr<EncryptMessageResult> encrypt_result =
-      encryptor.EncryptForRelease(message, *recipient_public_key,
-                                  associated_data, "src-state", "dst-state",
-                                  signing_key);
+      encryptor.EncryptForRelease(
+          message, *recipient_public_key, associated_data, "src-state",
+          "dst-state", [](absl::string_view) { return "signature"; });
   ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result =
@@ -623,13 +379,10 @@ TEST(CryptoTest, EncryptForReleaseWithNullSrcState) {
       decryptor.GetPublicKey([](absl::string_view) { return ""; }, 0);
   ASSERT_OK(recipient_public_key);
 
-  MockSigningKeyHandle signing_key;
-  ON_CALL(signing_key, Sign(_))
-      .WillByDefault(Return(oak::crypto::v1::Signature()));
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.EncryptForRelease(message, *recipient_public_key,
                                   associated_data, std::nullopt, "dst-state",
-                                  signing_key);
+                                  [](absl::string_view) { return ""; });
   ASSERT_OK(encrypt_result);
 
   absl::StatusOr<ReleaseToken> release_token =

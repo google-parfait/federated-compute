@@ -99,7 +99,6 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
     ] + select({
         ":disable_confidential_agg_setting": [],
         "//conditions:default": [
@@ -132,7 +131,6 @@ cc_library(
         ":cose",
         "//fcp/base",
         "//fcp/base:digest",
-        "//fcp/protos/confidentialcompute:confidential_transform_cc_proto",
         "@boringssl//:crypto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/cleanup",
@@ -141,9 +139,6 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_protobuf//:protobuf",
-        "@oak//cc/crypto:signing_key",
     ],
 )
 
@@ -154,7 +149,6 @@ cc_test(
         ":cose",
         ":crypto",
         "//fcp/base",
-        "//fcp/protos/confidentialcompute:confidential_transform_cc_proto",
         "//fcp/testing",
         "@boringssl//:crypto",
         "@com_google_absl//absl/log:check",
@@ -163,8 +157,6 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
-        "@oak//cc/crypto:signing_key",
-        "@oak//proto/crypto:crypto_cc_proto",
     ],
 )
 
@@ -328,6 +320,33 @@ cc_library(
         ":lambda_runner",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
+    name = "nonce",
+    srcs = ["nonce.cc"],
+    hdrs = ["nonce.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//fcp/protos/confidentialcompute:confidential_transform_cc_proto",
+        "@boringssl//:crypto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_test(
+    name = "nonce_test",
+    srcs = ["nonce_test.cc"],
+    deps = [
+        ":nonce",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 

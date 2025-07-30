@@ -280,7 +280,7 @@ TEST(OkpCwtTest, EncodeFull) {
            .issued_at = absl::FromUnixSeconds(1000),
            .expiration_time = absl::FromUnixSeconds(2000),
            .public_key = OkpKey(),
-           .config_properties = config_properties,
+           .config_properties = config_properties.SerializeAsString(),
            .access_policy_sha256 = "hash",
            .signature = "signature",
        })
@@ -313,7 +313,7 @@ TEST(OkpCwtTest, DecodeEmpty) {
   EXPECT_EQ(key->issued_at, std::nullopt);
   EXPECT_EQ(key->expiration_time, std::nullopt);
   EXPECT_EQ(key->public_key, std::nullopt);
-  EXPECT_THAT(key->config_properties, EqualsProto(""));
+  EXPECT_EQ(key->config_properties, "");
   EXPECT_EQ(key->access_policy_sha256, "");
   EXPECT_EQ(key->signature, "");
 }
@@ -328,14 +328,17 @@ TEST(OkpCwtTest, DecodeFull) {
   EXPECT_EQ(cwt->issued_at, absl::FromUnixSeconds(1000));
   EXPECT_EQ(cwt->expiration_time, absl::FromUnixSeconds(2000));
   EXPECT_TRUE(cwt->public_key.has_value());
-  EXPECT_THAT(cwt->config_properties, EqualsProto(R"pb(
+  EXPECT_EQ(cwt->access_policy_sha256, "hash");
+  EXPECT_EQ(cwt->signature, "signature");
+
+  google::protobuf::Struct config_properties;
+  ASSERT_TRUE(config_properties.ParseFromString(cwt->config_properties));
+  EXPECT_THAT(config_properties, EqualsProto(R"pb(
                 fields {
                   key: "x"
                   value { bool_value: true }
                 }
               )pb"));
-  EXPECT_EQ(cwt->access_policy_sha256, "hash");
-  EXPECT_EQ(cwt->signature, "signature");
 }
 
 TEST(OkpCwtTest, DecodeInvalid) {

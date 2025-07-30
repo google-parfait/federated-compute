@@ -21,7 +21,6 @@
 #include <utility>
 #include <vector>
 
-#include "google/protobuf/struct.pb.h"
 #include "absl/algorithm/container.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
@@ -29,12 +28,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/confidentialcompute/cose.h"
-#include "cc/crypto/signing_key.h"
 #include "openssl/aead.h"
 #include "openssl/base.h"
 #include "openssl/ec.h"
@@ -57,19 +54,6 @@ constexpr absl::string_view kNonce =
 constexpr absl::string_view kInfo;
 
 namespace {
-// The size of the session-level nonce.
-constexpr size_t kNonceSize = 16;
-
-// Generates a blob-level nonce from a session-level nonce and a blob counter.
-std::string GenerateBlobNonce(std::string session_nonce, uint32_t counter) {
-  // We assume that the untrusted and trusted code are running on a machine with
-  // the same endianness.
-  std::string blob_nonce(session_nonce.length() + sizeof(uint32_t), '\0');
-  std::memcpy(blob_nonce.data(), session_nonce.data(), session_nonce.length());
-  std::memcpy(blob_nonce.data() + session_nonce.length(), &counter,
-              sizeof(uint32_t));
-  return blob_nonce;
-}
 
 // Parses serialized COSE_Key decryption keys and converts them to
 // EVP_HPKE_KEYs, grouped by key ID.
@@ -109,54 +93,6 @@ ProcessDecryptionKeys(const std::vector<absl::string_view>& decryption_keys) {
 
 }  // namespace
 
-NonceChecker::NonceChecker() {
-  std::string nonce(kNonceSize, '\0');
-  // BoringSSL documentation says that it always returns 1 so we don't check
-  // the return value.
-  (void)RAND_bytes(reinterpret_cast<unsigned char*>(nonce.data()),
-                   nonce.size());
-  session_nonce_ = std::move(nonce);
-}
-
-absl::StatusOr<NonceAndCounter> NonceGenerator::GetNextBlobNonce() {
-  if (counter_ == UINT32_MAX) {
-    return absl::InternalError("Counter has overflowed.");
-  }
-  std::string next_blob_nonce = GenerateBlobNonce(session_nonce_, counter_);
-
-  NonceAndCounter result = {.blob_nonce = next_blob_nonce, .counter = counter_};
-  counter_++;
-  return result;
-}
-
-absl::Status NonceChecker::CheckBlobNonce(
-    const confidentialcompute::BlobMetadata& metadata) {
-  if (metadata.has_unencrypted()) {
-    return absl::OkStatus();
-  }
-
-  if (metadata.hpke_plus_aead_data().counter() == UINT32_MAX) {
-    return absl::InternalError("Counter has overflowed.");
-  }
-  if (metadata.hpke_plus_aead_data().counter() < counter_) {
-    return absl::PermissionDeniedError(
-        absl::StrFormat("Blob counter %d is less than the minimum expected "
-                        "value %d; caller may be "
-                        "attempting to reuse a previously seen nonce.",
-                        metadata.hpke_plus_aead_data().counter(), counter_));
-  }
-  if (metadata.hpke_plus_aead_data()
-          .rewrapped_symmetric_key_associated_data()
-          .nonce() !=
-      GenerateBlobNonce(session_nonce_,
-                        metadata.hpke_plus_aead_data().counter())) {
-    return absl::PermissionDeniedError(
-        "RewrappedAssociatedData nonce does not match the expected value.");
-  }
-  counter_ = metadata.hpke_plus_aead_data().counter() + 1;
-  return absl::OkStatus();
-}
-
 MessageEncryptor::MessageEncryptor()
     : hpke_kem_(EVP_hpke_x25519_hkdf_sha256()),
       hpke_kdf_(EVP_hpke_hkdf_sha256()),
@@ -168,23 +104,26 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
     absl::string_view associated_data) const {
   return EncryptInternal(plaintext, recipient_public_key, associated_data,
                          /*src_state=*/std::nullopt, /*dst_state=*/"",
-                         /*signing_key=*/nullptr);
+                         /*signer=*/std::nullopt);
 }
 
 absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptForRelease(
     absl::string_view plaintext, absl::string_view recipient_public_key,
     absl::string_view associated_data,
     std::optional<absl::string_view> src_state, absl::string_view dst_state,
-    oak::crypto::SigningKeyHandle& signing_key) const {
+    absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer)
+    const {
   return EncryptInternal(plaintext, recipient_public_key, associated_data,
-                         src_state, dst_state, &signing_key);
+                         src_state, dst_state, signer);
 }
 
 absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
     absl::string_view plaintext, absl::string_view recipient_public_key,
     absl::string_view associated_data,
     std::optional<absl::string_view> src_state, absl::string_view dst_state,
-    oak::crypto::SigningKeyHandle* signing_key) const {
+    std::optional<
+        absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)>>
+        signer) const {
   SymmetricKey symmetric_key{
       .algorithm = crypto_internal::kAeadAes128GcmSivFixedNonce,
       .key_ops = {kCoseKeyOpDecrypt},
@@ -256,7 +195,7 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
 
   // If a release token was requested, generate it.
   std::string serialized_release_token;
-  if (signing_key != nullptr) {
+  if (signer) {
     ReleaseToken release_token{
         .signing_algorithm = crypto_internal::kEs256,
         .encryption_algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
@@ -280,9 +219,7 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
 
     FCP_ASSIGN_OR_RETURN(std::string sig_structure,
                          release_token.BuildSigStructureForSigning(/*aad=*/""));
-    FCP_ASSIGN_OR_RETURN(oak::crypto::v1::Signature signature,
-                         signing_key->Sign(sig_structure));
-    release_token.signature = std::move(*signature.mutable_signature());
+    FCP_ASSIGN_OR_RETURN(release_token.signature, (*signer)(sig_structure));
     FCP_ASSIGN_OR_RETURN(serialized_release_token, release_token.Encode());
   }
 
@@ -296,7 +233,7 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
 }
 
 MessageDecryptor::MessageDecryptor(
-    google::protobuf::Struct config_properties,
+    std::string config_properties,
     const std::vector<absl::string_view>& decryption_keys)
     : config_properties_(std::move(config_properties)),
       decryption_keys_(ProcessDecryptionKeys(decryption_keys)),

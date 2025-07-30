@@ -132,9 +132,8 @@ absl::StatusOr<std::vector<uint8_t>> BuildCwtPayload(const OkpCwt& cwt) {
                          cwt.public_key->Encode());
     map.add(CwtClaim::kPublicKey, Bstr(encoded_public_key));
   }
-  if (!cwt.config_properties.fields().empty()) {
-    map.add(CwtClaim::kConfigProperties,
-            Bstr(cwt.config_properties.SerializeAsString()));
+  if (!cwt.config_properties.empty()) {
+    map.add(CwtClaim::kConfigProperties, Bstr(cwt.config_properties));
   }
   if (!cwt.access_policy_sha256.empty()) {
     map.add(CwtClaim::kAccessPolicySha256, Bstr(cwt.access_policy_sha256));
@@ -261,11 +260,9 @@ absl::Status ParseCwtPayload(const std::vector<uint8_t>& serialized_payload,
           return absl::InvalidArgumentError(
               absl::StrCat("unsupported configuration type ", value->type()));
         }
-        if (!cwt.config_properties.ParseFromArray(
-                value->asBstr()->value().data(),
-                static_cast<int>(value->asBstr()->value().size()))) {
-          return absl::InvalidArgumentError("failed to parse configuration");
-        }
+        cwt.config_properties.assign(
+            reinterpret_cast<const char*>(value->asBstr()->value().data()),
+            value->asBstr()->value().size());
         break;
 
       case CwtClaim::kAccessPolicySha256:

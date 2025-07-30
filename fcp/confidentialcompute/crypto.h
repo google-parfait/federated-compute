@@ -32,68 +32,19 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
-#include "google/protobuf/struct.pb.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "fcp/protos/confidentialcompute/confidential_transform.pb.h"
-#include "cc/crypto/signing_key.h"
 #include "openssl/base.h"
 #include "openssl/ec_key.h"  // // IWYU pragma: keep, needed for bssl::UniquePtr<EC_KEY>
 #include "openssl/hpke.h"
 
 namespace fcp {
 namespace confidential_compute {
-
-// Class used to track and verify a session-level nonce and blob counter.
-//
-// This class is not thread safe.
-class NonceChecker {
- public:
-  NonceChecker();
-  // Checks that the BlobMetadata's counter is greater than any blob counters
-  // seen so far and that RewrappedAssociatedData.nonce is correct. If the blob
-  // is unencrypted, always returns OK and doesn't affect the blob counters seen
-  // so far.
-  absl::Status CheckBlobNonce(
-      const fcp::confidentialcompute::BlobMetadata& blob_metadata);
-
-  std::string GetSessionNonce() { return session_nonce_; }
-
- private:
-  std::string session_nonce_;
-  // The next valid blob counter. Values less than this are invalid.
-  uint32_t counter_ = 0;
-};
-
-struct NonceAndCounter {
-  // Unique nonce for a blob.
-  std::string blob_nonce;
-  // The counter value for the blob, which is encoded in the blob_nonce.
-  uint32_t counter;
-};
-
-// Class used to generate the series of blob-level nonces for a given session.
-//
-// This class is not thread safe.
-class NonceGenerator {
- public:
-  explicit NonceGenerator(std::string session_nonce)
-      : session_nonce_(std::move(session_nonce)) {};
-
-  // Returns the next blob-level nonce and its associated counter. If
-  // successful, increments `counter_`.
-  absl::StatusOr<NonceAndCounter> GetNextBlobNonce();
-
- private:
-  std::string session_nonce_;
-  uint32_t counter_ = 0;
-};
 
 struct EncryptMessageResult {
   std::string ciphertext;
@@ -136,7 +87,8 @@ class MessageEncryptor {
       absl::string_view plaintext, absl::string_view recipient_public_key,
       absl::string_view associated_data,
       std::optional<absl::string_view> src_state, absl::string_view dst_state,
-      oak::crypto::SigningKeyHandle& signing_key) const;
+      absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer)
+      const;
 
  private:
   // Encrypts a message with the specified public key and optionally generates a
@@ -148,7 +100,9 @@ class MessageEncryptor {
       absl::string_view plaintext, absl::string_view recipient_public_key,
       absl::string_view associated_data,
       std::optional<absl::string_view> src_state, absl::string_view dst_state,
-      oak::crypto::SigningKeyHandle* signing_key) const;
+      std::optional<
+          absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)>>
+          signer) const;
 
   const EVP_HPKE_KEM* hpke_kem_;
   const EVP_HPKE_KDF* hpke_kdf_;
@@ -167,7 +121,7 @@ class MessageDecryptor {
   // internally generated key; these keys should be encoded as serialized
   // COSE_Keys. Any invalid keys will be ignored.
   explicit MessageDecryptor(
-      google::protobuf::Struct config_properties = {},
+      std::string config_properties = "",
       const std::vector<absl::string_view>& decryption_keys = {});
 
   // MessageDecryptor is not copyable or moveable due to the use of
@@ -232,7 +186,7 @@ class MessageDecryptor {
       absl::string_view encrypted_symmetric_key_associated_data,
       absl::string_view encapped_key, absl::string_view key_id) const;
 
-  const google::protobuf::Struct config_properties_;
+  const std::string config_properties_;
   const absl::flat_hash_map<std::string, std::vector<bssl::ScopedEVP_HPKE_KEY>>
       decryption_keys_;
   const EVP_HPKE_KEM* hpke_kem_;
