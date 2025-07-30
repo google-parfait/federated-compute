@@ -413,6 +413,9 @@ cc_proto_library(
 proto_library(
     name = "program_executor_tee_proto",
     srcs = ["program_executor_tee_config.proto"],
+    deps = [
+        "@oak//proto/attestation:reference_value_proto",
+    ],
 )
 
 cc_proto_library(
