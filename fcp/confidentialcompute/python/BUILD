@@ -28,7 +28,7 @@ py_library(
 py_library(
     name = "dp_mf_aggregator",
     srcs = ["dp_mf_aggregator.py"],
-    tags = ["nokokoro"],
+    tags = ["manual"],
     visibility = ["//visibility:public"],
     deps = [
         "@federated_language//federated_language",
@@ -42,7 +42,7 @@ py_library(
 py_test(
     name = "dp_mf_aggregator_test",
     srcs = ["dp_mf_aggregator_test.py"],
-    tags = ["nokokoro"],
+    tags = ["manual"],
     deps = [
         ":dp_mf_aggregator",
         "@federated_language//federated_language",
