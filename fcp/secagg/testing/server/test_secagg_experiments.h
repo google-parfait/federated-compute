@@ -35,7 +35,7 @@ class TestSecAggExperiment : public ExperimentsInterface {
     enabled_experiment_names_ =
         std::set<std::string>({enabled_experiment_name});
   }
-  explicit TestSecAggExperiment() {}
+  explicit TestSecAggExperiment() = default;
   bool IsEnabled(absl::string_view experiment_name) override {
     return enabled_experiment_names_.find(static_cast<std::string>(
                experiment_name)) != enabled_experiment_names_.end();
