@@ -14,24 +14,9 @@
 
 #![no_std]
 
-extern crate alloc;
-
-use alloc::{boxed::Box, format, sync::Arc, vec};
-use oak_attestation_verification::{
-    policy::{
-        container::ContainerPolicy, firmware::FirmwarePolicy, kernel::KernelPolicy,
-        platform::AmdSevSnpPolicy, system::SystemPolicy, HYBRID_ENCRYPTION_PUBLIC_KEY_ID,
-        SIGNING_PUBLIC_KEY_ID,
-    },
-    verifier::{get_event_artifact, AmdSevSnpDiceAttestationVerifier, EventLogVerifier},
-};
-use oak_attestation_verification_types::verifier::AttestationVerifier;
 use oak_proto_rust::oak::attestation::v1::{
-    attestation_results::Status, reference_values, AmdSevReferenceValues, AttestationResults,
-    Endorsements, Evidence, ExtractedEvidence, OakContainersReferenceValues, ReferenceValues,
-    RootLayerReferenceValues,
+    AttestationResults, Endorsements, Evidence, ReferenceValues,
 };
-use oak_time::{clock::FixedClock, Instant};
 
 /// Verifies Oak attestation evidence and endorsements given reference values.
 pub fn verify_attestation(
@@ -40,87 +25,13 @@ pub fn verify_attestation(
     endorsements: &Endorsements,
     reference_values: &ReferenceValues,
 ) -> AttestationResults {
-    let clock = Arc::new(FixedClock::at_instant(Instant::from_unix_millis(now_utc_millis)));
-    let verifier: Box<dyn AttestationVerifier> = match &reference_values.r#type {
-        // Oak Containers (insecure)
-        // TODO: b/432726860 - Use InsecureDiceAttestationVerifier once it is available.
-        Some(reference_values::Type::OakContainers(OakContainersReferenceValues {
-            root_layer: Some(RootLayerReferenceValues { insecure: Some(_), .. }),
-            kernel_layer: Some(kernel_ref_vals),
-            system_layer: Some(system_ref_vals),
-            container_layer: Some(container_ref_vals),
-        })) => Box::new(EventLogVerifier::new(
-            vec![
-                Box::new(KernelPolicy::new(kernel_ref_vals)),
-                Box::new(SystemPolicy::new(system_ref_vals)),
-                Box::new(ContainerPolicy::new(container_ref_vals)),
-            ],
-            clock,
-        )),
-
-        // Oak Containers (AMD SEV-SNP)
-        Some(reference_values::Type::OakContainers(OakContainersReferenceValues {
-            root_layer:
-                Some(RootLayerReferenceValues {
-                    amd_sev:
-                        Some(
-                            amd_sev_ref_vals @ AmdSevReferenceValues {
-                                stage0: Some(stage0_ref_vals),
-                                ..
-                            },
-                        ),
-                    insecure: None,
-                    ..
-                }),
-            kernel_layer: Some(kernel_ref_vals),
-            system_layer: Some(system_ref_vals),
-            container_layer: Some(container_ref_vals),
-        })) => Box::new(AmdSevSnpDiceAttestationVerifier::new(
-            AmdSevSnpPolicy::new(amd_sev_ref_vals),
-            Box::new(FirmwarePolicy::new(stage0_ref_vals)),
-            vec![
-                Box::new(KernelPolicy::new(kernel_ref_vals)),
-                Box::new(SystemPolicy::new(system_ref_vals)),
-                Box::new(ContainerPolicy::new(container_ref_vals)),
-            ],
-            clock,
-        )),
-
-        // Use the legacy verification API for the Restricted Kernel since the Restricted Kernel
-        // does not currently include application keys in the attestation events.
-        _ => {
-            return oak_attestation_verification::verifier::to_attestation_results(
-                &oak_attestation_verification::verifier::verify(
-                    now_utc_millis,
-                    &evidence,
-                    &endorsements,
-                    &reference_values,
-                ),
-            );
-        }
-    };
-
-    let mut results =
-        verifier.verify(evidence, endorsements).unwrap_or_else(|err| AttestationResults {
-            status: Status::GenericFailure.into(),
-            reason: format!("{:#?}", err),
-            ..Default::default()
-        });
-    if results.status != Status::Success as i32 {
-        return results;
-    }
-
-    // Callers expect the extracted evidence to be populated.
-    if results.extracted_evidence.is_none() {
-        results.extracted_evidence = Some(ExtractedEvidence {
-            signing_public_key: get_event_artifact(&results, SIGNING_PUBLIC_KEY_ID)
-                .cloned()
-                .unwrap_or_default(),
-            encryption_public_key: get_event_artifact(&results, HYBRID_ENCRYPTION_PUBLIC_KEY_ID)
-                .cloned()
-                .unwrap_or_default(),
-            ..Default::default()
-        });
-    }
-    results
+    // TODO: b/432726860 - switch to AmdSevSnpDiceAttestationVerifier.
+    oak_attestation_verification::verifier::to_attestation_results(
+        &oak_attestation_verification::verifier::verify(
+            now_utc_millis,
+            &evidence,
+            &endorsements,
+            &reference_values,
+        ),
+    )
 }
