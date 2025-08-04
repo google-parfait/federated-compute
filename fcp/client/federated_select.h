@@ -69,7 +69,7 @@ class FederatedSelectManager {
   // payloads after reading them from the network.
   virtual NetworkStats GetNetworkStats() = 0;
 
-  virtual ~FederatedSelectManager() {}
+  virtual ~FederatedSelectManager() = default;
 };
 
 // An base class for `ExampleIteratorFactory` implementations that can handle
