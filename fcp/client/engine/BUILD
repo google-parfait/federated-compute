@@ -70,8 +70,12 @@ cc_library(
     deps = [
         "//fcp/base",
         "//fcp/base:digest",
+        "//fcp/client:example_query_result_cc_proto",
+        "//fcp/confidentialcompute:constants",
+        "//fcp/protos:plan_cc_proto",
         "//fcp/protos/confidentialcompute:selection_criteria_cc_proto",
         "//fcp/protos/confidentialcompute:windowing_schedule_proto_cc",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -88,6 +92,9 @@ cc_test(
     visibility = default_visibility,
     deps = [
         ":privacy_id_utils",
+        "//fcp/client:example_query_result_cc_proto",
+        "//fcp/confidentialcompute:constants",
+        "//fcp/protos:plan_cc_proto",
         "//fcp/protos/confidentialcompute:selection_criteria_cc_proto",
         "//fcp/protos/confidentialcompute:windowing_schedule_proto_cc",
         "//fcp/testing",

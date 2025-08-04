@@ -26,6 +26,12 @@ inline constexpr char kComposedTeeRootUri[] = "composed_tee/root";
 
 inline constexpr char kFileInfoKeySeparator[] = "/";
 
+inline constexpr char kEventTimeColumnName[] =
+    "confidential_compute_event_time";
+
+inline constexpr char kPrivacyIdColumnName[] =
+    "confidential_compute_privacy_id";
+
 }  // namespace confidential_compute
 }  // namespace fcp
 

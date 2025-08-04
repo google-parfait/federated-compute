@@ -17,7 +17,10 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -25,8 +28,10 @@
 #include "absl/time/civil_time.h"
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/confidentialcompute/constants.h"
 #include "fcp/protos/confidentialcompute/selection_criteria.pb.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
+#include "fcp/protos/plan.pb.h"
 
 namespace fcp {
 namespace client {
@@ -35,6 +40,8 @@ namespace engine {
 namespace {
 
 using ::fcp::confidentialcompute::WindowingSchedule;
+using ::fedsql::PrivacyIdConfig;
+using ::google::internal::federated::plan::ExampleQuerySpec;
 
 // Remove the timezone modifier from the event time. Event_time must be in the
 // format YYYY-MM-DDTHH:MM:SS[+-]HH:MM, and the result will be in the format
@@ -103,6 +110,76 @@ ValidateCivilTimeWindowSchedule(
   return schedule;
 }
 
+template <typename ValuesType>
+void CopySelectedValues(const ValuesType& source, ValuesType* dest,
+                        const std::vector<int>& indices) {
+  for (int index : indices) {
+    dest->add_value(source.value(index));
+  }
+}
+
+absl::StatusOr<ExampleQueryResult> CreateExampleQueryResultFromIndices(
+    const ExampleQueryResult& original_result,
+    const std::vector<int>& indices) {
+  ExampleQueryResult new_result;
+  for (const auto& [column_name, values] :
+       original_result.vector_data().vectors()) {
+    ExampleQueryResult::VectorData::Values new_values;
+    switch (values.values_case()) {
+      case ExampleQueryResult::VectorData::Values::kInt32Values:
+        CopySelectedValues(values.int32_values(),
+                           new_values.mutable_int32_values(), indices);
+        break;
+      case ExampleQueryResult::VectorData::Values::kInt64Values:
+        CopySelectedValues(values.int64_values(),
+                           new_values.mutable_int64_values(), indices);
+        break;
+      case ExampleQueryResult::VectorData::Values::kStringValues:
+        CopySelectedValues(values.string_values(),
+                           new_values.mutable_string_values(), indices);
+        break;
+      case ExampleQueryResult::VectorData::Values::kBoolValues:
+        CopySelectedValues(values.bool_values(),
+                           new_values.mutable_bool_values(), indices);
+        break;
+      case ExampleQueryResult::VectorData::Values::kFloatValues:
+        CopySelectedValues(values.float_values(),
+                           new_values.mutable_float_values(), indices);
+        break;
+      case ExampleQueryResult::VectorData::Values::kDoubleValues:
+        CopySelectedValues(values.double_values(),
+                           new_values.mutable_double_values(), indices);
+        break;
+      case ExampleQueryResult::VectorData::Values::kBytesValues:
+        CopySelectedValues(values.bytes_values(),
+                           new_values.mutable_bytes_values(), indices);
+        break;
+      case ExampleQueryResult::VectorData::Values::VALUES_NOT_SET:
+        return absl::InvalidArgumentError(
+            "Invalid values type in the example query result");
+    }
+    (*new_result.mutable_vector_data()->mutable_vectors())[column_name] =
+        new_values;
+  }
+  return new_result;
+}
+
+// Adds the privacy ID to the example query result.
+absl::Status AddPrivacyIdColumn(absl::string_view privacy_id,
+                                ExampleQueryResult& example_query_result) {
+  if (example_query_result.vector_data().vectors().contains(
+          confidential_compute::kPrivacyIdColumnName)) {
+    return absl::InvalidArgumentError(
+        "Privacy ID column cannot already exist in the example query result");
+  }
+  ExampleQueryResult::VectorData::Values privacy_id_values;
+  privacy_id_values.mutable_bytes_values()->add_value(std::string(privacy_id));
+  (*example_query_result.mutable_vector_data()
+        ->mutable_vectors())[confidential_compute::kPrivacyIdColumnName] =
+      std::move(privacy_id_values);
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<absl::CivilSecond> GetPrivacyIdTimeWindowStart(
@@ -168,6 +245,65 @@ absl::StatusOr<std::string> GetPrivacyId(absl::string_view source_id,
   return hash.substr(0, 16);
 }
 
+absl::StatusOr<std::vector<SplitResults>> SplitResultsByPrivacyId(
+    const std::vector<
+        std::pair<ExampleQuerySpec::ExampleQuery, ExampleQueryResult>>&
+        structured_example_query_results,
+    const PrivacyIdConfig& privacy_id_config, absl::string_view source_id) {
+  std::vector<SplitResults> all_split_results;
+
+  for (const auto& [example_query, example_query_result] :
+       structured_example_query_results) {
+    auto it = example_query_result.vector_data().vectors().find(
+        confidential_compute::kEventTimeColumnName);
+    if (it == example_query_result.vector_data().vectors().end()) {
+      return absl::InvalidArgumentError(
+          "Required column not found in the example query result: " +
+          std::string(confidential_compute::kEventTimeColumnName));
+    }
+    const ExampleQueryResult::VectorData::Values& event_time_values =
+        it->second;
+    if (!event_time_values.has_string_values()) {
+      return absl::InvalidArgumentError(
+          "Unexpected data type for event time column, expected string.");
+    }
+
+    // Build a map of privacy ID to the indices of the rows with that privacy
+    // ID.
+    absl::flat_hash_map<std::string, std::vector<int>> privacy_id_to_indices;
+    for (int i = 0; i < event_time_values.string_values().value_size(); ++i) {
+      const std::string& event_time_str =
+          event_time_values.string_values().value(i);
+      FCP_ASSIGN_OR_RETURN(
+          absl::CivilSecond window_start,
+          GetPrivacyIdTimeWindowStart(privacy_id_config, event_time_str));
+      FCP_ASSIGN_OR_RETURN(std::string privacy_id,
+                           GetPrivacyId(source_id, window_start));
+      privacy_id_to_indices[privacy_id].push_back(i);
+    }
+
+    SplitResults split_results;
+    split_results.example_query = example_query;
+    for (const auto& [privacy_id, indices] : privacy_id_to_indices) {
+      PerPrivacyIdResult per_privacy_id_result;
+      per_privacy_id_result.privacy_id = privacy_id;
+      FCP_ASSIGN_OR_RETURN(
+          ExampleQueryResult per_privacy_id_example_query_result,
+          CreateExampleQueryResultFromIndices(example_query_result, indices));
+
+      FCP_RETURN_IF_ERROR(
+          AddPrivacyIdColumn(privacy_id, per_privacy_id_example_query_result));
+
+      per_privacy_id_result.example_query_result =
+          std::move(per_privacy_id_example_query_result);
+
+      split_results.per_privacy_id_results.push_back(
+          std::move(per_privacy_id_result));
+    }
+    all_split_results.push_back(std::move(split_results));
+  }
+  return all_split_results;
+}
 }  // namespace engine
 }  // namespace client
 }  // namespace fcp

@@ -17,11 +17,15 @@
 #define FCP_CLIENT_ENGINE_PRIVACY_ID_UTILS_H_
 
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/civil_time.h"
+#include "fcp/client/example_query_result.pb.h"
 #include "fcp/protos/confidentialcompute/selection_criteria.pb.h"
+#include "fcp/protos/plan.pb.h"
 
 namespace fcp {
 namespace client {
@@ -39,6 +43,29 @@ absl::StatusOr<absl::CivilSecond> GetPrivacyIdTimeWindowStart(
 // start.
 absl::StatusOr<std::string> GetPrivacyId(absl::string_view source_id,
                                          absl::CivilSecond window_start);
+
+// ExampleQueryResult corresponding to a specific privacy ID.
+struct PerPrivacyIdResult {
+  std::string privacy_id;
+  fcp::client::ExampleQueryResult example_query_result;
+};
+
+// An ExampleQuery and its results split by privacy ID.
+struct SplitResults {
+  google::internal::federated::plan::ExampleQuerySpec::ExampleQuery
+      example_query;
+  std::vector<PerPrivacyIdResult> per_privacy_id_results;
+};
+
+// Split each ExampleQueryResult within the input vector into multiple
+// ExampleQueryResults, one for each unique privacy ID. Add the privacy ID as a
+// column with a single value to each ExampleQueryResult.
+absl::StatusOr<std::vector<SplitResults>> SplitResultsByPrivacyId(
+    const std::vector<std::pair<
+        google::internal::federated::plan::ExampleQuerySpec::ExampleQuery,
+        fcp::client::ExampleQueryResult>>& structured_example_query_results,
+    const fedsql::PrivacyIdConfig& privacy_id_config,
+    absl::string_view source_id);
 
 }  // namespace engine
 }  // namespace client
