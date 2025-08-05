@@ -31,7 +31,7 @@ namespace secagg {
 const uint64_t ShamirSecretSharing::kPrime;
 constexpr size_t kSubsecretSize = sizeof(uint32_t);
 
-ShamirSecretSharing::ShamirSecretSharing() {}
+ShamirSecretSharing::ShamirSecretSharing() = default;
 
 std::vector<ShamirShare> ShamirSecretSharing::Share(
     int threshold, int num_shares, const std::string& to_share) {

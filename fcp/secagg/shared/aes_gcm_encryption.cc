@@ -32,7 +32,7 @@ namespace secagg {
 constexpr int kIvSize = 12;
 constexpr int kTagSize = 16;
 
-AesGcmEncryption::AesGcmEncryption() {}
+AesGcmEncryption::AesGcmEncryption() = default;
 
 std::string AesGcmEncryption::Encrypt(const AesKey& key,
                                       const std::string& plaintext) {
