@@ -31,7 +31,7 @@ namespace dictionary {
 // Interface for mapping tokens (usually words) to indices.
 class Dictionary {
  public:
-  virtual ~Dictionary() {}
+  virtual ~Dictionary() = default;
 
   // Returns the number of elements in the dictionary.
   virtual int32_t Size() const = 0;
