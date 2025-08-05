@@ -41,7 +41,7 @@ SecAggServerPrngRunningState::SecAggServerPrngRunningState(
                         SecAggServerStateKind::PRNG_RUNNING, std::move(impl)),
       completion_status_(std::nullopt) {}
 
-SecAggServerPrngRunningState::~SecAggServerPrngRunningState() {}
+SecAggServerPrngRunningState::~SecAggServerPrngRunningState() = default;
 
 Status SecAggServerPrngRunningState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {

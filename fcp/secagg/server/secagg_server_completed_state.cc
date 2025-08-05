@@ -41,7 +41,7 @@ SecAggServerCompletedState::SecAggServerCompletedState(
   Trace<SecAggProtocolOutcome>(TracingSecAggServerOutcome_Success);
 }
 
-SecAggServerCompletedState::~SecAggServerCompletedState() {}
+SecAggServerCompletedState::~SecAggServerCompletedState() = default;
 
 bool SecAggServerCompletedState::IsCompletedSuccessfully() const {
   return true;

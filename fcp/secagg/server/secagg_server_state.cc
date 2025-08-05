@@ -56,7 +56,7 @@ SecAggServerState::SecAggServerState(
       state_kind_(state_kind),
       impl_(std::move(impl)) {}
 
-SecAggServerState::~SecAggServerState() {}
+SecAggServerState::~SecAggServerState() = default;
 
 std::unique_ptr<SecAggServerProtocolImpl>&& SecAggServerState::ExitState(
     StateTransition state_transition_status) {

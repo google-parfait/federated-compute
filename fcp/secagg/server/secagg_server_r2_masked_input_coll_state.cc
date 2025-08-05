@@ -41,7 +41,8 @@ SecAggServerR2MaskedInputCollState::SecAggServerR2MaskedInputCollState(
   async_token_ = this->impl()->SetupMaskedInputCollection();
 }
 
-SecAggServerR2MaskedInputCollState::~SecAggServerR2MaskedInputCollState() {}
+SecAggServerR2MaskedInputCollState::~SecAggServerR2MaskedInputCollState() =
+    default;
 
 Status SecAggServerR2MaskedInputCollState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {

@@ -39,7 +39,7 @@ SecAggServerR3UnmaskingState::SecAggServerR3UnmaskingState(
   this->impl()->SetUpShamirSharesTables();
 }
 
-SecAggServerR3UnmaskingState::~SecAggServerR3UnmaskingState() {}
+SecAggServerR3UnmaskingState::~SecAggServerR3UnmaskingState() = default;
 
 Status SecAggServerR3UnmaskingState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {

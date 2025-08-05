@@ -38,7 +38,7 @@ SecAggServerR1ShareKeysState::SecAggServerR1ShareKeysState(
                         SecAggServerStateKind::R1_SHARE_KEYS, std::move(impl)) {
 }
 
-SecAggServerR1ShareKeysState::~SecAggServerR1ShareKeysState() {}
+SecAggServerR1ShareKeysState::~SecAggServerR1ShareKeysState() = default;
 
 Status SecAggServerR1ShareKeysState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {

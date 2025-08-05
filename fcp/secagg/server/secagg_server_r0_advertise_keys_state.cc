@@ -38,7 +38,7 @@ SecAggServerR0AdvertiseKeysState::SecAggServerR0AdvertiseKeysState(
   }
 }
 
-SecAggServerR0AdvertiseKeysState::~SecAggServerR0AdvertiseKeysState() {}
+SecAggServerR0AdvertiseKeysState::~SecAggServerR0AdvertiseKeysState() = default;
 
 Status SecAggServerR0AdvertiseKeysState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {

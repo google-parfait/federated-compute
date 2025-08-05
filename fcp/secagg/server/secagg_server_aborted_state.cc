@@ -35,7 +35,7 @@ SecAggServerAbortedState::SecAggServerAbortedState(
                         SecAggServerStateKind::ABORTED, std::move(impl)),
       error_message_(error_message) {}
 
-SecAggServerAbortedState::~SecAggServerAbortedState() {}
+SecAggServerAbortedState::~SecAggServerAbortedState() = default;
 
 bool SecAggServerAbortedState::IsAborted() const { return true; }
 
