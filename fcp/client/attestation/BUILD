@@ -27,6 +27,7 @@ cc_library(
     deps = [
         "//fcp/confidentialcompute:cose",
         "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
+        "//fcp/protos/federatedcompute:confidential_encryption_config_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -136,7 +137,7 @@ cc_library(
     srcs = ["test_values.cc"],
     hdrs = ["test_values.h"],
     deps = [
-        "//fcp/protos/federatedcompute:federated_compute_cc_proto",
+        "//fcp/protos/federatedcompute:confidential_encryption_config_cc_proto",
         "//fcp/testing",
         "@oak//proto/attestation:reference_value_cc_proto",
     ],

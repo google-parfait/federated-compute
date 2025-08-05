@@ -21,7 +21,7 @@
 #ifndef FCP_CLIENT_ATTESTATION_TEST_VALUES_H_
 #define FCP_CLIENT_ATTESTATION_TEST_VALUES_H_
 
-#include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
+#include "fcp/protos/federatedcompute/confidential_encryption_config.pb.h"
 #include "proto/attestation/reference_value.pb.h"
 
 namespace fcp::client::attestation::test_values {

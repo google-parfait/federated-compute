@@ -22,6 +22,7 @@
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
+#include "fcp/protos/federatedcompute/confidential_encryption_config.pb.h"
 
 namespace fcp::client::attestation {
 

@@ -423,6 +423,25 @@ cc_proto_library(
     deps = [":program_executor_tee_proto"],
 )
 
+proto_library(
+    name = "data_upload_config_proto",
+    srcs = ["data_upload_config.proto"],
+    deps = [
+        ":signed_endorsements_proto",
+        "//fcp/protos/federatedcompute:confidential_encryption_config_proto",
+    ],
+)
+
+java_proto_library(
+    name = "data_upload_config_java_proto",
+    deps = [":data_upload_config_proto"],
+)
+
+cc_proto_library(
+    name = "data_upload_config_cc_proto",
+    deps = [":data_upload_config_proto"],
+)
+
 # We have to use tf_proto_library since we have a dependency on sql_query_proto.
 # TODO: b/425744048 - Switch this to proto_library once we can remove the plan.proto dependency from
 # sql_query.proto.

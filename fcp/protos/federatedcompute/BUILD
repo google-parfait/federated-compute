@@ -22,6 +22,24 @@ package(
 )
 
 # --------------------------------------------------------------------
+proto_library(
+    name = "confidential_encryption_config_proto",
+    srcs = ["confidential_encryption_config.proto"],
+    deps = [
+        "@oak//proto/attestation:endorsement_proto",
+        "@oak//proto/attestation:evidence_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "confidential_encryption_config_cc_proto",
+    deps = [":confidential_encryption_config_proto"],
+)
+
+java_proto_library(
+    name = "confidential_encryption_config_java_proto",
+    deps = [":confidential_encryption_config_proto"],
+)
 
 # The api protos.
 proto_library(
@@ -42,8 +60,6 @@ proto_library(
         "@com_google_googleapis//google/rpc:code_proto",
         "@com_google_googleapis//google/rpc:status_proto",
         "@com_google_protobuf//:duration_proto",
-        "@oak//proto/attestation:endorsement_proto",
-        "@oak//proto/attestation:evidence_proto",
     ],
 )
 
