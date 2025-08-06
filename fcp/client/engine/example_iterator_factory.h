@@ -65,7 +65,7 @@ class ExampleIteratorFactory {
   // iterators created by this factory.
   virtual bool ShouldCollectStats() = 0;
 
-  virtual ~ExampleIteratorFactory() {}
+  virtual ~ExampleIteratorFactory() = default;
 };
 
 // A utility ExampleIteratorFactory implementation that can use simple
