@@ -6,8 +6,8 @@ import federated_language as flang
 import jax
 from jax.experimental import jax2tf
 import jax.numpy as jnp
-from jax_privacy import noise_addition
 from jax_privacy.experimental import clipping
+import optax
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -30,8 +30,7 @@ _jax2tf_convert_cpu_native = functools.partial(
 class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
   """Aggregation factory for Differentially Private mean across clients.
 
-  This factory expects a GradientPrivatizer from the `jax_privacy` to be
-  created,
+  This factory expects a privatizer from the `jax_privacy` to be created,
   supporting methods such as those from [Scaling up the Banded Matrix
   Factorization Mechanism for Differentially Private
   ML](https://arxiv.org/abs/2405.15913).
@@ -40,7 +39,7 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
   def __init__(
       self,
       *,
-      gradient_privatizer: noise_addition.GradientPrivatizer,
+      gradient_privatizer: optax.GradientTransformation,
       clients_per_round: int,
       l2_clip_norm: float = 1.0,
   ):
@@ -151,9 +150,8 @@ class DPMFAggregatorFactory(tff.aggregators.UnweightedAggregationFactory):
         """
 
         def jax_finalize_noise(noise_state, unnoised_aggregate):
-          noised_aggregate, new_noise_state = self._grad_privatizer.privatize(
-              sum_of_clipped_grads=unnoised_aggregate,
-              noise_state=noise_state,
+          noised_aggregate, new_noise_state = self._grad_privatizer.update(
+              unnoised_aggregate, noise_state
           )
           noised_mean = jax.tree.map(
               lambda arr: arr / self._clients_per_round,

@@ -2,8 +2,8 @@ from typing import Any
 
 from absl.testing import absltest
 import federated_language as flang
-from jax_privacy import noise_addition
 import numpy as np
+import optax
 import tensorflow as tf
 
 from fcp.confidentialcompute.python import dp_mf_aggregator
@@ -23,12 +23,12 @@ def _create_test_grad_privatizer():
     del params  # Unused.
     return np.int32(0)
 
-  def privatize(*, sum_of_clipped_grads, noise_state) -> tuple[Any, Any]:
+  def privatize(sum_of_clipped_grads, noise_state) -> tuple[Any, Any]:
     # Simple passthrough for tests, only increases the state counter. Test
     # coverage of the privatizer noise is done in the JaxPrivacy library.
     return sum_of_clipped_grads, noise_state + 1
 
-  return noise_addition.GradientPrivatizer(init, privatize)
+  return optax.GradientTransformation(init, privatize)
 
 
 class DPMFAggregatorFactoryExecutionTest(tf.test.TestCase):

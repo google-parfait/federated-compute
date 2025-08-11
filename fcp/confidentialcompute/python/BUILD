@@ -31,6 +31,7 @@ py_library(
     tags = ["manual"],
     visibility = ["//visibility:public"],
     deps = [
+        "//third_party/py/optax",
         "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_jax//:pkg",
@@ -45,9 +46,9 @@ py_test(
     tags = ["manual"],
     deps = [
         ":dp_mf_aggregator",
+        "//third_party/py/optax",
         "@federated_language//federated_language",
         "@pypi_absl_py//:pkg",
-        "@pypi_jax_privacy//:pkg",
         "@pypi_numpy//:pkg",
         "@pypi_tensorflow//:pkg",
     ],
