@@ -33,11 +33,10 @@ namespace engine {
 
 // Get the start of the time window that the event time falls into, given a time
 // window schedule specified in the privacy ID config. Only supports IGNORE time
-// zone scheme and civil time tumbling windows. event_time should be in the
-// format YYYY-MM-DDTHH:MM:SS[+-]HH:MM
+// zone scheme and civil time tumbling windows.
 absl::StatusOr<absl::CivilSecond> GetPrivacyIdTimeWindowStart(
     const fedsql::PrivacyIdConfig& privacy_id_config,
-    absl::string_view event_time);
+    absl::CivilSecond event_civil_second);
 
 // Deterministically derive a 16 byte privacy ID from the source ID and window
 // start.
@@ -57,13 +56,18 @@ struct SplitResults {
   std::vector<PerPrivacyIdResult> per_privacy_id_results;
 };
 
-// Split each ExampleQueryResult within the input vector into multiple
-// ExampleQueryResults, one for each unique privacy ID. Add the privacy ID as a
-// column with a single value to each ExampleQueryResult.
-absl::StatusOr<std::vector<SplitResults>> SplitResultsByPrivacyId(
-    const std::vector<std::pair<
-        google::internal::federated::plan::ExampleQuerySpec::ExampleQuery,
-        fcp::client::ExampleQueryResult>>& structured_example_query_results,
+// Split the ExampleQueryResult into multiple ExampleQueryResults, one for each
+// unique privacy ID. Add the privacy ID as a column with a single value to each
+// ExampleQueryResult.
+// Requires that the ExampleQueryResult has an event time column with the
+// kEventTimeColumnName. Event times should be in the format
+// YYYY-MM-DDTHH:MM:SS[+-]HH:MM.
+// ExampleQueryResult must not already have a column with the
+// kPrivacyIdColumnName.
+absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
+    google::internal::federated::plan::ExampleQuerySpec::ExampleQuery
+        example_query,
+    const fcp::client::ExampleQueryResult& example_query_result,
     const fedsql::PrivacyIdConfig& privacy_id_config,
     absl::string_view source_id);
 

@@ -81,8 +81,12 @@ message ExampleQueryResult {
     // the device to be eligible.
     int32 output_rows_count = 1;
 
-    // Maps the query name to the event time range of the query results.
-    map<string, EventTimeRange> event_time_range = 2;
+    // Deprecated. Maps the query name to the event time range of the query
+    // results.
+    map<string, EventTimeRange> event_time_range = 2 [deprecated = true];
+
+    // The event time range of all query results.
+    EventTimeRange cross_query_event_time_range = 3;
   }
 
   // Statistic data and properties of an example query.

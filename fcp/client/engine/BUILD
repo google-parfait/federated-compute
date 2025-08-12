@@ -70,6 +70,7 @@ cc_library(
     deps = [
         "//fcp/base",
         "//fcp/base:digest",
+        "//fcp/client:event_time_range_cc_proto",
         "//fcp/client:example_query_result_cc_proto",
         "//fcp/confidentialcompute:constants",
         "//fcp/protos:plan_cc_proto",
@@ -80,6 +81,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@com_google_googleapis//google/type:datetime_cc_proto",
     ],
 )
 
@@ -92,6 +94,7 @@ cc_test(
     visibility = default_visibility,
     deps = [
         ":privacy_id_utils",
+        "//fcp/client:event_time_range_cc_proto",
         "//fcp/client:example_query_result_cc_proto",
         "//fcp/confidentialcompute:constants",
         "//fcp/protos:plan_cc_proto",
@@ -102,6 +105,7 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@com_google_googleapis//google/type:datetime_cc_proto",
         "@com_google_googletest//:gtest_main",
     ],
 )
