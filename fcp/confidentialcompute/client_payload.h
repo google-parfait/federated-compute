@@ -21,6 +21,7 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "google/protobuf/io/zero_copy_stream.h"
 
 namespace fcp {
 namespace confidential_compute {
@@ -53,6 +54,12 @@ std::string EncodeClientPayload(ClientPayloadHeader header,
 // `encoded_data` view to point to the ciphertext.
 absl::StatusOr<ClientPayloadHeader> DecodeAndConsumeClientPayloadHeader(
     absl::string_view& encoded_data);
+
+// Variant of DecodeAndConsumeClientPayloadHeader that reads from a
+// ZeroCopyInputStream. On success, the stream is positioned at the start of the
+// ciphertext; on failure, the position is unspecified.
+absl::StatusOr<ClientPayloadHeader> DecodeAndConsumeClientPayloadHeader(
+    google::protobuf::io::ZeroCopyInputStream& stream);
 
 }  // namespace confidential_compute
 }  // namespace fcp

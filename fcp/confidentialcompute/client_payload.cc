@@ -23,7 +23,6 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "fcp/protos/confidentialcompute/aggregation_client_payload.pb.h"
@@ -70,18 +69,34 @@ std::string EncodeClientPayload(ClientPayloadHeader header,
 
 absl::StatusOr<ClientPayloadHeader> DecodeAndConsumeClientPayloadHeader(
     absl::string_view& encoded_data) {
-  if (!absl::StartsWith(encoded_data, kConfidentialAggPayloadV1MagicBytes)) {
-    return absl::InvalidArgumentError("Could not detect magic bytes prefix");
-  }
   if (encoded_data.size() > std::numeric_limits<int>::max()) {
     return absl::InvalidArgumentError("Unexpectedly large encoded data");
   }
 
-  google::protobuf::io::CodedInputStream coded_in(
+  google::protobuf::io::ArrayInputStream stream(
       reinterpret_cast<const uint8_t*>(encoded_data.data()),
       static_cast<int>(encoded_data.size()));
-  // Skip over the constant byte pattern at the start of the data.
-  coded_in.Skip(static_cast<int>(kConfidentialAggPayloadV1MagicBytes.size()));
+  absl::StatusOr<ClientPayloadHeader> result =
+      DecodeAndConsumeClientPayloadHeader(stream);
+  if (result.ok()) {
+    // We return a view into the `encoded_data` string, which allows us to avoid
+    // copying the data.
+    encoded_data = encoded_data.substr(stream.ByteCount());
+  }
+  return result;
+}
+
+absl::StatusOr<ClientPayloadHeader> DecodeAndConsumeClientPayloadHeader(
+    google::protobuf::io::ZeroCopyInputStream& stream) {
+  google::protobuf::io::CodedInputStream coded_in(&stream);
+  // Verify that the stream starts with expected byte pattern.
+  if (std::string magic_bytes;
+      !coded_in.ReadString(&magic_bytes,
+                           kConfidentialAggPayloadV1MagicBytes.size()) ||
+      magic_bytes != kConfidentialAggPayloadV1MagicBytes) {
+    return absl::InvalidArgumentError("Could not detect magic bytes prefix");
+  }
+
   uint32_t serialized_payload_size;
   if (!coded_in.ReadVarint32(&serialized_payload_size)) {
     return absl::InvalidArgumentError("Could not read 'size' varint64");
@@ -94,7 +109,7 @@ absl::StatusOr<ClientPayloadHeader> DecodeAndConsumeClientPayloadHeader(
   }
   coded_in.PopLimit(limit);
 
-  ClientPayloadHeader header = {
+  return ClientPayloadHeader{
       .encrypted_symmetric_key =
           std::move(*payload_header.mutable_encrypted_symmetric_key()),
       .encapsulated_public_key =
@@ -104,10 +119,6 @@ absl::StatusOr<ClientPayloadHeader> DecodeAndConsumeClientPayloadHeader(
       .is_gzip_compressed = payload_header.compression_type() ==
                             CompressionType::COMPRESSION_TYPE_GZIP,
   };
-  // We return a view into the `encoded_data` string, which allows us to avoid
-  // copying the data.
-  encoded_data = encoded_data.substr(coded_in.CurrentPosition());
-  return header;
 }
 
 }  // namespace confidential_compute
