@@ -138,6 +138,11 @@ message PipelineVariantPolicy {
   repeated AccessBudget shared_access_budgets = 2;
 
   message Transform {
+    // The numeric id of the source blobs in the graph that this transform may
+    // access.
+    // Deprecated: use src_node_ids instead.
+    uint32 src = 1 [deprecated = true];
+
     // The numeric id(s) of the source blobs in the graph that this transform
     // may access.
     repeated uint32 src_node_ids = 6;
@@ -172,8 +177,6 @@ message PipelineVariantPolicy {
     // *All* budgets must allow the usage for access to be granted to a source
     // blob.
     repeated uint32 shared_access_budget_indices = 4;
-
-    reserved 1;
   }
 }
 
