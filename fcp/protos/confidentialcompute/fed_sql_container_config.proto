@@ -119,4 +119,8 @@ message FedSqlContainerConfigConstraints {
 
   // Defines limits on the accesses to blobs.
   AccessBudget access_budget = 4;
+
+  // The uris of the aggregation intrinsics to use with AggCore. If non-empty,
+  // this field is used instead of `intrinsic_uri`.
+  repeated string intrinsic_uris = 7;
 }
