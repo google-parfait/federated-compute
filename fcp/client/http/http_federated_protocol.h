@@ -268,7 +268,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // during simple or confidential aggregation.
   absl::Status UploadDataViaByteStreamProtocol(
       std::string tf_checkpoint, PerTaskInfo& task_info,
-      std::optional<std::string> serialized_blob_header);
+      std::optional<absl::string_view> serialized_blob_header);
 
   // Helper function to perform a SubmitAggregationResult request.
   absl::Status SubmitAggregationResult(PerTaskInfo& task_info);

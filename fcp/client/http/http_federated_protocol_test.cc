@@ -35,6 +35,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/notification.h"
@@ -3774,8 +3775,10 @@ TEST_F(HttpFederatedProtocolTest,
   for (const auto& header : headers) {
     if (header.first == "x-goog-blob-header") {
       found_blob_header = true;
+      std::string unescaped;
+      ASSERT_TRUE(absl::WebSafeBase64Unescape(header.second, &unescaped));
       ::fcp::confidentialcompute::BlobHeader blob_header;
-      ASSERT_TRUE(blob_header.ParseFromString(header.second));
+      ASSERT_TRUE(blob_header.ParseFromString(unescaped));
       EXPECT_EQ(blob_header.access_policy_sha256(),
                 ComputeSHA256(serialized_access_policy));
       EXPECT_EQ(blob_header.access_policy_node_id(), 0);

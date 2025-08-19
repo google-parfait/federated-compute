@@ -34,6 +34,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -1639,7 +1640,7 @@ HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
 
 absl::Status HttpFederatedProtocol::UploadDataViaByteStreamProtocol(
     std::string tf_checkpoint, PerTaskInfo& task_info,
-    std::optional<std::string> serialized_blob_header) {
+    std::optional<absl::string_view> serialized_blob_header) {
   FCP_LOG(INFO) << "Uploading checkpoint with simple aggregation.";
   FCP_ASSIGN_OR_RETURN(
       std::string uri_suffix,
@@ -1647,7 +1648,7 @@ absl::Status HttpFederatedProtocol::UploadDataViaByteStreamProtocol(
   HeaderList additional_headers;
   if (serialized_blob_header.has_value()) {
     additional_headers.push_back(
-        {kBlobHeader, std::move(serialized_blob_header.value())});
+        {kBlobHeader, absl::WebSafeBase64Escape(*serialized_blob_header)});
   }
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<HttpRequest> http_request,
