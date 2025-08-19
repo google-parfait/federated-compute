@@ -16,6 +16,7 @@
 #include "fcp/client/engine/privacy_id_utils.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -23,6 +24,7 @@
 
 #include "google/type/datetime.pb.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -231,6 +233,18 @@ absl::StatusOr<absl::CivilSecond> ConvertEventTimeToCivilSecond(
   return event_civil_second;
 }
 
+// Loads a uint64_t from the given buffer in big-endian order.
+// TODO: b/439902489 - Replace this with the CFC version once it's available.
+uint64_t Load64BigEndian(const char* buf) {
+  return (static_cast<uint64_t>(static_cast<unsigned char>(buf[0])) << 56) |
+         (static_cast<uint64_t>(static_cast<unsigned char>(buf[1])) << 48) |
+         (static_cast<uint64_t>(static_cast<unsigned char>(buf[2])) << 40) |
+         (static_cast<uint64_t>(static_cast<unsigned char>(buf[3])) << 32) |
+         (static_cast<uint64_t>(static_cast<unsigned char>(buf[4])) << 24) |
+         (static_cast<uint64_t>(static_cast<unsigned char>(buf[5])) << 16) |
+         (static_cast<uint64_t>(static_cast<unsigned char>(buf[6])) << 8) |
+         static_cast<uint64_t>(static_cast<unsigned char>(buf[7]));
+}
 }  // namespace
 
 absl::StatusOr<absl::CivilSecond> GetPrivacyIdTimeWindowStart(
@@ -348,6 +362,38 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
   }
   return split_results;
 }
+
+absl::StatusOr<int32_t> GetNumPrefixBits(int32_t num_partitions) {
+  if (num_partitions <= 0) {
+    return absl::InvalidArgumentError("num_partitions must be positive.");
+  }
+  return static_cast<int32_t>(std::ceil(std::log2(num_partitions)));
+}
+
+absl::StatusOr<uint64_t> GetPartitionKey(int32_t num_prefix_bits,
+                                         absl::string_view privacy_id) {
+  if (num_prefix_bits > 64) {
+    return absl::InvalidArgumentError("num_prefix_bits must be <= 64.");
+  }
+  if (num_prefix_bits < 0) {
+    return absl::InvalidArgumentError("num_prefix_bits must be non-negative.");
+  }
+  if (num_prefix_bits == 0) {
+    // If no bits are preserved, the key is all zeros.
+    return 0;
+  }
+
+  int32_t num_bits_to_zero = 64 - num_prefix_bits;
+  // Hash the privacy ID to ensure partition keys are uniformly distributed.
+  std::string partition_key = ComputeSHA256(privacy_id);
+  partition_key = partition_key.substr(0, 8);
+
+  uint64_t partition_key_uint64 = Load64BigEndian(partition_key.data());
+  // Create a mask with the top num_prefix_bits set to 1.
+  uint64_t mask = ~0ULL << num_bits_to_zero;
+  return partition_key_uint64 & mask;
+}
+
 }  // namespace engine
 }  // namespace client
 }  // namespace fcp

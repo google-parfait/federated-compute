@@ -16,6 +16,7 @@
 #ifndef FCP_CLIENT_ENGINE_PRIVACY_ID_UTILS_H_
 #define FCP_CLIENT_ENGINE_PRIVACY_ID_UTILS_H_
 
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
@@ -71,6 +72,16 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
     const fedsql::PrivacyIdConfig& privacy_id_config,
     absl::string_view source_id);
 
+// Returns the number of prefix bits to preserve in the partition key such that
+// the partition key can represent at least num_partitions distinct values.
+absl::StatusOr<int32_t> GetNumPrefixBits(int32_t num_partitions);
+
+// Returns a partition key for the given privacy ID.
+//
+// The partition key is a hash of the privacy ID with num_prefix_bits preserved
+// and the rest zeroed out.
+absl::StatusOr<uint64_t> GetPartitionKey(int32_t num_prefix_bits,
+                                         absl::string_view privacy_id);
 }  // namespace engine
 }  // namespace client
 }  // namespace fcp
