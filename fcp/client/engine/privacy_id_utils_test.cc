@@ -172,6 +172,26 @@ TEST(PrivacyIdUtilsTest, NonTumblingWindow) {
                        HasSubstr("Only tumbling windows are supported")));
 }
 
+TEST(PrivacyIdUtilsTest, InvalidWindowSize) {
+  PrivacyIdConfig config = CreatePrivacyIdConfig(
+      /*window_size=*/0,
+      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
+      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
+  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
+                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Window size must be positive")));
+
+  config = CreatePrivacyIdConfig(
+      /*window_size=*/-1,
+      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
+      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
+  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
+                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Window size must be positive")));
+}
+
 TEST(PrivacyIdUtilsTest, InvalidStartTimeForHourWindow) {
   PrivacyIdConfig config = CreatePrivacyIdConfig(
       /*window_size=*/1,
@@ -331,23 +351,18 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdSucceeds) {
       UnorderedElementsAre(
           PerPrivacyIdResultIs(
               *privacy_id_1,
-              AddPrivacyId(
-                  AddEventTimeRange(
-                      CreateExampleQueryResult({"2024-01-01T10:15:00+00:00",
-                                                "2024-01-01T08:00:00-09:00"},
-                                               {1, 3}),
-                      CreateDateTime(2024, 1, 1, 8, 0, 0),
-                      CreateDateTime(2024, 1, 1, 10, 0, 0)),
-                  *privacy_id_1)),
+              AddEventTimeRange(
+                  CreateExampleQueryResult({"2024-01-01T10:15:00+00:00",
+                                            "2024-01-01T08:00:00-09:00"},
+                                           {1, 3}),
+                  CreateDateTime(2024, 1, 1, 8, 0, 0),
+                  CreateDateTime(2024, 1, 1, 10, 0, 0))),
           PerPrivacyIdResultIs(
               *privacy_id_2,
-              AddPrivacyId(
-                  AddEventTimeRange(CreateExampleQueryResult(
-                                        {"2024-01-02T12:00:00+00:00"}, {2}),
-
-                                    CreateDateTime(2024, 1, 2, 12, 0, 0),
-                                    CreateDateTime(2024, 1, 2, 12, 0, 0)),
-                  *privacy_id_2))));
+              AddEventTimeRange(
+                  CreateExampleQueryResult({"2024-01-02T12:00:00+00:00"}, {2}),
+                  CreateDateTime(2024, 1, 2, 12, 0, 0),
+                  CreateDateTime(2024, 1, 2, 12, 0, 0)))));
 }
 
 TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdNoEventTimeColumn) {
@@ -443,6 +458,29 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdEmptyResult) {
       CreateExampleQuery(), query_result, config, "test_source");
   ASSERT_OK(split_results);
   EXPECT_THAT(split_results->per_privacy_id_results, testing::IsEmpty());
+}
+
+TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdNoWindowingSchedule) {
+  // When no windowing schedule is provided, all rows have the same privacy ID.
+  PrivacyIdConfig config;
+
+  ExampleQueryResult query_result = CreateExampleQueryResult(
+      {"2024-01-01T10:15:00+00:00", "2024-01-02T12:00:00+00:00"}, {1, 2});
+
+  absl::StatusOr<SplitResults> split_results = SplitResultsByPrivacyId(
+      CreateExampleQuery(), query_result, config, "test_source");
+  ASSERT_OK(split_results);
+
+  // Expect a single result with privacy_id equal to source_id.
+  EXPECT_THAT(split_results->per_privacy_id_results,
+              UnorderedElementsAre(PerPrivacyIdResultIs(
+                  "test_source",
+                  AddEventTimeRange(
+                      CreateExampleQueryResult({"2024-01-01T10:15:00+00:00",
+                                                "2024-01-02T12:00:00+00:00"},
+                                               {1, 2}),
+                      CreateDateTime(2024, 1, 1, 10, 0, 0),
+                      CreateDateTime(2024, 1, 2, 12, 0, 0)))));
 }
 
 TEST(PrivacyIdUtilsTest, GetNumPrefixBitsValid) {

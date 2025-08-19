@@ -114,6 +114,9 @@ ValidateCivilTimeWindowSchedule(
       schedule.size().unit() != schedule.shift().unit()) {
     return absl::UnimplementedError("Only tumbling windows are supported");
   }
+  if (schedule.size().size() <= 0) {
+    return absl::InvalidArgumentError("Window size must be positive");
+  }
   return schedule;
 }
 
@@ -204,22 +207,6 @@ absl::StatusOr<ExampleQueryResult> CreateExampleQueryResultFromSelection(
         ConvertCivilHourToDateTime(selection.max_event_time);
   }
   return new_result;
-}
-
-// Adds the privacy ID to the example query result.
-absl::Status AddPrivacyIdColumn(absl::string_view privacy_id,
-                                ExampleQueryResult& example_query_result) {
-  if (example_query_result.vector_data().vectors().contains(
-          confidential_compute::kPrivacyIdColumnName)) {
-    return absl::InvalidArgumentError(
-        "Privacy ID column cannot already exist in the example query result");
-  }
-  ExampleQueryResult::VectorData::Values privacy_id_values;
-  privacy_id_values.mutable_bytes_values()->add_value(std::string(privacy_id));
-  (*example_query_result.mutable_vector_data()
-        ->mutable_vectors())[confidential_compute::kPrivacyIdColumnName] =
-      std::move(privacy_id_values);
-  return absl::OkStatus();
 }
 
 absl::StatusOr<absl::CivilSecond> ConvertEventTimeToCivilSecond(
@@ -319,6 +306,11 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
     return absl::InvalidArgumentError(
         "Unexpected data type for event time column, expected string.");
   }
+  if (example_query_result.vector_data().vectors().contains(
+          confidential_compute::kPrivacyIdColumnName)) {
+    return absl::InvalidArgumentError(
+        "Privacy ID column cannot already exist in the example query result");
+  }
 
   // Build a map of privacy ID to the indices of the rows with that privacy
   // ID. Also track the earliest and latest event times for each privacy ID,
@@ -330,11 +322,15 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
         event_time_values.string_values().value(i);
     FCP_ASSIGN_OR_RETURN(absl::CivilSecond event_civil_second,
                          ConvertEventTimeToCivilSecond(event_time_str));
-    FCP_ASSIGN_OR_RETURN(
-        absl::CivilSecond window_start,
-        GetPrivacyIdTimeWindowStart(privacy_id_config, event_civil_second));
-    FCP_ASSIGN_OR_RETURN(std::string privacy_id,
-                         GetPrivacyId(source_id, window_start));
+    // If privacy ID windowing is not configured, use the source ID as the
+    // privacy ID.
+    std::string privacy_id = std::string(source_id);
+    if (privacy_id_config.has_windowing_schedule()) {
+      FCP_ASSIGN_OR_RETURN(
+          absl::CivilSecond window_start,
+          GetPrivacyIdTimeWindowStart(privacy_id_config, event_civil_second));
+      FCP_ASSIGN_OR_RETURN(privacy_id, GetPrivacyId(source_id, window_start));
+    }
     ExampleQueryResultSelection& selection = privacy_id_selections[privacy_id];
     selection.indices.push_back(i);
     selection.min_event_time =
@@ -350,9 +346,6 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
     FCP_ASSIGN_OR_RETURN(
         ExampleQueryResult per_privacy_id_example_query_result,
         CreateExampleQueryResultFromSelection(example_query_result, selection));
-
-    FCP_RETURN_IF_ERROR(
-        AddPrivacyIdColumn(privacy_id, per_privacy_id_example_query_result));
 
     per_privacy_id_result.example_query_result =
         std::move(per_privacy_id_example_query_result);

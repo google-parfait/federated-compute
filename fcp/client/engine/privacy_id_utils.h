@@ -18,7 +18,6 @@
 
 #include <cstdint>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -58,8 +57,7 @@ struct SplitResults {
 };
 
 // Split the ExampleQueryResult into multiple ExampleQueryResults, one for each
-// unique privacy ID. Add the privacy ID as a column with a single value to each
-// ExampleQueryResult.
+// unique privacy ID.
 // Requires that the ExampleQueryResult has an event time column with the
 // kEventTimeColumnName. Event times should be in the format
 // YYYY-MM-DDTHH:MM:SS[+-]HH:MM.
