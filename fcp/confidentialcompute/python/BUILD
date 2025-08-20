@@ -75,6 +75,7 @@ py_test(
         ":min_sep_data_source",
         "//fcp/protos/confidentialcompute:file_info_py_pb2",
         "@federated_language//federated_language/proto:computation_py_pb2",
+        "@federated_language//federated_language/proto:data_type_py_pb2",
         "@pypi_absl_py//:pkg",
     ],
 )

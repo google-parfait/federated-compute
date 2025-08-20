@@ -17,6 +17,7 @@ import os
 from absl.testing import absltest
 from absl.testing import parameterized
 from federated_language.proto import computation_pb2
+from federated_language.proto import data_type_pb2
 
 from fcp.confidentialcompute.python import min_sep_data_source
 from fcp.protos.confidentialcompute import file_info_pb2
@@ -26,6 +27,9 @@ _MIN_SEP = 10
 _CLIENT_IDS = ['a', 'b', 'c']
 _TEST_CLIENT_DATA_DIRECTORY = 'test_dir'
 _KEY_NAME = 'key_name'
+_COMPUTATION_TYPE = computation_pb2.Type(
+    tensor=computation_pb2.TensorType(dtype=data_type_pb2.DataType.DT_INT32)
+)
 
 
 class MinSepDataSourceIteratorTest(parameterized.TestCase):
@@ -40,6 +44,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
           _MIN_SEP,
           client_ids,
           _TEST_CLIENT_DATA_DIRECTORY,
+          _COMPUTATION_TYPE,
           _KEY_NAME,
       )
 
@@ -54,6 +59,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
           min_sep,
           _CLIENT_IDS,
           _TEST_CLIENT_DATA_DIRECTORY,
+          _COMPUTATION_TYPE,
           _KEY_NAME,
       )
 
@@ -81,6 +87,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
         _MIN_SEP,
         client_ids,
         _TEST_CLIENT_DATA_DIRECTORY,
+        _COMPUTATION_TYPE,
         _KEY_NAME,
     )
 
@@ -97,6 +104,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
         _MIN_SEP,
         client_ids,
         _TEST_CLIENT_DATA_DIRECTORY,
+        _COMPUTATION_TYPE,
         _KEY_NAME,
     )
 
@@ -116,6 +124,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
       # Track which rounds clients are chosen to participate in.
       for data_computation in data_for_round:
         self.assertIsInstance(data_computation, computation_pb2.Computation)
+        self.assertEqual(data_computation.type, _COMPUTATION_TYPE)
         self.assertEqual(data_computation.WhichOneof('computation'), 'data')
         unpacked_content = file_info_pb2.FileInfo()
         data_computation.data.content.Unpack(unpacked_content)
@@ -156,6 +165,7 @@ class MinSepDataSourceTest(absltest.TestCase):
           _MIN_SEP,
           client_ids,
           _TEST_CLIENT_DATA_DIRECTORY,
+          _COMPUTATION_TYPE,
           _KEY_NAME,
       )
 
@@ -170,6 +180,7 @@ class MinSepDataSourceTest(absltest.TestCase):
           min_sep,
           _CLIENT_IDS,
           _TEST_CLIENT_DATA_DIRECTORY,
+          _COMPUTATION_TYPE,
           _KEY_NAME,
       )
 

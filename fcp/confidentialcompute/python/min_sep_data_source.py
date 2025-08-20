@@ -43,6 +43,7 @@ class MinSepDataSourceIterator(
       min_sep: int,
       client_ids: list[str],
       client_data_directory: str,
+      computation_type: computation_pb2.Type,
       key_name: str = constants.OUTPUT_TENSOR_NAME,
   ):
     """Returns an initialized `tff.program.MinSepDataSourceIterator`.
@@ -53,6 +54,7 @@ class MinSepDataSourceIterator(
       client_ids: A list of strings representing the clients from this data
         source. Must not be empty.
       client_data_directory: The directory containing the client data.
+      computation_type: The type of data represented by this data source.
       key_name: The name of the key to use when creating pointers to the
         underlying data. This should match the tensor name used when creating
         the federated checkpoint for the uploaded client data.
@@ -88,6 +90,7 @@ class MinSepDataSourceIterator(
 
     self._min_sep = min_sep
     self._client_data_directory = client_data_directory
+    self._computation_type = computation_type
     self._key_name = key_name
     self._round_index = 0
 
@@ -148,16 +151,6 @@ class MinSepDataSourceIterator(
     # Create a list of `federated_language.framework.Data` protos for the
     # selected client ids. This is how the trusted execution stack expects to
     # receive client data.
-    tensor_type_pb = computation_pb2.TensorType(
-        dtype=data_type_pb2.DataType.DT_STRING
-    )
-    placement_pb = computation_pb2.Placement(uri=federated_language.CLIENTS.uri)
-    federated_type_pb = computation_pb2.FederatedType(
-        placement=computation_pb2.PlacementSpec(value=placement_pb),
-        all_equal=False,
-        member=computation_pb2.Type(tensor=tensor_type_pb),
-    )
-
     selected_data_protos = []
     for client_id in selected_ids:
       any_proto = any_pb2.Any()
@@ -169,7 +162,7 @@ class MinSepDataSourceIterator(
       )
       selected_data_protos.append(
           computation_pb2.Computation(
-              type=computation_pb2.Type(federated=federated_type_pb),
+              type=self._computation_type,
               data=computation_pb2.Data(content=any_proto),
           )
       )
@@ -185,6 +178,21 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
       min_sep: int,
       client_ids: list[str],
       client_data_directory: str,
+      computation_type: computation_pb2.Type = computation_pb2.Type(
+          federated=computation_pb2.FederatedType(
+              placement=computation_pb2.PlacementSpec(
+                  value=computation_pb2.Placement(
+                      uri=federated_language.CLIENTS.uri
+                  )
+              ),
+              all_equal=False,
+              member=computation_pb2.Type(
+                  tensor=computation_pb2.TensorType(
+                      dtype=data_type_pb2.DataType.DT_STRING
+                  )
+              ),
+          )
+      ),
       key_name: str = constants.OUTPUT_TENSOR_NAME,
   ):
     """Returns an initialized `tff.program.MinSepDataSource`.
@@ -202,6 +210,7 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
       client_ids: A list of strings representing the clients from this data
         source. Must not be empty.
       client_data_directory: The directory containing the client data.
+      computation_type: The type of data represented by this data source.
       key_name: The name of the key to use when creating pointers to the
         underlying data. This should match the tensor name used when creating
         the federated checkpoint for the uploaded client data.
@@ -222,6 +231,7 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
     self._min_sep = min_sep
     self._client_ids = client_ids
     self._client_data_directory = client_data_directory
+    self._computation_type = computation_type
     self._key_name = key_name
 
   @property
@@ -236,5 +246,6 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
         self._min_sep,
         self._client_ids,
         self._client_data_directory,
+        self._computation_type,
         self._key_name,
     )
