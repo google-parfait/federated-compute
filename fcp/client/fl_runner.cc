@@ -124,9 +124,10 @@ absl::StatusOr<ComputationResults> CreateComputationResults(
     }
   }
 
-  if (!plan_result.federated_compute_checkpoint.empty()) {
+  if (!plan_result.federated_compute_checkpoints.empty()) {
+    // TODO: b/422862369 - support multiple checkpoints.
     computation_results[kFederatedComputeCheckpoint] =
-        std::move(plan_result.federated_compute_checkpoint);
+        std::move(plan_result.federated_compute_checkpoints[0].payload);
   } else if (!checkpoint_filename.empty()) {
     // Name of the TF checkpoint inside the aggregand map in the Checkpoint
     // protobuf. This field name is ignored by the server.
@@ -1634,8 +1635,13 @@ RunPlanResults RunComputation(
             : &checkin_result.plan.phase().tensorflow_spec(),
         *plan_result_and_checkpoint_file, flags);
 
-    payload_metadata = std::move(
-        plan_result_and_checkpoint_file->plan_result.payload_metadata);
+    // TODO: b/422862369 - add support for multiple checkpoints.
+    if (!plan_result_and_checkpoint_file->plan_result
+             .federated_compute_checkpoints.empty()) {
+      payload_metadata = std::move(plan_result_and_checkpoint_file->plan_result
+                                       .federated_compute_checkpoints[0]
+                                       .metadata);
+    }
   }
   std::optional<int64_t> min_sep_policy_index =
       GetMinSepPolicyIndexFromCheckinResult(checkin_result.plan);

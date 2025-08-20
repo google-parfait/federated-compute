@@ -80,6 +80,7 @@ using ::google::internal::federated::plan::ExampleQuerySpec;
 using ::google::internal::federated::plan::ExampleSelector;
 using tensorflow_federated::aggregation::Tensor;
 using tensorflow_federated::aggregation::TensorShape;
+using ::testing::SizeIs;
 using ::testing::StrictMock;
 using ::testing::UnorderedElementsAreArray;
 
@@ -657,8 +658,10 @@ TEST_F(ExampleQueryPlanEngineTest,
       /*uses_confidential_agg=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+  ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
 
-  absl::string_view str = result.federated_compute_checkpoint.Flatten();
+  absl::string_view str =
+      result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
   ASSERT_OK(tensors);
@@ -762,9 +765,11 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithEventTimeRange) {
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
-  ASSERT_TRUE(result.payload_metadata.has_value());
-  ASSERT_THAT(result.payload_metadata->event_time_range(),
-              EqualsProto(event_time_range));
+  ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
+  ASSERT_TRUE(result.federated_compute_checkpoints[0].metadata.has_value());
+  ASSERT_THAT(
+      result.federated_compute_checkpoints[0].metadata->event_time_range(),
+      EqualsProto(event_time_range));
 }
 
 TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
@@ -884,9 +889,11 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
-  ASSERT_TRUE(result.payload_metadata.has_value());
-  ASSERT_THAT(result.payload_metadata->event_time_range(),
-              EqualsProto(second_event_time_range));
+  ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
+  ASSERT_TRUE(result.federated_compute_checkpoints[0].metadata.has_value());
+  ASSERT_THAT(
+      result.federated_compute_checkpoints[0].metadata->event_time_range(),
+      EqualsProto(second_event_time_range));
 }
 
 TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
@@ -1013,9 +1020,11 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
   expected_event_time_range.mutable_end_event_time()->set_day(3);
   expected_event_time_range.mutable_end_event_time()->set_hours(1);
   expected_event_time_range.mutable_end_event_time()->set_minutes(1);
-  ASSERT_TRUE(result.payload_metadata.has_value());
-  ASSERT_THAT(result.payload_metadata->event_time_range(),
-              EqualsProto(expected_event_time_range));
+  ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
+  ASSERT_TRUE(result.federated_compute_checkpoints[0].metadata.has_value());
+  ASSERT_THAT(
+      result.federated_compute_checkpoints[0].metadata->event_time_range(),
+      EqualsProto(expected_event_time_range));
 }
 
 TEST_F(ExampleQueryPlanEngineTest, MissingEndEventTimeFails) {
@@ -1115,7 +1124,9 @@ TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
-  absl::string_view str = result.federated_compute_checkpoint.Flatten();
+  ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
+  absl::string_view str =
+      result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
   ASSERT_OK(tensors);
@@ -1207,7 +1218,9 @@ TEST_F(ExampleQueryPlanEngineTest, TwoQueryDirectDataUploadTaskSucceeds) {
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
-  absl::string_view str = result.federated_compute_checkpoint.Flatten();
+  ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
+  absl::string_view str =
+      result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
   ASSERT_OK(tensors);
@@ -1316,7 +1329,9 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
-  absl::string_view str = result.federated_compute_checkpoint.Flatten();
+  ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
+  absl::string_view str =
+      result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
   ASSERT_OK(tensors);

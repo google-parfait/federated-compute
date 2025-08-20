@@ -375,7 +375,8 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
     if (status.ok()) {
       auto checkpoint = checkpoint_builder->Build();
       if (checkpoint.ok()) {
-        plan_result.federated_compute_checkpoint = std::move(*checkpoint);
+        FederatedComputeCheckpoint result_checkpoint = {
+            .payload = std::move(*checkpoint)};
         // TODO: b/422862369 - derive the privacy ID and partition keys for each
         // example if the task uses confidential aggregation and has
         // num_partitions set in the SelectionCriteria.
@@ -387,8 +388,10 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
           confidentialcompute::PayloadMetadata payload_metadata;
           *payload_metadata.mutable_event_time_range() =
               GetEventTimeRange(structured_example_query_results);
-          plan_result.payload_metadata = std::move(payload_metadata);
+          result_checkpoint.metadata = std::move(payload_metadata);
         }
+        plan_result.federated_compute_checkpoints.push_back(
+            std::move(result_checkpoint));
       } else {
         status = checkpoint.status();
       }
