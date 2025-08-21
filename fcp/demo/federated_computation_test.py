@@ -41,9 +41,7 @@ def count_clients(state, client_data):
       1, federated_language.CLIENTS
   )
   aggregated_count = federated_language.federated_sum(client_value)
-  metrics = federated_language.federated_value(
-      tff.structure.Struct(()), federated_language.SERVER
-  )
+  metrics = federated_language.federated_value([], federated_language.SERVER)
   return (
       federated_language.federated_map(add_values, (state, aggregated_count)),
       metrics,
@@ -65,9 +63,7 @@ def count_examples(state, client_data):
 
   client_counts = federated_language.federated_map(client_work, client_data)
   aggregated_count = federated_language.federated_sum(client_counts)
-  metrics = federated_language.federated_value(
-      tff.structure.Struct(()), federated_language.SERVER
-  )
+  metrics = federated_language.federated_value([], federated_language.SERVER)
   return (
       federated_language.federated_map(add_values, (state, aggregated_count)),
       metrics,
