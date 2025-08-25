@@ -432,7 +432,13 @@ def pack_tff_value(
 
 
 def variable_names_from_structure(
-    tff_structure: Union[tff.structure.Struct, tf.Tensor], name: str = 'v'
+    tff_structure: Union[
+        Mapping[str, object],
+        Sequence[object],
+        tff.structure.Struct,
+        tf.Tensor,
+    ],
+    name: str = 'v',
 ) -> list[str]:
   """Creates a flattened list of variable names for the given structure.
 
@@ -469,21 +475,38 @@ def variable_names_from_structure(
     TypeError: If either argument is of the wrong type.
   """
   type_checks.check_type(
-      tff_structure, (tff.structure.Struct, tf.Tensor), name='structure_type'
+      tff_structure,
+      (Mapping, Sequence, tff.structure.Struct, tf.Tensor),
+      name='structure_type',
   )
   type_checks.check_type(name, str, name='name')
   if isinstance(tff_structure, tf.Tensor):
     return [name]
   elif isinstance(tff_structure, tff.structure.Struct):
+    return variable_names_from_structure(
+        tff.structure.to_odict_or_tuple(tff_structure),
+        name,
+    )
+  elif isinstance(tff_structure, Mapping):
     result = []
-    fields = tff.structure.to_elements(tff_structure)
-    for index, (field_name, field_type) in enumerate(fields):
-      # Default the name of the element to its index so that we don't wind up
-      # with multiple child fields listed under `/v/`
-      field_name = field_name or str(index)
+    for field_name, field_type in tff_structure.items():
       result.extend(
           variable_names_from_structure(
-              field_type, name=name + '/' + field_name
+              field_type,
+              name=name + '/' + field_name,
+          )
+      )
+    return result
+  elif isinstance(tff_structure, Sequence):
+    result = []
+    for index, field_type in enumerate(tff_structure):
+      # Default the name of the element to its index so that we don't wind up
+      # with multiple child fields listed under `/v/`
+      field_name = str(index)
+      result.extend(
+          variable_names_from_structure(
+              field_type,
+              name=name + '/' + field_name,
           )
       )
     return result

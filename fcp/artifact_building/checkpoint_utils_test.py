@@ -258,15 +258,15 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
         tff.structure.Struct([
             (None, tf.constant(1.0)),
             (
-                'b',
+                None,
                 tff.structure.Struct(
-                    [(None, tf.constant(False)), ('d', tf.constant(0.0))]
+                    [(None, tf.constant(False)), (None, tf.constant(0.0))]
                 ),
             ),
         ]),
         'test_name',
     )
-    self.assertEqual(names, ['test_name/0', 'test_name/b/0', 'test_name/b/d'])
+    self.assertEqual(names, ['test_name/0', 'test_name/1/0', 'test_name/1/1'])
 
   def test_save_tf_tensor_to_checkpoint_as_expected(self):
     temp_dir = self.create_tempdir()
