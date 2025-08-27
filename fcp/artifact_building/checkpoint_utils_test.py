@@ -177,11 +177,28 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
         )
     )
     value_list = [tf.constant(1), tf.constant(2), tf.constant(3)]
-    expected_packed_structure = tff.structure.from_container(
-        collections.OrderedDict(
-            foo=tf.constant(1), bar=[(), ([tf.constant(2)], tf.constant(3))]
-        ),
-        recursive=True,
+    expected_packed_structure = tff.structure.Struct(
+        [
+            ('foo', tf.constant(1)),
+            (
+                'bar',
+                tff.structure.Struct([
+                    (None, tff.structure.Struct([])),
+                    (
+                        None,
+                        tff.structure.Struct([
+                            (
+                                None,
+                                tff.structure.Struct([
+                                    (None, tf.constant(2)),
+                                ]),
+                            ),
+                            (None, tf.constant(3)),
+                        ]),
+                    ),
+                ]),
+            ),
+        ],
     )
     self.assertEqual(
         checkpoint_utils.pack_tff_value(
