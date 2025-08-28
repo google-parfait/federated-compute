@@ -15,6 +15,7 @@
 # Description:
 #   Mocks for SecAgg.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//fcp:config.bzl", "FCP_COPTS")
 
 package(

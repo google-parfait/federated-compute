@@ -14,6 +14,8 @@
 
 load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_cc_test", "tf_custom_op_py_library", "tf_gen_op_wrapper_py")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("@rules_python//python:defs.bzl", "py_binary", "py_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 load("//fcp/tensorflow/pip_tf:defs.bzl", "tf_custom_op_library")
