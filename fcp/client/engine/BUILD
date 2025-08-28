@@ -13,6 +13,8 @@
 # limitations under the License.
 
 load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 
 default_visibility = [

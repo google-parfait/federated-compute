@@ -15,6 +15,8 @@
 # Description:
 # Base component, containing common functionality used by other FCP components.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 load("//fcp/tracing:build_defs.bzl", "tracing_schema_cc_library")
 

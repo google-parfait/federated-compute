@@ -15,6 +15,9 @@
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_proto_library")
 load("@org_tensorflow//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 
 package(

@@ -1,4 +1,5 @@
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//fcp:config.bzl", "FCP_COPTS")
 
 package(
