@@ -15,6 +15,7 @@
 """Build rule for tracing schemas to be used with fcp/tracing library.
 """
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//fcp:config.bzl", "FCP_COPTS")
 load("@flatbuffers//:build_defs.bzl", "flatbuffer_cc_library")
 
@@ -91,7 +92,7 @@ def tracing_schema_cc_library(
     )
 
     # Packaging everything into cc_library:
-    native.cc_library(
+    cc_library(
         name = name,
         hdrs = [
             ":" + out_header,

@@ -16,6 +16,8 @@
 A custom build file for libcppbor
 """
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 licenses(["notice"])
 
 exports_files(["LICENSE"])

@@ -13,6 +13,8 @@
 # limitations under the License.
 """Provides rules for building custom TensorFlow ops compatible with pip."""
 
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+
 # Additional BUILD content that should be added to @pypi_tensorflow.
 TF_ADDITIVE_BUILD_CONTENT = """
 cc_library(
@@ -107,8 +109,7 @@ def tf_custom_op_library(
     target's own sources will be compiled with the necessary compiler flags to
     correctly target a pip TF library.
     """
-
-    native.cc_binary(
+    cc_binary(
         name = name + "_lib",
         srcs = srcs,
         linkshared = 1,
