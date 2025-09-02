@@ -24,6 +24,8 @@ inline constexpr char kComposedTeeUri[] = "composed_tee";
 inline constexpr char kComposedTeeLeafUri[] = "composed_tee/leaf";
 inline constexpr char kComposedTeeRootUri[] = "composed_tee/root";
 
+inline constexpr char kDirectDataUploadTensorName[] = "output_tensor_name";
+
 inline constexpr char kFileInfoKeySeparator[] = "/";
 
 inline constexpr char kEventTimeColumnName[] =
