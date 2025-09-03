@@ -163,8 +163,8 @@ class CheckpointUtilsTest(tf.test.TestCase, parameterized.TestCase):
 
   def test_pack_tff_value_with_federated_server_tensors_as_expected(self):
     # This test must create a type that has `StructType`s nested under the
-    # `FederatedType` to cover testing that tff.structure.pack_sequence_as
-    # package correctly descends through the entire type tree.
+    # `FederatedType` to cover testing that the packing logic correctly descends
+    # through the entire type tree.
     tff_type = federated_language.to_type(
         collections.OrderedDict(
             foo=federated_language.FederatedType(

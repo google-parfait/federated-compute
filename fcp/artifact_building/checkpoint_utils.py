@@ -377,11 +377,10 @@ def pack_tff_value(
       ),
   )
 
-  # We must "unwrap" any FederatedTypes because the
-  # `tff.structure.pack_sequence_as` call below will fail to recurse into them.
-  # Instead, we remove all the FederatedTypes, because we're only trying to
-  # build up a Python tree structure that matches the struct/tensor types from a
-  # list of values.
+  # We must "unwrap" any FederatedTypes because the packing logic below will
+  # fail to recurse into them. Instead, we remove all the FederatedTypes,
+  # because we're only trying to build up a Python tree structure that matches
+  # the struct/tensor types from a list of values.
   def remove_federated_types(
       type_spec: federated_language.Type,
   ) -> Union[federated_language.StructType, federated_language.TensorType]:
@@ -422,7 +421,20 @@ def pack_tff_value(
   if isinstance(tff_type, federated_language.TensorType):
     return value_list[0]
   elif isinstance(tff_type, federated_language.StructType):
-    return tff.structure.pack_sequence_as(tff_type, value_list)
+
+    def _unflatten_as(type_spec, flat_sequence):
+
+      def _pack(type_spec, value_iter):
+        if isinstance(type_spec, federated_language.StructType):
+          elements = [(n, _pack(v, value_iter)) for n, v in type_spec.items()]
+          return tff.structure.Struct(elements)
+        else:
+          return next(value_iter)
+
+      value_iter = iter(flat_sequence)
+      return _pack(type_spec, value_iter)
+
+    return _unflatten_as(tff_type, value_list)
   else:
     raise ValueError(
         '`tff_type` must be either federated_language.TensorType or '
