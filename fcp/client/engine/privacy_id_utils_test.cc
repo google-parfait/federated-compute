@@ -100,11 +100,13 @@ TEST(PrivacyIdUtilsTest, GetWindowStartHourly) {
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::HOURS,
       /*start_year=*/2024, /*start_month=*/1,
       /*start_day=*/1, /*start_hours=*/0);
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
+  EXPECT_THAT(GetTimeWindowStart(
+                  config.windowing_schedule().civil_time_window_schedule(),
+                  absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
               IsOkAndHolds(absl::CivilSecond(2024, 1, 1, 12, 0, 0)));
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 1, 0, 0, 0)),
+  EXPECT_THAT(GetTimeWindowStart(
+                  config.windowing_schedule().civil_time_window_schedule(),
+                  absl::CivilSecond(2024, 1, 1, 0, 0, 0)),
               IsOkAndHolds(absl::CivilSecond(2024, 1, 1, 0, 0, 0)));
 }
 
@@ -113,8 +115,9 @@ TEST(PrivacyIdUtilsTest, GetWindowStartDaily) {
       /*window_size=*/1,
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
       /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 5, 13, 5, 0)),
+  EXPECT_THAT(GetTimeWindowStart(
+                  config.windowing_schedule().civil_time_window_schedule(),
+                  absl::CivilSecond(2024, 1, 5, 13, 5, 0)),
               IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 0, 0, 0)));
 }
 
@@ -123,8 +126,9 @@ TEST(PrivacyIdUtilsTest, GetWindowStartMonthly) {
       /*window_size=*/1,
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::MONTHS,
       /*start_year=*/2024, /*start_month=*/1, /*start_day=*/0);
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 3, 5, 13, 5, 0)),
+  EXPECT_THAT(GetTimeWindowStart(
+                  config.windowing_schedule().civil_time_window_schedule(),
+                  absl::CivilSecond(2024, 3, 5, 13, 5, 0)),
               IsOkAndHolds(absl::CivilSecond(2024, 3, 1, 0, 0, 0)));
 }
 
@@ -133,8 +137,9 @@ TEST(PrivacyIdUtilsTest, GetWindowStartYearly) {
       /*window_size=*/1,
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::YEARS,
       /*start_year=*/2024, /*start_month=*/0, /*start_day=*/0);
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2025, 3, 5, 13, 5, 0)),
+  EXPECT_THAT(GetTimeWindowStart(
+                  config.windowing_schedule().civil_time_window_schedule(),
+                  absl::CivilSecond(2025, 3, 5, 13, 5, 0)),
               IsOkAndHolds(absl::CivilSecond(2025, 1, 1, 0, 0, 0)));
 }
 
@@ -143,53 +148,11 @@ TEST(PrivacyIdUtilsTest, GetWindowStartEventBeforeStart) {
       /*window_size=*/1,
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
       /*start_year=*/2024, /*start_month=*/1, /*start_day=*/10);
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 5, 13, 5, 0)),
+  EXPECT_THAT(GetTimeWindowStart(
+                  config.windowing_schedule().civil_time_window_schedule(),
+                  absl::CivilSecond(2024, 1, 5, 13, 5, 0)),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Event time is before the schedule start")));
-}
-
-TEST(PrivacyIdUtilsTest, MissingWindowSchedule) {
-  PrivacyIdConfig config;
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Missing CivilTimeWindowSchedule")));
-}
-
-TEST(PrivacyIdUtilsTest, NonTumblingWindow) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/1,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
-      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
-  config.mutable_windowing_schedule()
-      ->mutable_civil_time_window_schedule()
-      ->mutable_shift()
-      ->set_size(2);
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
-              StatusIs(absl::StatusCode::kUnimplemented,
-                       HasSubstr("Only tumbling windows are supported")));
-}
-
-TEST(PrivacyIdUtilsTest, InvalidWindowSize) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/0,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
-      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Window size must be positive")));
-
-  config = CreatePrivacyIdConfig(
-      /*window_size=*/-1,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
-      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Window size must be positive")));
 }
 
 TEST(PrivacyIdUtilsTest, InvalidStartTimeForHourWindow) {
@@ -199,8 +162,9 @@ TEST(PrivacyIdUtilsTest, InvalidStartTimeForHourWindow) {
       /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1,
       /*start_hours=*/0,
       /*start_minutes=*/1, /*start_seconds=*/0);  // Minutes not 0
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
+  EXPECT_THAT(GetTimeWindowStart(
+                  config.windowing_schedule().civil_time_window_schedule(),
+                  absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Start time minutes, seconds, and nanos must "
                                  "be 0 for HOUR windows")));
@@ -213,8 +177,9 @@ TEST(PrivacyIdUtilsTest, InvalidStartTimeForDayWindow) {
       /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1,
       /*start_hours=*/1,
       /*start_minutes=*/0, /*start_seconds=*/0);  // Hours not 0
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
+  EXPECT_THAT(GetTimeWindowStart(
+                  config.windowing_schedule().civil_time_window_schedule(),
+                  absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Start time must be unset for DAY windows")));
 }
@@ -225,8 +190,9 @@ TEST(PrivacyIdUtilsTest, InvalidStartTimeForMonthWindow) {
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::MONTHS,
       /*start_year=*/2024, /*start_month=*/1,
       /*start_day=*/2);  // Day not 0
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
+  EXPECT_THAT(GetTimeWindowStart(
+                  config.windowing_schedule().civil_time_window_schedule(),
+                  absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Start date day and start time must be unset "
                                  "for MONTH windows")));
@@ -238,8 +204,9 @@ TEST(PrivacyIdUtilsTest, InvalidStartTimeForYearWindow) {
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::YEARS,
       /*start_year=*/2024, /*start_month=*/2,
       /*start_day=*/0);  // Month not 0
-  EXPECT_THAT(GetPrivacyIdTimeWindowStart(
-                  config, absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
+  EXPECT_THAT(GetTimeWindowStart(
+                  config.windowing_schedule().civil_time_window_schedule(),
+                  absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Start date month, day, and time must be "
                                  "unset for YEAR windows")));
@@ -320,6 +287,65 @@ ExampleQueryResult AddPrivacyId(ExampleQueryResult result,
         ->mutable_vectors())[confidential_compute::kPrivacyIdColumnName] =
       privacy_id_values;
   return result;
+}
+
+TEST(PrivacyIdUtilsTest, MissingWindowSchedule) {
+  PrivacyIdConfig config = CreatePrivacyIdConfig(
+      /*window_size=*/1,
+      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
+      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
+  config.mutable_windowing_schedule()->clear_civil_time_window_schedule();
+  ExampleQueryResult query_result = CreateExampleQueryResult(
+      {"2024-01-01T10:15:00+00:00", "2024-01-02T12:00:00+00:00",
+       "2024-01-01T08:00:00-09:00"},
+      {1, 2, 3});
+  EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
+                                      config, "test_source"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Missing CivilTimeWindowSchedule")));
+}
+
+TEST(PrivacyIdUtilsTest, NonTumblingWindow) {
+  PrivacyIdConfig config = CreatePrivacyIdConfig(
+      /*window_size=*/1,
+      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
+      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
+  config.mutable_windowing_schedule()
+      ->mutable_civil_time_window_schedule()
+      ->mutable_shift()
+      ->set_size(2);
+  ExampleQueryResult query_result = CreateExampleQueryResult(
+      {"2024-01-01T10:15:00+00:00", "2024-01-02T12:00:00+00:00",
+       "2024-01-01T08:00:00-09:00"},
+      {1, 2, 3});
+  EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
+                                      config, "test_source"),
+              StatusIs(absl::StatusCode::kUnimplemented,
+                       HasSubstr("Only tumbling windows are supported")));
+}
+
+TEST(PrivacyIdUtilsTest, InvalidWindowSize) {
+  ExampleQueryResult query_result = CreateExampleQueryResult(
+      {"2024-01-01T10:15:00+00:00", "2024-01-02T12:00:00+00:00",
+       "2024-01-01T08:00:00-09:00"},
+      {1, 2, 3});
+  PrivacyIdConfig config = CreatePrivacyIdConfig(
+      /*window_size=*/0,
+      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
+      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
+  EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
+                                      config, "test_source"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Window size must be positive")));
+
+  config = CreatePrivacyIdConfig(
+      /*window_size=*/-1,
+      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
+      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
+  EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
+                                      config, "test_source"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Window size must be positive")));
 }
 
 TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdSucceeds) {

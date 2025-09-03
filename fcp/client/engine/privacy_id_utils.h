@@ -25,6 +25,7 @@
 #include "absl/time/civil_time.h"
 #include "fcp/client/example_query_result.pb.h"
 #include "fcp/protos/confidentialcompute/selection_criteria.pb.h"
+#include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp {
@@ -34,8 +35,9 @@ namespace engine {
 // Get the start of the time window that the event time falls into, given a time
 // window schedule specified in the privacy ID config. Only supports IGNORE time
 // zone scheme and civil time tumbling windows.
-absl::StatusOr<absl::CivilSecond> GetPrivacyIdTimeWindowStart(
-    const fedsql::PrivacyIdConfig& privacy_id_config,
+absl::StatusOr<absl::CivilSecond> GetTimeWindowStart(
+    ::fcp::confidentialcompute::WindowingSchedule::CivilTimeWindowSchedule
+        schedule,
     absl::CivilSecond event_civil_second);
 
 // Deterministically derive a 16 byte privacy ID from the source ID and window

@@ -234,12 +234,9 @@ uint64_t Load64BigEndian(const char* buf) {
 }
 }  // namespace
 
-absl::StatusOr<absl::CivilSecond> GetPrivacyIdTimeWindowStart(
-    const fedsql::PrivacyIdConfig& privacy_id_config,
+absl::StatusOr<absl::CivilSecond> GetTimeWindowStart(
+    WindowingSchedule::CivilTimeWindowSchedule schedule,
     absl::CivilSecond event_civil_second) {
-  FCP_ASSIGN_OR_RETURN(WindowingSchedule::CivilTimeWindowSchedule schedule,
-                       ValidateCivilTimeWindowSchedule(privacy_id_config));
-
   const auto& start_date = schedule.start_date();
 
   switch (schedule.size().unit()) {
@@ -326,9 +323,10 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
     // privacy ID.
     std::string privacy_id = std::string(source_id);
     if (privacy_id_config.has_windowing_schedule()) {
-      FCP_ASSIGN_OR_RETURN(
-          absl::CivilSecond window_start,
-          GetPrivacyIdTimeWindowStart(privacy_id_config, event_civil_second));
+      FCP_ASSIGN_OR_RETURN(WindowingSchedule::CivilTimeWindowSchedule schedule,
+                           ValidateCivilTimeWindowSchedule(privacy_id_config));
+      FCP_ASSIGN_OR_RETURN(absl::CivilSecond window_start,
+                           GetTimeWindowStart(schedule, event_civil_second));
       FCP_ASSIGN_OR_RETURN(privacy_id, GetPrivacyId(source_id, window_start));
     }
     ExampleQueryResultSelection& selection = privacy_id_selections[privacy_id];
