@@ -317,16 +317,16 @@ def _merge_secagg_vars(
         'Expected an equal number of variables and tensors, but found '
         f'{len(variables)} variables and {len(tensors)} tensors.'
     )
-  num_simple_add_vars = len(
-      tff.structure.flatten(
-          federated_language.to_type([
-              secure_sum_bitwidth_update_type,
-              secure_sum_update_type,
-          ])
-      )
+  num_simple_add_vars = federated_language.framework.type_count(
+      federated_language.to_type([
+          secure_sum_bitwidth_update_type,
+          secure_sum_update_type,
+      ]),
+      lambda x: not isinstance(x, federated_language.StructType),
   )
-  num_modular_add_vars = len(
-      tff.structure.flatten(secure_modular_sum_update_type)
+  num_modular_add_vars = federated_language.framework.type_count(
+      secure_modular_sum_update_type,
+      lambda x: not isinstance(x, federated_language.StructType),
   )
   # There must be one variable and tensor for each tensor in the secure update
   # types.
@@ -914,16 +914,17 @@ def _build_server_graph(
     assert (
         server_state_type.placement is federated_language.SERVER
     ), server_state_type
-    # server_metrics_type can be a federated_language.FederatedType or a
-    # structure containing federated_language.FederatedTypes.
-    if isinstance(server_metrics_type, federated_language.FederatedType):
-      # We need to check for server metrics without the placement so
-      # tff.structure.flatten works correctly.
-      has_server_metrics = bool(
-          tff.structure.flatten(server_metrics_type.member)
+
+    def _predicate(type_spec):
+      return not isinstance(
+          type_spec,
+          (federated_language.FederatedType, federated_language.StructType),
       )
-    else:
-      has_server_metrics = bool(tff.structure.flatten(server_metrics_type))
+
+    has_server_metrics = federated_language.framework.type_contains(
+        server_metrics_type,
+        _predicate,
+    )
     if isinstance(server_metrics_type, federated_language.TensorType) or (
         isinstance(server_metrics_type, federated_language.FederatedType)
         and isinstance(
@@ -969,10 +970,12 @@ def _build_server_graph(
             combined_intermediate_update_type, 'intermediate_update'
         )
     )
-    num_simpleagg_vars = len(combined_intermediate_update_vars) - len(
-        tff.structure.flatten(
-            federated_language.to_type(secure_sum_update_types)
-        )
+
+    num_simpleagg_vars = len(
+        combined_intermediate_update_vars
+    ) - federated_language.framework.type_count(
+        federated_language.to_type(secure_sum_update_types),
+        lambda x: not isinstance(x, federated_language.StructType),
     )
     intermediate_update_vars = combined_intermediate_update_vars[
         :num_simpleagg_vars
@@ -1599,7 +1602,10 @@ def _build_client_graph_with_tensorflow_spec(
         [] if is_broadcast_empty else broadcasted_tensor_specs,
     )
 
-    num_simpleagg_tensors = len(tff.structure.flatten(simpleagg_update_type))
+    num_simpleagg_tensors = federated_language.framework.type_count(
+        simpleagg_update_type,
+        lambda x: not isinstance(x, federated_language.StructType),
+    )
     simpleagg_tensors = combined_update_tensors[:num_simpleagg_tensors]
     simpleagg_serialization_names = variable_helpers.variable_names_from_type(
         simpleagg_update_type, name=artifact_constants.UPDATE
@@ -2214,7 +2220,10 @@ def build_cross_round_aggregation_execution(
         )
     )
 
-    num_simpleagg_vars = len(tff.structure.flatten(simpleagg_merge_type))
+    num_simpleagg_vars = federated_language.framework.type_count(
+        simpleagg_merge_type,
+        lambda x: not isinstance(x, federated_language.StructType),
+    )
 
     aggregated_update_vars = combined_aggregated_update_vars[
         :num_simpleagg_vars
