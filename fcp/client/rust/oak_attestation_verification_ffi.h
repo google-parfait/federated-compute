@@ -25,7 +25,8 @@ namespace fcp::client::rust::oak_attestation_verification_ffi {
 absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
     absl::Time now, const oak::attestation::v1::Evidence& evidence,
     const oak::attestation::v1::Endorsements& endorsements,
-    const oak::attestation::v1::ReferenceValues& reference_values);
+    const oak::attestation::v1::ReferenceValues& reference_values,
+    bool use_policy_api = true);
 
 // Verifies the given signed endorsement against a reference value.
 //

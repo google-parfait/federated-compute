@@ -31,7 +31,7 @@ extern "C" SerializedResult
 fcp_rs_oak_attestation_verification_verify_attestation(
     int64_t now_utc_millis, const char* serialized_evidence,
     size_t serialized_evidence_size, const char* serialized_endorsements,
-    size_t, const char* serialized_reference_values, size_t);
+    size_t, const char* serialized_reference_values, size_t, bool);
 
 extern "C" void fcp_rs_oak_attestation_verification_free_result(
     SerializedResult result);
@@ -44,7 +44,8 @@ fcp_rs_oak_attestation_verification_verify_endorsement(int64_t now_utc_millis,
 absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
     absl::Time now, const oak::attestation::v1::Evidence& evidence,
     const oak::attestation::v1::Endorsements& endorsements,
-    const oak::attestation::v1::ReferenceValues& reference_values) {
+    const oak::attestation::v1::ReferenceValues& reference_values,
+    bool use_policy_api) {
   std::string serialized_evidence = evidence.SerializeAsString();
   std::string serialized_endorsements = endorsements.SerializeAsString();
   std::string serialized_reference_values =
@@ -55,7 +56,7 @@ absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
           absl::ToUnixMillis(now), serialized_evidence.data(),
           serialized_evidence.size(), serialized_endorsements.data(),
           serialized_endorsements.size(), serialized_reference_values.data(),
-          serialized_reference_values.size());
+          serialized_reference_values.size(), use_policy_api);
   // Ensure that the Rust buffer gets released when we go out of scope.
   absl::Cleanup free_result_cleanup = [&attestation_result]() {
     fcp_rs_oak_attestation_verification_free_result(attestation_result);

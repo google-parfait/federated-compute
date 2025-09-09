@@ -36,6 +36,7 @@ pub unsafe extern "C" fn fcp_rs_oak_attestation_verification_verify_attestation<
     serialized_endorsements_size: usize,
     serialized_reference_values: *const u8,
     serialized_reference_values_size: usize,
+    use_policy_api: bool,
 ) -> SerializedResult {
     let evidence = Evidence::decode(core::slice::from_raw_parts(
         serialized_evidence,
@@ -58,6 +59,7 @@ pub unsafe extern "C" fn fcp_rs_oak_attestation_verification_verify_attestation<
         &evidence,
         &endorsements,
         &reference_values,
+        use_policy_api,
     );
 
     let serialized_result: Box<[u8]> = result.encode_to_vec().into_boxed_slice();
