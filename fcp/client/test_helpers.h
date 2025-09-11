@@ -58,7 +58,6 @@
 #include "fcp/client/stats.h"
 #include "fcp/client/task_result_info.pb.h"
 #include "fcp/client/tensorflow/tensorflow_runner.h"
-#include "fcp/confidentialcompute/cose.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
@@ -1020,7 +1019,7 @@ class MockSecAggProtocolDelegate : public SecAggProtocolDelegate {
 class MockAttestationVerifier : public attestation::AttestationVerifier {
  public:
   MOCK_METHOD(
-      absl::StatusOr<fcp::confidential_compute::OkpKey>, Verify,
+      absl::StatusOr<VerificationResult>, Verify,
       (const absl::Cord& access_policy,
        const confidentialcompute::SignedEndorsements& signed_endorsements,
        const google::internal::federatedcompute::v1::

@@ -17,9 +17,10 @@
 #ifndef FCP_CLIENT_ATTESTATION_ATTESTATION_VERIFIER_H_
 #define FCP_CLIENT_ATTESTATION_ATTESTATION_VERIFIER_H_
 
+#include <string>
+
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
-#include "fcp/confidentialcompute/cose.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/confidential_encryption_config.pb.h"
@@ -30,13 +31,27 @@ namespace fcp::client::attestation {
 // config are valid.
 class AttestationVerifier {
  public:
+  struct VerificationResult {
+    // The serialized public key to use for encrypting uploads, in a format
+    // supported by fcp::confidential_compute::MessageEncrypter.
+    std::string serialized_public_key;
+
+    // The serialized_public_key's key id, used for populating the BlobHeader
+    // without needing to deserialize the key.
+    std::string key_id;
+
+    // The SHA256 hash of the access policy, used for populating the BlobHeader
+    // without needing to re-compute the hash.
+    std::string access_policy_sha256;
+  };
+
   virtual ~AttestationVerifier() = default;
 
   // Validates the given access policy and encryption config, and if both are
-  // considered valid returns a public key extracted from the encryption config
+  // considered valid returns information extracted from the encryption config
   // with which confidential data can be encrypted. Returns an error if the
   // inputs are not considered a valid confidential configuration.
-  virtual absl::StatusOr<fcp::confidential_compute::OkpKey> Verify(
+  virtual absl::StatusOr<VerificationResult> Verify(
       const absl::Cord& access_policy,
       const confidentialcompute::SignedEndorsements& signed_endorsements,
       const google::internal::federatedcompute::v1::
@@ -47,7 +62,7 @@ class AttestationVerifier {
 // failure.
 class AlwaysFailingAttestationVerifier : public AttestationVerifier {
  public:
-  absl::StatusOr<fcp::confidential_compute::OkpKey> Verify(
+  absl::StatusOr<VerificationResult> Verify(
       const absl::Cord& access_policy,
       const confidentialcompute::SignedEndorsements& signed_endorsements,
       const google::internal::federatedcompute::v1::
@@ -60,7 +75,7 @@ class AlwaysFailingAttestationVerifier : public AttestationVerifier {
 // validation actually passed).
 class AlwaysPassingAttestationVerifier : public AttestationVerifier {
  public:
-  absl::StatusOr<fcp::confidential_compute::OkpKey> Verify(
+  absl::StatusOr<VerificationResult> Verify(
       const absl::Cord& access_policy,
       const confidentialcompute::SignedEndorsements& signed_endorsements,
       const google::internal::federatedcompute::v1::

@@ -42,7 +42,6 @@
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
 #include "fcp/base/compression.h"
-#include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/random_token.h"
 #include "fcp/base/time_util.h"
@@ -67,7 +66,6 @@
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/stats.h"
 #include "fcp/confidentialcompute/client_payload.h"
-#include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
@@ -90,7 +88,6 @@ using ::fcp::client::GenerateRetryWindowFromTargetDelay;
 using ::fcp::client::PickRetryTimeFromRange;
 using ::fcp::confidential_compute::EncryptMessageResult;
 using ::fcp::confidential_compute::MessageEncryptor;
-using ::fcp::confidential_compute::OkpKey;
 using ::fcp::confidentialcompute::BlobHeader;
 using ::fcp::confidentialcompute::PayloadMetadata;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
@@ -1290,17 +1287,16 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
   std::string serialized_blob_header = "";
   if (confidential_aggregation) {
     FCP_ASSIGN_OR_RETURN(
-        OkpKey parsed_public_key,
+        attestation::AttestationVerifier::VerificationResult attestation_result,
         ValidateConfidentialEncryptionConfig(task_info, *encryption_config));
     // This is pulled out here because depending on the
     // enable_blob_header_in_http_headers flag, we will either put the header in
     // the encrypted payload or in the http headers.
     BlobHeader blob_header;
     blob_header.set_blob_id(fcp::RandomToken::Generate().ToString());
-    // TODO: b/307312707 - Remove the need to compute the SHA256 hash twice.
     blob_header.set_access_policy_sha256(
-        ComputeSHA256(*task_info.confidential_data_access_policy));
-    blob_header.set_key_id(parsed_public_key.key_id);
+        std::move(attestation_result.access_policy_sha256));
+    blob_header.set_key_id(std::move(attestation_result.key_id));
     if (payload_metadata.has_value()) {
       *blob_header.mutable_payload_metadata() =
           std::move(payload_metadata.value());
@@ -1308,10 +1304,9 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
     serialized_blob_header = blob_header.SerializeAsString();
 
     FCP_ASSIGN_OR_RETURN(
-        data_to_upload,
-        EncryptPayloadForConfidentialAggregation(
-            task_info, parsed_public_key, encryption_config->public_key(),
-            result_data, serialized_blob_header));
+        data_to_upload, EncryptPayloadForConfidentialAggregation(
+                            task_info, attestation_result.serialized_public_key,
+                            result_data, serialized_blob_header));
   } else {
     data_to_upload = std::move(result_data);
   }
@@ -1553,7 +1548,7 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
   return confidential_encryption_config;
 }
 
-absl::StatusOr<OkpKey>
+absl::StatusOr<attestation::AttestationVerifier::VerificationResult>
 HttpFederatedProtocol::ValidateConfidentialEncryptionConfig(
     PerTaskInfo& task_info,
     const ConfidentialEncryptionConfig& encryption_config) {
@@ -1586,9 +1581,8 @@ HttpFederatedProtocol::ValidateConfidentialEncryptionConfig(
 
 absl::StatusOr<std::string>
 HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
-    PerTaskInfo& task_info, const OkpKey& parsed_public_key,
-    const std::string& serialized_public_key, std::string inner_payload,
-    const std::string& serialized_blob_header) {
+    PerTaskInfo& task_info, const std::string& serialized_public_key,
+    std::string inner_payload, const std::string& serialized_blob_header) {
   FCP_CHECK(task_info.confidential_data_access_policy.has_value());
 
   // Compress the payload before we encrypt it.

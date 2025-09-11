@@ -29,6 +29,7 @@ cc_library(
     hdrs = ["attestation_verifier.h"],
     visibility = ["//visibility:public"],
     deps = [
+        "//fcp/base:digest",
         "//fcp/confidentialcompute:cose",
         "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
         "//fcp/protos/federatedcompute:confidential_encryption_config_cc_proto",

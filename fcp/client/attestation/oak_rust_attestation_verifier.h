@@ -25,7 +25,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "fcp/client/attestation/attestation_verifier.h"
-#include "fcp/confidentialcompute/cose.h"
 #include "fcp/protos/confidentialcompute/access_policy_endorsement_options.pb.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/confidentialcompute/verification_record.pb.h"
@@ -70,7 +69,7 @@ class OakRustAttestationVerifier : public AttestationVerifier {
             std::move(access_policy_endorsement_options)),
         record_logger_(std::move(record_logger)) {}
 
-  absl::StatusOr<::fcp::confidential_compute::OkpKey> Verify(
+  absl::StatusOr<VerificationResult> Verify(
       const absl::Cord& access_policy,
       const fcp::confidentialcompute::SignedEndorsements& signed_endorsements,
       const google::internal::federatedcompute::v1::

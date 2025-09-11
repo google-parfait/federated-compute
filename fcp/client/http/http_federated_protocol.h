@@ -49,7 +49,6 @@
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/stats.h"
-#include "fcp/confidentialcompute/cose.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -249,7 +248,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
 
   // Validates a given ConfidentialEncryptionConfig and returns the public key
   // to encrypt the payload with, if the config validation was successful.
-  absl::StatusOr<fcp::confidential_compute::OkpKey>
+  absl::StatusOr<attestation::AttestationVerifier::VerificationResult>
   ValidateConfidentialEncryptionConfig(
       PerTaskInfo& task_info,
       const ::google::internal::federatedcompute::v1::
@@ -259,10 +258,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // encrypted payload in a self-describing format suitable for upload to the
   // server.
   absl::StatusOr<std::string> EncryptPayloadForConfidentialAggregation(
-      PerTaskInfo& task_info,
-      const fcp::confidential_compute::OkpKey& parsed_public_key,
-      const std::string& serialized_public_key, std::string inner_payload,
-      const std::string& serialized_blob_header);
+      PerTaskInfo& task_info, const std::string& serialized_public_key,
+      std::string inner_payload, const std::string& serialized_blob_header);
 
   // Helper function to perform data upload using the ByteStream protocol, used
   // during simple or confidential aggregation.

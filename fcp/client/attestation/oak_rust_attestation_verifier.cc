@@ -51,7 +51,6 @@
 namespace fcp::client::attestation {
 using ::fcp::confidential_compute::EcdsaP256R1SignatureVerifier;
 using ::fcp::confidential_compute::OkpCwt;
-using ::fcp::confidential_compute::OkpKey;
 using ::fcp::confidentialcompute::DataAccessPolicy;
 using ::google::internal::federatedcompute::v1::ConfidentialEncryptionConfig;
 using ::oak::attestation::v1::AttestationResults;
@@ -83,7 +82,8 @@ absl::StatusOr<AttestationResults> VerifyPublicKeyAttestation(
 }
 }  // namespace
 
-absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
+absl::StatusOr<OakRustAttestationVerifier::VerificationResult>
+OakRustAttestationVerifier::Verify(
     const absl::Cord& access_policy,
     const confidentialcompute::SignedEndorsements& signed_endorsements,
     const ConfidentialEncryptionConfig& encryption_config) {
@@ -256,11 +256,15 @@ absl::StatusOr<OkpKey> OakRustAttestationVerifier::Verify(
       std::move(parsed_access_policy);
   record_logger_(verification_record);
 
-  // Return the public key with which the caller can now safely encrypt data
+  // Return the information with which the caller can now safely encrypt data
   // to be uploaded. Only the attested server binary will have access to the
   // decryption key, and the it will only allow the decryption key to be
   // used by binaries/applications allowed by the data access policy.
-  return *std::move(cwt->public_key);
+  return VerificationResult{
+      .serialized_public_key = encryption_config.public_key(),
+      .key_id = std::move(cwt->public_key->key_id),
+      .access_policy_sha256 = std::move(raw_access_policy_hash),
+  };
 }
 
 }  // namespace fcp::client::attestation

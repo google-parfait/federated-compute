@@ -681,7 +681,6 @@ cc_library(
         "//fcp/client/opstats:opstats_db",
         "//fcp/client/opstats:opstats_logger",
         "//fcp/client/tensorflow:tensorflow_runner",
-        "//fcp/confidentialcompute:cose",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
         "//fcp/protos:plan_cc_proto",
