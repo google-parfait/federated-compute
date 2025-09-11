@@ -34,27 +34,6 @@ message ContributionStrategy {
   reserved 2, 3, 4;
 }
 
-// Configuration describing how clients should generate privacy IDs.
-//
-// Privacy IDs are user IDs that optionally rotate and are stored in the
-// encrypted part of client uploads.
-message PrivacyIdConfig {
-  // The windowing schedule for the task. If not set, the privacy ID will not
-  // rotate. Currently only tumbling windows are supported.
-  fcp.confidentialcompute.WindowingSchedule windowing_schedule = 2;
-}
-
-// Configuration describing how clients should generate partition keys.
-//
-// Partition keys are coarse-grained proxies for privacy IDs - many privacy IDs
-// map to the same partition key. Partition keys are stored in the clear in the
-// header of each client upload.
-message PartitionKeyConfig {
-  // The number of partitions to use for the task. The more partitions, the
-  // fewer users associated with each partition. Must be a power of 2.
-  int32 num_partitions = 1;
-}
-
 message EventTimeColumnConfig {
   // The column in the example store that is used for event time in the query.
   string event_time_column_name = 1;
@@ -104,11 +83,5 @@ message SelectionCriteria {
   // queries.
   map<string, EventTimeColumnConfig> event_time_column_configs = 6;
 
-  // The privacy ID configuration for the task. All queries in the task use
-  // the same privacy ID configuration.
-  PrivacyIdConfig privacy_id_config = 7;
-
-  // The partition key configuration for the task. All queries in the task use
-  // the same partition key configuration.
-  PartitionKeyConfig partition_key_config = 8;
+  reserved 7, 8;
 }

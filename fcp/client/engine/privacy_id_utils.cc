@@ -35,7 +35,6 @@
 #include "fcp/client/event_time_range.pb.h"
 #include "fcp/confidentialcompute/constants.h"
 #include "fcp/confidentialcompute/time_window_utilities.h"
-#include "fcp/protos/confidentialcompute/selection_criteria.pb.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
 #include "fcp/protos/plan.pb.h"
 
@@ -46,8 +45,8 @@ namespace engine {
 namespace {
 
 using ::fcp::confidentialcompute::WindowingSchedule;
-using ::fedsql::PrivacyIdConfig;
 using ::google::internal::federated::plan::ExampleQuerySpec;
+using ::google::internal::federated::plan::PrivacyIdConfig;
 
 constexpr int kPrivacyIdLength = 16;
 
@@ -71,7 +70,7 @@ absl::StatusOr<std::string> RemoveTimezoneFromEventTime(
 
 absl::StatusOr<WindowingSchedule::CivilTimeWindowSchedule>
 VerifyConfigHasCivilTimeWindowSchedule(
-    const fedsql::PrivacyIdConfig& privacy_id_config) {
+    const PrivacyIdConfig& privacy_id_config) {
   if (!privacy_id_config.has_windowing_schedule() ||
       !privacy_id_config.windowing_schedule()
            .has_civil_time_window_schedule()) {

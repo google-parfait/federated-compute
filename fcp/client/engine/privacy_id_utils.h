@@ -24,7 +24,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/civil_time.h"
 #include "fcp/client/example_query_result.pb.h"
-#include "fcp/protos/confidentialcompute/selection_criteria.pb.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
 #include "fcp/protos/plan.pb.h"
 
@@ -61,7 +60,7 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
     google::internal::federated::plan::ExampleQuerySpec::ExampleQuery
         example_query,
     const fcp::client::ExampleQueryResult& example_query_result,
-    const fedsql::PrivacyIdConfig& privacy_id_config,
+    const google::internal::federated::plan::PrivacyIdConfig& privacy_id_config,
     absl::string_view source_id);
 
 // Returns the number of prefix bits to preserve in the partition key such that

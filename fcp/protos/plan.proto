@@ -17,6 +17,7 @@ syntax = "proto3";
 package google.internal.federated.plan;
 
 import "google/protobuf/any.proto";
+import "fcp/protos/confidentialcompute/windowing_schedule.proto";
 import "fcp/protos/data_type.proto";
 import "tensorflow/core/framework/tensor.proto";
 import "tensorflow/core/framework/types.proto";
@@ -487,6 +488,16 @@ message TensorflowSpec {
   map<string, tensorflow.TensorProto> constant_inputs = 5;
 }
 
+// Configuration describing how clients should generate privacy IDs.
+//
+// Privacy IDs are user IDs that rotate and are stored in the encrypted part
+// of client uploads.
+message PrivacyIdConfig {
+  // The windowing schedule for the task. Currently only tumbling windows are
+  // supported.
+  fcp.confidentialcompute.WindowingSchedule windowing_schedule = 1;
+}
+
 // ExampleQuerySpec message describes client execution that issues example
 // queries and sends the query results directly to an aggregator with no or
 // little additional processing.
@@ -533,6 +544,8 @@ message ExampleQuerySpec {
 
   // The queries to run.
   repeated ExampleQuery example_queries = 1;
+
+  PrivacyIdConfig privacy_id_config = 2;
 }
 
 // The input and output router for Federated Compute plans.

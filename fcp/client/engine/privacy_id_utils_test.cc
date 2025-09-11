@@ -30,7 +30,6 @@
 #include "fcp/client/event_time_range.pb.h"
 #include "fcp/client/example_query_result.pb.h"
 #include "fcp/confidentialcompute/constants.h"
-#include "fcp/protos/confidentialcompute/selection_criteria.pb.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"
@@ -42,8 +41,8 @@ namespace {
 
 using ::fcp::EqualsProto;
 using ::fcp::confidentialcompute::WindowingSchedule;
-using ::fedsql::PrivacyIdConfig;
 using ::google::internal::federated::plan::ExampleQuerySpec;
+using ::google::internal::federated::plan::PrivacyIdConfig;
 using ::testing::Eq;
 using ::testing::ExplainMatchResult;
 using ::testing::HasSubstr;
