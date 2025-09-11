@@ -25,6 +25,7 @@
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/civil_time.h"
 #include "fcp/client/event_time_range.pb.h"
@@ -109,7 +110,8 @@ ExampleQueryResult CreateExampleQueryResult(
   ExampleQueryResult::VectorData::Values event_time_values;
   event_time_values.mutable_string_values()->mutable_value()->Add(
       event_times.begin(), event_times.end());
-  vectors[confidential_compute::kEventTimeColumnName] = event_time_values;
+  vectors[absl::StrCat("prefix/", confidential_compute::kEventTimeColumnName)] =
+      event_time_values;
 
   ExampleQueryResult::VectorData::Values data_values;
   data_values.mutable_int64_values()->mutable_value()->Add(values.begin(),
@@ -281,12 +283,30 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdNoEventTimeColumn) {
   ExampleQueryResult query_result =
       CreateExampleQueryResult({"2024-01-01T12:00:00+00:00"}, {1});
   query_result.mutable_vector_data()->mutable_vectors()->erase(
-      confidential_compute::kEventTimeColumnName);
+      absl::StrCat("prefix/", confidential_compute::kEventTimeColumnName));
 
   EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
                                       config, "test_source"),
               StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Required column not found")));
+                       HasSubstr("Required column ending with")));
+}
+
+TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdMultipleEventTimeColumns) {
+  PrivacyIdConfig config = CreatePrivacyIdConfig(
+      /*window_size=*/1,
+      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
+      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
+  ExampleQueryResult query_result =
+      CreateExampleQueryResult({"2024-01-01T12:00:00+00:00"}, {1});
+  query_result.mutable_vector_data()->mutable_vectors()->insert(
+      {absl::StrCat("different_prefix/",
+                    confidential_compute::kEventTimeColumnName),
+       ExampleQueryResult::VectorData::Values()});
+
+  EXPECT_THAT(SplitResultsByPrivacyId(CreateExampleQuery(), query_result,
+                                      config, "test_source"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Multiple columns found ending with")));
 }
 
 TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdWrongEventTimeType) {
@@ -297,10 +317,10 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdWrongEventTimeType) {
   ExampleQueryResult query_result =
       CreateExampleQueryResult({"to be replaced"}, {1});
   // Replace string event time with invalid event time type int64
-  (*query_result.mutable_vector_data()
-        ->mutable_vectors())[confidential_compute::kEventTimeColumnName]
-      .mutable_int64_values()
-      ->add_value(12345);
+  (*query_result.mutable_vector_data()->mutable_vectors())
+      [absl::StrCat("prefix/", confidential_compute::kEventTimeColumnName)]
+          .mutable_int64_values()
+          ->add_value(12345);
 
   EXPECT_THAT(
       SplitResultsByPrivacyId(CreateExampleQuery(), query_result, config,

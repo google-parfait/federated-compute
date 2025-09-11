@@ -27,7 +27,9 @@
 #include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/civil_time.h"
 #include "fcp/base/digest.h"
@@ -207,15 +209,28 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
     ExampleQuerySpec::ExampleQuery example_query,
     const ExampleQueryResult& example_query_result,
     const PrivacyIdConfig& privacy_id_config, absl::string_view source_id) {
-  auto it = example_query_result.vector_data().vectors().find(
-      confidential_compute::kEventTimeColumnName);
-  if (it == example_query_result.vector_data().vectors().end()) {
-    return absl::InvalidArgumentError(
-        "Required column not found in the example query result: " +
-        std::string(confidential_compute::kEventTimeColumnName));
+  const ExampleQueryResult::VectorData::Values* event_time_values = nullptr;
+
+  for (const auto& [column_name, values] :
+       example_query_result.vector_data().vectors()) {
+    if (absl::EndsWith(column_name,
+                       confidential_compute::kEventTimeColumnName)) {
+      if (event_time_values != nullptr) {
+        return absl::InvalidArgumentError(
+            "Multiple columns found ending with " +
+            std::string(confidential_compute::kEventTimeColumnName));
+      }
+      event_time_values = &values;
+    }
   }
-  const ExampleQueryResult::VectorData::Values& event_time_values = it->second;
-  if (!event_time_values.has_string_values()) {
+
+  if (event_time_values == nullptr) {
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "Required column ending with %s not found in the example query result",
+        confidential_compute::kEventTimeColumnName));
+  }
+
+  if (!event_time_values->has_string_values()) {
     return absl::InvalidArgumentError(
         "Unexpected data type for event time column, expected string.");
   }
@@ -230,9 +245,9 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
   // since we need to set the event time ranges for the per privacy ID results.
   absl::flat_hash_map<std::string, ExampleQueryResultSelection>
       privacy_id_selections;
-  for (int i = 0; i < event_time_values.string_values().value_size(); ++i) {
+  for (int i = 0; i < event_time_values->string_values().value_size(); ++i) {
     const std::string& event_time_str =
-        event_time_values.string_values().value(i);
+        event_time_values->string_values().value(i);
     FCP_ASSIGN_OR_RETURN(absl::CivilSecond event_civil_second,
                          ConvertEventTimeToCivilSecond(event_time_str));
     // If privacy ID windowing is not configured, use the source ID as the
