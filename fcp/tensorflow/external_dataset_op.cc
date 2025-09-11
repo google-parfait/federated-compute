@@ -107,8 +107,7 @@ class ExternalDatasetOp : public tensorflow::data::DatasetOpKernel {
     std::unique_ptr<tensorflow::data::IteratorBase> MakeIteratorInternal(
         const std::string& prefix) const override {
       std::unique_ptr<ExternalDatasetIterator> iter = stub_->MakeIterator();
-      Iterator::Params params{
-          this, tensorflow::strings::StrCat(prefix, "::ExternalDataset")};
+      Iterator::Params params{this, absl::StrCat(prefix, "::ExternalDataset")};
       return std::unique_ptr<tensorflow::data::IteratorBase>(
           new Iterator(params, std::move(iter)));
     }
