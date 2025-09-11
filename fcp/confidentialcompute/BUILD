@@ -15,6 +15,7 @@ load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//fcp:config.bzl", "FCP_COPTS")
 
 package(
     default_visibility = ["//fcp:internal"],
@@ -50,6 +51,41 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "time_window_utilities",
+    srcs = [
+        "time_window_utilities.cc",
+    ],
+    hdrs = [
+        "time_window_utilities.h",
+    ],
+    copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//fcp/protos/confidentialcompute:windowing_schedule_proto_cc",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "time_window_utilities_test",
+    srcs = [
+        "time_window_utilities_test.cc",
+    ],
+    copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        ":time_window_utilities",
+        "//fcp/protos/confidentialcompute:windowing_schedule_proto_cc",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
     ],
 )

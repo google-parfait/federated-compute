@@ -32,14 +32,6 @@ namespace fcp {
 namespace client {
 namespace engine {
 
-// Get the start of the time window that the event time falls into, given a time
-// window schedule specified in the privacy ID config. Only supports IGNORE time
-// zone scheme and civil time tumbling windows.
-absl::StatusOr<absl::CivilSecond> GetTimeWindowStart(
-    ::fcp::confidentialcompute::WindowingSchedule::CivilTimeWindowSchedule
-        schedule,
-    absl::CivilSecond event_civil_second);
-
 // Deterministically derive a 16 byte privacy ID from the source ID and window
 // start.
 absl::StatusOr<std::string> GetPrivacyId(absl::string_view source_id,

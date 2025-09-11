@@ -75,6 +75,7 @@ cc_library(
         "//fcp/client:event_time_range_cc_proto",
         "//fcp/client:example_query_result_cc_proto",
         "//fcp/confidentialcompute:constants",
+        "//fcp/confidentialcompute:time_window_utilities",
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos/confidentialcompute:selection_criteria_cc_proto",
         "//fcp/protos/confidentialcompute:windowing_schedule_proto_cc",

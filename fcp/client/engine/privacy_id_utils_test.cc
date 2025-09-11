@@ -94,140 +94,6 @@ PrivacyIdConfig CreatePrivacyIdConfig(
   return config;
 }
 
-TEST(PrivacyIdUtilsTest, GetWindowStartHourly) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/6,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::HOURS,
-      /*start_year=*/2024, /*start_month=*/1,
-      /*start_day=*/1, /*start_hours=*/0);
-  EXPECT_THAT(GetTimeWindowStart(
-                  config.windowing_schedule().civil_time_window_schedule(),
-                  absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
-              IsOkAndHolds(absl::CivilSecond(2024, 1, 1, 12, 0, 0)));
-  EXPECT_THAT(GetTimeWindowStart(
-                  config.windowing_schedule().civil_time_window_schedule(),
-                  absl::CivilSecond(2024, 1, 1, 0, 0, 0)),
-              IsOkAndHolds(absl::CivilSecond(2024, 1, 1, 0, 0, 0)));
-}
-
-TEST(PrivacyIdUtilsTest, GetWindowStartDaily) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/1,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
-      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
-  EXPECT_THAT(GetTimeWindowStart(
-                  config.windowing_schedule().civil_time_window_schedule(),
-                  absl::CivilSecond(2024, 1, 5, 13, 5, 0)),
-              IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 0, 0, 0)));
-}
-
-TEST(PrivacyIdUtilsTest, GetWindowStartMonthly) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/1,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::MONTHS,
-      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/0);
-  EXPECT_THAT(GetTimeWindowStart(
-                  config.windowing_schedule().civil_time_window_schedule(),
-                  absl::CivilSecond(2024, 3, 5, 13, 5, 0)),
-              IsOkAndHolds(absl::CivilSecond(2024, 3, 1, 0, 0, 0)));
-}
-
-TEST(PrivacyIdUtilsTest, GetWindowStartYearly) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/1,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::YEARS,
-      /*start_year=*/2024, /*start_month=*/0, /*start_day=*/0);
-  EXPECT_THAT(GetTimeWindowStart(
-                  config.windowing_schedule().civil_time_window_schedule(),
-                  absl::CivilSecond(2025, 3, 5, 13, 5, 0)),
-              IsOkAndHolds(absl::CivilSecond(2025, 1, 1, 0, 0, 0)));
-}
-
-TEST(PrivacyIdUtilsTest, GetWindowStartEventBeforeStart) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/1,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
-      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/10);
-  EXPECT_THAT(GetTimeWindowStart(
-                  config.windowing_schedule().civil_time_window_schedule(),
-                  absl::CivilSecond(2024, 1, 5, 13, 5, 0)),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Event time is before the schedule start")));
-}
-
-TEST(PrivacyIdUtilsTest, InvalidStartTimeForHourWindow) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/1,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::HOURS,
-      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1,
-      /*start_hours=*/0,
-      /*start_minutes=*/1, /*start_seconds=*/0);  // Minutes not 0
-  EXPECT_THAT(GetTimeWindowStart(
-                  config.windowing_schedule().civil_time_window_schedule(),
-                  absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Start time minutes, seconds, and nanos must "
-                                 "be 0 for HOUR windows")));
-}
-
-TEST(PrivacyIdUtilsTest, InvalidStartTimeForDayWindow) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/1,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
-      /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1,
-      /*start_hours=*/1,
-      /*start_minutes=*/0, /*start_seconds=*/0);  // Hours not 0
-  EXPECT_THAT(GetTimeWindowStart(
-                  config.windowing_schedule().civil_time_window_schedule(),
-                  absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Start time must be unset for DAY windows")));
-}
-
-TEST(PrivacyIdUtilsTest, InvalidStartTimeForMonthWindow) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/1,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::MONTHS,
-      /*start_year=*/2024, /*start_month=*/1,
-      /*start_day=*/2);  // Day not 0
-  EXPECT_THAT(GetTimeWindowStart(
-                  config.windowing_schedule().civil_time_window_schedule(),
-                  absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Start date day and start time must be unset "
-                                 "for MONTH windows")));
-}
-
-TEST(PrivacyIdUtilsTest, InvalidStartTimeForYearWindow) {
-  PrivacyIdConfig config = CreatePrivacyIdConfig(
-      /*window_size=*/1,
-      WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::YEARS,
-      /*start_year=*/2024, /*start_month=*/2,
-      /*start_day=*/0);  // Month not 0
-  EXPECT_THAT(GetTimeWindowStart(
-                  config.windowing_schedule().civil_time_window_schedule(),
-                  absl::CivilSecond(2024, 1, 1, 13, 5, 0)),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Start date month, day, and time must be "
-                                 "unset for YEAR windows")));
-}
-
-TEST(PrivacyIdUtilsTest, GetPrivacyId) {
-  absl::string_view source_id = "test_source";
-  absl::CivilSecond window_start(2024, 5, 15, 10, 0, 0);
-
-  absl::StatusOr<std::string> id1 = GetPrivacyId(source_id, window_start);
-  ASSERT_OK(id1);
-  absl::StatusOr<std::string> id2 = GetPrivacyId(source_id, window_start);
-  EXPECT_EQ(*id1, *id2);
-
-  absl::CivilSecond different_window(2024, 5, 15, 11, 0, 0);
-  absl::StatusOr<std::string> id3 = GetPrivacyId(source_id, different_window);
-  EXPECT_NE(*id1, *id3);
-
-  absl::StatusOr<std::string> id4 = GetPrivacyId("other_source", window_start);
-  EXPECT_NE(*id1, *id4);
-}
 
 ExampleQuerySpec::ExampleQuery CreateExampleQuery() {
   return PARSE_TEXT_PROTO(R"pb(
@@ -287,6 +153,23 @@ ExampleQueryResult AddPrivacyId(ExampleQueryResult result,
         ->mutable_vectors())[confidential_compute::kPrivacyIdColumnName] =
       privacy_id_values;
   return result;
+}
+
+TEST(PrivacyIdUtilsTest, GetPrivacyId) {
+  absl::string_view source_id = "test_source";
+  absl::CivilSecond window_start(2024, 5, 15, 10, 0, 0);
+
+  absl::StatusOr<std::string> id1 = GetPrivacyId(source_id, window_start);
+  ASSERT_OK(id1);
+  absl::StatusOr<std::string> id2 = GetPrivacyId(source_id, window_start);
+  EXPECT_EQ(*id1, *id2);
+
+  absl::CivilSecond different_window(2024, 5, 15, 11, 0, 0);
+  absl::StatusOr<std::string> id3 = GetPrivacyId(source_id, different_window);
+  EXPECT_NE(*id1, *id3);
+
+  absl::StatusOr<std::string> id4 = GetPrivacyId("other_source", window_start);
+  EXPECT_NE(*id1, *id4);
 }
 
 TEST(PrivacyIdUtilsTest, MissingWindowSchedule) {

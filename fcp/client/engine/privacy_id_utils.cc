@@ -34,6 +34,7 @@
 #include "fcp/base/monitoring.h"
 #include "fcp/client/event_time_range.pb.h"
 #include "fcp/confidentialcompute/constants.h"
+#include "fcp/confidentialcompute/time_window_utilities.h"
 #include "fcp/protos/confidentialcompute/selection_criteria.pb.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -68,56 +69,15 @@ absl::StatusOr<std::string> RemoveTimezoneFromEventTime(
   return std::string(event_time.substr(0, 19));
 }
 
-// Template helper function to calculate the window start for any CivilTime
-// type.
-template <typename CivilTimeType>
-absl::StatusOr<absl::CivilSecond> CalculateWindowStart(
-    const WindowingSchedule::CivilTimeWindowSchedule& schedule,
-    absl::CivilSecond event_civil_second) {
-  const auto& start_date = schedule.start_date();
-  const auto& start_time = schedule.start_time();
-  CivilTimeType schedule_start(start_date.year(), start_date.month(),
-                               start_date.day(), start_time.hours(),
-                               start_time.minutes(), start_time.seconds());
-  CivilTimeType event_civil_time(event_civil_second);
-
-  if (event_civil_time < schedule_start) {
-    return absl::InvalidArgumentError(
-        "Event time is before the schedule start");
-  }
-  // Calculate the number of windows that elapsed between the schedule start
-  // and the event time.
-  absl::civil_diff_t diff = event_civil_time - schedule_start;
-  int64_t window_size = schedule.size().size();
-  absl::civil_diff_t window_index = diff / window_size;
-  CivilTimeType window_start = schedule_start + window_index * window_size;
-  return absl::CivilSecond(window_start);
-}
-
 absl::StatusOr<WindowingSchedule::CivilTimeWindowSchedule>
-ValidateCivilTimeWindowSchedule(
+VerifyConfigHasCivilTimeWindowSchedule(
     const fedsql::PrivacyIdConfig& privacy_id_config) {
   if (!privacy_id_config.has_windowing_schedule() ||
       !privacy_id_config.windowing_schedule()
            .has_civil_time_window_schedule()) {
     return absl::InvalidArgumentError("Missing CivilTimeWindowSchedule");
   }
-  const auto& schedule =
-      privacy_id_config.windowing_schedule().civil_time_window_schedule();
-
-  if (schedule.time_zone_scheme() !=
-      WindowingSchedule::CivilTimeWindowSchedule::IGNORE) {
-    return absl::UnimplementedError(
-        "Only IGNORE time zone scheme is supported");
-  }
-  if (schedule.size().size() != schedule.shift().size() ||
-      schedule.size().unit() != schedule.shift().unit()) {
-    return absl::UnimplementedError("Only tumbling windows are supported");
-  }
-  if (schedule.size().size() <= 0) {
-    return absl::InvalidArgumentError("Window size must be positive");
-  }
-  return schedule;
+  return privacy_id_config.windowing_schedule().civil_time_window_schedule();
 }
 
 template <typename ValuesType>
@@ -234,49 +194,6 @@ uint64_t Load64BigEndian(const char* buf) {
 }
 }  // namespace
 
-absl::StatusOr<absl::CivilSecond> GetTimeWindowStart(
-    WindowingSchedule::CivilTimeWindowSchedule schedule,
-    absl::CivilSecond event_civil_second) {
-  const auto& start_date = schedule.start_date();
-
-  switch (schedule.size().unit()) {
-    case WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::HOURS: {
-      const auto& start_time = schedule.start_time();
-      if (start_time.minutes() != 0 || start_time.seconds() != 0 ||
-          start_time.nanos() != 0) {
-        return absl::InvalidArgumentError(
-            "Start time minutes, seconds, and nanos must be 0 for HOUR "
-            "windows");
-      }
-      return CalculateWindowStart<absl::CivilHour>(schedule,
-                                                   event_civil_second);
-    }
-    case WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS:
-      if (schedule.has_start_time()) {
-        return absl::InvalidArgumentError(
-            "Start time must be unset for DAY windows");
-      }
-      return CalculateWindowStart<absl::CivilDay>(schedule, event_civil_second);
-    case WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::MONTHS:
-      if (start_date.day() != 0 || schedule.has_start_time()) {
-        return absl::InvalidArgumentError(
-            "Start date day and start time must be unset for MONTH windows");
-      }
-      return CalculateWindowStart<absl::CivilMonth>(schedule,
-                                                    event_civil_second);
-    case WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::YEARS:
-      if (start_date.month() != 0 || start_date.day() != 0 ||
-          schedule.has_start_time()) {
-        return absl::InvalidArgumentError(
-            "Start date month, day, and time must be unset for YEAR windows");
-      }
-      return CalculateWindowStart<absl::CivilYear>(schedule,
-                                                   event_civil_second);
-    default:
-      return absl::UnimplementedError("Unsupported windowing schedule unit");
-  }
-}
-
 absl::StatusOr<std::string> GetPrivacyId(absl::string_view source_id,
                                          absl::CivilSecond window_start) {
   std::string hash = ComputeSHA256(
@@ -323,8 +240,9 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
     // privacy ID.
     std::string privacy_id = std::string(source_id);
     if (privacy_id_config.has_windowing_schedule()) {
-      FCP_ASSIGN_OR_RETURN(WindowingSchedule::CivilTimeWindowSchedule schedule,
-                           ValidateCivilTimeWindowSchedule(privacy_id_config));
+      FCP_ASSIGN_OR_RETURN(
+          WindowingSchedule::CivilTimeWindowSchedule schedule,
+          VerifyConfigHasCivilTimeWindowSchedule(privacy_id_config));
       FCP_ASSIGN_OR_RETURN(absl::CivilSecond window_start,
                            GetTimeWindowStart(schedule, event_civil_second));
       FCP_ASSIGN_OR_RETURN(privacy_id, GetPrivacyId(source_id, window_start));
