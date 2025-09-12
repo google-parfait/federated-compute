@@ -212,6 +212,11 @@ class Flags {
   virtual bool move_device_attestation_to_start_task_assignment() const {
     return false;
   }
+  // If true, a rotating privacy ID will be generated for each upload, enabling
+  // the application of stronger user-level DP guarantees across uploads from
+  // the same device. This is only used for confidential aggregation tasks, and
+  // the privacy ID will only be stored in the encrypted payload.
+  virtual bool enable_privacy_id_generation() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

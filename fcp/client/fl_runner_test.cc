@@ -1064,7 +1064,7 @@ class FlRunnerSourceIdSeedTest : public FlRunnerTestBase {
     EXPECT_CALL(mock_phase_logger_, LogCheckinTurnedAway(_, _, _));
 
     // Enable the flag to generate a source ID seed.
-    EXPECT_CALL(mock_flags_, enable_event_time_data_upload())
+    EXPECT_CALL(mock_flags_, enable_privacy_id_generation())
         .WillRepeatedly(Return(true));
   }
 };

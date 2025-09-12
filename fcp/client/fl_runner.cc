@@ -1919,7 +1919,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   }
 
   std::optional<std::string> source_id_seed = std::nullopt;
-  if (flags->enable_event_time_data_upload()) {
+  if (flags->enable_privacy_id_generation()) {
     FCP_ASSIGN_OR_RETURN(source_id_seed,
                          GetOrCreateSourceIdSeed(opstats_logger));
   }
