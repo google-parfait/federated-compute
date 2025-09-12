@@ -389,7 +389,6 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdEmptyResult) {
 }
 
 TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdNoWindowingSchedule) {
-  // When no windowing schedule is provided, all rows have the same privacy ID.
   PrivacyIdConfig config;
 
   ExampleQueryResult query_result = CreateExampleQueryResult(
@@ -397,18 +396,11 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdNoWindowingSchedule) {
 
   absl::StatusOr<SplitResults> split_results = SplitResultsByPrivacyId(
       CreateExampleQuery(), query_result, config, "test_source");
-  ASSERT_OK(split_results);
 
-  // Expect a single result with privacy_id equal to source_id.
-  EXPECT_THAT(split_results->per_privacy_id_results,
-              UnorderedElementsAre(PerPrivacyIdResultIs(
-                  "test_source",
-                  AddEventTimeRange(
-                      CreateExampleQueryResult({"2024-01-01T10:15:00+00:00",
-                                                "2024-01-02T12:00:00+00:00"},
-                                               {1, 2}),
-                      CreateDateTime(2024, 1, 1, 10, 0, 0),
-                      CreateDateTime(2024, 1, 2, 12, 0, 0)))));
+  // Windowing schedule is required, so this should fail.
+  EXPECT_THAT(split_results,
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Missing CivilTimeWindowSchedule")));
 }
 
 TEST(PrivacyIdUtilsTest, GetNumPrefixBitsValid) {

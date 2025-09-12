@@ -404,7 +404,8 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
   engine::PlanResult plan_result = plan_engine.RunPlan(
       client_phase.example_query_spec(), checkpoint_output_filename,
       use_client_report_wire_format, flags->enable_event_time_data_upload(),
-      source_id, checkin_result.confidential_agg_info.has_value());
+      source_id, checkin_result.confidential_agg_info.has_value(),
+      flags->enable_privacy_id_generation());
   PlanResultAndCheckpointFile result(std::move(plan_result));
   result.checkpoint_filename = checkpoint_output_filename;
   return result;

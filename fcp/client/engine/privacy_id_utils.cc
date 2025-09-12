@@ -250,17 +250,15 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
         event_time_values->string_values().value(i);
     FCP_ASSIGN_OR_RETURN(absl::CivilSecond event_civil_second,
                          ConvertEventTimeToCivilSecond(event_time_str));
-    // If privacy ID windowing is not configured, use the source ID as the
-    // privacy ID.
-    std::string privacy_id = std::string(source_id);
-    if (privacy_id_config.has_windowing_schedule()) {
-      FCP_ASSIGN_OR_RETURN(
-          WindowingSchedule::CivilTimeWindowSchedule schedule,
-          VerifyConfigHasCivilTimeWindowSchedule(privacy_id_config));
-      FCP_ASSIGN_OR_RETURN(absl::CivilSecond window_start,
-                           GetTimeWindowStart(schedule, event_civil_second));
-      FCP_ASSIGN_OR_RETURN(privacy_id, GetPrivacyId(source_id, window_start));
-    }
+
+    FCP_ASSIGN_OR_RETURN(
+        WindowingSchedule::CivilTimeWindowSchedule schedule,
+        VerifyConfigHasCivilTimeWindowSchedule(privacy_id_config));
+    FCP_ASSIGN_OR_RETURN(absl::CivilSecond window_start,
+                         GetTimeWindowStart(schedule, event_civil_second));
+    FCP_ASSIGN_OR_RETURN(std::string privacy_id,
+                         GetPrivacyId(source_id, window_start));
+
     ExampleQueryResultSelection& selection = privacy_id_selections[privacy_id];
     selection.indices.push_back(i);
     selection.min_event_time =
