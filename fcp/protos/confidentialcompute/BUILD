@@ -71,6 +71,16 @@ cc_proto_library(
 )
 
 proto_library(
+    name = "key_proto",
+    srcs = ["key.proto"],
+)
+
+cc_proto_library(
+    name = "key_cc_proto",
+    deps = [":key_proto"],
+)
+
+proto_library(
     name = "payload_metadata_proto",
     srcs = ["payload_metadata.proto"],
     deps = ["//fcp/client:event_time_range_proto"],

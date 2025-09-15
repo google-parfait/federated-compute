@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/algorithm/container.h"
@@ -32,6 +33,7 @@
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/confidentialcompute/cose.h"
+#include "fcp/protos/confidentialcompute/key.pb.h"
 #include "openssl/aead.h"
 #include "openssl/base.h"
 #include "openssl/ec.h"
@@ -54,6 +56,29 @@ constexpr absl::string_view kNonce =
 constexpr absl::string_view kInfo;
 
 namespace {
+
+using ::fcp::confidentialcompute::Key;
+
+// Converts an OkpKey to a Key proto.
+absl::StatusOr<Key> ConvertOkpKey(OkpKey okp_key) {
+  Key key;
+  if (okp_key.algorithm != crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm ||
+      okp_key.curve != crypto_internal::kX25519) {
+    return absl::InvalidArgumentError("unsupported public key");
+  }
+  key.set_algorithm(Key::HPKE_X25519_SHA256_AES128_GCM);
+  if (absl::c_find(okp_key.key_ops, kCoseKeyOpDecrypt) !=
+      okp_key.key_ops.end()) {
+    key.set_purpose(Key::DECRYPT);
+  } else if (absl::c_find(okp_key.key_ops, kCoseKeyOpEncrypt) !=
+             okp_key.key_ops.end()) {
+    key.set_purpose(Key::ENCRYPT);
+  }
+  key.set_key_id(std::move(okp_key.key_id));
+  // Only public keys (x) are supported.
+  key.set_key_material(std::move(okp_key.x));
+  return key;
+}
 
 // Parses serialized COSE_Key decryption keys and converts them to
 // EVP_HPKE_KEYs, grouped by key ID.
@@ -100,7 +125,9 @@ MessageEncryptor::MessageEncryptor()
       aead_(EVP_aead_aes_128_gcm_siv()) {}
 
 absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
-    absl::string_view plaintext, absl::string_view recipient_public_key,
+    absl::string_view plaintext,
+    const std::variant<absl::string_view, confidentialcompute::Key>&
+        recipient_public_key,
     absl::string_view associated_data) const {
   return EncryptInternal(plaintext, recipient_public_key, associated_data,
                          /*src_state=*/std::nullopt, /*dst_state=*/"",
@@ -108,7 +135,9 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::Encrypt(
 }
 
 absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptForRelease(
-    absl::string_view plaintext, absl::string_view recipient_public_key,
+    absl::string_view plaintext,
+    const std::variant<absl::string_view, confidentialcompute::Key>&
+        recipient_public_key,
     absl::string_view associated_data,
     std::optional<absl::string_view> src_state, absl::string_view dst_state,
     absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer)
@@ -118,7 +147,9 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptForRelease(
 }
 
 absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
-    absl::string_view plaintext, absl::string_view recipient_public_key,
+    absl::string_view plaintext,
+    const std::variant<absl::string_view, confidentialcompute::Key>&
+        recipient_public_key,
     absl::string_view associated_data,
     std::optional<absl::string_view> src_state, absl::string_view dst_state,
     std::optional<
@@ -143,25 +174,31 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
                     serialized_symmetric_key.size());
   };
 
-  // All (untagged) CWTs start with '\x84' (4 element array). COSE_Keys are a
-  // map type, so they always have a different prefix.
-  OkpKey okp_key;
-  if (absl::StartsWith(recipient_public_key, "\x84")) {
-    FCP_ASSIGN_OR_RETURN(OkpCwt cwt, OkpCwt::Decode(recipient_public_key));
-    if (!cwt.public_key) {
-      return absl::InvalidArgumentError("CWT has no public key");
+  Key key;
+  if (const absl::string_view* value =
+          std::get_if<absl::string_view>(&recipient_public_key);
+      value != nullptr) {
+    // Handle the case where the key is a serialized CWT or COSE_Key.
+    //
+    // All (untagged) CWTs start with '\x84' (4 element array). COSE_Keys are a
+    // map type, so they always have a different prefix.
+    if (absl::StartsWith(*value, "\x84")) {
+      FCP_ASSIGN_OR_RETURN(OkpCwt cwt, OkpCwt::Decode(*value));
+      if (!cwt.public_key) {
+        return absl::InvalidArgumentError("CWT has no public key");
+      }
+      FCP_ASSIGN_OR_RETURN(key, ConvertOkpKey(std::move(*cwt.public_key)));
+    } else {
+      FCP_ASSIGN_OR_RETURN(OkpKey okp_key, OkpKey::Decode(*value));
+      FCP_ASSIGN_OR_RETURN(key, ConvertOkpKey(std::move(okp_key)));
     }
-    okp_key = std::move(*cwt.public_key);
   } else {
-    FCP_ASSIGN_OR_RETURN(okp_key, OkpKey::Decode(recipient_public_key));
+    key = std::get<Key>(recipient_public_key);
   }
-  if (okp_key.algorithm != crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm ||
-      okp_key.curve != crypto_internal::kX25519) {
-    return absl::InvalidArgumentError("unsupported public key");
+  if (key.algorithm() != Key::HPKE_X25519_SHA256_AES128_GCM) {
+    return absl::InvalidArgumentError("unsupported public key algorithm");
   }
-  if (!okp_key.key_ops.empty() &&
-      absl::c_find(okp_key.key_ops, kCoseKeyOpEncrypt) ==
-          okp_key.key_ops.end()) {
+  if (key.has_purpose() && key.purpose() != Key::ENCRYPT) {
     return absl::InvalidArgumentError("public key disallows encrypt operation");
   }
 
@@ -190,8 +227,8 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
   FCP_ASSIGN_OR_RETURN(
       crypto_internal::WrapSymmetricKeyResult wrap_symmetric_key_result,
       crypto_internal::WrapSymmetricKey(hpke_kem_, hpke_kdf_, hpke_aead_,
-                                        serialized_symmetric_key, okp_key.x,
-                                        associated_data));
+                                        serialized_symmetric_key,
+                                        key.key_material(), associated_data));
 
   // If a release token was requested, generate it.
   std::string serialized_release_token;
@@ -199,7 +236,7 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
     ReleaseToken release_token{
         .signing_algorithm = crypto_internal::kEs256,
         .encryption_algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
-        .encryption_key_id = std::move(okp_key.key_id),
+        .encryption_key_id = std::move(*key.mutable_key_id()),
         .src_state = src_state ? std::make_optional<std::string>(*src_state)
                                : std::nullopt,
         .dst_state = std::string(dst_state),
@@ -210,8 +247,8 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
     FCP_ASSIGN_OR_RETURN(
         crypto_internal::WrapSymmetricKeyResult wrap_symmetric_key_result,
         crypto_internal::WrapSymmetricKey(hpke_kem_, hpke_kdf_, hpke_aead_,
-                                          serialized_symmetric_key, okp_key.x,
-                                          enc_structure));
+                                          serialized_symmetric_key,
+                                          key.key_material(), enc_structure));
     release_token.encrypted_payload =
         std::move(wrap_symmetric_key_result.encrypted_symmetric_key),
     release_token.encapped_key =

@@ -32,6 +32,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -39,6 +40,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "fcp/protos/confidentialcompute/key.pb.h"
 #include "openssl/base.h"
 #include "openssl/ec_key.h"  // // IWYU pragma: keep, needed for bssl::UniquePtr<EC_KEY>
 #include "openssl/hpke.h"
@@ -69,22 +71,26 @@ class MessageEncryptor {
  public:
   MessageEncryptor();
 
-  // Encrypts a message with the specified public key, which may be either a
-  // serialized CWT or a serialized COSE_Key.
+  // Encrypts a message with the specified public key, which may be a serialized
+  // CWT, a serialized COSE_Key, or a Key message.
   absl::StatusOr<EncryptMessageResult> Encrypt(
-      absl::string_view plaintext, absl::string_view recipient_public_key,
+      absl::string_view plaintext,
+      const std::variant<absl::string_view, confidentialcompute::Key>&
+          recipient_public_key,
       absl::string_view associated_data) const;
 
   // Encrypts a message with the specified public key and generates a "release
   // token" that can be passed to the CFC KMS to release the decryption key.
-  // Like with `Encrypt`, the public key may be either a serialized CWT or a
-  // serialized COSE_Key.
+  // Like with `Encrypt`, the public key may be a serialized CWT, a
+  // serialized COSE_Key, or a Key message.
   //
   // The KMS will only reveal the decryption key if the logical pipeline's state
   // can be updated from `src_state` to `dst_state`. See the KMS API docs in
   // ../protos/confidentialcompute/kms.proto.
   absl::StatusOr<EncryptMessageResult> EncryptForRelease(
-      absl::string_view plaintext, absl::string_view recipient_public_key,
+      absl::string_view plaintext,
+      const std::variant<absl::string_view, confidentialcompute::Key>&
+          recipient_public_key,
       absl::string_view associated_data,
       std::optional<absl::string_view> src_state, absl::string_view dst_state,
       absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer)
@@ -97,7 +103,9 @@ class MessageEncryptor {
   // This function implements the common functionality for `Encrypt` and
   // `EncryptForRelease`.
   absl::StatusOr<EncryptMessageResult> EncryptInternal(
-      absl::string_view plaintext, absl::string_view recipient_public_key,
+      absl::string_view plaintext,
+      const std::variant<absl::string_view, confidentialcompute::Key>&
+          recipient_public_key,
       absl::string_view associated_data,
       std::optional<absl::string_view> src_state, absl::string_view dst_state,
       std::optional<

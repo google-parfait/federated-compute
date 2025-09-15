@@ -30,6 +30,7 @@
 #include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/confidentialcompute/cose.h"
+#include "fcp/protos/confidentialcompute/key.pb.h"
 #include "fcp/testing/testing.h"
 #include "openssl/base.h"
 #include "openssl/hpke.h"
@@ -38,6 +39,7 @@ namespace fcp {
 namespace confidential_compute {
 namespace {
 
+using ::fcp::confidentialcompute::Key;
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::ElementsAre;
@@ -323,6 +325,39 @@ TEST(CryptoTest, EncryptWithCoseKey) {
   EXPECT_EQ(*decrypt_result, message);
 }
 
+TEST(CryptoTest, EncryptWithProtoKey) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "plaintext associated data";
+
+  MessageEncryptor encryptor;
+  MessageDecryptor decryptor;
+
+  // Convert the recipient's CWT to a fcp::confidentialcompute::Key. The
+  // MessageEncryptor should support that format as well.
+  absl::StatusOr<std::string> recipient_public_key =
+      decryptor.GetPublicKey([](absl::string_view) { return ""; }, 0);
+  ASSERT_OK(recipient_public_key);
+  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(*recipient_public_key);
+  ASSERT_OK(cwt);
+  ASSERT_TRUE(cwt->public_key);
+  fcp::confidentialcompute::Key key;
+  key.set_algorithm(Key::HPKE_X25519_SHA256_AES128_GCM);
+  key.set_purpose(Key::ENCRYPT);
+  key.set_key_id(cwt->public_key->key_id);
+  key.set_key_material(cwt->public_key->x);
+
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.Encrypt(message, key, associated_data);
+  ASSERT_OK(encrypt_result);
+
+  absl::StatusOr<std::string> decrypt_result =
+      decryptor.Decrypt(encrypt_result->ciphertext, associated_data,
+                        encrypt_result->encrypted_symmetric_key,
+                        associated_data, encrypt_result->encapped_key);
+  ASSERT_OK(decrypt_result);
+  EXPECT_EQ(*decrypt_result, message);
+}
+
 TEST(CryptoTest, EncryptForRelease) {
   std::string message = "some plaintext message";
   std::string associated_data = "plaintext associated data";
@@ -443,7 +478,28 @@ TEST(CryptoTest, EncryptWithInvalidCwtAlgorithmFails) {
   EXPECT_THAT(encrypt_result, fcp::IsCode(INVALID_ARGUMENT));
 }
 
-TEST(CryptoTest, EncryptWithIncorrectKeyOpFails) {
+TEST(CryptoTest, EncryptWithInvalidProtoAlgorithmFails) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "associated data";
+
+  absl::StatusOr<std::string> public_key =
+      MessageDecryptor().GetPublicKey([](absl::string_view) { return ""; }, 0);
+  ASSERT_OK(public_key);
+  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(*public_key);
+  ASSERT_OK(cwt);
+  fcp::confidentialcompute::Key key;
+  key.set_algorithm(Key::ECDSA_P256);
+  key.set_purpose(Key::ENCRYPT);
+  key.set_key_id(cwt->public_key->key_id);
+  key.set_key_material(cwt->public_key->x);
+
+  MessageEncryptor encryptor;
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.Encrypt(message, key, associated_data);
+  EXPECT_THAT(encrypt_result, fcp::IsCode(INVALID_ARGUMENT));
+}
+
+TEST(CryptoTest, EncryptWithIncorrectCwtKeyOpFails) {
   std::string message = "some plaintext message";
   std::string associated_data = "associated data";
 
@@ -462,7 +518,28 @@ TEST(CryptoTest, EncryptWithIncorrectKeyOpFails) {
   EXPECT_THAT(encrypt_result, fcp::IsCode(INVALID_ARGUMENT));
 }
 
-TEST(CryptoTest, EncryptWithoutKeyOpsSucceeds) {
+TEST(CryptoTest, EncryptWithIncorrectProtoKeyPurposeFails) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "associated data";
+
+  absl::StatusOr<std::string> public_key =
+      MessageDecryptor().GetPublicKey([](absl::string_view) { return ""; }, 0);
+  ASSERT_OK(public_key);
+  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(*public_key);
+  ASSERT_OK(cwt);
+  fcp::confidentialcompute::Key key;
+  key.set_algorithm(Key::HPKE_X25519_SHA256_AES128_GCM);
+  key.set_purpose(Key::DECRYPT);
+  key.set_key_id(cwt->public_key->key_id);
+  key.set_key_material(cwt->public_key->x);
+
+  MessageEncryptor encryptor;
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.Encrypt(message, key, associated_data);
+  EXPECT_THAT(encrypt_result, fcp::IsCode(INVALID_ARGUMENT));
+}
+
+TEST(CryptoTest, EncryptWithoutCwtKeyOpsSucceeds) {
   std::string message = "some plaintext message";
   std::string associated_data = "associated data";
 
@@ -478,6 +555,27 @@ TEST(CryptoTest, EncryptWithoutKeyOpsSucceeds) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *cwt_bytes, associated_data);
+  EXPECT_OK(encrypt_result);
+}
+
+TEST(CryptoTest, EncryptWithoutProtoKeyPurposeSucceeds) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "associated data";
+
+  absl::StatusOr<std::string> public_key =
+      MessageDecryptor().GetPublicKey([](absl::string_view) { return ""; }, 0);
+  ASSERT_OK(public_key);
+  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(*public_key);
+  ASSERT_OK(cwt);
+  fcp::confidentialcompute::Key key;
+  key.set_algorithm(Key::HPKE_X25519_SHA256_AES128_GCM);
+  key.clear_purpose();
+  key.set_key_id(cwt->public_key->key_id);
+  key.set_key_material(cwt->public_key->x);
+
+  MessageEncryptor encryptor;
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.Encrypt(message, key, associated_data);
   EXPECT_OK(encrypt_result);
 }
 
@@ -518,6 +616,27 @@ TEST(CryptoTest, EncryptWithInvalidCwtPublicKeyFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *cwt_bytes, associated_data);
+  EXPECT_THAT(encrypt_result, fcp::IsCode(INVALID_ARGUMENT));
+}
+
+TEST(CryptoTest, EncryptWithInvalidProtoKeyMaterialFails) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "associated data";
+
+  absl::StatusOr<std::string> public_key =
+      MessageDecryptor().GetPublicKey([](absl::string_view) { return ""; }, 0);
+  ASSERT_OK(public_key);
+  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(*public_key);
+  ASSERT_OK(cwt);
+  fcp::confidentialcompute::Key key;
+  key.set_algorithm(Key::HPKE_X25519_SHA256_AES128_GCM);
+  key.set_purpose(Key::ENCRYPT);
+  key.set_key_id(cwt->public_key->key_id);
+  key.set_key_material("invalid public key");
+
+  MessageEncryptor encryptor;
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.Encrypt(message, key, associated_data);
   EXPECT_THAT(encrypt_result, fcp::IsCode(INVALID_ARGUMENT));
 }
 

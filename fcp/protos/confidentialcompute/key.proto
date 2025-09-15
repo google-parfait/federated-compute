@@ -1,0 +1,60 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fcp.confidentialcompute;
+
+option java_package = "com.google.intelligence.fcp.confidentialcompute";
+option java_multiple_files = true;
+
+// A cryptographic key. This is heavily inspired by RFC 8152's COSE_Key, but
+// with a smaller number of supported algorithms and properties.
+message Key {
+  enum Algorithm {
+    ALGORITHM_UNSPECIFIED = 0;
+    // HPKE with X25519, SHA-256, and AES-128-GCM.
+    // key_material: little-endian octet string.
+    HPKE_X25519_SHA256_AES128_GCM = 1;
+    // ECDSA with P256 and SHA-256.
+    // key_material: uncompressed X9.62 format.
+    ECDSA_P256 = 2;
+  }
+
+  // The key's algorithm.
+  Algorithm algorithm = 1;
+
+  enum Purpose {
+    PURPOSE_UNSPECIFIED = 0;
+    ENCRYPT = 1;
+    DECRYPT = 2;
+    SIGN = 3;
+    VERIFY = 4;
+  }
+
+  // The key's purpose. If unset, the purpose is unrestricted. This field is not
+  // repeated since all current purposes are either mutually exclusive (e.g.
+  // signing and encryption) or trivially compatible (e.g. verifying with a
+  // signing key).
+  optional Purpose purpose = 2;
+
+  // A short identifier for the key to allow decryption or verification to find
+  // the corresponding key from a list. Key ids are not guaranteed to be unique.
+  bytes key_id = 3;
+
+  // The key material in an algorithm-specific format. This should generally be
+  // a "raw" format (e.g. uncompressed point) as opposed to a more complex
+  // format like PEM.
+  bytes key_material = 4;
+}
