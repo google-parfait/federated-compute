@@ -59,7 +59,12 @@ struct SymmetricKey {
   static absl::StatusOr<SymmetricKey> Decode(absl::string_view encoded);
 
   // CBOR-encodes a SymmetricKey.
-  absl::StatusOr<std::string> Encode() const;
+  //
+  // If `encode_without_libcppbor` is true, the key will be encoded without
+  // using libcppbor, which is useful when FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
+  // is not defined.
+  absl::StatusOr<std::string> Encode(
+      bool encode_without_libcppbor = false) const;
 };
 
 // A Cose_Sign1 struct for a CBOR Web Token (CWT) containing a OKP key.

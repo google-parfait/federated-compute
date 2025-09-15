@@ -609,26 +609,6 @@ absl::StatusOr<SymmetricKey> SymmetricKey::Decode(absl::string_view encoded) {
   return symmetric_key;
 }
 
-absl::StatusOr<std::string> SymmetricKey::Encode() const {
-  // Generate a map containing the parameters that are set.
-  Map map;
-  map.add(CoseKeyParameter::kKty, CoseKeyType::kSymmetric);
-  if (algorithm) {
-    map.add(CoseKeyParameter::kAlg, *algorithm);
-  }
-  if (!key_ops.empty()) {
-    Array array;
-    for (int64_t key_op : key_ops) {
-      array.add(key_op);
-    }
-    map.add(CoseKeyParameter::kKeyOps, std::move(array));
-  }
-  if (!k.empty()) {
-    map.add(CoseKeyParameter::kSymmetricK, Bstr(k));
-  }
-  return map.toString();
-}
-
 absl::StatusOr<std::string> OkpCwt::BuildSigStructureForSigning(
     absl::string_view aad) const {
   std::vector<uint8_t> protected_header =
@@ -794,11 +774,6 @@ absl::StatusOr<SymmetricKey> SymmetricKey::Decode(absl::string_view encoded) {
       "Confidential Aggregation is not supported on this platform.");
 }
 
-absl::StatusOr<std::string> SymmetricKey::Encode() const {
-  return absl::UnimplementedError(
-      "Confidential Aggregation is not supported on this platform.");
-}
-
 absl::StatusOr<std::string> OkpCwt::BuildSigStructureForSigning(
     absl::string_view aad) const {
   return absl::UnimplementedError(
@@ -856,4 +831,107 @@ absl::StatusOr<std::string> ReleaseToken::Encode() const {
 }
 
 #endif  // defined(FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG)
+
+// Encodes an integer as a CBOR integer, using the deterministic CBOR format
+// (RFC 8994 Section 4.2.1). Not all ranges are currently supported.
+static absl::Status EncodeInt(int64_t value, std::string& output) {
+  if (value > 0x17 || value < -0x0100000000) {
+    return absl::UnimplementedError("unsupported int range");
+  }
+  if (value >= 0) {
+    output.push_back(value);  // inlined unsigned int
+  } else {
+    uint64_t n = -1 - value;
+    if (n <= 0x17) {
+      output.push_back(0x20 + n);  // inlined negative int
+    } else if (n <= 0xff) {
+      output.push_back(0x38);  // 1-byte negative int
+      output.push_back(n);
+    } else if (n <= 0xffff) {
+      output.push_back(0x39);  // 2-byte negative int
+      output.push_back((n >> 8) & 0xff);
+      output.push_back(n & 0xff);
+    } else {
+      output.push_back(0x3a);  // 4-byte negative int
+      output.push_back((n >> 24) & 0xff);
+      output.push_back((n >> 16) & 0xff);
+      output.push_back((n >> 8) & 0xff);
+      output.push_back(n & 0xff);
+    }
+  }
+  return absl::OkStatus();
+}
+
+// SymmetricKey encoding is hand-implemented to allow MessageEncryptor to
+// function without a dependency on CBOR. See RFC 8949 for the encoding format.
+absl::StatusOr<std::string> SymmetricKey::Encode(
+    bool encode_without_libcppbor) const {
+  if (!encode_without_libcppbor) {
+#ifdef FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
+    // Generate a map containing the parameters that are set.
+    Map map;
+    map.add(CoseKeyParameter::kKty, CoseKeyType::kSymmetric);
+    if (algorithm) {
+      map.add(CoseKeyParameter::kAlg, *algorithm);
+    }
+    if (!key_ops.empty()) {
+      Array array;
+      for (int64_t key_op : key_ops) {
+        array.add(key_op);
+      }
+      map.add(CoseKeyParameter::kKeyOps, std::move(array));
+    }
+    if (!k.empty()) {
+      map.add(CoseKeyParameter::kSymmetricK, Bstr(k));
+    }
+    return map.toString();
+#else   // FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
+    return absl::UnimplementedError(
+        "Confidential Aggregation is not supported on this platform.");
+#endif  // FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
+  }
+
+  std::string output;
+  output.reserve(30);  // Expected size with one key_op and a 128-bit key.
+  int num_entries = 1 + algorithm.has_value() + !key_ops.empty() + !k.empty();
+  output.push_back(0xa0 + num_entries);  // Map with num_entries elements.
+
+  // Add the key type (kty) entry to the map.
+  output.push_back(0x01);  // kty (1)
+  output.push_back(0x04);  // symmetric (4)
+
+  // Add the algorithm entry to the map if it is set.
+  if (algorithm) {
+    output.push_back(0x03);  // alg (3)
+    FCP_RETURN_IF_ERROR(EncodeInt(*algorithm, output));
+  }
+
+  // Add the key_ops entry to the map if it is non-empty.
+  if (!key_ops.empty()) {
+    // Since there shouldn't be many key_ops, don't both supporting larger
+    // arrays, which use a different encoding.
+    if (key_ops.size() > 0x17) {
+      return absl::UnimplementedError("too many key_ops");
+    }
+    output.push_back(0x04);                   // key_ops (4)
+    output.push_back(0x80 + key_ops.size());  // array with size key_ops.size()
+    for (int64_t key_op : key_ops) {
+      FCP_RETURN_IF_ERROR(EncodeInt(key_op, output));
+    }
+  }
+
+  // Add the key material entry to the map if it is non-empty.
+  if (!k.empty()) {
+    // All keys are currently 16 bytes or less; don't bother supporting larger
+    // keys, which use a different encoding.
+    if (k.size() > 0x17) {
+      return absl::UnimplementedError("k is too large");
+    }
+    output.push_back(0x20);             // k (-1)
+    output.push_back(0x40 + k.size());  // bstr with size k.size()
+    absl::StrAppend(&output, k);
+  }
+  return output;
+}
+
 }  // namespace fcp::confidential_compute
