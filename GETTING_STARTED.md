@@ -30,18 +30,3 @@ Bazelisk is used to fetch the correct Bazel binaries necessary to build and run
 Federated Compute code.
 
 Please read https://github.com/bazelbuild/bazelisk#installation.
-
-## Build and run the federated program test!
-
-> ⚠️ Many Federated Compute targets depend on TensorFlow, which can take several
-> hours to build for the first time. Consider running builds in `screen` or
-> `tmux` if you're worried about your terminal closing during this time.
->
-> While not required, Bazel's
-> [remote build execution](https://bazel.build/remote/rbe) and
-> [remote caching](https://bazel.build/remote/caching) features can speed up
-> builds.
-
-```
-bazelisk test //fcp/demo:federated_program_test
-```

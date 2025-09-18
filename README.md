@@ -49,13 +49,12 @@ As of 12/7/2022, parts of the repository - in particular, code in the `client/`
 directory, and the service & data format definitions in `proto/` - are used in
 production in Google's federated learning infrastructure. Other parts - notably,
 production server side infrastructure - have not yet been open sourced due to
-its dependencies on proprietary infrastructure, and we instead provide a
-reference / example server implementation in `demo/` for demonstration purposes.
+its dependencies on proprietary infrastructure.
 
-The best way to get started is to run the end-to-end demo
-`//fcp/demo:federated_program_test`, which will spin up example services,
-clients, and run a federated program; this test will cover the majority of the
-code in this repository.
+We previously provided a reference/example server, but this code was removed to
+reduce maintenance costs. It can still be found in the project
+[history](https://github.com/google-parfait/federated-compute/tree/9ccfcc21c42a436e766c609dcf8560aae78d1e11/fcp/demo),
+however.
 
 ## Remote attestation of server-side, TEE-hosted applications
 
