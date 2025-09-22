@@ -445,6 +445,8 @@ cc_library(
     copts = FCP_COPTS,
     deps = [
         ":clock",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
     ],
 )
 

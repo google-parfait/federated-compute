@@ -16,6 +16,9 @@
 
 #include "fcp/base/simulated_clock.h"
 
+#include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
+
 namespace fcp {
 
 absl::Time SimulatedClock::Now() {
