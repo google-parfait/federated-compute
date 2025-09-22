@@ -92,6 +92,16 @@ cc_proto_library(
 )
 
 proto_library(
+    name = "payload_transparency_proto",
+    srcs = ["payload_transparency.proto"],
+)
+
+cc_proto_library(
+    name = "payload_transparency_cc_proto",
+    deps = [":payload_transparency_proto"],
+)
+
+proto_library(
     name = "aggregation_client_payload_proto",
     srcs = ["aggregation_client_payload.proto"],
 )

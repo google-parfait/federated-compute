@@ -1,0 +1,57 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fcp.confidentialcompute;
+
+option java_package = "com.google.intelligence.fcp.confidentialcompute";
+option java_multiple_files = true;
+
+// TODO: b/444302065 - Add additional messages needed to prove a payload is
+// signed and included in a transparency log.
+
+// A http://github.com/sigstore/rekor log entry, represented as a protocol
+// buffer for easier parsing on the client. Unused fields from the Rekor log
+// entry are omitted.
+message RekorLogEntry {
+  // The body of the log entry.
+  bytes body = 1;
+
+  // The entry's index in the log.
+  uint64 log_index = 2;
+
+  // The size of the Merkle tree containing the log.
+  uint64 tree_size = 3;
+
+  // The node hashes in the entry's audit path. See RFC 6962 section 2.1.1.
+  repeated bytes hashes = 4;
+
+  // The "origin" (instance name + version) of the Rekor instance containing the
+  // log entry.
+  string checkpoint_origin = 5;
+
+  // The lines of "other content" included in the checkpoint description. See
+  // https://github.com/sigstore/rekor/blob/8be1bd4c3f3390b7c7ce184709b4ae2b881a10d9/pkg/util/checkpoint.go#L67.
+  repeated string checkpoint_other_contents = 6;
+
+  // A P1364-encoded signature over the checkpoint description, which includes
+  // the checkpoint origin, tree size, root hash, and other content. This only
+  // contains the signature; the key id prefix normally added by Rekor is stored
+  // separately.
+  bytes checkpoint_signature = 7;
+
+  // The id of the key used to sign the checkpoint.
+  bytes checkpoint_signature_key_id = 8;
+}

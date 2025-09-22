@@ -23,6 +23,49 @@ package(
 )
 
 cc_library(
+    name = "rekor",
+    srcs = ["rekor.cc"],
+    hdrs = ["rekor.h"],
+    deps = [
+        ":signatures",
+        "//fcp/base",
+        "//fcp/protos/confidentialcompute:key_cc_proto",
+        "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
+        "@boringssl//:crypto",
+        "@com_google_absl//absl/container:fixed_array",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/functional:bind_front",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/numeric:bits",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "rekor_test",
+    srcs = ["rekor_test.cc"],
+    deps = [
+        ":rekor",
+        ":signatures",
+        "//fcp/confidentialcompute:crypto",
+        "//fcp/protos/confidentialcompute:key_cc_proto",
+        "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
+        "//fcp/testing",
+        "@boringssl//:crypto",
+        "@com_google_absl//absl/container:fixed_array",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "signatures",
     srcs = ["signatures.cc"],
     hdrs = ["signatures.h"],
