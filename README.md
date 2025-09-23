@@ -38,12 +38,10 @@ artifacts, and run in a distributed system consisting of a central coordinator,
 and a set of devices such as phones. The TFF repository contains infrastructure
 for authoring and simulating federated programs and computations.
 
-This repository hosts infrastructure for compiling and running federated
-programs and computations in the cross-device setting. We are actively working
-on open sourcing the core components of our production infrastructure, with a
-focus on privacy-sensitive code-paths such as the pipeline for compiling
-deployable artifacts from TFF computations, client-side processing, and
-server-side aggregation logic.
+This repository hosts infrastructure for running federated computations in the
+cross-device setting. We are actively working on open sourcing the core
+components of our production infrastructure, with a focus on privacy-sensitive
+code-paths performing client-side processing, and server-side aggregation logic.
 
 As of 12/7/2022, parts of the repository - in particular, code in the `client/`
 directory, and the service & data format definitions in `proto/` - are used in
@@ -51,10 +49,11 @@ production in Google's federated learning infrastructure. Other parts - notably,
 production server side infrastructure - have not yet been open sourced due to
 its dependencies on proprietary infrastructure.
 
-We previously provided a reference/example server, but this code was removed to
-reduce maintenance costs. It can still be found in the project
-[history](https://github.com/google-parfait/federated-compute/tree/9ccfcc21c42a436e766c609dcf8560aae78d1e11/fcp/demo),
-however.
+We previously provided a reference/example server and code for compiling
+deployable artifacts from TFF computations, but this code was removed to reduce
+maintenance costs. It can still be found in the project history, however
+([demo server](https://github.com/google-parfait/federated-compute/tree/9ccfcc21c42a436e766c609dcf8560aae78d1e11/fcp/demo),
+[artifact building](https://github.com/google-parfait/federated-compute/tree/f168e4c848a4fb19d0bab725b226888b7048dc45/fcp/artifact_building)).
 
 ## Remote attestation of server-side, TEE-hosted applications
 
