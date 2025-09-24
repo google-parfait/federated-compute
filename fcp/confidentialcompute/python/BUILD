@@ -20,6 +20,29 @@ package(
 )
 
 py_library(
+    name = "compiler",
+    srcs = ["compiler.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@federated_language//federated_language",
+        "@org_tensorflow_federated//tensorflow_federated",
+        "@pypi_immutabledict//:pkg",
+    ],
+)
+
+py_test(
+    name = "compiler_test",
+    srcs = ["compiler_test.py"],
+    deps = [
+        ":compiler",
+        "@federated_language//federated_language",
+        "@org_tensorflow_federated//tensorflow_federated",
+        "@pypi_absl_py//:pkg",
+        "@pypi_numpy//:pkg",
+    ],
+)
+
+py_library(
     name = "constants",
     srcs = ["constants.py"],
     visibility = ["//visibility:public"],
@@ -81,17 +104,6 @@ py_test(
 )
 
 py_library(
-    name = "compiler",
-    srcs = ["compiler.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "@federated_language//federated_language",
-        "@org_tensorflow_federated//tensorflow_federated",
-        "@pypi_immutabledict//:pkg",
-    ],
-)
-
-py_library(
     name = "program_input_provider",
     srcs = ["program_input_provider.py"],
     visibility = ["//visibility:public"],
@@ -106,17 +118,5 @@ py_test(
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi_absl_py//:pkg",
         "@pypi_tensorflow//:pkg",
-    ],
-)
-
-py_test(
-    name = "compiler_test",
-    srcs = ["compiler_test.py"],
-    deps = [
-        ":compiler",
-        "@federated_language//federated_language",
-        "@org_tensorflow_federated//tensorflow_federated",
-        "@pypi_absl_py//:pkg",
-        "@pypi_numpy//:pkg",
     ],
 )
