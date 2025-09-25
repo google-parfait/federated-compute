@@ -375,6 +375,11 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
   bool use_client_report_wire_format;
   if (*protocol_config ==
       AggregationConfig::ProtocolConfigCase::kTfV1CheckpointAggregation) {
+    if (flags->enable_remove_tfv1_checkpoint_support()) {
+      return PlanResultAndCheckpointFile(engine::PlanResult(
+          engine::PlanOutcome::kInvalidArgument,
+          absl::InvalidArgumentError("TFV1 checkpoint is not supported.")));
+    }
     // Contrary to what the AggregationConfig name implies, the type of output
     // checkpoint use in case of kTfV1CheckpointAggregation depends on the
     // enable_lightweight_client_report_wire_format flag value.

@@ -217,6 +217,11 @@ class Flags {
   // the same device. This is only used for confidential aggregation tasks, and
   // the privacy ID will only be stored in the encrypted payload.
   virtual bool enable_privacy_id_generation() const { return false; }
+
+  // If true, support for uploading TFv1 checkpoints will be removed from the
+  // ExampleQueryPlanEngine. This is because there should be no more
+  // ExampleQuerySpec plans using TFv1 checkpoints.
+  virtual bool enable_remove_tfv1_checkpoint_support() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp
