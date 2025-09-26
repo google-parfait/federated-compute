@@ -721,8 +721,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, move_device_attestation_to_start_task_assignment, (),
               (const, override));
   MOCK_METHOD(bool, enable_privacy_id_generation, (), (const, override));
-  MOCK_METHOD(bool, enable_remove_tfv1_checkpoint_support, (),
-              (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
