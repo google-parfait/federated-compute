@@ -18,9 +18,12 @@
 #define FCP_CLIENT_ATTESTATION_ATTESTATION_VERIFIER_H_
 
 #include <string>
+#include <variant>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/string_view.h"
+#include "fcp/protos/confidentialcompute/key.pb.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "fcp/protos/federatedcompute/confidential_encryption_config.pb.h"
@@ -32,9 +35,10 @@ namespace fcp::client::attestation {
 class AttestationVerifier {
  public:
   struct VerificationResult {
-    // The serialized public key to use for encrypting uploads, in a format
-    // supported by fcp::confidential_compute::MessageEncrypter.
-    std::string serialized_public_key;
+    // The public key to use for encrypting uploads, in a format supported by
+    // fcp::confidential_compute::MessageEncrypter. The string_view aliases into
+    // the ConfidentialEncryptionConfig passed to Verify().
+    std::variant<absl::string_view, confidentialcompute::Key> public_key;
 
     // The serialized_public_key's key id, used for populating the BlobHeader
     // without needing to deserialize the key.

@@ -31,11 +31,13 @@ cc_library(
     deps = [
         "//fcp/base:digest",
         "//fcp/confidentialcompute:cose",
+        "//fcp/protos/confidentialcompute:key_cc_proto",
         "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
         "//fcp/protos/federatedcompute:confidential_encryption_config_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
     ],
 )

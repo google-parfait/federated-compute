@@ -39,6 +39,7 @@ using ::oak::attestation::v1::ReferenceValues;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Not;
+using ::testing::VariantWith;
 
 confidentialcompute::SignedEndorsements GetFakeSignedEndorsements(
     int number_of_endorsements) {
@@ -137,7 +138,8 @@ TEST(OakRustAttestationTest,
                                 confidentialcompute::SignedEndorsements(),
                                 encryption_config);
   ASSERT_OK(result);
-  EXPECT_EQ(result->serialized_public_key, encryption_config.public_key());
+  EXPECT_THAT(result->public_key,
+              VariantWith<absl::string_view>(encryption_config.public_key()));
   EXPECT_THAT(result->key_id, Not(IsEmpty()));
   EXPECT_EQ(result->access_policy_sha256, ComputeSHA256(access_policy_bytes));
 }

@@ -68,6 +68,7 @@
 #include "fcp/confidentialcompute/client_payload.h"
 #include "fcp/confidentialcompute/crypto.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
+#include "fcp/protos/confidentialcompute/key.pb.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/aggregations.pb.h"
@@ -1303,10 +1304,10 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
     }
     serialized_blob_header = blob_header.SerializeAsString();
 
-    FCP_ASSIGN_OR_RETURN(
-        data_to_upload, EncryptPayloadForConfidentialAggregation(
-                            task_info, attestation_result.serialized_public_key,
-                            result_data, serialized_blob_header));
+    FCP_ASSIGN_OR_RETURN(data_to_upload,
+                         EncryptPayloadForConfidentialAggregation(
+                             task_info, attestation_result.public_key,
+                             result_data, serialized_blob_header));
   } else {
     data_to_upload = std::move(result_data);
   }
@@ -1581,7 +1582,8 @@ HttpFederatedProtocol::ValidateConfidentialEncryptionConfig(
 
 absl::StatusOr<std::string>
 HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
-    PerTaskInfo& task_info, const std::string& serialized_public_key,
+    PerTaskInfo& task_info,
+    const std::variant<absl::string_view, confidentialcompute::Key>& public_key,
     std::string inner_payload, const std::string& serialized_blob_header) {
   FCP_CHECK(task_info.confidential_data_access_policy.has_value());
 
@@ -1604,7 +1606,7 @@ HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
   // file, as well as in MessageEncryptor::Encrypt. Perhaps we should be able to
   // pass the already-parsed OkCwt struct to the Encrypt method instead?
   absl::StatusOr<EncryptMessageResult> encryption_result =
-      MessageEncryptor().Encrypt(*compressed_payload, serialized_public_key,
+      MessageEncryptor().Encrypt(*compressed_payload, public_key,
                                  serialized_blob_header);
   if (!encryption_result.ok()) {
     task_info.state = ObjectState::kReportFailedPermanentError;

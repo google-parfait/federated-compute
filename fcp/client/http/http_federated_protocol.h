@@ -22,6 +22,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -49,6 +50,7 @@
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/stats.h"
+#include "fcp/protos/confidentialcompute/key.pb.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -258,7 +260,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // encrypted payload in a self-describing format suitable for upload to the
   // server.
   absl::StatusOr<std::string> EncryptPayloadForConfidentialAggregation(
-      PerTaskInfo& task_info, const std::string& serialized_public_key,
+      PerTaskInfo& task_info,
+      const std::variant<absl::string_view, confidentialcompute::Key>&
+          public_key,
       std::string inner_payload, const std::string& serialized_blob_header);
 
   // Helper function to perform data upload using the ByteStream protocol, used

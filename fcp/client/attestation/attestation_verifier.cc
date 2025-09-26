@@ -51,7 +51,7 @@ AlwaysPassingAttestationVerifier::Verify(
     return absl::Status(cwt.status().code(), error_msg);
   }
   return VerificationResult{
-      .serialized_public_key = encryption_config.public_key(),
+      .public_key = encryption_config.public_key(),
       .key_id = std::move(cwt->public_key->key_id),
       .access_policy_sha256 = ComputeSHA256(access_policy),
   };

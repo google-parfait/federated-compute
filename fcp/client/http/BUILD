@@ -169,6 +169,7 @@ cc_library(
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos:population_eligibility_spec_cc_proto",
         "//fcp/protos/confidentialcompute:blob_header_cc_proto",
+        "//fcp/protos/confidentialcompute:key_cc_proto",
         "//fcp/protos/confidentialcompute:payload_metadata_cc_proto",
         "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",

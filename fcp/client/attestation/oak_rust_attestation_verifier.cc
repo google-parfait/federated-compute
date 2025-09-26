@@ -261,7 +261,7 @@ OakRustAttestationVerifier::Verify(
   // decryption key, and the it will only allow the decryption key to be
   // used by binaries/applications allowed by the data access policy.
   return VerificationResult{
-      .serialized_public_key = encryption_config.public_key(),
+      .public_key = encryption_config.public_key(),
       .key_id = std::move(cwt->public_key->key_id),
       .access_policy_sha256 = std::move(raw_access_policy_hash),
   };
