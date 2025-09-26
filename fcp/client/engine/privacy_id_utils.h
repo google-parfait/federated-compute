@@ -62,17 +62,6 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
     const fcp::client::ExampleQueryResult& example_query_result,
     const google::internal::federated::plan::PrivacyIdConfig& privacy_id_config,
     absl::string_view source_id);
-
-// Returns the number of prefix bits to preserve in the partition key such that
-// the partition key can represent at least num_partitions distinct values.
-absl::StatusOr<int32_t> GetNumPrefixBits(int32_t num_partitions);
-
-// Returns a partition key for the given privacy ID.
-//
-// The partition key is a hash of the privacy ID with num_prefix_bits preserved
-// and the rest zeroed out.
-absl::StatusOr<uint64_t> GetPartitionKey(int32_t num_prefix_bits,
-                                         absl::string_view privacy_id);
 }  // namespace engine
 }  // namespace client
 }  // namespace fcp
