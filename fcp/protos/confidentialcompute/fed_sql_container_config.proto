@@ -86,12 +86,18 @@ enum AggCoreFinalizationType {
   FINALIZATION_TYPE_REPORT = 1;
   // Return the serialized internal state of the checkpoint aggregator.
   FINALIZATION_TYPE_SERIALIZE = 2;
+  // Return the partitioned internal state of the checkpoint aggregator.
+  FINALIZATION_TYPE_PARTITION = 3;
 }
 
 // Configures how a result should be output by the trusted AggCore container.
 // This is specified through `FinalizeRequest.configuration`.
 message FedSqlContainerFinalizeConfiguration {
   AggCoreFinalizationType type = 1;
+
+  // The number of partitions to use for the partitioned output. This is only
+  // used when `type` is `FINALIZATION_TYPE_PARTITION`.
+  uint64 num_partitions = 3;
 
   reserved 2;
 }
