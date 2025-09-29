@@ -71,10 +71,24 @@ message GemmaConfiguration {
   GemmaModelTraining model_training = 4;
   // The Gemma model tensor type to be used for inference.
   GemmaTensorType tensor_type = 5;
+
+  // An enum of Gemma model weight file type supported for inference in TEE.
+  enum WeightType {
+    WEIGHT_TYPE_UNSPECIFIED = 0;
+    // If SBS is used, inference will be performed using gemma.cpp engine.
+    // gemma.cpp only supports CPU inference.
+    WEIGHT_TYPE_SBS = 1;
+    // If GGUF is used, inference will be performed using llama.cpp engine.
+    // llama.cpp supports GPU inference.
+    WEIGHT_TYPE_GGUF = 2;
+  }
+
+  // The file type of the Gemma model weight file.
+  WeightType weight_type = 6;
 }
 
 // An enum of Gemma models supported for inference in TEE. Details about Gemma
-// model variants can be found at gcpp::Model in the Gemma CPP repo
+// model variants can be found at gcpp::Model in the gemma.cpp repo
 // (https://github.com/google/gemma.cpp).
 enum GemmaModel {
   GEMMA_MODEL_UNSPECIFIED = 0;
@@ -90,8 +104,8 @@ enum GemmaModel {
 }
 
 // An enum of Gemma model training types supported for inference in TEE. Details
-// about Gemma model training can be found atÏ gcpp::ModelTraining in the Gemma
-// CPP repo (https://github.com/google/gemma.cpp).
+// about Gemma model training can be found atÏ gcpp::ModelTraining in the
+// gemma.cpp repo (https://github.com/google/gemma.cpp).
 enum GemmaModelTraining {
   GEMMA_MODEL_TRAINING_UNSPECIFIED = 0;
   GEMMA_IT = 1;
@@ -99,7 +113,7 @@ enum GemmaModelTraining {
 }
 
 // An enum of Gemma tensor types supported for inference in TEE. Details about
-// the Gemma model tensor types can be found at gcpp::Type in the Gemma CPP repo
+// the Gemma model tensor types can be found at gcpp::Type in the gemma.cpp repo
 // (https://github.com/google/gemma.cpp).
 enum GemmaTensorType {
   GEMMA_TENSOR_TYPE_UNSPECIFIED = 0;
@@ -115,10 +129,11 @@ message InferenceInitializeConfiguration {
   // Additional model-specific initialization configuration.
   oneof model_init_config {
     GemmaInitializeConfiguration gemma_init_config = 2;
+    LlamaCppInitializeConfiguration llama_cpp_init_config = 3;
   }
 }
 
-// Additional initialize configuration for Gemma models not covered by
+// Additional initialize configuration for gemma.cpp not covered by
 // InferenceConfiguration.
 message GemmaInitializeConfiguration {
   // The configuration_id for the tokenizer blob. It should match
@@ -129,4 +144,13 @@ message GemmaInitializeConfiguration {
   // StreamInitializeRequest.write_configuration.first_request_metadata.configuration_id
   // for the model weight blob.
   string model_weight_configuration_id = 2;
+}
+
+// Additional initialize configuration for llama.cpp engine not covered by
+// InferenceConfiguration.
+message LlamaCppInitializeConfiguration {
+  // The configuration_id for the model weight blob. It should match
+  // StreamInitializeRequest.write_configuration.first_request_metadata.configuration_id
+  // for the model weight blob.
+  string model_weight_configuration_id = 1;
 }
