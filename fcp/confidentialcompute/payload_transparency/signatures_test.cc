@@ -16,7 +16,6 @@
 
 #include "fcp/confidentialcompute/payload_transparency/signatures.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -25,16 +24,14 @@
 #include "absl/container/fixed_array.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "fcp/base/digest.h"
 #include "fcp/confidentialcompute/crypto.h"
 #include "fcp/protos/confidentialcompute/key.pb.h"
 #include "fcp/testing/testing.h"
-#include "openssl/bn.h"
 #include "openssl/digest.h"
-#include "openssl/ecdsa.h"
-#include "openssl/mem.h"
 
 namespace fcp::confidential_compute::payload_transparency {
 namespace {
@@ -82,27 +79,12 @@ TEST(VerifySignatureTest, Asn1Format) {
   key.set_purpose(Key::VERIFY);
   key.set_key_material(signer.GetPublicKey());
 
-  std::string signature = signer.Sign("data");
-  ASSERT_EQ(signature.size() % 2, 0) << "Signature does not have even length";
-
-  // Convert the P1363 signature to ASN.1.
-  bssl::UniquePtr<ECDSA_SIG> sig(ECDSA_SIG_new());
-  ASSERT_TRUE(ECDSA_SIG_set0(
-      sig.get(),
-      BN_bin2bn(reinterpret_cast<const uint8_t*>(signature.data()),
-                signature.size() / 2, nullptr),
-      BN_bin2bn(reinterpret_cast<const uint8_t*>(signature.data() +
-                                                 signature.size() / 2),
-                signature.size() / 2, nullptr)));
-  uint8_t* sig_bytes;
-  size_t sig_bytes_len;
-  ASSERT_TRUE(ECDSA_SIG_to_bytes(&sig_bytes, &sig_bytes_len, sig.get()));
-  std::string asn1_signature(reinterpret_cast<const char*>(sig_bytes),
-                             sig_bytes_len);
-  OPENSSL_free(sig_bytes);
+  absl::StatusOr<std::string> asn1_signature =
+      ConvertP1363SignatureToAsn1(signer.Sign("data"));
+  ASSERT_OK(asn1_signature);
 
   EXPECT_OK(
-      VerifySignature(asn1_signature, SignatureFormat::kAsn1, {&key},
+      VerifySignature(*asn1_signature, SignatureFormat::kAsn1, {&key},
                       [](absl::FunctionRef<void(absl::string_view)> emitter) {
                         emitter("data");
                       }));

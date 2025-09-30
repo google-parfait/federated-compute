@@ -36,6 +36,7 @@
 #include "fcp/protos/confidentialcompute/key.pb.h"
 #include "openssl/aead.h"
 #include "openssl/base.h"
+#include "openssl/bn.h"
 #include "openssl/ec.h"
 #include "openssl/ec_key.h"
 #include "openssl/ecdsa.h"
@@ -514,6 +515,41 @@ absl::Status EcdsaP256R1SignatureVerifier::Verify(
            << ERR_reason_error_string(ERR_get_error());
   }
   return absl::OkStatus();
+}
+
+absl::StatusOr<std::string> ConvertP1363SignatureToAsn1(
+    absl::string_view p1363_signature) {
+  // IEEE P1363 signatures are the concatenation of the signature's uncompressed
+  // r and s components. Since both components are the same size, the signature
+  // should have an even length.
+  if (p1363_signature.size() % 2 != 0) {
+    return absl::InvalidArgumentError(
+        "P1363 signature does not have even length");
+  }
+
+  bssl::UniquePtr<ECDSA_SIG> sig(ECDSA_SIG_new());
+  if (ECDSA_SIG_set0(
+          sig.get(),
+          BN_bin2bn(reinterpret_cast<const uint8_t*>(p1363_signature.data()),
+                    p1363_signature.size() / 2, nullptr),
+          BN_bin2bn(reinterpret_cast<const uint8_t*>(
+                        p1363_signature.data() + p1363_signature.size() / 2),
+                    p1363_signature.size() / 2, nullptr)) != 1) {
+    return FCP_STATUS(fcp::INVALID_ARGUMENT)
+           << "Failed to convert P1363 signature: "
+           << ERR_reason_error_string(ERR_get_error());
+  }
+  uint8_t* sig_bytes;
+  size_t sig_bytes_len;
+  if (ECDSA_SIG_to_bytes(&sig_bytes, &sig_bytes_len, sig.get()) != 1) {
+    return FCP_STATUS(fcp::INVALID_ARGUMENT)
+           << "Failed to convert P1363 signature to ASN.1: "
+           << ERR_reason_error_string(ERR_get_error());
+  }
+  std::string asn1_signature(reinterpret_cast<const char*>(sig_bytes),
+                             sig_bytes_len);
+  OPENSSL_free(sig_bytes);
+  return asn1_signature;
 }
 
 namespace crypto_internal {

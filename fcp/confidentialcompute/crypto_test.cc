@@ -1291,6 +1291,28 @@ TEST(EcdsaP256R1SignatureVerifierTest, VerifyReferenceExample) {
   ASSERT_OK(verifier->Verify(data, signature));
 }
 
+TEST(ConvertP1363SignatureToAsn1Test, ValidSignature) {
+  absl::StatusOr<std::string> asn1_signature =
+      ConvertP1363SignatureToAsn1(absl::HexStringToBytes(
+          "43675a6d2f2c2dfab5ab0497030ac63bafb9b9c6f09bcae8265e49543e8888cddc02"
+          "34539a1f54fee3cb0781255c1c8c07c5d769095a3d1bd08d1ab57185b582"));
+  ASSERT_OK(asn1_signature);
+  EXPECT_EQ(
+      *asn1_signature,
+      absl::HexStringToBytes("3045022043675a6d2f2c2dfab5ab0497030ac63bafb9b9c6f"
+                             "09bcae8265e49543e8888cd022100dc0234539a1f54fee3cb"
+                             "0781255c1c8c07c5d769095a3d1bd08d1ab57185b582"));
+}
+
+TEST(ConvertP1363SignatureToAsn1Test, InvalidSignature) {
+  // Odd-length signatures should fail.
+  absl::StatusOr<std::string> asn1_signature =
+      ConvertP1363SignatureToAsn1("odd");
+  EXPECT_THAT(asn1_signature, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(asn1_signature.status().message(),
+              HasSubstr("P1363 signature does not have even length"));
+}
+
 }  // namespace
 }  // namespace confidential_compute
 }  // namespace fcp
