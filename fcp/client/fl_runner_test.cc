@@ -1203,7 +1203,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlan) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
   {
     InSequence seq;
@@ -1253,7 +1253,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlanWithMinSepPolicy) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
   {
     InSequence seq;
@@ -1307,7 +1307,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   {
@@ -1354,7 +1354,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
 
   // Make the call to ReportCompleted(...) fail with an ABORTED error.
   EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
-      .WillOnce(Return(absl::AbortedError("foo")));
+      .WillOnce(Return(ReportResult::FromStatus(absl::AbortedError("foo"))));
 
   {
     InSequence seq;
@@ -1401,7 +1401,8 @@ TEST_F(FlRunnerTensorflowTaskTest,
 
   // Make the call to ReportCompleted(...) fail with an UNAVAILABLE error.
   EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
-      .WillOnce(Return(absl::UnavailableError("foo")));
+      .WillOnce(
+          Return(ReportResult::FromStatus(absl::UnavailableError("foo"))));
 
   {
     InSequence seq;
@@ -1432,6 +1433,56 @@ TEST_F(FlRunnerTensorflowTaskTest,
   EXPECT_THAT(*result, EqualsProto(expected_result));
 }
 
+// Checks that when reporting returns kPartialSuccess, task is considered
+// successful.
+TEST_F(FlRunnerTensorflowTaskTest,
+       SimpleAggregationPlanWithReportPartialSuccess) {
+  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
+      .WillOnce(Return(FederatedProtocol::TaskAssignment{
+          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+           single_task_assignment_artifacts_.checkpoint},
+          /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
+          /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
+          std::nullopt,
+          kTaskName}));
+
+  // Make the call to ReportCompleted(...) and return kPartialSuccess.
+  EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
+      .WillOnce(Return(ReportResult{.outcome = ReportOutcome::kPartialSuccess,
+                                    .status = absl::AbortedError("foo")}));
+
+  {
+    InSequence seq;
+    ExpectCheckinTrainingLogEvents();
+    EXPECT_CALL(mock_phase_logger_, LogResultUploadStarted())
+        .WillOnce(Return(absl::OkStatus()));
+    EXPECT_CALL(mock_phase_logger_,
+                LogResultUploadCompleted(
+                    EqualsNetworkStats(
+                        MockFederatedProtocol::kReportCompletedNetworkStats),
+                    _, _));
+    EXPECT_CALL(mock_task_env_, OnTaskCompleted(IsTaskResultSuccess()))
+        .WillOnce(Return(true));
+  }
+
+  MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
+                              /*has_secagg_output=*/false);
+
+  absl::StatusOr<FLRunnerResult> result = RunFederatedComputation(
+      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
+      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
+      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
+      /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
+  ASSERT_OK(result);
+  FLRunnerResult expected_result;
+  *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
+      mock_federated_protocol_.GetLatestRetryWindow());
+  expected_result.set_contribution_result(FLRunnerResult::SUCCESS);
+  expected_result.mutable_contributed_task_names()->Add(kTaskName);
+  EXPECT_THAT(*result, EqualsProto(expected_result));
+}
+
 TEST_F(FlRunnerTensorflowTaskTest, TfPlanLightweightComputationIdNull) {
   EXPECT_CALL(mock_flags_, enable_computation_id())
       .WillRepeatedly(Return(false));
@@ -1453,7 +1504,7 @@ TEST_F(FlRunnerTensorflowTaskTest, TfPlanLightweightComputationIdNull) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   EXPECT_CALL(mock_phase_logger_, LogComputationCompleted(_, _, _, _, _))
@@ -1504,7 +1555,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SecaggPlan) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   {
@@ -1561,7 +1612,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SecaggPlanOnlySecaggOutputTensors) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   {
@@ -1780,7 +1831,8 @@ TEST_F(FlRunnerTensorflowTaskTest, TaskCompletionCallbackEnabledUploadFailed) {
           kTaskName}));
 
   EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
-      .WillOnce(Return(absl::InternalError("Something's wrong.")));
+      .WillOnce(Return(
+          ReportResult::FromStatus(absl::InternalError("Something's wrong."))));
   EXPECT_CALL(mock_task_env_, OnTaskCompleted(IsTaskResultFailure()));
 
   {
@@ -2047,7 +2099,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinSucceeds) {
   // We expect the regular plan to execute successfully, resulting in a
   // ReportCompleted call.
   EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
 
   {
     InSequence seq;
@@ -2112,7 +2164,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
   // We expect the regular plan to execute successfully, resulting in a
   // ReportCompleted call.
   EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
                               /*has_secagg_output=*/false);
 
@@ -2182,7 +2234,7 @@ TEST_F(FlRunnerEligibilityEvalWithCriteriaTest, ComputationIdSet) {
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
                               /*has_secagg_output=*/false);
   EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
 
   {
     InSequence seq;
@@ -2264,7 +2316,7 @@ TEST_F(FlRunnerExampleQueryEligibilityEvalTest, UseExampleQueryResultFormat) {
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
                               /*has_secagg_output=*/false);
   EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
 
   {
     InSequence seq;
@@ -2337,7 +2389,7 @@ TEST_F(FlRunnerExampleQueryTest, TaskSucceeds) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   ExpectExampleQueryCheckinTrainingReportLogEvents();
@@ -2388,7 +2440,7 @@ TEST_F(FlRunnerExampleQueryTest, FederatedComputeWireFormat) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   ExpectExampleQueryCheckinTrainingReportLogEvents();
@@ -2455,7 +2507,7 @@ TEST_F(FlRunnerExampleQueryTest, FCCheckpointAggregationEnabled) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   ExpectExampleQueryCheckinTrainingReportLogEvents();
@@ -2518,7 +2570,7 @@ TEST_F(FlRunnerExampleQueryTest, LightweightTaskDoesNotCreateTempFiles) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   ExpectExampleQueryCheckinTrainingReportLogEvents();
@@ -2682,7 +2734,7 @@ TEST_F(FlRunnerExampleQueryTest, ExampleQueryPlanLightweightComputation) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   ExpectExampleQueryCheckinTrainingReportLogEvents();
@@ -2783,7 +2835,7 @@ TEST_F(FlRunnerExampleQueryTest, ConfidentialAggInSelectorContext) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   ExpectExampleQueryCheckinTrainingReportLogEvents();
@@ -2822,7 +2874,7 @@ TEST_F(FlRunnerExampleQueryTest, DirectDataUploadTaskSucceeds) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   ExpectExampleQueryCheckinTrainingReportLogEvents();
@@ -2940,7 +2992,7 @@ TEST_F(FlRunnerExampleQueryTest, ExampleQueryWithEventTimeRange) {
         computation_results = std::move(reported_results);
         event_time_range =
             std::move(report_payload_metadata->event_time_range());
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   ExpectExampleQueryCheckinTrainingReportLogEvents();
@@ -3004,7 +3056,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, EmptyPopulationSpec) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   {
@@ -3089,7 +3141,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_1 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
   ComputationResults multiple_task_assignment_computation_results_2;
   EXPECT_CALL(
@@ -3101,7 +3153,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_2 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(Eq(std::nullopt), _))
@@ -3121,7 +3173,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   {
@@ -3269,7 +3321,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_1 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
   ComputationResults multiple_task_assignment_computation_results_2;
   EXPECT_CALL(
@@ -3281,7 +3333,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_2 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
@@ -3425,7 +3477,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsTurnedAway) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations
@@ -3507,7 +3559,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsIOError) {
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations
@@ -3592,7 +3644,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations
@@ -3677,7 +3729,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations
@@ -3768,7 +3820,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations
@@ -3872,7 +3924,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<std::string> aggregation_session_id,
                     std::optional<PayloadMetadata> payload_metadata) {
         computation_results = std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations
@@ -3963,7 +4015,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_1 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
@@ -3994,7 +4046,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         single_task_assignment_computation_results =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations
@@ -4110,7 +4162,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_1 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
   ComputationResults multiple_task_assignment_computation_results_2;
   EXPECT_CALL(
@@ -4122,7 +4174,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_2 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
@@ -4155,7 +4207,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         single_task_assignment_computation_results =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations
@@ -4311,7 +4363,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_1 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
@@ -4445,7 +4497,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_1 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
   EXPECT_CALL(mock_federated_protocol_,
               MockReportCompleted(_, _, Eq(kTaskIdentifier2), _))
@@ -4455,7 +4507,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_2 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations
@@ -4563,11 +4615,11 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   EXPECT_CALL(
       mock_federated_protocol_,
       MockReportCompleted(_, _, Eq(task_assignment_1_.task_identifier), _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
   EXPECT_CALL(
       mock_federated_protocol_,
       MockReportCompleted(_, _, Eq(task_assignment_2_.task_identifier), _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
@@ -4581,7 +4633,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   EXPECT_CALL(mock_federated_protocol_,
               MockReportCompleted(_, _, Eq(std::nullopt), _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
 
   // We expect OnTaskCompleted called 3 times with success TaskResultInfo.
   EXPECT_CALL(mock_task_env_, OnTaskCompleted(IsTaskResultSuccess()))
@@ -4653,7 +4705,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   EXPECT_CALL(
       mock_federated_protocol_,
       MockReportCompleted(_, _, Eq(task_assignment_1_.task_identifier), _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
   EXPECT_CALL(
       mock_federated_protocol_,
       MockReportNotCompleted(_, _, Eq(task_assignment_2_.task_identifier)))
@@ -4670,7 +4722,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   EXPECT_CALL(mock_federated_protocol_,
               MockReportCompleted(_, _, Eq(std::nullopt), _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
 
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
                               /*has_secagg_output=*/true, EqualsProto(plan_1_));
@@ -4759,11 +4811,12 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   EXPECT_CALL(
       mock_federated_protocol_,
       MockReportCompleted(_, _, Eq(task_assignment_2_.task_identifier), _))
-      .WillOnce(Return(absl::InternalError("Something's wrong")));
+      .WillOnce(Return(
+          ReportResult::FromStatus(absl::InternalError("Something's wrong"))));
   EXPECT_CALL(
       mock_federated_protocol_,
       MockReportCompleted(_, _, Eq(task_assignment_1_.task_identifier), _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
@@ -4777,7 +4830,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   EXPECT_CALL(mock_federated_protocol_,
               MockReportCompleted(_, _, Eq(std::nullopt), _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
 
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
                               /*has_secagg_output=*/true, EqualsProto(plan_1_));
@@ -4867,7 +4920,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
   // We expect the regular plan to execute successfully, resulting in a
   // ReportCompleted call.
   EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
 
   {
     InSequence seq;
@@ -4937,7 +4990,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
   // We expect the regular plan to execute successfully, resulting in a
   // ReportCompleted call.
   EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _, _))
-      .WillOnce(Return(absl::OkStatus()));
+      .WillOnce(Return(ReportResult::FromStatus(absl::OkStatus())));
 
   {
     InSequence seq;
@@ -5039,7 +5092,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_1 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
   EXPECT_CALL(mock_federated_protocol_,
               MockReportCompleted(_, _, Eq(kTaskIdentifier2), _))
@@ -5049,7 +5102,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_2 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations
@@ -5191,7 +5244,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_1 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
   EXPECT_CALL(mock_federated_protocol_,
               MockReportCompleted(_, _, Eq(kTaskIdentifier2), _))
@@ -5201,7 +5254,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     std::optional<PayloadMetadata> payload_metadata) {
         multiple_task_assignment_computation_results_2 =
             std::move(reported_results);
-        return absl::OkStatus();
+        return ReportResult::FromStatus(absl::OkStatus());
       });
 
   // Set up PhaseLogger expectations

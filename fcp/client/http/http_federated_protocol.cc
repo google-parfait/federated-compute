@@ -1174,7 +1174,7 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
   return std::move(result);
 }
 
-absl::Status HttpFederatedProtocol::ReportCompleted(
+ReportResult HttpFederatedProtocol::ReportCompleted(
     ComputationResults results, absl::Duration plan_duration,
     std::optional<std::string> task_identifier,
     std::optional<PayloadMetadata> payload_metadata) {
@@ -1182,7 +1182,8 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
   PerTaskInfo* task_info;
   if (task_identifier.has_value()) {
     if (!task_info_map_.contains(task_identifier.value())) {
-      return absl::InvalidArgumentError("Unexpected task identifier.");
+      return ReportResult::FromStatus(absl::InvalidArgumentError(absl::StrCat(
+          "Unexpected task identifier: ", task_identifier.value())));
     }
     task_info = &task_info_map_[task_identifier.value()];
   } else {
@@ -1203,8 +1204,8 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
           std::move(results), plan_duration, *task_info,
           std::move(payload_metadata));
     } else {
-      return ReportViaSecureAggregation(std::move(results), plan_duration,
-                                        *task_info);
+      return ReportResult::FromStatus(ReportViaSecureAggregation(
+          std::move(results), plan_duration, *task_info));
     }
   } else {
     switch (task_info->aggregation_type) {
@@ -1217,17 +1218,18 @@ absl::Status HttpFederatedProtocol::ReportCompleted(
             std::move(results), plan_duration, *task_info,
             std::move(payload_metadata));
       case AggregationType::kSecureAggregation:
-        return ReportViaSecureAggregation(std::move(results), plan_duration,
-                                          *task_info);
+        return ReportResult::FromStatus(ReportViaSecureAggregation(
+            std::move(results), plan_duration, *task_info));
       case AggregationType::kUnknown:
         // Once the Flags::enable_confidential_aggregation() flag is turned on
         // we should never see kUnknown values anymore.
-        return absl::InternalError("Unexpected AggregationType::kUnknown");
+        return ReportResult::FromStatus(
+            absl::InternalError("Unexpected AggregationType::kUnknown"));
     }
   }
 }
 
-absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
+ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
     ComputationResults results, absl::Duration plan_duration,
     PerTaskInfo& task_info, std::optional<PayloadMetadata> payload_metadata) {
   // TODO: b/307312707 -  Remove the kUnknown check once the
@@ -1242,19 +1244,19 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
                                                     ? "Confidential aggregation"
                                                     : "Simple aggregation";
   if (results.size() != 1) {
-    return absl::InternalError(
+    return ReportResult::FromStatus(absl::InternalError(
         absl::StrCat(aggregation_type_readable,
-                     " aggregands have unexpected results size."));
+                     " aggregands have unexpected results size.")));
   }
   auto result = std::move(results.begin()->second);
   bool enable_lightweight_client_report_wire_format =
       flags_->enable_lightweight_client_report_wire_format();
   if (!enable_lightweight_client_report_wire_format &&
       std::holds_alternative<FCCheckpoint>(result)) {
-    return absl::InternalError(
+    return ReportResult::FromStatus(absl::InternalError(
         absl::StrCat(aggregation_type_readable,
                      " computation produced FC Wire Format but this feature is "
-                     "not enabled."));
+                     "not enabled.")));
   }
 
   std::vector<std::string> result_data;
@@ -1283,7 +1285,7 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
             task_info);
     if (!per_upload_info.ok()) {
       task_info.state = ObjectState::kReportFailedPermanentError;
-      return per_upload_info.status();
+      return ReportResult::FromStatus(per_upload_info.status());
     }
     // If we are doing a confidential aggregation we must have received an
     // encryption config, and if we're doing simple aggregation we must not have
@@ -1296,19 +1298,22 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
         checkpoint_metadata[0], aggregation_type_readable);
     if (!upload_status.ok()) {
       task_info.state = ObjectState::kReportFailedPermanentError;
-      return upload_status;
+      return ReportResult::FromStatus(upload_status);
     }
-    return absl::OkStatus();
+    return ReportResult::FromStatus(absl::OkStatus());
   }
   // New multiple-uploads path.
-  FCP_ASSIGN_OR_RETURN(
-      std::vector<absl::StatusOr<InMemoryHttpResponse>> responses,
+  absl::StatusOr<std::vector<absl::StatusOr<InMemoryHttpResponse>>> responses =
       PerformStartDataUploadRequestAndReportTaskResultForMultipleUploads(
-          plan_duration, task_info, result_data.size()));
+          plan_duration, task_info, result_data.size());
+  if (!responses.ok()) {
+    task_info.state = ObjectState::kReportFailedPermanentError;
+    return ReportResult::FromStatus(responses.status());
+  }
 
   std::vector<PerUploadInfo> per_upload_infos;
   absl::Status last_error_status = absl::OkStatus();
-  for (const auto& response : responses) {
+  for (const auto& response : *responses) {
     absl::StatusOr<PerUploadInfo> per_upload_info =
         HandleStartDataAggregationUploadOperationResponse(response, task_info);
     if (!per_upload_info.ok()) {
@@ -1344,14 +1349,15 @@ absl::Status HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
 
   if (num_successful_uploads == 0) {
     task_info.state = ObjectState::kReportFailedPermanentError;
-    return absl::Status(last_error_status.code(),
-                        absl::StrCat("All uploads failed. Last error: ",
-                                     last_error_status.ToString()));
+    return ReportResult::FromStatus(
+        absl::Status(last_error_status.code(),
+                     absl::StrCat("All uploads failed. Last error: ",
+                                  last_error_status.ToString())));
   }
 
   // TODO: b/422862369 - Report a partial failure if num_successful_uploads <
   // result_data.size()
-  return absl::OkStatus();
+  return ReportResult::FromStatus(absl::OkStatus());
 }
 
 absl::Status HttpFederatedProtocol::UploadResult(

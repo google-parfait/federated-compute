@@ -106,7 +106,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       const std::function<void(size_t)>& payload_uris_received_callback,
       const std::optional<std::string>& attestation_measurement) override;
 
-  absl::Status ReportCompleted(
+  ReportResult ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
       std::optional<std::string> task_identifier,
       std::optional<confidentialcompute::PayloadMetadata> payload_metadata)
@@ -245,9 +245,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::StatusOr<InMemoryHttpResponse> http_response,
       const std::function<void(size_t)>& payload_uris_received_callback);
 
-  // Helper function for reporting result via simple or confidential
+  // Helper function for reporting results via simple or confidential
   // aggregation.
-  absl::Status ReportViaSimpleOrConfidentialAggregation(
+  ReportResult ReportViaSimpleOrConfidentialAggregation(
       ComputationResults results, absl::Duration plan_duration,
       PerTaskInfo& task_info,
       std::optional<confidentialcompute::PayloadMetadata> payload_metadata);

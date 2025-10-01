@@ -21,6 +21,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -83,6 +84,22 @@ class ComputationResults
   ComputationResults& operator=(const ComputationResults&) = delete;
   ComputationResults(ComputationResults&&) = default;
   ComputationResults& operator=(ComputationResults&&) = default;
+};
+
+enum class ReportOutcome { kSuccess, kPartialSuccess, kFailure };
+
+struct ReportResult {
+  ReportOutcome outcome = ReportOutcome::kSuccess;
+  // If the outcome is kPartialSuccess, this will contain the status of the
+  // last error that occurred during the report.
+  absl::Status status = absl::OkStatus();
+
+  // Creates a kSuccess or kFailure ReportResult based on the provided status.
+  static ReportResult FromStatus(absl::Status status) {
+    return ReportResult{.outcome = status.ok() ? ReportOutcome::kSuccess
+                                               : ReportOutcome::kFailure,
+                        .status = std::move(status)};
+  }
 };
 
 // An interface that represents a single Federated Compute protocol session.
@@ -305,7 +322,7 @@ class FederatedProtocol {
       const std::function<void(size_t)>& payload_uris_received_callback,
       const std::optional<std::string>& attestation_measurement) = 0;
 
-  // Reports the result of a federated computation to the server. Must only be
+  // Reports the results of a federated computation to the server. Must only be
   // called once and after a successful call to Checkin().
   // @param results the ComputationResults of a task.
   // @param plan_duration the duration for executing the plan in the plan
@@ -315,9 +332,10 @@ class FederatedProtocol {
   // @param payload_metadata the metadata of the payload, to be included in each
   // uploaded data blob header.
   // Returns:
-  // - On success, OK.
-  // - On error (e.g. an interruption, network error, or other unexpected
-  //   error):
+  // - On success, kSuccess outcome.
+  // - On failure of all uploads (e.g. an interruption, network error, or other
+  //   unexpected error):
+  //   - kFailure outcome.
   //   - ABORTED when one of the I/O operations got aborted by the server.
   //   - CANCELLED when one of the I/O operations was interrupted by the client
   //     (possibly due to a positive result from the should_abort callback).
@@ -325,7 +343,10 @@ class FederatedProtocol {
   //     message.
   //   - INTERNAL for other unexpected client-side errors.
   //   - any server-provided error code.
-  virtual absl::Status ReportCompleted(
+  // - On failure of some uploads:
+  //   - kPartialSuccess outcome.
+  //   - The error status of the last failed upload.
+  virtual ReportResult ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
       std::optional<std::string> task_identifier,
       std::optional<confidentialcompute::PayloadMetadata> payload_metadata) = 0;

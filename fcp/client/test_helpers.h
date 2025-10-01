@@ -510,7 +510,7 @@ class MockFederatedProtocol : public FederatedProtocol {
        const std::function<void(size_t)>& payload_uris_received_callback,
        std::optional<std::string> attestation_measurement));
 
-  absl::Status ReportCompleted(
+  ReportResult ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
       std::optional<std::string> aggregation_session_id,
       std::optional<confidentialcompute::PayloadMetadata> payload_metadata)
@@ -521,7 +521,7 @@ class MockFederatedProtocol : public FederatedProtocol {
                                aggregation_session_id, payload_metadata);
   };
   MOCK_METHOD(
-      absl::Status, MockReportCompleted,
+      ReportResult, MockReportCompleted,
       (ComputationResults results, absl::Duration plan_duration,
        std::optional<std::string> aggregation_session_id,
        std::optional<confidentialcompute::PayloadMetadata> payload_metadata));

@@ -476,14 +476,20 @@ void LogComputationOutcome(const engine::PlanResult& plan_result,
   }
 }
 
-void LogResultUploadStatus(PhaseLogger& phase_logger, absl::Status result,
+void LogResultUploadStatus(PhaseLogger& phase_logger,
+                           ReportResult report_result,
                            const NetworkStats& network_stats,
                            absl::Time time_before_result_upload,
                            absl::Time reference_time) {
-  if (result.ok()) {
+  //  TODO: b/448716561 - Add a method to PhaseLogger to log partial successes.
+  //  For now, we will log partial successes as completed uploads, since that's
+  //  how we treat them for contribution tracking.
+  if (report_result.outcome == ReportOutcome::kSuccess ||
+      report_result.outcome == ReportOutcome::kPartialSuccess) {
     phase_logger.LogResultUploadCompleted(
         network_stats, time_before_result_upload, reference_time);
   } else {
+    absl::Status result = report_result.status;
     auto message =
         absl::StrCat("Error reporting results: code: ", result.code(),
                      ", message: ", result.message());
@@ -545,12 +551,16 @@ absl::Status ReportPlanResult(
   absl::Status result = absl::InternalError("");
   if (computation_results.ok()) {
     FCP_RETURN_IF_ERROR(phase_logger.LogResultUploadStarted());
-    result = federated_protocol->ReportCompleted(
+    ReportResult report_result = federated_protocol->ReportCompleted(
         std::move(*computation_results),
         /*plan_duration=*/absl::Now() - run_plan_start_time, task_identifier,
         std::move(payload_metadata));
+    result = report_result.outcome == ReportOutcome::kFailure
+                 ? report_result.status
+                 : absl::OkStatus();
+
     LogResultUploadStatus(
-        phase_logger, result,
+        phase_logger, report_result,
         GetNetworkStatsSince(federated_protocol, /*fedselect_manager=*/nullptr,
                              before_report_stats),
         before_report_time, reference_time);
