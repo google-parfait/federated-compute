@@ -700,7 +700,8 @@ TEST(OakRustAttestationTest,
   reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
       ->mutable_root_layer()
       ->mutable_amd_sev()
-      ->mutable_min_tcb_version();
+      ->mutable_milan()
+      ->mutable_skip();
   *reference_values_from_extracted_evidence.mutable_oak_restricted_kernel()
        ->mutable_root_layer()
        ->mutable_amd_sev()

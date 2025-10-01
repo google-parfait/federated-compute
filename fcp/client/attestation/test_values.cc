@@ -108,7 +108,7 @@ ReferenceValues GetKnownValidReferenceValues() {
     oak_restricted_kernel {
       root_layer {
         amd_sev {
-          min_tcb_version {}
+          milan { skip {} }
           stage0 {
             digests {
               digests {
@@ -176,7 +176,9 @@ ReferenceValues GetSkipAllReferenceValues() {
     oak_restricted_kernel {
       root_layer {
         amd_sev {
-          min_tcb_version {}
+          milan { skip {} }
+          genoa { skip {} }
+          turin { skip {} }
           stage0 { skip {} }
         }
       }
