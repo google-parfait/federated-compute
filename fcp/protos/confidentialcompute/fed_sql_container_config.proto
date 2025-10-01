@@ -115,6 +115,9 @@ message FedSqlContainerPartitionedOutputConfiguration {
 // using the Ledger API.
 message FedSqlContainerConfigConstraints {
   // DP parameters for the FedSQL container.
+  // The epsilon and delta parameters represent an upper bound on the privacy
+  // usage. It should be fine to define server workloads that consume less than
+  // this budget, but not more.
   double epsilon = 1;
   double delta = 2;
   // The column names that are part of the DP unit.
