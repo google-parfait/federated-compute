@@ -102,6 +102,13 @@ message FedSqlContainerFinalizeConfiguration {
   reserved 2;
 }
 
+// The configuration for a partitioned output. This is specified through
+// `ReadResponse.first_response_configuration` for each partition.
+message FedSqlContainerPartitionedOutputConfiguration {
+  // The index of the partition that this output corresponds to.
+  uint64 partition_index = 1;
+}
+
 // Config constraints for the FedSQL container that must be validated before any
 // of the blobs written to the container are decrypted.
 // This is required when using the KeyManagementService API, it is ignored when
