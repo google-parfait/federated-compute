@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package google.internal.federatedcompute.v1;
 
+import "fcp/protos/confidentialcompute/payload_transparency.proto";
 import "proto/attestation/endorsement.proto";
 import "proto/attestation/evidence.proto";
 
@@ -59,4 +60,13 @@ message ConfidentialEncryptionConfig {
 
   // The attestation endorsements for the service providing the public key.
   oak.attestation.v1.Endorsements attestation_endorsements = 5;
+
+  // A signed endorsement of the key used for encrypting uploads. The payload
+  // will be a serialized fcp.confidentialcompute.Key. Before accessing the
+  // payload, the client should verify that the signatures and transparency log
+  // entries meet the client's transparency requirements.
+  //
+  // This field will eventually replace `public_key`, `attestation_evidence`,
+  // and `attestation_endorsements`.
+  fcp.confidentialcompute.SignedPayload encryption_key = 6;
 }

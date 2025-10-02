@@ -49,6 +49,7 @@ proto_library(
     srcs = ["verification_record.proto"],
     deps = [
         ":access_policy_proto",
+        ":payload_transparency_proto",
         "@oak//proto/attestation:endorsement_proto",
         "@oak//proto/attestation:evidence_proto",
     ],
@@ -270,6 +271,7 @@ proto_library(
     name = "signed_endorsements_proto",
     srcs = ["signed_endorsements.proto"],
     deps = [
+        ":payload_transparency_proto",
         "@oak//proto/attestation:endorsement_proto",
     ],
 )

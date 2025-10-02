@@ -24,6 +24,50 @@ package(
 )
 
 cc_library(
+    name = "attestation_transparency_verifier",
+    srcs = ["attestation_transparency_verifier.cc"],
+    hdrs = ["attestation_transparency_verifier.h"],
+    deps = [
+        ":attestation_verifier",
+        "//fcp/base",
+        "//fcp/confidentialcompute/payload_transparency",
+        "//fcp/protos/confidentialcompute:access_policy_endorsement_options_cc_proto",
+        "//fcp/protos/confidentialcompute:key_cc_proto",
+        "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
+        "//fcp/protos/confidentialcompute:verification_record_cc_proto",
+        "//fcp/protos/federatedcompute:confidential_encryption_config_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/time",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "attestation_transparency_verifier_test",
+    srcs = ["attestation_transparency_verifier_test.cc"],
+    deps = [
+        ":attestation_transparency_verifier",
+        ":log_attestation_records",
+        "//fcp/confidentialcompute:crypto",
+        "//fcp/confidentialcompute/payload_transparency",
+        "//fcp/protos/confidentialcompute:access_policy_endorsement_options_cc_proto",
+        "//fcp/protos/confidentialcompute:key_cc_proto",
+        "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
+        "//fcp/protos/confidentialcompute:signed_endorsements_cc_proto",
+        "//fcp/protos/federatedcompute:confidential_encryption_config_cc_proto",
+        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "attestation_verifier",
     srcs = ["attestation_verifier.cc"],
     hdrs = ["attestation_verifier.h"],

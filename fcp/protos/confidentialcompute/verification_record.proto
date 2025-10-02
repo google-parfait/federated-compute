@@ -17,6 +17,7 @@ syntax = "proto3";
 package fcp.confidentialcompute;
 
 import "fcp/protos/confidentialcompute/access_policy.proto";
+import "fcp/protos/confidentialcompute/payload_transparency.proto";
 import "proto/attestation/endorsement.proto";
 import "proto/attestation/evidence.proto";
 
@@ -42,4 +43,14 @@ message AttestationVerificationRecord {
   // `TaskAssignment.ConfidentialAggregationInfo.data_access_policy` field in
   // the `TaskAssignments` protocol.
   DataAccessPolicy data_access_policy = 3;
+
+  // The upload encryption key that was verified. This corresponds to the
+  // server-provided `ConfidentialEncryptionConfig.encryption_key` field in the
+  // `ConfidentialAggregations` protocol.
+  SignedPayload encryption_key = 4;
+
+  // The pipeline configuration that was verified. This corresponds to the
+  // server-provided `SignedEndorsements.pipeline_configuration`
+  // field in the `TaskAssignments` protocol.
+  SignedPayload pipeline_configuration = 5;
 }

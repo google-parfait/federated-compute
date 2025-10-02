@@ -26,6 +26,7 @@ proto_library(
     name = "confidential_encryption_config_proto",
     srcs = ["confidential_encryption_config.proto"],
     deps = [
+        "//fcp/protos/confidentialcompute:payload_transparency_proto",
         "@oak//proto/attestation:endorsement_proto",
         "@oak//proto/attestation:evidence_proto",
     ],

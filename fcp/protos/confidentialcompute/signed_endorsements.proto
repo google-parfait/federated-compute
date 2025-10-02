@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+import "fcp/protos/confidentialcompute/payload_transparency.proto";
 import "proto/attestation/endorsement.proto";
 
 option java_multiple_files = true;
@@ -27,4 +28,27 @@ message SignedEndorsements {
   // EndorsementReferenceValue before allowing the client-held data to be
   // uploaded.
   repeated oak.attestation.v1.SignedEndorsement signed_endorsement = 1;
+
+  // A signed endorsement for the configuration of pipelines that are permitted
+  // to process uploaded data. The payload will be a serialized
+  // PipelineConfiguration message. Before accessing the payload, the client
+  // should verify that the signatures and transparency log entries meet the
+  // client's transparency requirements.
+  //
+  // This field will eventually replace `signed_endorsement` and
+  // `google.internal.federatedcompute.v1.TaskAssignment.ConfidentialAggregationInfo.data_access_policy`.
+  SignedPayload pipeline_configuration = 2;
+
+  // Configuration for the pipeline(s) that will be permitted to process
+  // uploaded data. This message can hold both server-side information (e.g.
+  // DataAccessPolicy digest) as well as any client-side configuration. Larger
+  // payloads that are not needed by the client (e.g. DataAccessPolicy) will
+  // generally be specified by digest; each such field will specify where the
+  // full artifact can be downloaded from.
+  message PipelineConfiguration {
+    // The SHA-256 hash of the access policy which governs this pipeline. The
+    // full access policy can be retrieved from
+    // https://federatedcompute-pa.googleapis.com/data/transparency/sha2-256:{b16_hash}.
+    bytes access_policy_sha256 = 1;
+  }
 }
