@@ -23,6 +23,50 @@ package(
 )
 
 cc_library(
+    name = "payload_transparency",
+    srcs = ["payload_transparency.cc"],
+    hdrs = ["payload_transparency.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":rekor",
+        ":signatures",
+        "//fcp/base",
+        "//fcp/protos/confidentialcompute:access_policy_endorsement_options_cc_proto",
+        "//fcp/protos/confidentialcompute:key_cc_proto",
+        "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "payload_transparency_test",
+    srcs = ["payload_transparency_test.cc"],
+    deps = [
+        ":payload_transparency",
+        "//fcp/base:digest",
+        "//fcp/confidentialcompute:crypto",
+        "//fcp/protos/confidentialcompute:access_policy_endorsement_options_cc_proto",
+        "//fcp/protos/confidentialcompute:key_cc_proto",
+        "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
+        "//fcp/testing",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
     name = "rekor",
     srcs = ["rekor.cc"],
     hdrs = ["rekor.h"],

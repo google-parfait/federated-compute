@@ -16,11 +16,100 @@ syntax = "proto3";
 
 package fcp.confidentialcompute;
 
+import "google/protobuf/timestamp.proto";
+import "fcp/protos/confidentialcompute/key.proto";
+
 option java_package = "com.google.intelligence.fcp.confidentialcompute";
 option java_multiple_files = true;
 
-// TODO: b/444302065 - Add additional messages needed to prove a payload is
-// signed and included in a transparency log.
+// One or more signatures over an arbitrary payload. All uses of this message
+// should specify the type of the payload. This message is modeled after
+// COSE_Sign from RFC 9052.
+message SignedPayload {
+  // The payload that was signed.
+  bytes payload = 1;
+
+  // The signatures over the payload.
+  repeated Signature signatures = 2;
+
+  message Signature {
+    // A serialized Headers message containing additional claims about the
+    // payload added by the signing entity.
+    bytes headers = 1;
+
+    // The signature over the payload and headers. The signed payload is
+    //   "\15SignedPayload" + varint(headers.size()) + headers +
+    //   varint(payload.size()) + payload
+    oneof signature {
+      // A inline signature in IEEE P1363 format (raw `r || s`).
+      bytes raw_signature = 2;
+
+      // A log entry that contains the signature and proof of inclusion in a
+      // transparency log.
+      LogEntry log_entry = 3;
+    }
+
+    // The key to use to verify the payload. `verifier` may be omitted if the
+    // verifying key can be identified from context, but all such uses should be
+    // clearly documented and should treat `verifier` being set as an error.
+    oneof verifier {
+      // A key id indicating that the key is known to the client.
+      bytes verifying_key_id = 4;
+
+      // A nested SignedPayload message whose payload is a serialized Key,
+      // forming a chain of trust.
+      SignedPayload verifying_key = 5;
+    }
+
+    message Headers {
+      // The algorithm of the signing key. This header is required.
+      Key.Algorithm algorithm = 1;
+
+      // The time at which the signature was generated.
+      google.protobuf.Timestamp issued_at = 2;
+
+      // The time before which the signature should be considered invalid. If
+      // not set, `issued_at` should be used instead (if set).
+      google.protobuf.Timestamp not_before = 3;
+
+      // The time after which the signature should be considered invalid. The
+      // signature does not expire if this field is not set.
+      google.protobuf.Timestamp not_after = 4;
+
+      // Additional claims added by the signer. See
+      // https://github.com/project-oak/oak/blob/main/docs/tr/README.md#claims.
+      repeated string claims = 5;
+
+      // Signature of the payload using an Oak application signing key. If set,
+      // the payload should contain a way to obtain the evidence for the Oak VM
+      // that performed the signing. This signature is included as a header so
+      // that it's included in the signed payload for transparency log entries.
+      //
+      // This field will only contain `headers` and `raw_signature` and the
+      // headers will not contain another `oak_application_signature`.
+      Signature oak_application_signature = 6;
+
+      // In `oak_application_signature` only: The SHA-256 hash of the
+      // oak.session.v1.EndorsedEvidence message attesting to the attesting
+      // actor's identity. The full EndorsedEvidence can be retrieved from
+      // https://federatedcompute-pa.googleapis.com/data/transparency/sha2-256:{b16_hash}.
+      bytes endorsed_evidence_sha256 = 7;
+
+      // The SHA-256 hash of the payload's DataAccessPolicy. This header is not
+      // applicable to all payload types. The full access policy can be
+      // retrieved from
+      // https://federatedcompute-pa.googleapis.com/data/transparency/sha2-256:{b16_hash}.
+      bytes access_policy_sha256 = 8;
+    }
+  }
+}
+
+// A transparency log entry.
+message LogEntry {
+  oneof kind {
+    RekorLogEntry rekor = 1;
+  }
+}
 
 // A http://github.com/sigstore/rekor log entry, represented as a protocol
 // buffer for easier parsing on the client. Unused fields from the Rekor log

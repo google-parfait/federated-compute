@@ -94,6 +94,10 @@ cc_proto_library(
 proto_library(
     name = "payload_transparency_proto",
     srcs = ["payload_transparency.proto"],
+    deps = [
+        ":key_proto",
+        "@com_google_protobuf//:timestamp_proto",
+    ],
 )
 
 cc_proto_library(
@@ -292,6 +296,7 @@ proto_library(
     name = "access_policy_endorsement_options_proto",
     srcs = ["access_policy_endorsement_options.proto"],
     deps = [
+        ":key_proto",
         "@oak//proto/attestation:reference_value_proto",
     ],
 )
