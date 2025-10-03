@@ -32,6 +32,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/civil_time.h"
 #include "fcp/base/monitoring.h"
@@ -150,7 +152,8 @@ absl::Status GenerateAggregationTensorsFromExampleQueryResult(
     auto it = example_query_result.vector_data().vectors().find(vector_name);
     if (it == example_query_result.vector_data().vectors().end()) {
       return absl::DataLossError(
-          "Expected value not found in the example query result");
+          absl::StrCat("Expected value not found in the example query result: ",
+                       vector_name));
     }
     const ExampleQueryResult::VectorData::Values values = it->second;
     Tensor tensor;
@@ -364,7 +367,7 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
     const std::string& output_checkpoint_filename,
     bool use_client_report_wire_format, bool enable_event_time_data_upload,
     std::optional<absl::string_view> source_id, bool uses_confidential_agg,
-    bool enable_privacy_id_generation) {
+    bool enable_privacy_id_generation, bool enable_private_logger) {
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
   bool has_event_time_range = false;
@@ -426,6 +429,31 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
         return PlanResult(
             PlanOutcome::kExampleIteratorError,
             absl::DataLossError("Unexpected example query result format"));
+      }
+
+      if (enable_private_logger && example_query_result.result_source() ==
+                                       ExampleQueryResult::PRIVATE_LOGGER) {
+        // An ExampleQueryResult from PrivateLogger won't set the query name
+        // prefix appropriately, so we retroactively get it from
+        // the ExampleQuerySpec and rewrite the column names in order to keep
+        // compatibility with the existing federated sql stack.
+        ExampleQueryResult::VectorData new_vector_data;
+        for (auto& [result_vector_name, values] :
+             *example_query_result.mutable_vector_data()->mutable_vectors()) {
+          for (auto const& [spec_tensor_name, spec_output_vector] :
+               example_query.output_vector_specs()) {
+            if (spec_output_vector.vector_name() == result_vector_name ||
+                absl::EndsWith(spec_output_vector.vector_name(),
+                               absl::StrCat("/", result_vector_name))) {
+              (*new_vector_data
+                    .mutable_vectors())[spec_output_vector.vector_name()] =
+                  std::move(values);
+              break;
+            }
+          }
+        }
+        *example_query_result.mutable_vector_data() =
+            std::move(new_vector_data);
       }
       // We currently use the number of example query output rows as the
       // 'example count' for the purpose of diagnostic logs. We may want to

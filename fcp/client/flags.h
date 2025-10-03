@@ -222,6 +222,9 @@ class Flags {
   // stored in the encrypted payload.
 
   virtual bool enable_privacy_id_generation() const { return false; }
+
+  // If true, enables support for PrivateLogger in the federated compute client.
+  virtual bool enable_private_logger() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

@@ -360,7 +360,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceeds) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -455,7 +456,8 @@ TEST_F(ExampleQueryPlanEngineTest, MultipleQueries) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -553,7 +555,8 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -588,7 +591,8 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecTypeMismatch) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -605,7 +609,8 @@ TEST_F(ExampleQueryPlanEngineTest, FactoryNotFound) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -622,7 +627,8 @@ TEST_F(ExampleQueryPlanEngineTest, NoIteratorCreated) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -651,7 +657,8 @@ TEST_F(ExampleQueryPlanEngineTest, InvalidExampleQueryResultFormat) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -671,7 +678,8 @@ TEST_F(ExampleQueryPlanEngineTest,
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
   ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
@@ -692,6 +700,109 @@ TEST_F(ExampleQueryPlanEngineTest,
   absl::flat_hash_map<std::string, std::string> expected_tensors = {
       {kOutputIntTensorName, int_tensor->ToProto().SerializeAsString()},
       {kOutputStringTensorName, string_tensor->ToProto().SerializeAsString()}};
+
+  ASSERT_THAT(*tensors, UnorderedElementsAreArray(expected_tensors));
+}
+
+TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerVectorNamesAreRewritten) {
+  Initialize();
+  client_only_plan_.mutable_phase()
+      ->mutable_federated_example_query()
+      ->clear_aggregations();
+  // Set result source to PRIVATE_LOGGER.
+  example_query_result_.Clear();
+  example_query_result_.set_result_source(ExampleQueryResult::PRIVATE_LOGGER);
+
+  ExampleQueryResult::VectorData::Values entry_values;
+  entry_values.mutable_string_values()->add_value("value1");
+  entry_values.mutable_string_values()->add_value("value2");
+  (*example_query_result_.mutable_vector_data()->mutable_vectors())["entry"] =
+      entry_values;
+  ExampleQueryResult::VectorData::Values time_values;
+  time_values.mutable_string_values()->add_value("2025-10-02T17:30:00Z");
+  time_values.mutable_string_values()->add_value("2025-10-02T17:31:00Z");
+  (*example_query_result_.mutable_vector_data()
+        ->mutable_vectors())["_fcp_event_time"] = time_values;
+
+  // Update client_only_plan_ to use prefixed vector names in
+  // output_vector_specs. The example_query_result_ will use non-prefixed
+  // names ("entry", "_fcp_event_time"), and we expect RunPlan to match them
+  // via suffix and rewrite them to "my_upload_query_name/entry",
+  // "my_upload_query_name/_fcp_event_time".
+  client_only_plan_.mutable_phase()
+      ->mutable_example_query_spec()
+      ->clear_example_queries();
+  ExampleQuerySpec::OutputVectorSpec entry_vector_spec;
+  entry_vector_spec.set_vector_name("my_upload_query_name/entry");
+  entry_vector_spec.set_data_type(DataType::STRING);
+  ExampleQuerySpec::OutputVectorSpec time_vector_spec;
+  time_vector_spec.set_vector_name("my_upload_query_name/_fcp_event_time");
+  time_vector_spec.set_data_type(DataType::STRING);
+
+  ExampleQuerySpec::ExampleQuery example_query;
+  example_query.mutable_example_selector()->set_collection_uri(kCollectionUri);
+  (*example_query.mutable_output_vector_specs())["entry_agg"] =
+      entry_vector_spec;
+  (*example_query.mutable_output_vector_specs())["event_time_agg"] =
+      time_vector_spec;
+  client_only_plan_.mutable_phase()
+      ->mutable_example_query_spec()
+      ->mutable_example_queries()
+      ->Add(std::move(example_query));
+  AggregationConfig aggregation_config;
+  aggregation_config.mutable_federated_compute_checkpoint_aggregation();
+  (*client_only_plan_.mutable_phase()
+        ->mutable_federated_example_query()
+        ->mutable_aggregations())["entry_agg"] = aggregation_config;
+  (*client_only_plan_.mutable_phase()
+        ->mutable_federated_example_query()
+        ->mutable_aggregations())["event_time_agg"] = aggregation_config;
+
+  // We also need to update dataset_ to return the example_query_result_ with
+  // result_source set.
+  std::string example = example_query_result_.SerializeAsString();
+  dataset_.clear_client_data();
+  Dataset::ClientDataset client_dataset;
+  client_dataset.set_client_id("client_id");
+  client_dataset.add_example(example);
+  dataset_.mutable_client_data()->Add(std::move(client_dataset));
+  example_bytes_ = example.size();
+
+  EXPECT_CALL(
+      mock_opstats_logger_,
+      UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
+
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_,
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+  engine::PlanResult result = plan_engine.RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/true);
+
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+  ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
+
+  absl::string_view str =
+      result.federated_compute_checkpoints[0].payload.Flatten();
+  absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
+      ReadFCCheckpointTensors(str);
+  ASSERT_OK(tensors);
+
+  absl::StatusOr<Tensor> entry_tensor =
+      Tensor::Create(DT_STRING, TensorShape({2}),
+                     CreateTestData<absl::string_view>({"value1", "value2"}));
+  ASSERT_OK(entry_tensor.status());
+  absl::StatusOr<Tensor> time_tensor =
+      Tensor::Create(DT_STRING, TensorShape({2}),
+                     CreateTestData<absl::string_view>(
+                         {"2025-10-02T17:30:00Z", "2025-10-02T17:31:00Z"}));
+  ASSERT_OK(time_tensor.status());
+  absl::flat_hash_map<std::string, std::string> expected_tensors = {
+      {"entry_agg", entry_tensor->ToProto().SerializeAsString()},
+      {"event_time_agg", time_tensor->ToProto().SerializeAsString()}};
 
   ASSERT_THAT(*tensors, UnorderedElementsAreArray(expected_tensors));
 }
@@ -775,7 +886,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithEventTimeRange) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -899,7 +1011,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1021,7 +1134,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1076,7 +1190,8 @@ TEST_F(ExampleQueryPlanEngineTest, MissingEndEventTimeFails) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/true, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
 }
@@ -1134,7 +1249,8 @@ TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1227,7 +1343,8 @@ TEST_F(ExampleQueryPlanEngineTest, TwoQueryDirectDataUploadTaskSucceeds) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1336,7 +1453,8 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false);
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1513,7 +1631,8 @@ class PrivacyIdSplittingTest : public testing::Test {
                              bool enable_event_time_data_upload = true,
                              std::optional<std::string> source_id = "source_id",
                              bool uses_confidential_agg = true,
-                             bool enable_privacy_id_generation = true) {
+                             bool enable_privacy_id_generation = true,
+                             bool enable_private_logger = false) {
     ExampleQueryPlanEngine plan_engine(
         {example_iterator_factory_.get()}, &mock_opstats_logger_,
         /*example_iterator_query_recorder=*/nullptr,
@@ -1521,7 +1640,8 @@ class PrivacyIdSplittingTest : public testing::Test {
     return plan_engine.RunPlan(
         spec, "unused output checkpoint filename",
         use_client_report_wire_format, enable_event_time_data_upload, source_id,
-        uses_confidential_agg, enable_privacy_id_generation);
+        uses_confidential_agg, enable_privacy_id_generation,
+        enable_private_logger);
   }
 
   StrictMock<MockOpStatsLogger> mock_opstats_logger_;
@@ -1898,12 +2018,12 @@ TEST_F(PrivacyIdSplittingTest, PrivacyIdSplitEnabledEventTimeDisabled) {
   EXPECT_CALL(
       mock_opstats_logger_,
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
-  engine::PlanResult result =
-      RunPlan(client_only_plan_.phase().example_query_spec(),
-              /*use_client_report_wire_format=*/true,
-              /*enable_event_time_data_upload=*/false,
-              /*source_id=*/"source_id", /*uses_confidential_agg=*/true,
-              /*enable_privacy_id_generation=*/true);
+  engine::PlanResult result = RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/false,
+      /*source_id=*/"source_id", /*uses_confidential_agg=*/true,
+      /*enable_privacy_id_generation=*/true, /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
 
@@ -1935,12 +2055,12 @@ TEST_F(PrivacyIdSplittingTest,
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
-  engine::PlanResult result =
-      RunPlan(client_only_plan_.phase().example_query_spec(),
-              /*use_client_report_wire_format=*/true,
-              /*enable_event_time_data_upload=*/true,
-              /*source_id=*/"source_id", /*uses_confidential_agg=*/false,
-              /*enable_privacy_id_generation=*/true);
+  engine::PlanResult result = RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/true,
+      /*source_id=*/"source_id", /*uses_confidential_agg=*/false,
+      /*enable_privacy_id_generation=*/true, /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
   EXPECT_THAT(
@@ -1958,12 +2078,12 @@ TEST_F(PrivacyIdSplittingTest,
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
       /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
-  engine::PlanResult result =
-      RunPlan(client_only_plan_.phase().example_query_spec(),
-              /*use_client_report_wire_format=*/true,
-              /*enable_event_time_data_upload=*/true,
-              /*source_id=*/std::nullopt, /*uses_confidential_agg=*/true,
-              /*enable_privacy_id_generation=*/true);
+  engine::PlanResult result = RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/true,
+      /*source_id=*/std::nullopt, /*uses_confidential_agg=*/true,
+      /*enable_privacy_id_generation=*/true, /*enable_private_logger=*/false);
 
   EXPECT_THAT(result.outcome, PlanOutcome::kExampleIteratorError);
   EXPECT_THAT(

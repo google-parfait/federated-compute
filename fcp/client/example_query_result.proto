@@ -91,4 +91,15 @@ message ExampleQueryResult {
 
   // Statistic data and properties of an example query.
   ExampleQueryStats stats = 2;
+
+  enum ResultSource {
+    // The result source is unknown. Treated as EXAMPLE_STORE for backwards
+    // compatibility.
+    UNKNOWN = 0;
+    // The result was fetched from the example store.
+    EXAMPLE_STORE = 1;
+    // The result was fetched from the private logger.
+    PRIVATE_LOGGER = 2;
+  }
+  ResultSource result_source = 3;
 }
