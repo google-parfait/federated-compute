@@ -225,6 +225,12 @@ class Flags {
 
   // If true, enables support for PrivateLogger in the federated compute client.
   virtual bool enable_private_logger() const { return false; }
+
+  // If true, the attestation transparency verifier will be enabled for
+  // confidential aggregation.
+  virtual bool enable_attestation_transparency_verifier() const {
+    return false;
+  }
 };
 }  // namespace client
 }  // namespace fcp

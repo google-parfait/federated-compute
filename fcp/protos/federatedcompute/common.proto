@@ -108,6 +108,9 @@ message ResourceCapabilities {
   // Whether or not the client supports "Confidential Aggregation". This can be
   // used by the server to perform task filtering.
   bool supports_confidential_aggregation = 2;
+  // Whether or not the client supports the AttestationTransparencyVerifier
+  // for confidential aggregation.
+  bool supports_attestation_transparency_verifier = 3;
 }
 
 // Different file formats that may be used to compress resources.

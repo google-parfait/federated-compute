@@ -785,6 +785,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   RunSuccessfulMultipleTaskAssignments(
       bool eligibility_eval_enabled = true,
       bool enable_confidential_aggregation = false,
+      bool enable_attestation_transparency_verifier = false,
       std::optional<Resource> confidential_data_access_policy = std::nullopt,
       std::optional<Resource> signed_endorsements = std::nullopt) {
     if (eligibility_eval_enabled) {
@@ -806,6 +807,10 @@ class HttpFederatedProtocolTest : public ::testing::Test {
       request.mutable_resource_capabilities()
           ->set_supports_confidential_aggregation(true);
     }
+    if (enable_attestation_transparency_verifier) {
+      request.mutable_resource_capabilities()
+          ->set_supports_attestation_transparency_verifier(true);
+    }
     for (const auto& task_name : task_names) {
       request.add_task_names(task_name);
     }
@@ -825,7 +830,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         enable_confidential_aggregation
             ? 0
             : kMinimumClientsInServerVisibleAggregate,
-        confidential_data_access_policy);
+        confidential_data_access_policy, signed_endorsements);
     Resource plan_2;
     std::string plan_uri = "https://fake.uri/plan";
     plan_2.set_uri(plan_uri);
@@ -2469,6 +2474,7 @@ TEST_F(HttpFederatedProtocolTest,
   auto result = RunSuccessfulMultipleTaskAssignments(
       /*eligibility_eval_enabled*/ true,
       /*enable_confidential_aggregation=*/true,
+      /*enable_attestation_transparency_verifier=*/false,
       /*confidential_data_access_policy=*/access_policy_resource);
   ASSERT_OK(result);
   EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
@@ -2500,6 +2506,7 @@ TEST_F(
   auto result = RunSuccessfulMultipleTaskAssignments(
       /*eligibility_eval_enabled*/ true,
       /*enable_confidential_aggregation=*/true,
+      /*enable_attestation_transparency_verifier=*/false,
       /*confidential_data_access_policy=*/access_policy_resource);
   ASSERT_OK(result);
   EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
@@ -3824,6 +3831,44 @@ TEST_F(HttpFederatedProtocolTest,
 
 // TODO: b/307312707 -  Add a test for confidential aggregation with multiple
 // task assignment.
+
+TEST_F(HttpFederatedProtocolTest,
+       TestReportCompletedViaConfidentialAggWithAttestationTransparency) {
+  EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
+      .WillRepeatedly(Return(true));
+  EXPECT_CALL(mock_flags_, enable_attestation_transparency_verifier)
+      .WillRepeatedly(Return(true));
+
+  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+      /*eligibility_eval_enabled=*/true,
+      /*enable_confidential_aggregation=*/true));
+  confidentialcompute::SignedEndorsements signed_endorsements;
+  signed_endorsements.mutable_pipeline_configuration();
+  std::string serialized_signed_endorsements =
+      signed_endorsements.SerializeAsString();
+  Resource signed_endorsements_resource;
+  signed_endorsements_resource.mutable_inline_resource()->set_data(
+      serialized_signed_endorsements);
+  auto result = RunSuccessfulMultipleTaskAssignments(
+      /*eligibility_eval_enabled*/ true,
+      /*enable_confidential_aggregation=*/true,
+      /*enable_attestation_transparency_verifier=*/true,
+      /*confidential_data_access_policy=*/Resource::default_instance(),
+      /*signed_endorsements=*/signed_endorsements_resource);
+  ASSERT_OK(result);
+  EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
+  auto task_assignment_1 = result->task_assignments[kMultiTaskId_1];
+  ASSERT_OK(task_assignment_1);
+  EXPECT_EQ(
+      task_assignment_1->confidential_agg_info.value().signed_endorsements,
+      serialized_signed_endorsements);
+
+  auto task_assignment_2 = result->task_assignments[kMultiTaskId_2];
+  ASSERT_OK(task_assignment_2);
+  EXPECT_EQ(
+      task_assignment_1->confidential_agg_info.value().signed_endorsements,
+      serialized_signed_endorsements);
+}
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
   absl::Duration plan_duration = absl::Minutes(5);

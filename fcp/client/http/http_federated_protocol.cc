@@ -1027,6 +1027,10 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   if (flags_->enable_confidential_aggregation()) {
     request.mutable_resource_capabilities()
         ->set_supports_confidential_aggregation(true);
+    if (flags_->enable_attestation_transparency_verifier()) {
+      request.mutable_resource_capabilities()
+          ->set_supports_attestation_transparency_verifier(true);
+    }
   }
   for (const auto& task_name : task_names) {
     *request.add_task_names() = task_name;
