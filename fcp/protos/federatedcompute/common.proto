@@ -111,6 +111,9 @@ message ResourceCapabilities {
   // Whether or not the client supports the AttestationTransparencyVerifier
   // for confidential aggregation.
   bool supports_attestation_transparency_verifier = 3;
+  // Whether or not the client supports "Willow Secure Aggregation". This can be
+  // used by the server to perform task filtering.
+  bool supports_willow_secure_aggregation = 4;
 }
 
 // Different file formats that may be used to compress resources.

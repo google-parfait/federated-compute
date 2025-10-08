@@ -251,6 +251,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       ComputationResults results, absl::Duration plan_duration,
       PerTaskInfo& task_info,
       std::optional<confidentialcompute::PayloadMetadata> payload_metadata);
+
   // Helper function to perform a StartDataUploadRequest and a ReportTaskResult
   // request concurrently.
   // This method will only return the response from the StartDataUploadRequest.

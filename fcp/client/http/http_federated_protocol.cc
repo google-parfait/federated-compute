@@ -487,6 +487,10 @@ HttpFederatedProtocol::PerformEligibilityEvalTaskRequest() {
     request.mutable_resource_capabilities()
         ->set_supports_confidential_aggregation(true);
   }
+  if (flags_->enable_willow_secure_aggregation()) {
+    request.mutable_resource_capabilities()
+        ->set_supports_willow_secure_aggregation(true);
+  }
 
   request.mutable_resource_capabilities()->add_supported_compression_formats(
       ResourceCompressionFormat::RESOURCE_COMPRESSION_FORMAT_GZIP);
@@ -735,6 +739,10 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
   if (flags_->enable_confidential_aggregation()) {
     request.mutable_resource_capabilities()
         ->set_supports_confidential_aggregation(true);
+  }
+  if (flags_->enable_willow_secure_aggregation()) {
+    request.mutable_resource_capabilities()
+        ->set_supports_willow_secure_aggregation(true);
   }
 
   if (attestation_measurement.has_value()) {
@@ -1031,6 +1039,10 @@ absl::StatusOr<InMemoryHttpResponse> HttpFederatedProtocol::
       request.mutable_resource_capabilities()
           ->set_supports_attestation_transparency_verifier(true);
     }
+  }
+  if (flags_->enable_willow_secure_aggregation()) {
+    request.mutable_resource_capabilities()
+        ->set_supports_willow_secure_aggregation(true);
   }
   for (const auto& task_name : task_names) {
     *request.add_task_names() = task_name;
