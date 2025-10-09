@@ -38,6 +38,10 @@ message ExampleIteratorQueries {
 // Results from a task, including whether the task succeeded or not, and
 // (optional) the example iterator queries that are used during the task.
 message TaskResultInfo {
+  // Whether the task succeeded or not.
   bool result = 1;
+  // The example iterator queries that were used during the task.
   ExampleIteratorQueries example_iterator_queries = 2;
+  // The name of the task.
+  string task_name = 3;
 }

@@ -1716,6 +1716,9 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     } else {
       task_result_info.set_result(false);
     }
+    if (flags->enable_private_logger()) {
+      task_result_info.set_task_name(task_assignment.task_name);
+    }
 
     *task_result_info.mutable_example_iterator_queries() =
         example_iterator_query_recorder->StopRecordingAndGetQueries();
@@ -2009,6 +2012,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
         task_result_info.set_result(true);
       } else {
         task_result_info.set_result(false);
+      }
+      if (flags->enable_private_logger()) {
+        task_result_info.set_task_name(checkin_result->task_name);
       }
 
       *task_result_info.mutable_example_iterator_queries() =
