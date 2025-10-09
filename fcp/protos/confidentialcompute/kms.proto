@@ -225,6 +225,11 @@ message RegisterPipelineInvocationRequest {
   // The serialized DataAccessPolicy messages for data that will be accessed by
   // the pipeline.
   repeated bytes authorized_logical_pipeline_policies = 5 [ctype = CORD];
+
+  // Whether the response should include metadata about the keys to which the
+  // pipeline will have access. Including this information increases the cost of
+  // the request.
+  bool include_keys_in_response = 6;
 }
 
 message RegisterPipelineInvocationResponse {
@@ -235,6 +240,10 @@ message RegisterPipelineInvocationResponse {
   // while the pipeline is running if multiple variants are running
   // concurrently.
   LogicalPipelineState logical_pipeline_state = 2;
+
+  // Metadata about the keys, only populated if `include_key_metadata` was true
+  // in the request.
+  repeated Keyset.Key keys = 3;
 }
 
 message AuthorizeConfidentialTransformRequest {
@@ -332,6 +341,13 @@ message AuthorizeConfidentialTransformResponse {
     // SHA-256 hashes of all the AuthorizedLogicalPipelinePolicies authorizing
     // this pipeline invocation.
     repeated bytes authorized_logical_pipeline_policies_hashes = 3;
+
+    // The ids of decryption keys that were omitted from
+    // `ProtectedResponse.decryption_keys`, e.g. because they expire before
+    // the pipeline invocation's intermediates TTL. The transform may use this
+    // information to avoid processing matching inputs or to provide more
+    // user-friendly error messages.
+    repeated bytes omitted_decryption_key_ids = 4;
   }
 }
 
