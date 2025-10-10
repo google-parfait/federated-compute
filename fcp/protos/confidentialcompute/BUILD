@@ -81,6 +81,11 @@ cc_proto_library(
     deps = [":key_proto"],
 )
 
+py_proto_library(
+    name = "key_py_pb2",
+    deps = [":key_proto"],
+)
+
 proto_library(
     name = "payload_metadata_proto",
     srcs = ["payload_metadata.proto"],
