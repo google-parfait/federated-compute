@@ -55,6 +55,12 @@ message FedSqlContainerInitializeConfiguration {
 
   // Configuration for running private inference in FedSQL container.
   InferenceInitializeConfiguration inference_init_config = 6;
+
+  // The FileDescriptorSet bytes for the logged message.
+  bytes logged_message_descriptor_set = 7;
+
+  // The fully qualified name of the logged message.
+  string logged_message_name = 8;
 }
 
 enum AggCoreAggregationType {
