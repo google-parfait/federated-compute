@@ -52,8 +52,14 @@ namespace client {
 // * N QuantizedTensors, whose string keys must map to the tensor names
 //   provided in the server's CheckinResponse's SideChannelExecutionInfo.
 using TFCheckpoint = std::string;
-// Data type used to represent Federated Compute wire format checkpoint.
-using FCCheckpoint = absl::Cord;
+// A Federated Compute wire format checkpoint and its metadata.
+struct FederatedComputeCheckpoint {
+  absl::Cord payload;
+  std::optional<fcp::confidentialcompute::PayloadMetadata> metadata;
+};
+// Data type used to represent multiple Federated Compute wire format
+// checkpoints and their metadata.
+using FCCheckpoints = std::vector<FederatedComputeCheckpoint>;
 struct QuantizedTensor {
   std::vector<uint64_t> values;
   int32_t bitwidth = 0;
@@ -74,10 +80,10 @@ struct QuantizedTensor {
 class ComputationResults
     : public absl::node_hash_map<
           std::string,
-          std::variant<TFCheckpoint, QuantizedTensor, FCCheckpoint>> {
+          std::variant<TFCheckpoint, QuantizedTensor, FCCheckpoints>> {
  public:
   using Base = absl::node_hash_map<
-      std::string, std::variant<TFCheckpoint, QuantizedTensor, FCCheckpoint>>;
+      std::string, std::variant<TFCheckpoint, QuantizedTensor, FCCheckpoints>>;
   using Base::Base;
   using Base::operator=;
   ComputationResults(const ComputationResults&) = delete;
@@ -329,8 +335,6 @@ class FederatedProtocol {
   //        engine. Does not include time spent on downloading the plan.
   // @param task_identifier the identifier of the task, this field is only
   //        filled when the task is assigned via multiple task assignment.
-  // @param payload_metadata the metadata of the payload, to be included in each
-  // uploaded data blob header.
   // Returns:
   // - On success, kSuccess outcome.
   // - On failure of all uploads (e.g. an interruption, network error, or other
@@ -348,8 +352,7 @@ class FederatedProtocol {
   //   - The error status of the last failed upload.
   virtual ReportResult ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
-      std::optional<std::string> task_identifier,
-      std::optional<confidentialcompute::PayloadMetadata> payload_metadata) = 0;
+      std::optional<std::string> task_identifier) = 0;
 
   // Reports the unsuccessful result of a federated computation to the server.
   // Must only be called once and after a successful call to Checkin().

@@ -58,7 +58,6 @@
 #include "fcp/client/stats.h"
 #include "fcp/client/task_result_info.pb.h"
 #include "fcp/client/tensorflow/tensorflow_runner.h"
-#include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
 #include "fcp/protos/opstats.pb.h"
@@ -512,19 +511,15 @@ class MockFederatedProtocol : public FederatedProtocol {
 
   ReportResult ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
-      std::optional<std::string> aggregation_session_id,
-      std::optional<confidentialcompute::PayloadMetadata> payload_metadata)
-      final {
+      std::optional<std::string> aggregation_session_id) final {
     network_stats_ += kReportCompletedNetworkStats;
     retry_window_ = GetPostReportCompletedRetryWindow();
     return MockReportCompleted(std::move(results), plan_duration,
-                               aggregation_session_id, payload_metadata);
+                               aggregation_session_id);
   };
-  MOCK_METHOD(
-      ReportResult, MockReportCompleted,
-      (ComputationResults results, absl::Duration plan_duration,
-       std::optional<std::string> aggregation_session_id,
-       std::optional<confidentialcompute::PayloadMetadata> payload_metadata));
+  MOCK_METHOD(ReportResult, MockReportCompleted,
+              (ComputationResults results, absl::Duration plan_duration,
+               std::optional<std::string> aggregation_session_id));
 
   absl::Status ReportNotCompleted(
       engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,

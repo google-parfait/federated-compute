@@ -29,7 +29,6 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/cord.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -61,11 +60,6 @@ enum class PlanOutcome {
   kExampleIteratorError,
 };
 
-struct FederatedComputeCheckpoint {
-  absl::Cord payload;
-  std::optional<fcp::confidentialcompute::PayloadMetadata> metadata;
-};
-
 // The result of a call to `SimplePlanEngine::RunPlan` or
 // `TfLitePlanEngine::RunPlan`.
 struct PlanResult {
@@ -76,9 +70,7 @@ struct PlanResult {
   // The secagg tensors from the plan execution.
   absl::flat_hash_map<std::string, QuantizedTensor> secagg_tensor_map;
   // Only set if 'outcome' is 'kSuccess' and the federated compute wire format
-  // is enabled, otherwise this is empty. Currently only supports a single
-  // checkpoint.
-  // TODO: b/422862369 - support multiple checkpoints.
+  // is enabled, otherwise this is empty.
   std::vector<FederatedComputeCheckpoint> federated_compute_checkpoints;
   // When the outcome is `kSuccess`, the status is ok. Otherwise, this status
   // contain the original error status which leads to the PlanOutcome.

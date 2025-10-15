@@ -108,9 +108,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
 
   ReportResult ReportCompleted(
       ComputationResults results, absl::Duration plan_duration,
-      std::optional<std::string> task_identifier,
-      std::optional<confidentialcompute::PayloadMetadata> payload_metadata)
-      override;
+      std::optional<std::string> task_identifier) override;
 
   absl::Status ReportNotCompleted(
       engine::PhaseOutcome phase_outcome, absl::Duration plan_duration,
@@ -249,8 +247,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // aggregation.
   ReportResult ReportViaSimpleOrConfidentialAggregation(
       ComputationResults results, absl::Duration plan_duration,
-      PerTaskInfo& task_info,
-      std::optional<confidentialcompute::PayloadMetadata> payload_metadata);
+      PerTaskInfo& task_info);
 
   // Helper function to perform a StartDataUploadRequest and a ReportTaskResult
   // request concurrently.

@@ -1192,8 +1192,7 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
 
 ReportResult HttpFederatedProtocol::ReportCompleted(
     ComputationResults results, absl::Duration plan_duration,
-    std::optional<std::string> task_identifier,
-    std::optional<PayloadMetadata> payload_metadata) {
+    std::optional<std::string> task_identifier) {
   FCP_LOG(INFO) << "Reporting outcome: " << static_cast<int>(engine::COMPLETED);
   PerTaskInfo* task_info;
   if (task_identifier.has_value()) {
@@ -1217,8 +1216,7 @@ ReportResult HttpFederatedProtocol::ReportCompleted(
     if (std::find_if(results.begin(), results.end(),
                      find_secagg_tensor_lambda) == results.end()) {
       return ReportViaSimpleOrConfidentialAggregation(
-          std::move(results), plan_duration, *task_info,
-          std::move(payload_metadata));
+          std::move(results), plan_duration, *task_info);
     } else {
       return ReportResult::FromStatus(ReportViaSecureAggregation(
           std::move(results), plan_duration, *task_info));
@@ -1227,12 +1225,10 @@ ReportResult HttpFederatedProtocol::ReportCompleted(
     switch (task_info->aggregation_type) {
       case AggregationType::kSimpleAggregation:
         return ReportViaSimpleOrConfidentialAggregation(
-            std::move(results), plan_duration, *task_info,
-            std::move(payload_metadata));
+            std::move(results), plan_duration, *task_info);
       case AggregationType::kConfidentialAggregation:
         return ReportViaSimpleOrConfidentialAggregation(
-            std::move(results), plan_duration, *task_info,
-            std::move(payload_metadata));
+            std::move(results), plan_duration, *task_info);
       case AggregationType::kSecureAggregation:
         return ReportResult::FromStatus(ReportViaSecureAggregation(
             std::move(results), plan_duration, *task_info));
@@ -1247,7 +1243,7 @@ ReportResult HttpFederatedProtocol::ReportCompleted(
 
 ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
     ComputationResults results, absl::Duration plan_duration,
-    PerTaskInfo& task_info, std::optional<PayloadMetadata> payload_metadata) {
+    PerTaskInfo& task_info) {
   // TODO: b/307312707 -  Remove the kUnknown check once the
   // Flags::enable_confidential_aggregation() flag is removed.
   FCP_CHECK(task_info.aggregation_type == AggregationType::kUnknown ||
@@ -1268,7 +1264,7 @@ ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
   bool enable_lightweight_client_report_wire_format =
       flags_->enable_lightweight_client_report_wire_format();
   if (!enable_lightweight_client_report_wire_format &&
-      std::holds_alternative<FCCheckpoint>(result)) {
+      std::holds_alternative<FCCheckpoints>(result)) {
     return ReportResult::FromStatus(absl::InternalError(
         absl::StrCat(aggregation_type_readable,
                      " computation produced FC Wire Format but this feature is "
@@ -1279,17 +1275,19 @@ ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
   std::vector<std::optional<PayloadMetadata>> checkpoint_metadata;
   bool should_report_lightweight_client_report_wire_format =
       enable_lightweight_client_report_wire_format &&
-      std::holds_alternative<FCCheckpoint>(result);
+      std::holds_alternative<FCCheckpoints>(result);
   if (should_report_lightweight_client_report_wire_format) {
-    // TODO: b/300128447 - avoid copying serialized checkpoint once http
-    // federated protocol supports absl::Cord
-    std::string data;
-    absl::CopyCordToString(std::get<FCCheckpoint>(result), &data);
-    result_data.push_back(std::move(data));
-    checkpoint_metadata.push_back(payload_metadata);
+    for (auto& checkpoint : std::get<FCCheckpoints>(result)) {
+      // TODO: b/300128447 - avoid copying serialized checkpoint once http
+      // federated protocol supports absl::Cord
+      std::string data;
+      absl::CopyCordToString(checkpoint.payload, &data);
+      result_data.push_back(std::move(data));
+      checkpoint_metadata.push_back(std::move(checkpoint.metadata));
+    }
   } else {
     result_data.push_back(std::get<TFCheckpoint>(result));
-    checkpoint_metadata.push_back(payload_metadata);
+    checkpoint_metadata.push_back(std::nullopt);
   }
 
   if (!flags_->enable_privacy_id_generation()) {
@@ -1342,8 +1340,6 @@ ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
   // If there are more per_upload_infos than result_data, then we have a bug.
   FCP_CHECK(per_upload_infos.size() <= result_data.size());
 
-  // TODO: b/422862369 - Set last_error status if per_upload_infos.size() <
-  // result_data.size() once we can report partial failures.
   int num_successful_uploads = 0;
   for (int i = 0; i < per_upload_infos.size(); ++i) {
     PerUploadInfo& per_upload_info = per_upload_infos[i];
@@ -1371,8 +1367,11 @@ ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
                                   last_error_status.ToString())));
   }
 
-  // TODO: b/422862369 - Report a partial failure if num_successful_uploads <
-  // result_data.size()
+  if (!last_error_status.ok()) {
+    return ReportResult{.outcome = ReportOutcome::kPartialSuccess,
+                        .status = last_error_status};
+  }
+
   return ReportResult::FromStatus(absl::OkStatus());
 }
 
