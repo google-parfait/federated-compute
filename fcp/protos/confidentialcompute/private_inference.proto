@@ -27,6 +27,23 @@ message InferenceConfiguration {
   oneof model_config {
     GemmaConfiguration gemma_config = 2;
   }
+  // Additional customer-facing arguments affecting inference at runtime.
+  RuntimeConfig runtime_config = 3;
+}
+
+// A message containing different optional arguments for inference runtime. For
+// all arguments, if no parameter is set, the default values as specified in the
+// TEE-hosted model engine will be used.
+message RuntimeConfig {
+  // The maximum number of characters in the prompt to be sent to the model.
+  int32 max_prompt_size = 1;
+  // The length of the sequence to be processed. Overrides the default value of
+  // the chosen model engine if desired to process longer prompts at expense of
+  // higher RAM consumption and longer pipeline runs.
+  int32 seq_len = 2;
+  // Number of tokens to generate for each inference run. Limiting the output
+  // can significantly improve performance.
+  int32 max_generated_tokens = 3;
 }
 
 // A single private inference task to execute inside the TEE-hosted
