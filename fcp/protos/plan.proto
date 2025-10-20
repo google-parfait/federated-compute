@@ -540,6 +540,11 @@ message ExampleQuerySpec {
     //
     // If this field is set, output_vector_specs must be empty.
     string direct_output_tensor_name = 3;
+
+    // The minimum number of output rows required to satisfy the data
+    // availability policy. If the number of output rows is less than this
+    // value, the client will drop out.
+    int32 min_output_row_count = 4;
   }
 
   // The queries to run.
