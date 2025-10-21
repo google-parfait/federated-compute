@@ -44,6 +44,9 @@ message RuntimeConfig {
   // Number of tokens to generate for each inference run. Limiting the output
   // can significantly improve performance.
   int32 max_generated_tokens = 3;
+  // The difference to apply to the default model temperature of 1.0. A negative
+  // value will cool the model, while a positive value will heat the model.
+  double temperature_diff = 4;
 }
 
 // A single private inference task to execute inside the TEE-hosted
