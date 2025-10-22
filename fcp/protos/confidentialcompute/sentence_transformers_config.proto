@@ -1,0 +1,46 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";  // Our OSS build does not support editions.
+
+package fcp.confidentialcompute;
+
+option java_multiple_files = true;
+option java_package = "com.google.intelligence.fcp.confidentialcompute";
+option java_outer_classname = "SentenceTransformersConfigProto";
+
+// The fields in this config maps to the input parameters for the
+// SentenceTransformer.encode() method:
+// https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/SentenceTransformer.py
+message EncodeConfig {
+  // The prompt to use for encoding.
+  // e.g. for encoding gemma, to generate optimized embedding for clustering,
+  // use the prompt: "task: clustering | query: {content}".  The content is the
+  // original text to be encoded.
+  string prompt = 1;
+}
+
+// Configures the SentenceTransformers container initialization.
+message SentenceTransformersContainerInitializeConfiguration {
+  // The configuration_id for the model artifacts blob. It should match
+  // StreamInitializeRequest.write_configuration.first_request_metadata.configuration_id
+  // for the model artifacts blob.
+  // The model artifacts is a directory containing the model weights, tokenizer
+  // model and various config files. The whole directory is compressed into one
+  // blob.
+  string model_artifacts_configuration_id = 1;
+
+  // The configuration for the encode() method.
+  EncodeConfig encode_config = 2;
+}

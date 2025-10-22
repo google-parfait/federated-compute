@@ -269,6 +269,16 @@ cc_proto_library(
     deps = [":blob_data_proto"],
 )
 
+proto_library(
+    name = "sentence_transformers_config_proto",
+    srcs = ["sentence_transformers_config.proto"],
+)
+
+cc_proto_library(
+    name = "sentence_transformers_config_cc_proto",
+    deps = [":sentence_transformers_config_proto"],
+)
+
 # --------------------------------------------------------------------
 # signed_endorsements.proto
 
