@@ -34,6 +34,8 @@ inline constexpr char kEventTimeColumnName[] =
 inline constexpr char kPrivacyIdColumnName[] =
     "confidential_compute_privacy_id";
 
+inline constexpr char kPrivateLoggerEntryKey[] = "entry";
+
 }  // namespace confidential_compute
 }  // namespace fcp
 
