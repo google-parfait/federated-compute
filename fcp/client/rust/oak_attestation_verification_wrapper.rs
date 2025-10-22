@@ -18,7 +18,7 @@ extern crate alloc;
 
 use alloc::{boxed::Box, format, sync::Arc, vec};
 use oak_attestation_verification::{
-    results::{get_hybrid_encryption_public_key, get_signing_public_key},
+    results::{unique_hybrid_encryption_public_key, unique_signing_public_key},
     AmdSevSnpDiceAttestationVerifier, AmdSevSnpPolicy, ContainerPolicy, FirmwarePolicy,
     InsecureAttestationVerifier, KernelPolicy, SystemPolicy,
 };
@@ -110,8 +110,8 @@ pub fn verify_attestation(
     // Callers expect the extracted evidence to be populated.
     if results.extracted_evidence.is_none() {
         results.extracted_evidence = Some(ExtractedEvidence {
-            signing_public_key: get_signing_public_key(&results).cloned().unwrap_or_default(),
-            encryption_public_key: get_hybrid_encryption_public_key(&results)
+            signing_public_key: unique_signing_public_key(&results).cloned().unwrap_or_default(),
+            encryption_public_key: unique_hybrid_encryption_public_key(&results)
                 .cloned()
                 .unwrap_or_default(),
             ..Default::default()
