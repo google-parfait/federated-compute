@@ -169,6 +169,11 @@ void LogComputationOutcome(engine::PlanResult plan_result,
           plan_result.original_status, plan_result.example_stats,
           NetworkStats(), run_plan_start_time);
       break;
+    case engine::PlanOutcome::kInsufficientData:
+      phase_logger.LogComputationInsufficientData(
+          plan_result.original_status, plan_result.example_stats,
+          NetworkStats(), run_plan_start_time, reference_time);
+      break;
   }
 }
 

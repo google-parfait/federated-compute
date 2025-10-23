@@ -402,7 +402,8 @@ PlanResultAndCheckpointFile RunPlanWithExampleQuerySpec(
       client_phase.example_query_spec(), checkpoint_output_filename,
       use_client_report_wire_format, flags->enable_event_time_data_upload(),
       source_id, checkin_result.confidential_agg_info.has_value(),
-      flags->enable_privacy_id_generation(), flags->enable_private_logger());
+      flags->enable_privacy_id_generation(), flags->enable_private_logger(),
+      flags->drop_out_based_data_availability());
   PlanResultAndCheckpointFile result(std::move(plan_result));
   result.checkpoint_filename = checkpoint_output_filename;
   return result;
@@ -469,6 +470,11 @@ void LogComputationOutcome(const engine::PlanResult& plan_result,
       phase_logger.LogComputationExampleIteratorError(
           plan_result.original_status, plan_result.example_stats, network_stats,
           run_plan_start_time);
+      break;
+    case engine::PlanOutcome::kInsufficientData:
+      phase_logger.LogComputationInsufficientData(
+          plan_result.original_status, plan_result.example_stats, network_stats,
+          run_plan_start_time, reference_time);
       break;
   }
 }
@@ -561,8 +567,12 @@ absl::Status ReportPlanResult(
         before_report_time, reference_time);
   } else {
     FCP_RETURN_IF_ERROR(phase_logger.LogFailureUploadStarted());
+    engine::PhaseOutcome phase_outcome = engine::PhaseOutcome::ERROR;
+    if (absl::IsFailedPrecondition(computation_results.status())) {
+      phase_outcome = engine::PhaseOutcome::INSUFFICIENT_DATA;
+    }
     result = federated_protocol->ReportNotCompleted(
-        engine::PhaseOutcome::ERROR,
+        phase_outcome,
         /*plan_duration=*/absl::Now() - run_plan_start_time, task_identifier);
     LogFailureUploadStatus(
         phase_logger, result,

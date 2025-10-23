@@ -235,6 +235,11 @@ class Flags {
   // If true, willow secure aggregation is advertised & can be used for uploads.
   // The willow protocol is described in https://eprint.iacr.org/2024/936.
   virtual bool enable_willow_secure_aggregation() const { return false; }
+
+  // If true, data availability policies for lightweight tasks will always
+  // return true, but then drop out if not enough data is returned during
+  // execution.
+  virtual bool drop_out_based_data_availability() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

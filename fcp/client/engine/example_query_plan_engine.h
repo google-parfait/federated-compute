@@ -56,7 +56,8 @@ class ExampleQueryPlanEngine {
       const std::string& output_checkpoint_filename,
       bool use_client_report_wire_format, bool enable_event_time_data_upload,
       std::optional<absl::string_view> source_id, bool uses_confidential_agg,
-      bool enable_privacy_id_generation, bool enable_private_logger);
+      bool enable_privacy_id_generation, bool enable_private_logger,
+      bool drop_out_based_data_availability);
 
  private:
   std::vector<ExampleIteratorFactory*> example_iterator_factories_;

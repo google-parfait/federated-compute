@@ -290,6 +290,12 @@ class MockEventPublisher : public EventPublisher {
                const NetworkStats& network_stats,
                absl::Duration phase_duration),
               (override));
+  MOCK_METHOD(void, PublishComputationInsufficientData,
+              (absl::string_view error_message,
+               const ExampleStats& example_stats,
+               const NetworkStats& network_stats,
+               absl::Duration phase_duration),
+              (override));
   MOCK_METHOD(void, PublishResultUploadStarted, (), (override));
   MOCK_METHOD(void, PublishResultUploadIOError,
               (absl::string_view error_message,
@@ -718,6 +724,8 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, enable_privacy_id_generation, (), (const, override));
   MOCK_METHOD(bool, enable_attestation_transparency_verifier, (),
               (const, override));
+  MOCK_METHOD(bool, drop_out_based_data_availability, (), (const, override));
+  MOCK_METHOD(bool, enable_private_logger, (), (const, override));
 };
 
 // Helper methods for extracting opstats fields from TF examples.
@@ -923,6 +931,11 @@ class MockPhaseLogger : public PhaseLogger {
                const NetworkStats& network_stats,
                absl::Time run_plan_start_time, absl::Time reference_time,
                (std::optional<int64_t> min_sep_policy_index)),
+              (override));
+  MOCK_METHOD(void, LogComputationInsufficientData,
+              (absl::Status error_status, const ExampleStats& example_stats,
+               const NetworkStats& network_stats,
+               absl::Time run_plan_start_time, absl::Time reference_time),
               (override));
   MOCK_METHOD(absl::Status, LogResultUploadStarted, (), (override));
   MOCK_METHOD(void, LogResultUploadIOError,

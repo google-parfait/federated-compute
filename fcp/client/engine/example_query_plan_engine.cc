@@ -367,7 +367,8 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
     const std::string& output_checkpoint_filename,
     bool use_client_report_wire_format, bool enable_event_time_data_upload,
     std::optional<absl::string_view> source_id, bool uses_confidential_agg,
-    bool enable_privacy_id_generation, bool enable_private_logger) {
+    bool enable_privacy_id_generation, bool enable_private_logger,
+    bool drop_out_based_data_availability) {
   std::atomic<int> total_example_count = 0;
   std::atomic<int64_t> total_example_size_bytes = 0;
   bool has_event_time_range = false;
@@ -431,6 +432,15 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
             absl::DataLossError("Unexpected example query result format"));
       }
 
+      if (drop_out_based_data_availability &&
+          example_query_result.stats().output_rows_count() <
+              example_query.min_output_row_count()) {
+        return PlanResult(
+            PlanOutcome::kInsufficientData,
+            absl::FailedPreconditionError(
+                "Not enough output rows to satisfy min_output_row_count"));
+      }
+
       if (enable_private_logger && example_query_result.result_source() ==
                                        ExampleQueryResult::PRIVATE_LOGGER) {
         // An ExampleQueryResult from PrivateLogger won't set the query name
@@ -455,6 +465,7 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
         *example_query_result.mutable_vector_data() =
             std::move(new_vector_data);
       }
+
       // We currently use the number of example query output rows as the
       // 'example count' for the purpose of diagnostic logs. We may want to
       // reconsider this in the future and introduce a proper notion of the
@@ -545,6 +556,13 @@ PlanResult ExampleQueryPlanEngine::RunPlan(
                             example.status());
         }
         example_query_results.push_back(std::move(*example));
+      }
+      if (drop_out_based_data_availability &&
+          example_query_results.size() < example_query.min_output_row_count()) {
+        return PlanResult(
+            PlanOutcome::kInsufficientData,
+            absl::FailedPreconditionError(
+                "Not enough output rows to satisfy min_output_row_count"));
       }
       direct_example_query_results[example_query.direct_output_tensor_name()] =
           std::move(example_query_results);

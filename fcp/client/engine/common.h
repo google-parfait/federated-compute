@@ -58,6 +58,8 @@ enum class PlanOutcome {
   kInvalidArgument,
   // An example iterator error occurred.
   kExampleIteratorError,
+  // The client had insufficient data to continue.
+  kInsufficientData,
 };
 
 // The result of a call to `SimplePlanEngine::RunPlan` or

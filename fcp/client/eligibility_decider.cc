@@ -186,6 +186,10 @@ absl::StatusOr<bool> ComputeDataAvailabilityEligibility(
     const DataAvailabilityPolicy& data_availability_policy,
     std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
     const Flags& flags) {
+  if (flags.drop_out_based_data_availability() &&
+      data_availability_policy.use_example_query_result_format()) {
+    return true;
+  }
   const ExampleSelector& selector = data_availability_policy.selector();
   engine::ExampleIteratorFactory* iterator_factory =
       FindExampleIteratorFactory(selector, example_iterator_factories);

@@ -197,6 +197,11 @@ class PhaseLoggerImpl : public PhaseLogger {
                                  const NetworkStats& network_stats,
                                  absl::Time run_plan_start_time,
                                  absl::Time reference_time) override;
+  void LogComputationInsufficientData(absl::Status error_status,
+                                      const ExampleStats& example_stats,
+                                      const NetworkStats& network_stats,
+                                      absl::Time run_plan_start_time,
+                                      absl::Time reference_time) override;
   void LogComputationCompleted(
       const ExampleStats& example_stats, const NetworkStats& network_stats,
       absl::Time run_plan_start_time, absl::Time reference_time,

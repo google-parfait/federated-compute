@@ -333,6 +333,8 @@ absl::StatusOr<UriOrInlineData> ConvertResourceToUriOrInlineData(
       return ::google::rpc::Code::INTERNAL;
     case engine::PhaseOutcome::INTERRUPTED:
       return ::google::rpc::Code::CANCELLED;
+    case engine::PhaseOutcome::INSUFFICIENT_DATA:
+      return ::google::rpc::Code::FAILED_PRECONDITION;
     default:
       return ::google::rpc::Code::UNKNOWN;
   }

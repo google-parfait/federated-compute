@@ -378,6 +378,14 @@ class FakeEventPublisher : public EventPublisher {
     FCP_CLIENT_LOG_FUNCTION_NAME;
   }
 
+  void PublishComputationInsufficientData(
+      absl::string_view error_message, const ExampleStats& example_stats,
+      const NetworkStats& network_stats,
+      absl::Duration phase_duration) override {
+    if (quiet_) return;
+    FCP_CLIENT_LOG_FUNCTION_NAME << error_message;
+  }
+
   void PublishResultUploadStarted() override {
     if (quiet_) return;
     FCP_CLIENT_LOG_FUNCTION_NAME;

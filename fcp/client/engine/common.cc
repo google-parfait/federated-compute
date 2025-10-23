@@ -103,6 +103,8 @@ PhaseOutcome ConvertPlanOutcomeToPhaseOutcome(PlanOutcome plan_outcome) {
     case PlanOutcome::kInvalidArgument:
     case PlanOutcome::kExampleIteratorError:
       return PhaseOutcome::ERROR;
+    case PlanOutcome::kInsufficientData:
+      return PhaseOutcome::INSUFFICIENT_DATA;
   }
 }
 
@@ -116,6 +118,8 @@ absl::Status ConvertPlanOutcomeToStatus(PlanOutcome outcome) {
       return absl::InternalError("");
     case PlanOutcome::kInterrupted:
       return absl::CancelledError("");
+    case PlanOutcome::kInsufficientData:
+      return absl::FailedPreconditionError("");
   }
 }
 

@@ -331,6 +331,9 @@ message OperationalStats {
 
       // Client failed to initialize a component, and execution was halted.
       EVENT_KIND_INITIALIZATION_ERROR_FATAL = 51;
+
+      // Computation finished, but the client had insufficient data.
+      EVENT_KIND_COMPUTATION_INSUFFICIENT_DATA = 63;
     }
 
     EventKind event_type = 1;

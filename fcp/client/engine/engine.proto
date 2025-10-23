@@ -39,6 +39,7 @@ enum PhaseOutcome {
   COMPLETED = 1;
   INTERRUPTED = 2;
   ERROR = 3;
+  INSUFFICIENT_DATA = 4;
 }
 
 enum DataSourceType {

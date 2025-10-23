@@ -425,6 +425,40 @@ TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyIsNotEligible) {
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
 }
+
+TEST_F(EligibilityDeciderTest,
+       DataAvailabilityPolicyDropOutBasedDataAvailability) {
+  EXPECT_CALL(mock_flags_, drop_out_based_data_availability())
+      .WillRepeatedly(Return(true));
+  PopulationEligibilitySpec spec;
+
+  EligibilityPolicyEvalSpec* da_spec =
+      spec.mutable_eligibility_policies()->Add();
+  da_spec->set_name("da_policy_3_examples");
+  da_spec->set_min_version(1);
+  da_spec->mutable_data_availability_policy()->set_min_example_count(3);
+  da_spec->mutable_data_availability_policy()
+      ->set_use_example_query_result_format(true);
+  *da_spec->mutable_data_availability_policy()
+       ->mutable_selector()
+       ->mutable_collection_uri() = "app:/padam_padam";
+
+  PopulationEligibilitySpec::TaskInfo* task_info =
+      spec.mutable_task_info()->Add();
+  task_info->set_task_name("single_task_1");
+  task_info->set_task_assignment_mode(
+      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
+  task_info->mutable_eligibility_policy_indices()->Add(0);
+
+  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
+      spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
+      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
+      &mock_flags_);
+  ASSERT_OK(eligibility_result);
+  ASSERT_EQ(eligibility_result->task_weights_size(), 1);
+  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
+}
+
 TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyComputationErrorNonfatal) {
   PopulationEligibilitySpec spec;
 

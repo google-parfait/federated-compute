@@ -270,6 +270,10 @@ class EventPublisher {
   virtual void PublishComputationCompleted(const ExampleStats& example_stats,
                                            const NetworkStats& network_stats,
                                            absl::Duration phase_duration) = 0;
+  // Publish that the client had insufficient data for computation.
+  virtual void PublishComputationInsufficientData(
+      absl::string_view error_message, const ExampleStats& example_stats,
+      const NetworkStats& network_stats, absl::Duration phase_duration) = 0;
   // Publish that the client starts to upload result.
   virtual void PublishResultUploadStarted() = 0;
   // Publish that an IO error occurred during result upload.
