@@ -436,6 +436,7 @@ proto_library(
     name = "kms_proto",
     srcs = ["kms.proto"],
     deps = [
+        ":payload_transparency_proto",
         "@com_google_googleapis//google/rpc:status_proto",
         "@com_google_protobuf//:any_proto",
         "@com_google_protobuf//:duration_proto",
