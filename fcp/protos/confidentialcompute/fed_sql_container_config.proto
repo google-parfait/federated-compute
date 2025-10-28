@@ -94,6 +94,8 @@ enum AggCoreFinalizationType {
   FINALIZATION_TYPE_SERIALIZE = 2;
   // Return the partitioned internal state of the checkpoint aggregator.
   FINALIZATION_TYPE_PARTITION = 3;
+  // Returns the noised results for the partitioned checkpoint aggregator.
+  FINALIZATION_TYPE_REPORT_PARTITION = 4;
 }
 
 // Configures how a result should be output by the trusted AggCore container.
