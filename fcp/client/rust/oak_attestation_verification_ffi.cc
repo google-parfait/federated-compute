@@ -73,8 +73,9 @@ absl::StatusOr<oak::attestation::v1::AttestationResults> VerifyAttestation(
   // empty/default-initialized proto). We shouldn't try to parse the buffer in
   // that case, since the pointer will be null.
   if (attestation_result.size > 0 &&
-      !result.ParseFromArray(attestation_result.data,
-                             static_cast<int>(attestation_result.size))) {
+      !result.ParseFromString(
+          absl::string_view(attestation_result.data,
+                            static_cast<int>(attestation_result.size)))) {
     return absl::InternalError("Failed to parse AttestationResults");
   }
   return result;
@@ -102,7 +103,8 @@ absl::StatusOr<EndorsementDetails> VerifyEndorsement(
   }
 
   EndorsementDetails result;
-  if (!result.ParseFromArray(r.data, static_cast<int>(r.size))) {
+  if (!result.ParseFromString(
+          absl::string_view(r.data, static_cast<int>(r.size)))) {
     return absl::InternalError("Failed to parse EndorsementDetails");
   }
   return result;
