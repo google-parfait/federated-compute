@@ -52,7 +52,7 @@ class CreateTaskEligibilityInfoOp : public tensorflow::OpKernel {
     // too.
 
     // Parse/validate the input arguments.
-    tensorflow::int64 version;
+    int64_t version;
     OP_REQUIRES_OK(
         ctx, tensorflow::data::ParseScalarArgument(ctx, "version", &version));
     std::vector<tensorflow::tstring> task_names;
