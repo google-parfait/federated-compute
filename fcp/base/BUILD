@@ -143,6 +143,7 @@ cc_library(
         "random_token.h",
     ],
     copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         ":base",
         "@boringssl//:crypto",
