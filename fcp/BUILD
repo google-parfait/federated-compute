@@ -38,6 +38,15 @@ package_group(
     ],
 )
 
+package_group(
+    name = "customers",
+    includes = [
+    ],
+    packages = [
+        "//fcp/...",
+    ],
+)
+
 platform(
     name = "remote_platform",
     constraint_values = [
