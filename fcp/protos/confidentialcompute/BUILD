@@ -274,6 +274,11 @@ proto_library(
     srcs = ["sentence_transformers_config.proto"],
 )
 
+py_proto_library(
+    name = "sentence_transformers_config_py_pb2",
+    deps = [":sentence_transformers_config_proto"],
+)
+
 cc_proto_library(
     name = "sentence_transformers_config_cc_proto",
     deps = [":sentence_transformers_config_proto"],
