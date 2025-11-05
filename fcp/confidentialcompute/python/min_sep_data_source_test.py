@@ -13,14 +13,18 @@
 # limitations under the License.
 
 import os
+from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from federated_language.proto import array_pb2
 from federated_language.proto import computation_pb2
 from federated_language.proto import data_type_pb2
 
 from fcp.confidentialcompute.python import min_sep_data_source
+from fcp.confidentialcompute.python import program_input_provider
 from fcp.protos.confidentialcompute import file_info_pb2
+from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
 
 
 _MIN_SEP = 10
@@ -32,18 +36,37 @@ _COMPUTATION_TYPE = computation_pb2.Type(
 )
 
 
+def _mock_resolve_uri_to_tensor_fn(
+    uri: str, key: str
+) -> tensor_pb2.TensorProto:
+  """A mock function for resolving a URI to a tensor."""
+  del key
+  return tensor_pb2.TensorProto(
+      dtype=tensor_pb2.DataType.DT_STRING,
+      # The content of the tensor is the uri itself.
+      content=uri.encode(),
+      shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
+  )
+
+
 class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
   def test_init_raises_value_error_with_client_ids_empty(self):
     client_ids = []
+
+    input_provider = program_input_provider.ProgramInputProvider(
+        client_ids,
+        _TEST_CLIENT_DATA_DIRECTORY,
+        {},
+        mock.Mock(),
+    )
 
     with self.assertRaisesRegex(
         ValueError, 'Expected `client_ids` to not be empty.'
     ):
       min_sep_data_source.MinSepDataSourceIterator(
           _MIN_SEP,
-          client_ids,
-          _TEST_CLIENT_DATA_DIRECTORY,
+          input_provider,
           _COMPUTATION_TYPE,
           _KEY_NAME,
       )
@@ -51,14 +74,20 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
   def test_init_raises_value_error_with_invalid_min_sep(self):
     min_sep = 0
 
+    input_provider = program_input_provider.ProgramInputProvider(
+        _CLIENT_IDS,
+        _TEST_CLIENT_DATA_DIRECTORY,
+        {},
+        mock.Mock(),
+    )
+
     with self.assertRaisesRegex(
         ValueError,
         'Expected `min_sep` to be a positive integer, found `min_sep` of 0.',
     ):
       min_sep_data_source.MinSepDataSourceIterator(
           min_sep,
-          _CLIENT_IDS,
-          _TEST_CLIENT_DATA_DIRECTORY,
+          input_provider,
           _COMPUTATION_TYPE,
           _KEY_NAME,
       )
@@ -83,10 +112,17 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
   def test_select_raises_value_error_with_k(self, k, expected_error_message):
     num_clients = 100
     client_ids = [str(i) for i in range(num_clients)]
-    iterator = min_sep_data_source.MinSepDataSourceIterator(
-        _MIN_SEP,
+
+    input_provider = program_input_provider.ProgramInputProvider(
         client_ids,
         _TEST_CLIENT_DATA_DIRECTORY,
+        {},
+        mock.Mock(),
+    )
+
+    iterator = min_sep_data_source.MinSepDataSourceIterator(
+        _MIN_SEP,
+        input_provider,
         _COMPUTATION_TYPE,
         _KEY_NAME,
     )
@@ -94,18 +130,30 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     with self.assertRaisesRegex(ValueError, expected_error_message):
       iterator.select(k)
 
-  def test_select_returns_client_ids(self):
+  @parameterized.named_parameters(
+      ('with_data_pointers', True),
+      ('with_resolved_values', False),
+  )
+  def test_select_returns_expected_data(self, use_data_pointers):
     num_clients = 1000
     client_ids = [str(i) for i in range(num_clients)]
+    mock_resolve_fn = mock.Mock()
+    mock_resolve_fn.side_effect = _mock_resolve_uri_to_tensor_fn
+    input_provider = program_input_provider.ProgramInputProvider(
+        client_ids,
+        _TEST_CLIENT_DATA_DIRECTORY,
+        {},
+        mock_resolve_fn,
+    )
 
     # Create an iterator that will have 100 eligible clients per round.
     # (1000 clients that are eligible to participate every 10th round)
     iterator = min_sep_data_source.MinSepDataSourceIterator(
         _MIN_SEP,
-        client_ids,
-        _TEST_CLIENT_DATA_DIRECTORY,
+        input_provider,
         _COMPUTATION_TYPE,
         _KEY_NAME,
+        use_data_pointers=use_data_pointers,
     )
 
     # Call `select` 1000 times with `k=10`. Each client should be selected for
@@ -122,20 +170,23 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
       self.assertLen(data_for_round, k)
 
       # Track which rounds clients are chosen to participate in.
-      for data_computation in data_for_round:
-        self.assertIsInstance(data_computation, computation_pb2.Computation)
-        self.assertEqual(data_computation.type, _COMPUTATION_TYPE)
-        self.assertEqual(data_computation.WhichOneof('computation'), 'data')
-        unpacked_content = file_info_pb2.FileInfo()
-        data_computation.data.content.Unpack(unpacked_content)
+      for value in data_for_round:
+        if use_data_pointers:
+          self.assertIsInstance(value, computation_pb2.Computation)
+          self.assertEqual(value.type, _COMPUTATION_TYPE)
+          self.assertEqual(value.WhichOneof('computation'), 'data')
+          unpacked_content = file_info_pb2.FileInfo()
+          value.data.content.Unpack(unpacked_content)
+          self.assertEqual(unpacked_content.key, _KEY_NAME)
+          uri = unpacked_content.uri
+        else:
+          self.assertIsInstance(value, array_pb2.Array)
+          self.assertEqual(value.dtype, data_type_pb2.DataType.DT_STRING)
+          uri = value.content.decode()
 
-        self.assertEqual(
-            os.path.dirname(unpacked_content.uri), _TEST_CLIENT_DATA_DIRECTORY
-        )
-        client_id_to_round_indices.setdefault(
-            os.path.basename(unpacked_content.uri), []
-        ).append(round_index)
-        self.assertEqual(unpacked_content.key, _KEY_NAME)
+        self.assertEqual(os.path.dirname(uri), _TEST_CLIENT_DATA_DIRECTORY)
+        client_id = os.path.basename(uri)
+        client_id_to_round_indices.setdefault(client_id, []).append(round_index)
 
     # Verify that the rounds that clients are chosen to participate in are
     # multiples of `_MIN_SEP` apart.
@@ -155,22 +206,41 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
 class MinSepDataSourceTest(absltest.TestCase):
 
+  def test_init_succeeds(self):
+    input_provider = program_input_provider.ProgramInputProvider(
+        _CLIENT_IDS, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
+    )
+    min_sep = min_sep_data_source.MinSepDataSource(
+        _MIN_SEP,
+        input_provider,
+        _COMPUTATION_TYPE,
+        _KEY_NAME,
+    )
+    self.assertIsInstance(
+        min_sep.iterator(), min_sep_data_source.MinSepDataSourceIterator
+    )
+
   def test_init_raises_value_error_with_client_ids_empty(self):
     client_ids = []
+    input_provider = program_input_provider.ProgramInputProvider(
+        client_ids, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
+    )
 
     with self.assertRaisesRegex(
-        ValueError, 'Expected `client_ids` to not be empty.'
+        ValueError, 'Expected `input_provider.client_ids` to not be empty.'
     ):
       min_sep_data_source.MinSepDataSource(
           _MIN_SEP,
-          client_ids,
-          _TEST_CLIENT_DATA_DIRECTORY,
+          input_provider,
           _COMPUTATION_TYPE,
           _KEY_NAME,
       )
 
   def test_init_raises_value_error_with_invalid_min_sep(self):
     min_sep = 0
+    input_provider = program_input_provider.ProgramInputProvider(
+        _CLIENT_IDS, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
+    )
 
     with self.assertRaisesRegex(
         ValueError,
@@ -178,8 +248,7 @@ class MinSepDataSourceTest(absltest.TestCase):
     ):
       min_sep_data_source.MinSepDataSource(
           min_sep,
-          _CLIENT_IDS,
-          _TEST_CLIENT_DATA_DIRECTORY,
+          input_provider,
           _COMPUTATION_TYPE,
           _KEY_NAME,
       )
