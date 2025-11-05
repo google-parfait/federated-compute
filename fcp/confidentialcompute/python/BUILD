@@ -107,7 +107,9 @@ py_library(
     name = "program_input_provider",
     srcs = ["program_input_provider.py"],
     visibility = ["//visibility:public"],
-    deps = ["@org_tensorflow_federated//tensorflow_federated"],
+    deps = [
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
+    ],
 )
 
 py_test(
@@ -115,8 +117,7 @@ py_test(
     srcs = ["program_input_provider_test.py"],
     deps = [
         ":program_input_provider",
-        "@org_tensorflow_federated//tensorflow_federated",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
         "@pypi_absl_py//:pkg",
-        "@pypi_tensorflow//:pkg",
     ],
 )

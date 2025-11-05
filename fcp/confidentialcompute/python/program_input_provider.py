@@ -13,10 +13,9 @@
 # limitations under the License.
 """Wrapper for providing inputs to a trusted federated program."""
 
-import os
-import zipfile
+from collections.abc import Callable
 
-import tensorflow_federated as tff
+from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
 
 
 class ProgramInputProvider:
@@ -32,7 +31,8 @@ class ProgramInputProvider:
       self,
       client_ids: list[str],
       client_data_directory: str,
-      model_id_to_zip_file: dict[str, str],
+      config_id_to_filename: dict[str, str],
+      resolve_uri_to_tensor_fn: Callable[[str, str], tensor_pb2.TensorProto],
   ):
     """Returns an initialized `ProgramInputProvider`.
 
@@ -40,12 +40,15 @@ class ProgramInputProvider:
       client_ids: A list of strings representing the clients from this data
         source. Must not be empty.
       client_data_directory: The directory containing the client data.
-      model_id_to_zip_file: A dictionary mapping model ids to the paths of the
-        zip files containing the model weights for those models.
+      config_id_to_filename: A dictionary mapping config ids to the paths of the
+        files containing information for that id.
+      resolve_uri_to_tensor_fn: A function that resolves pointers to data.
+        Expects a uri and key and returns an AggCore tensor proto.
     """
     self._client_ids = client_ids
     self._client_data_directory = client_data_directory
-    self._model_id_to_zip_file = model_id_to_zip_file
+    self._config_id_to_filename = config_id_to_filename
+    self._resolve_uri_to_tensor_fn = resolve_uri_to_tensor_fn
 
   @property
   def client_ids(self):
@@ -57,19 +60,15 @@ class ProgramInputProvider:
     """Returns the directory containing the client data."""
     return self._client_data_directory
 
-  def get_model(self, model_id: str) -> tff.learning.models.FunctionalModel:
-    """Returns the `tff.learning.models.FunctionalModel` with the given id."""
-    if model_id not in self._model_id_to_zip_file:
-      raise ValueError(f'Model id {model_id} not found in model_id_to_zip_file')
-    zip_file_path = self._model_id_to_zip_file[model_id]
-    model_path = os.path.join(os.path.dirname(zip_file_path), model_id)
-    try:
-      with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-        zip_ref.extractall(model_path)
-    except zipfile.BadZipFile as e:
-      raise ValueError(f'`{zip_file_path}` is not a valid ZIP file.') from e
-    except FileNotFoundError as e:
-      raise ValueError(f'ZIP file not found at `{zip_file_path}`.') from e
-    except Exception as e:
-      raise ValueError(f'An unexpected error occurred: {e}') from e
-    return tff.learning.models.load_functional_model(model_path)
+  def get_filename_for_config_id(self, config_id: str) -> str:
+    """Returns the filename for the given config id."""
+    if config_id not in self._config_id_to_filename:
+      raise ValueError(
+          f'Config id {config_id} not found in config_id_to_filename. Available'
+          f' config ids are {list(self._config_id_to_filename.keys())}'
+      )
+    return self._config_id_to_filename[config_id]
+
+  def resolve_uri_to_tensor(self, uri: str, key: str) -> tensor_pb2.TensorProto:
+    """Resolves a pointer to data."""
+    return self._resolve_uri_to_tensor_fn(uri, key)
