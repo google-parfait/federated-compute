@@ -63,6 +63,12 @@ py_library(
     ],
 )
 
+py_library(
+    name = "external_service_handle",
+    srcs = ["external_service_handle.py"],
+    visibility = ["//visibility:public"],
+)
+
 py_test(
     name = "dp_mf_aggregator_test",
     srcs = ["dp_mf_aggregator_test.py"],
