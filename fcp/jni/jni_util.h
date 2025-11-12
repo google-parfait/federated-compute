@@ -47,7 +47,7 @@ class ScopedJniEnv final {
     }
   }
 
-  virtual ~ScopedJniEnv() {
+  ~ScopedJniEnv() {
     if (is_attached_) {
       (void)jvm_->DetachCurrentThread();
     }
