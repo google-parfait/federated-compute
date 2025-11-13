@@ -52,24 +52,6 @@ using ::google::internal::federated::plan::PrivacyIdConfig;
 
 constexpr int kPrivacyIdLength = 16;
 
-// Remove the timezone modifier from the event time. Event_time must be in the
-// format YYYY-MM-DDTHH:MM:SS[+-]HH:MM, and the result will be in the format
-// YYYY-MM-DDTHH:MM:SS.
-absl::StatusOr<std::string> RemoveTimezoneFromEventTime(
-    absl::string_view event_time) {
-  if (event_time.length() != 25) {
-    return absl::InvalidArgumentError(
-        "Invalid event time format: incorrect length");
-  }
-  // Basic check for the presence of 'T' and timezone sign.
-  if (event_time[10] != 'T' ||
-      (event_time[19] != '+' && event_time[19] != '-')) {
-    return absl::InvalidArgumentError(
-        "Invalid event time format: missing T or timezone modifier");
-  }
-  return std::string(event_time.substr(0, 19));
-}
-
 absl::StatusOr<WindowingSchedule::CivilTimeWindowSchedule>
 VerifyConfigHasCivilTimeWindowSchedule(
     const PrivacyIdConfig& privacy_id_config) {
@@ -169,17 +151,6 @@ absl::StatusOr<ExampleQueryResult> CreateExampleQueryResultFromSelection(
   }
   return new_result;
 }
-
-absl::StatusOr<absl::CivilSecond> ConvertEventTimeToCivilSecond(
-    absl::string_view event_time) {
-  FCP_ASSIGN_OR_RETURN(std::string event_time_without_timezone,
-                       RemoveTimezoneFromEventTime(event_time));
-  absl::CivilSecond event_civil_second;
-  if (!absl::ParseCivilTime(event_time_without_timezone, &event_civil_second)) {
-    return absl::InvalidArgumentError("Invalid event time format");
-  }
-  return event_civil_second;
-}
 }  // namespace
 
 absl::StatusOr<std::string> GetPrivacyId(absl::string_view source_id,
@@ -235,8 +206,9 @@ absl::StatusOr<SplitResults> SplitResultsByPrivacyId(
   for (int i = 0; i < event_time_values->string_values().value_size(); ++i) {
     const std::string& event_time_str =
         event_time_values->string_values().value(i);
-    FCP_ASSIGN_OR_RETURN(absl::CivilSecond event_civil_second,
-                         ConvertEventTimeToCivilSecond(event_time_str));
+    FCP_ASSIGN_OR_RETURN(
+        absl::CivilSecond event_civil_second,
+        confidentialcompute::ConvertEventTimeToCivilSecond(event_time_str));
 
     FCP_ASSIGN_OR_RETURN(
         WindowingSchedule::CivilTimeWindowSchedule schedule,

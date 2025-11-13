@@ -16,10 +16,12 @@
 #include "fcp/confidentialcompute/time_window_utilities.h"
 
 #include <cstdint>
+#include <string>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/civil_time.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
 
 namespace fcp {
@@ -52,6 +54,24 @@ absl::StatusOr<absl::CivilSecond> CalculateWindowStart(
   absl::civil_diff_t window_index = diff / window_size;
   CivilTimeType window_start = schedule_start + window_index * window_size;
   return absl::CivilSecond(window_start);
+}
+
+// Remove the timezone modifier from the event time. Event_time must be in the
+// format YYYY-MM-DDTHH:MM:SS[+-]HH:MM, and the result will be in the format
+// YYYY-MM-DDTHH:MM:SS.
+absl::StatusOr<std::string> RemoveTimezoneFromEventTime(
+    absl::string_view event_time) {
+  if (event_time.length() != 25) {
+    return absl::InvalidArgumentError(
+        "Invalid event time format: incorrect length");
+  }
+  // Basic check for the presence of 'T' and timezone sign.
+  if (event_time[10] != 'T' ||
+      (event_time[19] != '+' && event_time[19] != '-')) {
+    return absl::InvalidArgumentError(
+        "Invalid event time format: missing T or timezone modifier");
+  }
+  return std::string(event_time.substr(0, 19));
 }
 
 }  // namespace
@@ -123,6 +143,17 @@ absl::StatusOr<absl::CivilSecond> GetTimeWindowStart(
     default:
       return absl::UnimplementedError("Unsupported windowing schedule unit");
   }
+}
+
+absl::StatusOr<absl::CivilSecond> ConvertEventTimeToCivilSecond(
+    absl::string_view event_time) {
+  FCP_ASSIGN_OR_RETURN(std::string event_time_without_timezone,
+                       RemoveTimezoneFromEventTime(event_time));
+  absl::CivilSecond event_civil_second;
+  if (!absl::ParseCivilTime(event_time_without_timezone, &event_civil_second)) {
+    return absl::InvalidArgumentError("Invalid event time format");
+  }
+  return event_civil_second;
 }
 
 }  //  namespace confidentialcompute

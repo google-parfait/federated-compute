@@ -66,9 +66,11 @@ cc_library(
     copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = [
+        "//fcp/base",
         "//fcp/protos/confidentialcompute:windowing_schedule_proto_cc",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
     ],
 )

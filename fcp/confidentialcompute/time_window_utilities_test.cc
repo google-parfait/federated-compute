@@ -261,6 +261,35 @@ TEST(TimeWindowUtilitiesTest, ValidateCivilTimeWindowScheduleInvalidSize) {
                        HasSubstr("Window size must be positive")));
 }
 
+TEST(TimeWindowUtilitiesTest, ConvertEventTimeToCivilSecondValid) {
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00+00:00"),
+              IsOkAndHolds(absl::CivilSecond(2024, 1, 5, 13, 5, 0)));
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2025-03-05T01:02:03-05:00"),
+              IsOkAndHolds(absl::CivilSecond(2025, 3, 5, 1, 2, 3)));
+}
+
+TEST(TimeWindowUtilitiesTest, ConvertEventTimeToCivilSecondInvalid) {
+  // Invalid length
+  EXPECT_THAT(
+      ConvertEventTimeToCivilSecond("2024-01-05T13:05:00"),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Invalid event time format: incorrect length")));
+  // Missing 'T'
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05 13:05:00+00:00"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid event time format: missing T or "
+                                 "timezone modifier")));
+  // Missing timezone modifier
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-01-05T13:05:00 00:00"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid event time format: missing T or "
+                                 "timezone modifier")));
+  // Unparseable time
+  EXPECT_THAT(ConvertEventTimeToCivilSecond("2024-13-05T13:05:00+00:00"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid event time format")));
+}
+
 }  //  namespace
 }  //  namespace confidentialcompute
 }  //  namespace fcp

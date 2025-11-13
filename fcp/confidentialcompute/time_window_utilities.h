@@ -17,6 +17,7 @@
 #define FCP_CONFIDENTIALCOMPUTE_TIME_WINDOW_UTILITIES_H_
 
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/civil_time.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
 
@@ -37,6 +38,11 @@ absl::StatusOr<
 ValidateCivilTimeWindowSchedule(
     ::fcp::confidentialcompute::WindowingSchedule::CivilTimeWindowSchedule
         schedule);
+
+// Converts an event_time string to a CivilSecond, returns an error if invalid.
+// The event time string must be in the format YYYY-MM-DDTHH:MM:SS[+-]HH:MM.
+absl::StatusOr<absl::CivilSecond> ConvertEventTimeToCivilSecond(
+    absl::string_view event_time);
 
 }  // namespace confidentialcompute
 }  // namespace fcp
