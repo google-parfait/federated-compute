@@ -64,10 +64,10 @@ message InferenceTask {
 // Configuration for columns used for inference. Multiple input columns can be
 // used as input, and the inference result will be saved in one output column.
 message ColumnConfiguration {
-  string input_column_name = 1;
   string output_column_name = 2;
-  // if set, overrides input_column_name value.
   repeated string input_column_names = 3;
+
+  reserved 1;
 }
 
 // A message for storing logics required for prompting a model.
