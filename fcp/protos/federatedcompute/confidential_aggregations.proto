@@ -82,20 +82,6 @@ service ConfidentialAggregations {
       body: "*"
     };
   }
-
-  // A request sent by the client indicating that a previously uploaded
-  // aggregation result should not be used for future aggregations. Any
-  // already-aggregated uses of the result will not be deleted.
-  //
-  // Revocation is best-effort and not guaranteed or verifiable.
-  rpc RevokeConfidentialAggregationResult(
-      RevokeConfidentialAggregationResultRequest)
-      returns (RevokeConfidentialAggregationResultResponse) {
-    option (google.api.http) = {
-      post: "/v1/confidentialaggregations/{aggregation_id}/uploads/{blob_id}:revoke"
-      body: "*"
-    };
-  }
 }
 
 message StartConfidentialAggregationDataUploadRequest {
@@ -180,31 +166,3 @@ message AbortConfidentialAggregationRequest {
 }
 
 message AbortConfidentialAggregationResponse {}
-
-message RevokeConfidentialAggregationResultRequest {
-  // The id of the aggregation session this client participates in. This value
-  // was returned by the server when the client was assigned a task.
-  //
-  // Note that HTTP clients set this value in the request URL instead of the
-  // request body.
-  string aggregation_id = 1
-      ;
-
-  // The id of the public key used to encrypt the blob; see
-  // fcp.confidentialcompute.BlobHeader.public_key_id.
-  fixed32 public_key_id = 2 [deprecated = true];
-
-  // The id of the public key used to encrypt the blob; see
-  // fcp.confidentialcompute.BlobHeader.key_id.
-  bytes key_id = 4;
-
-  // The client-selected identifier for the uploaded data; see
-  // fcp.confidentialcompute.BlobHeader.blob_id.
-  //
-  // Note that HTTP clients set this value in the request URL instead of the
-  // request body.
-  bytes blob_id = 3
-      ;
-}
-
-message RevokeConfidentialAggregationResultResponse {}
