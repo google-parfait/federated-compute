@@ -89,7 +89,10 @@ py_proto_library(
 proto_library(
     name = "payload_metadata_proto",
     srcs = ["payload_metadata.proto"],
-    deps = ["//fcp/client:event_time_range_proto"],
+    deps = [
+        ":message_description_proto",
+        "//fcp/client:event_time_range_proto",
+    ],
 )
 
 cc_proto_library(
@@ -539,4 +542,14 @@ tf_proto_library(
 alias(
     name = "windowing_schedule_py_pb2",
     actual = "windowing_schedule_proto_py",
+)
+
+proto_library(
+    name = "message_description_proto",
+    srcs = ["message_description.proto"],
+)
+
+cc_proto_library(
+    name = "message_description_cc_proto",
+    deps = [":message_description_proto"],
 )

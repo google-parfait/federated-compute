@@ -57,6 +57,8 @@ message FedSqlContainerInitializeConfiguration {
   InferenceInitializeConfiguration inference_init_config = 6;
 
   // The FileDescriptorSet bytes for the logged message.
+  // TODO: b/451799471 - replace logged_message_descriptor_set and
+  // logged_message_name with the MessageDescription proto.
   bytes logged_message_descriptor_set = 7;
 
   // The fully qualified name of the logged message.
