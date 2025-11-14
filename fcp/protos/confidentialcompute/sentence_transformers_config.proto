@@ -44,3 +44,18 @@ message SentenceTransformersContainerInitializeConfiguration {
   // The configuration for the encode() method.
   EncodeConfig encode_config = 2;
 }
+
+message Input {
+  // The index of the input.
+  int32 index = 1;
+  // The text to be encoded.
+  string text = 2;
+}
+
+// The embedding of a sentence.
+message Embedding {
+  // The index of the embedding.
+  int32 index = 1;
+  // The values of the embedding.
+  repeated float values = 2;
+}
