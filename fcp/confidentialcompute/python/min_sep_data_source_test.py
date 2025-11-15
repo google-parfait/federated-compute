@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import time
 from unittest import mock
 
 from absl.testing import absltest
@@ -34,19 +35,6 @@ _KEY_NAME = 'key_name'
 _COMPUTATION_TYPE = computation_pb2.Type(
     tensor=computation_pb2.TensorType(dtype=data_type_pb2.DataType.DT_INT32)
 )
-
-
-def _mock_resolve_uri_to_tensor_fn(
-    uri: str, key: str
-) -> tensor_pb2.TensorProto:
-  """A mock function for resolving a URI to a tensor."""
-  del key
-  return tensor_pb2.TensorProto(
-      dtype=tensor_pb2.DataType.DT_STRING,
-      # The content of the tensor is the uri itself.
-      content=uri.encode(),
-      shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
-  )
 
 
 class MinSepDataSourceIteratorTest(parameterized.TestCase):
@@ -137,8 +125,21 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
   def test_select_returns_expected_data(self, use_data_pointers):
     num_clients = 1000
     client_ids = [str(i) for i in range(num_clients)]
+
+    def mock_resolve_uri_to_tensor_fn(
+        uri: str, key: str
+    ) -> tensor_pb2.TensorProto:
+      """A mock function for resolving a URI to a tensor."""
+      del key
+      return tensor_pb2.TensorProto(
+          dtype=tensor_pb2.DataType.DT_STRING,
+          # The content of the tensor is the uri itself.
+          content=uri.encode(),
+          shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
+      )
+
     mock_resolve_fn = mock.Mock()
-    mock_resolve_fn.side_effect = _mock_resolve_uri_to_tensor_fn
+    mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
     input_provider = program_input_provider.ProgramInputProvider(
         client_ids,
         _TEST_CLIENT_DATA_DIRECTORY,
@@ -202,6 +203,49 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
       expected_modulus = round_indices[0] % _MIN_SEP
       for round_index in round_indices[1:]:
         self.assertEqual(round_index % _MIN_SEP, expected_modulus)
+
+  def test_select_parallelizes_resolve_uri_to_tensor(self):
+    num_clients = 200
+    client_ids = [str(i) for i in range(num_clients)]
+    k = 10
+    sleep_seconds = 5
+
+    def mock_resolve_uri_to_tensor_fn(uri: str, key: str):
+      del key
+      # Delay the resolution of each URI to simulate some work being done.
+      time.sleep(sleep_seconds)
+      return tensor_pb2.TensorProto(
+          dtype=tensor_pb2.DataType.DT_STRING,
+          content=uri.encode(),
+          shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
+      )
+
+    mock_resolve_fn = mock.Mock()
+    mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
+    input_provider = program_input_provider.ProgramInputProvider(
+        client_ids,
+        _TEST_CLIENT_DATA_DIRECTORY,
+        {},
+        mock_resolve_fn,
+    )
+
+    iterator = min_sep_data_source.MinSepDataSourceIterator(
+        _MIN_SEP,
+        input_provider,
+        _COMPUTATION_TYPE,
+        _KEY_NAME,
+        use_data_pointers=False,
+    )
+
+    # Call select and verify that resolve_uri_to_tensor was called k times and
+    # that the time taken is within 1 second of the expected time if the
+    # parallelization is working correctly.
+    start_time = time.time()
+    data_for_round = iterator.select(k)
+    end_time = time.time()
+    self.assertLess(end_time - start_time, sleep_seconds + 1)
+    self.assertLen(data_for_round, k)
+    self.assertEqual(mock_resolve_fn.call_count, k)
 
 
 class MinSepDataSourceTest(absltest.TestCase):

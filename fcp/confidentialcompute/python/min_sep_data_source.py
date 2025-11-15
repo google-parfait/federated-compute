@@ -13,6 +13,7 @@
 # limitations under the License.
 """Utilities for representing data sources with min-sep round participation."""
 
+import concurrent.futures
 import os
 import random
 from typing import Optional
@@ -173,22 +174,37 @@ class MinSepDataSourceIterator(
         )
       return selected_values
 
-    for client_id in selected_ids:
-      tensor = self._input_provider.resolve_uri_to_tensor(
-          os.path.join(self._input_provider.client_data_directory, client_id),
-          self._key_name,
-      )
-      selected_values.append(
-          array_pb2.Array(
-              dtype=data_type_pb2.DataType.Value(
-                  tensor_pb2.DataType.Name(tensor.dtype)
-              ),
-              shape=array_pb2.ArrayShape(
-                  dim=tensor.shape.dim_sizes, unknown_rank=False
-              ),
-              content=tensor.content,
-          )
-      )
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=os.cpu_count() * 4
+    ) as executor:
+      futures = []
+      for client_id in selected_ids:
+        uri = os.path.join(
+            self._input_provider.client_data_directory, client_id
+        )
+        futures.append(
+            executor.submit(
+                self._input_provider.resolve_uri_to_tensor,
+                uri,
+                self._key_name,
+            )
+        )
+
+      # Wait for all futures to complete. The order in which the results are
+      # added does not matter.
+      for future in concurrent.futures.as_completed(futures):
+        tensor = future.result()
+        selected_values.append(
+            array_pb2.Array(
+                dtype=data_type_pb2.DataType.Value(
+                    tensor_pb2.DataType.Name(tensor.dtype)
+                ),
+                shape=array_pb2.ArrayShape(
+                    dim=tensor.shape.dim_sizes, unknown_rank=False
+                ),
+                content=tensor.content,
+            )
+        )
     return selected_values
 
 
