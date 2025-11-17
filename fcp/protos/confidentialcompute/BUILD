@@ -90,7 +90,6 @@ proto_library(
     name = "payload_metadata_proto",
     srcs = ["payload_metadata.proto"],
     deps = [
-        ":message_description_proto",
         "//fcp/client:event_time_range_proto",
     ],
 )
@@ -552,4 +551,18 @@ proto_library(
 cc_proto_library(
     name = "message_description_cc_proto",
     deps = [":message_description_proto"],
+)
+
+proto_library(
+    name = "tee_payload_metadata_proto",
+    srcs = ["tee_payload_metadata.proto"],
+    deps = [
+        ":message_description_proto",
+        "//fcp/client:event_time_range_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "tee_payload_metadata_cc_proto",
+    deps = [":tee_payload_metadata_proto"],
 )
