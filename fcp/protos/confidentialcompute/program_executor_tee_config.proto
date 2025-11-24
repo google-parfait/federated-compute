@@ -43,3 +43,23 @@ message ProgramExecutorTeeInitializeConfig {
   // The address of the untrusted server to handle requests from the TEE.
   string outgoing_server_address = 7;
 }
+
+// Config constraints for the program executor TEE container that must be
+// validated before any of the blobs written to the container are decrypted.
+// This is required when using the KeyManagementService API, it is ignored when
+// using the Ledger API.
+message ProgramExecutorTeeConfigConstraints {
+  // The program that the container must be configured to execute.
+  bytes program = 1;
+  // The worker reference values that the container must be configured to use
+  // when setting up noise protocol sessions with workers.
+  bytes worker_reference_values = 2;
+  // Defines an upper bound on the number of times this program can be executed
+  // over a given set of data. Note that the budget may actually be tracked at
+  // a coarser granularity than this (e.g. the budget could track
+  // the number of times any program has been executed for a given logical
+  // pipeline name), which may mean that this program cannot be run the full
+  // `num_runs` times over a given set of data. Regardless, the budget will
+  // always enforce `num_runs` as a maximum bound.
+  int32 num_runs = 3;
+}
