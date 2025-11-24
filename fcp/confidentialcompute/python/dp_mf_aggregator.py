@@ -6,7 +6,7 @@ import federated_language as flang
 import jax
 from jax.experimental import jax2tf
 import jax.numpy as jnp
-from jax_privacy.experimental import clipping
+from jax_privacy import clipping
 import optax
 import tensorflow as tf
 import tensorflow_federated as tff
