@@ -76,6 +76,22 @@ message Prompt {
   // A regex to match against the model response, if provided. Only the first
   // match will be used.
   string regex = 2;
+  // A parser used to split output into multiple rows and/or columns. If
+  // PARSER_AUTO is selected, the prompt will be automatically modified so that
+  // Gemma outputs JSON format for automatic parsing. Otherwise, the prompt will
+  // be unchanged. If there is only one output value, select PARSER_NONE.
+  enum Parser {
+    PARSER_NONE = 0;  // No parsing needed for single output.
+    PARSER_AUTO = 1;  // Prompt will be automatically modified to support JSON.
+    PARSER_DELIMITER = 2;  // No prompt modifying, expecting delimited outputs.
+  }
+  Parser parser = 3;
+  // If PARSER_DELIMITER specified, we defer to this string as a provided
+  // delimeter. Default delimiter if left empty is a comma.
+  message DelimiterParser {
+    string delimiter = 1;
+  }
+  DelimiterParser delimiter_parser = 4;
 }
 
 // Configuration for running inference using Gemma models.
