@@ -240,6 +240,12 @@ message TaskAssignment {
     Resource signed_endorsements = 2;
   }
 
+  message WillowAggregationInfo {
+    // The encoding config that will be used to encode the client's contribution
+    // before it is sent to the server.
+    Resource encoding_config = 1;
+  }
+
   oneof aggregation_type {
     // If set, indicates that the Aggregations service (see
     // `aggregations.proto`) should be used to perform aggregation.
@@ -252,6 +258,11 @@ message TaskAssignment {
     // If set, indicates that the ConfidentialAggregations service (see
     // `confidential_aggregations.proto`) should be used to perform aggregation.
     ConfidentialAggregationInfo confidential_aggregation_info = 11;
+
+    // If set, indicates that the Willow encryption should be used in
+    // conjunction with the ConfidentialAggregations service (see
+    // `confidential_aggregations.proto`).
+    WillowAggregationInfo willow_aggregation_info = 12;
   }
 
   // Identifier for the client's protocol session, matching the session_id sent
