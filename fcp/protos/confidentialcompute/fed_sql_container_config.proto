@@ -63,6 +63,10 @@ message FedSqlContainerInitializeConfiguration {
 
   // The fully qualified name of the logged message.
   string logged_message_name = 8;
+
+  // The name of the on-device query. The FedSQL container uses this to prefix
+  // certain column names in the per-client table.
+  string on_device_query_name = 9;
 }
 
 enum AggCoreAggregationType {
