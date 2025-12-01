@@ -49,9 +49,15 @@ message ReadResponse {
       ;
 }
 
-// Request to write data out from the TEE. This can be used to store
-// program-committed data and release non-encrypted data.
+// Request to write data out from the TEE. This can be used to release data.
 message WriteRequest {
+  // Release Token signed by the TEE's application signing key, sent with the
+  // first WriteRequest for a blob. This is provided to untrusted space so it
+  // can use it to request KMS to release the final unencrypted results.
+  bytes release_token = 4;
+  // A key that should be used to construct the file path when writing the
+  // data, sent with the first WriteRequest for a blob.
+  string key = 5;
   // Metadata about the blob being written out by the TEE, sent with the
   // first WriteRequest for a blob.
   BlobMetadata first_request_metadata = 1;
