@@ -17,7 +17,7 @@ syntax = "proto3";
 package fcp.confidentialcompute;
 
 import "fcp/client/event_time_range.proto";
-import "fcp/protos/confidentialcompute/message_description.proto";
+import "fcp/protos/confidentialcompute/private_logger_uploads_config.proto";
 
 option java_package = "com.google.intelligence.fcp.confidentialcompute";
 option java_multiple_files = true;
@@ -59,7 +59,7 @@ message MetadataConfig {
 }
 
 message MetadataContainerInitializationConfig {
-  // Description of the logged message. This is used to parse the serialized
-  // logged message bytes to a generic Message.
-  MessageDescription logged_message_description = 1;
+  // Configuration for the PrivateLogger uploads.
+  PrivateLoggerUploadsConfig private_logger_uploads_config = 2;
+  reserved 1;
 }

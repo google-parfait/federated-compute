@@ -235,6 +235,7 @@ proto_library(
     deps = [
         ":access_policy_proto",
         ":private_inference_proto",
+        ":private_logger_uploads_config_proto",
         "@com_google_protobuf//:any_proto",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol:configuration_proto",
     ],
@@ -557,7 +558,7 @@ proto_library(
     name = "tee_payload_metadata_proto",
     srcs = ["tee_payload_metadata.proto"],
     deps = [
-        ":message_description_proto",
+        ":private_logger_uploads_config_proto",
         "//fcp/client:event_time_range_proto",
     ],
 )
@@ -565,4 +566,17 @@ proto_library(
 cc_proto_library(
     name = "tee_payload_metadata_cc_proto",
     deps = [":tee_payload_metadata_proto"],
+)
+
+proto_library(
+    name = "private_logger_uploads_config_proto",
+    srcs = ["private_logger_uploads_config.proto"],
+    deps = [
+        ":message_description_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "private_logger_uploads_config_cc_proto",
+    deps = [":private_logger_uploads_config_proto"],
 )
