@@ -59,7 +59,6 @@ message MetadataConfig {
 }
 
 message MetadataContainerInitializationConfig {
-  // Configuration for the PrivateLogger uploads.
-  PrivateLoggerUploadsConfig private_logger_uploads_config = 2;
-  reserved 1;
+  string on_device_query_name = 3;
+  reserved 1, 2;
 }
