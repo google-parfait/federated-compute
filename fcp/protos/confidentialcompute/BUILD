@@ -287,6 +287,16 @@ cc_proto_library(
     deps = [":sentence_transformers_config_proto"],
 )
 
+proto_library(
+    name = "nn_histogram_config_proto",
+    srcs = ["nn_histogram_config.proto"],
+)
+
+cc_proto_library(
+    name = "nn_histogram_config_cc_proto",
+    deps = [":nn_histogram_config_proto"],
+)
+
 # --------------------------------------------------------------------
 # signed_endorsements.proto
 
