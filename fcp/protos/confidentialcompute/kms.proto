@@ -154,7 +154,10 @@ message RotateKeysetRequest {
   google.protobuf.Duration ttl = 2;
 }
 
-message RotateKeysetResponse {}
+message RotateKeysetResponse {
+  // The id of the newly created key.
+  bytes key_id = 1;
+}
 
 message DeriveKeysRequest {
   uint64 keyset_id = 1;
