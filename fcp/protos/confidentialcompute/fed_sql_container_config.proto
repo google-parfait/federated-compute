@@ -33,7 +33,7 @@ message FedSqlContainerInitializeConfiguration {
   // with FINALIZATION_TYPE_SERIALIZE.
   // This field is only required when using Ledger API, it is ignored when using
   // the KeyManagementService API since outputs are always encrypted.
-  uint32 serialize_output_access_policy_node_id = 2;
+  uint32 serialize_output_access_policy_node_id = 2 [deprecated = true];
 
   // The numerical identifier for the reported result of the FedSQL session.
   // This field is only used by trusted services. If this field is empty then
@@ -41,7 +41,7 @@ message FedSqlContainerInitializeConfiguration {
   // with FINALIZATION_TYPE_REPORT.
   // This field is only required when using Ledger API, it is ignored when using
   // the KeyManagementService API since outputs are always encrypted.
-  uint32 report_output_access_policy_node_id = 3;
+  uint32 report_output_access_policy_node_id = 3 [deprecated = true];
 
   // The table schema for the data that can be joined with the device uploaded
   // data by the per-client query. This is an `Any` because using a TableSchema

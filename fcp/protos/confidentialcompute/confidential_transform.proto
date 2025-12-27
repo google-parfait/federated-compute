@@ -177,7 +177,8 @@ message ConfigureResponse {
   // The session-level nonce which will be included in the authenticated
   // data of the symmetric encryption key used to encrypt each blob,
   // along with a per-blob counter.
-  bytes nonce = 1;
+  // TODO: b/451710612 - Remove this field.
+  bytes nonce = 1 [deprecated = true];
 
   reserved 2;
 }
