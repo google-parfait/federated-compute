@@ -26,7 +26,6 @@
 #include <utility>
 #include <vector>
 
-#include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
@@ -43,6 +42,7 @@
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/testing/testing.h"
+#include "google/protobuf/util/time_util.h"
 #include "protostore/file-storage.h"
 
 namespace fcp {

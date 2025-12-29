@@ -24,7 +24,6 @@
 
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/timestamp.pb.h"
-#include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/flat_hash_map.h"
@@ -38,6 +37,7 @@
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"
+#include "google/protobuf/util/time_util.h"
 #include "tensorflow/core/example/example.pb.h"
 #include "tensorflow/core/example/feature.pb.h"
 

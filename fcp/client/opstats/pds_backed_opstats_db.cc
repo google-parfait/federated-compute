@@ -28,7 +28,6 @@
 #include <utility>
 
 #include "google/protobuf/timestamp.pb.h"
-#include "google/protobuf/util/time_util.h"
 #include "absl/base/attributes.h"
 #include "absl/base/const_init.h"
 #include "absl/container/flat_hash_set.h"
@@ -45,6 +44,7 @@
 #include "fcp/client/log_manager.h"
 #include "fcp/client/opstats/opstats_db.h"
 #include "google/protobuf/repeated_ptr_field.h"
+#include "google/protobuf/util/time_util.h"
 #include "protostore/file-storage.h"
 #include "protostore/proto-data-store.h"
 

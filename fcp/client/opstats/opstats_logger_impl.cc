@@ -20,7 +20,6 @@
 #include <string>
 #include <utility>
 
-#include "google/protobuf/util/time_util.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
@@ -38,6 +37,7 @@
 #include "fcp/client/stats.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
+#include "google/protobuf/util/time_util.h"
 
 namespace fcp {
 namespace client {

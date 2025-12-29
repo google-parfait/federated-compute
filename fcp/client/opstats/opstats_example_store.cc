@@ -23,7 +23,6 @@
 #include <vector>
 
 #include "google/protobuf/any.pb.h"
-#include "google/protobuf/util/time_util.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -34,6 +33,7 @@
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
+#include "google/protobuf/util/time_util.h"
 #include "tensorflow/core/example/example.pb.h"
 #include "tensorflow/core/example/feature.pb.h"
 
