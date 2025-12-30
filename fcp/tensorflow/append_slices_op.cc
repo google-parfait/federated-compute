@@ -31,6 +31,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/types/span.h"
 #include "tensorflow/core/framework/bounds_check.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -329,8 +330,8 @@ class PartialRandomAccessFile : public tensorflow::RandomAccessFile {
     }
     TF_RETURN_WITH_CONTEXT_IF_ERROR(
         file_->Read(offset + start_, n, result, scratch),
-        absl::StrCat("Reading from PartialRandomAccessFile at offset ", offset,
-                     " from start position ", start_));
+        absl::StrCat("Reading from PartialRandomAccessFile at offset ",
+                     offset, " from start position ", start_));
     if (read_too_long) {
       return absl::Status(absl::StatusCode::kOutOfRange,
                           "Attempted to read past end of file chunk.");
@@ -431,9 +432,9 @@ absl::Status LoadAndMergeAppendedSlices(const std::string& filename) {
     // Read in the footer telling us where the chunk started.
     char footer_scratch[sizeof(int64_t)];
     absl::string_view chunk_footer;
-    TF_RETURN_IF_ERROR(file->Read(chunk_footer_end - sizeof(int64_t),
-                                  sizeof(int64_t), &chunk_footer,
-                                  footer_scratch));
+    TF_RETURN_IF_ERROR(
+        file->Read(chunk_footer_end - sizeof(int64_t),
+                   sizeof(int64_t), &chunk_footer, footer_scratch));
     int64_t chunk_start = Int64FromHostEndianBytes(chunk_footer.data());
     int64_t chunk_end = chunk_footer_end - sizeof(int64_t);
     int64_t chunk_len = chunk_end - chunk_start;

@@ -684,6 +684,7 @@ cc_library(
     copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = APPEND_SLICES_OP_DEPS + [
+        "@com_google_absl//absl/types:span",
         "@org_tensorflow//tensorflow/core:framework",
         "@org_tensorflow//tensorflow/core:lib",
         "@org_tensorflow//tensorflow/core:protos_all_cc",
