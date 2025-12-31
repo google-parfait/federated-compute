@@ -15,7 +15,6 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 package(
-    default_visibility = ["//fcp:internal"],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -29,7 +28,6 @@ py_library(
     name = "dp_mf_aggregator",
     srcs = ["dp_mf_aggregator.py"],
     tags = ["manual"],
-    visibility = ["//visibility:public"],
     deps = [
         "//third_party/py/optax",
         "@federated_language//federated_language",
