@@ -47,12 +47,12 @@ message FedSqlContainerInitializeConfiguration {
   // data by the per-client query. This is an `Any` because using a TableSchema
   // would require using the `tf_proto_library` build rule for
   // fed_sql_container_config.proto and all its dependencies.
-  google.protobuf.Any joiner_table_schema = 4;
+  google.protobuf.Any joiner_table_schema = 4 [deprecated = true];
 
   // The data that can be joined with the device uploaded data by the per-client
   // query. The FedSQL container expects this data to be in the Federated
   // Compute client wire format.
-  bytes joiner_data = 5;
+  bytes joiner_data = 5 [deprecated = true];
 
   // Configuration for running private inference in FedSQL container.
   InferenceInitializeConfiguration inference_init_config = 6;

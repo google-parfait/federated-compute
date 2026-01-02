@@ -137,7 +137,8 @@ message InitializeResponse {
   // The CWT will also include claims regarding the initialization
   // configuration which must be verified by the Ledger to match the
   // data usage policy.
-  bytes public_key = 1;
+  // TODO: b/451710612 - Remove this field.
+  bytes public_key = 1 [deprecated = true];
 }
 
 // Polymorphic request message for a Session stream.
@@ -226,8 +227,12 @@ message BlobMetadata {
 
     // The associated data for `encrypted_symmetric_key`.
     oneof symmetric_key_associated_data_components {
-      LedgerAssociatedData ledger_symmetric_key_associated_data = 3;
-      RewrappedAssociatedData rewrapped_symmetric_key_associated_data = 4;
+      // TODO: b/451710612 - Remove this field.
+      LedgerAssociatedData ledger_symmetric_key_associated_data = 3
+          [deprecated = true];
+      // TODO: b/451710612 - Remove this field.
+      RewrappedAssociatedData rewrapped_symmetric_key_associated_data = 4
+          [deprecated = true];
       KmsAssociatedData kms_symmetric_key_associated_data = 8;
     }
 
@@ -244,7 +249,8 @@ message BlobMetadata {
     // Since the decryption step only succeeds if the associated data matches
     // what was included by the Ledger, this ensures that the Ledger explicitly
     // authorized access for each individual WriteRequest.
-    uint32 counter = 6;
+    // TODO: b/451710612 - Remove this field.
+    uint32 counter = 6 [deprecated = true];
 
     // Components which will be appended together to create the associated data
     // to be used for decryption of the symmetric key by the Ledger so that it
