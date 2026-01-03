@@ -16,10 +16,10 @@
 
 #include <optional>
 
-#include "google/protobuf/descriptor.h"
-#include "google/protobuf/message.h"
 #include "fcp/base/monitoring.h"
 #include "flatbuffers/flatbuffers.h"
+#include "google/protobuf/descriptor.h"
+#include "google/protobuf/message.h"
 
 namespace fcp::tracing_internal {
 
