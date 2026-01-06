@@ -134,7 +134,7 @@ message FedSqlContainerConfigConstraints {
   // `Any` because using a WindowingSchedule would require using the
   // `tf_proto_library` build rule for
   // fed_sql_container_config.proto and all its dependencies.
-  // TODO: team - Change this to a WindowingSchedule once we remove the
+  // TODO: b/425744048 - Change this to a WindowingSchedule once we remove the
   // dependency on plan.proto from sql_query.proto.
   google.protobuf.Any dp_windowing_schedule = 6;
 

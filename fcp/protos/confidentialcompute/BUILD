@@ -504,7 +504,7 @@ cc_proto_library(
 )
 
 # We have to use tf_proto_library since we have a dependency on sql_query_proto.
-# TODO: team - Switch this to proto_library once we can remove the plan.proto dependency from
+# TODO: b/425744048 - Switch this to proto_library once we can remove the plan.proto dependency from
 # sql_query.proto.
 tf_proto_library(
     name = "selection_criteria_proto",
@@ -542,7 +542,7 @@ java_proto_library(
 
 # Use tf_proto_library so selection_criteria_proto can depend on this. This is necessary for the
 # open source version of tf_proto_library to succeed.
-# TODO: team - Switch this to proto_library once we can remove the plan.proto dependency from
+# TODO: b/425744048 - Switch this to proto_library once we can remove the plan.proto dependency from
 # sql_query.proto (and thus also remove it from selection_criteria.proto)
 tf_proto_library(
     name = "windowing_schedule_proto",

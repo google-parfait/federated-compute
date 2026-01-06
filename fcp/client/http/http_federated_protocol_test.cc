@@ -4407,7 +4407,7 @@ TEST_F(HttpFederatedProtocolTest,
   ASSERT_TRUE(found_blob_header);
 }
 
-// TODO: team -  Add a test for confidential aggregation with multiple
+// TODO: b/307312707 -  Add a test for confidential aggregation with multiple
 // task assignment.
 
 TEST_F(HttpFederatedProtocolTest,

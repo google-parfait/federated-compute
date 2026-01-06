@@ -1246,7 +1246,7 @@ ReportResult HttpFederatedProtocol::ReportCompleted(
 ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
     ComputationResults results, absl::Duration plan_duration,
     PerTaskInfo& task_info) {
-  // TODO: team -  Remove the kUnknown check once the
+  // TODO: b/307312707 -  Remove the kUnknown check once the
   // Flags::enable_confidential_aggregation() flag is removed.
   FCP_CHECK(task_info.aggregation_type == AggregationType::kUnknown ||
             task_info.aggregation_type == AggregationType::kSimpleAggregation ||
@@ -1280,7 +1280,7 @@ ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
       std::holds_alternative<FCCheckpoints>(result);
   if (should_report_lightweight_client_report_wire_format) {
     for (auto& checkpoint : std::get<FCCheckpoints>(result)) {
-      // TODO: team - avoid copying serialized checkpoint once http
+      // TODO: b/300128447 - avoid copying serialized checkpoint once http
       // federated protocol supports absl::Cord
       std::string data;
       absl::CopyCordToString(checkpoint.payload, &data);
@@ -1798,7 +1798,7 @@ HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
   }
 
   // Now encrypt the compressed data.
-  // TODO: team -  Remove the need to parse the public key both in this
+  // TODO: b/307312707 -  Remove the need to parse the public key both in this
   // file, as well as in MessageEncryptor::Encrypt. Perhaps we should be able to
   // pass the already-parsed OkCwt struct to the Encrypt method instead?
   absl::StatusOr<EncryptMessageResult> encryption_result =

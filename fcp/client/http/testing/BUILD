@@ -21,7 +21,7 @@ package(
     licenses = ["notice"],  # Apache 2.0
 )
 
-# TODO(b/239369773)
+# TODO(team)
 
 cc_library(
     name = "test_helpers",

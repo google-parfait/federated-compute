@@ -182,7 +182,7 @@ absl::Status GenerateAggregationTensorsFromExampleQueryResult(
                       TensorShape({values.string_values().value_size()}),
                       values.string_values().value()));
     } else if (values.has_bool_values()) {
-      // TODO: team - add support for bool values type
+      // TODO: b/296046539 - add support for bool values type
       return absl::UnimplementedError("Bool values currently not supported.");
     } else if (values.has_float_values()) {
       FCP_RETURN_IF_ERROR(
@@ -201,7 +201,7 @@ absl::Status GenerateAggregationTensorsFromExampleQueryResult(
                       TensorShape({values.double_values().value_size()}),
                       values.double_values().value()));
     } else if (values.has_bytes_values()) {
-      // TODO: team - add support for bytes values type
+      // TODO: b/296046539 - add support for bytes values type
       return absl::UnimplementedError("Bytes values currently not supported.");
     } else {
       return absl::DataLossError(

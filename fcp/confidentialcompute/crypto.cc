@@ -28,6 +28,7 @@
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "fcp/base/digest.h"
@@ -280,16 +281,29 @@ MessageDecryptor::MessageDecryptor(
       hpke_kem_(EVP_hpke_x25519_hkdf_sha256()),
       hpke_kdf_(EVP_hpke_hkdf_sha256()),
       hpke_aead_(EVP_hpke_aes_128_gcm()),
-      hpke_key_(),
+      hpke_key_(std::in_place),
       aead_(EVP_aead_aes_128_gcm_siv()) {
-  FCP_CHECK(EVP_HPKE_KEY_generate(hpke_key_.get(), hpke_kem_) == 1)
+  FCP_CHECK(EVP_HPKE_KEY_generate(hpke_key_->get(), hpke_kem_) == 1)
       << "Failed to generate HPKE public/private keypair: "
       << ERR_reason_error_string(ERR_get_error());
 }
 
+MessageDecryptor::MessageDecryptor(
+    const std::vector<absl::string_view>& decryption_keys)
+    : decryption_keys_(ProcessDecryptionKeys(decryption_keys)),
+      hpke_kem_(EVP_hpke_x25519_hkdf_sha256()),
+      hpke_kdf_(EVP_hpke_hkdf_sha256()),
+      hpke_aead_(EVP_hpke_aes_128_gcm()),
+      aead_(EVP_aead_aes_128_gcm_siv()) {}
+
 absl::StatusOr<std::string> MessageDecryptor::GetPublicKey(
     absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer,
     int64_t signer_algorithm) const {
+  if (!hpke_key_) {
+    return absl::FailedPreconditionError(
+        "MessageDecryptor was constructed without GetPublicKey() support");
+  }
+
   OkpCwt cwt{
       .algorithm = signer_algorithm,
       .public_key =
@@ -303,8 +317,9 @@ absl::StatusOr<std::string> MessageDecryptor::GetPublicKey(
   };
   size_t public_key_len = 0;
   if (EVP_HPKE_KEY_public_key(
-          hpke_key_.get(), reinterpret_cast<uint8_t*>(cwt.public_key->x.data()),
-          &public_key_len, cwt.public_key->x.size()) != 1) {
+          hpke_key_->get(),
+          reinterpret_cast<uint8_t*>(cwt.public_key->x.data()), &public_key_len,
+          cwt.public_key->x.size()) != 1) {
     return FCP_STATUS(fcp::INTERNAL)
            << "Failed to obtain public key from HPKE public/private keypair: "
            << ERR_reason_error_string(ERR_get_error());
@@ -322,16 +337,21 @@ absl::StatusOr<std::string> MessageDecryptor::Decrypt(
     absl::string_view encrypted_symmetric_key,
     absl::string_view encrypted_symmetric_key_associated_data,
     absl::string_view encapped_key, absl::string_view key_id) const {
-  std::optional<std::string> symmetric_key =
+  absl::StatusOr<std::string> symmetric_key =
       UnwrapSymmetricKeyWithDecryptionKeys(
           encrypted_symmetric_key, encrypted_symmetric_key_associated_data,
           encapped_key, key_id);
-  if (!symmetric_key.has_value()) {
-    FCP_ASSIGN_OR_RETURN(
-        symmetric_key,
-        crypto_internal::UnwrapSymmetricKey(
-            hpke_key_.get(), hpke_kdf_, hpke_aead_, encrypted_symmetric_key,
-            encapped_key, encrypted_symmetric_key_associated_data));
+  if (!symmetric_key.ok()) {
+    // Fall back to the internally generated key (if available).
+    if (hpke_key_) {
+      FCP_ASSIGN_OR_RETURN(
+          symmetric_key,
+          crypto_internal::UnwrapSymmetricKey(
+              hpke_key_->get(), hpke_kdf_, hpke_aead_, encrypted_symmetric_key,
+              encapped_key, encrypted_symmetric_key_associated_data));
+    } else {
+      return std::move(symmetric_key).status();
+    }
   }
   // Cleanse the memory containing the symmetric key upon exiting the scope so
   // the key cannot be accessed outside this function.
@@ -386,35 +406,32 @@ absl::StatusOr<std::string> MessageDecryptor::DecryptReleasedResult(
   return plaintext;
 }
 
-std::optional<std::string>
+absl::StatusOr<std::string>
 MessageDecryptor::UnwrapSymmetricKeyWithDecryptionKeys(
     absl::string_view encrypted_symmetric_key,
     absl::string_view encrypted_symmetric_key_associated_data,
     absl::string_view encapped_key, absl::string_view key_id) const {
-  // Fail immediately if no decryption keys were provided or if a key_id wasn't
-  // provided.
-  if (decryption_keys_.empty() || key_id.empty()) {
-    return std::nullopt;
-  }
-
   // Attempt to decrypt with each key with a matching key ID. If all matching
   // keys fail, return nullopt so that the caller can attempt to decrypt with
   // the internally generated key (just in case the MessageDecryptor is being
   // used to decrypt a mix of inputs using the Ledger and KMS).
   auto it = decryption_keys_.find(key_id);
   if (it == decryption_keys_.end()) {
-    return std::nullopt;
+    return FCP_STATUS(fcp::FAILED_PRECONDITION)
+           << "no decryption key available for key ID h\""
+           << absl::BytesToHexString(key_id) << "\"";
   }
+  absl::StatusOr<std::string> symmetric_key;
   for (const auto& hpke_key : it->second) {
-    absl::StatusOr<std::string> symmetric_key =
-        crypto_internal::UnwrapSymmetricKey(
-            hpke_key.get(), hpke_kdf_, hpke_aead_, encrypted_symmetric_key,
-            encapped_key, encrypted_symmetric_key_associated_data);
+    symmetric_key = crypto_internal::UnwrapSymmetricKey(
+        hpke_key.get(), hpke_kdf_, hpke_aead_, encrypted_symmetric_key,
+        encapped_key, encrypted_symmetric_key_associated_data);
     if (symmetric_key.ok()) {
       return *std::move(symmetric_key);
     }
   }
-  return std::nullopt;
+  // Arbitrarily return the status of the last attempt.
+  return symmetric_key.status();
 }
 
 EcdsaP256R1Signer EcdsaP256R1Signer::Create() {

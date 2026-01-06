@@ -132,6 +132,15 @@ class MessageDecryptor {
       std::string config_properties = "",
       const std::vector<absl::string_view>& decryption_keys = {});
 
+  // Constructs a new MessageDecryptor that uses the provided decryption keys;
+  // these keys should be encoded as serialized COSE_Keys. Any invalid keys will
+  // be ignored.
+  //
+  // This constructor only supports the KMS; when using this constructor,
+  // GetPublicKey will always fail.
+  explicit MessageDecryptor(
+      const std::vector<absl::string_view>& decryption_keys);
+
   // MessageDecryptor is not copyable or moveable due to the use of
   // bssl::ScopedEVP_HPKE_KEY.
   MessageDecryptor(const MessageDecryptor& other) = delete;
@@ -187,9 +196,8 @@ class MessageDecryptor {
 
  private:
   // Attempts to unwraps the encrypted symmetric key using the decryption keys
-  // provided in the constructor. Returns nullopt if decryption is not
-  // successful.
-  std::optional<std::string> UnwrapSymmetricKeyWithDecryptionKeys(
+  // provided in the constructor.
+  absl::StatusOr<std::string> UnwrapSymmetricKeyWithDecryptionKeys(
       absl::string_view encrypted_symmetric_key,
       absl::string_view encrypted_symmetric_key_associated_data,
       absl::string_view encapped_key, absl::string_view key_id) const;
@@ -200,7 +208,7 @@ class MessageDecryptor {
   const EVP_HPKE_KEM* hpke_kem_;
   const EVP_HPKE_KDF* hpke_kdf_;
   const EVP_HPKE_AEAD* hpke_aead_;
-  bssl::ScopedEVP_HPKE_KEY hpke_key_;
+  std::optional<bssl::ScopedEVP_HPKE_KEY> hpke_key_;
   const EVP_AEAD* aead_;
 };
 

@@ -484,7 +484,7 @@ void LogResultUploadStatus(PhaseLogger& phase_logger,
                            const NetworkStats& network_stats,
                            absl::Time time_before_result_upload,
                            absl::Time reference_time) {
-  //  TODO: team - Add a method to PhaseLogger to log partial successes.
+  //  TODO: b/448716561 - Add a method to PhaseLogger to log partial successes.
   //  For now, we will log partial successes as completed uploads, since that's
   //  how we treat them for contribution tracking.
   if (report_result.outcome == ReportOutcome::kSuccess ||
@@ -666,7 +666,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     return absl::InternalError(message);
   }
 
-  // TODO: team - Remove checkpoint usage as native eligibility eval does
+  // TODO: b/325189386 - Remove checkpoint usage as native eligibility eval does
   // not require the checkpoint anymore.
   absl::StatusOr<std::string> checkpoint_input_filename =
       CreateInputCheckpointFile(files,
@@ -724,7 +724,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
 
       EetPlanRunnerImpl eet_plan_runner(run_plan_func);
 
-      // TODO: team - Return ExampleStats out of the NEET engine so they
+      // TODO: b/290714966 - Return ExampleStats out of the NEET engine so they
       // can be measured.
       native_task_eligibility_info = ComputeNativeEligibility(
           eligibility_eval_task.population_eligibility_spec.value(),

@@ -123,7 +123,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   enum class AggregationType {
     // Unknown aggregation type (in cases where the field simply isn't populated
     // yet).
-    // TODO: team -  Remove this value once the
+    // TODO: b/307312707 -  Remove this value once the
     // enable_confidential_aggregation() flag is removed.
     kUnknown,
     kSimpleAggregation,

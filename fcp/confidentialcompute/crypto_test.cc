@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "google/protobuf/struct.pb.h"
 #include "gmock/gmock.h"
@@ -123,6 +124,12 @@ TEST(CryptoTest, GetPublicKeyCwtSigningError) {
 
   MessageDecryptor decryptor;
   EXPECT_THAT(decryptor.GetPublicKey(signer.AsStdFunction(), 0),
+              IsCode(FAILED_PRECONDITION));
+}
+
+TEST(CryptoTest, GetPublicKeyWithoutSupport) {
+  MessageDecryptor decryptor(std::vector<absl::string_view>{});
+  EXPECT_THAT(decryptor.GetPublicKey([](absl::string_view) { return ""; }, 0),
               IsCode(FAILED_PRECONDITION));
 }
 
@@ -243,7 +250,7 @@ TEST(CryptoTest, EncryptAndDecryptWithProvidedKey) {
   std::string associated_data = "plaintext associated data";
 
   MessageEncryptor encryptor;
-  MessageDecryptor decryptor({}, {*private_key});
+  MessageDecryptor decryptor(std::vector<absl::string_view>{*private_key});
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *public_cwt, associated_data);
@@ -1079,7 +1086,7 @@ TEST(CryptoTest, DecryptWithWrongKeyIdFails) {
   std::string associated_data = "plaintext associated data";
 
   MessageEncryptor encryptor;
-  MessageDecryptor decryptor({}, {*private_key});
+  MessageDecryptor decryptor(std::vector<absl::string_view>{*private_key});
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *public_cwt, associated_data);
@@ -1089,7 +1096,7 @@ TEST(CryptoTest, DecryptWithWrongKeyIdFails) {
       encrypt_result->ciphertext, associated_data,
       encrypt_result->encrypted_symmetric_key, associated_data,
       encrypt_result->encapped_key, "other-id");
-  EXPECT_THAT(decrypt_result, fcp::IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, fcp::IsCode(FAILED_PRECONDITION));
 }
 
 TEST(CryptoTest, DecryptReleasedResult) {

@@ -103,13 +103,13 @@ class MinSepDataSourceIterator(
   @classmethod
   def from_bytes(cls, buffer: bytes) -> 'MinSepDataSourceIterator':
     """Deserializes the object from bytes."""
-    # TODO: team - Add deserialization support if fault tolerance is
+    # TODO: b/420969188 - Add deserialization support if fault tolerance is
     # needed.
     raise NotImplementedError()
 
   def to_bytes(self) -> bytes:
     """Serializes the object to bytes."""
-    # TODO: team - Add serialization support if fault tolerance is
+    # TODO: b/420969188 - Add serialization support if fault tolerance is
     # needed.
     raise NotImplementedError()
 

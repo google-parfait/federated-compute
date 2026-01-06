@@ -618,7 +618,7 @@ TEST(OakRustAttestationTest,
                                 encryption_config);
   // The access_policy_sha256 step should succeed, but since we modified the
   // public key, the signature verification will fail.
-  // TODO: team - Ensure this test succeeds once we have test data that
+  // TODO: b/418269101 - Ensure this test succeeds once we have test data that
   // includes an access_policy_sha256 claim.
   EXPECT_THAT(result.status(), IsCode(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(result.status().message(),
