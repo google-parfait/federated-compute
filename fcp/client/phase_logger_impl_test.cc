@@ -20,7 +20,6 @@
 #include <optional>
 #include <string>
 
-#include "google/protobuf/util/time_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
@@ -35,6 +34,7 @@
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/testing/testing.h"
+#include "google/protobuf/util/time_util.h"
 
 namespace fcp {
 namespace client {
