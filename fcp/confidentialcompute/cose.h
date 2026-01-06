@@ -30,6 +30,8 @@
 namespace fcp::confidential_compute {
 
 // COSE Key Operation values; see RFC 9052 Table 5.
+inline constexpr int64_t kCoseKeyOpSign = 1;
+inline constexpr int64_t kCoseKeyOpVerify = 2;
 inline constexpr int64_t kCoseKeyOpEncrypt = 3;
 inline constexpr int64_t kCoseKeyOpDecrypt = 4;
 
@@ -46,6 +48,24 @@ struct OkpKey {
   static absl::StatusOr<OkpKey> Decode(absl::string_view encoded);
 
   // CBOR-encodes an OkpKey.
+  absl::StatusOr<std::string> Encode() const;
+};
+
+// A Cose_Key struct for an EC2 public or private key (elliptic curve key with
+// x and y coordinates).
+struct Ec2Key {
+  std::string key_id;
+  std::optional<int64_t> algorithm;
+  std::vector<int64_t> key_ops;
+  std::optional<int64_t> curve;
+  std::string x;
+  std::string y;
+  std::string d;
+
+  // CBOR-decodes an Ec2Key.
+  static absl::StatusOr<Ec2Key> Decode(absl::string_view encoded);
+
+  // CBOR-encodes an Ec2Key.
   absl::StatusOr<std::string> Encode() const;
 };
 
@@ -67,13 +87,20 @@ struct SymmetricKey {
       bool encode_without_libcppbor = false) const;
 };
 
-// A Cose_Sign1 struct for a CBOR Web Token (CWT) containing a OKP key.
-struct OkpCwt {
+namespace cose_internal {
+// Base class for CWT types.
+template <typename T>
+struct BaseCwt {
   std::optional<int64_t> algorithm;
   std::optional<absl::Time> issued_at;
+  std::optional<absl::Time> not_before;
   std::optional<absl::Time> expiration_time;
-  std::optional<OkpKey> public_key;
+  std::optional<T> public_key;
   std::string config_properties;  // serialized google.protobuf.Struct
+  std::string logical_pipeline_name;
+  std::string invocation_id;
+  std::optional<uint64_t> transform_index;
+  std::vector<uint32_t> dst_node_ids;
   std::string access_policy_sha256;
   std::string signature;
 
@@ -94,11 +121,20 @@ struct OkpCwt {
 
   // CBOR-decodes a Cwt. Both COSE_Sign and COSE_Sign1 structures are supported;
   // if a COSE_Sign structure is provided, the first signature is used.
-  static absl::StatusOr<OkpCwt> Decode(absl::string_view encoded);
+  static absl::StatusOr<BaseCwt<T>> Decode(absl::string_view encoded);
 
   // CBOR-encodes a Cwt.
   absl::StatusOr<std::string> Encode() const;
 };
+extern template struct BaseCwt<OkpKey>;
+extern template struct BaseCwt<Ec2Key>;
+}  // namespace cose_internal
+
+// A Cose_Sign1 struct for a CBOR Web Token (CWT) containing a OKP key.
+using OkpCwt = cose_internal::BaseCwt<OkpKey>;
+
+// A Cose_Sign1 struct for a CBOR Web Token (CWT) containing a EC2 key.
+using Ec2Cwt = cose_internal::BaseCwt<Ec2Key>;
 
 // A ReleaseToken structure used by the KeyManagementService API. A ReleaseToken
 // contains a signed and encrypted symmetric key, along with the logical
