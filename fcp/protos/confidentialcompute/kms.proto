@@ -361,6 +361,9 @@ message AuthorizeConfidentialTransformResponse {
     // information to avoid processing matching inputs or to provide more
     // user-friendly error messages.
     repeated bytes omitted_decryption_key_ids = 4;
+
+    // The invocation id from the AuthorizeConfidentialTransformRequest.
+    bytes invocation_id = 5;
   }
 }
 

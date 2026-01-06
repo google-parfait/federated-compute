@@ -35,7 +35,7 @@
 #endif
 
 namespace fcp::confidential_compute {
-// TODO: b/361182982 - Clean up the ifdef once the iOS toolchain supports C++20,
+// TODO: team - Clean up the ifdef once the iOS toolchain supports C++20,
 // or a better solution towards C++20 compatibility is found.
 #ifdef FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG
 namespace {

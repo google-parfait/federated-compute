@@ -65,7 +65,7 @@ absl::StatusOr<AttestationResults> VerifyPublicKeyAttestation(
     const oak::attestation::v1::ReferenceValues& public_key_reference_values) {
   // Validate the attestation evidence provided in the encryption config, using
   // the `public_key_reference_values_` provided to us at construction time.
-  // TODO: b/432726860 - enable use_policy_api.
+  // TODO: team - enable use_policy_api.
   FCP_ASSIGN_OR_RETURN(
       AttestationResults attestation_results,
       fcp::client::rust::oak_attestation_verification_ffi::VerifyAttestation(

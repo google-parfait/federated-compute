@@ -92,7 +92,7 @@ cc_test(
     ],
 )
 
-# TODO: b/361182982 - Clean up these flags once the iOS toolchain supports C++20, or a better
+# TODO: team - Clean up these flags once the iOS toolchain supports C++20, or a better
 # solution towards C++20 compatibility is found.
 bool_flag(
     name = "disable_confidential_agg",

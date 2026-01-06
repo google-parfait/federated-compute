@@ -30,7 +30,7 @@ message WindowingSchedule {
   // https://github.com/googleapis/googleapis/blob/master/google/type/date.proto
   // This was forked because WindowingSchedule must be a tf_proto_library
   // target, and all its dependencies must also be tf_proto_library targets.
-  // TODO: b/425744048 - Switch to the originals once we can switch from
+  // TODO: team - Switch to the originals once we can switch from
   // tf_proto_library to proto_library.
   //
   // Represents a whole or partial calendar date, such as a birthday. The time
@@ -60,7 +60,7 @@ message WindowingSchedule {
   // https://github.com/googleapis/googleapis/blob/master/google/type/timeofday.proto
   // This was forked because WindowingSchedule must be a tf_proto_library
   // target, and all its dependencies must also be tf_proto_library targets.
-  // TODO: b/425744048 - Switch to the originals once we can switch from
+  // TODO: team - Switch to the originals once we can switch from
   // tf_proto_library to proto_library.
   //
   // Represents a time of day. The date and time zone are either not significant

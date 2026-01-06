@@ -43,7 +43,7 @@ option java_multiple_files = true;
 // policies, but are deprecated. All new policies will use
 // `PipelineVariantPolicy` and `PipelineVariantPolicy.Transform` instead.
 //
-// TODO: b/390344558 - rename DataAccessPolicy to
+// TODO: team - rename DataAccessPolicy to
 // AuthorizedLogicalPipelinePolicies.
 message DataAccessPolicy {
   // A list of all transforms that are allowed on this data and its derivatives.
@@ -97,7 +97,7 @@ message DataAccessPolicy {
 //
 // This message should contain the subset of DataAccessPolicy fields needed to
 // extract the serialized PipelineVariantPolicy messages; all tags must match.
-// TODO: b/390344558 - rename DataAccessPolicyWithSerializedVariants to
+// TODO: team - rename DataAccessPolicyWithSerializedVariants to
 // AuthorizedLogicalPipelinePoliciesWithSerializedVariants.
 message DataAccessPolicyWithSerializedVariants {
   message LogicalPipelinePolicy {

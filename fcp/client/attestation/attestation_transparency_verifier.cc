@@ -142,7 +142,7 @@ AttestationTransparencyVerifier::Verify(
         "pipeline configuration access policy SHA-256 does not match "
         "encryption key");
   }
-  // TODO: b/444302065 - Check required claims for the access policy.
+  // TODO: team - Check required claims for the access policy.
 
   // Verification is now complete! Log the key information used to perform the
   // verification to the provided logger. This allows someone observing these

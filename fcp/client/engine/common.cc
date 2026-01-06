@@ -199,7 +199,7 @@ absl::StatusOr<std::string> DatasetIterator::GetNext() {
     // If we're not forwarding an OUT_OF_RANGE to the caller, record example
     // stats for metrics logging.
     if (collect_stats_) {
-      // TODO: b/184863488 - Consider reducing logic duplication in
+      // TODO: team - Consider reducing logic duplication in
       // cross-dataset and single-dataset example stat variables.
       *total_example_count_ += 1;
       *total_example_size_bytes_ += example->size();

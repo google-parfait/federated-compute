@@ -562,7 +562,7 @@ message ExampleQuerySpec {
 // to do with outputs from `TensorflowSpec` (e.g. how to aggregate them back on
 // the server).
 //
-// TODO(team) we could replace `input_checkpoint_file_tensor_name` with
+// TODO(b/154756402) we could replace `input_checkpoint_file_tensor_name` with
 // an `input_tensors` field, which would then be a tensor that contains the
 // input TensorProtos directly and skipping disk I/O, rather than referring to a
 // checkpoint file path.

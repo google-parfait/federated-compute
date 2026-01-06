@@ -328,7 +328,7 @@ int main(int argc, const char** argv) {
               << '\n';
     // Finds the directory in which the flatbuf class should look for
     // dependencies of the .fbs file
-    // TODO(team) pass in tracing_schema_common to the script instead of
+    // TODO(b/159845584) pass in tracing_schema_common to the script instead of
     // hardcoding it.
     std::cout << "    std::string schema_path_common = "
                  "GetDataPath(\"fcp/tracing/"

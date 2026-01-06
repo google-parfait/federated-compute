@@ -142,7 +142,7 @@ absl::flat_hash_set<std::string> ComputePerTaskSworEligibility(
 
   absl::flat_hash_set<std::string> eligibility_results;
   for (const std::string& task_name : task_names) {
-    // TODO(team) Instead of using GetLastSuccessfulContributionTime
+    // TODO(b/280750418) Instead of using GetLastSuccessfulContributionTime
     // directly, consider passing in an opstats utils wrapper that can be
     // mocked.
     std::optional<google::protobuf::Timestamp>
