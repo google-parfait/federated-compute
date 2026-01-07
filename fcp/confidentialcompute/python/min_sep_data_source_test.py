@@ -247,6 +247,60 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     self.assertLen(data_for_round, k)
     self.assertEqual(mock_resolve_fn.call_count, k)
 
+  def test_select_skips_bad_decrypt_errors(self):
+    client_ids = ['0', '1']
+    k = 2
+
+    def mock_resolve_uri_to_tensor_fn(
+        uri: str, key: str
+    ) -> tensor_pb2.TensorProto:
+      """A mock function for resolving a URI to a tensor."""
+      del key
+      client_id = os.path.basename(uri)
+      if client_id == '0':
+        raise RuntimeError(
+            'Failed to fetch Tensor: Failed to unwrap symmetric key'
+        )
+      return tensor_pb2.TensorProto(
+          dtype=tensor_pb2.DataType.DT_STRING,
+          content=uri.encode(),
+          shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
+      )
+
+    mock_resolve_fn = mock.Mock()
+    mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
+    input_provider = program_input_provider.ProgramInputProvider(
+        client_ids,
+        _TEST_CLIENT_DATA_DIRECTORY,
+        {},
+        mock_resolve_fn,
+    )
+
+    iterator = min_sep_data_source.MinSepDataSourceIterator(
+        min_sep=1,
+        input_provider=input_provider,
+        computation_type=_COMPUTATION_TYPE,
+        key_name=_KEY_NAME,
+        use_data_pointers=False,
+    )
+
+    with self.assertLogs(level='WARNING') as logs:
+      data_for_round = iterator.select(k)
+      self.assertLen(data_for_round, 1)
+      self.assertEqual(
+          os.path.basename(data_for_round[0].content.decode()), '1'
+      )
+      self.assertLen(logs.output, 2)
+      self.assertRegex(
+          logs.output[0],
+          'Skipping URI: test_dir/0 due to resolve error: Failed to fetch'
+          ' Tensor: Failed to unwrap symmetric key',
+      )
+      self.assertRegex(
+          logs.output[1],
+          'Skipped 1 inputs due to resolve errors in total of 2 inputs.',
+      )
+
 
 class MinSepDataSourceTest(absltest.TestCase):
 

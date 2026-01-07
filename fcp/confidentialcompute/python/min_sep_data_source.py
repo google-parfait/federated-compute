@@ -18,6 +18,7 @@ import os
 import random
 from typing import Optional
 
+from absl import logging
 import federated_language
 from federated_language.proto import array_pb2
 from federated_language.proto import computation_pb2
@@ -28,6 +29,9 @@ from fcp.confidentialcompute.python import constants
 from fcp.confidentialcompute.python import program_input_provider
 from fcp.protos.confidentialcompute import file_info_pb2
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
+
+
+_RESOLVE_URI_ERROR_MESSAGE_SUBSTRING = 'Failed to fetch Tensor'
 
 
 class MinSepDataSourceIterator(
@@ -177,34 +181,52 @@ class MinSepDataSourceIterator(
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=os.cpu_count() * 4
     ) as executor:
-      futures = []
+      future_to_uri = {}
       for client_id in selected_ids:
         uri = os.path.join(
             self._input_provider.client_data_directory, client_id
         )
-        futures.append(
-            executor.submit(
-                self._input_provider.resolve_uri_to_tensor,
-                uri,
-                self._key_name,
-            )
+        future = executor.submit(
+            self._input_provider.resolve_uri_to_tensor,
+            uri,
+            self._key_name,
         )
+        future_to_uri[future] = uri
 
       # Wait for all futures to complete. The order in which the results are
       # added does not matter.
-      for future in concurrent.futures.as_completed(futures):
-        tensor = future.result()
-        selected_values.append(
-            array_pb2.Array(
-                dtype=data_type_pb2.DataType.Value(
-                    tensor_pb2.DataType.Name(tensor.dtype)
-                ),
-                shape=array_pb2.ArrayShape(
-                    dim=tensor.shape.dim_sizes, unknown_rank=False
-                ),
-                content=tensor.content,
+      failure_count = 0
+      for future in concurrent.futures.as_completed(future_to_uri):
+        try:
+          tensor = future.result()
+          selected_values.append(
+              array_pb2.Array(
+                  dtype=data_type_pb2.DataType.Value(
+                      tensor_pb2.DataType.Name(tensor.dtype)
+                  ),
+                  shape=array_pb2.ArrayShape(
+                      dim=tensor.shape.dim_sizes, unknown_rank=False
+                  ),
+                  content=tensor.content,
+              )
+          )
+        except RuntimeError as e:
+          if _RESOLVE_URI_ERROR_MESSAGE_SUBSTRING in str(e):
+            logging.warning(
+                'Skipping URI: %s due to resolve error: %s',
+                future_to_uri[future],
+                e,
             )
-        )
+            failure_count += 1
+            continue
+          else:
+            raise
+    if failure_count > 0:
+      logging.warning(
+          'Skipped %d inputs due to resolve errors in total of %d inputs.',
+          failure_count,
+          len(selected_ids),
+      )
     return selected_values
 
 
