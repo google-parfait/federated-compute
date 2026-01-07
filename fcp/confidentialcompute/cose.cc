@@ -1025,7 +1025,7 @@ absl::StatusOr<cose_internal::BaseCwt<T>> cose_internal::BaseCwt<T>::Decode(
 }
 
 template <typename T>
-absl::StatusOr<std::string> cose_internal::BaseCwt<T>::OkpCwt::Encode() const {
+absl::StatusOr<std::string> cose_internal::BaseCwt<T>::Encode() const {
   return absl::UnimplementedError(
       "Confidential Aggregation is not supported on this platform.");
 }
