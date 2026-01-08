@@ -27,40 +27,13 @@ import "tensorflow_federated/cc/core/impl/aggregation/protocol/configuration.pro
 message FedSqlContainerInitializeConfiguration {
   tensorflow_federated.aggregation.Configuration agg_configuration = 1;
 
-  // The numerical identifier for the result of serializing the FedSQL session.
-  // This field is only used by trusted services. If this field is empty then
-  // the trusted FedSQL service will not encrypt its outputs that are created
-  // with FINALIZATION_TYPE_SERIALIZE.
-  // This field is only required when using Ledger API, it is ignored when using
-  // the KeyManagementService API since outputs are always encrypted.
-  uint32 serialize_output_access_policy_node_id = 2 [deprecated = true];
-
-  // The numerical identifier for the reported result of the FedSQL session.
-  // This field is only used by trusted services. If this field is empty then
-  // the trusted FedSQL service will not encrypt its outputs that are created
-  // with FINALIZATION_TYPE_REPORT.
-  // This field is only required when using Ledger API, it is ignored when using
-  // the KeyManagementService API since outputs are always encrypted.
-  uint32 report_output_access_policy_node_id = 3 [deprecated = true];
-
-  // The table schema for the data that can be joined with the device uploaded
-  // data by the per-client query. This is an `Any` because using a TableSchema
-  // would require using the `tf_proto_library` build rule for
-  // fed_sql_container_config.proto and all its dependencies.
-  google.protobuf.Any joiner_table_schema = 4 [deprecated = true];
-
-  // The data that can be joined with the device uploaded data by the per-client
-  // query. The FedSQL container expects this data to be in the Federated
-  // Compute client wire format.
-  bytes joiner_data = 5 [deprecated = true];
-
   // Configuration for running private inference in FedSQL container.
   InferenceInitializeConfiguration inference_init_config = 6;
 
   // Configuration for processing PrivateLogger uploads.
   PrivateLoggerUploadsConfig private_logger_uploads_config = 10;
 
-  reserved 7, 8, 9;
+  reserved 2, 3, 4, 5, 7, 8, 9;
 }
 
 enum AggCoreAggregationType {

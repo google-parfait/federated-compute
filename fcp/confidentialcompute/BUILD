@@ -207,30 +207,3 @@ cc_library(
     hdrs = ["constants.h"],
     visibility = ["//visibility:public"],
 )
-
-cc_library(
-    name = "nonce",
-    srcs = ["nonce.cc"],
-    hdrs = ["nonce.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//fcp/protos/confidentialcompute:confidential_transform_cc_proto",
-        "@boringssl//:crypto",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
-    ],
-)
-
-cc_test(
-    name = "nonce_test",
-    srcs = ["nonce_test.cc"],
-    deps = [
-        ":nonce",
-        "//fcp/testing",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-    ],
-)

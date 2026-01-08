@@ -227,59 +227,12 @@ message BlobMetadata {
 
     // The associated data for `encrypted_symmetric_key`.
     oneof symmetric_key_associated_data_components {
-      // TODO: b/451710612 - Remove this field.
-      LedgerAssociatedData ledger_symmetric_key_associated_data = 3
-          [deprecated = true];
-      // TODO: b/451710612 - Remove this field.
-      RewrappedAssociatedData rewrapped_symmetric_key_associated_data = 4
-          [deprecated = true];
       KmsAssociatedData kms_symmetric_key_associated_data = 8;
     }
 
-    // The ephemeral Diffie-Hellman key needed to derive the symmetric key used
-    // to encrypt `encrypted_secret_key`.
+    // The ephemeral Diffie-Hellman key needed to derive the symmetric key.
     bytes encapsulated_public_key = 5;
 
-    // Counter used with the session-level nonce to protect against replay
-    // attacks. Before decrypting and processing the data, the trusted worker
-    // application will ensure that
-    // 1) The counter is greater than all previously seen counters
-    // 2) When combined with the session's nonce, it matches the
-    //    RewrappedAssociatedData.nonce
-    // Since the decryption step only succeeds if the associated data matches
-    // what was included by the Ledger, this ensures that the Ledger explicitly
-    // authorized access for each individual WriteRequest.
-    // TODO: b/451710612 - Remove this field.
-    uint32 counter = 6 [deprecated = true];
-
-    // Components which will be appended together to create the associated data
-    // to be used for decryption of the symmetric key by the Ledger so that it
-    // can check the policy and grant access to worker components.
-    message LedgerAssociatedData {
-      // A serialized `fcp.confidentialcompute.BlobHeader`.
-      bytes record_header = 1;
-    }
-
-    // Components which will be appended together to create the associated data
-    // to be used for decryption of the symmetric key by a trusted worker
-    // application after the Ledger has checked the policy and rewrapped the
-    // symmetric key for access by the worker.
-    message RewrappedAssociatedData {
-      // If the application will be re-encrypting its output, the CWT for the
-      // public key to use. The CWT has the same required claims and parameters
-      // as `fcp.confidentialcompute.CreateKeyResponse.public_key`. Reusing the
-      // same public key as the input ensures that derived objects have the same
-      // expiration time as the original data. This key can be ignored if the
-      // application doesn't encrypt its outputs (e.g., because it produces
-      // anonymized aggregate results).
-      bytes reencryption_public_key = 1;
-
-      // Unique nonce for this blob to protect against replay attacks by an
-      // untrusted portion of the stack.
-      bytes nonce = 2;
-    }
-
-    // This field replaces LedgerAssociatedData when using KMS.
     // Components which will be appended together to create the associated data
     // to be used for decryption of the symmetric key by a trusted worker that
     // is pre-authorized by KMS. This associated data should be used along with
@@ -292,6 +245,8 @@ message BlobMetadata {
     // The ID of the blob. This must match the ID in the blob's
     // `fcp.confidentialcompute.BlobHeader`.
     bytes blob_id = 7;
+
+    reserved 3, 4, 6;
   }
 }
 
