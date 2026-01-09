@@ -29,7 +29,6 @@
 #ifndef FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
 #define FCP_CONFIDENTIALCOMPUTE_CRYPTO_H_
 
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <variant>
@@ -123,21 +122,9 @@ class MessageEncryptor {
 // This class is thread-safe.
 class MessageDecryptor {
  public:
-  // Constructs a new MessageDecryptor. If set, the provided config_properties
-  // will be included in the public key claims. The MessageDecryptor may be
-  // provided with a list of decryption keys to use in addition to the
-  // internally generated key; these keys should be encoded as serialized
-  // COSE_Keys. Any invalid keys will be ignored.
-  explicit MessageDecryptor(
-      std::string config_properties = "",
-      const std::vector<absl::string_view>& decryption_keys = {});
-
   // Constructs a new MessageDecryptor that uses the provided decryption keys;
   // these keys should be encoded as serialized COSE_Keys. Any invalid keys will
   // be ignored.
-  //
-  // This constructor only supports the KMS; when using this constructor,
-  // GetPublicKey will always fail.
   explicit MessageDecryptor(
       const std::vector<absl::string_view>& decryption_keys);
 
@@ -146,22 +133,9 @@ class MessageDecryptor {
   MessageDecryptor(const MessageDecryptor& other) = delete;
   MessageDecryptor& operator=(const MessageDecryptor& other) = delete;
 
-  // Obtain a public key that can be used to encrypt messages that this class
-  // can subsequently decrypt. The key will be a CBOR Web Token (CWT) signed by
-  // the provided signing function.
-  //
-  // The key material is generated in the constructor so the same key material
-  // will be included in the CWT even if this function is called multiple times.
-  // The CWT returned by this function may differ between function calls if
-  // different signing functions or algorithm identifiers are used, or if the
-  // provided signing function is non-deterministic.
-  absl::StatusOr<std::string> GetPublicKey(
-      absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer,
-      int64_t signer_algorithm) const;
-
   // Decrypts `ciphertext` using a symmetric key produced by decrypting
-  // `encrypted_symmetric_key` with the `encapped_key` and the private key
-  // corresponding to the public key returned by `GetPublicKey`.
+  // `encrypted_symmetric_key` with the `encapped_key` and a private key
+  // provided to the constructor.
   //
   // The ciphertext to decrypt should have been produced by
   // `MessageEncryptor::Encrypt` or an equivalent implementation.
@@ -171,7 +145,7 @@ class MessageDecryptor {
   // intermediary for decryption by this recipient.
   //
   // Returns the decrypted plaintext, a FAILED_PRECONDITION status if
-  // `GetPublicKey` has never been called for this class, or an INVALID_ARGUMENT
+  // no key with the required key id was provided,, or an INVALID_ARGUMENT
   // status if the ciphertext could not be decrypted with the provided
   // arguments.
   absl::StatusOr<std::string> Decrypt(
@@ -179,7 +153,7 @@ class MessageDecryptor {
       absl::string_view ciphertext_associated_data,
       absl::string_view encrypted_symmetric_key,
       absl::string_view encrypted_symmetric_key_associated_data,
-      absl::string_view encapped_key, absl::string_view key_id = "") const;
+      absl::string_view encapped_key, absl::string_view key_id) const;
 
   // Decrypts `ciphertext` using a symmetric key returned by
   // `/KeyManagementService.ReleaseResults`.
@@ -208,7 +182,6 @@ class MessageDecryptor {
   const EVP_HPKE_KEM* hpke_kem_;
   const EVP_HPKE_KDF* hpke_kdf_;
   const EVP_HPKE_AEAD* hpke_aead_;
-  std::optional<bssl::ScopedEVP_HPKE_KEY> hpke_key_;
   const EVP_AEAD* aead_;
 };
 

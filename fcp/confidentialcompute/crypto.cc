@@ -274,21 +274,6 @@ absl::StatusOr<EncryptMessageResult> MessageEncryptor::EncryptInternal(
 }
 
 MessageDecryptor::MessageDecryptor(
-    std::string config_properties,
-    const std::vector<absl::string_view>& decryption_keys)
-    : config_properties_(std::move(config_properties)),
-      decryption_keys_(ProcessDecryptionKeys(decryption_keys)),
-      hpke_kem_(EVP_hpke_x25519_hkdf_sha256()),
-      hpke_kdf_(EVP_hpke_hkdf_sha256()),
-      hpke_aead_(EVP_hpke_aes_128_gcm()),
-      hpke_key_(std::in_place),
-      aead_(EVP_aead_aes_128_gcm_siv()) {
-  FCP_CHECK(EVP_HPKE_KEY_generate(hpke_key_->get(), hpke_kem_) == 1)
-      << "Failed to generate HPKE public/private keypair: "
-      << ERR_reason_error_string(ERR_get_error());
-}
-
-MessageDecryptor::MessageDecryptor(
     const std::vector<absl::string_view>& decryption_keys)
     : decryption_keys_(ProcessDecryptionKeys(decryption_keys)),
       hpke_kem_(EVP_hpke_x25519_hkdf_sha256()),
@@ -296,70 +281,23 @@ MessageDecryptor::MessageDecryptor(
       hpke_aead_(EVP_hpke_aes_128_gcm()),
       aead_(EVP_aead_aes_128_gcm_siv()) {}
 
-absl::StatusOr<std::string> MessageDecryptor::GetPublicKey(
-    absl::FunctionRef<absl::StatusOr<std::string>(absl::string_view)> signer,
-    int64_t signer_algorithm) const {
-  if (!hpke_key_) {
-    return absl::FailedPreconditionError(
-        "MessageDecryptor was constructed without GetPublicKey() support");
-  }
-
-  OkpCwt cwt{
-      .algorithm = signer_algorithm,
-      .public_key =
-          OkpKey{
-              .algorithm = crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm,
-              .key_ops = {kCoseKeyOpEncrypt},
-              .curve = crypto_internal::kX25519,
-              .x = std::string(EVP_HPKE_MAX_PUBLIC_KEY_LENGTH, '\0'),
-          },
-      .config_properties = config_properties_,
-  };
-  size_t public_key_len = 0;
-  if (EVP_HPKE_KEY_public_key(
-          hpke_key_->get(),
-          reinterpret_cast<uint8_t*>(cwt.public_key->x.data()), &public_key_len,
-          cwt.public_key->x.size()) != 1) {
-    return FCP_STATUS(fcp::INTERNAL)
-           << "Failed to obtain public key from HPKE public/private keypair: "
-           << ERR_reason_error_string(ERR_get_error());
-  }
-  cwt.public_key->x.resize(public_key_len);
-
-  FCP_ASSIGN_OR_RETURN(std::string sig_structure,
-                       cwt.BuildSigStructureForSigning(/*aad=*/""));
-  FCP_ASSIGN_OR_RETURN(cwt.signature, signer(sig_structure));
-  return cwt.Encode();
-}
-
 absl::StatusOr<std::string> MessageDecryptor::Decrypt(
     absl::string_view ciphertext, absl::string_view ciphertext_associated_data,
     absl::string_view encrypted_symmetric_key,
     absl::string_view encrypted_symmetric_key_associated_data,
     absl::string_view encapped_key, absl::string_view key_id) const {
-  absl::StatusOr<std::string> symmetric_key =
+  FCP_ASSIGN_OR_RETURN(
+      std::string symmetric_key,
       UnwrapSymmetricKeyWithDecryptionKeys(
           encrypted_symmetric_key, encrypted_symmetric_key_associated_data,
-          encapped_key, key_id);
-  if (!symmetric_key.ok()) {
-    // Fall back to the internally generated key (if available).
-    if (hpke_key_) {
-      FCP_ASSIGN_OR_RETURN(
-          symmetric_key,
-          crypto_internal::UnwrapSymmetricKey(
-              hpke_key_->get(), hpke_kdf_, hpke_aead_, encrypted_symmetric_key,
-              encapped_key, encrypted_symmetric_key_associated_data));
-    } else {
-      return std::move(symmetric_key).status();
-    }
-  }
+          encapped_key, key_id));
   // Cleanse the memory containing the symmetric key upon exiting the scope so
   // the key cannot be accessed outside this function.
   absl::Cleanup symmetric_key_cleanup = [&symmetric_key]() {
-    OPENSSL_cleanse(symmetric_key->data(), symmetric_key->size());
+    OPENSSL_cleanse(symmetric_key.data(), symmetric_key.size());
   };
   return DecryptReleasedResult(ciphertext, ciphertext_associated_data,
-                               *symmetric_key);
+                               symmetric_key);
 }
 
 absl::StatusOr<std::string> MessageDecryptor::DecryptReleasedResult(

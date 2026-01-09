@@ -42,15 +42,10 @@ namespace confidential_compute {
 namespace {
 
 using ::fcp::confidentialcompute::Key;
-using ::testing::_;
-using ::testing::DoAll;
-using ::testing::ElementsAre;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Not;
 using ::testing::Optional;
-using ::testing::Return;
-using ::testing::SaveArg;
 
 // Helper function to generate a new public and private key pair (HPKE_KEY).
 // This function uses output parameters because ScopedEVP_HPKE_KEY is not
@@ -65,53 +60,6 @@ void GenerateKeyPair(const EVP_HPKE_KEM& kem, std::string& public_key,
                &public_key_len, public_key.size()),
            1);
   public_key.resize(public_key_len);
-}
-
-TEST(CryptoTest, GetPublicKey) {
-  testing::MockFunction<absl::StatusOr<std::string>(absl::string_view)> signer;
-  std::string sig_structure;
-  EXPECT_CALL(signer, Call(_))
-      .WillOnce(DoAll(SaveArg<0>(&sig_structure), Return("signature")));
-
-  google::protobuf::Struct config_properties;
-  (*config_properties.mutable_fields())["key"].set_string_value("value");
-
-  MessageDecryptor decryptor(config_properties.SerializeAsString());
-  absl::StatusOr<std::string> recipient_public_key =
-      decryptor.GetPublicKey(signer.AsStdFunction(), 7);
-  ASSERT_OK(recipient_public_key);
-
-  absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(*recipient_public_key);
-  ASSERT_OK(cwt);
-  EXPECT_EQ(cwt->algorithm, 7);
-  ASSERT_NE(cwt->public_key, std::nullopt);
-  EXPECT_EQ(cwt->public_key->algorithm,
-            crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm);
-  EXPECT_THAT(cwt->public_key->key_ops, ElementsAre(kCoseKeyOpEncrypt));
-  EXPECT_EQ(cwt->public_key->curve, crypto_internal::kX25519);
-  EXPECT_NE(cwt->public_key->x, "");
-  EXPECT_EQ(cwt->config_properties, config_properties.SerializeAsString());
-  EXPECT_EQ(cwt->signature, "signature");
-
-  // The signature structure is a COSE implementation detail, but it should at
-  // least contain the public key.
-  EXPECT_THAT(sig_structure, HasSubstr(cwt->public_key->x));
-}
-
-TEST(CryptoTest, GetPublicKeyCwtSigningError) {
-  testing::MockFunction<absl::StatusOr<std::string>(absl::string_view)> signer;
-  EXPECT_CALL(signer, Call(_))
-      .WillOnce(Return(absl::FailedPreconditionError("")));
-
-  MessageDecryptor decryptor;
-  EXPECT_THAT(decryptor.GetPublicKey(signer.AsStdFunction(), 0),
-              IsCode(FAILED_PRECONDITION));
-}
-
-TEST(CryptoTest, GetPublicKeyWithoutSupport) {
-  MessageDecryptor decryptor(std::vector<absl::string_view>{});
-  EXPECT_THAT(decryptor.GetPublicKey([](absl::string_view) { return ""; }, 0),
-              IsCode(FAILED_PRECONDITION));
 }
 
 TEST(CryptoTest, EncryptAndDecrypt) {
@@ -212,32 +160,6 @@ TEST(CryptoTest, EncryptAndDecryptWithProvidedKey) {
       encryptor.Encrypt(message, public_key, associated_data);
   ASSERT_OK(encrypt_result);
 
-  absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
-      encrypt_result->ciphertext, associated_data,
-      encrypt_result->encrypted_symmetric_key, associated_data,
-      encrypt_result->encapped_key, "key-id");
-  ASSERT_OK(decrypt_result);
-  EXPECT_EQ(*decrypt_result, message);
-}
-
-TEST(CryptoTest, EncryptAndDecryptCanIgnoreProvidedKey) {
-  std::string message = "some plaintext message";
-  std::string associated_data = "plaintext associated data";
-
-  MessageEncryptor encryptor;
-  auto [public_key, private_key] = GenerateHpkeKeyPair("key-id");
-  MessageDecryptor decryptor({}, {private_key});
-
-  absl::StatusOr<std::string> recipient_public_key =
-      decryptor.GetPublicKey([](absl::string_view) { return ""; }, 0);
-  ASSERT_OK(recipient_public_key);
-
-  absl::StatusOr<EncryptMessageResult> encrypt_result =
-      encryptor.Encrypt(message, *recipient_public_key, associated_data);
-  ASSERT_OK(encrypt_result);
-
-  // Even though decryption keys were provided, it should still be possible to
-  // decrypt using the MessageDecryptor's internal key.
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, associated_data,
       encrypt_result->encrypted_symmetric_key, associated_data,
@@ -987,8 +909,8 @@ TEST(CryptoTest, DecryptReleasedResult) {
 
   // The message should be decryptable using the symmetric key.
   absl::StatusOr<std::string> decrypt_result =
-      MessageDecryptor().DecryptReleasedResult(encrypt_result->ciphertext,
-                                               associated_data, *symmetric_key);
+      MessageDecryptor({}).DecryptReleasedResult(
+          encrypt_result->ciphertext, associated_data, *symmetric_key);
   ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
 }
@@ -1014,8 +936,8 @@ TEST(CryptoTest, DecryptReleasedFailsWithInvalidSymmetricKey) {
   ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result =
-      MessageDecryptor().DecryptReleasedResult(encrypt_result->ciphertext,
-                                               associated_data, "invalid");
+      MessageDecryptor({}).DecryptReleasedResult(encrypt_result->ciphertext,
+                                                 associated_data, "invalid");
   EXPECT_THAT(decrypt_result, fcp::IsCode(INVALID_ARGUMENT));
 }
 
