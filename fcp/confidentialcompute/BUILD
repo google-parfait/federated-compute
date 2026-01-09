@@ -189,6 +189,7 @@ cc_test(
     deps = [
         ":cose",
         ":crypto",
+        ":crypto_test_util",
         "//fcp/base",
         "//fcp/protos/confidentialcompute:key_cc_proto",
         "//fcp/testing",
@@ -199,6 +200,35 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "crypto_test_util",
+    testonly = True,
+    srcs = ["crypto_test_util.cc"],
+    hdrs = ["crypto_test_util.h"],
+    deps = [
+        ":cose",
+        ":crypto",
+        "//fcp/base",
+        "@boringssl//:crypto",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "crypto_test_util_test",
+    srcs = ["crypto_test_util_test.cc"],
+    deps = [
+        ":crypto",
+        ":crypto_test_util",
+        "//fcp/testing",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
