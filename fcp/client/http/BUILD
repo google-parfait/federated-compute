@@ -211,6 +211,7 @@ cc_test(
         "//fcp/confidentialcompute:client_payload",
         "//fcp/confidentialcompute:cose",
         "//fcp/confidentialcompute:crypto",
+        "//fcp/confidentialcompute:crypto_test_util",
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos:population_eligibility_spec_cc_proto",

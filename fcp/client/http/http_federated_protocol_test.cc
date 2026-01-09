@@ -60,6 +60,7 @@
 #include "fcp/confidentialcompute/client_payload.h"
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"
+#include "fcp/confidentialcompute/crypto_test_util.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/federated_api.pb.h"
@@ -3376,17 +3377,9 @@ TEST_F(HttpFederatedProtocolTest,
   absl::Duration plan_duration = absl::Minutes(5);
 
   // Generate a new public key, which we'll pass to the client in the
-  // ConfidentialEncryptionConfig. We'll use the decryptor from which the public
-  // key was generated to validate the encrypted payload at the end of the test.
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
+  // ConfidentialEncryptionConfig.
+  auto [encoded_public_key, private_key] =
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id");
 
   // Note: we don't specify any attestation evidence nor attestation
   // endorsements in the encryption config, since we can't generate valid
@@ -3464,14 +3457,16 @@ TEST_F(HttpFederatedProtocolTest,
             ComputeSHA256(serialized_access_policy));
   EXPECT_EQ(blob_header.access_policy_node_id(), 0);
   EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
-  EXPECT_EQ(blob_header.key_id(), parsed_public_key->public_key->key_id);
+  EXPECT_EQ(blob_header.key_id(), "key-id");
 
   // Ensure that the ciphertext can be decrypted.
+  fcp::confidential_compute::MessageDecryptor decryptor(
+      std::vector<absl::string_view>{private_key});
   auto decrypted_uploaded_data =
       decryptor.Decrypt(ciphertext, payload_header->serialized_blob_header,
                         payload_header->encrypted_symmetric_key,
                         payload_header->serialized_blob_header,
-                        payload_header->encapsulated_public_key);
+                        payload_header->encapsulated_public_key, "key-id");
   ASSERT_OK(decrypted_uploaded_data);
 
   // The ciphertext contains compressed data, so we must decompress it before
@@ -3528,17 +3523,9 @@ TEST_F(HttpFederatedProtocolTest,
   absl::Duration plan_duration = absl::Minutes(5);
 
   // Generate a new public key, which we'll pass to the client in the
-  // ConfidentialEncryptionConfig. We'll use the decryptor from which the public
-  // key was generated to validate the encrypted payload at the end of the test.
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
+  // ConfidentialEncryptionConfig.
+  auto [encoded_public_key, private_key] =
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id");
 
   // Note: we don't specify any attestation evidence nor attestation
   // endorsements in the encryption config, since we can't generate valid
@@ -3616,15 +3603,17 @@ TEST_F(HttpFederatedProtocolTest,
             ComputeSHA256(serialized_access_policy));
   EXPECT_EQ(blob_header.access_policy_node_id(), 0);
   EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
-  EXPECT_EQ(blob_header.key_id(), parsed_public_key->public_key->key_id);
+  EXPECT_EQ(blob_header.key_id(), "key-id");
   EXPECT_THAT(blob_header.payload_metadata(), EqualsProto(payload_metadata));
 
   // Ensure that the ciphertext can be decrypted.
+  fcp::confidential_compute::MessageDecryptor decryptor(
+      std::vector<absl::string_view>{private_key});
   auto decrypted_uploaded_data =
       decryptor.Decrypt(ciphertext, payload_header->serialized_blob_header,
                         payload_header->encrypted_symmetric_key,
                         payload_header->serialized_blob_header,
-                        payload_header->encapsulated_public_key);
+                        payload_header->encapsulated_public_key, "key-id");
   ASSERT_OK(decrypted_uploaded_data);
 
   // The ciphertext contains compressed data, so we must decompress it before
@@ -3660,17 +3649,9 @@ TEST_F(HttpFederatedProtocolTest,
   absl::Duration plan_duration = absl::Minutes(5);
 
   // Generate a new public key, which we'll pass to the client in the
-  // ConfidentialEncryptionConfig. We'll use the decryptor from which the public
-  // key was generated to validate the encrypted payload at the end of the test.
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
+  // ConfidentialEncryptionConfig.
+  auto [encoded_public_key, private_key] =
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id");
 
   // Note: we don't specify any attestation evidence nor attestation
   // endorsements in the encryption config, since we can't generate valid
@@ -3748,14 +3729,16 @@ TEST_F(HttpFederatedProtocolTest,
             ComputeSHA256(serialized_access_policy));
   EXPECT_EQ(blob_header.access_policy_node_id(), 0);
   EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
-  EXPECT_EQ(blob_header.key_id(), parsed_public_key->public_key->key_id);
+  EXPECT_EQ(blob_header.key_id(), "key-id");
 
   // Ensure that the ciphertext can be decrypted.
+  fcp::confidential_compute::MessageDecryptor decryptor(
+      std::vector<absl::string_view>{private_key});
   auto decrypted_uploaded_data =
       decryptor.Decrypt(ciphertext, payload_header->serialized_blob_header,
                         payload_header->encrypted_symmetric_key,
                         payload_header->serialized_blob_header,
-                        payload_header->encapsulated_public_key);
+                        payload_header->encapsulated_public_key, "key-id");
   ASSERT_OK(decrypted_uploaded_data);
 
   // The ciphertext contains compressed data, so we must decompress it before
@@ -3862,17 +3845,9 @@ TEST_F(HttpFederatedProtocolTest,
       ->set_year(2025);
 
   // Generate a new public key, which we'll pass to the client in the
-  // ConfidentialEncryptionConfig. We'll use the decryptor from which the public
-  // key was generated to validate the encrypted payload at the end of the test.
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
+  // ConfidentialEncryptionConfig.
+  auto [encoded_public_key, private_key] =
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id");
 
   // Note: we don't specify any attestation evidence nor attestation
   // endorsements in the encryption config, since we can't generate valid
@@ -3950,16 +3925,18 @@ TEST_F(HttpFederatedProtocolTest,
             ComputeSHA256(serialized_access_policy));
   EXPECT_EQ(blob_header.access_policy_node_id(), 0);
   EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
-  EXPECT_EQ(blob_header.key_id(), parsed_public_key->public_key->key_id);
+  EXPECT_EQ(blob_header.key_id(), "key-id");
   EXPECT_THAT(blob_header.payload_metadata(),
               EqualsProto(expected_payload_metadata));
 
   // Ensure that the ciphertext can be decrypted.
+  fcp::confidential_compute::MessageDecryptor decryptor(
+      std::vector<absl::string_view>{private_key});
   auto decrypted_uploaded_data =
       decryptor.Decrypt(ciphertext, payload_header->serialized_blob_header,
                         payload_header->encrypted_symmetric_key,
                         payload_header->serialized_blob_header,
-                        payload_header->encapsulated_public_key);
+                        payload_header->encapsulated_public_key, "key-id");
   ASSERT_OK(decrypted_uploaded_data);
 
   // The ciphertext contains compressed data, so we must decompress it before
@@ -3991,18 +3968,9 @@ TEST_F(HttpFederatedProtocolTest,
   ComputationResults results = CreateFCCheckpointsResults();
   absl::Duration plan_duration = absl::Minutes(5);
 
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
-
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
+  encryption_config.set_public_key(
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
   confidentialcompute::SignedEndorsements signed_endorsements;
 
   EXPECT_CALL(
@@ -4125,18 +4093,9 @@ TEST_F(HttpFederatedProtocolTest,
   ComputationResults results = CreateFCCheckpointsResults();
   absl::Duration plan_duration = absl::Minutes(5);
 
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
-
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
+  encryption_config.set_public_key(
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
   confidentialcompute::SignedEndorsements signed_endorsements;
 
   EXPECT_CALL(
@@ -4302,24 +4261,12 @@ TEST_F(HttpFederatedProtocolTest,
   results.emplace("fc_checkpoints", std::move(checkpoints));
   absl::Duration plan_duration = absl::Minutes(5);
 
-  // Generate a new public key, which we'll pass to the client in the
-  // ConfidentialEncryptionConfig. We'll use the decryptor from which the public
-  // key was generated to validate the encrypted payload at the end of the test.
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
-
   // Note: we don't specify any attestation evidence nor attestation
   // endorsements in the encryption config, since we can't generate valid
   // attestations in a test anyway.
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
+  encryption_config.set_public_key(
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
   // Empty SignedEndorsements since the task does not use endorsements.
   confidentialcompute::SignedEndorsements signed_endorsements;
 
@@ -4371,8 +4318,7 @@ TEST_F(HttpFederatedProtocolTest,
                                                    plan_duration, std::nullopt),
               IsOkReportResult());
 
-  // Validate that the payload can be parsed and that the ciphertext can be
-  // decrypted using the decryptor that generated the public encryption key.
+  // Validate that the payload can be parsed.
   absl::StatusOr<confidential_compute::ClientPayloadHeader> payload_header;
   absl::string_view ciphertext;
   {
@@ -4399,7 +4345,7 @@ TEST_F(HttpFederatedProtocolTest,
                 ComputeSHA256(serialized_access_policy));
       EXPECT_EQ(blob_header.access_policy_node_id(), 0);
       EXPECT_THAT(blob_header.blob_id(), Not(IsEmpty()));
-      EXPECT_EQ(blob_header.key_id(), parsed_public_key->public_key->key_id);
+      EXPECT_EQ(blob_header.key_id(), "key-id");
       EXPECT_THAT(blob_header.payload_metadata(),
                   EqualsProto(payload_metadata));
     }
@@ -5440,18 +5386,9 @@ TEST_F(HttpFederatedProtocolTest,
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   absl::Duration plan_duration = absl::Minutes(5);
 
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
-
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
+  encryption_config.set_public_key(
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
   // Empty SignedEndorsements since the task does not use endorsements.
   confidentialcompute::SignedEndorsements signed_endorsements;
 
@@ -5517,18 +5454,9 @@ TEST_F(HttpFederatedProtocolTest,
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   absl::Duration plan_duration = absl::Minutes(5);
 
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
-
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
+  encryption_config.set_public_key(
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
   // Empty SignedEndorsements since the task does not use endorsements.
   confidentialcompute::SignedEndorsements signed_endorsements;
 
@@ -5597,18 +5525,9 @@ TEST_F(HttpFederatedProtocolTest,
   results.emplace("tensorflow_checkpoint", checkpoint_str);
   absl::Duration plan_duration = absl::Minutes(5);
 
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
-
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
+  encryption_config.set_public_key(
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
   // Empty SignedEndorsements since the task does not use endorsements.
   confidentialcompute::SignedEndorsements signed_endorsements;
 
