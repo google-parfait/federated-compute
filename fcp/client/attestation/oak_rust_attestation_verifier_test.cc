@@ -15,7 +15,7 @@
 #include "fcp/client/attestation/test_values.h"
 #include "fcp/client/rust/oak_attestation_verification_ffi.h"
 #include "fcp/confidentialcompute/cose.h"
-#include "fcp/confidentialcompute/crypto.h"
+#include "fcp/confidentialcompute/crypto_test_util.h"
 #include "fcp/protos/confidentialcompute/access_policy.pb.h"
 #include "fcp/protos/confidentialcompute/access_policy_endorsement_options.pb.h"
 #include "fcp/protos/confidentialcompute/access_policy_endorsement_options.pb.h"
@@ -74,24 +74,12 @@ GetFakeAccessPolicyEndorsementOptions(int number_of_rvs) {
 // Verification library and get a result back, but it doesn't actually test
 // the actual verification logic.
 TEST(OakRustAttestationTest, DefaultValuesDoNotVerifySuccessfully) {
-  // Generate a new public key, which we'll pass to the client in the
-  // ConfidentialEncryptionConfig. We'll use the decryptor from which the public
-  // key was generated to validate the encrypted payload at the end of the test.
-  fcp::confidential_compute::MessageDecryptor decryptor;
-  auto encoded_public_key =
-      decryptor
-          .GetPublicKey(
-              [](absl::string_view payload) { return "fakesignature"; }, 0)
-          .value();
-  absl::StatusOr<OkpCwt> parsed_public_key = OkpCwt::Decode(encoded_public_key);
-  ASSERT_OK(parsed_public_key);
-  ASSERT_TRUE(parsed_public_key->public_key.has_value());
-
   // Note: we don't specify any attestation evidence nor attestation
   // endorsements in the encryption config, since we can't generate valid
   // attestations in a test anyway.
   ConfidentialEncryptionConfig encryption_config;
-  encryption_config.set_public_key(encoded_public_key);
+  encryption_config.set_public_key(
+      fcp::confidential_compute::GenerateHpkeKeyPair("key-id").first);
   // Populate an empty Evidence proto.
   encryption_config.mutable_attestation_evidence();
 
