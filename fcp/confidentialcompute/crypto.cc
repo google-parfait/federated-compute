@@ -344,6 +344,29 @@ absl::StatusOr<std::string> MessageDecryptor::DecryptReleasedResult(
   return plaintext;
 }
 
+absl::StatusOr<UnwrappedReleaseToken> MessageDecryptor::UnwrapReleaseToken(
+    absl::string_view release_token) const {
+  FCP_ASSIGN_OR_RETURN(ReleaseToken token, ReleaseToken::Decode(release_token));
+  if (!token.encryption_key_id.has_value()) {
+    return absl::InvalidArgumentError("Release token has no encryption key ID");
+  }
+  if (!token.encapped_key.has_value()) {
+    return absl::InvalidArgumentError("Release token has no encapped key");
+  }
+  FCP_ASSIGN_OR_RETURN(std::string enc_structure,
+                       token.BuildEncStructureForEncrypting(/*aad=*/""));
+  FCP_ASSIGN_OR_RETURN(
+      std::string symmetric_key,
+      UnwrapSymmetricKeyWithDecryptionKeys(
+          token.encrypted_payload, enc_structure, token.encapped_key.value(),
+          token.encryption_key_id.value()));
+  return UnwrappedReleaseToken{
+      .src_state = token.src_state,
+      .dst_state = token.dst_state,
+      .serialized_symmetric_key = std::move(symmetric_key),
+  };
+}
+
 absl::StatusOr<std::string>
 MessageDecryptor::UnwrapSymmetricKeyWithDecryptionKeys(
     absl::string_view encrypted_symmetric_key,

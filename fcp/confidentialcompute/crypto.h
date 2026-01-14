@@ -78,8 +78,10 @@ class MessageEncryptor {
           recipient_public_key,
       absl::string_view associated_data) const;
 
-  // Encrypts a message with the specified public key and generates a "release
-  // token" that can be passed to the CFC KMS to release the decryption key.
+  // Encrypts a message using an internally generated symmetric key and creates
+  // a release token that holds this symmetric key (encrypted using the
+  // specified public key) as the payload. This release token can be passed to
+  // the CFC KMS to release the decryption key.
   // Like with `Encrypt`, the public key may be a serialized CWT, a
   // serialized COSE_Key, or a Key message.
   //
@@ -115,6 +117,14 @@ class MessageEncryptor {
   const EVP_HPKE_KDF* hpke_kdf_;
   const EVP_HPKE_AEAD* hpke_aead_;
   const EVP_AEAD* aead_;
+};
+
+// The result of unwrapping a ReleaseToken which was originally produced by
+// `MessageEncryptor::EncryptForRelease`.
+struct UnwrappedReleaseToken {
+  std::optional<std::optional<std::string>> src_state;
+  std::optional<std::string> dst_state;
+  std::string serialized_symmetric_key;
 };
 
 // Decrypts messages intended for this recipient.
@@ -167,6 +177,16 @@ class MessageDecryptor {
   absl::StatusOr<std::string> DecryptReleasedResult(
       absl::string_view ciphertext, absl::string_view associated_data,
       absl::string_view symmetric_key) const;
+
+  // Unwraps a ReleaseToken using the decryption keys provided in the
+  // constructor.
+  // The release token should have been produced by
+  // `MessageEncryptor::EncryptForRelease`. The unwrapped release token includes
+  // the `src` and `dst` states that were originally passed to
+  // `MessageEncryptor::EncryptForRelease`. It also includes the symmetric key
+  // used to encrypt the plaintext.
+  absl::StatusOr<UnwrappedReleaseToken> UnwrapReleaseToken(
+      absl::string_view release_token) const;
 
  private:
   // Attempts to unwraps the encrypted symmetric key using the decryption keys

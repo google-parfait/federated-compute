@@ -941,6 +941,71 @@ TEST(CryptoTest, DecryptReleasedFailsWithInvalidSymmetricKey) {
   EXPECT_THAT(decrypt_result, fcp::IsCode(INVALID_ARGUMENT));
 }
 
+TEST(CryptoTest, UnwrapReleaseToken) {
+  std::string message = "some plaintext message";
+  std::string associated_data = "plaintext associated data";
+
+  MessageEncryptor encryptor;
+  auto [public_key, private_key] = GenerateHpkeKeyPair("key-id");
+  MessageDecryptor decryptor(std::vector<absl::string_view>{private_key});
+
+  absl::StatusOr<EncryptMessageResult> encrypt_result =
+      encryptor.EncryptForRelease(
+          message, public_key, associated_data, "src-state", "dst-state",
+          [](absl::string_view) { return "signature"; });
+  ASSERT_OK(encrypt_result);
+
+  absl::StatusOr<UnwrappedReleaseToken> unwrapped_release_token =
+      decryptor.UnwrapReleaseToken(encrypt_result->release_token);
+  ASSERT_OK(unwrapped_release_token);
+  EXPECT_EQ(unwrapped_release_token->src_state, "src-state");
+  EXPECT_EQ(unwrapped_release_token->dst_state, "dst-state");
+
+  absl::StatusOr<std::string> decrypt_result = decryptor.DecryptReleasedResult(
+      encrypt_result->ciphertext, associated_data,
+      unwrapped_release_token->serialized_symmetric_key);
+  ASSERT_OK(decrypt_result);
+  EXPECT_EQ(*decrypt_result, message);
+}
+
+TEST(CryptoTest, UnwrapReleaseTokenWithNoKeyId) {
+  ReleaseToken token{
+      .signing_algorithm = 1,
+      .encryption_algorithm = 2,
+      .src_state = "src-state",
+      .dst_state = "dst-state",
+      .encrypted_payload = "payload",
+      .encapped_key = "key",
+      .signature = "signature",
+  };
+  absl::StatusOr<std::string> serialized_token = token.Encode();
+  ASSERT_OK(serialized_token);
+  absl::StatusOr<UnwrappedReleaseToken> unwrapped_release_token =
+      MessageDecryptor({}).UnwrapReleaseToken(*serialized_token);
+  EXPECT_THAT(unwrapped_release_token, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(unwrapped_release_token.status().message(),
+              HasSubstr("Release token has no encryption key ID"));
+}
+
+TEST(CryptoTest, UnwrapReleaseTokenWithNoEncappedKey) {
+  ReleaseToken token{
+      .signing_algorithm = 1,
+      .encryption_algorithm = 2,
+      .encryption_key_id = "key-id",
+      .src_state = "src-state",
+      .dst_state = "dst-state",
+      .encrypted_payload = "payload",
+      .signature = "signature",
+  };
+  absl::StatusOr<std::string> serialized_token = token.Encode();
+  ASSERT_OK(serialized_token);
+  absl::StatusOr<UnwrappedReleaseToken> unwrapped_release_token =
+      MessageDecryptor({}).UnwrapReleaseToken(*serialized_token);
+  EXPECT_THAT(unwrapped_release_token, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(unwrapped_release_token.status().message(),
+              HasSubstr("Release token has no encapped key"));
+}
+
 TEST(EcdsaP256R1SignatureVerifierTest, VerifierWithInvalidPublicKeyFails) {
   // Verify a real signature with a bogus public key, which should fail.
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
