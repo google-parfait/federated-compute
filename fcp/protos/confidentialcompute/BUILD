@@ -124,23 +124,6 @@ cc_proto_library(
 )
 
 proto_library(
-    name = "ledger_proto",
-    srcs = ["ledger.proto"],
-    deps = [
-        "@com_google_protobuf//:duration_proto",
-        "@com_google_protobuf//:timestamp_proto",
-        "@oak//proto/attestation:endorsement_proto",
-        "@oak//proto/attestation:evidence_proto",
-        "@oak//proto/micro_rpc:options_proto",
-    ],
-)
-
-cc_proto_library(
-    name = "ledger_cc_proto",
-    deps = [":ledger_proto"],
-)
-
-proto_library(
     name = "confidential_transform_proto",
     srcs = ["confidential_transform.proto"],
     deps = [
