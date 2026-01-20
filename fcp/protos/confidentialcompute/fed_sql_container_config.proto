@@ -36,10 +36,18 @@ message FedSqlContainerInitializeConfiguration {
   reserved 2, 3, 4, 5, 7, 8, 9;
 }
 
+// TODO: b/452043727 - Consider removing the `AggCore` prefix from this enum.
 enum AggCoreAggregationType {
   AGGREGATION_TYPE_UNSPECIFIED = 0;
+  // Accumulates the results in memory which are applied during `Commit`.
   AGGREGATION_TYPE_ACCUMULATE = 1;
+  // Merges the serialized checkpoint.
   AGGREGATION_TYPE_MERGE = 2;
+  // Accumulates the private state produced as a result of
+  // `FINALIZATION_TYPE_REPORT_PARTITION`.
+  AGGREGATION_TYPE_ACCUMULATE_PRIVATE_STATE = 3;
+  // Merges the serialized private state.
+  AGGREGATION_TYPE_MERGE_PRIVATE_STATE = 4;
 }
 
 // Configures how a blob should be aggregated by the trusted AggCore container.
@@ -59,16 +67,23 @@ message FedSqlContainerCommitConfiguration {
   Range range = 1;
 }
 
+// TODO: b/452043727 - Consider removing the `AggCore` prefix from this enum.
 enum AggCoreFinalizationType {
   FINALIZATION_TYPE_UNSPECIFIED = 0;
   // Return noised results from the checkpoint aggregator.
   FINALIZATION_TYPE_REPORT = 1;
   // Return the serialized internal state of the checkpoint aggregator.
   FINALIZATION_TYPE_SERIALIZE = 2;
+  // The below enums are used when output partitioning is enabled.
   // Return the partitioned internal state of the checkpoint aggregator.
   FINALIZATION_TYPE_PARTITION = 3;
   // Returns the noised results for the partitioned checkpoint aggregator.
   FINALIZATION_TYPE_REPORT_PARTITION = 4;
+  // Returns the serialized private state.
+  FINALIZATION_TYPE_SERIALIZE_PRIVATE_STATE = 5;
+  // Returns the final private state generating a release token that can be
+  // passed to KMS for releasing the results.
+  FINALIZATION_TYPE_REPORT_PRIVATE_STATE = 6;
 }
 
 // Configures how a result should be output by the trusted AggCore container.
