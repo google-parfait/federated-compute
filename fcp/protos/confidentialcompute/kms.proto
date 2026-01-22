@@ -362,6 +362,12 @@ message AuthorizeConfidentialTransformResponse {
     // user-friendly error messages.
     repeated bytes omitted_decryption_key_ids = 4;
 
+    // If true, omitted_decryption_key_ids contains key ids from all keysets,
+    // not just the keysets included in the RegisterPipelineInvocationRequest.
+    // This field can be used by pipelines to understand the behavior of the KMS
+    // version with which they are interacting.
+    bool omitted_decryption_key_ids_include_all_keysets = 6;
+
     // The invocation id from the AuthorizeConfidentialTransformRequest.
     bytes invocation_id = 5;
   }
