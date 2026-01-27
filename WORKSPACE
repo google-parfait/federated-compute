@@ -170,7 +170,6 @@ com_google_api_gax_java_repositories()
 http_archive(
     name = "org_tensorflow_federated",
     patches = [
-        "//fcp/patches:tensorflow_federated_deps.patch",
         "//fcp/patches:tensorflow_federated_executors.patch",
     ],
     sha256 = "599b886aa63d10728d3acd9d1aea5c71f571110fd99c2b3cad317f3c33d725eb",

@@ -65,7 +65,6 @@ compile_pip_requirements(
     timeout = "moderate",
     srcs = [
         "requirements.in",
-        "@org_tensorflow_federated//:requirements.txt",
     ],
     extra_args = [
         "--allow-unsafe",
