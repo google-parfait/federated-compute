@@ -1,3 +1,6 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+
 # Copyright 2023 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,10 +14,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-load("@bazel_skylib//lib:selects.bzl", "selects")
-load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 
 package(
@@ -92,45 +91,11 @@ cc_test(
     ],
 )
 
-# TODO: b/361182982 - Clean up these flags once the iOS toolchain supports C++20, or a better
-# solution towards C++20 compatibility is found.
-bool_flag(
-    name = "disable_confidential_agg",
-    build_setting_default = False,
-)
-
-config_setting(
-    name = "disable_confidential_agg_flag_setting",
-    flag_values = {":disable_confidential_agg": "True"},
-)
-
-config_setting(
-    name = "is_ios",
-    constraint_values = [
-        "@platforms//os:ios",
-    ],
-)
-
-selects.config_setting_group(
-    name = "disable_confidential_agg_setting",
-    match_any = [
-        ":disable_confidential_agg_flag_setting",
-        ":is_ios",
-    ],
-)
-
-CA_OPTIONAL_DEFINES = select({
-    ":disable_confidential_agg_setting": [],
-    "//conditions:default": [
-        "FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG",
-    ],
-})
-
 cc_library(
     name = "cose",
     srcs = ["cose.cc"],
     hdrs = ["cose.h"],
-    defines = CA_OPTIONAL_DEFINES,
+    defines = ["FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG"],
     visibility = ["//visibility:public"],
     deps = [
         "//fcp/base",
@@ -139,12 +104,8 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
-    ] + select({
-        ":disable_confidential_agg_setting": [],
-        "//conditions:default": [
-            "@libcppbor",
-        ],
-    }),
+        "@libcppbor",
+    ],
 )
 
 cc_test(
