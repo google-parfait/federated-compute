@@ -87,39 +87,24 @@ OakRustAttestationVerifier::Verify(
     const absl::Cord& access_policy,
     const confidentialcompute::SignedEndorsements& signed_endorsements,
     const ConfidentialEncryptionConfig& encryption_config) {
-  absl::StatusOr<AttestationResults> attestation_results;
-  if (public_key_reference_values_.type_case() ==
-          oak::attestation::v1::ReferenceValues::TYPE_NOT_SET &&
-      public_key_reference_values_secondary_.type_case() ==
-          oak::attestation::v1::ReferenceValues::TYPE_NOT_SET) {
-    attestation_results = VerifyPublicKeyAttestation(
-        encryption_config,
-        access_policy_endorsement_options_.public_key_reference_values());
-    if (!attestation_results.ok()) {
+  absl::StatusOr<AttestationResults> attestation_results =
+      VerifyPublicKeyAttestation(encryption_config,
+                                 public_key_reference_values_);
+  if (!attestation_results.ok()) {
+    absl::StatusOr<AttestationResults> attestation_results_secondary =
+        public_key_reference_values_secondary_.type_case() ==
+                oak::attestation::v1::ReferenceValues::TYPE_NOT_SET
+            ? absl::NotFoundError("No secondary reference values provided.")
+            : VerifyPublicKeyAttestation(
+                  encryption_config, public_key_reference_values_secondary_);
+    if (!attestation_results_secondary.ok()) {
       return absl::FailedPreconditionError(absl::Substitute(
-          "Attestation verification failed for reference values from the "
-          "AccessPolicyEndorsementOptions: $0",
-          attestation_results.status()));
+          "Attestation verification failed for both primary and secondary "
+          "reference values: $0, $1",
+          attestation_results.status(),
+          attestation_results_secondary.status()));
     }
-  } else {
-    attestation_results = VerifyPublicKeyAttestation(
-        encryption_config, public_key_reference_values_);
-    if (!attestation_results.ok()) {
-      absl::StatusOr<AttestationResults> attestation_results_secondary =
-          public_key_reference_values_secondary_.type_case() ==
-                  oak::attestation::v1::ReferenceValues::TYPE_NOT_SET
-              ? absl::NotFoundError("No secondary reference values provided.")
-              : VerifyPublicKeyAttestation(
-                    encryption_config, public_key_reference_values_secondary_);
-      if (!attestation_results_secondary.ok()) {
-        return absl::FailedPreconditionError(absl::Substitute(
-            "Attestation verification failed for both primary and secondary "
-            "reference values: $0, $1",
-            attestation_results.status(),
-            attestation_results_secondary.status()));
-      }
-      attestation_results = attestation_results_secondary;
-    }
+    attestation_results = attestation_results_secondary;
   }
 
   // Ensure that the provided data access policy parses correctly.
