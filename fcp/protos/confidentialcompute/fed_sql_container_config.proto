@@ -105,6 +105,16 @@ message FedSqlContainerPartitionedOutputConfiguration {
   uint64 partition_index = 1;
 }
 
+// The symmetric keys used to encrypt each output partition.
+message FedSqlContainerPartitionKeys {
+  repeated PartitionKey keys = 1;
+
+  message PartitionKey {
+    uint64 partition_index = 1;
+    bytes symmetric_key = 2;
+  }
+}
+
 // Config constraints for the FedSQL container that must be validated before any
 // of the blobs written to the container are decrypted.
 // This is required when using the KeyManagementService API, it is ignored when
