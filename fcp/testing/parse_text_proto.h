@@ -19,9 +19,9 @@
 
 #include <type_traits>
 
-#include "google/protobuf/text_format.h"
 #include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
+#include "google/protobuf/text_format.h"
 
 namespace fcp {
 
