@@ -20,6 +20,7 @@ import "fcp/client/event_time_range.proto";
 
 option java_package = "com.google.intelligence.fcp.client";
 option java_multiple_files = true;
+option objc_class_prefix = "FCPC";
 
 // Describes the result of an example query, as a series of vectors. Example
 // iterators invoked using `ExampleQuerySpec` are expected to return a single
