@@ -12,12 +12,23 @@ message AccessPolicyEndorsementOptions {
   // Configuration for verifying a transparency log entries for
   // `DataAccessPolicy` messages.
   //
-  // This field will eventually be replaced by the three following fields. Which
-  // set of fields is used will depend on client runtime flags and whether the
+  // This field will eventually be replaced by `kms_verifying_keys`,
+  // `access_policy_verifying_keys`, and `transparency_log_options`. Which set
+  // of fields is used will depend on client runtime flags and whether the
   // server evidence uses the Attestation Transparency Service. During the
   // transition, both sets of fields should be populated.
   repeated oak.attestation.v1.EndorsementReferenceValue
       endorsement_reference_values = 1;
+
+  // Configuration for verifying the hardware attestation of the server that
+  // produced the upload encryption key.
+  //
+  // This field will eventually be replaced by `kms_verifying_keys`,
+  // `access_policy_verifying_keys`, and `transparency_log_options`. Which set
+  // of fields is used will depend on client runtime flags and whether the
+  // server evidence uses the Attestation Transparency Service. During the
+  // transition, both sets of fields should be populated.
+  oak.attestation.v1.ReferenceValues public_key_reference_values = 5;
 
   // In order to be accepted, KMS TEE evidence must be signed by one of these
   // keys.
