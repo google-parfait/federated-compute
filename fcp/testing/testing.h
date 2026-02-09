@@ -22,13 +22,13 @@
 #include <string>
 #include <type_traits>
 
-#include "google/protobuf/util/message_differencer.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
+#include "google/protobuf/util/message_differencer.h"
 
 #include "fcp/testing/parse_text_proto.h"
 
