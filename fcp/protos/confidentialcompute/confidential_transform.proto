@@ -46,7 +46,7 @@ service ConfidentialTransform {
   // scope of data.
   //
   // The general pattern for a session is always this following where the
-  // [Op] can be Configure, Write, Commit, or Finalize.
+  // [Op] can be Configure, Write, Merge, Compact, Commit, or Finalize.
   //   --> [Op]Request       - client sends a request
   //   <-- ReadResponse      - server may write back an arbitrary number of
   //   ...                     read responses
@@ -156,6 +156,10 @@ message SessionResponse {
   }
 }
 
+// Optional request to configure a session, which may be used to override
+// session-level settings or to provide additional information to the TEE.
+// If this request is skipped, the TEE will use the default configuration for
+// the session, including the default chunk size.
 message ConfigureRequest {
   // Implementation-specific configuration to be passed to the TEE.
   google.protobuf.Any configuration = 1;
@@ -253,11 +257,7 @@ message WriteRequest {
   // session.
   // This configuration may be empty if the TEE-initialization configuration or
   // the session-level configuration fully specifies how to incorporate data
-  // into the session, but it allows for some flexibility. For example, a TEE
-  // implementation may allow incorporating either raw user uploads
-  // (`accumulate`) or partial aggregates (`merge`) into the session state. This
-  // configuration would then specify which operation to use to incorporate the
-  // blob into the session.
+  // into the session, but it allows for some flexibility.
   google.protobuf.Any first_request_configuration = 2;
   // Indicates that this is the final WriteRequest for a given blob.
   bool commit = 3;
@@ -270,7 +270,7 @@ message WriteRequest {
 message WriteFinishedResponse {
   // The total number of bytes that have been written for the
   // blob.
-  int64 committed_size_bytes = 1;
+  int64 committed_size_bytes = 1 [deprecated = true];
   // Status of writing the blob to the session. If not OK, indicates that the
   // blob wasn't successfully processed, with the error message providing more
   // information. Even if this status is not OK, the Session should still be in
@@ -280,6 +280,24 @@ message WriteFinishedResponse {
   google.rpc.Status status = 2;
 
   reserved 3;
+}
+
+// A response reading a chunk of a blob from the TEE, which will be
+// encrypted unless this was the last step in a differentially private
+// algorithm. Multiple ReadResponses may be sent in sequence if the
+// blob is large.
+message ReadResponse {
+  // Configuration sent with the first ReadResponse for a finalized
+  // blob to include any supplementary information needed to decrypt or
+  // otherwise process the blob.
+  google.protobuf.Any first_response_configuration = 4;
+  // Metadata about the blob being read from the TEE.
+  BlobMetadata first_response_metadata = 1;
+  // Indicates that this is the last chunk of data for the current blob.
+  bool finish_read = 2;
+  // A chunk of data read from the blob.
+  bytes data = 3
+      ;
 }
 
 // Request to incorporate all previously cached blobs into the session.
@@ -309,6 +327,45 @@ message CommitResponse {
   reserved 2;
 }
 
+// Request to compact the session state with a purpose of taking serialized
+// snapshot of the session state out of the Session and merging it into another
+// Session via a MergeRequest.
+message CompactRequest {
+  // Application-specific configuration specifying how to finalize the session.
+  // This may not be necessary for all applications.
+  google.protobuf.Any configuration = 1;
+}
+
+// Response indicating that the session state has been successfully compacted
+// and that one or more serialized snapshots have been emitted via
+// ReadResponses.
+message CompactResponse {
+  // The application specific configuration data associated with compacting the
+  // session state.
+  google.protobuf.Any configuration = 1;
+}
+
+// Request to merge a serialized snapshot of a session into the current session.
+// Similarly to WriteRequest, multiple MergeRequests may be sent in sequence to
+// transfer a large snapshot in chunks.
+message MergeRequest {
+  // Metadata about the serialized snapshot being merged into the session, sent
+  // with the first MergeRequest for a snapshot.
+  BlobMetadata first_request_metadata = 1;
+  // Configuration sent with the first MergeRequest for a particular snapshot to
+  // indicate how the snapshot should be incorporated into the session.
+  google.protobuf.Any first_request_configuration = 2;
+  // Indicates that this is the final MergeRequest for a given snapshot.
+  bool commit = 3;
+  // A chunk of data for the snapshot being merged into the session.
+  bytes data = 4
+      ;
+}
+
+// Response indicating that a serialized snapshot has been successfully merged
+// into the session.
+message MergeResponse {}
+
 // Request to finalize the session by running a finalization
 // operation, after which the session state is no longer mutable.
 message FinalizeRequest {
@@ -320,24 +377,6 @@ message FinalizeRequest {
   // The current state associated with the pipeline to which the trusted
   // container belongs. This field is optional.
   bytes pipeline_state = 3;
-}
-
-// A response reading a chunk of a blob from the TEE, which will be
-// encrypted unless this was the last step in a differentially private
-// algorithm. Multiple ReadResponses may be sent in sequence if the
-// blob is large.
-message ReadResponse {
-  // Configuration sent with the first ReadResponse for a finalized
-  // blob to include any supplementary information needed to decrypt or
-  // otherwise process the blob.
-  google.protobuf.Any first_response_configuration = 4;
-  // Metadata about the blob being read from the TEE.
-  BlobMetadata first_response_metadata = 1;
-  // Indicates that this is the last chunk of data for the current blob.
-  bool finish_read = 2;
-  // A chunk of data read from the blob.
-  bytes data = 3
-      ;
 }
 
 // A response indicating that the TEE has finished finalizing the session.
