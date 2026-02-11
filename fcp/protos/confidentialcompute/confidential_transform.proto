@@ -156,6 +156,14 @@ message SessionResponse {
   }
 }
 
+// Metrics that are sent to the untrusted side in [Op]Responses. It must be
+// clear from the open source TEE container implementation that these metrics do
+// not leak sensitive data from the TEE.
+message Metrics {
+  // A map of counter names to their values.
+  map<string, int64> counters = 1;
+}
+
 // Optional request to configure a session, which may be used to override
 // session-level settings or to provide additional information to the TEE.
 // If this request is skipped, the TEE will use the default configuration for
@@ -171,6 +179,8 @@ message ConfigureRequest {
 // Message acknowledging creation of a session with a configuration
 // passed in the ConfigureRequest.
 message ConfigureResponse {
+  Metrics metrics = 3;
+
   reserved 1, 2;
 }
 
@@ -279,6 +289,8 @@ message WriteFinishedResponse {
   // with an error.
   google.rpc.Status status = 2;
 
+  Metrics metrics = 4;
+
   reserved 3;
 }
 
@@ -324,6 +336,9 @@ message CommitResponse {
   }
 
   CommitStats stats = 3;
+
+  Metrics metrics = 4;
+
   reserved 2;
 }
 
@@ -390,6 +405,8 @@ message FinalizeResponse {
 
   // The application specific configuration data associated with finalization.
   google.protobuf.Any configuration = 2;
+
+  Metrics metrics = 3;
 }
 
 // This message is deprecated. Going forward, FinalizeResponse will be used
