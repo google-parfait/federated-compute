@@ -179,6 +179,7 @@ message ConfigureRequest {
 // Message acknowledging creation of a session with a configuration
 // passed in the ConfigureRequest.
 message ConfigureResponse {
+  // Arbitrary metrics associated with the configure operation.
   Metrics metrics = 3;
 
   reserved 1, 2;
@@ -289,6 +290,7 @@ message WriteFinishedResponse {
   // with an error.
   google.rpc.Status status = 2;
 
+  // Arbitrary metrics associated with the write operation.
   Metrics metrics = 4;
 
   reserved 3;
@@ -337,6 +339,7 @@ message CommitResponse {
 
   CommitStats stats = 3;
 
+  // Arbitrary metrics associated with the commit operation.
   Metrics metrics = 4;
 
   reserved 2;
@@ -358,6 +361,9 @@ message CompactResponse {
   // The application specific configuration data associated with compacting the
   // session state.
   google.protobuf.Any configuration = 1;
+
+  // Arbitrary metrics associated with the compact operation.
+  Metrics metrics = 2;
 }
 
 // Request to merge a serialized snapshot of a session into the current session.
@@ -379,7 +385,10 @@ message MergeRequest {
 
 // Response indicating that a serialized snapshot has been successfully merged
 // into the session.
-message MergeResponse {}
+message MergeResponse {
+  // Arbitrary metrics associated with the merge operation.
+  Metrics metrics = 1;
+}
 
 // Request to finalize the session by running a finalization
 // operation, after which the session state is no longer mutable.
@@ -406,6 +415,7 @@ message FinalizeResponse {
   // The application specific configuration data associated with finalization.
   google.protobuf.Any configuration = 2;
 
+  // Arbitrary metrics associated with the finalize operation.
   Metrics metrics = 3;
 }
 
