@@ -335,6 +335,20 @@ py_proto_library(
 )
 
 proto_library(
+    name = "attestation_transparency_service_proto",
+    srcs = ["attestation_transparency_service.proto"],
+    deps = [
+        ":payload_transparency_proto",
+        "@oak//proto/session:session_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "attestation_transparency_service_cc_proto",
+    deps = [":attestation_transparency_service_proto"],
+)
+
+proto_library(
     name = "private_inference_proto",
     srcs = ["private_inference.proto"],
 )
