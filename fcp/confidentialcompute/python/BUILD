@@ -109,3 +109,18 @@ py_test(
         "@pypi_absl_py//:pkg",
     ],
 )
+
+py_library(
+    name = "accounting",
+    srcs = ["accounting.py"],
+    deps = ["@pypi_numpy//:pkg"],
+)
+
+py_test(
+    name = "accounting_test",
+    srcs = ["accounting_test.py"],
+    deps = [
+        ":accounting",
+        "@pypi_absl_py//:pkg",
+    ],
+)
