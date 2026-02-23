@@ -1726,6 +1726,93 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQuerySufficientData) {
   ASSERT_THAT(*tensors, UnorderedElementsAreArray(expected_tensors));
 }
 
+TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithBytesValues) {
+  Initialize();
+
+  ExampleQuerySpec::OutputVectorSpec bytes_vector_spec;
+  bytes_vector_spec.set_vector_name("bytes_vector");
+  bytes_vector_spec.set_data_type(DataType::BYTES);
+
+  ExampleQuerySpec::ExampleQuery example_query =
+      client_only_plan_.phase().example_query_spec().example_queries().at(0);
+  example_query.mutable_output_vector_specs()->clear();
+  (*example_query.mutable_output_vector_specs())["bytes_tensor"] =
+      bytes_vector_spec;
+  client_only_plan_.mutable_phase()
+      ->mutable_example_query_spec()
+      ->clear_example_queries();
+  client_only_plan_.mutable_phase()
+      ->mutable_example_query_spec()
+      ->mutable_example_queries()
+      ->Add(std::move(example_query));
+
+  AggregationConfig aggregation_config;
+  aggregation_config.mutable_federated_compute_checkpoint_aggregation();
+  client_only_plan_.mutable_phase()
+      ->mutable_federated_example_query()
+      ->clear_aggregations();
+  (*client_only_plan_.mutable_phase()
+        ->mutable_federated_example_query()
+        ->mutable_aggregations())["bytes_tensor"] = aggregation_config;
+
+  ExampleQueryResult::VectorData::Values bytes_values;
+  bytes_values.mutable_bytes_values()->add_value("bytes1");
+  bytes_values.mutable_bytes_values()->add_value("bytes2");
+  example_query_result_.mutable_vector_data()->clear_vectors();
+  (*example_query_result_.mutable_vector_data()
+        ->mutable_vectors())["bytes_vector"] = bytes_values;
+  std::string example = example_query_result_.SerializeAsString();
+
+  dataset_.clear_client_data();
+  Dataset::ClientDataset client_dataset;
+  client_dataset.set_client_id("client_id");
+  client_dataset.add_example(example);
+  dataset_.mutable_client_data()->Add(std::move(client_dataset));
+
+  num_examples_ = 1;
+  example_bytes_ = example.size();
+
+  example_iterator_factory_ =
+      std::make_unique<FunctionalExampleIteratorFactory>(
+          [&dataset = dataset_](
+              const google::internal::federated::plan::ExampleSelector&
+                  selector) {
+            return std::make_unique<SimpleExampleIterator>(dataset);
+          });
+
+  EXPECT_CALL(
+      mock_opstats_logger_,
+      UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
+  ExampleQueryPlanEngine plan_engine(
+      {example_iterator_factory_.get()}, &mock_opstats_logger_,
+      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+  engine::PlanResult result = plan_engine.RunPlan(
+      client_only_plan_.phase().example_query_spec(),
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
+      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
+      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
+      /*enable_private_logger=*/false,
+      /*drop_out_based_data_availability=*/false);
+
+  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
+  ASSERT_THAT(result.federated_compute_checkpoints, SizeIs(1));
+
+  absl::string_view str =
+      result.federated_compute_checkpoints[0].payload.Flatten();
+  absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
+      ReadFCCheckpointTensors(str);
+  ASSERT_OK(tensors);
+
+  absl::StatusOr<Tensor> bytes_tensor =
+      Tensor::Create(DT_STRING, TensorShape({2}),
+                     CreateTestData<absl::string_view>({"bytes1", "bytes2"}));
+  ASSERT_OK(bytes_tensor.status());
+  absl::flat_hash_map<std::string, std::string> expected_tensors = {
+      {"bytes_tensor", bytes_tensor->ToProto().SerializeAsString()}};
+
+  ASSERT_THAT(*tensors, UnorderedElementsAreArray(expected_tensors));
+}
+
 PrivacyIdConfig CreatePrivacyIdConfig(
     int window_size,
     WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::Unit unit,

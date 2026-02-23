@@ -201,8 +201,12 @@ absl::Status GenerateAggregationTensorsFromExampleQueryResult(
                       TensorShape({values.double_values().value_size()}),
                       values.double_values().value()));
     } else if (values.has_bytes_values()) {
-      // TODO: b/296046539 - add support for bytes values type
-      return absl::UnimplementedError("Bytes values currently not supported.");
+      FCP_RETURN_IF_ERROR(
+          CheckOutputVectorDataType(output_vector_spec, DataType::BYTES));
+      FCP_ASSIGN_OR_RETURN(
+          tensor,
+          ConvertStringTensor(TensorShape({values.bytes_values().value_size()}),
+                              values.bytes_values().value()));
     } else {
       return absl::DataLossError(
           "Unexpected data type in the example query result");
