@@ -1818,8 +1818,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           clock, log_manager, flags, http_client.get(),
           std::make_unique<SecAggRunnerFactoryImpl>(),
           event_publisher->secagg_event_publisher(), resource_cache.get(),
-          env_deps->CreateAttestationVerifier(), federated_service_uri, api_key,
-          population_name, retry_token, client_version,
+          env_deps->CreateAttestationVerifier(),
+          env_deps->CreateWillowPayloadEncryptor(), federated_service_uri,
+          api_key, population_name, retry_token, client_version,
           client_attestation_measurement, should_abort_protocol_callback,
           absl::BitGen(), timing_config);
 

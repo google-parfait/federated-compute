@@ -29,6 +29,7 @@
 #include "google/longrunning/operations.pb.h"
 #include "google/protobuf/any.pb.h"
 #include "google/rpc/code.pb.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -59,6 +60,7 @@
 #include "fcp/client/http/http_secagg_send_to_server_impl.h"
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/http/protocol_request_helper.h"
+#include "fcp/client/http/willow_payload_encryptor.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/parsing_utils.h"
@@ -398,6 +400,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
     SecAggEventPublisher* secagg_event_publisher,
     cache::ResourceCache* resource_cache,
     std::unique_ptr<attestation::AttestationVerifier> attestation_verifier,
+    std::unique_ptr<WillowPayloadEncryptor> willow_payload_encryptor,
     absl::string_view entry_point_uri, absl::string_view api_key,
     absl::string_view population_name, absl::string_view retry_token,
     absl::string_view client_version,
@@ -413,6 +416,7 @@ HttpFederatedProtocol::HttpFederatedProtocol(
       secagg_event_publisher_(secagg_event_publisher),
       resource_cache_(resource_cache),
       attestation_verifier_(std::move(attestation_verifier)),
+      willow_payload_encryptor_(std::move(willow_payload_encryptor)),
       interruptible_runner_(std::make_unique<InterruptibleRunner>(
           log_manager, should_abort, timing_config,
           InterruptibleRunner::DiagnosticsConfig{
@@ -621,13 +625,14 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
         // errors that may be encountered in the process.
         FCP_ASSIGN_OR_RETURN(
             std::vector<absl::StatusOr<FetchedTaskResources>> task_resources,
-            FetchTaskResources(
-                {TaskResources{.plan = task.plan(),
-                               .checkpoint = task.init_checkpoint(),
-                               // Eligibility eval tasks have no confidential
-                               // data access policy or endorsements to fetch.
-                               .confidential_data_access_policy = Resource(),
-                               .signed_endorsements = Resource()}}));
+            FetchTaskResources({TaskResources{
+                .plan = task.plan(),
+                .checkpoint = task.init_checkpoint(),
+                // Eligibility eval tasks have no confidential
+                // data access policy, endorsements or Willow encoding to fetch.
+                .confidential_data_access_policy = Resource(),
+                .signed_endorsements = Resource(),
+                .willow_encoding_config = Resource()}}));
         if (!task_resources[0].ok()) {
           return task_resources[0].status();
         }
@@ -872,9 +877,9 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
   payload_uris_received_callback(result);
 
   // Fetch the task resources, returning any errors that may be encountered in
-  // the process.
+  // the process. Returns an error or a vector of length 1.
   FCP_ASSIGN_OR_RETURN(
-      auto task_resources,
+      auto task_resources_vec,
       FetchTaskResources({TaskResources{
           .plan = task_assignment.plan(),
           .checkpoint = task_assignment.init_checkpoint(),
@@ -882,24 +887,35 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
               task_assignment.confidential_aggregation_info()
                   .data_access_policy(),
           .signed_endorsements = task_assignment.confidential_aggregation_info()
-                                     .signed_endorsements()}}));
-  if (!task_resources[0].ok()) {
-    return task_resources[0].status();
+                                     .signed_endorsements(),
+          .willow_encoding_config =
+              task_assignment.willow_aggregation_info().encoding_config()}}));
+
+  auto task_resources = task_resources_vec[0];
+  if (!task_resources.ok()) {
+    return task_resources.status();
   }
-  result.payloads = task_resources[0]->plan_and_checkpoint_payloads;
+  result.payloads = task_resources->plan_and_checkpoint_payloads;
   FCP_ASSIGN_OR_RETURN(default_task_info_,
                        CreatePerTaskInfoFromTaskAssignment(
                            task_assignment, ObjectState::kCheckinAccepted));
+
   if (result.confidential_agg_info.has_value()) {
     result.confidential_agg_info->data_access_policy =
-        task_resources[0]->confidential_data_access_policy;
+        task_resources->confidential_data_access_policy;
     default_task_info_.confidential_data_access_policy =
         result.confidential_agg_info->data_access_policy;
     result.confidential_agg_info->signed_endorsements =
-        task_resources[0]->signed_endorsements;
+        task_resources->signed_endorsements;
     default_task_info_.signed_endorsements =
         result.confidential_agg_info->signed_endorsements;
   }
+
+  if (task_assignment.has_willow_aggregation_info()) {
+    default_task_info_.willow_encoding_config =
+        task_resources->willow_encoding_config;
+  }
+
   object_state_ = ObjectState::kCheckinAccepted;
   return std::move(result);
 }
@@ -968,13 +984,18 @@ HttpFederatedProtocol::CreatePerTaskInfoFromTaskAssignment(
   // aggregation type based on the `TaskAssignment.aggregation_type` field,
   // preserving previous behavior.
   if (!flags_->enable_confidential_aggregation()) {
-    if (task_assignment.has_confidential_aggregation_info()) {
+    if (task_assignment.has_confidential_aggregation_info() ||
+        task_assignment.has_willow_aggregation_info()) {
+      // This is because Willow uses confidential aggregation configuration to
+      // get resources
       return absl::InvalidArgumentError(
-          "Confidential aggregation is not enabled");
-    }
+          "Cannot assign task with confidential aggregation or Willow "
+          "aggregation when confidential aggregation flag is not enabled");
+    };
     task_info.aggregation_type = AggregationType::kUnknown;
     return std::move(task_info);
   }
+  // The confidential aggregation flag is enabled.
   switch (task_assignment.aggregation_type_case()) {
     case ::google::internal::federatedcompute::v1::TaskAssignment::
         AggregationTypeCase::kAggregationInfo:
@@ -987,6 +1008,13 @@ HttpFederatedProtocol::CreatePerTaskInfoFromTaskAssignment(
     case ::google::internal::federatedcompute::v1::TaskAssignment::
         AggregationTypeCase::kConfidentialAggregationInfo:
       task_info.aggregation_type = AggregationType::kConfidentialAggregation;
+      break;
+    case ::google::internal::federatedcompute::v1::TaskAssignment::
+        AggregationTypeCase::kWillowAggregationInfo:
+      if (!flags_->enable_willow_secure_aggregation()) {
+        return absl::InvalidArgumentError("Willow aggregation is not enabled");
+      }
+      task_info.aggregation_type = AggregationType::kWillowAggregation;
       break;
     default:
       return absl::InvalidArgumentError(
@@ -1136,7 +1164,9 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
             task_assignment.confidential_aggregation_info()
                 .data_access_policy(),
         .signed_endorsements = task_assignment.confidential_aggregation_info()
-                                   .signed_endorsements()};
+                                   .signed_endorsements(),
+        .willow_encoding_config =
+            task_assignment.willow_aggregation_info().encoding_config()};
     resources_to_fetch.push_back(task_resources);
 
     auto pending_task_assignment =
@@ -1183,6 +1213,12 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
         task_info_map_[task_assignment.task_identifier].signed_endorsements =
             task_assignment.confidential_agg_info->signed_endorsements;
       }
+      if (task_info_map_[task_assignment.task_identifier].aggregation_type ==
+          AggregationType::kWillowAggregation) {
+        task_info_map_[task_assignment.task_identifier].willow_encoding_config =
+            std::move((*payloads)->willow_encoding_config);
+      }
+
       result.task_assignments[task_assignment.task_name] =
           std::move(task_assignment);
     }
@@ -1217,33 +1253,30 @@ ReportResult HttpFederatedProtocol::ReportCompleted(
   if (!flags_->enable_confidential_aggregation()) {
     if (std::find_if(results.begin(), results.end(),
                      find_secagg_tensor_lambda) == results.end()) {
-      return ReportViaSimpleOrConfidentialAggregation(
-          std::move(results), plan_duration, *task_info);
+      return ReportViaOneShotAggregation(std::move(results), plan_duration,
+                                         *task_info);
     } else {
-      return ReportResult::FromStatus(ReportViaSecureAggregation(
+      return ReportResult::FromStatus(ReportViaMultiShotSecureAggregation(
           std::move(results), plan_duration, *task_info));
     }
   } else {
-    switch (task_info->aggregation_type) {
-      case AggregationType::kSimpleAggregation:
-        return ReportViaSimpleOrConfidentialAggregation(
-            std::move(results), plan_duration, *task_info);
-      case AggregationType::kConfidentialAggregation:
-        return ReportViaSimpleOrConfidentialAggregation(
-            std::move(results), plan_duration, *task_info);
-      case AggregationType::kSecureAggregation:
-        return ReportResult::FromStatus(ReportViaSecureAggregation(
-            std::move(results), plan_duration, *task_info));
-      case AggregationType::kUnknown:
-        // Once the Flags::enable_confidential_aggregation() flag is turned on
-        // we should never see kUnknown values anymore.
-        return ReportResult::FromStatus(
-            absl::InternalError("Unexpected AggregationType::kUnknown"));
+    if (task_info->aggregation_type == AggregationType::kSecureAggregation) {
+      return ReportResult::FromStatus(ReportViaMultiShotSecureAggregation(
+          std::move(results), plan_duration, *task_info));
+    } else if (task_info->aggregation_type == AggregationType::kUnknown) {
+      // Once the Flags::enable_confidential_aggregation() flag is turned on
+      // we should never see kUnknown values anymore.
+      return ReportResult::FromStatus(
+          absl::InternalError("Unexpected AggregationType::kUnknown"));
+    } else {
+      // kSimpleAggregation, kConfidentialAggregation or kWillowAggregation
+      return ReportViaOneShotAggregation(std::move(results), plan_duration,
+                                         *task_info);
     }
   }
 }
 
-ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
+ReportResult HttpFederatedProtocol::ReportViaOneShotAggregation(
     ComputationResults results, absl::Duration plan_duration,
     PerTaskInfo& task_info) {
   // TODO: b/307312707 -  Remove the kUnknown check once the
@@ -1251,12 +1284,14 @@ ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
   FCP_CHECK(task_info.aggregation_type == AggregationType::kUnknown ||
             task_info.aggregation_type == AggregationType::kSimpleAggregation ||
             task_info.aggregation_type ==
-                AggregationType::kConfidentialAggregation);
-  bool confidential_aggregation =
-      task_info.aggregation_type == AggregationType::kConfidentialAggregation;
-  const std::string aggregation_type_readable = confidential_aggregation
-                                                    ? "Confidential aggregation"
-                                                    : "Simple aggregation";
+                AggregationType::kConfidentialAggregation ||
+            task_info.aggregation_type == AggregationType::kWillowAggregation);
+  bool use_confidential_aggregation_service =
+      task_info.aggregation_type == AggregationType::kConfidentialAggregation ||
+      task_info.aggregation_type == AggregationType::kWillowAggregation;
+  const std::string aggregation_type_readable =
+      GetReadableAggregationType(task_info.aggregation_type);
+
   if (results.size() != 1) {
     return ReportResult::FromStatus(absl::InternalError(
         absl::StrCat(aggregation_type_readable,
@@ -1303,15 +1338,16 @@ ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
       task_info.state = ObjectState::kReportFailedPermanentError;
       return ReportResult::FromStatus(per_upload_info.status());
     }
-    // If we are doing a confidential aggregation we must have received an
-    // encryption config, and if we're doing simple aggregation we must not have
-    // received an encryption config.
+    // If we are doing a confidential aggregation or Willow aggregation, we must
+    // have received an encryption config from the confidential aggregation
+    // service, and if we're doing simple aggregation we must not have received
+    // an encryption config.
     FCP_CHECK(per_upload_info->confidential_encryption_config.has_value() ==
-              confidential_aggregation)
+              use_confidential_aggregation_service)
         << aggregation_type_readable;
-    absl::Status upload_status = UploadResult(
-        confidential_aggregation, task_info, *per_upload_info, result_data[0],
-        checkpoint_metadata[0], aggregation_type_readable);
+    absl::Status upload_status =
+        UploadResult(task_info, *per_upload_info, result_data[0],
+                     checkpoint_metadata[0], aggregation_type_readable);
     if (!upload_status.ok()) {
       task_info.state = ObjectState::kReportFailedPermanentError;
       return ReportResult::FromStatus(upload_status);
@@ -1345,15 +1381,16 @@ ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
   int num_successful_uploads = 0;
   for (int i = 0; i < per_upload_infos.size(); ++i) {
     PerUploadInfo& per_upload_info = per_upload_infos[i];
-    // If we are doing a confidential aggregation we must have received an
-    // encryption config, and if we're doing simple aggregation we must not have
-    // received an encryption config.
+    // If we are doing a confidential aggregation or Willow aggregation, we must
+    // have received an encryption config from the confidential aggregation
+    // service, and if we're doing simple aggregation we must not have received
+    // an encryption config.
     FCP_CHECK(per_upload_info.confidential_encryption_config.has_value() ==
-              confidential_aggregation)
+              use_confidential_aggregation_service)
         << aggregation_type_readable;
-    absl::Status upload_status = UploadResult(
-        confidential_aggregation, task_info, per_upload_info, result_data[i],
-        checkpoint_metadata[i], aggregation_type_readable);
+    absl::Status upload_status =
+        UploadResult(task_info, per_upload_info, result_data[i],
+                     checkpoint_metadata[i], aggregation_type_readable);
     if (!upload_status.ok()) {
       last_error_status = upload_status;
     } else {
@@ -1378,13 +1415,13 @@ ReportResult HttpFederatedProtocol::ReportViaSimpleOrConfidentialAggregation(
 }
 
 absl::Status HttpFederatedProtocol::UploadResult(
-    bool confidential_aggregation, PerTaskInfo& task_info,
-    PerUploadInfo& per_upload_info, std::string result,
+    PerTaskInfo& task_info, PerUploadInfo& per_upload_info, std::string result,
     std::optional<PayloadMetadata> payload_metadata,
     std::string aggregation_type_readable) {
   std::string data_to_upload;
   std::string serialized_blob_header = "";
-  if (confidential_aggregation) {
+
+  if (task_info.aggregation_type == AggregationType::kConfidentialAggregation) {
     FCP_ASSIGN_OR_RETURN(
         attestation::AttestationVerifier::VerificationResult attestation_result,
         ValidateConfidentialEncryptionConfig(task_info, per_upload_info));
@@ -1407,6 +1444,11 @@ absl::Status HttpFederatedProtocol::UploadResult(
                              task_info, attestation_result.public_key, result,
                              serialized_blob_header, per_upload_info));
 
+  } else if (task_info.aggregation_type ==
+             AggregationType::kWillowAggregation) {
+    FCP_ASSIGN_OR_RETURN(
+        data_to_upload,
+        EncryptPayloadForWillowAggregation(task_info, result, per_upload_info));
   } else {
     data_to_upload = std::move(result);
   }
@@ -1434,8 +1476,9 @@ absl::Status HttpFederatedProtocol::UploadResult(
 absl::StatusOr<InMemoryHttpResponse>
 HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
     absl::Duration plan_duration, PerTaskInfo& task_info) {
-  bool confidential_aggregation =
-      task_info.aggregation_type == AggregationType::kConfidentialAggregation;
+  bool use_confidential_aggregation_service =
+      task_info.aggregation_type == AggregationType::kConfidentialAggregation ||
+      task_info.aggregation_type == AggregationType::kWillowAggregation;
   FCP_ASSIGN_OR_RETURN(
       ReportTaskResultRequest report_task_result_request,
       CreateReportTaskResultRequest(
@@ -1458,7 +1501,7 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
   // paths up.
   std::string start_upload_request;
   std::string start_aggregation_data_upload_uri_suffix;
-  if (confidential_aggregation) {
+  if (use_confidential_aggregation_service) {
     start_upload_request =
         StartConfidentialAggregationDataUploadRequest().SerializeAsString();
     FCP_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
@@ -1479,7 +1522,7 @@ HttpFederatedProtocol::PerformStartDataUploadRequestAndReportTaskResult(
           start_aggregation_data_upload_uri_suffix, {},
           HttpRequest::Method::kPost, start_upload_request,
           /*is_protobuf_encoded=*/true));
-  FCP_LOG(INFO) << (confidential_aggregation
+  FCP_LOG(INFO) << (use_confidential_aggregation_service
                         ? "StartConfidentialAggregationDataUpload"
                         : "StartAggregationDataUpload")
                 << " request uri is : "
@@ -1515,8 +1558,10 @@ HttpFederatedProtocol::
     return absl::InvalidArgumentError(
         "num_data_uploads must be greater than 0.");
   }
-  bool confidential_aggregation =
-      task_info.aggregation_type == AggregationType::kConfidentialAggregation;
+  // Willow aggregation uses the same service as confidential aggregation.
+  bool use_confidential_aggregation_service =
+      task_info.aggregation_type == AggregationType::kConfidentialAggregation ||
+      task_info.aggregation_type == AggregationType::kWillowAggregation;
   FCP_ASSIGN_OR_RETURN(
       ReportTaskResultRequest report_task_result_request,
       CreateReportTaskResultRequest(
@@ -1539,7 +1584,7 @@ HttpFederatedProtocol::
   // paths up.
   std::string start_upload_request;
   std::string start_aggregation_data_upload_uri_suffix;
-  if (confidential_aggregation) {
+  if (use_confidential_aggregation_service) {
     start_upload_request =
         StartConfidentialAggregationDataUploadRequest().SerializeAsString();
     FCP_ASSIGN_OR_RETURN(start_aggregation_data_upload_uri_suffix,
@@ -1570,7 +1615,7 @@ HttpFederatedProtocol::
     requests.push_back(std::move(http_start_aggregation_data_upload_request));
   }
 
-  FCP_LOG(INFO) << (confidential_aggregation
+  FCP_LOG(INFO) << (use_confidential_aggregation_service
                         ? "StartConfidentialAggregationDataUpload"
                         : "StartAggregationDataUpload")
                 << " request uri is : " << requests[0]->uri();
@@ -1599,8 +1644,9 @@ absl::StatusOr<HttpFederatedProtocol::PerUploadInfo>
 HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
     absl::StatusOr<InMemoryHttpResponse> http_response,
     PerTaskInfo& task_info) {
-  bool confidential_aggregation =
-      task_info.aggregation_type == AggregationType::kConfidentialAggregation;
+  bool use_confidential_aggregation_service =
+      task_info.aggregation_type == AggregationType::kConfidentialAggregation ||
+      task_info.aggregation_type == AggregationType::kWillowAggregation;
   absl::StatusOr<Operation> operation =
       ParseOperationProtoFromHttpResponse(http_response);
   if (!operation.ok()) {
@@ -1611,8 +1657,9 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
     return absl::Status(
         operation.status().code(),
         absl::StrCat(
-            (confidential_aggregation ? "StartConfidentialAggregationDataUpload"
-                                      : "StartAggregationDataUpload"),
+            (use_confidential_aggregation_service
+                 ? "StartConfidentialAggregationDataUpload"
+                 : "StartAggregationDataUpload"),
             " request failed during polling: ", operation.status().ToString()));
   }
   absl::StatusOr<Operation> response_operation_proto =
@@ -1623,8 +1670,9 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
     return absl::Status(
         response_operation_proto.status().code(),
         absl::StrCat(
-            (confidential_aggregation ? "StartConfidentialAggregationDataUpload"
-                                      : "StartAggregationDataUpload"),
+            (use_confidential_aggregation_service
+                 ? "StartConfidentialAggregationDataUpload"
+                 : "StartAggregationDataUpload"),
             " request failed: ", response_operation_proto.status().ToString()));
   }
 
@@ -1640,18 +1688,18 @@ HttpFederatedProtocol::HandleStartDataAggregationUploadOperationResponse(
   }
 
   return CreatePerUploadInfo(*response_operation_proto, task_info,
-                             confidential_aggregation);
+                             use_confidential_aggregation_service);
 }
 
 absl::StatusOr<HttpFederatedProtocol::PerUploadInfo>
 HttpFederatedProtocol::CreatePerUploadInfo(
     const Operation& response_operation_proto, PerTaskInfo& task_info,
-    bool confidential_aggregation) {
+    bool use_confidential_aggregation_service) {
   std::optional<ConfidentialEncryptionConfig> confidential_encryption_config;
   ForwardingInfo aggregation_protocol_forwarding_info;
   ForwardingInfo data_upload_forwarding_info;
   PerUploadInfo per_upload_info;
-  if (confidential_aggregation) {
+  if (use_confidential_aggregation_service) {
     StartConfidentialAggregationDataUploadResponse response_proto;
     if (!response_operation_proto.response().UnpackTo(&response_proto)) {
       return absl::InvalidArgumentError(
@@ -1738,7 +1786,7 @@ HttpFederatedProtocol::CreatePerUploadInfo(
           // re-compress the encrypted payload.
           /*use_compression=*/
           !flags_->disable_http_request_body_compression() &&
-              !confidential_aggregation));
+              !use_confidential_aggregation_service));
   return per_upload_info;
 }
 
@@ -1831,6 +1879,28 @@ HttpFederatedProtocol::EncryptPayloadForConfidentialAggregation(
       std::move(client_payload_header), encryption_result->ciphertext);
 }
 
+absl::StatusOr<std::string>
+HttpFederatedProtocol::EncryptPayloadForWillowAggregation(
+    PerTaskInfo& task_info, absl::string_view inner_payload,
+    PerUploadInfo& per_upload_info) {
+  if (!task_info.willow_encoding_config.has_value()) {
+    return absl::InternalError("Missing Willow encoding config.");
+  }
+  absl::string_view confidential_encryption_config_public_key;
+  if (per_upload_info.confidential_encryption_config.has_value()) {
+    confidential_encryption_config_public_key =
+        per_upload_info.confidential_encryption_config->public_key();
+  } else {
+    return absl::InternalError(
+        "Missing confidential encryption config, which holds the Willow public "
+        "key.");
+  }
+  // Encrypt and add the necessary headers.
+  return willow_payload_encryptor_->EncryptAndSerializePayload(
+      *task_info.willow_encoding_config,
+      confidential_encryption_config_public_key, inner_payload);
+}
+
 absl::Status HttpFederatedProtocol::UploadDataViaByteStreamProtocol(
     std::string tf_checkpoint, PerUploadInfo& per_upload_info,
     std::optional<absl::string_view> serialized_blob_header) {
@@ -1867,7 +1937,8 @@ absl::Status HttpFederatedProtocol::SubmitAggregationResult(
     PerTaskInfo& task_info, PerUploadInfo& per_upload_info) {
   FCP_LOG(INFO) << "Notifying the server that data upload is complete.";
   bool confidential_aggregation =
-      task_info.aggregation_type == AggregationType::kConfidentialAggregation;
+      task_info.aggregation_type == AggregationType::kConfidentialAggregation ||
+      task_info.aggregation_type == AggregationType::kWillowAggregation;
   std::string uri_suffix;
   std::string request_proto;
   if (confidential_aggregation) {
@@ -1968,7 +2039,7 @@ absl::Status HttpFederatedProtocol::AbortAggregationInner(
       .status();
 }
 
-absl::Status HttpFederatedProtocol::ReportViaSecureAggregation(
+absl::Status HttpFederatedProtocol::ReportViaMultiShotSecureAggregation(
     ComputationResults results, absl::Duration plan_duration,
     PerTaskInfo& task_info) {
   FCP_ASSIGN_OR_RETURN(
@@ -2281,6 +2352,12 @@ HttpFederatedProtocol::FetchTaskResources(
       results.push_back(signed_endorsements_uri_or_data.status());
       continue;
     }
+    auto willow_encoding_config_uri_or_data =
+        ConvertResourceToUriOrInlineData(task_resources.willow_encoding_config);
+    if (!willow_encoding_config_uri_or_data.ok()) {
+      results.push_back(willow_encoding_config_uri_or_data.status());
+      continue;
+    }
     // We still need to fetch the resources, push an empty
     // FetchedTaskResources as placeholder to the result vector.
     results.push_back(FetchedTaskResources{});
@@ -2288,6 +2365,7 @@ HttpFederatedProtocol::FetchTaskResources(
     uris_to_fetch.push_back(*checkpoint_uri_or_data);
     uris_to_fetch.push_back(*confidential_data_access_policy_uri_or_data);
     uris_to_fetch.push_back(*signed_endorsements_uri_or_data);
+    uris_to_fetch.push_back(*willow_encoding_config_uri_or_data);
   }
 
   // Fetch the task resources if they need to be fetched (using the inline data
@@ -2321,11 +2399,15 @@ HttpFederatedProtocol::FetchTaskResources(
     // using confidential aggregation, and only those with signed endorsements,
     // so we must only try and access it in those cases.
     auto signed_endorsements_response = response_it++;
+    // The willow encoding config resource is only specified for tasks
+    // using willow aggregation, so we must only try and access it in those
+    // cases.
+    auto willow_encoding_config_response = response_it++;
 
     pending_result = CreateFetchedTaskResources(
         *plan_data_response, *checkpoint_data_response,
         *confidential_data_access_policy_response,
-        *signed_endorsements_response);
+        *signed_endorsements_response, *willow_encoding_config_response);
   }
   return results;
 }
@@ -2336,7 +2418,8 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
     absl::StatusOr<InMemoryHttpResponse>& checkpoint_data_response,
     absl::StatusOr<InMemoryHttpResponse>&
         confidential_data_access_policy_response,
-    absl::StatusOr<InMemoryHttpResponse>& signed_endorsements_response) {
+    absl::StatusOr<InMemoryHttpResponse>& signed_endorsements_response,
+    absl::StatusOr<InMemoryHttpResponse>& willow_encoding_config_response) {
   // Note: we forward any error during the fetching of the task resources to
   // the caller, which means that these error codes will be checked against
   // the set of 'permanent' error codes, just like the errors in response to
@@ -2365,6 +2448,12 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
         absl::StrCat("signed endorsements fetch failed: ",
                      signed_endorsements_response.status().ToString()));
   }
+  if (!willow_encoding_config_response.ok()) {
+    return absl::Status(
+        willow_encoding_config_response.status().code(),
+        absl::StrCat("willow encoding config fetch failed: ",
+                     willow_encoding_config_response.status().ToString()));
+  }
 
   return FetchedTaskResources{
       .plan_and_checkpoint_payloads =
@@ -2372,7 +2461,8 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
               plan_data_response->body, checkpoint_data_response->body},
       .confidential_data_access_policy =
           confidential_data_access_policy_response->body,
-      .signed_endorsements = signed_endorsements_response->body};
+      .signed_endorsements = signed_endorsements_response->body,
+      .willow_encoding_config = willow_encoding_config_response->body};
 }
 
 template <typename T>
@@ -2516,6 +2606,22 @@ absl::Status HttpFederatedProtocol::
     most_recent_forwarding_prefix_ = updated_target_uri_prefix;
   }
   return absl::OkStatus();
+}
+
+std::string HttpFederatedProtocol::GetReadableAggregationType(
+    AggregationType aggregation_type) {
+  switch (aggregation_type) {
+    case AggregationType::kUnknown:
+      return "Unknown aggregation";
+    case AggregationType::kSimpleAggregation:
+      return "Simple aggregation";
+    case AggregationType::kSecureAggregation:
+      return "Secure aggregation (multi-phase)";
+    case AggregationType::kConfidentialAggregation:
+      return "Confidential aggregation";
+    case AggregationType::kWillowAggregation:
+      return "Willow aggregation";
+  }
 }
 
 }  // namespace http

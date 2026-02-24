@@ -97,6 +97,7 @@ cc_library(
         ":task_result_info_cc_proto",
         "//fcp/client/attestation:attestation_verifier",
         "//fcp/client/http:http_client",
+        "//fcp/client/http:willow_payload_encryptor",
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos/confidentialcompute:access_policy_endorsement_options_cc_proto",
         "@com_google_absl//absl/status:statusor",

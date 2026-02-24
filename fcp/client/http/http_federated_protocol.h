@@ -45,6 +45,7 @@
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/http/protocol_request_helper.h"
+#include "fcp/client/http/willow_payload_encryptor.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/secagg_event_publisher.h"
@@ -79,6 +80,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       SecAggEventPublisher* secagg_event_publisher,
       cache::ResourceCache* resource_cache,
       std::unique_ptr<attestation::AttestationVerifier> attestation_verifier,
+      std::unique_ptr<WillowPayloadEncryptor> willow_payload_encryptor,
       absl::string_view entry_point_uri, absl::string_view api_key,
       absl::string_view population_name, absl::string_view retry_token,
       absl::string_view client_version,
@@ -129,11 +131,15 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     kSimpleAggregation,
     kSecureAggregation,
     kConfidentialAggregation,
+    kWillowAggregation,
   };
+
+  // Returns a string representation of the aggregation type.
+  std::string GetReadableAggregationType(AggregationType aggregation_type);
 
   // These fields are set based on the response from the StartDataUpload
   // request. They're unique to each upload. This is only used for simple
-  // aggregation and confidential aggregation.
+  // aggregation, confidential aggregation and Willow aggregation.
   struct PerUploadInfo {
     // Resource name for the result data to upload.
     std::string aggregation_resource_name;
@@ -181,6 +187,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     // policy above. Only set when aggregation_type == kConfidentialAggregation,
     // and the task uses SignedEndorsements.
     std::optional<absl::Cord> signed_endorsements;
+    // The serialized InputSpec that will be used to encode the client's
+    // contribution. Only set when aggregation_type == kWillowAggregation.
+    std::optional<absl::Cord> willow_encoding_config;
     // Each task's state is tracked individually starting from the end of
     // check-in or multiple task assignments. The states from all of the tasks
     // will be used collectively to determine which retry window to use.
@@ -243,11 +252,15 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::StatusOr<InMemoryHttpResponse> http_response,
       const std::function<void(size_t)>& payload_uris_received_callback);
 
-  // Helper function for reporting results via simple or confidential
-  // aggregation.
-  ReportResult ReportViaSimpleOrConfidentialAggregation(
-      ComputationResults results, absl::Duration plan_duration,
-      PerTaskInfo& task_info);
+  // Helper function for reporting results via simple aggregation, confidential
+  // aggregation, or Willow-based secure aggregation.
+  // These three methods all operate in "one shot", meaning that the encrypted
+  // data is sent to the server in a single message, without blocking on other
+  // client submissions (unlike the legacy multi-shot secure aggregation
+  // protocol).
+  ReportResult ReportViaOneShotAggregation(ComputationResults results,
+                                           absl::Duration plan_duration,
+                                           PerTaskInfo& task_info);
 
   // Helper function to perform a StartDataUploadRequest and a ReportTaskResult
   // request concurrently.
@@ -268,14 +281,15 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // `longrunning.Operation` response from a StartDataUpload request.
   absl::StatusOr<HttpFederatedProtocol::PerUploadInfo> CreatePerUploadInfo(
       const google::longrunning::Operation& response_operation_proto,
-      PerTaskInfo& task_info, bool confidential_aggregation);
+      PerTaskInfo& task_info, bool use_confidential_aggregation_service);
 
-  // Helper function to perform a data upload. Encrypts the payload if
-  // `confidential_aggregation` is true, and calls AbortAggregation or
-  // SubmitAggregationResult depending on the status of the upload.
+  // Helper function to perform a data upload. Encrypts the payload
+  // appropriately for confidential aggregation or Willow aggregation, and calls
+  // AbortAggregation or SubmitAggregationResult depending on the status of the
+  // upload.
   absl::Status UploadResult(
-      bool confidential_aggregation, PerTaskInfo& task_info,
-      PerUploadInfo& per_upload_info, std::string result,
+      PerTaskInfo& task_info, PerUploadInfo& per_upload_info,
+      std::string result,
       std::optional<confidentialcompute::PayloadMetadata> payload_metadata,
       std::string aggregation_type_readable);
 
@@ -300,6 +314,13 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       const std::variant<absl::string_view, confidentialcompute::Key>&
           public_key,
       std::string inner_payload, const std::string& serialized_blob_header,
+      PerUploadInfo& per_upload_info);
+
+  // Encrypts the given payload using the given Willow configuration, and
+  // serializes the encrypted payload in a self-describing format suitable for
+  // upload to the server.
+  absl::StatusOr<std::string> EncryptPayloadForWillowAggregation(
+      PerTaskInfo& task_info, absl::string_view inner_payload,
       PerUploadInfo& per_upload_info);
 
   // Helper function to perform data upload using the ByteStream protocol,
@@ -328,10 +349,10 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
                                      PerTaskInfo& task_info,
                                      PerUploadInfo& per_upload_info);
 
-  // Helper function for reporting via secure aggregation.
-  absl::Status ReportViaSecureAggregation(ComputationResults results,
-                                          absl::Duration plan_duration,
-                                          PerTaskInfo& task_info);
+  // Helper function for reporting via multi-shot secure aggregation.
+  absl::Status ReportViaMultiShotSecureAggregation(ComputationResults results,
+                                                   absl::Duration plan_duration,
+                                                   PerTaskInfo& task_info);
 
   // Helper function to perform a StartSecureAggregationRequest and a
   // ReportTaskResultRequest.
@@ -362,6 +383,11 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     // returned).
     const ::google::internal::federatedcompute::v1::Resource&
         signed_endorsements;
+    // For tasks using Willow aggregation, this field contains the encoding
+    // configuration. For all other tasks, this field is empty, meaning
+    // that FetchTaskResources will not fetch anything for this field.
+    const ::google::internal::federatedcompute::v1::Resource&
+        willow_encoding_config;
   };
 
   // Represents fetched task resources, separating plan-and-checkpoint from
@@ -375,6 +401,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     // The serialized `fcp.confidentialcompute.SignedEndorsements` proto, if
     // the task has one, or an empty Cord if the task did not have one.
     absl::Cord signed_endorsements;
+    // The serialized `secure_aggregation.willow.InputSpec` proto, if the task
+    // has one, or an empty Cord if the task did not have one.
+    absl::Cord willow_encoding_config;
   };
 
   // Helper function for fetching the checkpoint/plan resources for a list of
@@ -395,7 +424,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::StatusOr<InMemoryHttpResponse>& checkpoint_data_response,
       absl::StatusOr<InMemoryHttpResponse>&
           confidential_data_access_policy_response,
-      absl::StatusOr<InMemoryHttpResponse>& signed_endorsements_response);
+      absl::StatusOr<InMemoryHttpResponse>& signed_endorsements_response,
+      absl::StatusOr<InMemoryHttpResponse>& willow_encoding_config_response);
 
   // Helper function for fetching the Resources used by the protocol
   // implementation itself, like PopulationEligibilitySpec or
@@ -442,6 +472,8 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // A verifier which can be used to verify a ConfidentialAggregations
   // service's attestation evidence.
   std::unique_ptr<attestation::AttestationVerifier> attestation_verifier_;
+  // Encryptor for Willow aggregation.
+  std::unique_ptr<WillowPayloadEncryptor> willow_payload_encryptor_;
 
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
   std::unique_ptr<ProtocolRequestCreator> eligibility_eval_request_creator_;

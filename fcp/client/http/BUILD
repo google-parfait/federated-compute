@@ -134,6 +134,19 @@ cc_test(
 )
 
 cc_library(
+    name = "willow_payload_encryptor",
+    hdrs = ["willow_payload_encryptor.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_library(
     name = "http_federated_protocol",
     srcs = ["http_federated_protocol.cc"],
     hdrs = [
@@ -145,6 +158,7 @@ cc_library(
         ":http_secagg_send_to_server_impl",
         ":in_memory_request_response",
         ":protocol_request_helper",
+        ":willow_payload_encryptor",
         "//fcp/base",
         "//fcp/base:clock",
         "//fcp/base:compression",
@@ -193,6 +207,7 @@ cc_test(
     deps = [
         ":http_client",
         ":http_federated_protocol",
+        ":willow_payload_encryptor",
         "//fcp/base",
         "//fcp/base:clock",
         "//fcp/base:compression",
