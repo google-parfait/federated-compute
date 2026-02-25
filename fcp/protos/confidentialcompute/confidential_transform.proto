@@ -154,9 +154,12 @@ message SessionResponse {
     ReadResponse read = 3;
     FinalizeResponse finalize = 5;
   }
+
+  // Arbitrary metrics associated with the operation.
+  Metrics metrics = 6;
 }
 
-// Metrics that are sent to the untrusted side in [Op]Responses. It must be
+// Metrics that are sent to the untrusted side in SessionResponses. It must be
 // clear from the open source TEE container implementation that these metrics do
 // not leak sensitive data from the TEE.
 message Metrics {
@@ -179,10 +182,7 @@ message ConfigureRequest {
 // Message acknowledging creation of a session with a configuration
 // passed in the ConfigureRequest.
 message ConfigureResponse {
-  // Arbitrary metrics associated with the configure operation.
-  Metrics metrics = 3;
-
-  reserved 1, 2;
+  reserved 1, 2, 3;
 }
 
 // Encodes metadata about a blob that is written to or read from the
@@ -290,10 +290,7 @@ message WriteFinishedResponse {
   // with an error.
   google.rpc.Status status = 2;
 
-  // Arbitrary metrics associated with the write operation.
-  Metrics metrics = 4;
-
-  reserved 3;
+  reserved 4;
 }
 
 // A response reading a chunk of a blob from the TEE, which will be
@@ -339,10 +336,7 @@ message CommitResponse {
 
   CommitStats stats = 3;
 
-  // Arbitrary metrics associated with the commit operation.
-  Metrics metrics = 4;
-
-  reserved 2;
+  reserved 2, 4;
 }
 
 // Request to compact the session state with a purpose of taking serialized
@@ -362,8 +356,7 @@ message CompactResponse {
   // session state.
   google.protobuf.Any configuration = 1;
 
-  // Arbitrary metrics associated with the compact operation.
-  Metrics metrics = 2;
+  reserved 2;
 }
 
 // Request to merge a serialized snapshot of a session into the current session.
@@ -386,8 +379,7 @@ message MergeRequest {
 // Response indicating that a serialized snapshot has been successfully merged
 // into the session.
 message MergeResponse {
-  // Arbitrary metrics associated with the merge operation.
-  Metrics metrics = 1;
+  reserved 1;
 }
 
 // Request to finalize the session by running a finalization
@@ -415,8 +407,7 @@ message FinalizeResponse {
   // The application specific configuration data associated with finalization.
   google.protobuf.Any configuration = 2;
 
-  // Arbitrary metrics associated with the finalize operation.
-  Metrics metrics = 3;
+  reserved 3;
 }
 
 // This message is deprecated. Going forward, FinalizeResponse will be used
