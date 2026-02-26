@@ -30,6 +30,8 @@ inline constexpr char kEventTimeColumnName[] =
 inline constexpr char kPrivacyIdColumnName[] =
     "confidential_compute_privacy_id";
 
+// Values keyed by this key are serialized proto bytes. Older clients may upload
+// base64 encoded serialized proto bytes.
 inline constexpr char kPrivateLoggerEntryKey[] = "entry";
 
 }  // namespace confidential_compute

@@ -1331,6 +1331,10 @@ SelectorContext FillSelectorContextWithTaskLevelDetails(
             ->mutable_simple_aggregation()) = SimpleAggregation();
     }
   }
+  federated_selector_context_with_task_name.mutable_computation_properties()
+      ->mutable_private_logger_options()
+      ->set_support_arbitrary_bytestrings(true);
+
   return federated_selector_context_with_task_name;
 }
 

@@ -65,6 +65,9 @@ message QueryTimeComputationProperties {
 
   // Expected output format from the example iterator.
   ExampleIteratorOutputFormat example_iterator_output_format = 7;
+
+  // Execution-time options for PrivateLogger.
+  PrivateLoggerOptions private_logger_options = 8;
 }
 
 // On-device, local computation only. No aggregation.
@@ -146,4 +149,12 @@ message HistoricalContext {
   // The map of collection URIs to the timestamp of when this task first
   // accessed the collection on the previous successful execution.
   map<string, google.protobuf.Timestamp> collection_first_access_times = 2;
+}
+
+message PrivateLoggerOptions {
+  // Whether the runtime supports arbitrary bytestrings from PrivateLogger. If
+  // true, the private logger client should send raw bytes in the "entry"
+  // vector. If false, the private logger client should send base64 encoded
+  // bytes in the "entry" vector.
+  bool support_arbitrary_bytestrings = 1;
 }

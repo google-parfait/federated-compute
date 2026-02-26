@@ -201,8 +201,25 @@ absl::Status GenerateAggregationTensorsFromExampleQueryResult(
                       TensorShape({values.double_values().value_size()}),
                       values.double_values().value()));
     } else if (values.has_bytes_values()) {
-      FCP_RETURN_IF_ERROR(
-          CheckOutputVectorDataType(output_vector_spec, DataType::BYTES));
+      // Allow output vector specs to be either BYTES or STRING when the values
+      // are bytes, as both are represented by string tensors in FCCheckpoints.
+      //
+      // This is needed for the private logger compatibility between older and
+      // newer clients, as the ExampleQuerySpec for the private logger SQL
+      // upload task uses STRING for its output vector spec, even though the
+      // values are bytes from newer clients and base64 encoded strings from
+      // older clients.
+      absl::Status bytes_check =
+          CheckOutputVectorDataType(output_vector_spec, DataType::BYTES);
+      absl::Status string_check =
+          CheckOutputVectorDataType(output_vector_spec, DataType::STRING);
+
+      if (!bytes_check.ok() && !string_check.ok()) {
+        return absl::DataLossError(absl::StrCat(
+            "Output vector spec data type mismatch for bytes values. Expected "
+            "BYTES or STRING, got: ",
+            DataType_Name(output_vector_spec.data_type())));
+      }
       FCP_ASSIGN_OR_RETURN(
           tensor,
           ConvertStringTensor(TensorShape({values.bytes_values().value_size()}),
@@ -275,7 +292,6 @@ absl::Status CreateOrUpdateCheckpointBuilders(
       in_progress_checkpoints[per_privacy_id_result.privacy_id] = {
           .checkpoint_builder = std::move(checkpoint_builder)};
     }
-
     FCP_RETURN_IF_ERROR(GenerateAggregationTensorsFromExampleQueryResult(
         *in_progress_checkpoints[per_privacy_id_result.privacy_id]
              .checkpoint_builder,

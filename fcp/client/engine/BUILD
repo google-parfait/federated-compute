@@ -164,6 +164,7 @@ cc_test(
         "//fcp/client:client_runner",
         "//fcp/client:event_time_range_cc_proto",
         "//fcp/client:example_query_result_cc_proto",
+        "//fcp/client:federated_protocol",
         "//fcp/client:simple_task_environment",
         "//fcp/client:test_helpers",
         "//fcp/client/tensorflow:tensorflow_runner",
