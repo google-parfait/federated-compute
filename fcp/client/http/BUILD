@@ -138,10 +138,10 @@ cc_library(
     hdrs = ["willow_payload_encryptor.h"],
     visibility = ["//visibility:public"],
     deps = [
+        "//fcp/client:federated_protocol",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/strings:str_format",
     ],
 )

@@ -904,6 +904,7 @@ void FlRunnerExampleQueryTest::ExpectComputationFailureWithInvalidArgument() {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
   EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(kTaskName));
   ExpectCheckinCompletedLogEvents();
@@ -1192,6 +1193,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlan) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   ComputationResults computation_results;
@@ -1239,6 +1241,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlanWithMinSepPolicy) {
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -1294,6 +1297,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   ComputationResults computation_results;
@@ -1345,6 +1349,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   // Make the call to ReportCompleted(...) fail with an ABORTED error.
@@ -1390,6 +1395,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -1438,6 +1444,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -1490,6 +1497,7 @@ TEST_F(FlRunnerTensorflowTaskTest, TfPlanLightweightComputationIdNull) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   ComputationResults computation_results;
@@ -1539,6 +1547,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SecaggPlan) {
           FederatedProtocol::SecAggInfo{
               .expected_number_of_clients = 4,
               .minimum_clients_in_server_visible_aggregate = 3},
+          std::nullopt,
           std::nullopt,
           kTaskName}));
 
@@ -1595,6 +1604,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SecaggPlanOnlySecaggOutputTensors) {
           /*aggregation_session_id=*/kAggregationSessionId,
           sec_agg_info,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   ComputationResults computation_results;
@@ -1641,6 +1651,7 @@ TEST_F(FlRunnerTensorflowTaskTest, AbortPlan) {
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -1692,6 +1703,7 @@ TEST_F(FlRunnerTensorflowTaskTest, ExampleIteratorError) {
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -1748,6 +1760,7 @@ TEST_F(FlRunnerTensorflowTaskTest, ComputationInvalidArgument) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
   EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(kTaskName));
   ExpectCheckinCompletedLogEvents();
@@ -1791,6 +1804,7 @@ TEST_F(FlRunnerTensorflowTaskTest, MockCheckinInvalidPlan) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   {
@@ -1818,6 +1832,7 @@ TEST_F(FlRunnerTensorflowTaskTest, TaskCompletionCallbackEnabledUploadFailed) {
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -2085,6 +2100,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinSucceeds) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
                               /*has_secagg_output=*/false);
@@ -2149,6 +2165,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -2220,6 +2237,7 @@ TEST_F(FlRunnerEligibilityEvalWithCriteriaTest, ComputationIdSet) {
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -2304,6 +2322,7 @@ TEST_F(FlRunnerExampleQueryEligibilityEvalTest, UseExampleQueryResultFormat) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
                               /*has_secagg_output=*/false);
@@ -2357,6 +2376,7 @@ TEST_F(FlRunnerExampleQueryTest, TaskSucceeds) {
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -2419,6 +2439,7 @@ TEST_F(FlRunnerExampleQueryTest, FederatedComputeWireFormat) {
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -2488,6 +2509,7 @@ TEST_F(FlRunnerExampleQueryTest, FCCheckpointAggregationEnabled) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   ComputationResults computation_results;
@@ -2548,6 +2570,7 @@ TEST_F(FlRunnerExampleQueryTest, LightweightTaskDoesNotCreateTempFiles) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillRepeatedly(testing::Return(true));
@@ -2602,6 +2625,7 @@ TEST_F(FlRunnerExampleQueryTest, NoExampleQueryIORouter) {
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -2700,6 +2724,7 @@ TEST_F(FlRunnerExampleQueryTest, ExampleQueryPlanLightweightComputation) {
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -2802,6 +2827,7 @@ TEST_F(FlRunnerExampleQueryTest, ConfidentialAggInSelectorContext) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           confidential_agg_info,
+          std::nullopt,
           kTaskName}));
 
   EXPECT_CALL(*mock_tensorflow_runner_, WriteTFV1Checkpoint(_, _))
@@ -2849,6 +2875,7 @@ TEST_F(FlRunnerExampleQueryTest, DirectDataUploadTaskSucceeds) {
           {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -2962,6 +2989,7 @@ TEST_F(FlRunnerExampleQueryTest, ExampleQueryWithEventTimeRange) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillRepeatedly(testing::Return(true));
@@ -3027,6 +3055,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, EmptyPopulationSpec) {
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -3142,6 +3171,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -3439,6 +3469,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsTurnedAway) {
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   MockSuccessfulPlanExecution(
@@ -3518,6 +3549,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsIOError) {
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -3603,6 +3635,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   MockSuccessfulPlanExecution(
@@ -3685,6 +3718,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -3775,6 +3809,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -3878,6 +3913,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -3995,6 +4031,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -4151,6 +4188,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -4584,6 +4622,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   EXPECT_CALL(mock_federated_protocol_,
@@ -4670,6 +4709,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));
@@ -4778,6 +4818,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
 
   EXPECT_CALL(mock_federated_protocol_,
@@ -4866,6 +4907,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
           std::nullopt,
+          std::nullopt,
           kTaskName}));
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
                               /*has_secagg_output=*/false);
@@ -4934,6 +4976,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
+          std::nullopt,
           std::nullopt,
           std::nullopt,
           kTaskName}));

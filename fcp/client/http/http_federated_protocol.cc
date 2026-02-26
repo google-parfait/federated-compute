@@ -632,7 +632,7 @@ HttpFederatedProtocol::HandleEligibilityEvalTaskResponse(
                 // data access policy, endorsements or Willow encoding to fetch.
                 .confidential_data_access_policy = Resource(),
                 .signed_endorsements = Resource(),
-                .willow_encoding_config = Resource()}}));
+                .willow_input_spec = Resource()}}));
         if (!task_resources[0].ok()) {
           return task_resources[0].status();
         }
@@ -888,9 +888,8 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
                   .data_access_policy(),
           .signed_endorsements = task_assignment.confidential_aggregation_info()
                                      .signed_endorsements(),
-          .willow_encoding_config =
-              task_assignment.willow_aggregation_info().encoding_config()}}));
-
+          .willow_input_spec =
+              task_assignment.willow_aggregation_info().input_spec()}}));
   auto task_resources = task_resources_vec[0];
   if (!task_resources.ok()) {
     return task_resources.status();
@@ -911,9 +910,15 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
         result.confidential_agg_info->signed_endorsements;
   }
 
-  if (task_assignment.has_willow_aggregation_info()) {
-    default_task_info_.willow_encoding_config =
-        task_resources->willow_encoding_config;
+  if (result.willow_agg_info.has_value()) {
+    // For the task assignment, CreateTaskAssignment has already initialized
+    // willow_agg_info with the right number of clients.
+    result.willow_agg_info->input_spec = task_resources->willow_input_spec;
+    // For the task info, CreatePerTaskInfoFromTaskAssignment has not
+    // initialized willow_agg_info.
+    default_task_info_.willow_agg_info = FederatedProtocol::WillowAggInfo{
+        .input_spec = task_resources->willow_input_spec,
+        .max_number_of_clients = result.willow_agg_info->max_number_of_clients};
   }
 
   object_state_ = ObjectState::kCheckinAccepted;
@@ -943,6 +948,14 @@ FederatedProtocol::TaskAssignment HttpFederatedProtocol::CreateTaskAssignment(
     // above can already determine that the task we got assigned but haven't
     // fetched resources for is a confidential aggregation task.
     result.confidential_agg_info = ConfidentialAggInfo{};
+  }
+  if (flags_->enable_willow_secure_aggregation() &&
+      task_assignment.has_willow_aggregation_info()) {
+    // Create the WillowAggInfo struct and get the number of clients
+    // immediately. The input spec will be populated after it's been fetched.
+    result.willow_agg_info = WillowAggInfo{
+        .max_number_of_clients =
+            task_assignment.willow_aggregation_info().max_number_of_clients()};
   }
 
   result.task_identifier = CreateTaskIdentifier(task_index);
@@ -1165,8 +1178,8 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
                 .data_access_policy(),
         .signed_endorsements = task_assignment.confidential_aggregation_info()
                                    .signed_endorsements(),
-        .willow_encoding_config =
-            task_assignment.willow_aggregation_info().encoding_config()};
+        .willow_input_spec =
+            task_assignment.willow_aggregation_info().input_spec()};
     resources_to_fetch.push_back(task_resources);
 
     auto pending_task_assignment =
@@ -1213,10 +1226,18 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
         task_info_map_[task_assignment.task_identifier].signed_endorsements =
             task_assignment.confidential_agg_info->signed_endorsements;
       }
-      if (task_info_map_[task_assignment.task_identifier].aggregation_type ==
-          AggregationType::kWillowAggregation) {
-        task_info_map_[task_assignment.task_identifier].willow_encoding_config =
-            std::move((*payloads)->willow_encoding_config);
+      if (task_assignment.willow_agg_info.has_value()) {
+        // For the task assignment, CreateTaskAssignment has already initialized
+        // willow_agg_info with the right number of clients.
+        task_assignment.willow_agg_info->input_spec =
+            std::move((*payloads)->willow_input_spec);
+        // For the task info, CreatePerTaskInfoFromTaskAssignment has not
+        // initialized willow_agg_info.
+        task_info_map_[task_assignment.task_identifier].willow_agg_info =
+            FederatedProtocol::WillowAggInfo{
+                .input_spec = task_assignment.willow_agg_info->input_spec,
+                .max_number_of_clients =
+                    task_assignment.willow_agg_info->max_number_of_clients};
       }
 
       result.task_assignments[task_assignment.task_name] =
@@ -1883,13 +1904,12 @@ absl::StatusOr<std::string>
 HttpFederatedProtocol::EncryptPayloadForWillowAggregation(
     PerTaskInfo& task_info, absl::string_view inner_payload,
     PerUploadInfo& per_upload_info) {
-  if (!task_info.willow_encoding_config.has_value()) {
-    return absl::InternalError("Missing Willow encoding config.");
+  if (!task_info.willow_agg_info.has_value()) {
+    return absl::InternalError("Missing Willow aggregation info.");
   }
-  absl::string_view confidential_encryption_config_public_key;
+  absl::string_view willow_key;
   if (per_upload_info.confidential_encryption_config.has_value()) {
-    confidential_encryption_config_public_key =
-        per_upload_info.confidential_encryption_config->public_key();
+    willow_key = per_upload_info.confidential_encryption_config->public_key();
   } else {
     return absl::InternalError(
         "Missing confidential encryption config, which holds the Willow public "
@@ -1897,8 +1917,7 @@ HttpFederatedProtocol::EncryptPayloadForWillowAggregation(
   }
   // Encrypt and add the necessary headers.
   return willow_payload_encryptor_->EncryptAndSerializePayload(
-      *task_info.willow_encoding_config,
-      confidential_encryption_config_public_key, inner_payload);
+      *task_info.willow_agg_info, willow_key, inner_payload);
 }
 
 absl::Status HttpFederatedProtocol::UploadDataViaByteStreamProtocol(
@@ -2352,10 +2371,10 @@ HttpFederatedProtocol::FetchTaskResources(
       results.push_back(signed_endorsements_uri_or_data.status());
       continue;
     }
-    auto willow_encoding_config_uri_or_data =
-        ConvertResourceToUriOrInlineData(task_resources.willow_encoding_config);
-    if (!willow_encoding_config_uri_or_data.ok()) {
-      results.push_back(willow_encoding_config_uri_or_data.status());
+    auto willow_input_spec_uri_or_data =
+        ConvertResourceToUriOrInlineData(task_resources.willow_input_spec);
+    if (!willow_input_spec_uri_or_data.ok()) {
+      results.push_back(willow_input_spec_uri_or_data.status());
       continue;
     }
     // We still need to fetch the resources, push an empty
@@ -2365,7 +2384,7 @@ HttpFederatedProtocol::FetchTaskResources(
     uris_to_fetch.push_back(*checkpoint_uri_or_data);
     uris_to_fetch.push_back(*confidential_data_access_policy_uri_or_data);
     uris_to_fetch.push_back(*signed_endorsements_uri_or_data);
-    uris_to_fetch.push_back(*willow_encoding_config_uri_or_data);
+    uris_to_fetch.push_back(*willow_input_spec_uri_or_data);
   }
 
   // Fetch the task resources if they need to be fetched (using the inline data
@@ -2399,15 +2418,15 @@ HttpFederatedProtocol::FetchTaskResources(
     // using confidential aggregation, and only those with signed endorsements,
     // so we must only try and access it in those cases.
     auto signed_endorsements_response = response_it++;
-    // The willow encoding config resource is only specified for tasks
+    // The willow input spec resource is only specified for tasks
     // using willow aggregation, so we must only try and access it in those
     // cases.
-    auto willow_encoding_config_response = response_it++;
+    auto willow_input_spec_response = response_it++;
 
     pending_result = CreateFetchedTaskResources(
         *plan_data_response, *checkpoint_data_response,
         *confidential_data_access_policy_response,
-        *signed_endorsements_response, *willow_encoding_config_response);
+        *signed_endorsements_response, *willow_input_spec_response);
   }
   return results;
 }
@@ -2419,7 +2438,7 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
     absl::StatusOr<InMemoryHttpResponse>&
         confidential_data_access_policy_response,
     absl::StatusOr<InMemoryHttpResponse>& signed_endorsements_response,
-    absl::StatusOr<InMemoryHttpResponse>& willow_encoding_config_response) {
+    absl::StatusOr<InMemoryHttpResponse>& willow_input_spec_response) {
   // Note: we forward any error during the fetching of the task resources to
   // the caller, which means that these error codes will be checked against
   // the set of 'permanent' error codes, just like the errors in response to
@@ -2448,11 +2467,11 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
         absl::StrCat("signed endorsements fetch failed: ",
                      signed_endorsements_response.status().ToString()));
   }
-  if (!willow_encoding_config_response.ok()) {
+  if (!willow_input_spec_response.ok()) {
     return absl::Status(
-        willow_encoding_config_response.status().code(),
-        absl::StrCat("willow encoding config fetch failed: ",
-                     willow_encoding_config_response.status().ToString()));
+        willow_input_spec_response.status().code(),
+        absl::StrCat("willow input spec fetch failed: ",
+                     willow_input_spec_response.status().ToString()));
   }
 
   return FetchedTaskResources{
@@ -2462,7 +2481,7 @@ HttpFederatedProtocol::CreateFetchedTaskResources(
       .confidential_data_access_policy =
           confidential_data_access_policy_response->body,
       .signed_endorsements = signed_endorsements_response->body,
-      .willow_encoding_config = willow_encoding_config_response->body};
+      .willow_input_spec = willow_input_spec_response->body};
 }
 
 template <typename T>

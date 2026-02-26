@@ -241,9 +241,12 @@ message TaskAssignment {
   }
 
   message WillowAggregationInfo {
-    // The encoding config that will be used to encode the client's contribution
+    // The input spec that will be used to encode the client's contribution
     // before it is sent to the server.
-    Resource encoding_config = 1;
+    Resource input_spec = 1;
+
+    // The maximum number of clients that can participate in the aggregations.
+    int64 max_number_of_clients = 2;
   }
 
   oneof aggregation_type {

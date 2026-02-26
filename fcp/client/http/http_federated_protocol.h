@@ -187,9 +187,9 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     // policy above. Only set when aggregation_type == kConfidentialAggregation,
     // and the task uses SignedEndorsements.
     std::optional<absl::Cord> signed_endorsements;
-    // The serialized InputSpec that will be used to encode the client's
-    // contribution. Only set when aggregation_type == kWillowAggregation.
-    std::optional<absl::Cord> willow_encoding_config;
+    // Information for Willow aggregation. Only set when aggregation_type ==
+    // kWillowAggregation.
+    std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info;
     // Each task's state is tracked individually starting from the end of
     // check-in or multiple task assignments. The states from all of the tasks
     // will be used collectively to determine which retry window to use.
@@ -383,11 +383,10 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     // returned).
     const ::google::internal::federatedcompute::v1::Resource&
         signed_endorsements;
-    // For tasks using Willow aggregation, this field contains the encoding
-    // configuration. For all other tasks, this field is empty, meaning
-    // that FetchTaskResources will not fetch anything for this field.
-    const ::google::internal::federatedcompute::v1::Resource&
-        willow_encoding_config;
+    // For tasks using Willow aggregation, this field contains the input spec.
+    // For all other tasks, this field is empty, meaning that FetchTaskResources
+    // will not fetch anything for this field.
+    const ::google::internal::federatedcompute::v1::Resource& willow_input_spec;
   };
 
   // Represents fetched task resources, separating plan-and-checkpoint from
@@ -403,7 +402,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
     absl::Cord signed_endorsements;
     // The serialized `secure_aggregation.willow.InputSpec` proto, if the task
     // has one, or an empty Cord if the task did not have one.
-    absl::Cord willow_encoding_config;
+    absl::Cord willow_input_spec;
   };
 
   // Helper function for fetching the checkpoint/plan resources for a list of
@@ -425,7 +424,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       absl::StatusOr<InMemoryHttpResponse>&
           confidential_data_access_policy_response,
       absl::StatusOr<InMemoryHttpResponse>& signed_endorsements_response,
-      absl::StatusOr<InMemoryHttpResponse>& willow_encoding_config_response);
+      absl::StatusOr<InMemoryHttpResponse>& willow_input_spec_response);
 
   // Helper function for fetching the Resources used by the protocol
   // implementation itself, like PopulationEligibilitySpec or

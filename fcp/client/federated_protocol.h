@@ -220,6 +220,17 @@ class FederatedProtocol {
     absl::Cord signed_endorsements;
   };
 
+  // Metadata for Willow aggregation.
+  struct WillowAggInfo {
+    // The serialized `secure_aggregation.willow.InputSpec` proto that will be
+    // used to encode the client's contribution.
+    absl::Cord input_spec;
+    // The maximum number of clients that can participate in the aggregation.
+    // This is used by the Willow library to compute the right cryptographic
+    // parameters.
+    int64_t max_number_of_clients;
+  };
+
   // A task assignment, consisting of task payloads, a URI template to download
   // federated select task slices with (if the plan uses federated select), a
   // session identifier, and SecAgg-related metadata.
@@ -233,6 +244,9 @@ class FederatedProtocol {
     // Only populated when the task will be aggregated using the confidential
     // aggregation protocol.
     std::optional<ConfidentialAggInfo> confidential_agg_info;
+    // Only populated when the task will be aggregated using the Willow
+    // aggregation protocol.
+    std::optional<WillowAggInfo> willow_agg_info;
     std::string task_name;
     // Unique identifier for the task when the task is assigned via multiple
     // task assignment.

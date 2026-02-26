@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-#ifndef FCP_CLIENT_HTTP_HTTP_WILLOW_ENCRYPT_PAYLOAD_H_
-#define FCP_CLIENT_HTTP_HTTP_WILLOW_ENCRYPT_PAYLOAD_H_
+#ifndef FCP_CLIENT_HTTP_WILLOW_PAYLOAD_ENCRYPTOR_H_
+#define FCP_CLIENT_HTTP_WILLOW_PAYLOAD_ENCRYPTOR_H_
 
 #include <string>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/cord.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "fcp/client/federated_protocol.h"
 
 namespace fcp::client::http {
 
@@ -36,13 +36,12 @@ class WillowPayloadEncryptor {
   // the wire format by adding the ClientPayloadHeader.
   //
   // Args:
-  //  willow_encoding_config: serialized
-  //  `secure_aggregation.willow.InputSpec` proto.
+  //  willow_agg_info: configuration for Willow aggregation.
   //  key: serialized `secure_aggregation.willow.Key` proto.
   //  inner_payload: serialized data (FCCheckpoint) to be encrypted.
   virtual absl::StatusOr<std::string> EncryptAndSerializePayload(
-      const absl::Cord& willow_encoding_config, absl::string_view key,
-      absl::string_view inner_payload) = 0;
+      const FederatedProtocol::WillowAggInfo& willow_agg_info,
+      absl::string_view key, absl::string_view inner_payload) = 0;
 };
 
 // A default implementation of WillowPayloadEncryptor that always returns an
@@ -50,8 +49,8 @@ class WillowPayloadEncryptor {
 class AlwaysFailingWillowPayloadEncryptor : public WillowPayloadEncryptor {
  public:
   absl::StatusOr<std::string> EncryptAndSerializePayload(
-      const absl::Cord& willow_encoding_config, absl::string_view key,
-      absl::string_view inner_payload) override {
+      const FederatedProtocol::WillowAggInfo& willow_agg_info,
+      absl::string_view key, absl::string_view inner_payload) override {
     return absl::UnimplementedError("Willow aggregation is not supported.");
   }
 };
@@ -61,13 +60,14 @@ class AlwaysFailingWillowPayloadEncryptor : public WillowPayloadEncryptor {
 class TestingFakeWillowPayloadEncryptor : public WillowPayloadEncryptor {
  public:
   absl::StatusOr<std::string> EncryptAndSerializePayload(
-      const absl::Cord& willow_encoding_config, absl::string_view key,
-      absl::string_view inner_payload) override {
-    return absl::StrFormat("%v%v%v", willow_encoding_config, key,
+      const FederatedProtocol::WillowAggInfo& willow_agg_info,
+      absl::string_view key, absl::string_view inner_payload) override {
+    return absl::StrFormat("%v%v%v%v", willow_agg_info.input_spec,
+                           willow_agg_info.max_number_of_clients, key,
                            inner_payload);
   }
 };
 
 }  // namespace fcp::client::http
 
-#endif  // FCP_CLIENT_HTTP_HTTP_WILLOW_ENCRYPT_PAYLOAD_H_
+#endif  // FCP_CLIENT_HTTP_WILLOW_PAYLOAD_ENCRYPTOR_H_
