@@ -23,9 +23,9 @@
 #include "absl/time/time.h"
 #include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/http/http_client.h"
-#include "fcp/client/http/willow_payload_encryptor.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/task_result_info.pb.h"
+#include "fcp/client/willow/willow_payload_encryptor.h"
 #include "fcp/protos/confidentialcompute/access_policy_endorsement_options.pb.h"
 #include "fcp/protos/plan.pb.h"
 
@@ -103,10 +103,10 @@ class SimpleTaskEnvironment {
   // aggregation. An AlwaysFailingWillowPayloadEncryptor will be used by default
   // (effectively disabling support for Willow aggregation). Must never
   // return a nullptr.
-  virtual std::unique_ptr<fcp::client::http::WillowPayloadEncryptor>
+  virtual std::unique_ptr<fcp::client::willow::WillowPayloadEncryptor>
   CreateWillowPayloadEncryptor() {
     return std::make_unique<
-        fcp::client::http::AlwaysFailingWillowPayloadEncryptor>();
+        fcp::client::willow::AlwaysFailingWillowPayloadEncryptor>();
   }
 
   // Checks whether the caller should abort computation. If less than

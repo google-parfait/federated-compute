@@ -60,13 +60,13 @@
 #include "fcp/client/http/http_secagg_send_to_server_impl.h"
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/http/protocol_request_helper.h"
-#include "fcp/client/http/willow_payload_encryptor.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/parsing_utils.h"
 #include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/stats.h"
+#include "fcp/client/willow/willow_payload_encryptor.h"
 #include "fcp/confidentialcompute/client_payload.h"
 #include "fcp/confidentialcompute/crypto.h"
 #include "fcp/protos/confidentialcompute/blob_header.pb.h"
@@ -89,6 +89,7 @@ namespace {
 using ::fcp::client::GenerateRetryWindowFromRetryTime;
 using ::fcp::client::GenerateRetryWindowFromTargetDelay;
 using ::fcp::client::PickRetryTimeFromRange;
+using ::fcp::client::willow::WillowPayloadEncryptor;
 using ::fcp::confidential_compute::EncryptMessageResult;
 using ::fcp::confidential_compute::MessageEncryptor;
 using ::fcp::confidentialcompute::BlobHeader;
@@ -912,13 +913,16 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
 
   if (result.willow_agg_info.has_value()) {
     // For the task assignment, CreateTaskAssignment has already initialized
-    // willow_agg_info with the right number of clients.
+    // willow_agg_info with everything except the input spec.
     result.willow_agg_info->input_spec = task_resources->willow_input_spec;
     // For the task info, CreatePerTaskInfoFromTaskAssignment has not
     // initialized willow_agg_info.
     default_task_info_.willow_agg_info = FederatedProtocol::WillowAggInfo{
         .input_spec = task_resources->willow_input_spec,
-        .max_number_of_clients = result.willow_agg_info->max_number_of_clients};
+        .max_flattened_domain_size =
+            result.willow_agg_info->max_flattened_domain_size,
+        .max_number_of_clients = result.willow_agg_info->max_number_of_clients,
+    };
   }
 
   object_state_ = ObjectState::kCheckinAccepted;
@@ -954,6 +958,8 @@ FederatedProtocol::TaskAssignment HttpFederatedProtocol::CreateTaskAssignment(
     // Create the WillowAggInfo struct and get the number of clients
     // immediately. The input spec will be populated after it's been fetched.
     result.willow_agg_info = WillowAggInfo{
+        .max_flattened_domain_size = task_assignment.willow_aggregation_info()
+                                         .max_flattened_domain_size(),
         .max_number_of_clients =
             task_assignment.willow_aggregation_info().max_number_of_clients()};
   }
@@ -1228,7 +1234,7 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
       }
       if (task_assignment.willow_agg_info.has_value()) {
         // For the task assignment, CreateTaskAssignment has already initialized
-        // willow_agg_info with the right number of clients.
+        // willow_agg_info with everything except the input spec.
         task_assignment.willow_agg_info->input_spec =
             std::move((*payloads)->willow_input_spec);
         // For the task info, CreatePerTaskInfoFromTaskAssignment has not
@@ -1236,8 +1242,11 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
         task_info_map_[task_assignment.task_identifier].willow_agg_info =
             FederatedProtocol::WillowAggInfo{
                 .input_spec = task_assignment.willow_agg_info->input_spec,
+                .max_flattened_domain_size =
+                    task_assignment.willow_agg_info->max_flattened_domain_size,
                 .max_number_of_clients =
-                    task_assignment.willow_agg_info->max_number_of_clients};
+                    task_assignment.willow_agg_info->max_number_of_clients,
+            };
       }
 
       result.task_assignments[task_assignment.task_name] =
