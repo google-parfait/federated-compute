@@ -155,10 +155,10 @@ TEST(Ec2KeyTest, DecodeFull) {
 }
 
 TEST(Ec2KeyTest, DecodeInvalid) {
-  EXPECT_THAT(OkpKey::Decode(""), IsCode(absl::StatusCode::kInvalidArgument));
-  EXPECT_THAT(OkpKey::Decode("\xa5"),  // map with 5 items
+  EXPECT_THAT(Ec2Key::Decode(""), IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(Ec2Key::Decode("\xa5"),  // map with 5 items
               IsCode(absl::StatusCode::kInvalidArgument));
-  EXPECT_THAT(OkpKey::Decode("\xa0 extra"),  // map with 0 items + " extra"
+  EXPECT_THAT(Ec2Key::Decode("\xa0 extra"),  // map with 0 items + " extra"
               IsCode(absl::StatusCode::kInvalidArgument));
 }
 
