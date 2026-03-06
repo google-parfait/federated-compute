@@ -52,8 +52,6 @@ class OakRustAttestationVerifier : public AttestationVerifier {
   // successful attestation verification.
   OakRustAttestationVerifier(
       oak::attestation::v1::ReferenceValues public_key_reference_values,
-      oak::attestation::v1::ReferenceValues
-          public_key_reference_values_secondary,
       absl::flat_hash_set<std::string> allowlisted_access_policy_hashes,
       confidentialcompute::AccessPolicyEndorsementOptions
           access_policy_endorsement_options,
@@ -61,8 +59,6 @@ class OakRustAttestationVerifier : public AttestationVerifier {
           void(const fcp::confidentialcompute::AttestationVerificationRecord&)>
           record_logger)
       : public_key_reference_values_(std::move(public_key_reference_values)),
-        public_key_reference_values_secondary_(
-            std::move(public_key_reference_values_secondary)),
         allowlisted_access_policy_hashes_(
             std::move(allowlisted_access_policy_hashes)),
         access_policy_endorsement_options_(
@@ -77,7 +73,6 @@ class OakRustAttestationVerifier : public AttestationVerifier {
 
  private:
   oak::attestation::v1::ReferenceValues public_key_reference_values_;
-  oak::attestation::v1::ReferenceValues public_key_reference_values_secondary_;
   absl::flat_hash_set<std::string> allowlisted_access_policy_hashes_;
   fcp::confidentialcompute::AccessPolicyEndorsementOptions
       access_policy_endorsement_options_;
