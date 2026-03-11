@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef FCP_CLIENT_WILLOW_WILLOW_PAYLOAD_ENCRYPTOR_H_
-#define FCP_CLIENT_WILLOW_WILLOW_PAYLOAD_ENCRYPTOR_H_
+#ifndef FCP_CLIENT_HTTP_WILLOW_PAYLOAD_ENCRYPTOR_H_
+#define FCP_CLIENT_HTTP_WILLOW_PAYLOAD_ENCRYPTOR_H_
 
 #include <string>
 
@@ -25,11 +25,9 @@
 #include "absl/strings/string_view.h"
 #include "fcp/client/federated_protocol.h"
 
-namespace fcp::client::willow {
+namespace fcp::client::http {
 
 // Interface for encrypting the payload for Willow aggregation.
-// The protocol is described in the paper "Willow: Secure Aggregation with
-// One-Shot Clients" (CRYPTO '25, https://eprint.iacr.org/2024/936).
 class WillowPayloadEncryptor {
  public:
   virtual ~WillowPayloadEncryptor() = default;
@@ -64,13 +62,12 @@ class TestingFakeWillowPayloadEncryptor : public WillowPayloadEncryptor {
   absl::StatusOr<std::string> EncryptAndSerializePayload(
       const FederatedProtocol::WillowAggInfo& willow_agg_info,
       absl::string_view key, absl::string_view inner_payload) override {
-    return absl::StrFormat("%v%v%v%v%v", willow_agg_info.input_spec,
-                           willow_agg_info.max_flattened_domain_size,
+    return absl::StrFormat("%v%v%v%v", willow_agg_info.input_spec,
                            willow_agg_info.max_number_of_clients, key,
                            inner_payload);
   }
 };
 
-}  // namespace fcp::client::willow
+}  // namespace fcp::client::http
 
-#endif  // FCP_CLIENT_WILLOW_WILLOW_PAYLOAD_ENCRYPTOR_H_
+#endif  // FCP_CLIENT_HTTP_WILLOW_PAYLOAD_ENCRYPTOR_H_

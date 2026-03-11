@@ -245,10 +245,6 @@ message TaskAssignment {
     // before it is sent to the server.
     Resource input_spec = 1;
 
-    // The maximum size of the Cartesian product of input spec domains. This is
-    // used by the Willow library in conjunction with the input_spec.
-    int64 max_flattened_domain_size = 3;
-
     // The maximum number of clients that can participate in the aggregations.
     int64 max_number_of_clients = 2;
   }

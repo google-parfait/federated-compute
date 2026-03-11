@@ -134,6 +134,19 @@ cc_test(
 )
 
 cc_library(
+    name = "willow_payload_encryptor",
+    hdrs = ["willow_payload_encryptor.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//fcp/client:federated_protocol",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_library(
     name = "http_federated_protocol",
     srcs = ["http_federated_protocol.cc"],
     hdrs = [
@@ -145,6 +158,7 @@ cc_library(
         ":http_secagg_send_to_server_impl",
         ":in_memory_request_response",
         ":protocol_request_helper",
+        ":willow_payload_encryptor",
         "//fcp/base",
         "//fcp/base:clock",
         "//fcp/base:compression",
@@ -163,7 +177,6 @@ cc_library(
         "//fcp/client/attestation:attestation_verifier",
         "//fcp/client/cache:resource_cache",
         "//fcp/client/engine:engine_cc_proto",
-        "//fcp/client/willow:willow_payload_encryptor",
         "//fcp/confidentialcompute:client_payload",
         "//fcp/confidentialcompute:crypto",
         "//fcp/protos:federated_api_cc_proto",
@@ -194,6 +207,7 @@ cc_test(
     deps = [
         ":http_client",
         ":http_federated_protocol",
+        ":willow_payload_encryptor",
         "//fcp/base",
         "//fcp/base:clock",
         "//fcp/base:compression",
@@ -209,7 +223,6 @@ cc_test(
         "//fcp/client/cache:test_helpers",
         "//fcp/client/engine:engine_cc_proto",
         "//fcp/client/http/testing:test_helpers",
-        "//fcp/client/willow:willow_payload_encryptor",
         "//fcp/confidentialcompute:client_payload",
         "//fcp/confidentialcompute:cose",
         "//fcp/confidentialcompute:crypto",
@@ -228,7 +241,6 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
-        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_googleapis//google/longrunning:longrunning_cc_proto",

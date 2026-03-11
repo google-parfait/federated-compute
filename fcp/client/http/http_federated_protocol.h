@@ -45,13 +45,13 @@
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/in_memory_request_response.h"
 #include "fcp/client/http/protocol_request_helper.h"
+#include "fcp/client/http/willow_payload_encryptor.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
 #include "fcp/client/secagg_event_publisher.h"
 #include "fcp/client/secagg_runner.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/client/stats.h"
-#include "fcp/client/willow/willow_payload_encryptor.h"
 #include "fcp/protos/confidentialcompute/key.pb.h"
 #include "fcp/protos/confidentialcompute/payload_metadata.pb.h"
 #include "fcp/protos/confidentialcompute/signed_endorsements.pb.h"
@@ -80,8 +80,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
       SecAggEventPublisher* secagg_event_publisher,
       cache::ResourceCache* resource_cache,
       std::unique_ptr<attestation::AttestationVerifier> attestation_verifier,
-      std::unique_ptr<::fcp::client::willow::WillowPayloadEncryptor>
-          willow_payload_encryptor,
+      std::unique_ptr<WillowPayloadEncryptor> willow_payload_encryptor,
       absl::string_view entry_point_uri, absl::string_view api_key,
       absl::string_view population_name, absl::string_view retry_token,
       absl::string_view client_version,
@@ -473,8 +472,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // service's attestation evidence.
   std::unique_ptr<attestation::AttestationVerifier> attestation_verifier_;
   // Encryptor for Willow aggregation.
-  std::unique_ptr<::fcp::client::willow::WillowPayloadEncryptor>
-      willow_payload_encryptor_;
+  std::unique_ptr<WillowPayloadEncryptor> willow_payload_encryptor_;
 
   std::unique_ptr<InterruptibleRunner> interruptible_runner_;
   std::unique_ptr<ProtocolRequestCreator> eligibility_eval_request_creator_;

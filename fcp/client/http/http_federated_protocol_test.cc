@@ -37,7 +37,6 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/notification.h"
 #include "absl/time/clock.h"
@@ -55,10 +54,10 @@
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/http/http_client.h"
 #include "fcp/client/http/testing/test_helpers.h"
+#include "fcp/client/http/willow_payload_encryptor.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/stats.h"
 #include "fcp/client/test_helpers.h"
-#include "fcp/client/willow/willow_payload_encryptor.h"
 #include "fcp/confidentialcompute/client_payload.h"
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto.h"
@@ -89,7 +88,6 @@ using ::fcp::client::http::FakeHttpResponse;
 using ::fcp::client::http::MockableHttpClient;
 using ::fcp::client::http::MockHttpClient;
 using ::fcp::client::http::SimpleHttpRequestMatcher;
-using ::fcp::client::willow::TestingFakeWillowPayloadEncryptor;
 using ::fcp::confidential_compute::OkpCwt;
 using ::google::internal::federated::plan::PopulationEligibilitySpec;
 using ::google::internal::federatedcompute::v1::ByteStreamResource;
@@ -462,8 +460,8 @@ TaskAssignment CreateTaskAssignment(
     int32_t minimum_clients_in_server_visible_aggregate,
     std::optional<Resource> confidential_data_access_policy = std::nullopt,
     std::optional<Resource> signed_endorsements = std::nullopt,
-    std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info =
-        std::nullopt) {
+    std::optional<Resource> willow_input_spec = std::nullopt,
+    int64_t max_number_of_clients = 0) {
   TaskAssignment task_assignment;
   ForwardingInfo* forwarding_info =
       task_assignment.mutable_aggregation_data_forwarding_info();
@@ -487,16 +485,11 @@ TaskAssignment CreateTaskAssignment(
       *task_assignment.mutable_confidential_aggregation_info()
            ->mutable_signed_endorsements() = *signed_endorsements;
     }
-  } else if (willow_agg_info.has_value()) {
+  } else if (willow_input_spec.has_value()) {
     task_assignment.mutable_willow_aggregation_info()
-        ->set_max_number_of_clients(willow_agg_info->max_number_of_clients);
-    task_assignment.mutable_willow_aggregation_info()
-        ->set_max_flattened_domain_size(
-            willow_agg_info->max_flattened_domain_size);
-    *task_assignment.mutable_willow_aggregation_info()
-         ->mutable_input_spec()
-         ->mutable_inline_resource()
-         ->mutable_data() = std::string(willow_agg_info->input_spec);
+        ->set_max_number_of_clients(max_number_of_clients);
+    *task_assignment.mutable_willow_aggregation_info()->mutable_input_spec() =
+        *willow_input_spec;
   } else {
     task_assignment.mutable_aggregation_info();
   }
@@ -511,14 +504,15 @@ StartTaskAssignmentResponse GetFakeTaskAssignmentResponse(
     const std::string& target_uri_prefix = kAggregationTargetUri,
     std::optional<Resource> confidential_data_access_policy = std::nullopt,
     std::optional<Resource> signed_endorsements = std::nullopt,
-    std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info =
-        std::nullopt) {
+    std::optional<Resource> willow_input_spec = std::nullopt,
+    int64_t max_number_of_clients = 0) {
   StartTaskAssignmentResponse response;
   *response.mutable_task_assignment() = CreateTaskAssignment(
       plan, checkpoint, federated_select_uri_template, kClientSessionId,
       aggregation_session_id, kTaskName, target_uri_prefix,
       minimum_clients_in_server_visible_aggregate,
-      confidential_data_access_policy, signed_endorsements, willow_agg_info);
+      confidential_data_access_policy, signed_endorsements, willow_input_spec,
+      max_number_of_clients);
   return response;
 }
 
@@ -658,8 +652,8 @@ class HttpFederatedProtocolTest : public ::testing::Test {
         absl::WrapUnique(mock_secagg_runner_factory_),
         &mock_secagg_event_publisher_, &mock_resource_cache_,
         absl::WrapUnique(mock_attestation_verifier_),
-        std::make_unique<TestingFakeWillowPayloadEncryptor>(),
-        kEntryPointUri, kApiKey, kPopulationName, kRetryToken, kClientVersion,
+        std::make_unique<TestingFakeWillowPayloadEncryptor>(), kEntryPointUri,
+        kApiKey, kPopulationName, kRetryToken, kClientVersion,
         kAttestationMeasurement, mock_should_abort_.AsStdFunction(),
         absl::BitGen(),
         InterruptibleRunner::TimingConfig{
@@ -752,15 +746,13 @@ class HttpFederatedProtocolTest : public ::testing::Test {
   // successful execution of Checkin(). It returns a
   // absl::StatusOr<CheckinResult>, which the caller should verify is OK using
   // ASSERT_OK.
-  // For Willow tasks, willow_agg_info holds the input_spec and the
-  // max_number_of_clients, which are both required for encrypting the payload.
   absl::StatusOr<FederatedProtocol::CheckinResult> RunSuccessfulCheckin(
       bool report_eligibility_eval_result = true,
       std::optional<std::string> confidential_data_access_policy = std::nullopt,
-      std::optional<FederatedProtocol::WillowAggInfo> willow_agg_info =
-          std::nullopt,
+      std::optional<std::string> willow_input_spec = std::nullopt,
       bool set_relative_uri = false,
-      std::optional<std::string> signed_endorsements = std::nullopt) {
+      std::optional<std::string> signed_endorsements = std::nullopt,
+      int64_t max_number_of_clients = 0) {
     // We return a fake response which returns the plan/initial checkpoint
     // data inline, to keep things simple.
     std::string expected_plan = kPlan;
@@ -774,6 +766,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     std::string expected_aggregation_session_id = kAggregationSessionId;
     std::optional<Resource> confidential_agg_resource;
     std::optional<Resource> signed_endorsements_resource;
+    std::optional<Resource> willow_input_spec_resource;
     if (confidential_data_access_policy.has_value()) {
       confidential_agg_resource = Resource();
       confidential_agg_resource->mutable_inline_resource()->set_data(
@@ -784,6 +777,11 @@ class HttpFederatedProtocolTest : public ::testing::Test {
             *signed_endorsements);
       }
     }
+    if (willow_input_spec.has_value()) {
+      willow_input_spec_resource = Resource();
+      willow_input_spec_resource->mutable_inline_resource()->set_data(
+          *willow_input_spec);
+    }
 
     StartTaskAssignmentResponse task_assignment_response =
         GetFakeTaskAssignmentResponse(
@@ -791,7 +789,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
             expected_aggregation_session_id, 0,
             set_relative_uri ? "/" : kAggregationTargetUri,
             confidential_agg_resource, signed_endorsements_resource,
-            willow_agg_info);
+            willow_input_spec_resource, max_number_of_clients);
 
     std::string request_uri;
     if (set_relative_uri) {
@@ -810,7 +808,7 @@ class HttpFederatedProtocolTest : public ::testing::Test {
     if (confidential_data_access_policy.has_value()) {
       enable_confidential_aggregation = true;
     }
-    if (willow_agg_info.has_value()) {
+    if (willow_input_spec.has_value()) {
       // Enable confidential aggregation even when there is no confidential data
       // access policy
       enable_confidential_aggregation = true;
@@ -1113,37 +1111,6 @@ class HttpFederatedProtocolTest : public ::testing::Test {
                                  "CLIENT_TOKEN:abort?%24alt=proto"),
                     HttpRequest::Method::kPost, _, _)))
         .WillOnce(Return(CreateEmptySuccessHttpResponse()));
-  }
-
-  void ExpectReportCompletedMatchesArgumentsForFakeWillowDecryptor(
-      ComputationResults results, absl::Duration plan_duration,
-      FederatedProtocol::WillowAggInfo willow_agg_info,
-      absl::string_view public_key, absl::string_view checkpoint_string) {
-    // Capture the raw uploaded data for later
-    std::string uploaded_data;
-    EXPECT_CALL(mock_http_client_,
-                PerformSingleRequest(SimpleHttpRequestMatcher(
-                    "https://bytestream.uri/upload/v1/media/"
-                    "CHECKPOINT_RESOURCE?upload_protocol=raw",
-                    HttpRequest::Method::kPost, _, _)))
-        .WillOnce([&uploaded_data](MockHttpClient::SimpleHttpRequest request) {
-          uploaded_data = request.body;
-          return CreateEmptySuccessHttpResponse();
-        });
-    ExpectSuccessfulSubmitAggregationResultRequest(
-        "https://aggregation.second.uri/v1/confidentialaggregations/"
-        "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
-        true);
-    auto result = federated_protocol_->ReportCompleted(
-        std::move(results), plan_duration, std::nullopt);
-    EXPECT_THAT(result, IsOkReportResult());
-    // Check the uploaded data to verify that the encryptor received the correct
-    // arguments
-    std::string expected_uploaded_data = absl::StrFormat(
-        "%v%v%v%v%v", willow_agg_info.input_spec,
-        willow_agg_info.max_flattened_domain_size,
-        willow_agg_info.max_number_of_clients, public_key, checkpoint_string);
-    EXPECT_EQ(uploaded_data, expected_uploaded_data);
   }
 
   StrictMock<MockHttpClient> mock_http_client_;
@@ -3721,7 +3688,7 @@ TEST_F(HttpFederatedProtocolTest,
   ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/serialized_access_policy,
-      /*willow_agg_info=*/std::nullopt,
+      /*willow_input_spec=*/std::nullopt,
       /*set_relative_uri=*/false,
       /*signed_endorsements=*/serialized_signed_endorsements));
 
@@ -5340,11 +5307,9 @@ TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingSimpleAgg) {
       /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ASSERT_OK(
-      RunSuccessfulCheckin(true,
-                           /*confidential_data_access_policy=*/std::nullopt,
-                           /*willow_agg_info=*/std::nullopt,
-                           /*set_relative_uri=*/true));
+  ASSERT_OK(RunSuccessfulCheckin(true, std::nullopt,
+                                 /*willow_input_spec=*/std::nullopt,
+                                 /*set_relative_uri=*/true));
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -5380,11 +5345,9 @@ TEST_F(HttpFederatedProtocolTest,
   ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
-  ASSERT_OK(
-      RunSuccessfulCheckin(true,
-                           /*confidential_data_access_policy=*/std::nullopt,
-                           /*willow_agg_info=*/std::nullopt,
-                           /*set_relative_uri=*/true));
+  ASSERT_OK(RunSuccessfulCheckin(true, std::nullopt,
+                                 /*willow_input_spec=*/std::nullopt,
+                                 /*set_relative_uri=*/true));
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -5424,11 +5387,9 @@ TEST_F(HttpFederatedProtocolTest,
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ASSERT_OK(
-      RunSuccessfulCheckin(true,
-                           /*confidential_data_access_policy=*/std::nullopt,
-                           /*willow_agg_info=*/std::nullopt,
-                           /*set_relative_uri=*/true));
+  ASSERT_OK(RunSuccessfulCheckin(true, std::nullopt,
+                                 /*willow_input_spec=*/std::nullopt,
+                                 /*set_relative_uri=*/true));
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -5475,7 +5436,7 @@ TEST_F(HttpFederatedProtocolTest,
 
   std::string serialized_access_policy = "the access policy";
   ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
-                                 /*willow_agg_info=*/std::nullopt,
+                                 /*willow_input_spec=*/std::nullopt,
                                  /*set_relative_uri=*/true));
 
   // Create a fake checkpoint with 32 'X'.
@@ -5545,7 +5506,7 @@ TEST_F(HttpFederatedProtocolTest,
 
   std::string serialized_access_policy = "the access policy";
   ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
-                                 /*willow_agg_info=*/std::nullopt,
+                                 /*willow_input_spec=*/std::nullopt,
                                  /*set_relative_uri=*/true));
 
   // Create a fake checkpoint with 32 'X'.
@@ -5618,7 +5579,7 @@ TEST_F(HttpFederatedProtocolTest,
 
   std::string serialized_access_policy = "the access policy";
   ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
-                                 /*willow_agg_info=*/std::nullopt,
+                                 /*willow_input_spec=*/std::nullopt,
                                  /*set_relative_uri=*/true));
 
   // Create a fake checkpoint with 32 'X'.
@@ -5684,11 +5645,9 @@ TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingSecAgg) {
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ASSERT_OK(
-      RunSuccessfulCheckin(true,
-                           /*confidential_data_access_policy=*/std::nullopt,
-                           /*willow_agg_info=*/std::nullopt,
-                           /*set_relative_uri=*/true));
+  ASSERT_OK(RunSuccessfulCheckin(true, std::nullopt,
+                                 /*willow_input_spec=*/std::nullopt,
+                                 /*set_relative_uri=*/true));
 
   StartSecureAggregationResponse start_secure_aggregation_response;
   start_secure_aggregation_response.set_client_token(kClientToken);
@@ -5790,10 +5749,9 @@ TEST_F(HttpFederatedProtocolTest,
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ASSERT_OK(RunSuccessfulCheckin(
-      true, /*confidential_data_access_policy=*/std::nullopt,
-      /*willow_agg_info=*/std::nullopt,
-      /*set_relative_uri=*/true));
+  ASSERT_OK(RunSuccessfulCheckin(true, std::nullopt,
+                                 /*willow_input_spec=*/std::nullopt,
+                                 /*set_relative_uri=*/true));
 
   StartSecureAggregationResponse start_secure_aggregation_response;
   start_secure_aggregation_response.set_client_token(kClientToken);
@@ -5949,19 +5907,14 @@ TEST_F(HttpFederatedProtocolTest,
 
   // Setup Checkin response
   TaskEligibilityInfo expected_eligibility_info = GetFakeTaskEligibilityInfo();
-  auto fake_willow_input_spec_resource = Resource();
-  fake_willow_input_spec_resource.mutable_inline_resource()->set_data(
-      "fake_willow_input_spec");
+  auto fake_willow_encoding_config_resource = Resource();
+  fake_willow_encoding_config_resource.mutable_inline_resource()->set_data(
+      "fake_willow_encoding_config");
   StartTaskAssignmentResponse task_assignment_response =
       GetFakeTaskAssignmentResponse(
           Resource(), Resource(), kFederatedSelectUriTemplate,
           kAggregationSessionId, 0, kAggregationTargetUri, std::nullopt,
-          std::nullopt,
-          FederatedProtocol::WillowAggInfo{
-              .input_spec = absl::Cord(
-                  fake_willow_input_spec_resource.inline_resource().data()),
-              .max_flattened_domain_size = 1000000,
-              .max_number_of_clients = 0});
+          std::nullopt, fake_willow_encoding_config_resource);
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -6012,17 +5965,13 @@ TEST_F(HttpFederatedProtocolTest, TestWillowEncryptorReceivesCorrectArguments) {
   ComputationResults fake_results;
   fake_results.emplace("tensorflow_checkpoint", "fake_checkpoint_string");
 
-  FederatedProtocol::WillowAggInfo fake_willow_agg_info = {
-      .input_spec = absl::Cord(fake_willow_input_spec),
-      .max_flattened_domain_size = 1000000,
-      .max_number_of_clients = fake_willow_max_number_of_clients};
-
   ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/std::nullopt,
-      /*willow_agg_info=*/fake_willow_agg_info,
+      /*willow_input_spec=*/fake_willow_input_spec,
       /*set_relative_uri=*/false,
-      /*signed_endorsements=*/std::nullopt));
+      /*signed_endorsements=*/std::nullopt,
+      /*max_number_of_clients=*/fake_willow_max_number_of_clients));
 
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
@@ -6036,9 +5985,31 @@ TEST_F(HttpFederatedProtocolTest, TestWillowEncryptorReceivesCorrectArguments) {
       kResourceName, kByteStreamTargetUri, kSecondStageAggregationTargetUri,
       false, fake_willow_encryption_config);
 
-  ExpectReportCompletedMatchesArgumentsForFakeWillowDecryptor(
-      std::move(fake_results), plan_duration, fake_willow_agg_info,
-      fake_public_key, fake_checkpoint_string);
+  // Capture the raw uploaded data for later
+  std::string uploaded_data;
+  EXPECT_CALL(mock_http_client_, PerformSingleRequest(SimpleHttpRequestMatcher(
+                                     "https://bytestream.uri/upload/v1/media/"
+                                     "CHECKPOINT_RESOURCE?upload_protocol=raw",
+                                     HttpRequest::Method::kPost, _, _)))
+      .WillOnce([&uploaded_data](MockHttpClient::SimpleHttpRequest request) {
+        uploaded_data = request.body;
+        return CreateEmptySuccessHttpResponse();
+      });
+
+  ExpectSuccessfulSubmitAggregationResultRequest(
+      "https://aggregation.second.uri/v1/confidentialaggregations/"
+      "AGGREGATION_SESSION_ID/clients/CLIENT_TOKEN:submit?%24alt=proto",
+      /*confidential_aggregation=*/true);
+  EXPECT_THAT(federated_protocol_->ReportCompleted(std::move(fake_results),
+                                                   plan_duration, std::nullopt),
+              IsOkReportResult());
+
+  // Check the uploaded data to verify that the encryptor received the correct
+  // arguments
+  std::string expected_uploaded_data =
+      absl::StrCat(fake_willow_input_spec, fake_willow_max_number_of_clients,
+                   fake_public_key, fake_checkpoint_string);
+  EXPECT_EQ(uploaded_data, expected_uploaded_data);
 }
 
 }  // anonymous namespace
