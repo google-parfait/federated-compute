@@ -28,6 +28,7 @@ py_library(
     name = "dp_mf_aggregator",
     srcs = ["dp_mf_aggregator.py"],
     tags = ["manual"],
+    visibility = ["//visibility:public"],
     deps = [
         "//third_party/py/optax",
         "@federated_language//federated_language",
