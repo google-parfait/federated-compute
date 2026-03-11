@@ -153,7 +153,10 @@ class MinSepDataSourceIterator(
       )
 
     if len(eligible_ids) < k:
-      raise ValueError('Requested more than the number of eligible clients.')
+      raise ValueError(
+          'Requested more than the number of eligible clients. '
+          f'Requested {k}, eligible {len(eligible_ids)}.'
+      )
 
     selected_ids = random.sample(eligible_ids, min(len(eligible_ids), k))
     self._round_index += 1

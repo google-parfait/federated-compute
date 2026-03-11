@@ -94,7 +94,10 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
       (
           'too_small',
           20,
-          'Requested more than the number of eligible clients.',
+          (
+              'Requested more than the number of eligible clients. '
+              'Requested 20, eligible 10.'
+          ),
       ),
   )
   def test_select_raises_value_error_with_k(self, k, expected_error_message):
