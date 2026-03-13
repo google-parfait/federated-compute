@@ -49,6 +49,7 @@
 #endif
 
 #include "fcp/client/engine/tflite_plan_engine.h"
+#include "fcp/client/opstats/opstats_example_store.h"
 #include "fcp/client/phase_logger_impl.h"
 #include "fcp/client/selector_context.pb.h"
 #include "fcp/protos/plan.pb.h"
@@ -331,11 +332,13 @@ absl::Status RunLocalComputation(
     return absl::CancelledError("");
   }
   // Local compute plans can use example iterators from the
-  // SimpleTaskEnvironment.
+  // SimpleTaskEnvironment and those reading the OpStats DB.
+  opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
+      opstats_logger, log_manager);
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(env_deps, selector_context);
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
-      env_example_iterator_factory.get()};
+      &opstats_example_iterator_factory, env_example_iterator_factory.get()};
 
   fcp::client::InterruptibleRunner::TimingConfig timing_config = {
       .polling_period = polling_period,

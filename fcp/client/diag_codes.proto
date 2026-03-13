@@ -204,7 +204,8 @@ enum ProdDiagCode {
   // is invalid.
   OPSTATS_INVALID_SELECTION_CRITERIA = 1693;
 
-  reserved 1692;  // OPSTATS_EXAMPLE_STORE_REQUESTED_NOT_ENABLED
+  // Logged when the OpStats example store is requested, but not enabled.
+  OPSTATS_EXAMPLE_STORE_REQUESTED_NOT_ENABLED = 1692;
 
   // Logged when extracting the task name from the checkin response fails.
   OPSTATS_TASK_NAME_EXTRACTION_FAILED = 1691;

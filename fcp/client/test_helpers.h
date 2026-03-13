@@ -593,6 +593,7 @@ class MockOpStatsLogger : public ::fcp::client::opstats::OpStatsLogger {
               (override));
   MOCK_METHOD(::fcp::client::opstats::OpStatsDb*, GetOpStatsDb, (), (override));
   MOCK_METHOD(absl::Status, CommitToStorage, (), (override));
+  MOCK_METHOD(std::string, GetCurrentTaskName, (), (override));
   MOCK_METHOD(void, StartLoggingForPhase,
               (::fcp::client::opstats::OperationalStats::PhaseStats::Phase),
               (override));

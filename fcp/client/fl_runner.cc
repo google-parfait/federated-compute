@@ -66,6 +66,7 @@
 #include "fcp/client/http/http_federated_protocol.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
+#include "fcp/client/opstats/opstats_example_store.h"
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/opstats/opstats_logger_impl.h"
 #include "fcp/client/opstats/opstats_utils.h"
@@ -1545,6 +1546,7 @@ RunPlanResults RunComputation(
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
     FederatedSelectManager* fedselect_manager,
+    engine::ExampleIteratorFactory* opstats_example_iterator_factory,
     ExampleIteratorQueryRecorder* example_iterator_query_recorder,
     const TensorflowRunnerFactory& tensorflow_runner_factory,
     FLRunnerResult& fl_runner_result, const std::function<bool()>& should_abort,
@@ -1593,11 +1595,11 @@ RunPlanResults RunComputation(
     checkpoint_output_filename = *output_filename;
   }
 
-  // Regular plans can use example iterators from the SimpleTaskEnvironment or
-  // those serving Federated Select slices. This iterator factory is used by the
-  // task to query the environment's example store. We log first access time
-  // here to implement example-level sampling without replacement for the
-  // environment.
+  // Regular plans can use example iterators from the SimpleTaskEnvironment,
+  // those reading the OpStats DB, or those serving Federated Select slices.
+  // This iterator factory is used by the task to query the environment's
+  // example store. We log first access time here to implement example-level
+  // sampling without replacement for the environment.
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(
           env_deps, selector_context_with_task_details, &phase_logger,
@@ -1608,7 +1610,7 @@ RunPlanResults RunComputation(
               checkin_result.federated_select_uri_template);
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
       fedselect_example_iterator_factory.get(),
-      env_example_iterator_factory.get()};
+      opstats_example_iterator_factory, env_example_iterator_factory.get()};
 
   std::unique_ptr<PlanResultAndCheckpointFile> plan_result_and_checkpoint_file;
   if (checkin_result.plan.phase().has_example_query_spec()) {
@@ -1671,6 +1673,7 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     LogManager* log_manager, OpStatsLogger* opstats_logger, const Flags* flags,
     FederatedProtocol* federated_protocol,
     FederatedSelectManager* fedselect_manager,
+    engine::ExampleIteratorFactory* opstats_example_iterator_factory,
     TensorflowRunnerFactory tensorflow_runner_factory,
     FLRunnerResult& fl_runner_result, const std::function<bool()>& should_abort,
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
@@ -1690,7 +1693,7 @@ std::vector<std::string> HandleMultipleTaskAssignments(
     RunPlanResults run_plan_results = RunComputation(
         task_assignment, selector_context_with_task_details, env_deps,
         phase_logger, files, log_manager, opstats_logger, flags,
-        federated_protocol, fedselect_manager,
+        federated_protocol, fedselect_manager, opstats_example_iterator_factory,
         example_iterator_query_recorder.get(), tensorflow_runner_factory,
         fl_runner_result, should_abort, timing_config, reference_time,
         source_id_seed);
@@ -1895,7 +1898,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   }
 
   // Eligibility eval plans can use example iterators from the
-  // SimpleTaskEnvironment.
+  // SimpleTaskEnvironment and those reading the OpStats DB.
+  opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
+      opstats_logger, log_manager);
   // This iterator factory is used by the task to query the environment's
   // example store for eligibility, and thus does not log first access time
   // since we do not implement example-level SWOR for eligibility.
@@ -1906,6 +1911,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
               /*should_log_collection_first_access_time=*/false);
   std::vector<engine::ExampleIteratorFactory*>
       eligibility_example_iterator_factories{
+          &opstats_example_iterator_factory,
           env_eligibility_example_iterator_factory.get()};
 
   auto tensorflow_runner_factory =
@@ -1954,7 +1960,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     successful_task_names = HandleMultipleTaskAssignments(
         multiple_task_assignments, federated_selector_context, env_deps,
         phase_logger, files, log_manager, opstats_logger, flags,
-        federated_protocol, fedselect_manager, tensorflow_runner_factory,
+        federated_protocol, fedselect_manager,
+        &opstats_example_iterator_factory, tensorflow_runner_factory,
         fl_runner_result, should_abort, timing_config, reference_time,
         source_id_seed);
   }
@@ -1984,6 +1991,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
           *checkin_result, selector_context_with_task_details, env_deps,
           phase_logger, files, log_manager, opstats_logger, flags,
           federated_protocol, fedselect_manager,
+          &opstats_example_iterator_factory,
           example_iterator_query_recorder.get(), tensorflow_runner_factory,
           fl_runner_result, should_abort, timing_config, reference_time,
           source_id_seed);
@@ -2061,12 +2069,14 @@ FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
   // test-specific slices if they want to.
   //
   // Eligibility eval plans can only use iterators from the
-  // SimpleTaskEnvironment.
+  // SimpleTaskEnvironment and those reading the OpStats DB.
+  opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
+      opstats_logger.get(), log_manager);
   std::unique_ptr<engine::ExampleIteratorFactory> env_example_iterator_factory =
       CreateSimpleTaskEnvironmentIteratorFactory(env_deps, SelectorContext(),
                                                  &phase_logger, true);
   std::vector<engine::ExampleIteratorFactory*> example_iterator_factories{
-      env_example_iterator_factory.get()};
+      &opstats_example_iterator_factory, env_example_iterator_factory.get()};
 
   auto tensorflow_runner_factory =
       GetGlobalTensorflowRunnerFactoryRegistry().Get(

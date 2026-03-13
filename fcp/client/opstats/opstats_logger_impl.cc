@@ -257,6 +257,24 @@ absl::Status OpStatsLoggerImpl::CommitToStorage() {
   return status;
 }
 
+std::string OpStatsLoggerImpl::GetCurrentTaskName() {
+  absl::MutexLock lock(&mutex_);
+  if (!current_phase_stats_.task_name().empty()) {
+    return current_phase_stats_.task_name();
+  }
+  for (auto it = stats_.phase_stats().rbegin();
+       it != stats_.phase_stats().rend(); it++) {
+    if (!it->task_name().empty()) {
+      return it->task_name();
+    }
+  }
+  // If we reach this line, it means we don't know the task name yet for the
+  // current run. Technically, it won't happen because this method is only
+  // called by the opstats example store and at that point we already know
+  // the task name.  Unfortunately, we can't enforce this at API level.
+  return "";
+}
+
 void OpStatsLoggerImpl::StartLoggingForPhase(
     OperationalStats::PhaseStats::Phase phase) {
   absl::MutexLock lock(&mutex_);
