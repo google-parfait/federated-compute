@@ -98,10 +98,6 @@ class OpStatsLoggerImpl : public OpStatsLogger {
   // Syncs all logged events to storage.
   absl::Status CommitToStorage() override;
 
-  // Returns the task name of the currently executing task. Only returns a valid
-  // task name if called after `AddEventAndSetTaskName` is called.
-  std::string GetCurrentTaskName() override;
-
   // Start logging stats for a new Phase.
   void StartLoggingForPhase(OperationalStats::PhaseStats::Phase phase) override;
 
