@@ -109,6 +109,7 @@ using ::testing::Pair;
 using ::testing::Return;
 using ::testing::SaveArg;
 using ::testing::StrictMock;
+using ::testing::UnorderedElementsAre;
 using ::testing::VariantWith;
 
 constexpr NetworkStats kFederatedSelectNetworkStats = {
@@ -223,9 +224,6 @@ class FlRunnerTestBase : public ::testing::Test {
   // subsequent Checkin(...) request should not be given a TaskEligibilityInfo
   // value.
   void MockEligibilityEvalDisabled();
-
-  void MockSuccessfulEligibilityPlanExecution(
-      const TaskEligibilityInfo& task_eligibility_info);
 
   void MockSuccessfulPlanExecution(
       bool has_checkpoint, bool has_secagg_output,
@@ -374,19 +372,6 @@ void FlRunnerTestBase::MockSuccessfulPlanExecution(
       RunPlanWithTensorflowSpec(_, _, _, _, _, _, plan_matcher, _, _, _))
       .WillOnce(Return(std::move(plan_result_and_checkpoint_file)))
       .RetiresOnSaturation();
-}
-
-void FlRunnerTestBase::MockSuccessfulEligibilityPlanExecution(
-    const TaskEligibilityInfo& task_eligibility_info) {
-  engine::PlanResult plan_result(engine::PlanOutcome::kSuccess,
-                                 absl::OkStatus());
-  plan_result.example_stats.example_count = 5;
-  plan_result.example_stats.example_size_bytes = 10;
-  plan_result.task_eligibility_info = task_eligibility_info;
-  EXPECT_CALL(
-      *mock_tensorflow_runner_,
-      RunEligibilityEvalPlanWithTensorflowSpec(_, _, _, _, _, _, _, _, _, _))
-      .WillOnce(Return(std::move(plan_result)));
 }
 
 void FlRunnerTestBase::ExpectEligibilityCheckinCompletedLogEvent() {
@@ -538,10 +523,33 @@ void FlRunnerEligibilityEvalTest::SetUpEligibilityEvalTask() {
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
   task_info->add_eligibility_policy_indices(0);
   auto policy = population_eligibility_spec.add_eligibility_policies();
-  policy->set_name("custom_tf_policy");
-  *policy->mutable_tf_custom_policy()->mutable_arguments() = "tfl_policy_args";
+  policy->set_name("data_availability_policy");
+  auto data_availability_policy = policy->mutable_data_availability_policy();
+  data_availability_policy->set_min_example_count(1);
+  ExampleSelector example_selector;
+  example_selector.set_collection_uri(
+      std::string(kEligibilityEvalCollectionUri));
+  *data_availability_policy->mutable_selector() = example_selector;
+
   eligibility_eval_artifacts_.population_eligibility_spec =
       population_eligibility_spec;
+
+  Dataset dataset;
+  auto client_data = dataset.add_client_data();
+  client_data->set_client_id("client_1");
+  auto selected_example = client_data->add_selected_example();
+  *selected_example->mutable_selector() = example_selector;
+  selected_example->add_example("example");
+  eligibility_eval_artifacts_.dataset = dataset;
+
+  EXPECT_CALL(mock_task_env_,
+              CreateExampleIterator(EqualsProto(example_selector), _))
+      .Times(AtMost(1))
+      .WillOnce(DoAll(SaveArg<1>(&latest_eligibility_selector_context_),
+                      Return(ByMove(std::make_unique<SimpleExampleIterator>(
+                          eligibility_eval_artifacts_.dataset,
+                          kEligibilityEvalCollectionUri)))))
+      .RetiresOnSaturation();
 }
 
 class FlRunnerEligibilityEvalWithCriteriaTest : public FlRunnerTestBase {
@@ -991,8 +999,13 @@ void FlRunnerMultipleTaskAssignmentsTest::SetUpPopulationEligibilitySpec() {
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_SINGLE);
   task_info->add_eligibility_policy_indices(0);
   auto policy = population_eligibility_spec.add_eligibility_policies();
-  policy->set_name("custom_tf_policy");
-  *policy->mutable_tf_custom_policy()->mutable_arguments() = "tfl_policy_args";
+  policy->set_name("data_availability_policy");
+  auto data_availability_policy = policy->mutable_data_availability_policy();
+  data_availability_policy->set_min_example_count(1);
+  ExampleSelector example_selector;
+  example_selector.set_collection_uri(
+      std::string(kEligibilityEvalCollectionUri));
+  *data_availability_policy->mutable_selector() = example_selector;
   auto mta_task_info_1 = population_eligibility_spec.add_task_info();
   mta_task_info_1->set_task_name(std::string(kSwor24HourTaskName));
   mta_task_info_1->set_task_assignment_mode(
@@ -1005,6 +1018,23 @@ void FlRunnerMultipleTaskAssignmentsTest::SetUpPopulationEligibilitySpec() {
   mta_task_info_2->add_eligibility_policy_indices(0);
   eligibility_eval_artifacts_.population_eligibility_spec =
       population_eligibility_spec;
+
+  Dataset dataset;
+  auto client_data = dataset.add_client_data();
+  client_data->set_client_id("client_1");
+  auto selected_example = client_data->add_selected_example();
+  *selected_example->mutable_selector() = example_selector;
+  selected_example->add_example("example");
+  eligibility_eval_artifacts_.dataset = dataset;
+
+  EXPECT_CALL(mock_task_env_,
+              CreateExampleIterator(EqualsProto(example_selector), _))
+      .Times(AtMost(1))
+      .WillOnce(DoAll(SaveArg<1>(&latest_eligibility_selector_context_),
+                      Return(ByMove(std::make_unique<SimpleExampleIterator>(
+                          eligibility_eval_artifacts_.dataset,
+                          kEligibilityEvalCollectionUri)))))
+      .RetiresOnSaturation();
 }
 
 // Setup the expectations for running the eligibility task which returns 3
@@ -2090,7 +2120,6 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinSucceeds) {
   TaskWeight* task_weight = expected_eligibility_info.add_task_weights();
   task_weight->set_task_name(kTaskName);
   task_weight->set_weight(1);
-  MockSuccessfulEligibilityPlanExecution(expected_eligibility_info);
   EXPECT_CALL(mock_federated_protocol_,
               MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
@@ -2157,7 +2186,6 @@ TEST_F(FlRunnerEligibilityEvalTest,
   TaskWeight* task_weight = expected_eligibility_info.add_task_weights();
   task_weight->set_task_name(kTaskName);
   task_weight->set_weight(1);
-  MockSuccessfulEligibilityPlanExecution(expected_eligibility_info);
   EXPECT_CALL(mock_federated_protocol_,
               MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
@@ -3129,8 +3157,8 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       task_assignment_2_;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kSwor24HourTaskName),
-                              std::string(kRequires5ExamplesTaskName)),
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
                   _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
 
@@ -3316,8 +3344,8 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       task_assignment_2_;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kSwor24HourTaskName),
-                              std::string(kRequires5ExamplesTaskName)),
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
                   _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   ComputationResults multiple_task_assignment_computation_results_1;
@@ -3454,11 +3482,12 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsTurnedAway) {
   task_weight_2->set_task_name(kTaskName);
   task_weight_2->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
   // Mock a multiple task assignment request which returns no task.
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
+                  _, _))
       .WillOnce(Return(FederatedProtocol::MultipleTaskAssignments{}));
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
@@ -3536,11 +3565,12 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsIOError) {
   task_weight_2->set_task_name(kTaskName);
   task_weight_2->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
   // Mock a multiple task assignment request which fails with IO error.
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
+                  _, _))
       .WillOnce(Return(absl::InternalError("Something's wrong")));
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
@@ -3620,11 +3650,12 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_2->set_task_name(kTaskName);
   task_weight_2->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
   // Mock a multiple task assignment request which is aborted by the server.
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
+                  _, _))
       .WillOnce(Return(absl::AbortedError("Abort")));
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
@@ -3705,11 +3736,12 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_2->set_task_name(kTaskName);
   task_weight_2->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
   // Mock a multiple task assignment request which is cancelled by the client.
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
+                  _, _))
       .WillOnce(Return(absl::CancelledError("Client side cancellation.")));
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
@@ -3791,16 +3823,19 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_2->set_task_name(kTaskName);
   task_weight_2->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
   // Mock a multiple task assignment request which 1) the artifact uris for all
   // of the requested tasks are received; 2) IO error happened during the
   // retrieval of computation artifact.
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
   multiple_task_assignments.task_assignments[kRequires5ExamplesTaskName] =
       absl::InternalError("Something's wrong");
+  multiple_task_assignments.task_assignments[kSwor24HourTaskName] =
+      absl::InternalError("Something's wrong");
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
+                  _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
@@ -3841,6 +3876,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     _));
     EXPECT_CALL(mock_phase_logger_,
                 SetModelIdentifier(kRequires5ExamplesTaskName));
+    EXPECT_CALL(mock_phase_logger_, LogMultipleTaskAssignmentsPayloadIOError(
+                                        IsCode(absl::StatusCode::kInternal)));
+    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
+    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(kSwor24HourTaskName));
     EXPECT_CALL(mock_phase_logger_, LogMultipleTaskAssignmentsPayloadIOError(
                                         IsCode(absl::StatusCode::kInternal)));
     EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
@@ -3891,7 +3930,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_2->set_task_name(kTaskName);
   task_weight_2->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
 
   // Mock a multiple task assignment request which 1) the artifact uris for all
   // of the requested tasks are received; 2) one of the downloaded artifacts is
@@ -3902,9 +3940,16 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
   multiple_task_assignments.task_assignments[kRequires5ExamplesTaskName] =
       invalid_task_assignment;
+  FederatedProtocol::TaskAssignment invalid_task_assignment_1 =
+      task_assignment_1_;
+  invalid_task_assignment_1.payloads.plan = "INVALID_PLAN";
+  multiple_task_assignments.task_assignments[kSwor24HourTaskName] =
+      invalid_task_assignment_1;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
+                  _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
@@ -3945,6 +3990,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     _));
     EXPECT_CALL(mock_phase_logger_,
                 SetModelIdentifier(kRequires5ExamplesTaskName));
+    EXPECT_CALL(mock_phase_logger_,
+                LogMultipleTaskAssignmentsInvalidPayload(_));
+    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
+    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(kSwor24HourTaskName));
     EXPECT_CALL(mock_phase_logger_,
                 LogMultipleTaskAssignmentsInvalidPayload(_));
     EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
@@ -3997,8 +4046,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_3->set_task_name(kTaskName);
   task_weight_3->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
-
   // Mock a multiple task assignment request which the server assigned some of
   // the requested tasks, not all.
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
@@ -4006,8 +4053,8 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       task_assignment_1_;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kSwor24HourTaskName),
-                              std::string(kRequires5ExamplesTaskName)),
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
                   _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   ComputationResults multiple_task_assignment_computation_results_1;
@@ -4141,8 +4188,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_3->set_task_name(kTaskName);
   task_weight_3->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
-
   // Mock a successful multiple task assignment request.
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
   multiple_task_assignments.task_assignments[kSwor24HourTaskName] =
@@ -4151,8 +4196,8 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       task_assignment_2_;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kSwor24HourTaskName),
-                              std::string(kRequires5ExamplesTaskName)),
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
                   _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   ComputationResults multiple_task_assignment_computation_results_1;
@@ -4313,8 +4358,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 // population, so regular check-in is not expected.
 TEST_F(FlRunnerMultipleTaskAssignmentsTest,
        MultipleTaskAssignmentsSucceededRegularCheckInDisabled) {
-  SetUpEligibilityEvalTask();
-
   // Mock a successful eligibility eval checkin.
   // Population only supports multiple task assignments.
   PopulationEligibilitySpec population_spec;
@@ -4324,9 +4367,31 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   task_info_1->add_eligibility_policy_indices(0);
   auto policy = population_spec.add_eligibility_policies();
-  policy->set_name("custom_tf_policy");
-  *policy->mutable_tf_custom_policy()->mutable_arguments() = "tfl_policy_args";
+  policy->set_name("data_availability_policy");
+  auto data_availability_policy = policy->mutable_data_availability_policy();
+  data_availability_policy->set_min_example_count(1);
+  ExampleSelector example_selector;
+  example_selector.set_collection_uri(
+      std::string(kEligibilityEvalCollectionUri));
+  *data_availability_policy->mutable_selector() = example_selector;
   eligibility_eval_artifacts_.population_eligibility_spec = population_spec;
+
+  Dataset dataset;
+  auto client_data = dataset.add_client_data();
+  client_data->set_client_id("client_1");
+  auto selected_example = client_data->add_selected_example();
+  *selected_example->mutable_selector() = example_selector;
+  selected_example->add_example("example");
+  eligibility_eval_artifacts_.dataset = dataset;
+
+  EXPECT_CALL(mock_task_env_,
+              CreateExampleIterator(EqualsProto(example_selector), _))
+      .Times(AtMost(1))
+      .WillOnce(DoAll(SaveArg<1>(&latest_eligibility_selector_context_),
+                      Return(ByMove(std::make_unique<SimpleExampleIterator>(
+                          eligibility_eval_artifacts_.dataset,
+                          kEligibilityEvalCollectionUri)))))
+      .RetiresOnSaturation();
 
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
@@ -4341,15 +4406,15 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight->set_task_name(std::string(kRequires5ExamplesTaskName));
   task_weight->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
 
   // Mock a successful multiple task assignment request.
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
   multiple_task_assignments.task_assignments[kRequires5ExamplesTaskName] =
       task_assignment_2_;
-  EXPECT_CALL(mock_federated_protocol_,
-              MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
+  EXPECT_CALL(
+      mock_federated_protocol_,
+      MockPerformMultipleTaskAssignments(
+          UnorderedElementsAre(std::string(kRequires5ExamplesTaskName)), _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
 
   ComputationResults multiple_task_assignment_computation_results_1;
@@ -4460,7 +4525,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
   task_weight_2->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
 
   // Mock a successful multiple task assignment request.
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
@@ -4593,8 +4657,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_3->set_task_name(kTaskName);
   task_weight_3->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
-
   // Mock a successful multiple task assignment request.
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
   multiple_task_assignments.task_assignments[kSwor24HourTaskName] =
@@ -4681,8 +4743,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_3->set_task_name(kTaskName);
   task_weight_3->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
-
   // Mock a successful multiple task assignment request.
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
   multiple_task_assignments.task_assignments[kSwor24HourTaskName] =
@@ -4691,8 +4751,8 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       task_assignment_2_;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kSwor24HourTaskName),
-                              std::string(kRequires5ExamplesTaskName)),
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
 
                   _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
@@ -4786,8 +4846,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_3->set_task_name(kTaskName);
   task_weight_3->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
-
   // Mock a successful multiple task assignment request.
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
   multiple_task_assignments.task_assignments[kSwor24HourTaskName] =
@@ -4796,8 +4854,8 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       task_assignment_2_;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kSwor24HourTaskName),
-                              std::string(kRequires5ExamplesTaskName)),
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
                   _, _))
       .WillOnce(Return(std::move(multiple_task_assignments)));
   // First task failed upload.
@@ -4896,7 +4954,6 @@ TEST_F(FlRunnerEligibilityEvalTest,
   TaskWeight* task_weight = expected_eligibility_info.add_task_weights();
   task_weight->set_task_name(kTaskName);
   task_weight->set_weight(1);
-  MockSuccessfulEligibilityPlanExecution(expected_eligibility_info);
   EXPECT_CALL(mock_federated_protocol_,
               MockCheckin(Optional(EqualsProto(expected_eligibility_info)),
                           Eq(attestation_measurement)))
@@ -4967,7 +5024,6 @@ TEST_F(FlRunnerEligibilityEvalTest,
   TaskWeight* task_weight = expected_eligibility_info.add_task_weights();
   task_weight->set_task_name(kTaskName);
   task_weight->set_weight(1);
-  MockSuccessfulEligibilityPlanExecution(expected_eligibility_info);
   EXPECT_CALL(mock_federated_protocol_,
               MockCheckin(Optional(EqualsProto(expected_eligibility_info)),
                           Eq(std::nullopt)))
@@ -5049,7 +5105,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
   task_weight_2->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
 
   std::string attestation_measurement = "test_attestation_measurement";
   EXPECT_CALL(mock_task_env_, GetAttestationMeasurement(Eq(content_binding)))
@@ -5066,8 +5121,8 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       kMultipleTaskAggregationSessionId1;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kSwor24HourTaskName),
-                              std::string(kRequires5ExamplesTaskName)),
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
                   _, Eq(attestation_measurement)))
       .WillOnce(Return(std::move(multiple_task_assignments)));
 
@@ -5201,7 +5256,6 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
   task_weight_2->set_weight(1);
 
-  MockSuccessfulEligibilityPlanExecution(task_eligibility_info);
 
   EXPECT_CALL(mock_task_env_, GetAttestationMeasurement(_)).Times(0);
 
@@ -5216,8 +5270,8 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       kMultipleTaskAggregationSessionId1;
   EXPECT_CALL(mock_federated_protocol_,
               MockPerformMultipleTaskAssignments(
-                  ElementsAre(std::string(kSwor24HourTaskName),
-                              std::string(kRequires5ExamplesTaskName)),
+                  UnorderedElementsAre(std::string(kSwor24HourTaskName),
+                                       std::string(kRequires5ExamplesTaskName)),
                   _, Eq(std::nullopt)))
       .WillOnce(Return(std::move(multiple_task_assignments)));
 

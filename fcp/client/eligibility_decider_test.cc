@@ -39,7 +39,6 @@
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/testing/testing.h"
-#include "tensorflow/core/example/example.pb.h"
 
 namespace fcp {
 namespace client {
@@ -499,210 +498,6 @@ TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyComputationErrorNonfatal) {
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
 }
 
-TEST_F(EligibilityDeciderTest, TfCustomPolicyEnabledRunsSuccessfully) {
-  PopulationEligibilitySpec spec;
-
-  EligibilityPolicyEvalSpec* tf_spec =
-      spec.mutable_eligibility_policies()->Add();
-  tf_spec->set_name("tf_custom_policy");
-  tf_spec->set_min_version(1);
-  *tf_spec->mutable_tf_custom_policy()->mutable_arguments() =
-      "hi hello how are you";
-
-  PopulationEligibilitySpec::TaskInfo* task_info =
-      spec.mutable_task_info()->Add();
-  task_info->set_task_name("single_task_1");
-  task_info->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
-  task_info->mutable_eligibility_policy_indices()->Add(0);
-
-  TaskEligibilityInfo tf_custom_policy_output;
-  tf_custom_policy_output.set_version(1);
-  auto* task_weight = tf_custom_policy_output.add_task_weights();
-  task_weight->set_task_name("single_task_1");
-  task_weight->set_weight(1.0f);
-
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(Return(tf_custom_policy_output));
-
-  // Result should match the response of our TfCustomPolicy output since we have
-  // no other policies.
-  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
-      spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
-      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
-      &mock_flags_);
-  ASSERT_OK(eligibility_result);
-  EXPECT_THAT(*eligibility_result, EqualsProto(tf_custom_policy_output));
-}
-
-TEST_F(EligibilityDeciderTest, TfCustomPolicyPreparesNeetContextIterator) {
-  PopulationEligibilitySpec spec;
-
-  EligibilityPolicyEvalSpec* tf_spec =
-      spec.mutable_eligibility_policies()->Add();
-  std::string policy_name = "tf_custom_policy";
-  tf_spec->set_name(policy_name);
-  tf_spec->set_min_version(1);
-  *tf_spec->mutable_tf_custom_policy()->mutable_arguments() =
-      "hi hello how are you";
-
-  PopulationEligibilitySpec::TaskInfo* task_info =
-      spec.mutable_task_info()->Add();
-  std::string task_name = "single_task_1";
-  task_info->set_task_name(task_name);
-  task_info->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
-  task_info->mutable_eligibility_policy_indices()->Add(0);
-
-  engine::PlanResult plan_result(engine::PlanOutcome::kSuccess,
-                                 absl::OkStatus());
-
-  TaskEligibilityInfo tf_custom_policy_output;
-  tf_custom_policy_output.set_version(1);
-  auto* task_weight = tf_custom_policy_output.add_task_weights();
-  task_weight->set_task_name("single_task_1");
-  task_weight->set_weight(1.0f);
-
-  // We do some asserts inside of our mock RunPlan, as we will not be able to
-  // capture these variables and test them outside of the scope of
-  // ComputeEligibility.
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(DoAll(
-          [&](std::vector<engine::ExampleIteratorFactory*> factory_pointers) {
-            // iterator_factories should contain both our base iterator and our
-            // neet context iterator. They should also be in order of growing
-            // scope, as the implementation will scan through them from
-            // beginning to end. The neet context iterator factory should be
-            // first, as it specifically handles the neet context uri, then our
-            // generic iterator factory should be second, as it handles all
-            // possible uris.
-
-            ExampleSelector neet_selector;
-            *neet_selector.mutable_collection_uri() =
-                "internal:/eligibility_context";
-            ExampleSelector my_examples_selector;
-            *my_examples_selector.mutable_collection_uri() = "app:/rain_on_me";
-
-            ASSERT_EQ(factory_pointers.size(), 2);
-            auto eligibility_context_factory = factory_pointers[0];
-            ASSERT_TRUE(eligibility_context_factory->CanHandle(neet_selector));
-            ASSERT_FALSE(
-                eligibility_context_factory->CanHandle(my_examples_selector));
-            ASSERT_TRUE(factory_pointers[1]->CanHandle(my_examples_selector));
-
-            // Get all examples from the neet context iterator
-            std::vector<std::string> eligibility_context_example;
-            absl::StatusOr<std::unique_ptr<ExampleIterator>>
-                eligibility_context_iterator =
-                    eligibility_context_factory->CreateExampleIterator(
-                        neet_selector);
-            ASSERT_OK(eligibility_context_iterator);
-            absl::StatusOr<std::string> next_example =
-                (*eligibility_context_iterator)->Next();
-            while (next_example.ok()) {
-              eligibility_context_example.push_back(*next_example);
-              next_example = (*eligibility_context_iterator)->Next();
-            }
-            ASSERT_EQ(eligibility_context_example.size(), 1);
-            tensorflow::Example example;
-            ASSERT_TRUE(
-                example.ParseFromString(eligibility_context_example[0]));
-            ASSERT_EQ(example.features()
-                          .feature()
-                          .at("policy_name")
-                          .bytes_list()
-                          .value(0),
-                      policy_name);
-            ASSERT_EQ(example.features()
-                          .feature()
-                          .at("task_names")
-                          .bytes_list()
-                          .value_size(),
-                      1);
-            ASSERT_EQ(example.features()
-                          .feature()
-                          .at("task_names")
-                          .bytes_list()
-                          .value(0),
-                      task_name);
-          },
-          Return(std::move(tf_custom_policy_output))));
-
-  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
-      spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
-      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
-      &mock_flags_);
-
-  ASSERT_OK(eligibility_result);
-}
-
-TEST_F(EligibilityDeciderTest, TfCustomPolicyParseOutputsLogsNonfatal) {
-  PopulationEligibilitySpec spec;
-
-  EligibilityPolicyEvalSpec* tf_spec =
-      spec.mutable_eligibility_policies()->Add();
-  tf_spec->set_name("tf_custom_policy");
-  tf_spec->set_min_version(1);
-  *tf_spec->mutable_tf_custom_policy()->mutable_arguments() =
-      "hi hello how are you";
-
-  PopulationEligibilitySpec::TaskInfo* task_info =
-      spec.mutable_task_info()->Add();
-  task_info->set_task_name("single_task_1");
-  task_info->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
-  task_info->mutable_eligibility_policy_indices()->Add(0);
-
-  engine::PlanResult plan_result(engine::PlanOutcome::kSuccess,
-                                 absl::OkStatus());
-
-  auto execution_error = absl::InternalError("cripes!");
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(Return(execution_error));
-  EXPECT_CALL(mock_phase_logger_,
-              LogEligibilityEvalComputationErrorNonfatal(Eq(execution_error)));
-
-  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
-      spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
-      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
-      &mock_flags_);
-  ASSERT_OK(eligibility_result);
-  ASSERT_EQ(eligibility_result->task_weights_size(), 1);
-  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
-}
-
-TEST_F(EligibilityDeciderTest, TfCustomPolicyPlanOutcomeFailureNonfatal) {
-  PopulationEligibilitySpec spec;
-
-  EligibilityPolicyEvalSpec* tf_spec =
-      spec.mutable_eligibility_policies()->Add();
-  tf_spec->set_name("tf_custom_policy");
-  tf_spec->set_min_version(1);
-  *tf_spec->mutable_tf_custom_policy()->mutable_arguments() =
-      "hi hello how are you";
-
-  PopulationEligibilitySpec::TaskInfo* task_info =
-      spec.mutable_task_info()->Add();
-  task_info->set_task_name("single_task_1");
-  task_info->set_task_assignment_mode(
-      PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
-  task_info->mutable_eligibility_policy_indices()->Add(0);
-
-  auto execution_error = absl::InternalError("oh no!!");
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(Return(execution_error));
-  EXPECT_CALL(mock_phase_logger_,
-              LogEligibilityEvalComputationErrorNonfatal(Eq(execution_error)));
-
-  absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
-      spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
-      {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
-      &mock_flags_);
-  ASSERT_OK(eligibility_result);
-  ASSERT_EQ(eligibility_result->task_weights_size(), 1);
-  ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
-}
-
 TEST_F(EligibilityDeciderTest, EligibleForAllPolicyTypes) {
   PopulationEligibilitySpec spec;
 
@@ -739,13 +534,6 @@ TEST_F(EligibilityDeciderTest, EligibleForAllPolicyTypes) {
        ->mutable_selector()
        ->mutable_collection_uri() = "app:/bad_idea_right";
 
-  EligibilityPolicyEvalSpec* tf_spec =
-      spec.mutable_eligibility_policies()->Add();
-  tf_spec->set_name("tf_custom_policy");
-  tf_spec->set_min_version(1);
-  *tf_spec->mutable_tf_custom_policy()->mutable_arguments() =
-      "hi hello how are you";
-
   PopulationEligibilitySpec::TaskInfo* task_info =
       spec.mutable_task_info()->Add();
   task_info->set_task_name(task_name);
@@ -753,24 +541,20 @@ TEST_F(EligibilityDeciderTest, EligibleForAllPolicyTypes) {
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   task_info->mutable_eligibility_policy_indices()->Add(0);
   task_info->mutable_eligibility_policy_indices()->Add(1);
-  task_info->mutable_eligibility_policy_indices()->Add(2);
 
-  TaskEligibilityInfo tf_custom_policy_output;
-  tf_custom_policy_output.set_version(1);
-  auto* task_weight = tf_custom_policy_output.add_task_weights();
-  task_weight->set_task_name(task_name);
-  task_weight->set_weight(1.0f);
-
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(Return(tf_custom_policy_output));
   // Result should match the response of our TfCustomPolicy output since we have
   // a single task eligible for all policies.
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
-      spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
+      spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(5).get()}, mock_eet_plan_runner_,
       &mock_flags_);
   ASSERT_OK(eligibility_result);
-  EXPECT_THAT(*eligibility_result, EqualsProto(tf_custom_policy_output));
+  TaskEligibilityInfo expected;
+  expected.set_version(1);
+  auto* tw = expected.add_task_weights();
+  tw->set_task_name(task_name);
+  tw->set_weight(1.0f);
+  EXPECT_THAT(*eligibility_result, EqualsProto(expected));
 }
 
 TEST_F(EligibilityDeciderTest, TwoTasksOneEligibleForAllOneNot) {
@@ -791,8 +575,13 @@ TEST_F(EligibilityDeciderTest, TwoTasksOneEligibleForAllOneNot) {
   stats.mutable_events()->Add(CreateOpstatsEvent(
       opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED,
       upload_started_time_sec));
+  opstats::OperationalStats stats2;
+  stats2.set_task_name(task_name2);
+  stats2.mutable_events()->Add(CreateOpstatsEvent(
+      opstats::OperationalStats::Event::EVENT_KIND_RESULT_UPLOAD_STARTED, 8));
   opstats::OpStatsSequence opstats_sequence;
   *opstats_sequence.add_opstats() = std::move(stats);
+  *opstats_sequence.add_opstats() = std::move(stats2);
   // Trustworthy since epoch time
   opstats_sequence.mutable_earliest_trustworthy_time()->set_seconds(0);
 
@@ -810,13 +599,6 @@ TEST_F(EligibilityDeciderTest, TwoTasksOneEligibleForAllOneNot) {
        ->mutable_selector()
        ->mutable_collection_uri() = "app:/super_shy";
 
-  EligibilityPolicyEvalSpec* tf_spec =
-      spec.mutable_eligibility_policies()->Add();
-  tf_spec->set_name("tf_custom_policy");
-  tf_spec->set_min_version(1);
-  *tf_spec->mutable_tf_custom_policy()->mutable_arguments() =
-      "hi hello how are you";
-
   PopulationEligibilitySpec::TaskInfo* task_info =
       spec.mutable_task_info()->Add();
   task_info->set_task_name(task_name);
@@ -824,7 +606,6 @@ TEST_F(EligibilityDeciderTest, TwoTasksOneEligibleForAllOneNot) {
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   task_info->mutable_eligibility_policy_indices()->Add(0);
   task_info->mutable_eligibility_policy_indices()->Add(1);
-  task_info->mutable_eligibility_policy_indices()->Add(2);
 
   PopulationEligibilitySpec::TaskInfo* task_info2 =
       spec.mutable_task_info()->Add();
@@ -833,27 +614,23 @@ TEST_F(EligibilityDeciderTest, TwoTasksOneEligibleForAllOneNot) {
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   task_info2->mutable_eligibility_policy_indices()->Add(0);
   task_info2->mutable_eligibility_policy_indices()->Add(1);
-  task_info2->mutable_eligibility_policy_indices()->Add(2);
 
-  TaskEligibilityInfo tf_custom_policy_output;
-  tf_custom_policy_output.set_version(1);
-  auto* task_weight = tf_custom_policy_output.add_task_weights();
-  task_weight->set_task_name(task_name);
-  task_weight->set_weight(1.0f);
-  auto* task_weight2 = tf_custom_policy_output.add_task_weights();
-  task_weight2->set_task_name(task_name2);
-  task_weight2->set_weight(0.0f);
-
-  EXPECT_CALL(mock_eet_plan_runner_, RunPlan(_))
-      .WillOnce(Return(tf_custom_policy_output));
   // Result should match the response of our TfCustomPolicy output since we have
   // a single task eligible for all policies.
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
-      spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
+      spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(5).get()}, mock_eet_plan_runner_,
       &mock_flags_);
   ASSERT_OK(eligibility_result);
-  EXPECT_THAT(*eligibility_result, EqualsProto(tf_custom_policy_output));
+  TaskEligibilityInfo expected;
+  expected.set_version(1);
+  auto* tw = expected.add_task_weights();
+  tw->set_task_name(task_name);
+  tw->set_weight(1.0f);
+  auto* tw2 = expected.add_task_weights();
+  tw2->set_task_name(task_name2);
+  tw2->set_weight(0.0f);
+  EXPECT_THAT(*eligibility_result, EqualsProto(expected));
 }
 
 TEST_F(EligibilityDeciderTest, TwoTasksOneUnimplementedPolicyNonfatal) {
@@ -871,16 +648,13 @@ TEST_F(EligibilityDeciderTest, TwoTasksOneUnimplementedPolicyNonfatal) {
        ->mutable_selector()
        ->mutable_collection_uri() = "app:/super_shy";
 
-  EligibilityPolicyEvalSpec* tf_spec =
+  EligibilityPolicyEvalSpec* unimplemented_swor_spec =
       spec.mutable_eligibility_policies()->Add();
-  tf_spec->set_name("tf_custom_policy");
-  // This policy is not implemented with version at least 1000.
-  tf_spec->set_min_version(1000);
-  *tf_spec->mutable_tf_custom_policy()->mutable_arguments() =
-      "hi hello how are you";
-
-  // Don't need to set up any tf mocks because this unimplemented policy will
-  // not be evaluated. If it does, this test would fail.
+  unimplemented_swor_spec->set_name("unimplemented_swor_policy");
+  unimplemented_swor_spec->set_min_version(1000);
+  unimplemented_swor_spec->mutable_swor_policy()
+      ->mutable_min_period()
+      ->set_seconds(5);
 
   // Since the policy is just unimplemented, not throwing an error, we should
   // not see a LogEligibilityEvalComputationErrorNonfatal call.

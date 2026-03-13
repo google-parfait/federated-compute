@@ -47,8 +47,6 @@
 #include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "re2/re2.h"
-#include "tensorflow/core/example/example.pb.h"
-#include "tensorflow/core/example/feature.pb.h"
 
 namespace fcp::client {
 
@@ -66,20 +64,8 @@ namespace {
 
 const int32_t kDataAvailabilityImplementationVersionWithExampleQueryResult = 2;
 const int32_t kSworImplementationVersion = 1;
-const int32_t kTfCustomPolicyImplementationVersion = 1;
 const int32_t kMinimumSeparationPolicyImplementationVersion = 1;
 const int32_t kMinimumSeparationPolicyImplementationVersionWithPhaseStats = 3;
-
-// URI handled by the eligibility decider for an example selector that will
-// return a single example containing the name of the policy implementation to
-// be evaluated and the task names that policy applies to.
-constexpr char kNeetContextUri[] = "internal:/eligibility_context";
-// The feature name key corresponding to the name of the policy impl to be
-// evaluated in the example returned by the example iterator from the above URI.
-constexpr char kPolicyName[] = "policy_name";
-// The feature name key corresponding to the task names that the policy impl
-// should be applied to.
-constexpr char kTaskNames[] = "task_names";
 
 bool ExecutionOutsideSworPeriod(
     absl::Time now, absl::Duration min_period,
@@ -260,93 +246,6 @@ absl::StatusOr<bool> ComputeDataAvailabilityEligibility(
   return true;
 }
 
-// An iterator that passes the name of the policy implementation to be executed
-// and the task names it applies to to the TfCustomPolicy eligibility
-// computation.
-class EligibilityContextIterator : public fcp::client::ExampleIterator {
- public:
-  explicit EligibilityContextIterator(std::string policy_name,
-                                      std::vector<std::string> task_names) {
-    tensorflow::Example example;
-    auto* feature_map = example.mutable_features()->mutable_feature();
-    (*feature_map)[kPolicyName] = CreateFeatureFromStrings({policy_name});
-    (*feature_map)[kTaskNames] = CreateFeatureFromStrings(task_names);
-    example_ = example.SerializeAsString();
-  }
-
-  absl::StatusOr<std::string> Next() override {
-    if (example_returned_) {
-      return absl::OutOfRangeError("Already returned neet context example");
-    }
-    example_returned_ = true;
-    return example_;
-  }
-
-  void Close() override { example_returned_ = true; }
-
-  tensorflow::Feature CreateFeatureFromStrings(
-      std::vector<std::string> strings) {
-    tensorflow::Feature feature;
-    auto* bytes_list = feature.mutable_bytes_list();
-    for (const std::string& str : strings) {
-      bytes_list->add_value(str);
-    }
-    return feature;
-  }
-
-  bool example_returned_ = false;
-  std::string example_;
-};
-
-std::unique_ptr<engine::ExampleIteratorFactory>
-CreateEligibilityContextExampleIteratorFactory(
-    std::string policy_name, std::vector<std::string> task_names) {
-  return std::make_unique<engine::FunctionalExampleIteratorFactory>(
-      /*can_handle_func=*/
-      [](const google::internal::federated::plan::ExampleSelector& selector) {
-        return selector.collection_uri() == kNeetContextUri;
-      },
-      /*create_iterator_func=*/
-      [policy_name,
-       task_names](const google::internal::federated::plan::ExampleSelector&
-                       example_selector) {
-        return std::make_unique<EligibilityContextIterator>(policy_name,
-                                                            task_names);
-      },
-      /*should_collect_stats=*/false);
-}
-
-absl::StatusOr<absl::flat_hash_set<std::string>>
-ComputeTfCustomPolicyEligibility(
-    EligibilityPolicyEvalSpec policy_spec,
-    const absl::flat_hash_set<std::string>& task_names,
-    std::vector<engine::ExampleIteratorFactory*> example_iterator_factories,
-    EetPlanRunner& eet_plan_runner) {
-  std::vector<std::string> iterator_task_names(task_names.cbegin(),
-                                               task_names.cend());
-  std::unique_ptr<engine::ExampleIteratorFactory>
-      neet_context_iterator_factory =
-          CreateEligibilityContextExampleIteratorFactory(policy_spec.name(),
-                                                         iterator_task_names);
-  std::vector<engine::ExampleIteratorFactory*>
-      overridden_example_iterator_factories = {
-          neet_context_iterator_factory.get()};
-  overridden_example_iterator_factories.insert(
-      overridden_example_iterator_factories.end(),
-      example_iterator_factories.begin(), example_iterator_factories.end());
-
-  FCP_ASSIGN_OR_RETURN(
-      TaskEligibilityInfo task_eligibility_info,
-      eet_plan_runner.RunPlan(overridden_example_iterator_factories));
-  absl::flat_hash_set<std::string> eligible_task_names = {};
-  for (const TaskWeight& task_weight : task_eligibility_info.task_weights()) {
-    if (task_weight.weight() > 0) {
-      eligible_task_names.insert(task_weight.task_name());
-    }
-  }
-  return eligible_task_names;
-}
-
 int32_t GetMinSepImplementationVersion(const Flags* flags) {
   if (flags->log_min_sep_index_to_phase_stats()) {
     return kMinimumSeparationPolicyImplementationVersionWithPhaseStats;
@@ -454,9 +353,7 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
         }
         break;
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kTfCustomPolicy:
-        if (kTfCustomPolicyImplementationVersion < policy_spec.min_version()) {
-            policy_implemented = false;
-        }
+        policy_implemented = false;
         break;
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kMinSepPolicy:
         if (GetMinSepImplementationVersion(flags) < policy_spec.min_version()) {
@@ -580,20 +477,6 @@ absl::StatusOr<TaskEligibilityInfo> ComputeEligibility(
           }
         }
         break;
-      case EligibilityPolicyEvalSpec::PolicyTypeCase::kTfCustomPolicy: {
-        absl::StatusOr<absl::flat_hash_set<std::string>> tf_policy_task_names =
-            ComputeTfCustomPolicyEligibility(policy_spec, policy_task_names,
-                                             example_iterator_factories,
-                                             eet_plan_runner);
-        if (tf_policy_task_names.ok()) {
-          eligible_policy_task_names = *tf_policy_task_names;
-        } else {
-          phase_logger.LogEligibilityEvalComputationErrorNonfatal(
-              tf_policy_task_names.status());
-          // No tasks are eligible, so leave eligible_policy_task_names empty.
-          // Below, we'll remove them from the overall eligible tasks.
-        }
-      } break;
       case EligibilityPolicyEvalSpec::PolicyTypeCase::kMinSepPolicy: {
         eligible_policy_task_names = ComputeMinimumSeparationPolicyEligibility(
             policy_spec.min_sep_policy(), policy_task_names, opstats_sequence,
