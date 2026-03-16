@@ -50,6 +50,17 @@ message RuntimeConfig {
   // The maximum number of inference calls to be batched together for parallel
   // processing. If not set, the default value of 1 will be used (no batching).
   int32 max_batch_size = 5;
+
+  // Determines how model instances are managed within the container.
+  enum ModelMode {
+    MODEL_MODE_UNSPECIFIED = 0;
+    // Uses a single model instance safely shared across all sessions within the
+    // container.
+    MODEL_MODE_SHARED_MODEL = 1;
+    // Instantiates a separate model instance per session.
+    MODEL_MODE_MODEL_PER_SESSION = 2;
+  }
+  ModelMode model_mode = 6;
 }
 
 // A single private inference task to execute inside the TEE-hosted
@@ -107,10 +118,10 @@ message GemmaConfiguration {
   string model_weight_file = 2;
   // The Gemma model variant to be used for inference.
   GemmaModel model = 3;
-  // The Gemma model training type to be used for inference.
-  GemmaModelTraining model_training = 4;
-  // The Gemma model tensor type to be used for inference.
-  GemmaTensorType tensor_type = 5;
+  // Deprecated: determined based on the model itself.
+  GemmaModelTraining model_training = 4 [deprecated = true];
+  // Deprecated: determined based on the model itself.
+  GemmaTensorType tensor_type = 5 [deprecated = true];
 
   // An enum of Gemma model weight file type supported for inference in TEE.
   enum WeightType {
@@ -144,7 +155,7 @@ enum GemmaModel {
 }
 
 // An enum of Gemma model training types supported for inference in TEE. Details
-// about Gemma model training can be found atÏ gcpp::ModelTraining in the
+// about Gemma model training can be found at gcpp::ModelTraining in the
 // gemma.cpp repo (https://github.com/google/gemma.cpp).
 enum GemmaModelTraining {
   GEMMA_MODEL_TRAINING_UNSPECIFIED = 0;
