@@ -16,17 +16,19 @@
 
 set -o errexit
 set -o nounset
-if [ $# -ne 3 ]; then
-  echo "Usage: $0 <input.fbs> <output-dir> <header-output-dir>"
+if [ $# -ne 5 ]; then
+  echo "Usage: $0 <flatc> <tracing_traits_generator> <input.fbs> <output-dir> <header-output-dir>"
   exit 1;
 fi
-FBS_FILE=$1
-OUT_DIR=$2
-HEADER_OUT_DIR=$3
+FLATC=$1
+TRACING_TRAITS_GENERATOR=$2
+FBS_FILE=$3
+OUT_DIR=$4
+HEADER_OUT_DIR=$5
 # Running flatc to parse fbs and generate bfbs
-external/flatbuffers/flatc -b --schema -o ${OUT_DIR} -I "." ${FBS_FILE} 1>&2
+${FLATC} -b --schema -o ${OUT_DIR} -I "." ${FBS_FILE} 1>&2
 # Flatc should have produced the following files:
 BFBS_FILE=$OUT_DIR/$(basename ${FBS_FILE%.fbs}).bfbs
 GENERATED_FILE=$HEADER_OUT_DIR/$(basename ${FBS_FILE%.fbs})_generated.h
 # Generate header file from bfbs (to stdout)
-fcp/tracing/tools/tracing_traits_generator ${GENERATED_FILE} ${BFBS_FILE} ${FBS_FILE}
+${TRACING_TRAITS_GENERATOR} ${GENERATED_FILE} ${BFBS_FILE} ${FBS_FILE}

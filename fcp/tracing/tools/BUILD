@@ -37,7 +37,11 @@ cc_binary(
 cc_test(
     name = "tracing_traits_generator_test",
     srcs = ["tracing_traits_generator_test.cc"],
-    args = ["--codegen_tool_path=$(location :test_codegen_runner.sh)"],
+    args = [
+        "--codegen_tool_path=$(location :test_codegen_runner.sh)",
+        "--flatc_path=$(location @flatbuffers//:flatc)",
+        "--tracing_traits_generator_path=$(location :tracing_traits_generator)",
+    ],
     copts = FCP_COPTS,
     data = glob([
         "testdata/*.baseline",
