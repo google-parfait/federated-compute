@@ -48,7 +48,6 @@
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/simple_task_environment.h"
 #include "fcp/client/tensorflow/tensorflow_runner.h"
-#include "fcp/client/tensorflow/tensorflow_runner_impl.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/confidentialcompute/constants.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
@@ -57,14 +56,6 @@
 #include "fcp/testing/testing.h"  // IWYU pragma: keep
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
-#include "tensorflow/c/checkpoint_reader.h"
-#include "tensorflow/c/tf_status.h"
-#include "tensorflow/c/tf_status_helper.h"
-#include "tensorflow/core/example/example.pb.h"
-#include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/framework/types.pb.h"
-#include "tensorflow/core/platform/tstring.h"
 #include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.h"
 #include "tensorflow_federated/cc/core/impl/aggregation/core/tensor.pb.h"
 #include "tensorflow_federated/cc/core/impl/aggregation/core/tensor_shape.h"
@@ -75,8 +66,6 @@ namespace fcp {
 namespace client {
 namespace engine {
 namespace {
-
-namespace tf = ::tensorflow;
 
 using ::fcp::client::ExampleQueryResult;
 using ::fcp::confidential_compute::kEventTimeColumnName;
@@ -200,29 +189,6 @@ class TwoExampleIteratorsFactory : public ExampleIteratorFactory {
   std::string second_collection_uri_;
 };
 
-absl::StatusOr<absl::flat_hash_map<std::string, tf::Tensor>> ReadTensors(
-    std::string checkpoint_path) {
-  absl::flat_hash_map<std::string, tf::Tensor> tensors;
-  tf::TF_StatusPtr tf_status(TF_NewStatus());
-  tf::checkpoint::CheckpointReader tf_checkpoint_reader(checkpoint_path,
-                                                        tf_status.get());
-  if (TF_GetCode(tf_status.get()) != TF_OK) {
-    return absl::NotFoundError("Couldn't read an input checkpoint");
-  }
-  for (const auto& [name, tf_dtype] :
-       tf_checkpoint_reader.GetVariableToDataTypeMap()) {
-    std::unique_ptr<tf::Tensor> tensor;
-    tf_checkpoint_reader.GetTensor(name, &tensor, tf_status.get());
-    if (TF_GetCode(tf_status.get()) != TF_OK) {
-      return absl::NotFoundError(
-          absl::StrFormat("Checkpoint doesn't have tensor %s", name));
-    }
-    tensors[name] = *tensor;
-  }
-
-  return tensors;
-}
-
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 ReadFCCheckpointTensors(absl::string_view checkpoint) {
   google::protobuf::io::ArrayInputStream input(checkpoint.data(),
@@ -336,9 +302,6 @@ class ExampleQueryPlanEngineTest : public testing::Test {
                     selector) {
               return std::make_unique<SimpleExampleIterator>(dataset);
             });
-    tensorflow_runner_factory_ = []() {
-      return std::make_unique<TensorflowRunnerImpl>();
-    };
   }
 
   fcp::client::FilesImpl files_impl_;
@@ -349,8 +312,6 @@ class ExampleQueryPlanEngineTest : public testing::Test {
   ClientOnlyPlan client_only_plan_;
   Dataset dataset_;
   std::string output_checkpoint_filename_;
-  absl::AnyInvocable<std::unique_ptr<TensorflowRunner>() const>
-      tensorflow_runner_factory_;
 
   int num_examples_ = 0;
   int64_t example_bytes_ = 0;
@@ -387,7 +348,7 @@ class ExampleQueryPlanEngineTest : public testing::Test {
     ExampleQueryPlanEngine plan_engine(
         {example_iterator_factory_.get()}, &mock_opstats_logger_,
         /*example_iterator_query_recorder=*/nullptr,
-        tensorflow_runner_factory_);
+        /*tensorflow_runner_factory=*/nullptr);
     engine::PlanResult result = plan_engine.RunPlan(
         spec, output_checkpoint_filename_,
         /*use_client_report_wire_format=*/true,
@@ -415,162 +376,6 @@ class ExampleQueryPlanEngineTest : public testing::Test {
     }
   }
 };
-
-TEST_F(ExampleQueryPlanEngineTest, PlanSucceeds) {
-  Initialize();
-
-  EXPECT_CALL(
-      mock_opstats_logger_,
-      UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
-  ExampleQueryPlanEngine plan_engine(
-      {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
-  engine::PlanResult result = plan_engine.RunPlan(
-      client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
-      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
-      /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
-
-  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
-
-  auto tensors = ReadTensors(output_checkpoint_filename_);
-  ASSERT_OK(tensors);
-  tf::Tensor int_tensor = tensors.value()[kOutputIntTensorName];
-  ASSERT_EQ(int_tensor.shape(), tf::TensorShape({2}));
-  ASSERT_EQ(int_tensor.dtype(), tf::DT_INT64);
-  auto int_data = static_cast<int64_t*>(int_tensor.data());
-  std::vector<int64_t> expected_int_data({42, 24});
-  for (int i = 0; i < 2; ++i) {
-    ASSERT_EQ(int_data[i], expected_int_data[i]);
-  }
-
-  tf::Tensor string_tensor = tensors.value()[kOutputStringTensorName];
-  ASSERT_EQ(string_tensor.shape(), tf::TensorShape({2}));
-  ASSERT_EQ(string_tensor.dtype(), tf::DT_STRING);
-  auto string_data = static_cast<tf::tstring*>(string_tensor.data());
-  std::vector<std::string> expected_string_data({"value1", "value2"});
-  for (int i = 0; i < 2; ++i) {
-    ASSERT_EQ(static_cast<std::string>(string_data[i]),
-              expected_string_data[i]);
-  }
-}
-
-TEST_F(ExampleQueryPlanEngineTest, MultipleQueries) {
-  Initialize();
-
-  ExampleQuerySpec::OutputVectorSpec float_vector_spec;
-  float_vector_spec.set_vector_name("float_vector");
-  float_vector_spec.set_data_type(DataType::FLOAT);
-  ExampleQuerySpec::OutputVectorSpec string_vector_spec;
-  // Same vector name as in the other ExampleQuery, but with a different output
-  // one to make sure these vectors are distinguished in
-  // example_query_plan_engine.
-  string_vector_spec.set_vector_name(kOutputStringVectorName);
-  string_vector_spec.set_data_type(DataType::STRING);
-
-  ExampleQuerySpec::ExampleQuery second_example_query;
-  second_example_query.mutable_example_selector()->set_collection_uri(
-      "app:/second_collection");
-  (*second_example_query.mutable_output_vector_specs())["float_tensor"] =
-      float_vector_spec;
-  (*second_example_query
-        .mutable_output_vector_specs())["another_string_tensor"] =
-      string_vector_spec;
-  client_only_plan_.mutable_phase()
-      ->mutable_example_query_spec()
-      ->mutable_example_queries()
-      ->Add(std::move(second_example_query));
-
-  AggregationConfig aggregation_config;
-  aggregation_config.mutable_tf_v1_checkpoint_aggregation();
-  (*client_only_plan_.mutable_phase()
-        ->mutable_federated_example_query()
-        ->mutable_aggregations())["float_tensor"] = aggregation_config;
-
-  ExampleQueryResult second_example_query_result;
-  ExampleQueryResult::VectorData::Values float_values;
-  float_values.mutable_float_values()->add_value(0.24f);
-  float_values.mutable_float_values()->add_value(0.42f);
-  float_values.mutable_float_values()->add_value(0.33f);
-  ExampleQueryResult::VectorData::Values string_values;
-  string_values.mutable_string_values()->add_value("another_string_value");
-  (*second_example_query_result.mutable_vector_data()
-        ->mutable_vectors())["float_vector"] = float_values;
-  (*second_example_query_result.mutable_vector_data()
-        ->mutable_vectors())[kOutputStringVectorName] = string_values;
-  std::string example = second_example_query_result.SerializeAsString();
-
-  Dataset::ClientDataset dataset;
-  dataset.set_client_id("second_client_id");
-  dataset.add_example(example);
-  Dataset second_dataset;
-  second_dataset.mutable_client_data()->Add(std::move(dataset));
-
-  example_iterator_factory_ = std::make_unique<TwoExampleIteratorsFactory>(
-      [&dataset = dataset_](
-          const google::internal::federated::plan::ExampleSelector& selector) {
-        return std::make_unique<SimpleExampleIterator>(dataset);
-      },
-      [&dataset = second_dataset](
-          const google::internal::federated::plan::ExampleSelector& selector) {
-        return std::make_unique<SimpleExampleIterator>(dataset);
-      },
-      kCollectionUri, "app:/second_collection");
-
-  ExampleQueryPlanEngine plan_engine(
-      {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
-  engine::PlanResult result = plan_engine.RunPlan(
-      client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
-      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
-      /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/false);
-
-  EXPECT_THAT(result.outcome, PlanOutcome::kSuccess);
-
-  auto tensors = ReadTensors(output_checkpoint_filename_);
-  ASSERT_OK(tensors);
-  tf::Tensor int_tensor = tensors.value()[kOutputIntTensorName];
-  ASSERT_EQ(int_tensor.shape(), tf::TensorShape({2}));
-  ASSERT_EQ(int_tensor.dtype(), tf::DT_INT64);
-  auto int_data = static_cast<int64_t*>(int_tensor.data());
-  std::vector<int64_t> expected_int_data({42, 24});
-  for (int i = 0; i < 2; ++i) {
-    ASSERT_EQ(int_data[i], expected_int_data[i]);
-  }
-
-  tf::Tensor string_tensor = tensors.value()[kOutputStringTensorName];
-  ASSERT_EQ(string_tensor.shape(), tf::TensorShape({2}));
-  ASSERT_EQ(string_tensor.dtype(), tf::DT_STRING);
-  auto string_data = static_cast<tf::tstring*>(string_tensor.data());
-  std::vector<std::string> expected_string_data({"value1", "value2"});
-  for (int i = 0; i < 2; ++i) {
-    ASSERT_EQ(static_cast<std::string>(string_data[i]),
-              expected_string_data[i]);
-  }
-
-  tf::Tensor float_tensor = tensors.value()["float_tensor"];
-  ASSERT_EQ(float_tensor.shape(), tf::TensorShape({3}));
-  ASSERT_EQ(float_tensor.dtype(), tf::DT_FLOAT);
-  auto float_data = static_cast<float*>(float_tensor.data());
-  std::vector<float> expected_float_data({0.24f, 0.42f, 0.33f});
-  for (int i = 0; i < 3; ++i) {
-    ASSERT_EQ(float_data[i], expected_float_data[i]);
-  }
-
-  tf::Tensor second_query_string_tensor =
-      tensors.value()["another_string_tensor"];
-  ASSERT_EQ(second_query_string_tensor.shape(), tf::TensorShape({1}));
-  ASSERT_EQ(second_query_string_tensor.dtype(), tf::DT_STRING);
-  auto second_query_string_data =
-      static_cast<tf::tstring*>(second_query_string_tensor.data());
-  ASSERT_EQ(static_cast<std::string>(*second_query_string_data),
-            "another_string_value");
-}
 
 TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
   Initialize();
@@ -621,10 +426,11 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecMissingInResult) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
       /*enable_private_logger=*/false,
@@ -658,10 +464,11 @@ TEST_F(ExampleQueryPlanEngineTest, OutputVectorSpecTypeMismatch) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
       /*enable_private_logger=*/false,
@@ -677,10 +484,11 @@ TEST_F(ExampleQueryPlanEngineTest, FactoryNotFound) {
 
   ExampleQueryPlanEngine plan_engine(
       {invalid_example_factory.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
       /*enable_private_logger=*/false,
@@ -696,10 +504,11 @@ TEST_F(ExampleQueryPlanEngineTest, NoIteratorCreated) {
 
   ExampleQueryPlanEngine plan_engine(
       {invalid_example_factory.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
       /*enable_private_logger=*/false,
@@ -727,10 +536,11 @@ TEST_F(ExampleQueryPlanEngineTest, InvalidExampleQueryResultFormat) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
+      output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
       /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
       /*enable_private_logger=*/false,
@@ -749,7 +559,8 @@ TEST_F(ExampleQueryPlanEngineTest,
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -851,7 +662,8 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerVectorNamesAreRewritten) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -959,7 +771,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithEventTimeRange) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1085,7 +898,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithOverriddenEventTimeRange) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1209,7 +1023,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithMergedEventTimeRange) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1266,7 +1081,8 @@ TEST_F(ExampleQueryPlanEngineTest, MissingEndEventTimeFails) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1292,16 +1108,8 @@ TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
   aggregation_config.mutable_federated_compute_checkpoint_aggregation();
   (*aggregations)[kTensorName] = aggregation_config;
 
-  tensorflow::Example example_1;
-  (*example_1.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(1);
-  tensorflow::Example example_2;
-  (*example_2.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(2);
-  std::string example_1_str = example_1.SerializeAsString();
-  std::string example_2_str = example_2.SerializeAsString();
+  std::string example_1_str = "example_1";
+  std::string example_2_str = "example_2";
 
   Dataset::ClientDataset client_dataset;
   client_dataset.set_client_id("client_id");
@@ -1310,7 +1118,7 @@ TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
   dataset_.mutable_client_data()->Add(std::move(client_dataset));
 
   num_examples_ = 2;
-  example_bytes_ = example_1.ByteSizeLong() + example_2.ByteSizeLong();
+  example_bytes_ = example_1_str.size() + example_2_str.size();
 
   example_iterator_factory_ =
       std::make_unique<FunctionalExampleIteratorFactory>(
@@ -1326,7 +1134,8 @@ TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1374,26 +1183,10 @@ TEST_F(ExampleQueryPlanEngineTest, TwoQueryDirectDataUploadTaskSucceeds) {
   (*aggregations)[kTensorName1] = aggregation_config;
   (*aggregations)[kTensorName2] = aggregation_config;
 
-  tensorflow::Example example_1;
-  (*example_1.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(1);
-  tensorflow::Example example_2;
-  (*example_2.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(2);
-  tensorflow::Example example_3;
-  (*example_3.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(3);
-  tensorflow::Example example_4;
-  (*example_4.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(4);
-  std::string example_1_str = example_1.SerializeAsString();
-  std::string example_2_str = example_2.SerializeAsString();
-  std::string example_3_str = example_3.SerializeAsString();
-  std::string example_4_str = example_4.SerializeAsString();
+  std::string example_1_str = "example_1";
+  std::string example_2_str = "example_2";
+  std::string example_3_str = "example_3";
+  std::string example_4_str = "example_4";
 
   Dataset::ClientDataset client_dataset;
   client_dataset.set_client_id("client_id_1");
@@ -1421,7 +1214,8 @@ TEST_F(ExampleQueryPlanEngineTest, TwoQueryDirectDataUploadTaskSucceeds) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1491,16 +1285,8 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
   (*aggregations)[kTensorName2] = tf_v1_checkpoint_aggregation_config;
   (*aggregations)[kTensorName3] = tf_v1_checkpoint_aggregation_config;
 
-  tensorflow::Example example_1;
-  (*example_1.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(1);
-  tensorflow::Example example_2;
-  (*example_2.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(2);
-  std::string example_1_str = example_1.SerializeAsString();
-  std::string example_2_str = example_2.SerializeAsString();
+  std::string example_1_str = "example_1";
+  std::string example_2_str = "example_2";
 
   Dataset::ClientDataset client_dataset;
   client_dataset.set_client_id("client_id_1");
@@ -1532,7 +1318,8 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1568,44 +1355,6 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
   ASSERT_THAT(*tensors, UnorderedElementsAreArray(expected_tensors));
 }
 
-TEST_F(ExampleQueryPlanEngineTest, InsufficientData) {
-  Initialize();
-  client_only_plan_.mutable_phase()
-      ->mutable_example_query_spec()
-      ->mutable_example_queries(0)
-      ->set_min_output_row_count(10);
-  example_query_result_.mutable_stats()->set_output_rows_count(1);
-  std::string example = example_query_result_.SerializeAsString();
-  dataset_.clear_client_data();
-  Dataset::ClientDataset client_dataset;
-  client_dataset.set_client_id("client_id");
-  client_dataset.add_example(example);
-  dataset_.mutable_client_data()->Add(std::move(client_dataset));
-  example_iterator_factory_ =
-      std::make_unique<FunctionalExampleIteratorFactory>(
-          [&dataset = dataset_](
-              const google::internal::federated::plan::ExampleSelector&
-                  selector) {
-            return std::make_unique<SimpleExampleIterator>(dataset);
-          });
-  EXPECT_CALL(mock_opstats_logger_,
-              UpdateDatasetStats(kCollectionUri, 1, example.size()));
-  ExampleQueryPlanEngine plan_engine(
-      {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
-  engine::PlanResult result = plan_engine.RunPlan(
-      client_only_plan_.phase().example_query_spec(),
-      output_checkpoint_filename_, /*use_client_report_wire_format=*/false,
-      /*enable_event_time_data_upload=*/false, /*source_id=*/std::nullopt,
-      /*uses_confidential_agg=*/false, /*enable_privacy_id_generation=*/false,
-      /*enable_private_logger=*/false,
-      /*drop_out_based_data_availability=*/true);
-
-  EXPECT_THAT(result.outcome, PlanOutcome::kInsufficientData);
-  EXPECT_EQ(result.original_status.code(),
-            absl::StatusCode::kFailedPrecondition);
-}
-
 TEST_F(ExampleQueryPlanEngineTest, SufficientData) {
   Initialize();
   client_only_plan_.mutable_phase()
@@ -1630,7 +1379,8 @@ TEST_F(ExampleQueryPlanEngineTest, SufficientData) {
               UpdateDatasetStats(kCollectionUri, 1, example.size()));
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1646,9 +1396,6 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQueryInsufficientData) {
   std::filesystem::path root_dir(testing::TempDir());
   std::filesystem::path output_path = root_dir / std::string("output.ckpt");
   output_checkpoint_filename_ = output_path.string();
-  tensorflow_runner_factory_ = []() {
-    return std::make_unique<TensorflowRunnerImpl>();
-  };
 
   const std::string kTensorName = "data";
   client_only_plan_.mutable_phase()
@@ -1669,11 +1416,7 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQueryInsufficientData) {
   aggregation_config.mutable_federated_compute_checkpoint_aggregation();
   (*aggregations)[kTensorName] = aggregation_config;
 
-  tensorflow::Example example_1;
-  (*example_1.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(1);
-  std::string example_1_str = example_1.SerializeAsString();
+  std::string example_1_str = "example_1";
 
   dataset_.clear_client_data();
   Dataset::ClientDataset client_dataset;
@@ -1682,7 +1425,7 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQueryInsufficientData) {
   dataset_.mutable_client_data()->Add(std::move(client_dataset));
 
   num_examples_ = 1;
-  example_bytes_ = example_1.ByteSizeLong();
+  example_bytes_ = example_1_str.size();
 
   example_iterator_factory_ =
       std::make_unique<FunctionalExampleIteratorFactory>(
@@ -1698,7 +1441,8 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQueryInsufficientData) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1716,9 +1460,6 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQuerySufficientData) {
   std::filesystem::path root_dir(testing::TempDir());
   std::filesystem::path output_path = root_dir / std::string("output.ckpt");
   output_checkpoint_filename_ = output_path.string();
-  tensorflow_runner_factory_ = []() {
-    return std::make_unique<TensorflowRunnerImpl>();
-  };
 
   const std::string kTensorName = "data";
   client_only_plan_.mutable_phase()
@@ -1739,11 +1480,7 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQuerySufficientData) {
   aggregation_config.mutable_federated_compute_checkpoint_aggregation();
   (*aggregations)[kTensorName] = aggregation_config;
 
-  tensorflow::Example example_1;
-  (*example_1.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(1);
-  std::string example_1_str = example_1.SerializeAsString();
+  std::string example_1_str = "example_1";
 
   dataset_.clear_client_data();
   Dataset::ClientDataset client_dataset;
@@ -1752,7 +1489,7 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQuerySufficientData) {
   dataset_.mutable_client_data()->Add(std::move(client_dataset));
 
   num_examples_ = 1;
-  example_bytes_ = example_1.ByteSizeLong();
+  example_bytes_ = example_1_str.size();
 
   example_iterator_factory_ =
       std::make_unique<FunctionalExampleIteratorFactory>(
@@ -1768,7 +1505,8 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQuerySufficientData) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1854,7 +1592,8 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithBytesValues) {
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       client_only_plan_.phase().example_query_spec(),
       output_checkpoint_filename_, /*use_client_report_wire_format=*/true,
@@ -1997,9 +1736,6 @@ class PrivacyIdSplittingTest : public testing::Test {
                     selector) {
               return std::make_unique<SimpleExampleIterator>(dataset);
             });
-    tensorflow_runner_factory_ = []() {
-      return std::make_unique<TensorflowRunnerImpl>();
-    };
   }
 
   absl::flat_hash_map<std::string, std::string> CreateExpectedTensors(
@@ -2026,7 +1762,6 @@ class PrivacyIdSplittingTest : public testing::Test {
   }
 
   engine::PlanResult RunPlan(const ExampleQuerySpec& spec,
-                             bool use_client_report_wire_format = true,
                              bool enable_event_time_data_upload = true,
                              std::optional<std::string> source_id = "source_id",
                              bool uses_confidential_agg = true,
@@ -2036,11 +1771,11 @@ class PrivacyIdSplittingTest : public testing::Test {
     ExampleQueryPlanEngine plan_engine(
         {example_iterator_factory_.get()}, &mock_opstats_logger_,
         /*example_iterator_query_recorder=*/nullptr,
-        tensorflow_runner_factory_);
+        /*tensorflow_runner_factory=*/nullptr);
     return plan_engine.RunPlan(
         spec, "unused output checkpoint filename",
-        use_client_report_wire_format, enable_event_time_data_upload, source_id,
-        uses_confidential_agg, enable_privacy_id_generation,
+        /*use_client_report_wire_format=*/true, enable_event_time_data_upload,
+        source_id, uses_confidential_agg, enable_privacy_id_generation,
         enable_private_logger, drop_out_based_data_availability);
   }
 
@@ -2050,8 +1785,6 @@ class PrivacyIdSplittingTest : public testing::Test {
   ExampleQueryResult example_query_result_;
   ClientOnlyPlan client_only_plan_;
   Dataset dataset_;
-  absl::AnyInvocable<std::unique_ptr<TensorflowRunner>() const>
-      tensorflow_runner_factory_;
 
   int num_examples_ = 0;
   int64_t example_bytes_ = 0;
@@ -2420,7 +2153,6 @@ TEST_F(PrivacyIdSplittingTest, PrivacyIdSplitEnabledEventTimeDisabled) {
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
   engine::PlanResult result = RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/false,
       /*source_id=*/"source_id", /*uses_confidential_agg=*/true,
       /*enable_privacy_id_generation=*/true, /*enable_private_logger=*/false);
@@ -2454,10 +2186,10 @@ TEST_F(PrivacyIdSplittingTest,
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/true,
       /*source_id=*/"source_id", /*uses_confidential_agg=*/false,
       /*enable_privacy_id_generation=*/true, /*enable_private_logger=*/false);
@@ -2477,10 +2209,10 @@ TEST_F(PrivacyIdSplittingTest,
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = RunPlan(
       client_only_plan_.phase().example_query_spec(),
-      /*use_client_report_wire_format=*/true,
       /*enable_event_time_data_upload=*/true,
       /*source_id=*/std::nullopt, /*uses_confidential_agg=*/true,
       /*enable_privacy_id_generation=*/true, /*enable_private_logger=*/false);
@@ -2525,7 +2257,6 @@ TEST_F(PrivacyIdSplittingTest, PrivacyIdSplitDisabledFlagDisabled) {
       UpdateDatasetStats(kCollectionUri, num_examples_, example_bytes_));
   engine::PlanResult result =
       RunPlan(client_only_plan_.phase().example_query_spec(),
-              /*use_client_report_wire_format=*/true,
               /*enable_event_time_data_upload=*/true,
               /*source_id=*/"source_id", /*uses_confidential_agg=*/true,
               /*enable_privacy_id_generation=*/false);
@@ -2581,7 +2312,8 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerOnlyEntriesPresent) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       spec, output_checkpoint_filename_,
       /*use_client_report_wire_format=*/true,
@@ -2666,7 +2398,8 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerEntryAsBytes) {
 
   ExampleQueryPlanEngine plan_engine(
       {example_iterator_factory_.get()}, &mock_opstats_logger_,
-      /*example_iterator_query_recorder=*/nullptr, tensorflow_runner_factory_);
+      /*example_iterator_query_recorder=*/nullptr,
+      /*tensorflow_runner_factory=*/nullptr);
   engine::PlanResult result = plan_engine.RunPlan(
       spec, output_checkpoint_filename_,
       /*use_client_report_wire_format=*/true,

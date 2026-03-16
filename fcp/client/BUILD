@@ -140,8 +140,6 @@ TF_OPTIONAL_DEFINES = select({
 })
 
 # This target only support example query plans, and it doesn't support TensorFlow based plans.
-# For TensorFlow based plans, make sure to also link in
-# //fcp/client/tensorflow:tensorflow_runner_impl_registration.
 cc_library(
     name = "fl_runner",
     srcs = ["fl_runner.cc"],
@@ -573,7 +571,6 @@ cc_library(
         ":fake_event_publisher",
         ":fl_runner",
         "//fcp/base",
-        "//fcp/client/tensorflow:tensorflow_runner_impl_registration",
         "//fcp/tensorflow:external_dataset_op_lib",
         "//fcp/tensorflow:task_eligibility_info_ops_lib",
         "@com_google_absl//absl/flags:flag",
