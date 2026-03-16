@@ -68,9 +68,6 @@
 #include "fcp/testing/testing.h"
 #include "google/protobuf/map.h"
 #include "google/protobuf/repeated_ptr_field.h"
-#include "tensorflow/core/example/example.pb.h"
-#include "tensorflow/core/framework/tensor_shape.pb.h"
-#include "tensorflow/core/protobuf/struct.pb.h"
 
 namespace fcp {
 namespace client {
@@ -845,15 +842,10 @@ void FlRunnerExampleQueryTest::SetUpDirectDataUploadTask() {
         ->mutable_federated_example_query()
         ->mutable_aggregations())["data_upload_tensor"] = aggregation_config;
 
-  tensorflow::Example example;
-  (*example.mutable_features()->mutable_feature())["col1"]
-      .mutable_int64_list()
-      ->add_value(1);
-
   dataset_.clear_client_data();
   Dataset::ClientDataset client_dataset;
   client_dataset.set_client_id("client_id");
-  client_dataset.add_example(example.SerializeAsString());
+  client_dataset.add_example("example");
   dataset_.mutable_client_data()->Add(std::move(client_dataset));
 
   // Set up the mock example iterator for running the "regular" task payload.

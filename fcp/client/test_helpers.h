@@ -64,9 +64,6 @@
 #include "fcp/protos/plan.pb.h"
 #include "fcp/protos/population_eligibility_spec.pb.h"
 #include "fcp/secagg/shared/secagg_messages.pb.h"
-#include "google/protobuf/repeated_ptr_field.h"
-#include "tensorflow/core/example/example.pb.h"
-#include "tensorflow/core/example/feature.pb.h"
 
 namespace fcp {
 namespace client {
@@ -728,16 +725,6 @@ class MockFlags : public Flags {
   MOCK_METHOD(bool, drop_out_based_data_availability, (), (const, override));
   MOCK_METHOD(bool, enable_private_logger, (), (const, override));
 };
-
-// Helper methods for extracting opstats fields from TF examples.
-std::string ExtractSingleString(const tensorflow::Example& example,
-                                const char key[]);
-google::protobuf::RepeatedPtrField<std::string> ExtractRepeatedString(
-    const tensorflow::Example& example, const char key[]);
-int64_t ExtractSingleInt64(const tensorflow::Example& example,
-                           const char key[]);
-google::protobuf::RepeatedField<int64_t> ExtractRepeatedInt64(
-    const tensorflow::Example& example, const char key[]);
 
 class MockOpStatsDb : public ::fcp::client::opstats::OpStatsDb {
  public:

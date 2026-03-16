@@ -37,6 +37,7 @@
 #include "fcp/protos/opstats.pb.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/util/time_util.h"
 #include "tensorflow/core/example/example.pb.h"
 #include "tensorflow/core/example/feature.pb.h"
@@ -53,6 +54,26 @@ using ::testing::ElementsAreArray;
 using ::testing::Return;
 
 constexpr char kTestTaskName[] = "stefans_really_cool_task";
+
+std::string ExtractSingleString(const tensorflow::Example& example,
+                                const char key[]) {
+  return example.features().feature().at(key).bytes_list().value().at(0);
+}
+
+google::protobuf::RepeatedPtrField<std::string> ExtractRepeatedString(
+    const tensorflow::Example& example, const char key[]) {
+  return example.features().feature().at(key).bytes_list().value();
+}
+
+int64_t ExtractSingleInt64(const tensorflow::Example& example,
+                           const char key[]) {
+  return example.features().feature().at(key).int64_list().value().at(0);
+}
+
+google::protobuf::RepeatedField<int64_t> ExtractRepeatedInt64(
+    const tensorflow::Example& example, const char key[]) {
+  return example.features().feature().at(key).int64_list().value();
+}
 
 class OpStatsExampleStoreTest : public testing::Test {
  public:

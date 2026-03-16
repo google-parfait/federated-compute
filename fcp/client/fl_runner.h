@@ -29,7 +29,6 @@
 #include "fcp/client/federated_select.h"
 #include "fcp/client/files.h"
 #include "fcp/client/fl_runner.pb.h"
-#include "fcp/client/fl_runner_tensorflow_spec_result.pb.h"
 #include "fcp/client/flags.h"
 #include "fcp/client/interruptible_runner.h"
 #include "fcp/client/log_manager.h"
@@ -100,19 +99,6 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
     absl::Time reference_time, const std::string& session_name,
     const std::string& population_name, Clock& clock);
-
-// This is exposed for use in compatibility tests only. Prod code should call
-// RunFederatedComputation.
-FLRunnerTensorflowSpecResult RunPlanWithTensorflowSpecForTesting(
-    SimpleTaskEnvironment* env_deps, EventPublisher* event_publisher,
-    Files* files, LogManager* log_manager, const Flags* flags,
-    const google::internal::federated::plan::ClientOnlyPlan& client_plan,
-    const std::string& checkpoint_input_filename,
-    const fcp::client::InterruptibleRunner::TimingConfig& timing_config,
-    absl::Time run_plan_start_time, absl::Time reference_time,
-    std::optional<
-        ::google::internal::federated::plan::PopulationEligibilitySpec>
-        population_eligibility_spec);
 
 }  // namespace client
 }  // namespace fcp
