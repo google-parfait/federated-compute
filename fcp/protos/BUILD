@@ -72,7 +72,6 @@ tf_proto_library(
     srcs = ["plan.proto"],
     protodeps = [
         ":data_type_proto",
-        "@org_tensorflow//tensorflow/core:protos_all",
         "//fcp/protos/confidentialcompute:windowing_schedule_proto",
     ],
     visibility = default_visibility,

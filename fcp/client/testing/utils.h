@@ -38,7 +38,6 @@ namespace fcp::client::testing {
 
 using google::internal::federated::plan::Dataset;
 using google::internal::federated::plan::ExampleSelector;
-using google::internal::federated::plan::Plan;
 using google::internal::federatedml::v2::RetryWindow;
 
 inline std::string MakeTestFileName(absl::string_view dir,
