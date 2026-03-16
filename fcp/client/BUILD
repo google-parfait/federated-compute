@@ -247,45 +247,6 @@ cc_test(
 )
 
 cc_library(
-    name = "lc_runner",
-    srcs = ["lc_runner.cc"],
-    hdrs = [
-        "lc_runner.h",
-    ],
-    copts = FCP_COPTS,
-    defines = TF_OPTIONAL_DEFINES,
-    visibility = ["//visibility:public"],
-    deps = [
-        ":diag_codes_cc_proto",
-        ":example_iterator_query_recorder",
-        ":interfaces",
-        ":interruptible_runner",
-        ":phase_logger",
-        ":phase_logger_impl",
-        ":runner_common",
-        ":selector_context_cc_proto",
-        ":simple_task_environment",
-        "//fcp/base",
-        "//fcp/client/engine:common",
-        "//fcp/client/engine:example_iterator_factory",
-        "//fcp/client/engine:plan_engine_helpers",
-        "//fcp/client/engine:tflite_plan_engine",
-        "//fcp/client/opstats:opstats_example_store",
-        "//fcp/client/opstats:opstats_logger",
-        "//fcp/client/opstats:opstats_logger_impl",
-        "//fcp/protos:plan_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
-        "@org_tensorflow//tensorflow/core:framework",
-        "@org_tensorflow//tensorflow/core:protos_all_cc",
-        "@org_tensorflow//tensorflow/core/platform:tstring",
-    ] + TF_OPTIONAL_DEPS,
-)
-
-cc_library(
     name = "eligibility_decider",
     srcs = ["eligibility_decider.cc"],
     hdrs = ["eligibility_decider.h"],
@@ -571,8 +532,6 @@ cc_library(
         ":fake_event_publisher",
         ":fl_runner",
         "//fcp/base",
-        "//fcp/tensorflow:external_dataset_op_lib",
-        "//fcp/tensorflow:task_eligibility_info_ops_lib",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/flags:usage",
@@ -587,7 +546,6 @@ cc_binary(
     testonly = True,
     deps = [
         ":client_runner_main_lib",
-        "@org_tensorflow//tensorflow/core:tensorflow_opensource",
     ],
 )
 

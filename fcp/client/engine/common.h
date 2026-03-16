@@ -19,20 +19,19 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "fcp/client/engine/engine.pb.h"
 #include "fcp/client/engine/example_iterator_factory.h"
+#include "fcp/client/engine/external_dataset_iterator.h"
 #include "fcp/client/example_iterator_query_recorder.h"
 #include "fcp/client/federated_protocol.h"
 #include "fcp/client/opstats/opstats_logger.h"
@@ -42,7 +41,6 @@
 #include "fcp/protos/data_type.pb.h"
 #include "fcp/protos/federated_api.pb.h"
 #include "fcp/protos/plan.pb.h"
-#include "fcp/tensorflow/external_dataset.h"
 
 namespace fcp {
 namespace client {
@@ -89,12 +87,6 @@ struct PlanResult {
   PlanResult(const PlanResult&) = delete;
   PlanResult& operator=(const PlanResult&) = delete;
 };
-
-// Validates that the input tensors match what's inside the TensorflowSpec.
-absl::Status ValidateTensorflowSpec(
-    const google::internal::federated::plan::TensorflowSpec& tensorflow_spec,
-    const absl::flat_hash_set<std::string>& expected_input_tensor_names_set,
-    const std::vector<std::string>& output_names);
 
 PhaseOutcome ConvertPlanOutcomeToPhaseOutcome(PlanOutcome plan_outcome);
 

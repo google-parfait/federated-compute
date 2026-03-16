@@ -27,39 +27,6 @@ package(
 )
 
 cc_library(
-    name = "plan_engine",
-    srcs = [
-        "simple_plan_engine.cc",
-    ],
-    hdrs = [
-        "simple_plan_engine.h",
-    ],
-    copts = FCP_COPTS,
-    visibility = default_visibility,
-    deps = [
-        ":common",
-        ":example_iterator_factory",
-        ":plan_engine_helpers",
-        ":tensorflow_utils",
-        ":tf_wrapper",
-        "//fcp/base",
-        "//fcp/client:example_iterator_query_recorder",
-        "//fcp/client:histogram_counters_cc_proto",
-        "//fcp/client:interfaces",
-        "//fcp/client:interruptible_runner",
-        "//fcp/client/opstats:opstats_logger",
-        "//fcp/protos:plan_cc_proto",
-        "//fcp/tensorflow:host_object",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@org_tensorflow//tensorflow/core:framework",
-        "@org_tensorflow//tensorflow/core:protos_all_cc",
-    ],
-)
-
-cc_library(
     name = "privacy_id_utils",
     srcs = [
         "privacy_id_utils.cc",
@@ -190,178 +157,6 @@ cc_test(
     ],
 )
 
-# A plan-engine independent wrapper around TF that supports cancellation.
-cc_library(
-    name = "tf_wrapper",
-    srcs = ["tf_wrapper.cc"],
-    hdrs = ["tf_wrapper.h"],
-    copts = FCP_COPTS,
-    visibility = ["//visibility:private"],
-    deps = [
-        ":plan_engine_helpers",
-        "//fcp/base",
-        "//fcp/client:diag_codes_cc_proto",
-        "//fcp/client:interfaces",
-        "//fcp/client:interruptible_runner",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_protobuf//:protobuf",
-        "@org_tensorflow//tensorflow/core:core_cpu",
-        "@org_tensorflow//tensorflow/core:framework",
-    ],
-)
-
-cc_test(
-    name = "tf_wrapper_test",
-    srcs = ["tf_wrapper_test.cc"],
-    deps = [
-        ":tf_wrapper",
-        "//fcp/base",
-        "//fcp/testing",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
-        "@org_tensorflow//tensorflow/core:protos_all_cc",
-    ],
-)
-
-cc_library(
-    name = "plan_engine_helpers",
-    srcs = ["plan_engine_helpers.cc"],
-    hdrs = ["plan_engine_helpers.h"],
-    copts = FCP_COPTS,
-    visibility = default_visibility,
-    deps = [
-        ":common",
-        ":example_iterator_factory",
-        "//fcp/client:diag_codes_cc_proto",
-        "//fcp/client:example_iterator_query_recorder",
-        "//fcp/client:simple_task_environment",
-        "//fcp/client/opstats:opstats_logger",
-        "//fcp/protos:plan_cc_proto",
-        "//fcp/tensorflow:external_dataset",
-        "//fcp/tensorflow:host_object",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/synchronization",
-        "@org_tensorflow//tensorflow/core:framework",
-        "@org_tensorflow//tensorflow/core/platform:tstring",
-    ],
-)
-
-cc_library(
-    name = "tflite_wrapper",
-    srcs = ["tflite_wrapper.cc"],
-    hdrs = ["tflite_wrapper.h"],
-    deps = [
-        ":caching_error_reporter",
-        "//fcp/base",
-        "//fcp/client:diag_codes_cc_proto",
-        "//fcp/client:interfaces",
-        "//fcp/client:interruptible_runner",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_protobuf//:protobuf",
-        "@org_tensorflow//tensorflow/core:framework",
-        "@org_tensorflow//tensorflow/lite:framework",
-        "@org_tensorflow//tensorflow/lite:framework_experimental",
-        "@org_tensorflow//tensorflow/lite:string_util",
-        "@org_tensorflow//tensorflow/lite/c:c_api_types",
-        "@org_tensorflow//tensorflow/lite/delegates/flex:delegate_only_runtime",
-        "@org_tensorflow//tensorflow/lite/delegates/flex:util",
-        "@org_tensorflow//tensorflow/lite/delegates/utils:simple_delegate",
-        "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
-    ],
-)
-
-cc_test(
-    name = "tflite_wrapper_test",
-    srcs = ["tflite_wrapper_test.cc"],
-    data = [
-        "//fcp/client/engine/data:join_model.flatbuffer",
-        "//fcp/client/engine/data:length_model.flatbuffer",
-    ],
-    deps = [
-        ":tflite_wrapper",
-        "//fcp/base",
-        "//fcp/client:interruptible_runner",
-        "//fcp/client:test_helpers",
-        "//fcp/testing",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
-        "@com_google_googletest//:gtest_main",
-        "@org_tensorflow//tensorflow/core/kernels:string_join_op",
-        "@org_tensorflow//tensorflow/core/ops:string_ops_op_lib",
-        "@org_tensorflow//tensorflow/core/platform:tstring",
-    ],
-)
-
-cc_library(
-    name = "tflite_plan_engine",
-    srcs = [
-        "tflite_plan_engine.cc",
-    ],
-    hdrs = [
-        "tflite_plan_engine.h",
-    ],
-    copts = FCP_COPTS,
-    deps = [
-        ":common",
-        ":example_iterator_factory",
-        ":plan_engine_helpers",
-        ":tensorflow_utils",
-        ":tflite_wrapper",
-        "//fcp/base",
-        "//fcp/client:diag_codes_cc_proto",
-        "//fcp/client:example_iterator_query_recorder",
-        "//fcp/client:interfaces",
-        "//fcp/client:interruptible_runner",
-        "//fcp/client/opstats:opstats_logger",
-        "//fcp/protos:plan_cc_proto",
-        "//fcp/tensorflow:host_object",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@org_tensorflow//tensorflow/core:framework",
-        "@org_tensorflow//tensorflow/core:protos_all_cc",
-        "@org_tensorflow//tensorflow/core/platform:tstring",
-    ],
-)
-
-cc_library(
-    name = "caching_error_reporter",
-    srcs = ["caching_error_reporter.cc"],
-    hdrs = ["caching_error_reporter.h"],
-    deps = [
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/synchronization",
-        "@org_tensorflow//tensorflow/lite/core/api:error_reporter",
-    ],
-)
-
-cc_test(
-    name = "caching_error_reporter_test",
-    srcs = ["caching_error_reporter_test.cc"],
-    deps = [
-        ":caching_error_reporter",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-        "@org_tensorflow//tensorflow/lite/core/api:error_reporter",
-    ],
-)
-
 cc_library(
     name = "common",
     srcs = ["common.cc"],
@@ -369,6 +164,7 @@ cc_library(
     deps = [
         ":engine_cc_proto",
         ":example_iterator_factory",
+        ":external_dataset_iterator",
         "//fcp/base",
         "//fcp/client:example_iterator_query_recorder",
         "//fcp/client:federated_protocol",
@@ -379,16 +175,12 @@ cc_library(
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:plan_cc_proto",
         "//fcp/protos/confidentialcompute:payload_metadata_cc_proto",
-        "//fcp/tensorflow:external_dataset",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
-        "@org_tensorflow//tensorflow/core:protos_all_cc",
     ],
 )
 
@@ -406,34 +198,10 @@ cc_library(
 )
 
 cc_library(
-    name = "tensorflow_utils",
-    srcs = ["tensorflow_utils.cc"],
-    hdrs = ["tensorflow_utils.h"],
+    name = "external_dataset_iterator",
+    hdrs = ["external_dataset_iterator.h"],
     deps = [
-        "//fcp/client:federated_protocol",
-        "//fcp/protos:federated_api_cc_proto",
-        "//fcp/protos:plan_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@org_tensorflow//tensorflow/core:framework",
-        "@org_tensorflow//tensorflow/core:protos_all_cc",
-        "@org_tensorflow//tensorflow/core/platform:tstring",
-    ],
-)
-
-cc_test(
-    name = "tensorflow_utils_test",
-    srcs = ["tensorflow_utils_test.cc"],
-    deps = [
-        ":tensorflow_utils",
-        "//fcp/protos:federated_api_cc_proto",
-        "//fcp/testing",
-        "@com_google_absl//absl/status",
-        "@com_google_googletest//:gtest_main",
-        "@org_tensorflow//tensorflow/core:framework",
-        "@org_tensorflow//tensorflow/core/platform:tstring",
     ],
 )
 

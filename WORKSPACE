@@ -79,15 +79,9 @@ python_register_toolchains(
 
 load("@python//:defs.bzl", "interpreter")  # buildifier: disable=load-on-top
 load("@rules_python//python:pip.bzl", "package_annotation", "pip_parse")  # buildifier: disable=load-on-top
-load("//fcp/tensorflow/pip_tf:defs.bzl", "TF_ADDITIVE_BUILD_CONTENT")  # buildifier: disable=load-on-top
 
 pip_parse(
     name = "pypi",
-    annotations = {
-        "tensorflow": package_annotation(
-            additive_build_content = TF_ADDITIVE_BUILD_CONTENT,
-        ),
-    },
     python_interpreter_target = interpreter,
     requirements_lock = "//fcp:requirements.txt",
 )
