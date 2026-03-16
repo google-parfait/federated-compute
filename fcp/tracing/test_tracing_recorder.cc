@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/strings/str_cat.h"
 #include "fcp/tracing/test_tracing_recorder_impl.h"
 #include "fcp/tracing/tracing_severity.h"
 #include "fcp/tracing/tracing_tag.h"
