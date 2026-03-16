@@ -33,7 +33,7 @@ cc_library(
         "//fcp/client:selector_context_cc_proto",
         "//fcp/client:simple_task_environment",
         "//fcp/protos:federated_api_cc_proto",
-        "//fcp/protos:plan_proto_cc",
+        "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

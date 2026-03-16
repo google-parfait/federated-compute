@@ -66,7 +66,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//fcp/base",
-        "//fcp/protos/confidentialcompute:windowing_schedule_proto_cc",
+        "//fcp/protos/confidentialcompute:windowing_schedule_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -83,7 +83,7 @@ cc_test(
     visibility = ["//visibility:public"],
     deps = [
         ":time_window_utilities",
-        "//fcp/protos/confidentialcompute:windowing_schedule_proto_cc",
+        "//fcp/protos/confidentialcompute:windowing_schedule_cc_proto",
         "//fcp/testing",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/time",
