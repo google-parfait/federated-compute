@@ -1066,8 +1066,8 @@ absl::StatusOr<std::string> ReleaseToken::Encode() const {
 
 #endif  // defined(FCP_CLIENT_SUPPORT_CONFIDENTIAL_AGG)
 
-template class cose_internal::BaseCwt<OkpKey>;
-template class cose_internal::BaseCwt<Ec2Key>;
+template struct cose_internal::BaseCwt<OkpKey>;
+template struct cose_internal::BaseCwt<Ec2Key>;
 
 // Encodes an integer as a CBOR integer, using the deterministic CBOR format
 // (RFC 8994 Section 4.2.1). Not all ranges are currently supported.
