@@ -92,7 +92,9 @@ message FedSqlContainerFinalizeConfiguration {
   AggCoreFinalizationType type = 1;
 
   // The number of partitions to use for the partitioned output. This is only
-  // used when `type` is `FINALIZATION_TYPE_PARTITION`.
+  // used when `type` is `FINALIZATION_TYPE_PARTITION`. This value must be less
+  // than or equal to `max_output_partitions` in
+  // `FedSqlContainerConfigConstraints`.
   uint64 num_partitions = 3;
 
   reserved 2;
@@ -137,7 +139,8 @@ message FedSqlContainerConfigConstraints {
   google.protobuf.Any dp_windowing_schedule = 6;
 
   // The uri of the aggregation intrinsic to use with AggCore.
-  string intrinsic_uri = 3;
+  // Use `intrinsic_uris` instead.
+  string intrinsic_uri = 3 [deprecated = true];
 
   // Defines limits on the accesses to blobs.
   AccessBudget access_budget = 4;
@@ -145,4 +148,8 @@ message FedSqlContainerConfigConstraints {
   // The uris of the aggregation intrinsics to use with AggCore. If non-empty,
   // this field is used instead of `intrinsic_uri`.
   repeated string intrinsic_uris = 7;
+
+  // This value represents an upper bound on the number of partitions that can
+  // be used when performing partitioned aggregation.
+  uint64 max_output_partitions = 8;
 }
