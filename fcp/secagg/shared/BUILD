@@ -82,7 +82,6 @@ cc_library(
         "//fcp/base",
         "@boringssl//:crypto",
         "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/base:endian",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/numeric:bits",
