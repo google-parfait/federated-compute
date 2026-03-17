@@ -32,8 +32,8 @@ service DataReadWrite {
 message ReadRequest {
   // Data URI to be resolved.
   string uri = 1;
-  // A nonce to prevent replay attacks.
-  bytes nonce = 2;
+
+  reserved 2;
 }
 
 // Read response with the data resolved from the URI.
