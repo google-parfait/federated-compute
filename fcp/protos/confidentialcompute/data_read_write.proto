@@ -70,8 +70,8 @@ message WriteRequest {
 
 // Write response.
 message WriteResponse {
-  // Deprecated.
-  google.protobuf.Any reply = 1 [deprecated = true];
   // The URI of the written data.
   string file_uri = 2;
+
+  reserved 1;
 }
