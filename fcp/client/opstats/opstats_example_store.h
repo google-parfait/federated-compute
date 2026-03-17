@@ -21,44 +21,19 @@
 #include "absl/status/statusor.h"
 #include "fcp/client/engine/example_iterator_factory.h"
 #include "fcp/client/log_manager.h"
-#include "fcp/client/opstats/opstats_logger.h"
-#include "fcp/client/simple_task_environment.h"
 #include "fcp/protos/plan.pb.h"
 
 namespace fcp {
 namespace client {
 namespace opstats {
 inline static constexpr char kOpStatsCollectionUri[] = "internal:/opstats";
-inline static constexpr char kPopulationName[] = "population_name";
-inline static constexpr char kSessionName[] = "session_name";
-inline static constexpr char kTaskName[] = "task_name";
-inline static constexpr char kEventsEventType[] = "events-event_type";
-inline static constexpr char kEventsTimestampMillis[] = "events-timestamp";
-inline static constexpr char kDatasetStatsUri[] = "dataset_stats-uri";
-inline static constexpr char kDatasetStatsNumExamplesRead[] =
-    "dataset_stats-num_examples_read";
-inline static constexpr char kDatasetStatsNumBytesRead[] =
-    "dataset_stats-num_bytes_read";
-inline static constexpr char kErrorMessage[] = "error_message";
-inline static constexpr char kRetryWindowDelayMinMillis[] =
-    "retry_window-delay_min";
-inline static constexpr char kRetryWindowDelayMaxMillis[] =
-    "retry_window-delay_max";
-inline static constexpr char kChunkingLayerBytesDownloaded[] =
-    "chunking_layer_bytes_downloaded";
-inline static constexpr char kChunkingLayerBytesUploaded[] =
-    "chunking_layer_bytes_uploaded";
-inline static constexpr char kNetworkDuration[] = "network_duration";
-inline static constexpr char kEarliestTrustWorthyTimeMillis[] =
-    "earliest_trustworthy_time";
 inline static constexpr char kSupportsNeetContext[] = "supports_neet_context";
 
 class OpStatsExampleIteratorFactory
     : public fcp::client::engine::ExampleIteratorFactory {
  public:
-  OpStatsExampleIteratorFactory(OpStatsLogger* op_stats_logger,
-                                LogManager* log_manager)
-      : op_stats_logger_(op_stats_logger), log_manager_(log_manager) {}
+  explicit OpStatsExampleIteratorFactory(LogManager* log_manager)
+      : log_manager_(log_manager) {}
 
   bool CanHandle(const google::internal::federated::plan::ExampleSelector&
                      example_selector) override;
@@ -70,7 +45,6 @@ class OpStatsExampleIteratorFactory
           example_selector) override;
 
  private:
-  OpStatsLogger* op_stats_logger_;
   LogManager* log_manager_;
 };
 

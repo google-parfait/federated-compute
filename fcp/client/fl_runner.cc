@@ -1899,7 +1899,7 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   // Eligibility eval plans can use example iterators from the
   // SimpleTaskEnvironment and those reading the OpStats DB.
   opstats::OpStatsExampleIteratorFactory opstats_example_iterator_factory(
-      opstats_logger, log_manager);
+      log_manager);
   // This iterator factory is used by the task to query the environment's
   // example store for eligibility, and thus does not log first access time
   // since we do not implement example-level SWOR for eligibility.

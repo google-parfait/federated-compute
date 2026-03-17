@@ -83,10 +83,6 @@ class OpStatsLogger {
   // failed to initialize.
   absl::Status GetInitStatus() { return init_status_; }
 
-  // Returns the task name of the currently executing task. Only returns a valid
-  // task name if called after `AddEventAndSetTaskName` is called.
-  virtual std::string GetCurrentTaskName() { return ""; }
-
   // Start logging stats for a new Phase.
   virtual void StartLoggingForPhase(OperationalStats::PhaseStats::Phase phase) {
   }

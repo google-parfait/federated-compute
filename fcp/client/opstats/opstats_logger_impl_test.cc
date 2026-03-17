@@ -615,9 +615,6 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsAddEventAndSetTaskName) {
   opstats_logger->AddEventAndSetTaskName(
       kTaskName, OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
   opstats_logger->StopLoggingForTheCurrentPhase();
-
-  ASSERT_EQ(opstats_logger->GetCurrentTaskName(), kTaskName);
-
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
@@ -702,9 +699,6 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsAddEvent) {
   opstats_logger->AddEvent(
       OperationalStats::Event::EVENT_KIND_COMPUTATION_CLIENT_INTERRUPTED);
   opstats_logger->StopLoggingForTheCurrentPhase();
-
-  ASSERT_EQ(opstats_logger->GetCurrentTaskName(), task_2);
-
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
@@ -764,9 +758,6 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsAddEventWithErrorMessage) {
       OperationalStats::Event::EVENT_KIND_COMPUTATION_ERROR_TENSORFLOW,
       error_message);
   opstats_logger->StopLoggingForTheCurrentPhase();
-
-  ASSERT_EQ(opstats_logger->GetCurrentTaskName(), kTaskName);
-
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
@@ -857,9 +848,6 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsUpdateDatasetStats) {
                                      example_size_3);
 
   opstats_logger->StopLoggingForTheCurrentPhase();
-
-  ASSERT_EQ(opstats_logger->GetCurrentTaskName(), kTaskName);
-
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
@@ -1120,38 +1108,6 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsLogCommitLogCommitKeepsAllEntries) {
   CheckEqualProtosAndIncreasingTimestamps(start_time, expected, *data);
 }
 
-TEST_F(OpStatsLoggerImplTest, PhaseStatsGetCurrentTaskName) {
-  auto start_time = TimeUtil::GetCurrentTime();
-  ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
-                             /*num_opstats_commits*/ 1);
-
-  auto opstats_logger =
-      CreateOpStatsLogger(base_dir_, &mock_flags_, &mock_log_manager_,
-                          kSessionName, kPopulationName);
-  opstats_logger->StartLoggingForPhase(
-      OperationalStats::PhaseStats::COMPUTATION);
-  opstats_logger->AddEventAndSetTaskName(
-      kTaskName, OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
-  opstats_logger->AddEvent(
-      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
-  ASSERT_EQ(opstats_logger->GetCurrentTaskName(), kTaskName);
-  opstats_logger->StopLoggingForTheCurrentPhase();
-  ASSERT_EQ(opstats_logger->GetCurrentTaskName(), kTaskName);
-
-  opstats_logger->StartLoggingForPhase(
-      OperationalStats::PhaseStats::COMPUTATION);
-  const std::string task_name_2 = "task_name_2";
-  opstats_logger->AddEventAndSetTaskName(
-      task_name_2, OperationalStats::Event::EVENT_KIND_COMPUTATION_STARTED);
-  ASSERT_EQ(opstats_logger->GetCurrentTaskName(), task_name_2);
-  opstats_logger->AddEvent(
-      OperationalStats::Event::EVENT_KIND_COMPUTATION_FINISHED);
-  opstats_logger->StopLoggingForTheCurrentPhase();
-
-  ASSERT_EQ(opstats_logger->GetCurrentTaskName(), task_name_2);
-  opstats_logger.reset();
-}
-
 TEST_F(OpStatsLoggerImplTest, PhaseStatsStopCurrentPhaseLoggingNotCalled) {
   auto start_time = TimeUtil::GetCurrentTime();
   ExpectOpstatsEnabledEvents(/*num_opstats_loggers=*/1,
@@ -1249,9 +1205,6 @@ TEST_F(OpStatsLoggerImplTest, PhaseStatsSetMinSepPolicyIndex) {
       kTaskName, OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED);
   opstats_logger->SetMinSepPolicyIndex(1);
   opstats_logger->StopLoggingForTheCurrentPhase();
-
-  ASSERT_EQ(opstats_logger->GetCurrentTaskName(), kTaskName);
-
   opstats_logger.reset();
 
   auto db = PdsBackedOpStatsDb::Create(
