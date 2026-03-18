@@ -50,8 +50,50 @@ using ::tensorflow_federated::aggregation::CheckpointParser;
 using ::tensorflow_federated::aggregation::
     FederatedComputeCheckpointParserFactory;
 
-const int64_t kFixedMaxDecryptors = 1;
-const int64_t kFixedMaxDecryptorDropouts = 0;
+namespace {
+
+// Parses a serialized FCCheckpoint `inner_payload` and populates the provided
+// `group_by_data` and `metric_data`.
+absl::Status ParseFCCheckpoint(
+    absl::string_view inner_payload,
+    const secure_aggregation::willow::InputSpec& input_spec_proto,
+    secure_aggregation::willow::GroupData& group_by_data,
+    secure_aggregation::willow::MetricData& metric_data) {
+  // Temporary solution to integrate Willow with minimal changes in
+  // the existing code:
+  //    Copy to Cord and deserialize the inner_payload, which comes from a
+  //    CopyCordToString of a serialized ExampleQueryResult in
+  //    ReportViaOneShotAggregation.
+  // TODO: b/493222177 - Avoid unnecessary copy.
+  absl::Cord inner_payload_cord(inner_payload);
+  FederatedComputeCheckpointParserFactory parser_factory;
+  FCP_ASSIGN_OR_RETURN(std::unique_ptr<CheckpointParser> parser,
+                       parser_factory.Create(inner_payload_cord));
+
+  // Use the names in InputSpec to retrieve the tensors from the parser.
+  for (const auto& spec : input_spec_proto.group_by_vector_specs()) {
+    FCP_ASSIGN_OR_RETURN(auto tensor, parser->GetTensor(spec.vector_name()));
+    // ToStringVector performs an implicit conversion to string, since the
+    // encoder expects strings for group-by vectors. This is useful to handle
+    // data with categorical group-bys. However the corresponding type in the
+    // InputSpec should be STRING.
+    // TODO: b/493222177 - Use more efficient conversion to string.
+    group_by_data[spec.vector_name()] = tensor.ToStringVector();
+  }
+  for (const auto& spec : input_spec_proto.metric_vector_specs()) {
+    FCP_ASSIGN_OR_RETURN(auto tensor, parser->GetTensor(spec.vector_name()));
+    if (tensor.dtype() != tensorflow_federated::aggregation::DT_INT64) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Unsupported metric data type for vector: ", spec.vector_name()));
+    }
+    // TODO: b/493222177 - Use more generic or efficient conversion.
+    auto span = tensor.AsSpan<int64_t>();
+    metric_data[spec.vector_name()].assign(span.begin(), span.end());
+  }
+  return absl::OkStatus();
+}
+
+}  // namespace
 
 absl::StatusOr<std::string>
 WillowPayloadEncryptorImpl::EncryptAndSerializePayload(
@@ -81,61 +123,21 @@ WillowPayloadEncryptorImpl::EncryptAndSerializePayload(
   blob_header.set_blob_id(nonce);
   blob_header.set_key_id(key_id);
 
-  secure_aggregation::willow::AggregationConfigProto config_proto;
-  config_proto.set_max_number_of_clients(willow_agg_info.max_number_of_clients);
-  config_proto.set_max_number_of_decryptors(kFixedMaxDecryptors);
-  config_proto.set_max_decryptor_dropouts(kFixedMaxDecryptorDropouts);
-  config_proto.set_key_id(key_id);
+  FCP_ASSIGN_OR_RETURN(
+      secure_aggregation::willow::AggregationConfigProto config_proto,
+      secure_aggregation::CreateAggregationConfig(
+          input_spec_proto, key_id, willow_agg_info.max_number_of_clients));
 
-  // Build vector_configs from input_spec.
-  int64_t length = 1;
-  for (const auto& spec : input_spec_proto.group_by_vector_specs()) {
-    length *= spec.domain_spec().string_values().values_size();
-  }
-  for (const auto& spec : input_spec_proto.metric_vector_specs()) {
-    auto& config = (*config_proto.mutable_vector_configs())[spec.vector_name()];
-    config.set_length(length);
-    if (spec.has_domain_spec() && spec.domain_spec().has_interval()) {
-      config.set_bound(
-          static_cast<int64_t>(spec.domain_spec().interval().max()));
-    } else {
-      config.set_bound(1LL << 30);
-    }
-  }
-
-  // Willow encoded data to be populated from the inner_payload.
-  absl::flat_hash_map<std::string, std::vector<std::string>> group_by_data;
-  absl::flat_hash_map<std::string, std::vector<int64_t>> metric_data;
-
-  // Temporary solution to integrate Willow with minimal changes in
-  // the existing code:
-  //    Copy to Cord and deserialize the inner_payload, which comes from a
-  //    CopyCordToString of a serialized ExampleQueryResult in
-  //    ReportViaOneShotAggregation.
-  FederatedComputeCheckpointParserFactory parser_factory;
-  absl::Cord inner_payload_cord(inner_payload);
-  FCP_ASSIGN_OR_RETURN(std::unique_ptr<CheckpointParser> parser,
-                       parser_factory.Create(inner_payload_cord));
-
-  // Use the names in InputSpec to retrieve the tensors from the parser.
-  for (const auto& spec : input_spec_proto.group_by_vector_specs()) {
-    FCP_ASSIGN_OR_RETURN(auto tensor, parser->GetTensor(spec.vector_name()));
-    group_by_data[spec.vector_name()] = tensor.ToStringVector();
-  }
-  for (const auto& spec : input_spec_proto.metric_vector_specs()) {
-    FCP_ASSIGN_OR_RETURN(auto tensor, parser->GetTensor(spec.vector_name()));
-    if (tensor.dtype() != tensorflow_federated::aggregation::DT_INT64) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Unsupported metric data type for vector: ", spec.vector_name()));
-    }
-    auto span = tensor.AsSpan<int64_t>();
-    metric_data[spec.vector_name()].assign(span.begin(), span.end());
-  }
+  secure_aggregation::willow::GroupData group_by_data;
+  secure_aggregation::willow::MetricData metric_data;
+  FCP_RETURN_IF_ERROR(ParseFCCheckpoint(inner_payload, input_spec_proto,
+                                        group_by_data, metric_data));
 
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<secure_aggregation::willow::Codec> encoder,
       secure_aggregation::willow::CodecFactory::CreateExplicitCodec(
           input_spec_proto, willow_agg_info.max_flattened_domain_size));
+
   FCP_ASSIGN_OR_RETURN(secure_aggregation::willow::EncodedData encoded_data,
                        encoder->Encode(group_by_data, metric_data));
 
