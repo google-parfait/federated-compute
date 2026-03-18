@@ -103,12 +103,12 @@ TEST(Worker, TasksAreExecutedSequentially) {
   for (int i = 0; i < 128; i++) {
     worker->Schedule([&mutex, &recorded, i] {
       // Expect that no one is holding the mutex (tests for non-overlap).
-      if (mutex.TryLock()) {
+      if (mutex.try_lock()) {
         // Add i to the recorded values (tests for execution in order).
         recorded.push_back(i);
         // Idle wait to be sure we don't execute faster than we schedule
         absl::SleepFor(absl::Milliseconds(50));
-        mutex.Unlock();
+        mutex.unlock();
       } else {
         FAIL() << "mutex was unexpectedly hold";
       }

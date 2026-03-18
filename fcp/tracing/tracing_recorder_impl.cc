@@ -48,7 +48,7 @@ class TracingState {
 
  public:
   std::shared_ptr<TracingRecorderImpl> GetRecorderImpl() {
-    absl::ReaderMutexLock lock(&mutex_);
+    absl::ReaderMutexLock lock(mutex_);
     TracingRecorderImpl* tracing_recorder =
         using_thread_local_state_ ? GetThreadLocalState().tracing_recorder
                                   : global_tracing_recorder_;
@@ -57,7 +57,7 @@ class TracingState {
   }
 
   void SetGlobalRecorderImpl(TracingRecorderImpl* impl) {
-    absl::WriterMutexLock lock(&mutex_);
+    absl::WriterMutexLock lock(mutex_);
     FCP_CHECK(!using_thread_local_state_)
         << "Global and thread local tracing recorders can't be used at the "
            "same time";
@@ -69,7 +69,7 @@ class TracingState {
 
   void SetThreadLocalRecorderImpl(TracingRecorderImpl* impl) {
     FCP_CHECK(impl != nullptr);
-    absl::WriterMutexLock lock(&mutex_);
+    absl::WriterMutexLock lock(mutex_);
     auto& thread_local_state = GetThreadLocalState();
     FCP_CHECK(global_tracing_recorder_ == nullptr)
         << "Global and thread local tracing recorders can't be used at the "
@@ -84,7 +84,7 @@ class TracingState {
 
   void ResetThreadLocalRecorderImpl(TracingRecorderImpl* impl) {
     FCP_CHECK(impl != nullptr);
-    absl::WriterMutexLock lock(&mutex_);
+    absl::WriterMutexLock lock(mutex_);
     auto& thread_local_state = GetThreadLocalState();
     FCP_CHECK(thread_local_state.tracing_recorder == impl &&
               thread_local_state.ref_count > 0)
@@ -96,7 +96,7 @@ class TracingState {
   }
 
   void EnsureNotSet(TracingRecorderImpl* impl) {
-    absl::WriterMutexLock lock(&mutex_);
+    absl::WriterMutexLock lock(mutex_);
     FCP_CHECK(global_tracing_recorder_ != impl)
         << "Trace recorder must not be set as global at destruction time";
     if (using_thread_local_state_) {

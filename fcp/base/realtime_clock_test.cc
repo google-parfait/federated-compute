@@ -32,7 +32,7 @@ class RealtimeClockTest : public Test {
   RealtimeClockTest() : start_(Clock::RealClock()->Now()) {}
 
   void OnWakeUp(int waiter_id) {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     waiter_ids_.push_back(waiter_id);
     waiter_intervals_.push_back(Clock::RealClock()->Now() - start_);
   }
@@ -73,7 +73,7 @@ TEST_F(RealtimeClockTest, MultipleTimerWakeUp) {
     return waiter_ids_.size() == 4;
   };
 
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   mu_.Await(absl::Condition(&test_done));
 
   // Verify the results

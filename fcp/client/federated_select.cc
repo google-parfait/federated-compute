@@ -265,7 +265,7 @@ HttpFederatedSelectManager::CreateExampleIteratorFactoryForUriTemplate(
 }
 
 absl::StatusOr<std::string> InMemoryFederatedSelectExampleIterator::Next() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
 
   if (slices_.empty()) {
     // Eagerly delete the scratch file, since we won't need it anymore.
@@ -304,7 +304,7 @@ InMemoryFederatedSelectExampleIterator::
 }
 
 void InMemoryFederatedSelectExampleIterator::CleanupInternal() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   // Remove the scratch filename, if it hadn't been removed yet.
   slices_.clear();
   std::filesystem::remove(scratch_filename_);

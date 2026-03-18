@@ -79,7 +79,7 @@ class FunctionRegistry {
   // See docs above for more details.
   template <typename KeyArg = Key>
   bool Register(const KeyArg& key, Function fn) {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     auto insert_result = functions_.emplace(key, std::move(fn));
 
     if (!insert_result.second) {
@@ -95,7 +95,7 @@ class FunctionRegistry {
   // See docs above for more details.
   template <typename KeyArg = Key>
   Function Get(const KeyArg& key) const {
-    absl::ReaderMutexLock lock(&mu_);
+    absl::ReaderMutexLock lock(mu_);
     Function fn;
     auto it = functions_.find(key);
     if (it != functions_.end()) {

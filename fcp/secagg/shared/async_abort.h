@@ -48,7 +48,7 @@ class AsyncAbort {
   // SecAggClient if it has already transitioned to a terminal state (aborted
   // or completed).
   void Abort(std::string message) {
-    absl::WriterMutexLock _(&mu_);
+    absl::WriterMutexLock _(mu_);
     message_ = message;
     *signal_ = &message_;
   }
@@ -61,7 +61,7 @@ class AsyncAbort {
   // Returns the abort message specified by the abort signal.
   // If Signalled() returns false, the value is undefined.
   ABSL_MUST_USE_RESULT std::string Message() const {
-    absl::ReaderMutexLock _(&mu_);
+    absl::ReaderMutexLock _(mu_);
     return **signal_;
   }
 

@@ -139,7 +139,7 @@ size_t CurlHttpRequestHandle::ProgressCallback(void* user_data,
                                                curl_off_t ultotal,
                                                curl_off_t ulnow) {
   auto self = static_cast<CurlHttpRequestHandle*>(user_data);
-  absl::MutexLock lock(&self->mutex_);
+  absl::MutexLock lock(self->mutex_);
   // Abort is any number except zero.
   return (self->is_cancelled_) ? 1 : 0;
 }
@@ -174,7 +174,7 @@ CurlHttpRequestHandle::~CurlHttpRequestHandle() {
 }
 
 void CurlHttpRequestHandle::Cancel() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
 
   if (callback_ == nullptr || is_cancelled_ || is_completed_) {
     return;
@@ -189,7 +189,7 @@ void CurlHttpRequestHandle::Cancel() {
 }
 
 void CurlHttpRequestHandle::MarkAsCompleted() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
 
   FCP_CHECK(callback_ != nullptr);
   if (!is_cancelled_ && !is_completed_) {
@@ -205,7 +205,7 @@ void CurlHttpRequestHandle::MarkAsCompleted() {
 
 absl::Status CurlHttpRequestHandle::AddToMulti(CurlMultiHandle* multi_handle,
                                                HttpRequestCallback* callback) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
 
   FCP_CHECK(callback != nullptr);
   FCP_CHECK(multi_handle != nullptr);
@@ -233,7 +233,7 @@ absl::Status CurlHttpRequestHandle::AddToMulti(CurlMultiHandle* multi_handle,
 }
 
 void CurlHttpRequestHandle::RemoveFromMulti(CurlMultiHandle* multi_handle) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
 
   FCP_CHECK(multi_handle != nullptr);
   CURLMcode code = multi_handle->RemoveEasyHandle(easy_handle_.get());
@@ -246,7 +246,7 @@ void CurlHttpRequestHandle::RemoveFromMulti(CurlMultiHandle* multi_handle) {
 
 HttpRequestHandle::SentReceivedBytes
 CurlHttpRequestHandle::TotalSentReceivedBytes() const {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   curl_off_t total_sent_bytes = 0;
   CURLcode code =
       easy_handle_->GetInfo(CURLINFO_SIZE_UPLOAD_T, &total_sent_bytes);

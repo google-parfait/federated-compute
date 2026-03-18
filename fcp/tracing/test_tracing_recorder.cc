@@ -61,7 +61,7 @@ void TestTracingRecorder::OnRoot(TracingSpanId id,
   auto unique_record = std::make_unique<Record>(id, std::move(data));
   root_record_ = unique_record.get();
   {
-    absl::MutexLock locked(&map_lock_);
+    absl::MutexLock locked(map_lock_);
     FCP_CHECK(id_to_record_map_.empty());
     id_to_record_map_[id] = std::move(unique_record);
   }
@@ -76,12 +76,12 @@ void TestTracingRecorder::OnTrace(TracingSpanId parent_id, TracingSpanId id,
   // the record.
   Record* record = unique_record.get();
   {
-    absl::MutexLock locked(&map_lock_);
+    absl::MutexLock locked(map_lock_);
     id_to_record_map_[id] = std::move(unique_record);
   }
   TracingTraitsBase const* traits = TraitsForRecord(record);
   if (traits->Severity() == TracingSeverity::kError) {
-    absl::MutexLock locked(&expected_errors_lock_);
+    absl::MutexLock locked(expected_errors_lock_);
     // We're interested here in errors only:
     TracingTag error_tag = *TracingTag::FromFlatbuf(record->data);
     EXPECT_TRUE(expected_errors_.contains(error_tag))
@@ -138,7 +138,7 @@ std::vector<TestTracingRecorder::Record*> TestTracingRecorder::GetChildren(
     Record* parent) {
   std::vector<Record*> children;
   {
-    absl::MutexLock locked(&map_lock_);
+    absl::MutexLock locked(map_lock_);
     // Search through the entire hashmap for children of this parent.
     // Note that this is O(n) in terms of the total number of traces, rather
     // than in terms of the number of children.

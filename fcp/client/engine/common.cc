@@ -81,7 +81,7 @@ absl::Status ConvertPlanOutcomeToStatus(PlanOutcome outcome) {
 }
 
 void ExampleIteratorStatus::SetStatus(absl::Status status) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   // We ignores normal status such as ok and outOfRange to avoid running into a
   // race condition when an error happened, then an outofRange or ok status
   // returned in a different thread which overrides the error status.
@@ -92,7 +92,7 @@ void ExampleIteratorStatus::SetStatus(absl::Status status) {
 }
 
 absl::Status ExampleIteratorStatus::GetStatus() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   return status_;
 }
 
@@ -137,7 +137,7 @@ DatasetIterator::~DatasetIterator() {
 
 // Returns the next entry from the dataset.
 absl::StatusOr<std::string> DatasetIterator::GetNext() {
-  absl::MutexLock locked(&iterator_lock_);
+  absl::MutexLock locked(iterator_lock_);
   if (iterator_finished_) {
     // If we've reached the end of the iterator, always return OUT_OF_RANGE.
     return absl::OutOfRangeError("End of iterator reached");

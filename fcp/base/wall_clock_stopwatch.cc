@@ -33,7 +33,7 @@ class RealWallClockStopwatch : public WallClockStopwatch {
     return WallClockStopwatch::Handle(this);
   }
   absl::Duration GetTotalDuration() const override ABSL_LOCKS_EXCLUDED(mutex_) {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     FCP_CHECK(started_count_ >= 0);
     if (latest_start_time_ == absl::InfiniteFuture()) {
       return previous_durations_;
@@ -43,7 +43,7 @@ class RealWallClockStopwatch : public WallClockStopwatch {
 
  private:
   void StartInternal() override ABSL_LOCKS_EXCLUDED(mutex_) {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     FCP_CHECK(started_count_ >= 0);
     started_count_++;
     if (started_count_ == 1) {
@@ -51,7 +51,7 @@ class RealWallClockStopwatch : public WallClockStopwatch {
     }
   }
   void StopInternal() override ABSL_LOCKS_EXCLUDED(mutex_) {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     FCP_CHECK(started_count_ >= 1);
     started_count_--;
     if (started_count_ == 0) {

@@ -77,7 +77,7 @@ void Clock::WakeupWithDeadline(absl::Time deadline,
   // Waiters with matching deadlines are inserted into the same bucket and
   // their order within the bucket is preserved.
   {
-    absl::MutexLock lock(mutex());
+    absl::MutexLock lock(*mutex());
     WaiterMap::iterator it;
     if ((it = pending_waiters_.find(deadline)) != pending_waiters_.end()) {
       it->second.push_back(waiter);
@@ -130,14 +130,14 @@ void Clock::DispatchWakeups() {
 // Increments dispatch_level_ and returns true if there is already
 // another dispatch call in progress.
 bool Clock::CheckReentrancy() {
-  absl::MutexLock lock(mutex());
+  absl::MutexLock lock(*mutex());
   return ++dispatch_level_ > 1;
 }
 
 // Iterate through waiter buckets ordered by deadline time and take out all
 // waiters that are due.
 Clock::WaiterList Clock::GetExpiredWaiters() {
-  absl::MutexLock lock(mutex());
+  absl::MutexLock lock(*mutex());
   absl::Time now = NowLocked();
   std::vector<std::shared_ptr<Waiter>> wakeup_calls;
   WaiterMap::iterator iter;
@@ -156,7 +156,7 @@ Clock::WaiterList Clock::GetExpiredWaiters() {
 // Returns true if the dispatch loop has ended.
 // Returns false if more the dispatch loop needs to be repeated.
 bool Clock::FinishDispatchAndScheduleNextWakeup() {
-  absl::MutexLock lock(mutex());
+  absl::MutexLock lock(*mutex());
   int current_dispatch_level = dispatch_level_;
   dispatch_level_ = 0;
 
@@ -191,7 +191,7 @@ void RealTimeClock::WorkerLoop() {
     bool dispatch = false;
 
     {
-      absl::MutexLock lock(&wakeup_mu_);
+      absl::MutexLock lock(wakeup_mu_);
       wakeup_condvar_.WaitWithDeadline(&wakeup_mu_, next_wakeup_);
       if (Now() >= next_wakeup_) {
         dispatch = true;
@@ -207,7 +207,7 @@ void RealTimeClock::WorkerLoop() {
 
 // RealTimeClock implementation of ScheduleWakeup.
 void RealTimeClock::ScheduleWakeup(absl::Time wakeup_time) {
-  absl::MutexLock lock(&wakeup_mu_);
+  absl::MutexLock lock(wakeup_mu_);
 
   // Optimization: round wakeup_time up to whole milliseconds.
   wakeup_time = absl::FromUDate(ceil(absl::ToUDate(wakeup_time)));

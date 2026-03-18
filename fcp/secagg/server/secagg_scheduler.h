@@ -162,7 +162,7 @@ class Accumulator : public AsyncWorker,
   // Returns true if the accumulator doesn't have any remaining tasks,
   // even if their results have not been observed by a callback.
   bool IsIdle() override {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     return remaining_sequential_tasks_count_ == 0;
   }
 
@@ -173,7 +173,7 @@ class Accumulator : public AsyncWorker,
   bool SetAsyncObserver(std::function<void()> async_callback) override {
     bool idle;
     {
-      absl::MutexLock lock(&mutex_);
+      absl::MutexLock lock(mutex_);
       if (!has_unobserved_work_) {
         return false;
       }
@@ -197,7 +197,7 @@ class Accumulator : public AsyncWorker,
   // Updates the active and remaining task counts, and returns the callback to
   // be executed, or nullptr if there's pending async work.
   inline std::function<void()> UpdateCountsAndGetCallback() {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     if (--active_count_ == 0 && is_cancelled_) {
       inactive_cv_.SignalAll();
     }
@@ -215,7 +215,7 @@ class Accumulator : public AsyncWorker,
   // Take the accumulated result and abort any further work. This method can
   // only be called when the accumulator is idle
   std::unique_ptr<T> GetResultAndCancel() {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     FCP_CHECK(active_count_ == 0);
     is_cancelled_ = true;
     return std::move(accumulated_value_);
@@ -223,21 +223,21 @@ class Accumulator : public AsyncWorker,
 
   // AsyncWorker implementation
   void Cancel() override {
-    mutex_.Lock();
+    mutex_.lock();
     is_cancelled_ = true;
     while (active_count_ > 0) {
       inactive_cv_.Wait(&mutex_);
     }
-    mutex_.Unlock();
+    mutex_.unlock();
   }
 
   bool IsCancelled() {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     return is_cancelled_;
   }
 
   bool MaybeIncrementActiveCount() {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     if (is_cancelled_) {
       return false;
     }
@@ -246,7 +246,7 @@ class Accumulator : public AsyncWorker,
   }
 
   size_t DecrementActiveCount() {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     FCP_CHECK(active_count_ > 0);
     if (--active_count_ == 0 && is_cancelled_) {
       inactive_cv_.SignalAll();
@@ -255,7 +255,7 @@ class Accumulator : public AsyncWorker,
   }
 
   void IncrementRemainingCount() {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     has_unobserved_work_ |= (remaining_sequential_tasks_count_ == 0);
     remaining_sequential_tasks_count_++;
   }

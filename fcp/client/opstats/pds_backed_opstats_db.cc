@@ -67,7 +67,7 @@ absl::flat_hash_set<std::string>* GetFilesInUseSet() {
 
 absl::StatusOr<int> AcquireFileLock(const std::string& db_path,
                                     LogManager& log_manager) {
-  absl::WriterMutexLock lock(&file_lock_mutex);
+  absl::WriterMutexLock lock(file_lock_mutex);
   // If the underlying file is already in the hash set, it means another
   // instance of OpStatsDb is using it, and we'll return an error.
   absl::flat_hash_set<std::string>* files_in_use = GetFilesInUseSet();
@@ -101,7 +101,7 @@ absl::StatusOr<int> AcquireFileLock(const std::string& db_path,
 }
 
 void ReleaseFileLock(const std::string& db_path, int fd) {
-  absl::WriterMutexLock lock(&file_lock_mutex);
+  absl::WriterMutexLock lock(file_lock_mutex);
   GetFilesInUseSet()->erase(db_path);
   FCP_CHECK(fd >= 0);
   // File lock is released when the descriptor is closed.
@@ -286,7 +286,7 @@ absl::StatusOr<std::unique_ptr<OpStatsDb>> PdsBackedOpStatsDb::Create(
 PdsBackedOpStatsDb::~PdsBackedOpStatsDb() { lock_releaser_(); }
 
 absl::StatusOr<OpStatsSequence> PdsBackedOpStatsDb::Read() {
-  absl::WriterMutexLock lock(&mutex_);
+  absl::WriterMutexLock lock(mutex_);
   auto data_or = ReadInternal(*db_, log_manager_);
   if (!data_or.ok()) {
     // Try resetting after a failed read.
@@ -297,7 +297,7 @@ absl::StatusOr<OpStatsSequence> PdsBackedOpStatsDb::Read() {
 
 absl::Status PdsBackedOpStatsDb::Transform(
     std::function<void(OpStatsSequence&)> func) {
-  absl::WriterMutexLock lock(&mutex_);
+  absl::WriterMutexLock lock(mutex_);
   OpStatsSequence data;
   auto data_or = ReadInternal(*db_, log_manager_);
   if (!data_or.ok()) {

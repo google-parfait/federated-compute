@@ -83,7 +83,7 @@ void SecAggServerPrngRunningState::EnterState() {
   auto initialize_result = Initialize();
 
   if (!initialize_result.ok()) {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     completion_status_ = initialize_result.status();
     return;
   }
@@ -99,7 +99,7 @@ void SecAggServerPrngRunningState::EnterState() {
 
 bool SecAggServerPrngRunningState::SetAsyncCallback(
     std::function<void()> async_callback) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   FCP_CHECK(async_callback != nullptr) << "async_callback is expected";
 
   if (completion_status_.has_value()) {
@@ -121,7 +121,7 @@ void SecAggServerPrngRunningState::PrngRunnerFinished(Status final_status) {
 
   std::function<void()> prng_done_callback;
   {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     completion_status_ = final_status;
     prng_done_callback = prng_done_callback_;
   }
@@ -142,7 +142,7 @@ SecAggServerPrngRunningState::ProceedToNextRound() {
   // Block if StartPrng is still being called. That done to ensure that
   // StartPrng doesn't use *this* object after it has been destroyed by
   // the code that called ProceedToNextRound.
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
 
   if (!completion_status_.has_value()) {
     return FCP_STATUS(UNAVAILABLE);
@@ -164,7 +164,7 @@ SecAggServerPrngRunningState::ProceedToNextRound() {
 }
 
 bool SecAggServerPrngRunningState::ReadyForNextRound() const {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   return completion_status_.has_value();
 }
 

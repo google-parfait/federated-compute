@@ -150,7 +150,7 @@ FileBackedResourceCache::Create(absl::string_view base_dir,
           std::move(pds), std::move(file_storage), cache_dir_path,
           manifest_path, log_manager, clock, max_cache_size_bytes));
   {
-    absl::MutexLock lock(&resource_cache->mutex_);
+    absl::MutexLock lock(resource_cache->mutex_);
     FCP_RETURN_IF_ERROR(resource_cache->Initialize());
   }
 
@@ -161,7 +161,7 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
                                           const absl::Cord& resource,
                                           const google::protobuf::Any& metadata,
                                           absl::Duration max_age) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
 
   if (resource.size() > max_cache_size_bytes_ / 2) {
     return absl::ResourceExhaustedError(absl::StrCat(cache_id, " too large"));
@@ -218,7 +218,7 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
   absl::Cleanup diag_code_logger = [this, &diag_code] {
     log_manager_.LogDiag(diag_code);
   };
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   FCP_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
 
   std::string cache_id_str(cache_id);

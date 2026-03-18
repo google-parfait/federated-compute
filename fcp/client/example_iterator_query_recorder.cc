@@ -26,13 +26,13 @@
 namespace fcp::client {
 
 void SingleExampleIteratorQueryRecorderImpl::Increment() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   example_count_++;
 }
 
 SingleExampleIteratorQuery
 SingleExampleIteratorQueryRecorderImpl::FinishRecordingAndGet() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   SingleExampleIteratorQuery query;
   query.set_collection_uri(selector_.collection_uri());
   *query.mutable_criteria() = selector_.criteria();
@@ -46,7 +46,7 @@ SingleExampleIteratorQueryRecorderImpl::FinishRecordingAndGet() {
 SingleExampleIteratorQueryRecorder*
 ExampleIteratorQueryRecorderImpl::RecordQuery(
     const google::internal::federated::plan::ExampleSelector& selector) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   auto recorder =
       std::make_unique<SingleExampleIteratorQueryRecorderImpl>(selector);
   SingleExampleIteratorQueryRecorder* raw_pointer = recorder.get();
@@ -56,7 +56,7 @@ ExampleIteratorQueryRecorderImpl::RecordQuery(
 
 ExampleIteratorQueries
 ExampleIteratorQueryRecorderImpl::StopRecordingAndGetQueries() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   ExampleIteratorQueries queries;
   *queries.mutable_selector_context() = selector_context_;
   auto* single_example_iterator_query_list = queries.mutable_query();

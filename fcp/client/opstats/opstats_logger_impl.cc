@@ -78,7 +78,7 @@ bool OpStatsLoggerImpl::IsInitializationEvent(
 
 void OpStatsLoggerImpl::AddEventAndSetTaskName(
     const std::string& task_name, OperationalStats::Event::EventKind event) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   FCP_CHECK(current_phase_stats_.phase() !=
             OperationalStats::PhaseStats::UNSPECIFIED)
       << "AddEventAndSetTaskName called before StartLoggingForPhase";
@@ -88,7 +88,7 @@ void OpStatsLoggerImpl::AddEventAndSetTaskName(
 }
 
 void OpStatsLoggerImpl::AddEvent(OperationalStats::Event::EventKind event) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   if (current_phase_stats_.phase() !=
       OperationalStats::PhaseStats::UNSPECIFIED) {
     AddNewEventToCurrentPhaseStats(event);
@@ -104,7 +104,7 @@ void OpStatsLoggerImpl::AddEvent(OperationalStats::Event::EventKind event) {
 void OpStatsLoggerImpl::AddEventWithErrorMessage(
     OperationalStats::Event::EventKind event,
     const std::string& error_message) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   if (current_phase_stats_.phase() !=
       OperationalStats::PhaseStats::UNSPECIFIED) {
     AddNewEventToCurrentPhaseStats(event);
@@ -125,7 +125,7 @@ void OpStatsLoggerImpl::AddEventWithErrorMessage(
 }
 
 void OpStatsLoggerImpl::SetMinSepPolicyIndex(int64_t current_index) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   if (log_min_sep_index_to_phase_stats_) {
     FCP_CHECK(current_phase_stats_.phase() !=
               OperationalStats::PhaseStats::UNSPECIFIED)
@@ -138,7 +138,7 @@ void OpStatsLoggerImpl::SetMinSepPolicyIndex(int64_t current_index) {
 
 void OpStatsLoggerImpl::RecordCollectionFirstAccessTime(
     absl::string_view collection_uri, absl::Time first_access_time) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   if (!collection_first_access_time_map_.contains(collection_uri)) {
     collection_first_access_time_map_[collection_uri] = first_access_time;
   }
@@ -147,7 +147,7 @@ void OpStatsLoggerImpl::RecordCollectionFirstAccessTime(
 void OpStatsLoggerImpl::UpdateDatasetStats(
     const std::string& collection_uri, int additional_example_count,
     int64_t additional_example_size_bytes) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   OperationalStats::DatasetStats* dataset_stats;
   FCP_CHECK(current_phase_stats_.phase() !=
             OperationalStats::PhaseStats::UNSPECIFIED)
@@ -168,7 +168,7 @@ void OpStatsLoggerImpl::UpdateDatasetStats(
 }
 
 void OpStatsLoggerImpl::SetNetworkStats(const NetworkStats& network_stats) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   if (current_phase_stats_.phase() !=
       OperationalStats::PhaseStats::UNSPECIFIED) {
     // The input network stats is always the accumulated stats, but we want the
@@ -200,7 +200,7 @@ void OpStatsLoggerImpl::SetNetworkStats(const NetworkStats& network_stats) {
 // StartLoggingForPhase before calling the method, this method can be called any
 // time.
 void OpStatsLoggerImpl::SetRetryWindow(RetryWindow retry_window) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   retry_window.clear_retry_token();
   *stats_.mutable_retry_window() = std::move(retry_window);
 }
@@ -224,7 +224,7 @@ void OpStatsLoggerImpl::AddNewEventToCurrentPhaseStats(
 // call StartLoggingForPhase before calling the method, this method can be
 // called any time.
 absl::Status OpStatsLoggerImpl::CommitToStorage() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   log_manager_->LogDiag(ProdDiagCode::OPSTATS_DB_COMMIT_ATTEMPTED);
   const absl::Time before_commit_time = absl::Now();
   OperationalStats copy = stats_;
@@ -259,7 +259,7 @@ absl::Status OpStatsLoggerImpl::CommitToStorage() {
 
 void OpStatsLoggerImpl::StartLoggingForPhase(
     OperationalStats::PhaseStats::Phase phase) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
 
   if (current_phase_stats_.phase() !=
       OperationalStats::PhaseStats::UNSPECIFIED) {
@@ -272,7 +272,7 @@ void OpStatsLoggerImpl::StartLoggingForPhase(
 }
 
 void OpStatsLoggerImpl::StopLoggingForTheCurrentPhase() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
 
   // Only add the current PhaseStats when it's not empty.
   FCP_CHECK(current_phase_stats_.phase() !=

@@ -268,7 +268,7 @@ TEST_F(PdsBackedOpStatsDbTest, TwoInstanceOnTwoThreadsAccessSameFile) {
               LogDiag(ProdDiagCode::OPSTATS_MULTIPLE_DB_INSTANCE_DETECTED));
   std::vector<absl::StatusOr<std::unique_ptr<OpStatsDb>>> results;
   std::function<void()> init = [&]() {
-    absl::WriterMutexLock lock(&mu_);
+    absl::WriterMutexLock lock(mu_);
     results.push_back(
         PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit));
   };
@@ -288,7 +288,7 @@ TEST_F(PdsBackedOpStatsDbTest, TwoInstanceOnTwoThreadsAccessSameFile) {
 TEST_F(PdsBackedOpStatsDbTest, TwoInstanceOnTwoThreadsAccessDifferentFile) {
   std::vector<absl::StatusOr<std::unique_ptr<OpStatsDb>>> results;
   std::function<void(std::string)> init = [&](std::string thread_id) {
-    absl::WriterMutexLock lock(&mu_);
+    absl::WriterMutexLock lock(mu_);
     results.push_back(
         PdsBackedOpStatsDb::Create(absl::StrCat(base_dir_, "/", thread_id), ttl,
                                    log_manager_, size_limit));

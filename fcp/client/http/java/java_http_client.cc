@@ -276,7 +276,7 @@ JavaHttpRequestHandle::~JavaHttpRequestHandle() {
   ScopedJniEnv scoped_env(jvm_);
   JNIEnv* env = scoped_env.env();
 
-  absl::MutexLock locked(&lock_);
+  absl::MutexLock locked(lock_);
   // We call the Java close() method when the destructor is invoked, to let the
   // Java code know the request's resources (if any) can be released. The
   // close() method may not have been invoked yet if the JavaHttpRequestHandle
@@ -296,7 +296,7 @@ JavaHttpRequestHandle::~JavaHttpRequestHandle() {
 
 void JavaHttpRequestHandle::Cancel() {
   {
-    absl::MutexLock locked(&lock_);
+    absl::MutexLock locked(lock_);
     // We mark the request 'performed'. This way if the handle is subsequently
     // still erroneously passed to `PerformRequests`, we can detect the error.
     performed_ = true;
@@ -345,19 +345,19 @@ fcp::client::http::HttpRequestCallback* JavaHttpRequestHandle::callback()
   // method though, to ensure that if the `HttpRequestCallback` invocation
   // ultimately causes another JNI callback to be invoked, we don't attempt to
   // acquire the lock twice on the same thread.
-  absl::MutexLock _(&lock_);
+  absl::MutexLock _(lock_);
   return callback_;
 }
 
 const JavaHttpResponse& JavaHttpRequestHandle::response() const {
   // We synchronize for the same purpose as in callback().
-  absl::MutexLock _(&lock_);
+  absl::MutexLock _(lock_);
   return response_;
 }
 
 absl::Status JavaHttpRequestHandle::SetCallback(
     fcp::client::http::HttpRequestCallback* callback) {
-  absl::MutexLock locked(&lock_);
+  absl::MutexLock locked(lock_);
   // If the request was already 'performed' then we should detect that error.
   if (performed_) {
     return absl::InvalidArgumentError(
@@ -429,7 +429,7 @@ jboolean JavaHttpRequestHandle::OnResponseStarted(JNIEnv* env,
   // Populate the response_ field based on the serialized response proto. This
   // will allow us to access it in subsequent callbacks as well.
   {
-    absl::MutexLock _(&lock_);
+    absl::MutexLock _(lock_);
     response_.PopulateFromProto(
         ParseProtoFromJByteArray<JniHttpResponse>(env, response_proto));
   }

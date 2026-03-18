@@ -215,7 +215,7 @@ absl::StatusOr<int64_t> InMemoryHttpRequest::ReadBody(char* buffer,
   // This method is called from the HttpClient's thread (we don't really care
   // which one). Hence, we use a mutex to ensure that subsequent calls to this
   // method see the modifications to cursor_.
-  absl::WriterMutexLock _(&mutex_);
+  absl::WriterMutexLock _(mutex_);
 
   // Check whether there's any bytes left to read, and indicate the end has been
   // reached if not.
@@ -239,7 +239,7 @@ std::unique_ptr<HttpRequest> InMemoryHttpRequest::Clone() const {
 
 absl::Status InMemoryHttpRequestCallback::OnResponseStarted(
     const HttpRequest& request, const HttpResponse& response) {
-  absl::WriterMutexLock _(&mutex_);
+  absl::WriterMutexLock _(mutex_);
   response_code_ = response.code();
 
   std::optional<std::string> content_encoding_header =
@@ -307,7 +307,7 @@ absl::Status InMemoryHttpRequestCallback::OnResponseStarted(
 
 void InMemoryHttpRequestCallback::OnResponseError(const HttpRequest& request,
                                                   const absl::Status& error) {
-  absl::WriterMutexLock _(&mutex_);
+  absl::WriterMutexLock _(mutex_);
   status_ = absl::Status(
       error.code(), absl::StrCat("Error receiving response headers (error: ",
                                  error.message(), ")"));
@@ -320,7 +320,7 @@ absl::Status InMemoryHttpRequestCallback::OnResponseBody(
   // could be our original thread, or a different one). Ensure that if
   // subsequent callbacks occur on different threads each thread sees the
   // previous threads' updates to response_buffer_.
-  absl::WriterMutexLock _(&mutex_);
+  absl::WriterMutexLock _(mutex_);
 
   // Ensure we're not receiving more data than expected.
   if (expected_content_length_.has_value() &&
@@ -344,7 +344,7 @@ absl::Status InMemoryHttpRequestCallback::OnResponseBody(
 void InMemoryHttpRequestCallback::OnResponseBodyError(
     const HttpRequest& request, const HttpResponse& response,
     const absl::Status& error) {
-  absl::WriterMutexLock _(&mutex_);
+  absl::WriterMutexLock _(mutex_);
   status_ = absl::Status(
       error.code(),
       absl::StrCat("Error receiving response body (response code: ",
@@ -355,7 +355,7 @@ void InMemoryHttpRequestCallback::OnResponseCompleted(
     const HttpRequest& request, const HttpResponse& response) {
   // Once the body has been received correctly, turn the response code into a
   // canonical code.
-  absl::WriterMutexLock _(&mutex_);
+  absl::WriterMutexLock _(mutex_);
   // Note: the case when too *much* response data is unexpectedly received is
   // handled in OnResponseBody (while this handles the case of too little data).
   if (expected_content_length_.has_value() &&
@@ -372,7 +372,7 @@ void InMemoryHttpRequestCallback::OnResponseCompleted(
 
 absl::StatusOr<InMemoryHttpResponse> InMemoryHttpRequestCallback::Response()
     const {
-  absl::ReaderMutexLock _(&mutex_);
+  absl::ReaderMutexLock _(mutex_);
   FCP_RETURN_IF_ERROR(status_);
   // If status_ is OK, then response_code_ and response_headers_ are guaranteed
   // to have values.

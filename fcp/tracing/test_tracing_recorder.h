@@ -249,7 +249,7 @@ class TestTracingRecorder
 
 template <typename FlatBufferTable>
 void TestTracingRecorder::ExpectError() {
-  absl::MutexLock locked(&expected_errors_lock_);
+  absl::MutexLock locked(expected_errors_lock_);
   expected_errors_.insert(TracingTraits<FlatBufferTable>::kTag);
   unseen_expected_errors_.insert(TracingTraits<FlatBufferTable>::kTag);
 }

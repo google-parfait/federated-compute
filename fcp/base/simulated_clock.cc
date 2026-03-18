@@ -22,7 +22,7 @@
 namespace fcp {
 
 absl::Time SimulatedClock::Now() {
-  absl::MutexLock lock(mutex());
+  absl::MutexLock lock(*mutex());
   return NowLocked();
 }
 
@@ -34,13 +34,13 @@ absl::Time SimulatedClock::NowLocked() {
 void SimulatedClock::Sleep(absl::Duration d) {
   absl::Time current;
   {
-    absl::MutexLock lock(mutex());
+    absl::MutexLock lock(*mutex());
     current = now_;
   }
   absl::Time deadline = current + d;
   while (true) {
     {
-      absl::MutexLock lock(mutex());
+      absl::MutexLock lock(*mutex());
       current = now_;
     }
     if (current >= deadline) {
@@ -51,7 +51,7 @@ void SimulatedClock::Sleep(absl::Duration d) {
 
 void SimulatedClock::SetTime(absl::Time t) {
   {
-    absl::MutexLock lock(mutex());
+    absl::MutexLock lock(*mutex());
     now_ = t;
   }
   DispatchWakeups();
@@ -59,7 +59,7 @@ void SimulatedClock::SetTime(absl::Time t) {
 
 void SimulatedClock::AdvanceTime(absl::Duration d) {
   {
-    absl::MutexLock lock(mutex());
+    absl::MutexLock lock(*mutex());
     now_ += d;
   }
   DispatchWakeups();
