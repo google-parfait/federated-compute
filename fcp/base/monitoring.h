@@ -65,7 +65,7 @@ namespace fcp {
 #define _FCP_LOG_IF_WARNING(condition) ABSL_LOG_IF(WARNING, condition)
 #define _FCP_LOG_IF_ERROR(condition) ABSL_LOG_IF(ERROR, condition)
 #define _FCP_LOG_IF_FATAL(condition) ABSL_LOG_IF(FATAL, condition)
-#define FCP_VLOG(verbosity) ABSL_LOG(INFO).WithVerbosity(verbosity)
+#define FCP_VLOG(verbosity) ABSL_VLOG(verbosity)
 
 #endif  // !defined(__ANDROID__)
 
@@ -91,7 +91,7 @@ namespace fcp {
 #ifdef FCP_VERBOSE_ANDROID_LOGCAT
 #define _FCP_LOG_INFO ABSL_LOG(INFO) << "fcp: "
 #define _FCP_LOG_IF_INFO(condition) ABSL_LOG_IF(INFO, condition) << "fcp: "
-#define FCP_VLOG(verbosity) ABSL_LOG(INFO).WithVerbosity(verbosity) << "fcp: "
+#define FCP_VLOG(verbosity) ABSL_VLOG(verbosity) << "fcp: "
 #else
 #define _FCP_LOG_INFO ABSL_LOG_IF(INFO, false)
 #define _FCP_LOG_IF_INFO(condition) ABSL_LOG_IF(INFO, false)

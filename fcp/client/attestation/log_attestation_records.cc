@@ -48,8 +48,7 @@ inline constexpr char kSerializedVerificationRecordLogTag[] = "fcp.attest";
 
 void LogPrettyPrintedVerificationRecord(
     const confidentialcompute::AttestationVerificationRecord& record) {
-  FCP_LOG(INFO) << kVerificationRecordLogInfoMessage << std::endl
-                << record.DebugString();
+  FCP_LOG(INFO) << kVerificationRecordLogInfoMessage << std::endl << record;
 }
 
 // When printing a serialized verification record, we split it up into equal
