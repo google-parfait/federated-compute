@@ -1,0 +1,12 @@
+--- src/cppbor.cpp
++++ src/cppbor.cpp
+@@ -21,1 +21,2 @@
+ #include <cstdint>
++#include <limits>
+
+--- src/cppbor_parse.cpp
++++ src/cppbor_parse.cpp
+@@ -18,2 +18,3 @@
+
++#include <limits>
+ #include <sstream>

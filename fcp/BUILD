@@ -66,10 +66,6 @@ compile_pip_requirements(
     srcs = [
         "requirements.in",
     ],
-    extra_args = [
-        "--allow-unsafe",
-        "--no-annotate",
-        "--resolver=backtracking",
-    ],
+    extra_args = ["--no-annotate"],
     requirements_txt = "requirements.txt",
 )

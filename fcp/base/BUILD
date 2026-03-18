@@ -72,6 +72,7 @@ cc_library(
         "bounds.h",
     ],
     copts = FCP_COPTS,
+    deps = [":base"],
 )
 
 cc_test(
@@ -94,6 +95,7 @@ cc_library(
         "meta.h",
     ],
     copts = FCP_COPTS,
+    deps = [":base"],
 )
 
 cc_test(
@@ -114,6 +116,7 @@ cc_library(
         "reentrancy_guard.h",
     ],
     copts = FCP_COPTS,
+    deps = [":base"],
 )
 
 cc_test(
@@ -123,6 +126,7 @@ cc_test(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         ":reentrancy_guard",
         ":scheduler",
         "//fcp/testing",
@@ -142,6 +146,7 @@ cc_library(
     copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = [
+        ":base",
         "@boringssl//:crypto",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
@@ -172,6 +177,7 @@ cc_library(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         ":meta",
         ":scheduler",
         ":unique_value",
@@ -185,6 +191,7 @@ cc_test(
     srcs = ["future_test.cc"],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         ":future",
         ":meta",
         "@com_google_absl//absl/base:core_headers",
@@ -202,6 +209,7 @@ cc_test(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         "@com_google_absl//absl/base:log_severity",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_googletest//:gtest_main",
@@ -216,6 +224,7 @@ cc_test(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         "//fcp/testing",
         "@com_google_absl//absl/strings:cord",
         "@com_google_googletest//:gtest_main",
@@ -231,7 +240,10 @@ cc_library(
         "scheduler.h",
     ],
     copts = FCP_COPTS,
-    deps = ["@com_google_absl//absl/synchronization"],
+    deps = [
+        ":base",
+        "@com_google_absl//absl/synchronization",
+    ],
 )
 
 cc_test(
@@ -242,6 +254,7 @@ cc_test(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         ":scheduler",
         "//fcp/testing",
         "@com_google_absl//absl/synchronization",
@@ -257,6 +270,7 @@ cc_test(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         ":unique_value",
         "@com_google_googletest//:gtest_main",
     ],
@@ -279,6 +293,7 @@ cc_test(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         ":unique_value",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
@@ -315,6 +330,7 @@ cc_library(
     hdrs = ["status_converters.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":base",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/status",
     ],
@@ -413,6 +429,7 @@ cc_library(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
     ],
@@ -488,6 +505,7 @@ cc_library(
     hdrs = ["wall_clock_stopwatch.h"],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
     ],
@@ -517,6 +535,7 @@ cc_library(
     copts = FCP_COPTS,
     visibility = ["//visibility:public"],
     deps = [
+        ":base",
         "@boringssl//:crypto",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/strings",
@@ -569,6 +588,7 @@ cc_library(
     name = "function_registry",
     hdrs = ["function_registry.h"],
     deps = [
+        ":base",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/base:log_severity",
         "@com_google_absl//absl/container:flat_hash_map",

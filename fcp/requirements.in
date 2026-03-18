@@ -17,11 +17,5 @@
 # requires unique handling, we use a different version specifier and comment the
 # versioning scheme or reasoning.
 
-absl-py~=1.4
-attrs~=23.1
-dm-tree~=0.1.8
-immutabledict==4.2.0
-protobuf>=4.23
-# The TensorFlow version should match what's specified in the WORKSPACE file for
-# C++ targets.
-tensorflow==2.14.0
+absl-py~=2.4,==2.4.*
+numpy~=2.4.3

@@ -47,7 +47,7 @@ std::string TestCaseName() {
 std::string GetTestDataPath(absl::string_view relative_path) {
   auto env = getenv("TEST_SRCDIR");
   std::string test_srcdir = env ? env : "";
-  return ConcatPath(test_srcdir, ConcatPath("com_google_fcp", relative_path));
+  return ConcatPath(test_srcdir, ConcatPath("_main", relative_path));
 }
 
 std::string TemporaryTestFile(absl::string_view suffix) {
