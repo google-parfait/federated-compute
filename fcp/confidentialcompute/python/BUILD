@@ -33,9 +33,9 @@ py_library(
         "//third_party/py/optax",
         "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
-        "@pypi_jax//:pkg",
-        "@pypi_jax_privacy//:pkg",
-        "@pypi_tensorflow//:pkg",
+        "@pypi//jax",
+        "@pypi//jax_privacy",
+        "@pypi//tensorflow",
     ],
 )
 
@@ -53,9 +53,9 @@ py_test(
         ":dp_mf_aggregator",
         "//third_party/py/optax",
         "@federated_language//federated_language",
-        "@pypi_absl_py//:pkg",
-        "@pypi_numpy//:pkg",
-        "@pypi_tensorflow//:pkg",
+        "@pypi//absl_py",
+        "@pypi//numpy",
+        "@pypi//tensorflow",
     ],
 )
 
@@ -73,7 +73,7 @@ py_library(
         "@federated_language//federated_language/proto:computation_py_pb2",
         "@federated_language//federated_language/proto:data_type_py_pb2",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
-        "@pypi_absl_py//:pkg",
+        "@pypi//absl_py",
     ],
 )
 
@@ -88,7 +88,7 @@ py_test(
         "@federated_language//federated_language/proto:computation_py_pb2",
         "@federated_language//federated_language/proto:data_type_py_pb2",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
-        "@pypi_absl_py//:pkg",
+        "@pypi//absl_py",
     ],
 )
 
@@ -107,14 +107,14 @@ py_test(
     deps = [
         ":program_input_provider",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
-        "@pypi_absl_py//:pkg",
+        "@pypi//absl_py",
     ],
 )
 
 py_library(
     name = "accounting",
     srcs = ["accounting.py"],
-    deps = ["@pypi_numpy//:pkg"],
+    deps = ["@pypi//numpy"],
 )
 
 py_test(
@@ -122,6 +122,6 @@ py_test(
     srcs = ["accounting_test.py"],
     deps = [
         ":accounting",
-        "@pypi_absl_py//:pkg",
+        "@pypi//absl_py",
     ],
 )
