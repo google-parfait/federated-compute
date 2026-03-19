@@ -20,28 +20,18 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/time/civil_time.h"
 #include "fcp/protos/confidentialcompute/windowing_schedule.pb.h"
-#include "fcp/testing/testing.h"
 
 namespace fcp {
 namespace confidentialcompute {
 namespace {
 
+using ::absl_testing::IsOkAndHolds;
+using ::absl_testing::StatusIs;
 using ::fcp::confidentialcompute::WindowingSchedule;
-using ::testing::ExplainMatchResult;
 using ::testing::HasSubstr;
-
-MATCHER_P2(StatusIs, expected_code, message_matcher, "") {
-  return ExplainMatchResult(IsCode(expected_code), arg, result_listener) &&
-         ExplainMatchResult(message_matcher, arg.status().message(),
-                            result_listener);
-}
-
-MATCHER_P(IsOkAndHolds, m, "") {
-  return testing::ExplainMatchResult(IsOk(), arg, result_listener) &&
-         testing::ExplainMatchResult(m, arg.value(), result_listener);
-}
 
 WindowingSchedule::CivilTimeWindowSchedule CreateSchedule(
     int window_size,
@@ -214,7 +204,7 @@ TEST(TimeWindowUtilitiesTest, ValidateCivilTimeWindowScheduleValid) {
       /*window_size=*/1,
       WindowingSchedule::CivilTimeWindowSchedule::TimePeriod::DAYS,
       /*start_year=*/2024, /*start_month=*/1, /*start_day=*/1);
-  EXPECT_OK(ValidateCivilTimeWindowSchedule(schedule));
+  ABSL_EXPECT_OK(ValidateCivilTimeWindowSchedule(schedule));
 }
 
 TEST(TimeWindowUtilitiesTest, ValidateCivilTimeWindowScheduleInvalidTimeZone) {

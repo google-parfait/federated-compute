@@ -26,21 +26,17 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/base/log_severity.h"
+#include "absl/status/status_matchers.h"
 #include "absl/strings/str_format.h"
 #include "fcp/base/base_name.h"
 
 namespace fcp {
 namespace {
 
+using ::absl_testing::IsOk;
+using ::absl_testing::IsOkAndHolds;
 using ::testing::MatchesRegex;
 using ::testing::Not;
-
-MATCHER(IsOk, "") { return arg.ok(); }
-
-MATCHER_P(IsOkAndHolds, m, "") {
-  return testing::ExplainMatchResult(IsOk(), arg, result_listener) &&
-         testing::ExplainMatchResult(m, arg.value(), result_listener);
-}
 
 class MonitoringTest : public ::testing::TestWithParam<bool> {
  public:

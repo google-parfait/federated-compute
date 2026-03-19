@@ -24,6 +24,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -40,6 +41,7 @@ namespace client {
 namespace engine {
 namespace {
 
+using ::absl_testing::StatusIs;
 using ::fcp::EqualsProto;
 using ::fcp::confidentialcompute::WindowingSchedule;
 using ::google::internal::federated::plan::ExampleQuerySpec;
@@ -48,17 +50,6 @@ using ::testing::Eq;
 using ::testing::ExplainMatchResult;
 using ::testing::HasSubstr;
 using ::testing::UnorderedElementsAre;
-
-MATCHER_P2(StatusIs, expected_code, message_matcher, "") {
-  return ExplainMatchResult(IsCode(expected_code), arg, result_listener) &&
-         ExplainMatchResult(message_matcher, arg.status().message(),
-                            result_listener);
-}
-
-MATCHER_P(IsOkAndHolds, m, "") {
-  return testing::ExplainMatchResult(IsOk(), arg, result_listener) &&
-         testing::ExplainMatchResult(m, arg.value(), result_listener);
-}
 
 MATCHER_P2(PerPrivacyIdResultIs, privacy_id, example_query_result, "") {
   return ExplainMatchResult(Eq(privacy_id), arg.privacy_id, result_listener) &&

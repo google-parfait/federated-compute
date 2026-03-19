@@ -19,6 +19,7 @@
 #include "gtest/gtest.h"
 #include "absl/flags/flag.h"
 #include "fcp/base/monitoring.h"
+#include "fcp/base/platform.h"
 #include "fcp/testing/test_messages.pb.h"
 
 ABSL_FLAG(std::string, baseline_path, "", "Path to baseline");

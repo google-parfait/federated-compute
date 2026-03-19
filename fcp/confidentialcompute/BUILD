@@ -85,8 +85,8 @@ cc_test(
     deps = [
         ":time_window_utilities",
         "//fcp/protos/confidentialcompute:windowing_schedule_cc_proto",
-        "//fcp/testing",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
     ],

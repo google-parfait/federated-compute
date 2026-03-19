@@ -252,7 +252,4 @@ StatusOr<std::string> VerifyAgainstBaseline(absl::string_view baseline_file,
   return diff_result;
 }
 
-StatusMatcher IsCode(StatusCode code) { return StatusMatcher(code); }
-StatusMatcher IsOk() { return IsCode(OK); }
-
 }  // namespace fcp

@@ -31,6 +31,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -148,9 +149,8 @@ MATCHER(IsOkReportResult, "") {
 
 MATCHER_P2(IsErrorReportResult, code, message_matcher, "") {
   return (arg.outcome == ReportOutcome::kFailure) &&
-         arg.status.code() == code &&
-         ExplainMatchResult(message_matcher, arg.status.message(),
-                            result_listener);
+         ExplainMatchResult(absl_testing::StatusIs(code, message_matcher),
+                            arg.status, result_listener);
 }
 
 constexpr char kEntryPointUri[] = "https://initial.uri/";
@@ -251,12 +251,6 @@ MATCHER_P(ReportTaskResultRequestMatcher, matcher,
   return ExplainMatchResult(matcher, request, result_listener);
 }
 
-MATCHER(IsOk, "") { return arg.ok(); }
-
-MATCHER_P(IsOkAndHolds, m, "") {
-  return testing::ExplainMatchResult(IsOk(), arg, result_listener) &&
-         testing::ExplainMatchResult(m, arg.value(), result_listener);
-}
 MATCHER_P(EqTaskIdentifier, task_identifier, "") {
   return testing::ExplainMatchResult(task_identifier, arg.task_identifier,
                                      result_listener);

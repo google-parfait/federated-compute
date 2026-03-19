@@ -30,13 +30,9 @@
 namespace fcp::confidential_compute {
 namespace {
 
+using ::absl_testing::IsOkAndHolds;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
-
-MATCHER_P(IsOkAndHolds, matcher, "") {
-  return arg.ok() &&
-         testing::ExplainMatchResult(matcher, arg.value(), result_listener);
-}
 
 TEST(OkpKeyTest, EncodeEmpty) {
   EXPECT_THAT(OkpKey().Encode(),
