@@ -660,9 +660,9 @@ struct ComputationArtifacts {
   // The path to the file containing the initial checkpoint data (not set for
   // local compute task artifacts).
   std::string checkpoint_filepath;
-  // The initial checkpoint data, as a string (not set for local compute task
+  // The initial checkpoint data, as a Cord (not set for local compute task
   // artifacts).
-  std::string checkpoint;
+  absl::Cord checkpoint;
   // The Federated Select slice data (not set for local compute task artifacts).
   google::internal::federated::plan::SlicesTestDataset federated_select_slices;
   // A fake PopulationEligibilitySpec matching the policies in the

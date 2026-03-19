@@ -1895,11 +1895,10 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
   PerformMultipleTaskAssignmentsResponse response;
   Resource plan_1;
   std::string expected_plan_1 = "plan1";
-  *plan_1.mutable_inline_resource()->mutable_data() = expected_plan_1;
+  plan_1.mutable_inline_resource()->set_data(expected_plan_1);
   Resource checkpoint_1;
   std::string expected_checkpoint_1 = "checkpoint1";
-  *checkpoint_1.mutable_inline_resource()->mutable_data() =
-      expected_checkpoint_1;
+  checkpoint_1.mutable_inline_resource()->set_data(expected_checkpoint_1);
   *response.add_task_assignments() = CreateTaskAssignment(
       plan_1, checkpoint_1, kFederatedSelectUriTemplate,
       kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
@@ -2005,11 +2004,10 @@ TEST_F(HttpFederatedProtocolTest,
   PerformMultipleTaskAssignmentsResponse response;
   Resource plan_1;
   std::string expected_plan_1 = "plan1";
-  *plan_1.mutable_inline_resource()->mutable_data() = expected_plan_1;
+  plan_1.mutable_inline_resource()->set_data(expected_plan_1);
   Resource checkpoint_1;
   std::string expected_checkpoint_1 = "checkpoint1";
-  *checkpoint_1.mutable_inline_resource()->mutable_data() =
-      expected_checkpoint_1;
+  checkpoint_1.mutable_inline_resource()->set_data(expected_checkpoint_1);
   *response.add_task_assignments() = CreateTaskAssignment(
       plan_1, checkpoint_1, kFederatedSelectUriTemplate,
       kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,
@@ -2096,11 +2094,10 @@ TEST_F(HttpFederatedProtocolTest,
   PerformMultipleTaskAssignmentsResponse response;
   Resource plan_1;
   std::string expected_plan_1 = "plan1";
-  *plan_1.mutable_inline_resource()->mutable_data() = expected_plan_1;
+  plan_1.mutable_inline_resource()->set_data(expected_plan_1);
   Resource checkpoint_1;
   std::string expected_checkpoint_1 = "checkpoint1";
-  *checkpoint_1.mutable_inline_resource()->mutable_data() =
-      expected_checkpoint_1;
+  checkpoint_1.mutable_inline_resource()->set_data(expected_checkpoint_1);
   *response.add_task_assignments() = CreateTaskAssignment(
       plan_1, checkpoint_1, kFederatedSelectUriTemplate,
       kMultiTaskClientSessionId_1, kMultiTaskAggregationSessionId_1,

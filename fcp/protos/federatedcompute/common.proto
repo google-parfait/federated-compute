@@ -79,8 +79,7 @@ message Resource {
 
   message InlineResource {
     // The inlined data for the resource.
-    bytes data = 1
-        ;
+    bytes data = 1 [ctype = CORD];
 
     // The compression used for the inlined data, or unset if the data is
     // uncompressed.

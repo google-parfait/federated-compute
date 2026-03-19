@@ -160,7 +160,6 @@ cc_library(
         ":fl_runner_cc_proto",
         ":interfaces",
         ":interruptible_runner",
-        ":parsing_utils",
         ":phase_logger",
         ":phase_logger_impl",
         ":runner_common",
@@ -398,12 +397,6 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
     ],
-)
-
-cc_library(
-    name = "parsing_utils",
-    hdrs = ["parsing_utils.h"],
-    deps = ["@com_google_absl//absl/strings:cord"],
 )
 
 cc_test(

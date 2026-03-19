@@ -69,7 +69,6 @@
 #include "fcp/client/opstats/opstats_logger.h"
 #include "fcp/client/opstats/opstats_logger_impl.h"
 #include "fcp/client/opstats/opstats_utils.h"
-#include "fcp/client/parsing_utils.h"
 #include "fcp/client/phase_logger.h"
 #include "fcp/client/phase_logger_impl.h"
 #include "fcp/client/runner_common.h"
@@ -582,36 +581,18 @@ absl::Status ReportPlanResult(
   return result;
 }
 
-// Writes the given data to the stream, and returns true if successful and false
-// if not.
-bool WriteStringOrCordToFstream(
-    std::fstream& stream, const std::variant<std::string, absl::Cord>& data) {
-  if (stream.fail()) {
-    return false;
-  }
-  if (std::holds_alternative<std::string>(data)) {
-    return (stream << std::get<std::string>(data)).good();
-  }
-  for (absl::string_view chunk : std::get<absl::Cord>(data).Chunks()) {
-    if (!(stream << chunk).good()) {
-      return false;
-    }
-  }
-  return true;
-}
-
 // Writes the given checkpoint data to a newly created temporary file.
 // Returns the filename if successful, or an error if the file could not be
 // created, or if writing to the file failed.
 absl::StatusOr<std::string> CreateInputCheckpointFile(
-    Files* files, const std::variant<std::string, absl::Cord>& checkpoint) {
+    Files* files, const absl::Cord& checkpoint) {
   // Create the temporary checkpoint file.
   // Deletion of the file is left to the caller / the Files implementation.
   FCP_ASSIGN_OR_RETURN(absl::StatusOr<std::string> filename,
                        files->CreateTempFile("init", ".ckp"));
   // Write the checkpoint data to the file.
   std::fstream checkpoint_stream(*filename, std::ios_base::out);
-  if (!WriteStringOrCordToFstream(checkpoint_stream, checkpoint)) {
+  if (!(checkpoint_stream << checkpoint).good()) {
     return absl::InvalidArgumentError("Failed to write to file");
   }
   checkpoint_stream.close();
@@ -656,7 +637,7 @@ absl::StatusOr<std::optional<TaskEligibilityInfo>> RunEligibilityEvalPlan(
     const absl::Time time_before_plan_download,
     const NetworkStats& network_stats, Clock& clock) {
   ClientOnlyPlan plan;
-  if (!ParseFromStringOrCord(plan, eligibility_eval_task.payloads.plan)) {
+  if (!plan.ParseFromString(eligibility_eval_task.payloads.plan)) {
     auto message = "Failed to parse received eligibility eval plan";
     phase_logger.LogEligibilityEvalCheckinInvalidPayloadError(
         message, network_stats, time_before_plan_download);
@@ -1009,8 +990,7 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
         log_io_error,
     const Flags* flags) {
   ClientOnlyPlan plan;
-  auto plan_bytes = task_assignment.payloads.plan;
-  if (!ParseFromStringOrCord(plan, plan_bytes)) {
+  if (!plan.ParseFromString(task_assignment.payloads.plan)) {
     auto message = "Failed to parse received plan";
     log_invalid_payload_error(task_assignment.task_name, message);
     FCP_LOG(ERROR) << message;
@@ -1032,11 +1012,7 @@ absl::StatusOr<CheckinResult> CreateCheckinResultFromTaskAssignment(
     }
     computation_id = ComputeSHA256(merged_criteria);
   } else if (flags->enable_computation_id()) {
-    if (std::holds_alternative<std::string>(plan_bytes)) {
-      computation_id = ComputeSHA256(std::get<std::string>(plan_bytes));
-    } else {
-      computation_id = ComputeSHA256(std::get<absl::Cord>(plan_bytes));
-    }
+    computation_id = ComputeSHA256(task_assignment.payloads.plan);
   }
 
   int32_t minimum_clients_in_server_visible_aggregate = 0;

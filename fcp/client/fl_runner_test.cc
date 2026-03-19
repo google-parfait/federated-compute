@@ -524,8 +524,7 @@ void FlRunnerEligibilityEvalTest::SetUpEligibilityEvalTask() {
   auto data_availability_policy = policy->mutable_data_availability_policy();
   data_availability_policy->set_min_example_count(1);
   ExampleSelector example_selector;
-  example_selector.set_collection_uri(
-      std::string(kEligibilityEvalCollectionUri));
+  example_selector.set_collection_uri(kEligibilityEvalCollectionUri);
   *data_availability_policy->mutable_selector() = example_selector;
 
   eligibility_eval_artifacts_.population_eligibility_spec =
@@ -588,8 +587,7 @@ void FlRunnerEligibilityEvalWithCriteriaTest::SetUpEligibilityEvalTask() {
   auto data_availability_policy = policy->mutable_data_availability_policy();
   data_availability_policy->set_min_example_count(2);
   ExampleSelector example_selector;
-  example_selector.set_collection_uri(
-      std::string(kEligibilityEvalCollectionUri));
+  example_selector.set_collection_uri(kEligibilityEvalCollectionUri);
   google::internal::federated::plan::AverageOptions average_options;
   average_options.set_average_stat_name("count");
   example_selector.mutable_criteria()->PackFrom(average_options);
@@ -664,8 +662,7 @@ void FlRunnerExampleQueryEligibilityEvalTest::SetUpEligibilityEvalTask() {
   auto data_availability_policy = policy->mutable_data_availability_policy();
   data_availability_policy->set_min_example_count(5);
   ExampleSelector example_selector;
-  example_selector.set_collection_uri(
-      std::string(kEligibilityEvalCollectionUri));
+  example_selector.set_collection_uri(kEligibilityEvalCollectionUri);
   google::internal::federated::plan::AverageOptions average_options;
   average_options.set_average_stat_name("count");
   example_selector.mutable_criteria()->PackFrom(average_options);
@@ -899,7 +896,7 @@ void FlRunnerExampleQueryTest::ExpectComputationFailureWithInvalidArgument() {
   EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
+          {single_task_assignment_client_only_plan_.SerializeAsCord(), {}},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -962,11 +959,11 @@ void FlRunnerMultipleTaskAssignmentsTest::SetUp() {
   task_assignment_1_.sec_agg_info = kSecAggInfoForMixedSecAgg;
   task_assignment_1_.task_name = kSwor24HourTaskName;
   task_assignment_1_.task_identifier = kTaskIdentifier1;
-  task_assignment_1_.payloads.checkpoint = std::string(kInitialCheckpoint);
+  task_assignment_1_.payloads.checkpoint = kInitialCheckpoint;
   *plan_1_.mutable_phase()
        ->mutable_tensorflow_spec()
        ->mutable_dataset_token_tensor_name() = "plan_1_dataset_token";
-  task_assignment_1_.payloads.plan = plan_1_.SerializeAsString();
+  task_assignment_1_.payloads.plan = plan_1_.SerializeAsCord();
 
   // Set up the second task assignment.
   task_assignment_2_.federated_select_uri_template =
@@ -976,11 +973,11 @@ void FlRunnerMultipleTaskAssignmentsTest::SetUp() {
   task_assignment_2_.sec_agg_info = kSecAggInfoForPureSecAggTask;
   task_assignment_2_.task_name = kRequires5ExamplesTaskName;
   task_assignment_2_.task_identifier = kTaskIdentifier2;
-  task_assignment_2_.payloads.checkpoint = std::string(kInitialCheckpoint);
+  task_assignment_2_.payloads.checkpoint = kInitialCheckpoint;
   *plan_2_.mutable_phase()
        ->mutable_tensorflow_spec()
        ->mutable_dataset_token_tensor_name() = "plan_2_dataset_token";
-  task_assignment_2_.payloads.plan = plan_2_.SerializeAsString();
+  task_assignment_2_.payloads.plan = plan_2_.SerializeAsCord();
 }
 
 void FlRunnerMultipleTaskAssignmentsTest::SetUpPopulationEligibilitySpec() {
@@ -995,16 +992,15 @@ void FlRunnerMultipleTaskAssignmentsTest::SetUpPopulationEligibilitySpec() {
   auto data_availability_policy = policy->mutable_data_availability_policy();
   data_availability_policy->set_min_example_count(1);
   ExampleSelector example_selector;
-  example_selector.set_collection_uri(
-      std::string(kEligibilityEvalCollectionUri));
+  example_selector.set_collection_uri(kEligibilityEvalCollectionUri);
   *data_availability_policy->mutable_selector() = example_selector;
   auto mta_task_info_1 = population_eligibility_spec.add_task_info();
-  mta_task_info_1->set_task_name(std::string(kSwor24HourTaskName));
+  mta_task_info_1->set_task_name(kSwor24HourTaskName);
   mta_task_info_1->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   mta_task_info_1->add_eligibility_policy_indices(0);
   auto mta_task_info_2 = population_eligibility_spec.add_task_info();
-  mta_task_info_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  mta_task_info_2->set_task_name(kRequires5ExamplesTaskName);
   mta_task_info_2->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   mta_task_info_2->add_eligibility_policy_indices(0);
@@ -1062,7 +1058,7 @@ void FlRunnerMultipleTaskAssignmentsTest::MockEligibilityEvalCheckIn() {
 
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           population_spec}));
@@ -1209,7 +1205,7 @@ TEST_F(FlRunnerTensorflowTaskTest, RejectionTest) {
 TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlan) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1259,7 +1255,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlanWithMinSepPolicy) {
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1306,66 +1302,13 @@ TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlanWithMinSepPolicy) {
                                VariantWith<TFCheckpoint>(Not(IsEmpty())))));
 }
 
-TEST_F(FlRunnerTensorflowTaskTest,
-       SimpleAggregationPlanWithTaskResourcesAsAbslCord) {
-  // We return the task resources as absl::Cords instead of std::strings, to
-  // exercise the absl::Cord-specific code paths.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
-      .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {absl::Cord(
-               single_task_assignment_artifacts_.plan.SerializeAsString()),
-           absl::Cord(single_task_assignment_artifacts_.checkpoint)},
-          /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
-          /*aggregation_session_id=*/kAggregationSessionId,
-          std::nullopt,
-          std::nullopt,
-          std::nullopt,
-          kTaskName}));
-
-  ComputationResults computation_results;
-  EXPECT_CALL(mock_federated_protocol_, MockReportCompleted(_, _, _))
-      .WillOnce([&](ComputationResults reported_results,
-                    absl::Duration plan_duration,
-                    std::optional<std::string> aggregation_session_id) {
-        computation_results = std::move(reported_results);
-        return ReportResult::FromStatus(absl::OkStatus());
-      });
-
-  {
-    InSequence seq;
-    ExpectCheckinTrainingReportLogEvents();
-    EXPECT_CALL(mock_task_env_, OnTaskCompleted(IsTaskResultSuccess()))
-        .WillOnce(Return(true));
-  }
-
-  MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
-                              /*has_secagg_output=*/false);
-
-  absl::StatusOr<FLRunnerResult> result = RunFederatedComputation(
-      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
-      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
-      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
-      /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
-  FLRunnerResult expected_result;
-  *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
-      mock_federated_protocol_.GetLatestRetryWindow());
-  expected_result.set_contribution_result(FLRunnerResult::SUCCESS);
-  expected_result.add_contributed_task_names(kTaskName);
-  EXPECT_THAT(*result, EqualsProto(expected_result));
-  // There should be one checkpoint and no secagg results.
-  EXPECT_THAT(computation_results,
-              ElementsAre(Pair(kTensorflowCheckpointAggregand,
-                               VariantWith<TFCheckpoint>(Not(IsEmpty())))));
-}
-
 // Checks that when reporting fails with an ABORTED protocol error, the most
 // recent retry window is still used.
 TEST_F(FlRunnerTensorflowTaskTest,
        SimpleAggregationPlanWithReportAbortedErrorReturnsRetryWindow) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1413,7 +1356,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
        SimpleAggregationPlanWithReportUnavailableErrorReturnsRetryWindow) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1462,7 +1405,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
        SimpleAggregationPlanWithReportPartialSuccess) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1513,7 +1456,7 @@ TEST_F(FlRunnerTensorflowTaskTest, TfPlanLightweightComputationIdNull) {
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1562,7 +1505,7 @@ TEST_F(FlRunnerTensorflowTaskTest, TfPlanLightweightComputationIdNull) {
 TEST_F(FlRunnerTensorflowTaskTest, SecaggPlan) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1620,7 +1563,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SecaggPlanOnlySecaggOutputTensors) {
       .minimum_clients_in_server_visible_aggregate = 2};
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1669,7 +1612,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SecaggPlanOnlySecaggOutputTensors) {
 TEST_F(FlRunnerTensorflowTaskTest, AbortPlan) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1721,7 +1664,7 @@ TEST_F(FlRunnerTensorflowTaskTest, AbortPlan) {
 TEST_F(FlRunnerTensorflowTaskTest, ExampleIteratorError) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1776,7 +1719,7 @@ TEST_F(FlRunnerTensorflowTaskTest, ComputationInvalidArgument) {
   EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1821,7 +1764,8 @@ TEST_F(FlRunnerTensorflowTaskTest, ComputationInvalidArgument) {
 TEST_F(FlRunnerTensorflowTaskTest, MockCheckinInvalidPlan) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {"im_not_a_plan", single_task_assignment_artifacts_.checkpoint},
+          {absl::Cord("im_not_a_plan"),
+           single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -1850,7 +1794,7 @@ TEST_F(FlRunnerTensorflowTaskTest, MockCheckinInvalidPlan) {
 TEST_F(FlRunnerTensorflowTaskTest, TaskCompletionCallbackEnabledUploadFailed) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -1943,50 +1887,8 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinFails) {
   // Mock a successful eligibility eval checkin.
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
-          kEligibilityEvalExecutionId}));
-
-  // Make the subsequent Checkin(...) method fail due to interruption.
-  EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
-      .WillOnce(Return(absl::CancelledError("foo")));
-
-  {
-    InSequence seq;
-    // The eligibility plan execution will log a set of training-related log
-    // events, followed by a single checkin related log events for the regular
-    // checkin.
-    ExpectEligibilityEvalLogEvents();
-    EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
-    EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
-    EXPECT_CALL(mock_phase_logger_, LogCheckinClientInterrupted(_, _, _, _));
-  }
-
-  // Even though the Checkin(...) method fails with a network error, we expect
-  // an FLRunnerResult to be returned with the most recent RetryWindow, when
-  // the flag above is on.
-  absl::StatusOr<FLRunnerResult> result = RunFederatedComputation(
-      &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
-      &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
-      &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
-      /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
-  FLRunnerResult expected_result;
-  *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
-      mock_federated_protocol_.GetLatestRetryWindow());
-  expected_result.set_contribution_result(FLRunnerResult::FAIL);
-  EXPECT_THAT(*result, EqualsProto(expected_result));
-}
-
-TEST_F(FlRunnerEligibilityEvalTest,
-       EvalCheckinSucceedsWithTaskResourcesAsAbslCordRegularCheckinFails) {
-  // Mock a successful eligibility eval checkin.
-  // We return the task resources as absl::Cords instead of std::strings, to
-  // exercise the absl::Cord-specific code paths.
-  EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
-      .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {absl::Cord(eligibility_eval_artifacts_.plan.SerializeAsString()),
-           absl::Cord(eligibility_eval_artifacts_.checkpoint)},
           kEligibilityEvalExecutionId}));
 
   // Make the subsequent Checkin(...) method fail due to interruption.
@@ -2025,7 +1927,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinInvalidPlan) {
   // proto.
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {"im_not_a_plan", eligibility_eval_artifacts_.checkpoint},
+          {absl::Cord("im_not_a_plan"), eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId}));
   EXPECT_CALL(mock_federated_protocol_,
               MockReportEligibilityEvalError(
@@ -2057,7 +1959,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinRejected) {
   // Mock a successful eligibility eval checkin.
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId}));
 
@@ -2099,7 +2001,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinSucceeds) {
   // Checkin(...) request.
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           eligibility_eval_artifacts_.population_eligibility_spec}));
@@ -2115,7 +2017,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinSucceeds) {
   EXPECT_CALL(mock_federated_protocol_,
               MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -2165,7 +2067,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
   // Checkin(...) request.
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           eligibility_eval_artifacts_.population_eligibility_spec}));
@@ -2181,7 +2083,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
   EXPECT_CALL(mock_federated_protocol_,
               MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -2240,7 +2142,7 @@ TEST_F(FlRunnerEligibilityEvalWithCriteriaTest, ComputationIdSet) {
 
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           eligibility_eval_artifacts_.population_eligibility_spec}));
@@ -2253,7 +2155,7 @@ TEST_F(FlRunnerEligibilityEvalWithCriteriaTest, ComputationIdSet) {
   EXPECT_CALL(mock_federated_protocol_,
               MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -2322,7 +2224,7 @@ TEST_F(FlRunnerExampleQueryEligibilityEvalTest, UseExampleQueryResultFormat) {
 
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           eligibility_eval_artifacts_.population_eligibility_spec}));
@@ -2336,7 +2238,7 @@ TEST_F(FlRunnerExampleQueryEligibilityEvalTest, UseExampleQueryResultFormat) {
   EXPECT_CALL(mock_federated_protocol_,
               MockCheckin(Optional(EqualsProto(expected_eligibility_info)), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -2393,7 +2295,7 @@ TEST_F(FlRunnerExampleQueryEligibilityEvalTest, UseExampleQueryResultFormat) {
 TEST_F(FlRunnerExampleQueryTest, TaskSucceeds) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
+          {single_task_assignment_client_only_plan_.SerializeAsCord(), {}},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -2456,7 +2358,7 @@ TEST_F(FlRunnerExampleQueryTest, TaskSucceeds) {
 TEST_F(FlRunnerExampleQueryTest, FederatedComputeWireFormat) {
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
+          {single_task_assignment_client_only_plan_.SerializeAsCord(), {}},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -2524,7 +2426,7 @@ TEST_F(FlRunnerExampleQueryTest, FCCheckpointAggregationEnabled) {
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
+          {single_task_assignment_client_only_plan_.SerializeAsCord(), {}},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -2585,7 +2487,7 @@ TEST_F(FlRunnerExampleQueryTest, LightweightTaskDoesNotCreateTempFiles) {
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
+          {single_task_assignment_client_only_plan_.SerializeAsCord(), {}},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -2642,7 +2544,7 @@ TEST_F(FlRunnerExampleQueryTest, NoExampleQueryIORouter) {
   EXPECT_CALL(mock_phase_logger_, LogCheckinStarted());
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
+          {single_task_assignment_client_only_plan_.SerializeAsCord(), {}},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -2741,7 +2643,7 @@ TEST_F(FlRunnerExampleQueryTest, ExampleQueryPlanLightweightComputation) {
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
+          {single_task_assignment_client_only_plan_.SerializeAsCord(), {}},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -2842,7 +2744,7 @@ TEST_F(FlRunnerExampleQueryTest, ConfidentialAggInSelectorContext) {
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
+          {single_task_assignment_client_only_plan_.SerializeAsCord(), {}},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -2892,7 +2794,7 @@ TEST_F(FlRunnerExampleQueryTest, DirectDataUploadTaskSucceeds) {
   SetUpDirectDataUploadTask();
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
+          {single_task_assignment_client_only_plan_.SerializeAsCord(), {}},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -3004,7 +2906,7 @@ TEST_F(FlRunnerExampleQueryTest, ExampleQueryWithEventTimeRange) {
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_client_only_plan_.SerializeAsString(), ""},
+          {single_task_assignment_client_only_plan_.SerializeAsCord(), {}},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
           std::nullopt,
@@ -3064,14 +2966,14 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, EmptyPopulationSpec) {
   // EligibilityEvalTask contains no population eligibility spec.
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId}));
 
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -3126,11 +3028,11 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // multiple task assignments is enabled.
   PopulationEligibilitySpec population_spec;
   auto task_info_1 = population_spec.add_task_info();
-  task_info_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_info_1->set_task_name(kSwor24HourTaskName);
   task_info_1->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   auto task_info_2 = population_spec.add_task_info();
-  task_info_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_info_2->set_task_name(kRequires5ExamplesTaskName);
   task_info_2->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   auto task_info_3 = population_spec.add_task_info();
@@ -3187,7 +3089,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(Eq(std::nullopt), _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -3317,11 +3219,11 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // multiple task assignments.
   PopulationEligibilitySpec population_spec;
   auto task_info_1 = population_spec.add_task_info();
-  task_info_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_info_1->set_task_name(kSwor24HourTaskName);
   task_info_1->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   auto task_info_2 = population_spec.add_task_info();
-  task_info_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_info_2->set_task_name(kRequires5ExamplesTaskName);
   task_info_2->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
@@ -3468,7 +3370,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsTurnedAway) {
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight = task_eligibility_info.add_task_weights();
-  task_weight->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight->set_task_name(kRequires5ExamplesTaskName);
   task_weight->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
   task_weight_2->set_task_name(kTaskName);
@@ -3484,7 +3386,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsTurnedAway) {
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -3551,7 +3453,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsIOError) {
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight = task_eligibility_info.add_task_weights();
-  task_weight->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight->set_task_name(kRequires5ExamplesTaskName);
   task_weight->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
   task_weight_2->set_task_name(kTaskName);
@@ -3567,7 +3469,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsIOError) {
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -3636,7 +3538,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight = task_eligibility_info.add_task_weights();
-  task_weight->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight->set_task_name(kRequires5ExamplesTaskName);
   task_weight->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
   task_weight_2->set_task_name(kTaskName);
@@ -3652,7 +3554,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -3722,7 +3624,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight = task_eligibility_info.add_task_weights();
-  task_weight->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight->set_task_name(kRequires5ExamplesTaskName);
   task_weight->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
   task_weight_2->set_task_name(kTaskName);
@@ -3738,7 +3640,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -3809,7 +3711,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight = task_eligibility_info.add_task_weights();
-  task_weight->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight->set_task_name(kRequires5ExamplesTaskName);
   task_weight->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
   task_weight_2->set_task_name(kTaskName);
@@ -3832,7 +3734,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -3916,7 +3818,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight = task_eligibility_info.add_task_weights();
-  task_weight->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight->set_task_name(kRequires5ExamplesTaskName);
   task_weight->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
   task_weight_2->set_task_name(kTaskName);
@@ -3928,13 +3830,13 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // invalid.
   FederatedProtocol::TaskAssignment invalid_task_assignment =
       task_assignment_2_;
-  invalid_task_assignment.payloads.plan = "INVALID_PLAN";
+  invalid_task_assignment.payloads.plan = absl::Cord("INVALID_PLAN");
   FederatedProtocol::MultipleTaskAssignments multiple_task_assignments;
   multiple_task_assignments.task_assignments[kRequires5ExamplesTaskName] =
       invalid_task_assignment;
   FederatedProtocol::TaskAssignment invalid_task_assignment_1 =
       task_assignment_1_;
-  invalid_task_assignment_1.payloads.plan = "INVALID_PLAN";
+  invalid_task_assignment_1.payloads.plan = absl::Cord("INVALID_PLAN");
   multiple_task_assignments.task_assignments[kSwor24HourTaskName] =
       invalid_task_assignment_1;
   EXPECT_CALL(mock_federated_protocol_,
@@ -3946,7 +3848,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // The client should proceed to single task assignment directly.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -4029,10 +3931,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight = task_eligibility_info.add_task_weights();
-  task_weight->set_task_name(std::string(kSwor24HourTaskName));
+  task_weight->set_task_name(kSwor24HourTaskName);
   task_weight->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
-  task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight_2->set_task_name(kRequires5ExamplesTaskName);
   task_weight_2->set_weight(1);
   TaskWeight* task_weight_3 = task_eligibility_info.add_task_weights();
   task_weight_3->set_task_name(kTaskName);
@@ -4066,7 +3968,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // The client should proceed to single task assignment.
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -4171,10 +4073,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight = task_eligibility_info.add_task_weights();
-  task_weight->set_task_name(std::string(kSwor24HourTaskName));
+  task_weight->set_task_name(kSwor24HourTaskName);
   task_weight->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
-  task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight_2->set_task_name(kRequires5ExamplesTaskName);
   task_weight_2->set_weight(1);
   TaskWeight* task_weight_3 = task_eligibility_info.add_task_weights();
   task_weight_3->set_task_name(kTaskName);
@@ -4221,7 +4123,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -4354,7 +4256,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // Population only supports multiple task assignments.
   PopulationEligibilitySpec population_spec;
   auto task_info_1 = population_spec.add_task_info();
-  task_info_1->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_info_1->set_task_name(kRequires5ExamplesTaskName);
   task_info_1->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   task_info_1->add_eligibility_policy_indices(0);
@@ -4363,8 +4265,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   auto data_availability_policy = policy->mutable_data_availability_policy();
   data_availability_policy->set_min_example_count(1);
   ExampleSelector example_selector;
-  example_selector.set_collection_uri(
-      std::string(kEligibilityEvalCollectionUri));
+  example_selector.set_collection_uri(kEligibilityEvalCollectionUri);
   *data_availability_policy->mutable_selector() = example_selector;
   eligibility_eval_artifacts_.population_eligibility_spec = population_spec;
 
@@ -4387,7 +4288,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           population_spec}));
@@ -4395,7 +4296,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight = task_eligibility_info.add_task_weights();
-  task_weight->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight->set_task_name(kRequires5ExamplesTaskName);
   task_weight->set_weight(1);
 
 
@@ -4494,16 +4395,16 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // Population only supports multiple task assignments.
   PopulationEligibilitySpec population_spec;
   auto task_info_1 = population_spec.add_task_info();
-  task_info_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_info_1->set_task_name(kSwor24HourTaskName);
   task_info_1->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   auto task_info_2 = population_spec.add_task_info();
-  task_info_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_info_2->set_task_name(kRequires5ExamplesTaskName);
   task_info_2->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           population_spec}));
@@ -4511,10 +4412,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight_1 = task_eligibility_info.add_task_weights();
-  task_weight_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_weight_1->set_task_name(kSwor24HourTaskName);
   task_weight_1->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
-  task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight_2->set_task_name(kRequires5ExamplesTaskName);
   task_weight_2->set_weight(1);
 
 
@@ -4640,10 +4541,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight_1 = task_eligibility_info.add_task_weights();
-  task_weight_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_weight_1->set_task_name(kSwor24HourTaskName);
   task_weight_1->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
-  task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight_2->set_task_name(kRequires5ExamplesTaskName);
   task_weight_2->set_weight(1);
   TaskWeight* task_weight_3 = task_eligibility_info.add_task_weights();
   task_weight_3->set_task_name(kTaskName);
@@ -4670,7 +4571,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -4726,10 +4627,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight_1 = task_eligibility_info.add_task_weights();
-  task_weight_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_weight_1->set_task_name(kSwor24HourTaskName);
   task_weight_1->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
-  task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight_2->set_task_name(kRequires5ExamplesTaskName);
   task_weight_2->set_weight(1);
   TaskWeight* task_weight_3 = task_eligibility_info.add_task_weights();
   task_weight_3->set_task_name(kTaskName);
@@ -4757,7 +4658,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       .WillOnce(Return(absl::OkStatus()));
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -4829,10 +4730,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight_1 = task_eligibility_info.add_task_weights();
-  task_weight_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_weight_1->set_task_name(kSwor24HourTaskName);
   task_weight_1->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
-  task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight_2->set_task_name(kRequires5ExamplesTaskName);
   task_weight_2->set_weight(1);
   TaskWeight* task_weight_3 = task_eligibility_info.add_task_weights();
   task_weight_3->set_task_name(kTaskName);
@@ -4862,7 +4763,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -4928,7 +4829,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
   // Checkin(...) request.
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           eligibility_eval_artifacts_.population_eligibility_spec,
@@ -4950,7 +4851,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
               MockCheckin(Optional(EqualsProto(expected_eligibility_info)),
                           Eq(attestation_measurement)))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -5001,7 +4902,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
   // Checkin(...) request.
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           eligibility_eval_artifacts_.population_eligibility_spec,
@@ -5020,7 +4921,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
               MockCheckin(Optional(EqualsProto(expected_eligibility_info)),
                           Eq(std::nullopt)))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
-          {single_task_assignment_artifacts_.plan.SerializeAsString(),
+          {single_task_assignment_artifacts_.plan.SerializeAsCord(),
            single_task_assignment_artifacts_.checkpoint},
           /*federated_select_uri_template=*/kFederatedSelectUriTemplate,
           /*aggregation_session_id=*/kAggregationSessionId,
@@ -5073,16 +4974,16 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // Population only supports multiple task assignments.
   PopulationEligibilitySpec population_spec;
   auto task_info_1 = population_spec.add_task_info();
-  task_info_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_info_1->set_task_name(kSwor24HourTaskName);
   task_info_1->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   auto task_info_2 = population_spec.add_task_info();
-  task_info_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_info_2->set_task_name(kRequires5ExamplesTaskName);
   task_info_2->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           population_spec,
@@ -5091,10 +4992,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight_1 = task_eligibility_info.add_task_weights();
-  task_weight_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_weight_1->set_task_name(kSwor24HourTaskName);
   task_weight_1->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
-  task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight_2->set_task_name(kRequires5ExamplesTaskName);
   task_weight_2->set_weight(1);
 
 
@@ -5224,16 +5125,16 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   // Population only supports multiple task assignments.
   PopulationEligibilitySpec population_spec;
   auto task_info_1 = population_spec.add_task_info();
-  task_info_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_info_1->set_task_name(kSwor24HourTaskName);
   task_info_1->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   auto task_info_2 = population_spec.add_task_info();
-  task_info_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_info_2->set_task_name(kRequires5ExamplesTaskName);
   task_info_2->set_task_assignment_mode(
       PopulationEligibilitySpec::TaskInfo::TASK_ASSIGNMENT_MODE_MULTIPLE);
   EXPECT_CALL(mock_federated_protocol_, MockEligibilityEvalCheckin())
       .WillOnce(Return(FederatedProtocol::EligibilityEvalTask{
-          {eligibility_eval_artifacts_.plan.SerializeAsString(),
+          {eligibility_eval_artifacts_.plan.SerializeAsCord(),
            eligibility_eval_artifacts_.checkpoint},
           kEligibilityEvalExecutionId,
           population_spec,
@@ -5242,10 +5143,10 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   TaskEligibilityInfo task_eligibility_info;
   task_eligibility_info.set_version(1);
   TaskWeight* task_weight_1 = task_eligibility_info.add_task_weights();
-  task_weight_1->set_task_name(std::string(kSwor24HourTaskName));
+  task_weight_1->set_task_name(kSwor24HourTaskName);
   task_weight_1->set_weight(1);
   TaskWeight* task_weight_2 = task_eligibility_info.add_task_weights();
-  task_weight_2->set_task_name(std::string(kRequires5ExamplesTaskName));
+  task_weight_2->set_task_name(kRequires5ExamplesTaskName);
   task_weight_2->set_weight(1);
 
 

@@ -23,6 +23,5 @@ message BlobData {
   // Metadata for the blob being written.
   BlobMetadata metadata = 1;
   // Data for the blob being written.
-  bytes data = 2
-      ;
+  bytes data = 2 [ctype = CORD];
 }

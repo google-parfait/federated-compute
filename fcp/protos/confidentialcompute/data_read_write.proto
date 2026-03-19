@@ -45,8 +45,7 @@ message ReadResponse {
   bool finish_read = 2;
   // A chunk of data resolved from the URI in ReadRequest, encrypted with the
   // public key of the requestor TEE.
-  bytes data = 3
-      ;
+  bytes data = 3 [ctype = CORD];
 }
 
 // Request to write data out from the TEE. This can be used to release data.
@@ -64,8 +63,7 @@ message WriteRequest {
   // Indicates that this is the final WriteRequest for a given blob.
   bool commit = 2;
   // A chunk of data to be written out by the TEE.
-  bytes data = 3
-      ;
+  bytes data = 3 [ctype = CORD];
 }
 
 // Write response.

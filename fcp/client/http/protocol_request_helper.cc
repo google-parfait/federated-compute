@@ -399,9 +399,7 @@ absl::StatusOr<Operation> ParseOperationProtoFromHttpResponse(
   FCP_RETURN_IF_ERROR(http_response);
   Operation response_operation_proto;
   // Parse the response.
-    if
-    (!response_operation_proto.ParseFromString(std::string(http_response->body)))
-    {
+  if (!response_operation_proto.ParseFromString(http_response->body)) {
     return absl::InvalidArgumentError("could not parse Operation proto");
   }
   return response_operation_proto;

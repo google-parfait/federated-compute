@@ -123,8 +123,7 @@ message WriteConfigurationRequest {
   // configuration blob.
   bool commit = 2;
   // A chunk of data for the blob being written.
-  bytes data = 3
-      ;
+  bytes data = 3 [ctype = CORD];
 }
 
 // Message indicating that the TEE was successfully initialized
@@ -273,8 +272,7 @@ message WriteRequest {
   // Indicates that this is the final WriteRequest for a given blob.
   bool commit = 3;
   // A chunk of data for the blob being written.
-  bytes data = 4
-      ;
+  bytes data = 4 [ctype = CORD];
 }
 
 // Acknowledges successful receipt of all chunks of an encrypted blob.
@@ -307,8 +305,7 @@ message ReadResponse {
   // Indicates that this is the last chunk of data for the current blob.
   bool finish_read = 2;
   // A chunk of data read from the blob.
-  bytes data = 3
-      ;
+  bytes data = 3 [ctype = CORD];
 }
 
 // Request to incorporate all previously cached blobs into the session.
@@ -372,8 +369,7 @@ message MergeRequest {
   // Indicates that this is the final MergeRequest for a given snapshot.
   bool commit = 3;
   // A chunk of data for the snapshot being merged into the session.
-  bytes data = 4
-      ;
+  bytes data = 4 [ctype = CORD];
 }
 
 // Response indicating that a serialized snapshot has been successfully merged

@@ -28,7 +28,6 @@
 #include "absl/log/log_sink_registry.h"
 #include "fcp/client/attestation/log_attestation_records.h"
 #include "fcp/client/attestation/test_values.h"
-#include "fcp/client/parsing_utils.h"
 #include "fcp/protos/confidentialcompute/access_policy.pb.h"
 #include "fcp/protos/confidentialcompute/verification_record.pb.h"
 #include "fcp/protos/federatedcompute/confidential_aggregations.pb.h"
@@ -127,8 +126,7 @@ TEST(ExtractAttestationRecordsTest, ExtractRecordSuccessfully) {
 
   // Verify that the extracted record matches the original record.
   fcp::confidentialcompute::AttestationVerificationRecord parsed_record;
-  ASSERT_TRUE(
-      ParseFromStringOrCord(parsed_record, records[0].decompressed_record));
+  ASSERT_TRUE(parsed_record.ParseFromString(records[0].decompressed_record));
   EXPECT_THAT(parsed_record, EqualsProto(record));
 
   // Now also compare the original record to the hardcoded serialized record
@@ -245,8 +243,7 @@ I0811 09:51:20.139433    4815 oak_rust_attestation_verifier.cc:207] foo: Some su
 
   // Verify that the extracted record from the hardcoded logs above still
   // matches the original record at the top of this test.
-  ASSERT_TRUE(
-      ParseFromStringOrCord(parsed_record, records[0].decompressed_record));
+  ASSERT_TRUE(parsed_record.ParseFromString(records[0].decompressed_record));
   EXPECT_THAT(parsed_record, EqualsProto(record));
 }
 
@@ -289,11 +286,9 @@ TEST(ExtractAttestationRecordsTest, ExtractRecordMultipleSuccessfully) {
 
   // Verify that the extracted records match the original records.
   fcp::confidentialcompute::AttestationVerificationRecord parsed_record;
-  ASSERT_TRUE(
-      ParseFromStringOrCord(parsed_record, records[0].decompressed_record));
+  ASSERT_TRUE(parsed_record.ParseFromString(records[0].decompressed_record));
   EXPECT_THAT(parsed_record, EqualsProto(record1));
-  ASSERT_TRUE(
-      ParseFromStringOrCord(parsed_record, records[1].decompressed_record));
+  ASSERT_TRUE(parsed_record.ParseFromString(records[1].decompressed_record));
   EXPECT_THAT(parsed_record, EqualsProto(record2));
 }
 

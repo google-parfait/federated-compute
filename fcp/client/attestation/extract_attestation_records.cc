@@ -30,7 +30,6 @@
 #include "fcp/base/compression.h"
 #include "fcp/base/digest.h"
 #include "fcp/base/monitoring.h"
-#include "fcp/client/parsing_utils.h"
 #include "fcp/protos/confidentialcompute/verification_record.pb.h"
 
 namespace fcp::client::attestation {
@@ -119,7 +118,7 @@ std::optional<Record> ParseRecord(absl::string_view serialized_record,
 
   // Validate that the data successfully parses.
   fcp::confidentialcompute::AttestationVerificationRecord parsed_record;
-  if (!ParseFromStringOrCord(parsed_record, *decompressed_record)) {
+  if (!parsed_record.ParseFromString(*decompressed_record)) {
     FCP_LOG(ERROR) << "Failed to parse record at lines " << start_line << "-"
                    << end_line;
     return std::nullopt;
