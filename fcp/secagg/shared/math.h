@@ -22,13 +22,13 @@
 #ifndef FCP_SECAGG_SHARED_MATH_H_
 #define FCP_SECAGG_SHARED_MATH_H_
 
-#include <arpa/inet.h>
-
 #include <cstdint>
 #include <cstring>
 #include <string>
 
+#include "absl/numeric/bits.h"
 #include "absl/numeric/int128.h"
+#include "absl/strings/resize_and_overwrite.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
@@ -113,10 +113,16 @@ static inline uint64_t InverseModPrime(uint64_t a, uint64_t z) {
 // independence only in converting known integer values to byte strings for use
 // in cryptographic methods, not for general processing of binary data.
 static inline std::string IntToByteString(uint32_t input) {
-  input = htonl(input);
+  if constexpr (absl::endian::native != absl::endian::big) {
+    input = absl::byteswap(input);
+  }
 
-  std::string bytes(sizeof(input), '\0');
-  memcpy(bytes.data(), &input, sizeof(input));
+  std::string bytes;
+  absl::StringResizeAndOverwrite(bytes, sizeof(input),
+                                 [input](char* buf, size_t) {
+                                   memcpy(buf, &input, sizeof(input));
+                                   return sizeof(input);
+                                 });
   return bytes;
 }
 
