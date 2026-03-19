@@ -70,6 +70,7 @@ using ::testing::IsEmpty;
 using ::testing::MockFunction;
 using ::testing::Ne;
 using ::testing::NiceMock;
+using ::testing::Optional;
 using ::testing::Pair;
 using ::testing::Return;
 using ::testing::StrEq;
@@ -275,8 +276,7 @@ TEST(InMemoryHttpRequestTest, RequestWithCompressedBody) {
   ASSERT_OK(request);
   auto content_encoding_header =
       FindHeader((*request)->extra_headers(), kContentEncodingHdr);
-  ASSERT_TRUE(content_encoding_header.has_value());
-  ASSERT_EQ(content_encoding_header.value(), kGzipEncodingHdrValue);
+  ASSERT_THAT(content_encoding_header, Optional(StrEq(kGzipEncodingHdrValue)));
 
   auto content_length_header =
       FindHeader((*request)->extra_headers(), kContentLengthHdr);

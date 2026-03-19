@@ -45,6 +45,7 @@
 #include "fcp/client/http/http_client_util.h"
 #include "fcp/client/http/http_resource_metadata.pb.h"
 #include "fcp/client/interruptible_runner.h"
+#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 
 namespace fcp {
 namespace client {
@@ -606,12 +607,9 @@ FetchResourcesInMemory(HttpClient& http_client,
             .IgnoreError();
       }
       if (encoded_with_gzip) {
-        std::string response_body_temp(response->body);
-        // We're going to overwrite the response body with the decoded
-        // contents shortly, no need to keep an extra copy of it in memory.
-        response->body.Clear();
+        google::protobuf::io::CordInputStream cord_stream(&response->body);
         absl::StatusOr<absl::Cord> decoded_response_body =
-            UncompressWithGzip(response_body_temp);
+            UncompressWithGzip(cord_stream);
         if (!decoded_response_body.ok()) {
           response = decoded_response_body.status();
         } else {

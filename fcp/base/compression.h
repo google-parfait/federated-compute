@@ -17,9 +17,12 @@
 #ifndef FCP_BASE_COMPRESSION_H_
 #define FCP_BASE_COMPRESSION_H_
 
+#include <string>
+
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
+#include "google/protobuf/io/zero_copy_stream.h"
 
 namespace fcp {
 
@@ -27,6 +30,8 @@ absl::StatusOr<std::string> CompressWithGzip(
     absl::string_view uncompressed_data);
 absl::StatusOr<absl::Cord> UncompressWithGzip(
     absl::string_view compressed_data);
+absl::StatusOr<absl::Cord> UncompressWithGzip(
+    google::protobuf::io::ZeroCopyInputStream& compressed_data);
 
 }  // namespace fcp
 

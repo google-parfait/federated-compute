@@ -25,6 +25,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/io/gzip_stream.h"
+#include "google/protobuf/io/zero_copy_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 
 namespace fcp {
@@ -73,12 +74,17 @@ absl::StatusOr<std::string> CompressWithGzip(
 
 absl::StatusOr<absl::Cord> UncompressWithGzip(
     absl::string_view compressed_data) {
+  ArrayInputStream sub_stream(compressed_data.data(),
+                              static_cast<int>(compressed_data.size()));
+  return UncompressWithGzip(sub_stream);
+}
+
+absl::StatusOr<absl::Cord> UncompressWithGzip(
+    google::protobuf::io::ZeroCopyInputStream& compressed_data) {
   absl::Cord out;
   const void* buffer;
   int size;
-  ArrayInputStream sub_stream(compressed_data.data(),
-                              static_cast<int>(compressed_data.size()));
-  GzipInputStream input_stream(&sub_stream, GzipInputStream::GZIP);
+  GzipInputStream input_stream(&compressed_data, GzipInputStream::GZIP);
 
   while (input_stream.Next(&buffer, &size)) {
     if (size <= -1) {
