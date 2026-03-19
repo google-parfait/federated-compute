@@ -19,6 +19,7 @@
 #include <sstream>
 
 #include "absl/base/attributes.h"
+#include "absl/base/macros.h"
 #include "absl/base/optimization.h"
 #include "absl/log/absl_log.h"
 #include "absl/status/status.h"
@@ -100,17 +101,14 @@ namespace fcp {
 
 #endif  // defined(__ANDROID__)
 
-#define FCP_PREDICT_FALSE(x) ABSL_PREDICT_FALSE(x)
-#define FCP_PREDICT_TRUE(x) ABSL_PREDICT_TRUE(x)
-
 /**
  * Check that the condition holds, otherwise die. Any additional messages can
  * be streamed into the invocation. Example:
  *
  *     FCP_CHECK(condition) << "stuff went wrong";
  */
-#define FCP_CHECK(condition)                         \
-  FCP_LOG_IF(FATAL, FCP_PREDICT_FALSE(!(condition))) \
+#define FCP_CHECK(condition)                          \
+  FCP_LOG_IF(FATAL, ABSL_PREDICT_FALSE(!(condition))) \
       << ("Check failed: " #condition ". ")
 
 /**
@@ -133,8 +131,8 @@ namespace fcp {
  *
  * Use as in:
  *
- *   FCP_STATUS(OK);                // signal success
- *   FCP_STATUS(code) << message;   // signal failure
+ *   absl::OkStatus()              // signal success
+ *   FCP_STATUS(code) << message;  // signal failure
  *
  * FCP_STATUS can be used in places which either expect a Status or a
  * StatusOr<T>.
@@ -142,30 +140,84 @@ namespace fcp {
 #define FCP_STATUS(code) \
   ::fcp::internal::MakeStatusBuilder(code, __FILE__, __LINE__)
 
-#define FCP_MUST_USE_RESULT ABSL_MUST_USE_RESULT
-
-using Status = absl::Status;
-using StatusCode = absl::StatusCode;
+using Status [[deprecated("Use absl::Status instead")]] ABSL_REFACTOR_INLINE =
+    absl::Status;
+using StatusCode
+    [[deprecated("Use absl::StatusCode "
+                 "instead")]] ABSL_REFACTOR_INLINE = absl::StatusCode;
 template <typename T>
-using StatusOr = absl::StatusOr<T>;
+using StatusOr
+    [[deprecated("Use absl::StatusOr "
+                 "instead")]] ABSL_REFACTOR_INLINE = absl::StatusOr<T>;
 
-constexpr auto OK = StatusCode::kOk;
-constexpr auto CANCELLED = StatusCode::kCancelled;
-constexpr auto UNKNOWN = StatusCode::kUnknown;
-constexpr auto INVALID_ARGUMENT = StatusCode::kInvalidArgument;
-constexpr auto DEADLINE_EXCEEDED = StatusCode::kDeadlineExceeded;
-constexpr auto NOT_FOUND = StatusCode::kNotFound;
-constexpr auto ALREADY_EXISTS = StatusCode::kAlreadyExists;
-constexpr auto PERMISSION_DENIED = StatusCode::kPermissionDenied;
-constexpr auto RESOURCE_EXHAUSTED = StatusCode::kResourceExhausted;
-constexpr auto FAILED_PRECONDITION = StatusCode::kFailedPrecondition;
-constexpr auto ABORTED = StatusCode::kAborted;
-constexpr auto OUT_OF_RANGE = StatusCode::kOutOfRange;
-constexpr auto UNIMPLEMENTED = StatusCode::kUnimplemented;
-constexpr auto INTERNAL = StatusCode::kInternal;
-constexpr auto UNAVAILABLE = StatusCode::kUnavailable;
-constexpr auto DATA_LOSS = StatusCode::kDataLoss;
-constexpr auto UNAUTHENTICATED = StatusCode::kUnauthenticated;
+[[deprecated(
+    "Use absl::StatusCode::kOk "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto OK =
+    StatusCode::kOk;
+[[deprecated(
+    "Use absl::StatusCode::kCancelled "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto CANCELLED =
+    StatusCode::kCancelled;
+[[deprecated(
+    "Use absl::StatusCode::kUnknown "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNKNOWN =
+    StatusCode::kUnknown;
+[[deprecated(
+    "Use absl::StatusCode::kInvalidArgument "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto INVALID_ARGUMENT =
+    StatusCode::kInvalidArgument;
+[[deprecated(
+    "Use absl::StatusCode::kDeadlineExceeded "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto DEADLINE_EXCEEDED =
+    StatusCode::kDeadlineExceeded;
+[[deprecated(
+    "Use absl::StatusCode::kNotFound "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto NOT_FOUND =
+    StatusCode::kNotFound;
+[[deprecated(
+    "Use absl::StatusCode::kAlreadyExists "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto ALREADY_EXISTS =
+    StatusCode::kAlreadyExists;
+[[deprecated(
+    "Use absl::StatusCode::kPermissionDenied "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto PERMISSION_DENIED =
+    StatusCode::kPermissionDenied;
+[[deprecated(
+    "Use absl::StatusCode::kResourceExhausted "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto RESOURCE_EXHAUSTED =
+    StatusCode::kResourceExhausted;
+[[deprecated(
+    "Use absl::StatusCode::kFailedPrecondition "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto
+    FAILED_PRECONDITION = StatusCode::kFailedPrecondition;
+[[deprecated(
+    "Use absl::StatusCode::kAborted "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto ABORTED =
+    StatusCode::kAborted;
+[[deprecated(
+    "Use absl::StatusCode::kOutOfRange "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto OUT_OF_RANGE =
+    StatusCode::kOutOfRange;
+[[deprecated(
+    "Use absl::StatusCode::kUnimplemented "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNIMPLEMENTED =
+    StatusCode::kUnimplemented;
+[[deprecated(
+    "Use absl::StatusCode::kInternal "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto INTERNAL =
+    StatusCode::kInternal;
+[[deprecated(
+    "Use absl::StatusCode::kUnavailable "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNAVAILABLE =
+    StatusCode::kUnavailable;
+[[deprecated(
+    "Use absl::StatusCode::kDataLoss "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto DATA_LOSS =
+    StatusCode::kDataLoss;
+[[deprecated(
+    "Use absl::StatusCode::kUnauthenticated "
+    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNAUTHENTICATED =
+    StatusCode::kUnauthenticated;
 
 namespace internal {
 /** Functions to assist with FCP_RETURN_IF_ERROR() */
@@ -232,7 +284,7 @@ namespace internal {
  * into it. Implicitly converts to Status and StatusOr so can be used as a drop
  * in replacement when those types are expected.
  */
-class FCP_MUST_USE_RESULT StatusBuilder {
+class ABSL_MUST_USE_RESULT StatusBuilder {
  public:
   /** Construct a StatusBuilder from status code. */
   StatusBuilder(StatusCode code, const char* file, int line);
