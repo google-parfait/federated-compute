@@ -14,7 +14,8 @@ load("@rules_java//java:defs.bzl", "java_test")
 # See the License for the specific language governing permissions and
 # limitations under the License.
 package(
-    licenses = ["notice"],  # Apache 2.0
+    default_applicable_licenses = ["//fcp:license"],
+    licenses = ["notice"],
 )
 
 java_test(

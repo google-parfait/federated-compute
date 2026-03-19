@@ -17,8 +17,18 @@ A custom build file for curl
 """
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_license//rules:license.bzl", "license")
+
+package(default_applicable_licenses = [":license"])
 
 licenses(["notice"])
+
+license(
+    name = "license",
+    package_name = "curl",
+    license_text = "COPYING",
+    license_kinds = ["@rules_license//licenses/spdx:curl"],
+)
 
 exports_files(["COPYING"])
 

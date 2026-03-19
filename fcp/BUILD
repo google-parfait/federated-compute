@@ -18,11 +18,19 @@
 # large set of dynamically available nodes (e.g. mobile devices).
 
 load("@bazel_toolchains//rules/exec_properties:exec_properties.bzl", "create_rbe_exec_properties_dict")
+load("@rules_license//rules:license.bzl", "license")
 load("@rules_python//python:pip.bzl", "compile_pip_requirements")
 
 package(
+    default_applicable_licenses = [":license"],
     default_visibility = [":internal"],
-    licenses = ["notice"],  # Apache 2.0
+    licenses = ["notice"],
+)
+
+license(
+    name = "license",
+    package_name = "fcp",
+    license_kinds = ["@rules_license//licenses/spdx:Apache-2.0"],
 )
 
 exports_files([

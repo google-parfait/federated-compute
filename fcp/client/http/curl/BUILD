@@ -17,7 +17,8 @@ load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("//fcp:config.bzl", "FCP_COPTS")
 
 package(
-    licenses = ["notice"],  # Apache 2.0
+    default_applicable_licenses = ["//fcp:license"],
+    licenses = ["notice"],
 )
 
 cc_library(

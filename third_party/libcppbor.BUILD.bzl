@@ -17,8 +17,17 @@ A custom build file for libcppbor
 """
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_license//rules:license.bzl", "license")
+
+package(default_applicable_licenses = [":license"])
 
 licenses(["notice"])
+
+license(
+    name = "license",
+    package_name = "libcppbor",
+    license_kinds = ["@rules_license//licenses/spdx:Apache-2.0"],
+)
 
 exports_files(["LICENSE"])
 

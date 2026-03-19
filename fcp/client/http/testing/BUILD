@@ -15,10 +15,11 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(
+    default_applicable_licenses = ["//fcp:license"],
     default_visibility = [
         "//fcp:internal",
     ],
-    licenses = ["notice"],  # Apache 2.0
+    licenses = ["notice"],
 )
 
 # TODO(team)

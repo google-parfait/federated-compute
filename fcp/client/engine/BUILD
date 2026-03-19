@@ -23,8 +23,9 @@ default_visibility = [
 ]
 
 package(
+    default_applicable_licenses = ["//fcp:license"],
     default_visibility = default_visibility,
-    licenses = ["notice"],  # Apache 2.0
+    licenses = ["notice"],
 )
 
 cc_library(
