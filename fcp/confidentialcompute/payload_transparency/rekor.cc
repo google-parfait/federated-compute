@@ -71,7 +71,11 @@ absl::StatusOr<std::string> ExtractDataHash(absl::string_view body) {
   if (!data_hash_b16) {
     return absl::InvalidArgumentError("log entry is missing data hash");
   }
-  return absl::HexStringToBytes(*data_hash_b16);
+  std::string data_hash;
+  if (!absl::HexStringToBytes(*data_hash_b16, &data_hash)) {
+    return absl::InvalidArgumentError("data hash is not a valid base16 string");
+  }
+  return data_hash;
 }
 
 // Extracts the signature field from the log entry.

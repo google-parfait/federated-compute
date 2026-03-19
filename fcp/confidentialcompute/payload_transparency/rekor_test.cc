@@ -194,19 +194,12 @@ constexpr std::array kLeaves = {
     "2k2Wit5TXhZOGp1YXRIaENPM3BBPT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0t\"}}}}",
 };
 
-// Converts a hex string to bytes. This function is intended to ease the
-// migration to the version of HexStringToBytes introduced in abseil 20240722.0.
-bool HexStringToBytes(absl::string_view hex, std::string* bytes) {
-  *bytes = absl::HexStringToBytes(hex);
-  return true;
-}
-
 // The key used to sign even-index log entries.
 Key GetEvenVerifyingKey() {
   Key key;
   key.set_algorithm(Key::ECDSA_P256);
   key.set_purpose(Key::VERIFY);
-  CHECK(HexStringToBytes(
+  CHECK(absl::HexStringToBytes(
       "04f3ffb9edf621b9a0bc57eb8c14ef64753077dcd499e6afc76cc59c304cbfd1d7171725"
       "a76a37ff270ffe03da64b54b17b7e8ba67ec8cc58f23b9ab478423b7a4",
       key.mutable_key_material()));
@@ -219,7 +212,7 @@ Key GetOddVerifyingKey() {
   Key key;
   key.set_algorithm(Key::ECDSA_P256);
   key.set_purpose(Key::VERIFY);
-  CHECK(HexStringToBytes(
+  CHECK(absl::HexStringToBytes(
       "04657221481c50da35d183c1a4f4b47d6dfe85de8d9aebf5206fe34a5951b1c0abf578eb"
       "cfeb732235a49903af55df8c6491a26556697446cd6e2df2f55c39bf1e",
       key.mutable_key_material()));
@@ -263,7 +256,7 @@ TEST(VerifyRekorLogEntryTest, Leaf0) {
            "c5ebc562f49755eccc26679d2aa22a700c76311a2e97b0be0c3c3e7a5c502786",
            "23e18ca02de317968435d21756f6ff8189abbb44b864f5357264d100d4e44a97",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -289,7 +282,7 @@ TEST(VerifyRekorLogEntryTest, Leaf5) {
            "f625e204b44ef052ae52ec92695dd9648b83a9b601ba6cf76205124d522a8e15",
            "23e18ca02de317968435d21756f6ff8189abbb44b864f5357264d100d4e44a97",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -315,7 +308,7 @@ TEST(VerifyRekorLogEntryTest, Leaf7) {
            "f625e204b44ef052ae52ec92695dd9648b83a9b601ba6cf76205124d522a8e15",
            "23e18ca02de317968435d21756f6ff8189abbb44b864f5357264d100d4e44a97",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -340,7 +333,7 @@ TEST(VerifyRekorLogEntryTest, Leaf8) {
            "c0e6be9a317ce82b482b91ac12c7a90555208bdfc6741f5f67207e2a7593ecc6",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -364,7 +357,7 @@ TEST(VerifyRekorLogEntryTest, Leaf10) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -405,7 +398,7 @@ TEST(VerifyRekorLogEntryTest, CheckpointOtherContents) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.add_checkpoint_other_contents("extra 1");
@@ -431,7 +424,7 @@ TEST(VerifyRekorLogEntryTest, UnsupportedLogEntryKind) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -460,7 +453,7 @@ TEST(VerifyRekorLogEntryTest, MissingDataHash) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -488,7 +481,7 @@ TEST(VerifyRekorLogEntryTest, InvalidDataHashEncoding) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -497,7 +490,8 @@ TEST(VerifyRekorLogEntryTest, InvalidDataHashEncoding) {
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
   EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
-  EXPECT_THAT(status.message(), HasSubstr("hash does not match payload"));
+  EXPECT_THAT(status.message(),
+              HasSubstr("data hash is not a valid base16 string"));
 }
 
 TEST(VerifyRekorLogEntryTest, MissmatchedDataHash) {
@@ -516,7 +510,7 @@ TEST(VerifyRekorLogEntryTest, MissmatchedDataHash) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -546,7 +540,7 @@ TEST(VerifyRekorLogEntryTest, MissingSignature) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -575,7 +569,7 @@ TEST(VerifyRekorLogEntryTest, InvalidSignatureEncoding) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -606,7 +600,7 @@ TEST(VerifyRekorLogEntryTest, MissmatchedSignature) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -631,7 +625,7 @@ TEST(VerifyRekorLogEntryTest, LeafIndexTooLarge) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -665,7 +659,7 @@ TEST(VerifyRekorLogEntryTest, WrongNumberOfHashes) {
            // Add an extra hash.
            "0000000000000000000000000000000000000000000000000000000000000000",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -699,7 +693,7 @@ TEST(VerifyRekorLogEntryTest, MissmatchedCheckpointSignature) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -724,7 +718,7 @@ TEST(VerifyRekorLogEntryTest, NoMatchingRekorKey) {
            "3fe1a8f703995dc5db242e9040efabc666dbe615ebd5e3e4b751f610d4228476",
            "2044241076dd5d97acf82f027399fea9e2983655476e7ed581bbf0f86e256cbe",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("origin");
   log_entry.set_checkpoint_signature(checkpoint_signature);
@@ -811,10 +805,10 @@ TEST(VerifyRekorLogEntryTest, RealLogEntry) {
            "906353f3bc653d8e5966373b0925f03ecdd0b0baf95039d510437789979b818c",
            "9c99f9a3422518e013f7682ef34dabbf5b6d3af762eac7892dde030e280ef023",
        }) {
-    ASSERT_TRUE(HexStringToBytes(hash, log_entry.add_hashes()));
+    ASSERT_TRUE(absl::HexStringToBytes(hash, log_entry.add_hashes()));
   }
   log_entry.set_checkpoint_origin("rekor.sigstore.dev - 1193050959916656506");
-  ASSERT_TRUE(HexStringToBytes(
+  ASSERT_TRUE(absl::HexStringToBytes(
       "952e3f895a4f4619b9c522c830544533dc731c7d045731bb5af3921e7b8b31b6"
       "2c3b3ae0a8f7d15d6021409b817cfbed9388bbba096110ac8e2e5fa676fa37f2",
       log_entry.mutable_checkpoint_signature()));
@@ -823,7 +817,7 @@ TEST(VerifyRekorLogEntryTest, RealLogEntry) {
   Key verifying_key;
   verifying_key.set_algorithm(Key::ECDSA_P256);
   verifying_key.set_purpose(Key::VERIFY);
-  ASSERT_TRUE(HexStringToBytes(
+  ASSERT_TRUE(absl::HexStringToBytes(
       "048ede9c77dc6780f525ec75587cf29c1ebcda2b2938eb41a22b0edf2cbbbfbc117a1f96"
       "1715cf433c55db5bce3ad8f10c2f2fcc96694e4fc4e8f80f8db54f7228",
       verifying_key.mutable_key_material()));
@@ -831,7 +825,7 @@ TEST(VerifyRekorLogEntryTest, RealLogEntry) {
   rekor_key.set_algorithm(Key::ECDSA_P256);
   rekor_key.set_purpose(Key::VERIFY);
   rekor_key.set_key_id("\xc0\xd2\x3d\x6a");
-  ASSERT_TRUE(HexStringToBytes(
+  ASSERT_TRUE(absl::HexStringToBytes(
       "04d86d98fb6b5a6dd4d5e41706881231d1af5f005c2b9016e62d21ad92ce0bdea5fac986"
       "34cee7c19e10bc52bfe2cb9e468563fff40fdb6362e10b7d0cf7e458b7",
       rekor_key.mutable_key_material()));
