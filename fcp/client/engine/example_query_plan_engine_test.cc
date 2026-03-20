@@ -28,7 +28,9 @@
 #include <vector>
 
 #include "google/protobuf/duration.pb.h"
+#include "google/type/date.pb.h"
 #include "google/type/datetime.pb.h"
+#include "google/type/timeofday.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/flat_hash_map.h"

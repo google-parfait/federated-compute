@@ -18,6 +18,8 @@
 #include <cstdint>
 #include <string>
 
+#include "google/type/date.pb.h"
+#include "google/type/timeofday.pb.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/civil_time.h"

@@ -20,7 +20,9 @@
 #include <string>
 #include <vector>
 
+#include "google/type/date.pb.h"
 #include "google/type/datetime.pb.h"
+#include "google/type/timeofday.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
