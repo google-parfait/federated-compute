@@ -27,6 +27,20 @@ def _fcp_deps_impl(ctx):
         url = "https://github.com/bazelbuild/bazel-toolchains/archive/8c717f8258cd5f6c7a45b97d974292755852b658.tar.gz",
     )
 
+    http_archive(
+        name = "differential_privacy_cc",
+        sha256 = "6e6e1cd7a819695caae408f4fa938129ab7a86e83fe2410137c85e50131abbe0",
+        strip_prefix = "differential-privacy-3.0.0/cc",
+        url = "https://github.com/google/differential-privacy/archive/refs/tags/v3.0.0.tar.gz",
+    )
+
+    http_archive(
+        name = "differential_privacy_common",
+        sha256 = "6e6e1cd7a819695caae408f4fa938129ab7a86e83fe2410137c85e50131abbe0",
+        strip_prefix = "differential-privacy-3.0.0",
+        url = "https://github.com/google/differential-privacy/archive/refs/tags/v3.0.0.tar.gz",
+    )
+
     git_repository(
         name = "libcppbor",
         build_file = "//third_party:libcppbor.BUILD.bzl",

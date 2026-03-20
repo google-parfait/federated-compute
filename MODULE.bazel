@@ -44,6 +44,8 @@ use_repo(
     "libcppbor",
     "libcurl",
     "org_tensorflow_federated",
+    com_google_cc_differential_privacy = "differential_privacy_cc",
+    com_google_differential_privacy = "differential_privacy_common",
     protodatastore_cpp = "protodatastore-cpp",
 )
 
