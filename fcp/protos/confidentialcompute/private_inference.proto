@@ -29,6 +29,10 @@ message InferenceConfiguration {
   }
   // Additional customer-facing arguments affecting inference at runtime.
   RuntimeConfig runtime_config = 3;
+
+  // Configuration for the host proxy (see the comment on `ProxyConfig` for
+  // the explanation of the role of this proxy).
+  ProxyConfig proxy_config = 4;
 }
 
 // A message containing different optional arguments for inference runtime. For
@@ -61,6 +65,25 @@ message RuntimeConfig {
     MODEL_MODE_MODEL_PER_SESSION = 2;
   }
   ModelMode model_mode = 6;
+}
+
+// Configuration for the proxy on the (Oak) host on which the Oak TEE is
+// running. The host starts a gRPC proxy, relays its configuration to
+// the container in the Oak TEE, and enables the container in the TEE to
+// connect to this proxy to initiate the Oak Session protocol with a remote
+// inference backend. The host proxy facilitates the TEE-to-TEE communication
+// with the remote inference backend by carrying encrypted messages back
+// and forth. Containers in Oak TEEs do not have direct network access, and
+// have to use a proxy on the host, to reach inference backends (e.g., such
+// as GPU-equipped backends hosted on GCP). Currently, only a port number is
+// specified. The host proxy is guaranteed to implement the Oak Session
+// protocol via gRPC.
+message ProxyConfig {
+  // The port number on which the host proxy is listening on. Whereas normally,
+  // Oak TEEs cannot reach the internet, this port is specifically provisioned
+  // to be accessible to the container for the purpose of communication with
+  // the proxy.
+  int32 host_proxy_port = 1;
 }
 
 // A single private inference task to execute inside the TEE-hosted
