@@ -19,7 +19,6 @@
 #include <string>
 #include <utility>
 
-
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"  // IWYU pragma: keep
 #include "absl/flags/usage.h"  // IWYU pragma: keep

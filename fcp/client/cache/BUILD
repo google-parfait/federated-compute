@@ -75,10 +75,10 @@ cc_library(
     deps = [
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:any_cc_proto",
     ],
 )
 
@@ -107,7 +107,8 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:any_cc_proto",
+        "@com_google_protobuf//:timestamp_cc_proto",
         "@protodatastore_cpp//protostore:file-storage",
         "@protodatastore_cpp//protostore:proto-data-store",
     ],
@@ -139,10 +140,10 @@ cc_library(
         ":resource_cache",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:any_cc_proto",
     ],
 )

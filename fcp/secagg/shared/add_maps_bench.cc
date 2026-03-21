@@ -22,7 +22,7 @@
 #include "fcp/secagg/shared/secagg_vector.h"
 
 // Open-source version of benchmarking library
-#include "benchmark//benchmark.h"
+#include "benchmark/benchmark.h"
 
 namespace fcp {
 namespace secagg {

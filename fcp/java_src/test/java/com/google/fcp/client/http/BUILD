@@ -27,7 +27,7 @@ java_test(
         "//fcp/java_src/main/java/com/google/fcp/client",
         "//fcp/java_src/main/java/com/google/fcp/client/http",
         "@com_google_googleapis//google/rpc:rpc_java_proto",
-        "@com_google_protobuf//:protobuf_java",
+        "@com_google_protobuf//:protobuf_javalite",
         "@fcp_maven//:com_google_guava_guava",
         "@fcp_maven//:com_google_truth_truth",
         "@fcp_maven//:junit_junit",

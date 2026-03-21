@@ -40,9 +40,11 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:timestamp_cc_proto",
+        "@com_google_protobuf//src/google/protobuf/io",
     ],
 )
 
@@ -61,9 +63,10 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:timestamp_cc_proto",
     ],
 )
 
@@ -85,8 +88,9 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:span",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:protobuf_lite",
     ],
 )
 
@@ -140,7 +144,7 @@ cc_test(
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest_main",
     ],

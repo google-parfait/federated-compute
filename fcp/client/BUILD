@@ -85,7 +85,7 @@ cc_library(
         "//fcp/protos:federated_api_cc_proto",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:duration_cc_proto",
     ],
 )
 
@@ -199,7 +199,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:duration_cc_proto",
     ],
 )
 
@@ -242,7 +242,8 @@ cc_test(
         "@com_google_absl//absl/time",
         "@com_google_googleapis//google/type:datetime_cc_proto",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:duration_cc_proto",
+        "@com_google_protobuf//:protobuf_lite",
     ],
 )
 
@@ -272,7 +273,8 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:duration_cc_proto",
+        "@com_google_protobuf//:timestamp_cc_proto",
         "@com_googlesource_code_re2//:re2",
     ],
 )
@@ -297,7 +299,8 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:duration_cc_proto",
+        "@com_google_protobuf//:timestamp_cc_proto",
     ],
 )
 
@@ -349,7 +352,7 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:time_util",
     ],
 )
 
@@ -395,7 +398,7 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:any_cc_proto",
     ],
 )
 
@@ -421,7 +424,7 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:any_cc_proto",
     ],
 )
 
@@ -509,8 +512,8 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_googletest//:gtest_for_library",
+        "@com_google_protobuf//:any_cc_proto",
     ],
 )
 
@@ -552,7 +555,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:protobuf_lite",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_cc_proto",
     ],
@@ -582,7 +585,7 @@ cc_library(
         "//fcp/protos:plan_cc_proto",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/synchronization",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:any_cc_proto",
     ],
 )
 
@@ -597,7 +600,7 @@ cc_test(
         "//fcp/testing",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:any_cc_proto",
     ],
 )
 
@@ -641,7 +644,8 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:duration_cc_proto",
+        "@com_google_protobuf//:protobuf_lite",
     ],
 )
 

@@ -487,7 +487,8 @@ cc_library(
     hdrs = ["time_util.h"],
     deps = [
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:duration_cc_proto",
+        "@com_google_protobuf//:timestamp_cc_proto",
     ],
 )
 
@@ -540,8 +541,8 @@ cc_library(
         ":base",
         "@boringssl//:crypto",
         "@com_google_absl//absl/functional:function_ref",
-        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:string_view",
     ],
 )
 
@@ -572,7 +573,9 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_protobuf//src/google/protobuf/io",
+        "@com_google_protobuf//src/google/protobuf/io:gzip_stream",
     ],
 )
 

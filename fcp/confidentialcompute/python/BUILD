@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("@rules_python//python:py_library.bzl", "py_library")
+load("@rules_python//python:py_test.bzl", "py_test")
 
 package(
     default_applicable_licenses = ["//fcp:license"],
@@ -31,11 +32,11 @@ py_library(
     tags = ["manual"],
     visibility = ["//visibility:public"],
     deps = [
-        "//third_party/py/optax",
         "@federated_language//federated_language",
         "@org_tensorflow_federated//tensorflow_federated",
         "@pypi//jax",
         "@pypi//jax_privacy",
+        "@pypi//optax",
         "@pypi//tensorflow",
     ],
 )
@@ -52,10 +53,10 @@ py_test(
     tags = ["manual"],
     deps = [
         ":dp_mf_aggregator",
-        "//third_party/py/optax",
         "@federated_language//federated_language",
         "@pypi//absl_py",
         "@pypi//numpy",
+        "@pypi//optax",
         "@pypi//tensorflow",
     ],
 )

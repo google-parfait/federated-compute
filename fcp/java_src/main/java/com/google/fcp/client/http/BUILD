@@ -44,7 +44,7 @@ java_library(
         "//fcp/client/http/java:jni_java_proto",
         "//fcp/java_src/main/java/com/google/fcp/client",
         "@com_google_googleapis//google/rpc:rpc_java_proto",
-        "@com_google_protobuf//:protobuf_java",
+        "@com_google_protobuf//:protobuf_javalite",
         "@fcp_maven//:com_google_code_findbugs_jsr305",
         "@fcp_maven//:com_google_errorprone_error_prone_annotations",
         "@fcp_maven//:com_google_guava_guava",

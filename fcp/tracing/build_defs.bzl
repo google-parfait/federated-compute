@@ -64,7 +64,7 @@ def tracing_schema_cc_library(
             "--keep-prefix",
         ],
         gen_reflections = True,
-        include_paths = [".", "third_party/fcp/tracing"],
+        include_paths = [".", "fcp/tracing"],
     )
 
     # Get generated flatbuff files from flatbuffer_cc_library rule.
@@ -106,7 +106,7 @@ def tracing_schema_cc_library(
             "@com_google_absl//absl/base:core_headers",
             "@com_google_absl//absl/strings",
             "@com_google_absl//absl/memory",
-            "@flatbuffers//:flatbuffers",
+            "@flatbuffers",
             "//fcp/base",
         ],
         data = [

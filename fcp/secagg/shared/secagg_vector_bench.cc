@@ -17,7 +17,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "benchmark//benchmark.h"
+#include "benchmark/benchmark.h"
 #include "fcp/secagg/shared/secagg_vector.h"
 
 namespace fcp {

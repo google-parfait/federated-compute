@@ -43,7 +43,7 @@ cc_library(
         "//fcp/protos:federated_api_cc_proto",
         "//fcp/protos:opstats_cc_proto",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
     ],
 )
@@ -67,10 +67,10 @@ cc_library(
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:time_util",
     ],
 )
 
@@ -91,7 +91,7 @@ cc_test(
         "//fcp/testing",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:time_util",
         "@protodatastore_cpp//protostore:file-storage",
     ],
 )
@@ -122,7 +122,9 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:duration_cc_proto",
+        "@com_google_protobuf//:time_util",
+        "@com_google_protobuf//:timestamp_cc_proto",
         "@com_googlesource_code_re2//:re2",
     ],
 )
@@ -137,7 +139,7 @@ cc_test(
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:timestamp_cc_proto",
         "@com_googlesource_code_re2//:re2",
     ],
 )
@@ -161,7 +163,9 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:protobuf_lite",
+        "@com_google_protobuf//:time_util",
+        "@com_google_protobuf//:timestamp_cc_proto",
         "@protodatastore_cpp//protostore:file-storage",
         "@protodatastore_cpp//protostore:proto-data-store",
     ],
@@ -186,7 +190,7 @@ cc_test(
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:time_util",
         "@protodatastore_cpp//protostore:file-storage",
     ],
 )

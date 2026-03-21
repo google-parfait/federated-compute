@@ -43,8 +43,9 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
-        "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:protobuf_lite",
     ],
 )
 
@@ -64,6 +65,7 @@ cc_test(
         "//fcp/testing",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -82,8 +84,8 @@ cc_library(
         "//fcp/protos/federatedcompute:federated_compute_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:string_view",
     ],
 )
 

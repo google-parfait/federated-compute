@@ -19,7 +19,7 @@
 
 #include "absl/numeric/bits.h"
 #include "absl/strings/str_cat.h"
-#include "benchmark//benchmark.h"
+#include "benchmark/benchmark.h"
 #include "fcp/secagg/shared/aes_ctr_prng_factory.h"
 #include "fcp/secagg/shared/input_vector_specification.h"
 #include "fcp/secagg/shared/map_of_masks.h"
