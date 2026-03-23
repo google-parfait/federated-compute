@@ -150,6 +150,8 @@ message FedSqlContainerConfigConstraints {
   repeated string intrinsic_uris = 7;
 
   // This value represents an upper bound on the number of partitions that can
-  // be used when performing partitioned aggregation.
-  uint64 max_output_partitions = 8;
+  // be used when performing partitioned aggregation. If unset or set to 0,
+  // unpartitioned aggregation will be used i.e. all aggregates are
+  // merged together in a single worker before release.
+  optional uint64 max_output_partitions = 8;
 }
