@@ -139,6 +139,8 @@ message SessionRequest {
     ConfigureRequest configure = 1;
     WriteRequest write = 2;
     CommitRequest commit = 4;
+    CompactRequest compact = 5;
+    MergeRequest merge = 6;
     FinalizeRequest finalize = 3;
   }
 }
@@ -150,6 +152,8 @@ message SessionResponse {
     ConfigureResponse configure = 1;
     WriteFinishedResponse write = 2;
     CommitResponse commit = 4;
+    CompactResponse compact = 7;
+    MergeResponse merge = 8;
     ReadResponse read = 3;
     FinalizeResponse finalize = 5;
   }
