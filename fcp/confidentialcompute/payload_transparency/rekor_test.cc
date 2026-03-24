@@ -28,6 +28,7 @@
 #include "absl/functional/function_ref.h"
 #include "absl/log/check.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
@@ -262,8 +263,8 @@ TEST(VerifyRekorLogEntryTest, Leaf0) {
   log_entry.set_checkpoint_signature(checkpoint_signature);
   log_entry.set_checkpoint_signature_key_id(rekor_key.key_id());
 
-  EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
-                                BuildSignedData("leaf 0")));
+  ABSL_EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
+                                     BuildSignedData("leaf 0")));
 }
 
 // Leaf 5 is in the middle of the size 8 perfect subtree.
@@ -288,8 +289,8 @@ TEST(VerifyRekorLogEntryTest, Leaf5) {
   log_entry.set_checkpoint_signature(checkpoint_signature);
   log_entry.set_checkpoint_signature_key_id(rekor_key.key_id());
 
-  EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
-                                BuildSignedData("leaf 5")));
+  ABSL_EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
+                                     BuildSignedData("leaf 5")));
 }
 
 // Leaf 7 is on the right of the size 8 perfect subtree.
@@ -314,8 +315,8 @@ TEST(VerifyRekorLogEntryTest, Leaf7) {
   log_entry.set_checkpoint_signature(checkpoint_signature);
   log_entry.set_checkpoint_signature_key_id(rekor_key.key_id());
 
-  EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
-                                BuildSignedData("leaf 7")));
+  ABSL_EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
+                                     BuildSignedData("leaf 7")));
 }
 
 // Leaf 8 is in the inside of the size 2 perfect subtree.
@@ -339,8 +340,8 @@ TEST(VerifyRekorLogEntryTest, Leaf8) {
   log_entry.set_checkpoint_signature(checkpoint_signature);
   log_entry.set_checkpoint_signature_key_id(rekor_key.key_id());
 
-  EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
-                                BuildSignedData("leaf 8")));
+  ABSL_EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
+                                     BuildSignedData("leaf 8")));
 }
 
 // Leaf 10 is in the size 1 perfect subtree.
@@ -363,8 +364,8 @@ TEST(VerifyRekorLogEntryTest, Leaf10) {
   log_entry.set_checkpoint_signature(checkpoint_signature);
   log_entry.set_checkpoint_signature_key_id(rekor_key.key_id());
 
-  EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
-                                BuildSignedData("leaf 10")));
+  ABSL_EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
+                                     BuildSignedData("leaf 10")));
 }
 
 TEST(VerifyRekorLogEntryTest, SingleElementTree) {
@@ -380,8 +381,8 @@ TEST(VerifyRekorLogEntryTest, SingleElementTree) {
   log_entry.set_checkpoint_signature(checkpoint_signature);
   log_entry.set_checkpoint_signature_key_id(rekor_key.key_id());
 
-  EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
-                                BuildSignedData("leaf 0")));
+  ABSL_EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
+                                     BuildSignedData("leaf 0")));
 }
 
 TEST(VerifyRekorLogEntryTest, CheckpointOtherContents) {
@@ -406,8 +407,8 @@ TEST(VerifyRekorLogEntryTest, CheckpointOtherContents) {
   log_entry.set_checkpoint_signature(checkpoint_signature);
   log_entry.set_checkpoint_signature_key_id(rekor_key.key_id());
 
-  EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
-                                BuildSignedData("leaf 10")));
+  ABSL_EXPECT_OK(VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key},
+                                     BuildSignedData("leaf 10")));
 }
 
 TEST(VerifyRekorLogEntryTest, UnsupportedLogEntryKind) {
@@ -834,7 +835,7 @@ TEST(VerifyRekorLogEntryTest, RealLogEntry) {
                                       77,  188, 50,  179, 136, 131, 223, 248,
                                       48,  51,  108, 145, 50,  110, 122, 135};
 
-  EXPECT_OK(
+  ABSL_EXPECT_OK(
       VerifyRekorLogEntry(log_entry, {&verifying_key}, {&rekor_key}, digest));
 }
 

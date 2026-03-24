@@ -585,7 +585,7 @@ cc_test(
     copts = FCP_COPTS,
     deps = [
         ":compression",
-        "//fcp/testing",
+        "@com_google_absl//absl/status:status_matchers",
         "@com_google_googletest//:gtest_main",
     ],
 )

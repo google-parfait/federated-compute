@@ -22,6 +22,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
@@ -70,22 +71,22 @@ TEST_F(TempFilesTest, InvalidRelativePath) {
 }
 
 TEST_F(TempFilesTest, SuccessfulInitialization) {
-  ASSERT_OK(TempFiles::Create(root_dir_, &log_manager_));
+  ABSL_ASSERT_OK(TempFiles::Create(root_dir_, &log_manager_));
 }
 
 TEST_F(TempFilesTest, CreateTempFile) {
   auto temp_files = TempFiles::Create(root_dir_, &log_manager_);
-  ASSERT_OK(temp_files);
+  ABSL_ASSERT_OK(temp_files);
   auto temp_file = (*temp_files)->CreateTempFile("stefan", ".cool");
-  ASSERT_OK(temp_file);
+  ABSL_ASSERT_OK(temp_file);
 }
 
 TEST_F(TempFilesTest, CreateSomeTempFilesThenDeleteInDtor) {
   auto temp_files = TempFiles::Create(root_dir_, &log_manager_);
-  ASSERT_OK(temp_files);
+  ABSL_ASSERT_OK(temp_files);
   int num_temp_files = 4;
   for (int i = 0; i < num_temp_files; i++) {
-    ASSERT_OK((*temp_files)->CreateTempFile("stefan", ".cool"));
+    ABSL_ASSERT_OK((*temp_files)->CreateTempFile("stefan", ".cool"));
   }
   ASSERT_EQ(num_temp_files, CountFilesInDir(temp_file_dir_));
 
@@ -108,17 +109,17 @@ TEST_F(TempFilesTest, CreatingTempFilesDeletesExistingFiles) {
   ASSERT_EQ(num_existing_temp_files, CountFilesInDir(temp_file_dir_));
 
   auto temp_files = TempFiles::Create(root_dir_, &log_manager_);
-  ASSERT_OK(temp_files);
+  ABSL_ASSERT_OK(temp_files);
   ASSERT_EQ(0, CountFilesInDir(temp_file_dir_));
 }
 
 TEST_F(TempFilesTest, FailToDeleteTempFilesLogs) {
   // Create a temp file in the temp dir
   auto temp_files = TempFiles::Create(root_dir_, &log_manager_);
-  ASSERT_OK(temp_files);
-  ASSERT_OK((*temp_files)->CreateTempFile("stefan", ".cool"));
-  ASSERT_OK((*temp_files)->CreateTempFile("stefan", ".cool"));
-  ASSERT_OK((*temp_files)->CreateTempFile("stefan", ".cool"));
+  ABSL_ASSERT_OK(temp_files);
+  ABSL_ASSERT_OK((*temp_files)->CreateTempFile("stefan", ".cool"));
+  ABSL_ASSERT_OK((*temp_files)->CreateTempFile("stefan", ".cool"));
+  ABSL_ASSERT_OK((*temp_files)->CreateTempFile("stefan", ".cool"));
   ASSERT_EQ(3, CountFilesInDir(temp_file_dir_));
 
   // Delete the temp file dir and root dir, which should cause the dtor to fail

@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/status/status_matchers.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/dictionary/dictionary.pb.h"
 #include "fcp/testing/parse_text_proto.h"

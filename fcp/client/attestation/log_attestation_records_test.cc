@@ -6,6 +6,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/escaping.h"
@@ -91,7 +92,7 @@ TEST(LogSerializedVerificationRecordTest,
   ASSERT_TRUE(absl::Base64Unescape(base64_record_data, &decoded_record_data));
   absl::StatusOr<absl::Cord> uncompressed_record_data =
       UncompressWithGzip(decoded_record_data);
-  ASSERT_OK(uncompressed_record_data);
+  ABSL_ASSERT_OK(uncompressed_record_data);
   confidentialcompute::AttestationVerificationRecord decoded_record;
   ASSERT_TRUE(decoded_record.ParseFromString(*uncompressed_record_data));
   EXPECT_THAT(decoded_record, EqualsProto(record));

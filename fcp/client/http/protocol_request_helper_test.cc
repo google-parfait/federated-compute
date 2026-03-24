@@ -26,6 +26,7 @@
 #include "gtest/gtest.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -155,7 +156,7 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
       "/v1/request", QueryParams(), HttpRequest::Method::kPost, expected_body,
       /*is_protobuf_encoded=*/false);
 
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   EXPECT_EQ((*request)->uri(), "https://initial.uri/v1/request");
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
   EXPECT_THAT(
@@ -166,7 +167,8 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
   EXPECT_TRUE((*request)->HasBody());
   std::string actual_body;
   actual_body.resize(expected_body.size());
-  ASSERT_OK((*request)->ReadBody(actual_body.data(), expected_body.size()));
+  ABSL_ASSERT_OK(
+      (*request)->ReadBody(actual_body.data(), expected_body.size()));
   EXPECT_EQ(actual_body, expected_body);
 }
 
@@ -179,7 +181,7 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequestWithAdditionalHeaders) {
       /*is_protobuf_encoded=*/false,
       HeaderList{{"x-header1", "header-value1"}});
 
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   EXPECT_EQ((*request)->uri(), "https://initial.uri/v1/request");
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
   EXPECT_THAT(
@@ -191,7 +193,8 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequestWithAdditionalHeaders) {
   EXPECT_TRUE((*request)->HasBody());
   std::string actual_body;
   actual_body.resize(expected_body.size());
-  ASSERT_OK((*request)->ReadBody(actual_body.data(), expected_body.size()));
+  ABSL_ASSERT_OK(
+      (*request)->ReadBody(actual_body.data(), expected_body.size()));
   EXPECT_EQ(actual_body, expected_body);
 }
 
@@ -203,7 +206,7 @@ TEST(ProtocolRequestCreatorTest, CreateProtobufEncodedProtocolRequest) {
       "/v1/request", QueryParams(), HttpRequest::Method::kPost, expected_body,
       /*is_protobuf_encoded=*/true);
 
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   EXPECT_EQ((*request)->uri(), "https://initial.uri/v1/request?%24alt=proto");
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
   EXPECT_THAT((*request)->extra_headers(),
@@ -214,7 +217,7 @@ TEST(ProtocolRequestCreatorTest, CreateProtobufEncodedProtocolRequest) {
   EXPECT_TRUE((*request)->HasBody());
   std::string actual_body;
   actual_body.resize(expected_body.size());
-  ASSERT_OK((*request)->ReadBody(actual_body.data(), actual_body.size()));
+  ABSL_ASSERT_OK((*request)->ReadBody(actual_body.data(), actual_body.size()));
   EXPECT_EQ(actual_body, expected_body);
 }
 
@@ -223,7 +226,7 @@ TEST(ProtocolRequestCreatorTest, CreateGetOperationRequest) {
                                  /*use_compression=*/false);
   std::string operation_name = "my_operation";
   auto request = creator.CreateGetOperationRequest(operation_name);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   EXPECT_EQ((*request)->uri(),
             "https://initial.uri/v1/my_operation?%24alt=proto");
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kGet);
@@ -237,7 +240,7 @@ TEST(ProtocolRequestCreatorTest, CreateCancelOperationRequest) {
                                  /*use_compression=*/false);
   std::string operation_name = "my_operation";
   auto request = creator.CreateCancelOperationRequest(operation_name);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   EXPECT_EQ((*request)->uri(),
             "https://initial.uri/v1/my_operation:cancel?%24alt=proto");
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
@@ -321,10 +324,10 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
   auto http_request = request_creator->CreateProtocolRequest(
       "/suffix1", QueryParams(), HttpRequest::Method::kPost, "body1",
       /*is_protobuf_encoded=*/false);
-  ASSERT_OK(http_request);
+  ABSL_ASSERT_OK(http_request);
   auto result = protocol_request_helper_.PerformProtocolRequest(
       *std::move(http_request), interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   VerifyInMemoryHttpResponse(*result, 200, "", "response1");
 
   {
@@ -337,7 +340,7 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
         "header-value2";
     auto new_request_creator = ProtocolRequestCreator::Create(
         kApiKey, forwarding_info1, /*use_compression=*/false);
-    ASSERT_OK(new_request_creator);
+    ABSL_ASSERT_OK(new_request_creator);
     request_creator = std::move(*new_request_creator);
   }
 
@@ -356,10 +359,10 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
   http_request = request_creator->CreateProtocolRequest(
       "/suffix2", QueryParams(), HttpRequest::Method::kGet, "",
       /*is_protobuf_encoded=*/false);
-  ASSERT_OK(http_request);
+  ABSL_ASSERT_OK(http_request);
   result = protocol_request_helper_.PerformProtocolRequest(
       *std::move(http_request), interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_EQ(result->body, "response2");
 
   EXPECT_CALL(mock_http_client_,
@@ -377,10 +380,10 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
   http_request = request_creator->CreateProtocolRequest(
       "/suffix3", QueryParams(), HttpRequest::Method::kPut, "body3",
       /*is_protobuf_encoded=*/false);
-  ASSERT_OK(http_request);
+  ABSL_ASSERT_OK(http_request);
   result = protocol_request_helper_.PerformProtocolRequest(
       *std::move(http_request), interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_EQ(result->body, "response3");
 
   {
@@ -389,7 +392,7 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
     forwarding_info2.set_target_uri_prefix("https://third.uri");
     auto new_request_creator = ProtocolRequestCreator::Create(
         kApiKey, forwarding_info2, /*use_compression=*/false);
-    ASSERT_OK(new_request_creator);
+    ABSL_ASSERT_OK(new_request_creator);
     request_creator = std::move(*new_request_creator);
   }
 
@@ -409,10 +412,10 @@ TEST_F(ProtocolRequestHelperTest, TestForwardingInfoIsPassedAlongCorrectly) {
   http_request = request_creator->CreateProtocolRequest(
       "/suffix4", QueryParams(), HttpRequest::Method::kPost, "body4",
       /*is_protobuf_encoded=*/false);
-  ASSERT_OK(http_request);
+  ABSL_ASSERT_OK(http_request);
   result = protocol_request_helper_.PerformProtocolRequest(
       *std::move(http_request), interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_EQ(result->body, "response4");
 }
 
@@ -430,7 +433,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseImmediateSuccess) {
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
           expected_response, initial_request_creator_, interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
 
@@ -441,7 +444,7 @@ TEST_F(ProtocolRequestHelperTest,
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
           expected_response, initial_request_creator_, interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
 
@@ -472,7 +475,7 @@ TEST_F(ProtocolRequestHelperTest,
       protocol_request_helper_.PollOperationResponseUntilDone(
           pending_operation_response, initial_request_creator_,
           interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
 
@@ -502,7 +505,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseErrorAfterPolling) {
       protocol_request_helper_.PollOperationResponseUntilDone(
           pending_operation_response, initial_request_creator_,
           interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
 
@@ -551,7 +554,7 @@ TEST_F(ProtocolRequestHelperTest,
       protocol_request_helper_.PollOperationResponseUntilDone(
           pending_operation_response, initial_request_creator_,
           interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
 
@@ -590,7 +593,7 @@ TEST_F(ProtocolRequestHelperTest,
       protocol_request_helper_.PollOperationResponseUntilDone(
           pending_operation_response, initial_request_creator_,
           interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
 
@@ -629,7 +632,7 @@ TEST_F(ProtocolRequestHelperTest,
       protocol_request_helper_.PollOperationResponseUntilDone(
           pending_operation_response, initial_request_creator_,
           interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
 
@@ -667,7 +670,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseShareKeysMetadata) {
       protocol_request_helper_.PollOperationResponseUntilDone(
           pending_operation_response, initial_request_creator_,
           interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
 
@@ -706,7 +709,7 @@ TEST_F(ProtocolRequestHelperTest,
       protocol_request_helper_.PollOperationResponseUntilDone(
           pending_operation_response, initial_request_creator_,
           interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, EqualsProto(expected_response));
 }
 
@@ -714,11 +717,11 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsSuccess) {
   auto request_a = initial_request_creator_.CreateProtocolRequest(
       "/v1/request_a", QueryParams(), HttpRequest::Method::kPost, "body1",
       /*is_protobuf_encoded=*/false);
-  ASSERT_OK(request_a);
+  ABSL_ASSERT_OK(request_a);
   auto request_b = initial_request_creator_.CreateProtocolRequest(
       "/v1/request_b", QueryParams(), HttpRequest::Method::kPost, "body2",
       /*is_protobuf_encoded=*/false);
-  ASSERT_OK(request_b);
+  ABSL_ASSERT_OK(request_b);
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -746,12 +749,12 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsSuccess) {
 
   auto result = protocol_request_helper_.PerformMultipleProtocolRequests(
       std::move(requests), interruptible_runner_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   auto response_1 = (*result)[0];
-  ASSERT_OK(response_1);
+  ABSL_ASSERT_OK(response_1);
   VerifyInMemoryHttpResponse(*response_1, 200, "", "response1");
   auto response_2 = (*result)[1];
-  ASSERT_OK(response_2);
+  ABSL_ASSERT_OK(response_2);
   VerifyInMemoryHttpResponse(*response_2, 200, "", "response2");
 }
 
@@ -760,12 +763,12 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
   auto request_a = initial_request_creator_.CreateProtocolRequest(
       uri_suffix_a, QueryParams(), HttpRequest::Method::kPost, "body1",
       /*is_protobuf_encoded=*/false);
-  ASSERT_OK(request_a);
+  ABSL_ASSERT_OK(request_a);
   std::string uri_suffix_b = "/v1/request_b";
   auto request_b = initial_request_creator_.CreateProtocolRequest(
       uri_suffix_b, QueryParams(), HttpRequest::Method::kPost, "body2",
       /*is_protobuf_encoded=*/false);
-  ASSERT_OK(request_b);
+  ABSL_ASSERT_OK(request_b);
   EXPECT_CALL(
       mock_http_client_,
       PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -795,9 +798,9 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
   auto result = protocol_request_helper_.PerformMultipleProtocolRequests(
       std::move(requests), interruptible_runner_);
 
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   auto response_1 = (*result)[0];
-  ASSERT_OK(response_1);
+  ABSL_ASSERT_OK(response_1);
   VerifyInMemoryHttpResponse(*response_1, 200, "", "response1");
   auto response_2 = (*result)[1];
   ASSERT_THAT(response_2, IsCode(absl::StatusCode::kNotFound));

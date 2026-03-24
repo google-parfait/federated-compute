@@ -21,6 +21,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "fcp/testing/testing.h"
@@ -41,7 +42,7 @@ TEST(ClientPayloadTest, EncodeDecodeSucceeds) {
   absl::string_view encoded_view(encoded);
   absl::StatusOr<ClientPayloadHeader> decoded =
       DecodeAndConsumeClientPayloadHeader(encoded_view);
-  ASSERT_OK(decoded);
+  ABSL_ASSERT_OK(decoded);
   EXPECT_THAT(*decoded,
               FieldsAre("encrypted_symmetric_key", "encapsulated_public_key",
                         "blob_header", true));
@@ -56,7 +57,7 @@ TEST(ClientPayloadTest, EncodeDecodeDefaultValuesSucceeds) {
   absl::string_view encoded_view(encoded);
   absl::StatusOr<ClientPayloadHeader> decoded =
       DecodeAndConsumeClientPayloadHeader(encoded_view);
-  ASSERT_OK(decoded);
+  ABSL_ASSERT_OK(decoded);
   EXPECT_THAT(*decoded, FieldsAre("", "", "", false));
   EXPECT_EQ(encoded_view, "");
 }

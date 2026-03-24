@@ -154,7 +154,7 @@ TEST(PrivacyIdUtilsTest, GetPrivacyId) {
   absl::CivilSecond window_start(2024, 5, 15, 10, 0, 0);
 
   absl::StatusOr<std::string> id1 = GetPrivacyId(source_id, window_start);
-  ASSERT_OK(id1);
+  ABSL_ASSERT_OK(id1);
   absl::StatusOr<std::string> id2 = GetPrivacyId(source_id, window_start);
   EXPECT_EQ(*id1, *id2);
 
@@ -240,14 +240,14 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdSucceeds) {
 
   absl::StatusOr<SplitResults> split_results = SplitResultsByPrivacyId(
       CreateExampleQuery(), query_result, config, "test_source");
-  ASSERT_OK(split_results);
+  ABSL_ASSERT_OK(split_results);
 
   absl::StatusOr<std::string> privacy_id_1 =
       GetPrivacyId("test_source", absl::CivilDay(2024, 1, 1));
-  ASSERT_OK(privacy_id_1);
+  ABSL_ASSERT_OK(privacy_id_1);
   absl::StatusOr<std::string> privacy_id_2 =
       GetPrivacyId("test_source", absl::CivilDay(2024, 1, 2));
-  ASSERT_OK(privacy_id_2);
+  ABSL_ASSERT_OK(privacy_id_2);
 
   EXPECT_THAT(
       split_results->per_privacy_id_results,
@@ -377,7 +377,7 @@ TEST(PrivacyIdUtilsTest, SplitResultsByPrivacyIdEmptyResult) {
 
   absl::StatusOr<SplitResults> split_results = SplitResultsByPrivacyId(
       CreateExampleQuery(), query_result, config, "test_source");
-  ASSERT_OK(split_results);
+  ABSL_ASSERT_OK(split_results);
   EXPECT_THAT(split_results->per_privacy_id_results, testing::IsEmpty());
 }
 

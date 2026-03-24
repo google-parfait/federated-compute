@@ -37,15 +37,6 @@
 
 namespace fcp {
 
-// Convenience macros for `EXPECT_THAT(s, IsOk())`, where `s` is either
-// a `Status` or a `StatusOr<T>`.
-// Old versions of the protobuf library define EXPECT_OK as well, so we only
-// conditionally define our version.
-#if !defined(EXPECT_OK)
-#define EXPECT_OK(result) ABSL_EXPECT_OK(result)
-#endif
-#define ASSERT_OK(result) ABSL_ASSERT_OK(result)
-
 /** Returns the current test's name. */
 std::string TestName();
 

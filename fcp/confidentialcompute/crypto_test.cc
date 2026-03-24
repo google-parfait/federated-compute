@@ -26,6 +26,7 @@
 #include "gtest/gtest.h"
 #include "absl/log/check.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/string_view.h"
@@ -72,13 +73,13 @@ TEST(CryptoTest, EncryptAndDecrypt) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, public_key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, associated_data,
       encrypt_result->encrypted_symmetric_key, associated_data,
       encrypt_result->encapped_key, "key-id");
-  ASSERT_OK(decrypt_result);
+  ABSL_ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
 }
 
@@ -91,7 +92,7 @@ TEST(CryptoTest, EncryptRewrapKeyAndDecrypt) {
   MessageDecryptor decryptor(std::vector<absl::string_view>{private_key});
 
   absl::StatusOr<OkpCwt> recipient_cwt = OkpCwt::Decode(public_key);
-  ASSERT_OK(recipient_cwt);
+  ABSL_ASSERT_OK(recipient_cwt);
   ASSERT_TRUE(recipient_cwt->public_key.has_value());
 
   // Encrypt the symmetric key with the public key of an intermediary.
@@ -107,10 +108,10 @@ TEST(CryptoTest, EncryptRewrapKeyAndDecrypt) {
           .curve = crypto_internal::kX25519,
           .x = intermediary_public_key,
       }}.Encode();
-  ASSERT_OK(intermediary_cwt_bytes);
+  ABSL_ASSERT_OK(intermediary_cwt_bytes);
   absl::StatusOr<EncryptMessageResult> encrypt_result = encryptor.Encrypt(
       message, *intermediary_cwt_bytes, message_associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   // Have the intermediary rewrap the symmetric key with the public key of the
   // final recipient.
@@ -119,7 +120,7 @@ TEST(CryptoTest, EncryptRewrapKeyAndDecrypt) {
           intermediary_key.get(), kdf, aead,
           encrypt_result->encrypted_symmetric_key, encrypt_result->encapped_key,
           message_associated_data);
-  ASSERT_OK(symmetric_key);
+  ABSL_ASSERT_OK(symmetric_key);
 
   std::string symmetric_key_associated_data =
       "rewrap symmetric key associated data";
@@ -127,7 +128,7 @@ TEST(CryptoTest, EncryptRewrapKeyAndDecrypt) {
       rewrapped_symmetric_key_result = crypto_internal::WrapSymmetricKey(
           kem, kdf, aead, *symmetric_key, recipient_cwt->public_key->x,
           symmetric_key_associated_data);
-  ASSERT_OK(rewrapped_symmetric_key_result);
+  ABSL_ASSERT_OK(rewrapped_symmetric_key_result);
 
   // The final recipient should be able to decrypt the message using the
   // rewrapped key.
@@ -136,13 +137,13 @@ TEST(CryptoTest, EncryptRewrapKeyAndDecrypt) {
                         rewrapped_symmetric_key_result->encrypted_symmetric_key,
                         symmetric_key_associated_data,
                         rewrapped_symmetric_key_result->encapped_key, "key-id");
-  ASSERT_OK(decrypt_result);
+  ABSL_ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
 
   // The symmetric key should be an encoded CoseKey.
   absl::StatusOr<SymmetricKey> decoded_symmetric_key =
       SymmetricKey::Decode(*symmetric_key);
-  ASSERT_OK(decoded_symmetric_key);
+  ABSL_ASSERT_OK(decoded_symmetric_key);
   EXPECT_EQ(decoded_symmetric_key->algorithm,
             crypto_internal::kAeadAes128GcmSivFixedNonce);
   EXPECT_NE(decoded_symmetric_key->k, "");
@@ -158,13 +159,13 @@ TEST(CryptoTest, EncryptAndDecryptWithProvidedKey) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, public_key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, associated_data,
       encrypt_result->encrypted_symmetric_key, associated_data,
       encrypt_result->encapped_key, "key-id");
-  ASSERT_OK(decrypt_result);
+  ABSL_ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
 }
 
@@ -179,20 +180,20 @@ TEST(CryptoTest, EncryptWithCoseKey) {
   // Extract the COSE_Key from the recipient's public key. The MessageEncryptor
   // should support that format as well.
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(public_key);
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   ASSERT_TRUE(cwt->public_key);
   absl::StatusOr<std::string> cose_key = cwt->public_key->Encode();
-  ASSERT_OK(cose_key);
+  ABSL_ASSERT_OK(cose_key);
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *cose_key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, associated_data,
       encrypt_result->encrypted_symmetric_key, associated_data,
       encrypt_result->encapped_key, "key-id");
-  ASSERT_OK(decrypt_result);
+  ABSL_ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
 }
 
@@ -207,7 +208,7 @@ TEST(CryptoTest, EncryptWithProtoKey) {
   // Convert the recipient's CWT to a fcp::confidentialcompute::Key. The
   // MessageEncryptor should support that format as well.
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(public_key);
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   ASSERT_TRUE(cwt->public_key);
   fcp::confidentialcompute::Key key;
   key.set_algorithm(Key::HPKE_X25519_SHA256_AES128_GCM);
@@ -217,13 +218,13 @@ TEST(CryptoTest, EncryptWithProtoKey) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, associated_data,
       encrypt_result->encrypted_symmetric_key, associated_data,
       encrypt_result->encapped_key, "key-id");
-  ASSERT_OK(decrypt_result);
+  ABSL_ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
 }
 
@@ -239,18 +240,18 @@ TEST(CryptoTest, EncryptForRelease) {
       encryptor.EncryptForRelease(
           message, public_key, associated_data, "src-state", "dst-state",
           [](absl::string_view) { return "signature"; });
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, associated_data,
       encrypt_result->encrypted_symmetric_key, associated_data,
       encrypt_result->encapped_key, "key-id");
-  ASSERT_OK(decrypt_result);
+  ABSL_ASSERT_OK(decrypt_result);
   ASSERT_EQ(*decrypt_result, message);
 
   absl::StatusOr<ReleaseToken> release_token =
       ReleaseToken::Decode(encrypt_result->release_token);
-  ASSERT_OK(release_token);
+  ABSL_ASSERT_OK(release_token);
   EXPECT_THAT(release_token->signing_algorithm, Optional(Not(0)));
   EXPECT_THAT(release_token->encryption_algorithm, Optional(Not(0)));
   EXPECT_EQ(release_token->encryption_key_id, "key-id");
@@ -272,11 +273,11 @@ TEST(CryptoTest, EncryptForReleaseWithNullSrcState) {
       encryptor.EncryptForRelease(message, public_key, associated_data,
                                   std::nullopt, "dst-state",
                                   [](absl::string_view) { return ""; });
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<ReleaseToken> release_token =
       ReleaseToken::Decode(encrypt_result->release_token);
-  ASSERT_OK(release_token);
+  ABSL_ASSERT_OK(release_token);
   EXPECT_THAT(release_token->src_state, Optional(std::nullopt));
 }
 
@@ -305,7 +306,7 @@ TEST(CryptoTest, EncryptWithMissingCwtPublicKeyFails) {
   std::string associated_data = "associated data";
 
   absl::StatusOr<std::string> cwt_bytes = OkpCwt().Encode();
-  ASSERT_OK(cwt_bytes);
+  ABSL_ASSERT_OK(cwt_bytes);
 
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
@@ -318,10 +319,10 @@ TEST(CryptoTest, EncryptWithInvalidCwtAlgorithmFails) {
   std::string associated_data = "associated data";
 
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(GenerateHpkeKeyPair("id").first);
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   cwt->public_key->algorithm = crypto_internal::kAeadAes128GcmSivFixedNonce;
   absl::StatusOr<std::string> cwt_bytes = cwt->Encode();
-  ASSERT_OK(cwt_bytes);
+  ABSL_ASSERT_OK(cwt_bytes);
 
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
@@ -334,7 +335,7 @@ TEST(CryptoTest, EncryptWithInvalidProtoAlgorithmFails) {
   std::string associated_data = "associated data";
 
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(GenerateHpkeKeyPair("id").first);
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   fcp::confidentialcompute::Key key;
   key.set_algorithm(Key::ECDSA_P256);
   key.set_purpose(Key::ENCRYPT);
@@ -352,10 +353,10 @@ TEST(CryptoTest, EncryptWithIncorrectCwtKeyOpFails) {
   std::string associated_data = "associated data";
 
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(GenerateHpkeKeyPair("id").first);
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   cwt->public_key->key_ops = {kCoseKeyOpDecrypt};
   absl::StatusOr<std::string> cwt_bytes = cwt->Encode();
-  ASSERT_OK(cwt_bytes);
+  ABSL_ASSERT_OK(cwt_bytes);
 
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
@@ -368,7 +369,7 @@ TEST(CryptoTest, EncryptWithIncorrectProtoKeyPurposeFails) {
   std::string associated_data = "associated data";
 
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(GenerateHpkeKeyPair("id").first);
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   fcp::confidentialcompute::Key key;
   key.set_algorithm(Key::HPKE_X25519_SHA256_AES128_GCM);
   key.set_purpose(Key::DECRYPT);
@@ -386,15 +387,15 @@ TEST(CryptoTest, EncryptWithoutCwtKeyOpsSucceeds) {
   std::string associated_data = "associated data";
 
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(GenerateHpkeKeyPair("id").first);
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   cwt->public_key->key_ops.clear();
   absl::StatusOr<std::string> cwt_bytes = cwt->Encode();
-  ASSERT_OK(cwt_bytes);
+  ABSL_ASSERT_OK(cwt_bytes);
 
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *cwt_bytes, associated_data);
-  EXPECT_OK(encrypt_result);
+  ABSL_EXPECT_OK(encrypt_result);
 }
 
 TEST(CryptoTest, EncryptWithoutProtoKeyPurposeSucceeds) {
@@ -402,7 +403,7 @@ TEST(CryptoTest, EncryptWithoutProtoKeyPurposeSucceeds) {
   std::string associated_data = "associated data";
 
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(GenerateHpkeKeyPair("id").first);
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   fcp::confidentialcompute::Key key;
   key.set_algorithm(Key::HPKE_X25519_SHA256_AES128_GCM);
   key.clear_purpose();
@@ -412,7 +413,7 @@ TEST(CryptoTest, EncryptWithoutProtoKeyPurposeSucceeds) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, key, associated_data);
-  EXPECT_OK(encrypt_result);
+  ABSL_EXPECT_OK(encrypt_result);
 }
 
 TEST(CryptoTest, EncryptWithInvalidCwtCurveFails) {
@@ -420,10 +421,10 @@ TEST(CryptoTest, EncryptWithInvalidCwtCurveFails) {
   std::string associated_data = "associated data";
 
   absl::StatusOr<OkpCwt> cwt = OkpCwt::Decode(GenerateHpkeKeyPair("id").first);
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   cwt->public_key->curve = 0;  // 0 is a reserved value.
   absl::StatusOr<std::string> cwt_bytes = cwt->Encode();
-  ASSERT_OK(cwt_bytes);
+  ABSL_ASSERT_OK(cwt_bytes);
 
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
@@ -444,7 +445,7 @@ TEST(CryptoTest, EncryptWithInvalidCwtPublicKeyFails) {
           },
   };
   absl::StatusOr<std::string> cwt_bytes = cwt.Encode();
-  ASSERT_OK(cwt_bytes);
+  ABSL_ASSERT_OK(cwt_bytes);
 
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
@@ -487,16 +488,16 @@ TEST(CryptoTest, EncryptTwiceWithSameKeyUsesDifferentSymmetricKey) {
           .curve = crypto_internal::kX25519,
           .x = intermediary_public_key,
       }}.Encode();
-  ASSERT_OK(intermediary_cwt_bytes);
+  ABSL_ASSERT_OK(intermediary_cwt_bytes);
   absl::StatusOr<EncryptMessageResult> encrypt_result_1 = encryptor.Encrypt(
       message, *intermediary_cwt_bytes, message_associated_data);
-  ASSERT_OK(encrypt_result_1);
+  ABSL_ASSERT_OK(encrypt_result_1);
 
   // Encrypt the same plaintext a second time. This should produce a different
   // ciphertext as a new symmetric key will be generated.
   absl::StatusOr<EncryptMessageResult> encrypt_result_2 = encryptor.Encrypt(
       message, *intermediary_cwt_bytes, message_associated_data);
-  ASSERT_OK(encrypt_result_2);
+  ABSL_ASSERT_OK(encrypt_result_2);
   ASSERT_NE(encrypt_result_1->ciphertext, encrypt_result_2->ciphertext);
 
   // Unwrap the symmetric key for each EncryptMessageResult.
@@ -505,14 +506,14 @@ TEST(CryptoTest, EncryptTwiceWithSameKeyUsesDifferentSymmetricKey) {
           intermediary_key.get(), kdf, aead,
           encrypt_result_1->encrypted_symmetric_key,
           encrypt_result_1->encapped_key, message_associated_data);
-  ASSERT_OK(symmetric_key_1);
+  ABSL_ASSERT_OK(symmetric_key_1);
 
   absl::StatusOr<std::string> symmetric_key_2 =
       crypto_internal::UnwrapSymmetricKey(
           intermediary_key.get(), kdf, aead,
           encrypt_result_2->encrypted_symmetric_key,
           encrypt_result_2->encapped_key, message_associated_data);
-  ASSERT_OK(symmetric_key_2);
+  ABSL_ASSERT_OK(symmetric_key_2);
 
   // The symmetric keys should be different.
   ASSERT_NE(*symmetric_key_1, *symmetric_key_2);
@@ -537,10 +538,10 @@ TEST(CryptoTest, DecryptWithWrongKeyFails) {
           .curve = crypto_internal::kX25519,
           .x = intermediary_public_key,
       }}.Encode();
-  ASSERT_OK(intermediary_cwt_bytes);
+  ABSL_ASSERT_OK(intermediary_cwt_bytes);
   absl::StatusOr<EncryptMessageResult> encrypt_result = encryptor.Encrypt(
       message, *intermediary_cwt_bytes, message_associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   // Attempting to decrypt without the symmetric key being rewrapped with the
   // public key of the recipient should fail.
@@ -561,7 +562,7 @@ TEST(CryptoTest, DecryptWithWrongCiphertextAssociatedDataFails) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, public_key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, "wrong ciphertext associated data",
@@ -580,7 +581,7 @@ TEST(CryptoTest, DecryptWithWrongSymmetricKeyAssociatedDataFails) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, public_key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result =
       decryptor.Decrypt(encrypt_result->ciphertext, associated_data,
@@ -600,7 +601,7 @@ TEST(CryptoTest, DecryptWithWrongEncappedKeyFails) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, public_key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result =
       decryptor.Decrypt(encrypt_result->ciphertext, associated_data,
@@ -620,7 +621,7 @@ TEST(CryptoTest, DecryptWithInvalidCiphertextFails) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, public_key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       "invalid ciphertext", associated_data,
@@ -639,7 +640,7 @@ TEST(CryptoTest, DecryptWithInvalidSymmetricKeyFails) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, public_key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, associated_data, "invalid symmetric key",
@@ -657,7 +658,7 @@ TEST(CryptoTest, DecryptWithInvalidEncappedKeyFails) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, public_key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result =
       decryptor.Decrypt(encrypt_result->ciphertext, associated_data,
@@ -675,7 +676,7 @@ TEST(CryptoTest, DecryptWithInvalidAlgorithmFails) {
   MessageDecryptor decryptor(std::vector<absl::string_view>{private_key});
 
   absl::StatusOr<OkpCwt> recipient_cwt = OkpCwt::Decode(public_key);
-  ASSERT_OK(recipient_cwt);
+  ABSL_ASSERT_OK(recipient_cwt);
   ASSERT_TRUE(recipient_cwt->public_key.has_value());
 
   // Encrypt the symmetric key with the public key of an intermediary.
@@ -692,10 +693,10 @@ TEST(CryptoTest, DecryptWithInvalidAlgorithmFails) {
           .curve = crypto_internal::kX25519,
           .x = intermediary_public_key,
       }}.Encode();
-  ASSERT_OK(intermediary_cwt_bytes);
+  ABSL_ASSERT_OK(intermediary_cwt_bytes);
   absl::StatusOr<EncryptMessageResult> encrypt_result = encryptor.Encrypt(
       message, *intermediary_cwt_bytes, message_associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   // Have the intermediary rewrap the symmetric key with the public key of the
   // final recipient -- after changing the key's algorithm.
@@ -704,15 +705,15 @@ TEST(CryptoTest, DecryptWithInvalidAlgorithmFails) {
           intermediary_key.get(), kdf, aead,
           encrypt_result->encrypted_symmetric_key, encrypt_result->encapped_key,
           message_associated_data);
-  ASSERT_OK(symmetric_key);
+  ABSL_ASSERT_OK(symmetric_key);
 
   absl::StatusOr<SymmetricKey> decoded_symmetric_key =
       SymmetricKey::Decode(*symmetric_key);
-  ASSERT_OK(decoded_symmetric_key);
+  ABSL_ASSERT_OK(decoded_symmetric_key);
   decoded_symmetric_key->algorithm =
       crypto_internal::kHpkeBaseX25519Sha256Aes128Gcm;
   symmetric_key = decoded_symmetric_key->Encode();
-  ASSERT_OK(symmetric_key);
+  ABSL_ASSERT_OK(symmetric_key);
 
   std::string symmetric_key_associated_data =
       "rewrap symmetric key associated data";
@@ -720,7 +721,7 @@ TEST(CryptoTest, DecryptWithInvalidAlgorithmFails) {
       rewrapped_symmetric_key_result = crypto_internal::WrapSymmetricKey(
           kem, kdf, aead, *symmetric_key, recipient_cwt->public_key->x,
           symmetric_key_associated_data);
-  ASSERT_OK(rewrapped_symmetric_key_result);
+  ABSL_ASSERT_OK(rewrapped_symmetric_key_result);
 
   // Decryption should fail because the algorithm is unsupported.
   absl::StatusOr<std::string> decrypt_result =
@@ -740,7 +741,7 @@ TEST(CryptoTest, DecryptWithIncorrectKeyOpFails) {
   MessageDecryptor decryptor(std::vector<absl::string_view>{private_key});
 
   absl::StatusOr<OkpCwt> recipient_cwt = OkpCwt::Decode(public_key);
-  ASSERT_OK(recipient_cwt);
+  ABSL_ASSERT_OK(recipient_cwt);
   ASSERT_TRUE(recipient_cwt->public_key.has_value());
 
   // Encrypt the symmetric key with the public key of an intermediary.
@@ -757,10 +758,10 @@ TEST(CryptoTest, DecryptWithIncorrectKeyOpFails) {
           .curve = crypto_internal::kX25519,
           .x = intermediary_public_key,
       }}.Encode();
-  ASSERT_OK(intermediary_cwt_bytes);
+  ABSL_ASSERT_OK(intermediary_cwt_bytes);
   absl::StatusOr<EncryptMessageResult> encrypt_result = encryptor.Encrypt(
       message, *intermediary_cwt_bytes, message_associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   // Have the intermediary rewrap the symmetric key with the public key of the
   // final recipient -- after changing the key_ops.
@@ -769,14 +770,14 @@ TEST(CryptoTest, DecryptWithIncorrectKeyOpFails) {
           intermediary_key.get(), kdf, aead,
           encrypt_result->encrypted_symmetric_key, encrypt_result->encapped_key,
           message_associated_data);
-  ASSERT_OK(symmetric_key);
+  ABSL_ASSERT_OK(symmetric_key);
 
   absl::StatusOr<SymmetricKey> decoded_symmetric_key =
       SymmetricKey::Decode(*symmetric_key);
-  ASSERT_OK(decoded_symmetric_key);
+  ABSL_ASSERT_OK(decoded_symmetric_key);
   decoded_symmetric_key->key_ops = {kCoseKeyOpEncrypt};
   symmetric_key = decoded_symmetric_key->Encode();
-  ASSERT_OK(symmetric_key);
+  ABSL_ASSERT_OK(symmetric_key);
 
   std::string symmetric_key_associated_data =
       "rewrap symmetric key associated data";
@@ -784,7 +785,7 @@ TEST(CryptoTest, DecryptWithIncorrectKeyOpFails) {
       rewrapped_symmetric_key_result = crypto_internal::WrapSymmetricKey(
           kem, kdf, aead, *symmetric_key, recipient_cwt->public_key->x,
           symmetric_key_associated_data);
-  ASSERT_OK(rewrapped_symmetric_key_result);
+  ABSL_ASSERT_OK(rewrapped_symmetric_key_result);
 
   // Decryption should fail because the "decrypt" key_op isn't present.
   absl::StatusOr<std::string> decrypt_result =
@@ -804,7 +805,7 @@ TEST(CryptoTest, DecryptWithoutKeyOpsSucceeds) {
   MessageDecryptor decryptor(std::vector<absl::string_view>{private_key});
 
   absl::StatusOr<OkpCwt> recipient_cwt = OkpCwt::Decode(public_key);
-  ASSERT_OK(recipient_cwt);
+  ABSL_ASSERT_OK(recipient_cwt);
   ASSERT_TRUE(recipient_cwt->public_key.has_value());
 
   // Encrypt the symmetric key with the public key of an intermediary.
@@ -821,10 +822,10 @@ TEST(CryptoTest, DecryptWithoutKeyOpsSucceeds) {
           .curve = crypto_internal::kX25519,
           .x = intermediary_public_key,
       }}.Encode();
-  ASSERT_OK(intermediary_cwt_bytes);
+  ABSL_ASSERT_OK(intermediary_cwt_bytes);
   absl::StatusOr<EncryptMessageResult> encrypt_result = encryptor.Encrypt(
       message, *intermediary_cwt_bytes, message_associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   // Have the intermediary rewrap the symmetric key with the public key of the
   // final recipient -- after clearing the key_ops.
@@ -833,14 +834,14 @@ TEST(CryptoTest, DecryptWithoutKeyOpsSucceeds) {
           intermediary_key.get(), kdf, aead,
           encrypt_result->encrypted_symmetric_key, encrypt_result->encapped_key,
           message_associated_data);
-  ASSERT_OK(symmetric_key);
+  ABSL_ASSERT_OK(symmetric_key);
 
   absl::StatusOr<SymmetricKey> decoded_symmetric_key =
       SymmetricKey::Decode(*symmetric_key);
-  ASSERT_OK(decoded_symmetric_key);
+  ABSL_ASSERT_OK(decoded_symmetric_key);
   decoded_symmetric_key->key_ops.clear();
   symmetric_key = decoded_symmetric_key->Encode();
-  ASSERT_OK(symmetric_key);
+  ABSL_ASSERT_OK(symmetric_key);
 
   std::string symmetric_key_associated_data =
       "rewrap symmetric key associated data";
@@ -848,14 +849,14 @@ TEST(CryptoTest, DecryptWithoutKeyOpsSucceeds) {
       rewrapped_symmetric_key_result = crypto_internal::WrapSymmetricKey(
           kem, kdf, aead, *symmetric_key, recipient_cwt->public_key->x,
           symmetric_key_associated_data);
-  ASSERT_OK(rewrapped_symmetric_key_result);
+  ABSL_ASSERT_OK(rewrapped_symmetric_key_result);
 
   absl::StatusOr<std::string> decrypt_result =
       decryptor.Decrypt(encrypt_result->ciphertext, message_associated_data,
                         rewrapped_symmetric_key_result->encrypted_symmetric_key,
                         symmetric_key_associated_data,
                         rewrapped_symmetric_key_result->encapped_key, "key-id");
-  ASSERT_OK(decrypt_result);
+  ABSL_ASSERT_OK(decrypt_result);
 }
 
 TEST(CryptoTest, DecryptWithWrongKeyIdFails) {
@@ -868,7 +869,7 @@ TEST(CryptoTest, DecryptWithWrongKeyIdFails) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, public_key, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, associated_data,
@@ -895,23 +896,23 @@ TEST(CryptoTest, DecryptReleasedResult) {
           .curve = crypto_internal::kX25519,
           .x = public_key,
       }}.Encode();
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       MessageEncryptor().Encrypt(message, *cwt, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   // Unwrap the symmetric key.
   absl::StatusOr<std::string> symmetric_key =
       crypto_internal::UnwrapSymmetricKey(
           private_key.get(), kdf, aead, encrypt_result->encrypted_symmetric_key,
           encrypt_result->encapped_key, associated_data);
-  ASSERT_OK(symmetric_key);
+  ABSL_ASSERT_OK(symmetric_key);
 
   // The message should be decryptable using the symmetric key.
   absl::StatusOr<std::string> decrypt_result =
       MessageDecryptor({}).DecryptReleasedResult(
           encrypt_result->ciphertext, associated_data, *symmetric_key);
-  ASSERT_OK(decrypt_result);
+  ABSL_ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
 }
 
@@ -930,10 +931,10 @@ TEST(CryptoTest, DecryptReleasedFailsWithInvalidSymmetricKey) {
           .curve = crypto_internal::kX25519,
           .x = public_key,
       }}.Encode();
-  ASSERT_OK(cwt);
+  ABSL_ASSERT_OK(cwt);
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       MessageEncryptor().Encrypt(message, *cwt, associated_data);
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<std::string> decrypt_result =
       MessageDecryptor({}).DecryptReleasedResult(encrypt_result->ciphertext,
@@ -953,18 +954,18 @@ TEST(CryptoTest, UnwrapReleaseToken) {
       encryptor.EncryptForRelease(
           message, public_key, associated_data, "src-state", "dst-state",
           [](absl::string_view) { return "signature"; });
-  ASSERT_OK(encrypt_result);
+  ABSL_ASSERT_OK(encrypt_result);
 
   absl::StatusOr<UnwrappedReleaseToken> unwrapped_release_token =
       decryptor.UnwrapReleaseToken(encrypt_result->release_token);
-  ASSERT_OK(unwrapped_release_token);
+  ABSL_ASSERT_OK(unwrapped_release_token);
   EXPECT_EQ(unwrapped_release_token->src_state, "src-state");
   EXPECT_EQ(unwrapped_release_token->dst_state, "dst-state");
 
   absl::StatusOr<std::string> decrypt_result = decryptor.DecryptReleasedResult(
       encrypt_result->ciphertext, associated_data,
       unwrapped_release_token->serialized_symmetric_key);
-  ASSERT_OK(decrypt_result);
+  ABSL_ASSERT_OK(decrypt_result);
   EXPECT_EQ(*decrypt_result, message);
 }
 
@@ -979,7 +980,7 @@ TEST(CryptoTest, UnwrapReleaseTokenWithNoKeyId) {
       .signature = "signature",
   };
   absl::StatusOr<std::string> serialized_token = token.Encode();
-  ASSERT_OK(serialized_token);
+  ABSL_ASSERT_OK(serialized_token);
   absl::StatusOr<UnwrappedReleaseToken> unwrapped_release_token =
       MessageDecryptor({}).UnwrapReleaseToken(*serialized_token);
   EXPECT_THAT(unwrapped_release_token, IsCode(INVALID_ARGUMENT));
@@ -998,7 +999,7 @@ TEST(CryptoTest, UnwrapReleaseTokenWithNoEncappedKey) {
       .signature = "signature",
   };
   absl::StatusOr<std::string> serialized_token = token.Encode();
-  ASSERT_OK(serialized_token);
+  ABSL_ASSERT_OK(serialized_token);
   absl::StatusOr<UnwrappedReleaseToken> unwrapped_release_token =
       MessageDecryptor({}).UnwrapReleaseToken(*serialized_token);
   EXPECT_THAT(unwrapped_release_token, IsCode(INVALID_ARGUMENT));
@@ -1034,9 +1035,9 @@ TEST(EcdsaP256R1SignatureVerifierTest, ValidSignatureVerifiesSuccessfully) {
   // Verify the signature.
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
       EcdsaP256R1SignatureVerifier::Create(signer.GetPublicKey());
-  ASSERT_OK(verifier);
+  ABSL_ASSERT_OK(verifier);
   auto result = verifier->Verify(data_to_sign, signature);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 }
 
 // Ensures that an empty data string can still be signed successfully, and
@@ -1052,9 +1053,9 @@ TEST(EcdsaP256R1SignatureVerifierTest,
   // Verify the signature.
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
       EcdsaP256R1SignatureVerifier::Create(signer.GetPublicKey());
-  ASSERT_OK(verifier);
+  ABSL_ASSERT_OK(verifier);
   auto result = verifier->Verify(empty_string, signature);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 }
 
 TEST(EcdsaP256R1SignatureVerifierTest, InvalidSignatureFailsVerification) {
@@ -1067,7 +1068,7 @@ TEST(EcdsaP256R1SignatureVerifierTest, InvalidSignatureFailsVerification) {
   // fail.
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
       EcdsaP256R1SignatureVerifier::Create(signer.GetPublicKey());
-  ASSERT_OK(verifier);
+  ABSL_ASSERT_OK(verifier);
   auto result = verifier->Verify(data_to_sign, "not a valid signature");
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.message(), HasSubstr("Invalid signature"));
@@ -1082,7 +1083,7 @@ TEST(EcdsaP256R1SignatureVerifierTest, EmptySignatureFailsVerification) {
   // Verify with an empty signature, which should fail.
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
       EcdsaP256R1SignatureVerifier::Create(signer.GetPublicKey());
-  ASSERT_OK(verifier);
+  ABSL_ASSERT_OK(verifier);
   auto result = verifier->Verify(data_to_sign, "");
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.message(), HasSubstr("Invalid signature"));
@@ -1102,7 +1103,7 @@ TEST(EcdsaP256R1SignatureVerifierTest, MismatchingPublicKeyFailsVerification) {
   // key, which should fail.
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
       EcdsaP256R1SignatureVerifier::Create(second_signer.GetPublicKey());
-  ASSERT_OK(verifier);
+  ABSL_ASSERT_OK(verifier);
   auto result = verifier->Verify(data_to_sign, signature);
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(result.message(), HasSubstr("Invalid signature"));
@@ -1114,7 +1115,7 @@ TEST(EcdsaP256R1SignatureVerifierTest,
   // Verify an empty data string with empty signature, which should fail.
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
       EcdsaP256R1SignatureVerifier::Create(signer.GetPublicKey());
-  ASSERT_OK(verifier);
+  ABSL_ASSERT_OK(verifier);
   auto result = verifier->Verify("", "");
   EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
 }
@@ -1137,8 +1138,8 @@ TEST(EcdsaP256R1SignatureVerifierTest, VerifyReferenceExample) {
 
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
       EcdsaP256R1SignatureVerifier::Create(public_key);
-  ASSERT_OK(verifier);
-  ASSERT_OK(verifier->Verify(data, signature));
+  ABSL_ASSERT_OK(verifier);
+  ABSL_ASSERT_OK(verifier->Verify(data, signature));
 }
 
 TEST(ConvertP1363SignatureToAsn1Test, ValidSignature) {
@@ -1146,7 +1147,7 @@ TEST(ConvertP1363SignatureToAsn1Test, ValidSignature) {
       ConvertP1363SignatureToAsn1(absl::HexStringToBytes(
           "43675a6d2f2c2dfab5ab0497030ac63bafb9b9c6f09bcae8265e49543e8888cddc02"
           "34539a1f54fee3cb0781255c1c8c07c5d769095a3d1bd08d1ab57185b582"));
-  ASSERT_OK(asn1_signature);
+  ABSL_ASSERT_OK(asn1_signature);
   EXPECT_EQ(
       *asn1_signature,
       absl::HexStringToBytes("3045022043675a6d2f2c2dfab5ab0497030ac63bafb9b9c6f"

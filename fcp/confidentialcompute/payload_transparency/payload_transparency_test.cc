@@ -25,6 +25,7 @@
 #include "gtest/gtest.h"
 #include "absl/log/check.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
@@ -137,7 +138,7 @@ TEST(VerifySignedPayloadTest, SingleSignature) {
 
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {&verifying_key}, {}, absl::Now());
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->headers, ElementsAre(EqualsProto(headers)));
 }
 
@@ -164,7 +165,7 @@ TEST(VerifySignedPayloadTest, MultipleSignatures) {
   // succeed, hence verification should succeed overall.
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {&verifying_key2}, {}, absl::Now());
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->headers, ElementsAre(EqualsProto(headers2)));
 }
 
@@ -189,7 +190,7 @@ TEST(VerifySignedPayloadTest, SignatureChain) {
 
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {&verifying_key2}, {}, absl::Now());
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->headers,
               ElementsAre(EqualsProto(headers2), EqualsProto(headers1)));
 }
@@ -314,7 +315,8 @@ TEST(VerifySignedPayloadTest, SignatureWithTimeBounds) {
   AddSignature(signed_payload, headers, signer)
       .set_verifying_key_id(verifying_key.key_id());
 
-  ASSERT_OK(VerifySignedPayload(signed_payload, {&verifying_key}, {}, now));
+  ABSL_ASSERT_OK(
+      VerifySignedPayload(signed_payload, {&verifying_key}, {}, now));
 }
 
 TEST(VerifySignedPayloadTest, SignatureNotYetValid) {
@@ -418,7 +420,7 @@ TEST(VerifySignedPayloadTest, ValidRekorLogEntry) {
     absl::StatusOr<VerifySignedPayloadResult> result =
         VerifySignedPayload(signed_payload, {&verifying_key},
                             transparency_log_options, absl::Now());
-    ASSERT_OK(result);
+    ABSL_ASSERT_OK(result);
     EXPECT_THAT(result->headers, ElementsAre(EqualsProto(headers)));
   }
 }
@@ -450,7 +452,7 @@ TEST(VerifySignedPayloadTest, NonLeafRekorLogEntry) {
   *transparency_log_options.add_rekor_verifying_keys() = rekor_verifying_key;
   absl::StatusOr<VerifySignedPayloadResult> result = VerifySignedPayload(
       signed_payload, {&verifying_key2}, transparency_log_options, absl::Now());
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->headers,
               ElementsAre(EqualsProto(headers2), EqualsProto(headers1)));
 

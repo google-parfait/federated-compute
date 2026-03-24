@@ -36,6 +36,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/escaping.h"
@@ -368,7 +369,7 @@ class ExampleQueryPlanEngineTest : public testing::Test {
     std::string payload_str(checkpoint.payload);
     absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
         ReadFCCheckpointTensors(payload_str);
-    ASSERT_OK(tensors);
+    ABSL_ASSERT_OK(tensors);
 
     for (const auto& [key, expected_value] : expected_tensors) {
       EXPECT_THAT(*tensors, Contains(Pair(key, expected_value)));
@@ -578,15 +579,15 @@ TEST_F(ExampleQueryPlanEngineTest,
       result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
-  ASSERT_OK(tensors);
+  ABSL_ASSERT_OK(tensors);
 
   absl::StatusOr<Tensor> int_tensor = Tensor::Create(
       DT_INT64, TensorShape({2}), CreateTestData<uint64_t>({42, 24}));
-  ASSERT_OK(int_tensor.status());
+  ABSL_ASSERT_OK(int_tensor.status());
   absl::StatusOr<Tensor> string_tensor =
       Tensor::Create(DT_STRING, TensorShape({2}),
                      CreateTestData<absl::string_view>({"value1", "value2"}));
-  ASSERT_OK(string_tensor.status());
+  ABSL_ASSERT_OK(string_tensor.status());
   absl::flat_hash_map<std::string, std::string> expected_tensors = {
       {kOutputIntTensorName, int_tensor->ToProto().SerializeAsString()},
       {kOutputStringTensorName, string_tensor->ToProto().SerializeAsString()}};
@@ -681,17 +682,17 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerVectorNamesAreRewritten) {
       result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
-  ASSERT_OK(tensors);
+  ABSL_ASSERT_OK(tensors);
 
   absl::StatusOr<Tensor> entry_tensor =
       Tensor::Create(DT_STRING, TensorShape({2}),
                      CreateTestData<absl::string_view>({"value1", "value2"}));
-  ASSERT_OK(entry_tensor.status());
+  ABSL_ASSERT_OK(entry_tensor.status());
   absl::StatusOr<Tensor> time_tensor =
       Tensor::Create(DT_STRING, TensorShape({2}),
                      CreateTestData<absl::string_view>(
                          {"2025-10-02T17:30:00Z", "2025-10-02T17:31:00Z"}));
-  ASSERT_OK(time_tensor.status());
+  ABSL_ASSERT_OK(time_tensor.status());
   absl::flat_hash_map<std::string, std::string> expected_tensors = {
       {"entry_agg", entry_tensor->ToProto().SerializeAsString()},
       {"event_time_agg", time_tensor->ToProto().SerializeAsString()}};
@@ -1153,12 +1154,12 @@ TEST_F(ExampleQueryPlanEngineTest, SingleQueryDirectDataUploadTaskSucceeds) {
       result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
-  ASSERT_OK(tensors);
+  ABSL_ASSERT_OK(tensors);
 
   absl::StatusOr<Tensor> string_tensor = Tensor::Create(
       DT_STRING, TensorShape({2}),
       CreateTestData<absl::string_view>({example_1_str, example_2_str}));
-  ASSERT_OK(string_tensor.status());
+  ABSL_ASSERT_OK(string_tensor.status());
   absl::flat_hash_map<std::string, std::string> expected_tensors = {
       {kTensorName, string_tensor->ToProto().SerializeAsString()}};
 
@@ -1233,16 +1234,16 @@ TEST_F(ExampleQueryPlanEngineTest, TwoQueryDirectDataUploadTaskSucceeds) {
       result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
-  ASSERT_OK(tensors);
+  ABSL_ASSERT_OK(tensors);
 
   absl::StatusOr<Tensor> string_tensor = Tensor::Create(
       DT_STRING, TensorShape({2}),
       CreateTestData<absl::string_view>({example_1_str, example_2_str}));
-  ASSERT_OK(string_tensor.status());
+  ABSL_ASSERT_OK(string_tensor.status());
   absl::StatusOr<Tensor> second_string_tensor = Tensor::Create(
       DT_STRING, TensorShape({2}),
       CreateTestData<absl::string_view>({example_3_str, example_4_str}));
-  ASSERT_OK(second_string_tensor.status());
+  ABSL_ASSERT_OK(second_string_tensor.status());
   absl::flat_hash_map<std::string, std::string> expected_tensors = {
       {kTensorName1, string_tensor->ToProto().SerializeAsString()},
       {kTensorName2, second_string_tensor->ToProto().SerializeAsString()}};
@@ -1337,15 +1338,15 @@ TEST_F(ExampleQueryPlanEngineTest, MixedQueryTaskSucceeds) {
       result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
-  ASSERT_OK(tensors);
+  ABSL_ASSERT_OK(tensors);
 
   absl::StatusOr<Tensor> first_tensor = Tensor::Create(
       DT_STRING, TensorShape({2}),
       CreateTestData<absl::string_view>({example_1_str, example_2_str}));
-  ASSERT_OK(first_tensor.status());
+  ABSL_ASSERT_OK(first_tensor.status());
   absl::StatusOr<Tensor> second_tensor =
       Tensor::Create(DT_INT64, TensorShape({1}), CreateTestData<int64_t>({1}));
-  ASSERT_OK(second_tensor.status());
+  ABSL_ASSERT_OK(second_tensor.status());
   absl::StatusOr<Tensor> third_tensor =
       Tensor::Create(DT_STRING, TensorShape({1}),
                      CreateTestData<absl::string_view>({"string_value1"}));
@@ -1523,12 +1524,12 @@ TEST_F(ExampleQueryPlanEngineTest, DirectQuerySufficientData) {
       result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
-  ASSERT_OK(tensors);
+  ABSL_ASSERT_OK(tensors);
 
   absl::StatusOr<Tensor> string_tensor =
       Tensor::Create(DT_STRING, TensorShape({1}),
                      CreateTestData<absl::string_view>({example_1_str}));
-  ASSERT_OK(string_tensor.status());
+  ABSL_ASSERT_OK(string_tensor.status());
   absl::flat_hash_map<std::string, std::string> expected_tensors = {
       {kTensorName, string_tensor->ToProto().SerializeAsString()}};
 
@@ -1611,12 +1612,12 @@ TEST_F(ExampleQueryPlanEngineTest, PlanSucceedsWithBytesValues) {
       result.federated_compute_checkpoints[0].payload.Flatten();
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(str);
-  ASSERT_OK(tensors);
+  ABSL_ASSERT_OK(tensors);
 
   absl::StatusOr<Tensor> bytes_tensor =
       Tensor::Create(DT_STRING, TensorShape({2}),
                      CreateTestData<absl::string_view>({"bytes1", "bytes2"}));
-  ASSERT_OK(bytes_tensor.status());
+  ABSL_ASSERT_OK(bytes_tensor.status());
   absl::flat_hash_map<std::string, std::string> expected_tensors = {
       {"bytes_tensor", bytes_tensor->ToProto().SerializeAsString()}};
 
@@ -1746,12 +1747,12 @@ class PrivacyIdSplittingTest : public testing::Test {
     absl::StatusOr<Tensor> int_tensor = Tensor::Create(
         DT_INT64, TensorShape({static_cast<int64_t>(int_values.size())}),
         CreateTestData<uint64_t>(int_values));
-    EXPECT_OK(int_tensor.status());
+    ABSL_EXPECT_OK(int_tensor.status());
     absl::StatusOr<Tensor> event_time_tensor = Tensor::Create(
         DT_STRING,
         TensorShape({static_cast<int64_t>(event_time_values.size())}),
         CreateTestData<absl::string_view>(event_time_values));
-    EXPECT_OK(event_time_tensor.status());
+    ABSL_EXPECT_OK(event_time_tensor.status());
     return {{kOutputIntTensorName, int_tensor->ToProto().SerializeAsString()},
             {kEventTimeColumnName,
              event_time_tensor->ToProto().SerializeAsString()}};
@@ -1996,13 +1997,13 @@ TEST_F(PrivacyIdSplittingTest, PrivacyIdSplitEnabledMultipleQueries) {
   // Add the expected Jan 1 tensors from the second query.
   absl::StatusOr<Tensor> second_query_jan_1_float_tensor = Tensor::Create(
       DT_FLOAT, TensorShape({1}), CreateTestData<float>({0.24f}));
-  ASSERT_OK(second_query_jan_1_float_tensor.status());
+  ABSL_ASSERT_OK(second_query_jan_1_float_tensor.status());
   expected_jan_1_tensors["float_tensor"] =
       second_query_jan_1_float_tensor->ToProto().SerializeAsString();
   absl::StatusOr<Tensor> second_query_jan_1_event_time_tensor = Tensor::Create(
       DT_STRING, TensorShape({1}),
       CreateTestData<absl::string_view>({"2024-01-01T15:00:00+00:00"}));
-  ASSERT_OK(second_query_jan_1_event_time_tensor.status());
+  ABSL_ASSERT_OK(second_query_jan_1_event_time_tensor.status());
   expected_jan_1_tensors[absl::StrCat("prefix/", kEventTimeColumnName)] =
       second_query_jan_1_event_time_tensor->ToProto().SerializeAsString();
 
@@ -2011,11 +2012,11 @@ TEST_F(PrivacyIdSplittingTest, PrivacyIdSplitEnabledMultipleQueries) {
 
   absl::StatusOr<Tensor> jan_29_float_tensor = Tensor::Create(
       DT_FLOAT, TensorShape({1}), CreateTestData<float>({0.48f}));
-  ASSERT_OK(jan_29_float_tensor.status());
+  ABSL_ASSERT_OK(jan_29_float_tensor.status());
   absl::StatusOr<Tensor> jan_29_event_time_tensor = Tensor::Create(
       DT_STRING, TensorShape({1}),
       CreateTestData<absl::string_view>({"2024-01-29T03:00:00+22:00"}));
-  ASSERT_OK(jan_29_event_time_tensor.status());
+  ABSL_ASSERT_OK(jan_29_event_time_tensor.status());
   absl::flat_hash_map<std::string, std::string> expected_jan_29_tensors = {
       {"float_tensor", jan_29_float_tensor->ToProto().SerializeAsString()},
       {absl::StrCat("prefix/", kEventTimeColumnName),
@@ -2330,7 +2331,7 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerOnlyEntriesPresent) {
   std::string payload_str(result.federated_compute_checkpoints[0].payload);
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(payload_str);
-  ASSERT_OK(tensors);
+  ABSL_ASSERT_OK(tensors);
 
   ASSERT_THAT(*tensors, Contains(Key("entry")));
   TensorProto tensor_proto;
@@ -2416,7 +2417,7 @@ TEST_F(ExampleQueryPlanEngineTest, PrivateLoggerEntryAsBytes) {
   std::string payload_str(result.federated_compute_checkpoints[0].payload);
   absl::StatusOr<absl::flat_hash_map<std::string, std::string>> tensors =
       ReadFCCheckpointTensors(payload_str);
-  ASSERT_OK(tensors);
+  ABSL_ASSERT_OK(tensors);
 
   ASSERT_THAT(*tensors, Contains(Key("entry")));
   TensorProto tensor_proto;

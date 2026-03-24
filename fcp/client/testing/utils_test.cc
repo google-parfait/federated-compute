@@ -19,6 +19,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "fcp/protos/plan.pb.h"
 #include "fcp/testing/testing.h"  // IWYU pragma: keep
@@ -104,14 +105,14 @@ TEST(TestTaskEnvironmentTest, DefaultExamples) {
   ExampleSelector selector;
   selector.set_collection_uri("app://my_collection");
   auto iterator = env.CreateExampleIterator(selector);
-  ASSERT_OK(iterator);
+  ABSL_ASSERT_OK(iterator);
 
   auto element = (*iterator)->Next();
-  ASSERT_OK(element);
+  ABSL_ASSERT_OK(element);
   EXPECT_EQ(*element, "a");
 
   element = (*iterator)->Next();
-  ASSERT_OK(element);
+  ABSL_ASSERT_OK(element);
   EXPECT_EQ(*element, "b");
 
   element = (*iterator)->Next();
@@ -136,14 +137,14 @@ TEST(TestTaskEnvironmentTest, SelectedExamples) {
 
   TestTaskEnvironment env(*data.client_data().data(), "base_dir");
   auto iterator = env.CreateExampleIterator(selector_1);
-  ASSERT_OK(iterator);
+  ABSL_ASSERT_OK(iterator);
 
   auto element = (*iterator)->Next();
-  ASSERT_OK(element);
+  ABSL_ASSERT_OK(element);
   EXPECT_EQ(*element, "a");
 
   element = (*iterator)->Next();
-  ASSERT_OK(element);
+  ABSL_ASSERT_OK(element);
   EXPECT_EQ(*element, "b");
 
   element = (*iterator)->Next();
@@ -151,7 +152,7 @@ TEST(TestTaskEnvironmentTest, SelectedExamples) {
 
   iterator = env.CreateExampleIterator(selector_2);
   element = (*iterator)->Next();
-  ASSERT_OK(element);
+  ABSL_ASSERT_OK(element);
   EXPECT_EQ(*element, "c");
 
   element = (*iterator)->Next();

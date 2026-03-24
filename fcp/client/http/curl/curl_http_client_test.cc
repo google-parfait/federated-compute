@@ -25,6 +25,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
@@ -212,12 +213,12 @@ void PerformTwoRequests(CurlHttpClient* http_client, int port,
   auto request1 = InMemoryHttpRequest::Create(
       request_uri1, HttpRequest::Method::kGet, HeaderList(), request1_body,
       /*use_compression*/ false);
-  ASSERT_OK(request1);
+  ABSL_ASSERT_OK(request1);
 
   auto request2 = InMemoryHttpRequest::Create(
       request_uri2, HttpRequest::Method::kPost, HeaderList(), request2_body,
       /*use_compression*/ false);
-  ASSERT_OK(request2);
+  ABSL_ASSERT_OK(request2);
 
   auto handle1 = http_client->EnqueueRequest(std::move(request1.value()));
   auto handle2 = http_client->EnqueueRequest(std::move(request2.value()));
@@ -314,7 +315,7 @@ TEST(CurlHttpClientTest, PutRequest) {
   auto request = InMemoryHttpRequest::Create(
       request_uri, HttpRequest::Method::kPut, HeaderList(), request_body,
       /*use_compression*/ false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   auto handle = http_client->EnqueueRequest(std::move(request.value()));
 
@@ -417,12 +418,12 @@ TEST(CurlHttpClientTest, CancelRequest) {
   auto request1 = InMemoryHttpRequest::Create(
       request_uri1, HttpRequest::Method::kGet, HeaderList(), request1_body,
       /*use_compression*/ false);
-  ASSERT_OK(request1);
+  ABSL_ASSERT_OK(request1);
 
   auto request2 = InMemoryHttpRequest::Create(
       request_uri2, HttpRequest::Method::kPost, HeaderList(), request2_body,
       /*use_compression*/ false);
-  ASSERT_OK(request2);
+  ABSL_ASSERT_OK(request2);
 
   auto handle1 = http_client->EnqueueRequest(std::move(request1.value()));
   auto handle2 = http_client->EnqueueRequest(std::move(request2.value()));
@@ -522,7 +523,7 @@ TEST(CurlHttpClientTest, TestExtraHeaders) {
   auto request = InMemoryHttpRequest::Create(
       request_uri, HttpRequest::Method::kPost, extra_headers, request_body,
       /*use_compression*/ false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   auto handle = http_client->EnqueueRequest(std::move(request.value()));
 

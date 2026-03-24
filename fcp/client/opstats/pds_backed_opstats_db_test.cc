@@ -29,6 +29,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/synchronization/mutex.h"
@@ -137,7 +138,7 @@ TEST_F(PdsBackedOpStatsDbTest, AddOpStats) {
               LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/1));
-  ASSERT_OK((*db)->Transform(func));
+  ABSL_ASSERT_OK((*db)->Transform(func));
   OpStatsSequence expected;
   *expected.add_opstats() = op_stats;
   absl::StatusOr<OpStatsSequence> data = (*db)->Read();
@@ -167,13 +168,13 @@ TEST_F(PdsBackedOpStatsDbTest, MutateOpStats) {
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/1))
       .Times(2);
-  ASSERT_OK((*db)->Transform(initialCommit));
+  ABSL_ASSERT_OK((*db)->Transform(initialCommit));
   auto mutate = [](OpStatsSequence& data) {
     data.mutable_opstats(0)->mutable_events()->Add(
         CreateEvent(OperationalStats::Event::EVENT_KIND_CHECKIN_ACCEPTED,
                     benchmark_time_sec));
   };
-  ASSERT_OK((*db)->Transform(mutate));
+  ABSL_ASSERT_OK((*db)->Transform(mutate));
   OperationalStats expected_op_stats;
   expected_op_stats.mutable_events()->Add(CreateEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED, benchmark_time_sec));
@@ -214,11 +215,11 @@ TEST_F(PdsBackedOpStatsDbTest, LastUpdateTimeIsCorrectlyUsed) {
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/1))
       .Times(2);
-  ASSERT_OK((*db)->Transform(initialCommit));
+  ABSL_ASSERT_OK((*db)->Transform(initialCommit));
 
   // We do a second unity commit to trigger the ttl cleanup.
   auto unityCommit = [](OpStatsSequence& data) {};
-  ASSERT_OK((*db)->Transform(unityCommit));
+  ABSL_ASSERT_OK((*db)->Transform(unityCommit));
   OpStatsSequence expected;
   *expected.add_opstats() = op_stats;
   absl::StatusOr<OpStatsSequence> data = (*db)->Read();
@@ -251,11 +252,11 @@ TEST_F(PdsBackedOpStatsDbTest, NoEventsOpStatsGotRemoved) {
               LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/0));
-  ASSERT_OK((*db)->Transform(initialCommit));
+  ABSL_ASSERT_OK((*db)->Transform(initialCommit));
 
   // We do a second unity commit to trigger the ttl cleanup.
   auto unityCommit = [](OpStatsSequence& data) {};
-  ASSERT_OK((*db)->Transform(unityCommit));
+  ABSL_ASSERT_OK((*db)->Transform(unityCommit));
   absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_THAT(data, IsOk());
   ASSERT_TRUE(data->has_earliest_trustworthy_time());
@@ -298,7 +299,7 @@ TEST_F(PdsBackedOpStatsDbTest, TwoInstanceOnTwoThreadsAccessDifferentFile) {
   first_thread.join();
   second_thread.join();
   for (const auto& result : results) {
-    ASSERT_OK(result.status());
+    ABSL_ASSERT_OK(result.status());
   }
 }
 
@@ -312,7 +313,7 @@ TEST_F(PdsBackedOpStatsDbTest, BackfillEarliestTrustWorthyTime) {
   {
     absl::StatusOr<std::unique_ptr<OpStatsDb>> db =
         PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
-    ASSERT_OK(db);
+    ABSL_ASSERT_OK(db);
     auto add = [first_op_stats, second_op_stats](OpStatsSequence& data) {
       *data.add_opstats() = first_op_stats;
       *data.add_opstats() = second_op_stats;
@@ -331,13 +332,13 @@ TEST_F(PdsBackedOpStatsDbTest, BackfillEarliestTrustWorthyTime) {
                                   /*execution_index=*/0, /*epoch_index=*/0,
                                   engine::DataSourceType::DATASET, /*value=*/2))
         .Times(2);
-    ASSERT_OK((*db)->Transform(add));
-    ASSERT_OK((*db)->Transform(remove_earliest_trustworthy_time));
+    ABSL_ASSERT_OK((*db)->Transform(add));
+    ABSL_ASSERT_OK((*db)->Transform(remove_earliest_trustworthy_time));
   }
 
   absl::StatusOr<std::unique_ptr<OpStatsDb>> db =
       PdsBackedOpStatsDb::Create(base_dir_, ttl, log_manager_, size_limit);
-  ASSERT_OK(db);
+  ABSL_ASSERT_OK(db);
   OperationalStats third_op_stats = CreateOperationalStatsWithSingleEvent(
       OperationalStats::Event::EVENT_KIND_CHECKIN_STARTED,
       benchmark_time_sec + 10);
@@ -353,9 +354,9 @@ TEST_F(PdsBackedOpStatsDbTest, BackfillEarliestTrustWorthyTime) {
               LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/3));
-  ASSERT_OK((*db)->Transform(add_another));
+  ABSL_ASSERT_OK((*db)->Transform(add_another));
   absl::StatusOr<OpStatsSequence> data = (*db)->Read();
-  ASSERT_OK(data);
+  ABSL_ASSERT_OK(data);
   OpStatsSequence expected;
   *expected.mutable_earliest_trustworthy_time() =
       TimeUtil::SecondsToTimestamp(benchmark_time_sec);
@@ -408,11 +409,11 @@ TEST_F(PdsBackedOpStatsDbTest, RemoveOpstatsDueToTtl) {
               LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/1));
-  ASSERT_OK((*db)->Transform(initialCommit));
+  ABSL_ASSERT_OK((*db)->Transform(initialCommit));
 
   // We do a second unity commit to trigger the ttl cleanup.
   auto unityCommit = [](OpStatsSequence& data) {};
-  ASSERT_OK((*db)->Transform(unityCommit));
+  ABSL_ASSERT_OK((*db)->Transform(unityCommit));
 
   absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_THAT(data, IsOk());
@@ -459,11 +460,11 @@ TEST_F(PdsBackedOpStatsDbTest, RemoveOpstatsDueToTtlPhaseStats) {
               LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/1));
-  ASSERT_OK((*db)->Transform(initialCommit));
+  ABSL_ASSERT_OK((*db)->Transform(initialCommit));
 
   // We do a second unity commit to trigger the ttl cleanup.
   auto unityCommit = [](OpStatsSequence& data) {};
-  ASSERT_OK((*db)->Transform(unityCommit));
+  ABSL_ASSERT_OK((*db)->Transform(unityCommit));
 
   absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_THAT(data, IsOk());
@@ -509,11 +510,11 @@ TEST_F(PdsBackedOpStatsDbTest, RemoveOpstatsDueToTtlLegacyAndPhaseStats) {
               LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                                  /*execution_index=*/0, /*epoch_index=*/0,
                                  engine::DataSourceType::DATASET, /*value=*/1));
-  ASSERT_OK((*db)->Transform(initialCommit));
+  ABSL_ASSERT_OK((*db)->Transform(initialCommit));
 
   // We do a second unity commit to trigger the ttl cleanup.
   auto unityCommit = [](OpStatsSequence& data) {};
-  ASSERT_OK((*db)->Transform(unityCommit));
+  ABSL_ASSERT_OK((*db)->Transform(unityCommit));
 
   absl::StatusOr<OpStatsSequence> data = (*db)->Read();
   ASSERT_THAT(data, IsOk());
@@ -550,7 +551,7 @@ TEST_F(PdsBackedOpStatsDbTest, CorruptedFile) {
         LogToLongHistogram(HistogramCounters::OPSTATS_DB_NUM_ENTRIES,
                            /*execution_index=*/0, /*epoch_index=*/0,
                            engine::DataSourceType::DATASET, /*value=*/1));
-    ASSERT_OK(db->Transform(func));
+    ABSL_ASSERT_OK(db->Transform(func));
   }
 
   {
@@ -560,8 +561,8 @@ TEST_F(PdsBackedOpStatsDbTest, CorruptedFile) {
     protostore::FileStorage file_storage;
     std::unique_ptr<protostore::OutputStream> ostream =
         file_storage.OpenForWrite(db_path).value();
-    ASSERT_OK(ostream->Append("not a proto"));
-    ASSERT_OK(ostream->Close());
+    ABSL_ASSERT_OK(ostream->Append("not a proto"));
+    ABSL_ASSERT_OK(ostream->Close());
   }
 
   std::unique_ptr<OpStatsDb> db =
@@ -606,7 +607,7 @@ TEST_F(PdsBackedOpStatsDbTest, OpStatsRemovedDueToSizeLimit) {
   auto initial_commit = [op_stats](OpStatsSequence& data) {
     *data.add_opstats() = op_stats;
   };
-  ASSERT_OK(db->Transform(initial_commit));
+  ABSL_ASSERT_OK(db->Transform(initial_commit));
 
   // Add the second event, which will pushes the database size over the limit.
   EXPECT_CALL(log_manager_,
@@ -624,7 +625,7 @@ TEST_F(PdsBackedOpStatsDbTest, OpStatsRemovedDueToSizeLimit) {
   auto add = [another_op_stats](OpStatsSequence& data) {
     *data.add_opstats() = another_op_stats;
   };
-  ASSERT_OK(db->Transform(add));
+  ABSL_ASSERT_OK(db->Transform(add));
 
   // Verify the first event doesn't exist in the database.
   OpStatsSequence expected;

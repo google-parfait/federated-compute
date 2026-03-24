@@ -35,6 +35,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
@@ -359,7 +360,7 @@ void FlRunnerTestBase::MockSuccessfulPlanExecution(
       std::move(plan_result));
   if (has_checkpoint) {
     auto checkpoint_file = files_impl_.CreateTempFile("output", ".ckpt");
-    ASSERT_OK(checkpoint_file);
+    ABSL_ASSERT_OK(checkpoint_file);
     WriteContentToFile(*checkpoint_file, "output_checkpoint");
     plan_result_and_checkpoint_file.checkpoint_filename =
         std::move(*checkpoint_file);
@@ -925,7 +926,7 @@ void FlRunnerExampleQueryTest::ExpectComputationFailureWithInvalidArgument() {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_EQ(result->contribution_result(), FLRunnerResult::FAIL);
 }
 
@@ -1094,7 +1095,7 @@ TEST_F(FlRunnerSourceIdSeedTest, GeneratesSourceIdSeedWhenNoneExists) {
   EXPECT_CALL(mock_opstats_db_, Transform(_))
       .WillOnce(DoAll(SaveArg<0>(&transform_fn), Return(absl::OkStatus())));
 
-  ASSERT_OK(RunFederatedComputation(
+  ABSL_ASSERT_OK(RunFederatedComputation(
       &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
@@ -1117,7 +1118,7 @@ TEST_F(FlRunnerSourceIdSeedTest, UsesExistingSourceIdSeed) {
   // dtor will still commit, so we expect at most one call.
   EXPECT_CALL(mock_opstats_db_, Transform(_)).Times(AtMost(1));
 
-  ASSERT_OK(RunFederatedComputation(
+  ABSL_ASSERT_OK(RunFederatedComputation(
       &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
@@ -1138,7 +1139,7 @@ TEST_F(FlRunnerImmediateAbortTest, ImmediateAbort) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1172,7 +1173,7 @@ TEST_F(FlRunnerTensorflowTaskTest, MockCheckinFails) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1194,7 +1195,7 @@ TEST_F(FlRunnerTensorflowTaskTest, RejectionTest) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1236,7 +1237,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlan) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1289,7 +1290,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SimpleAggregationPlanWithMinSepPolicy) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1341,7 +1342,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
   // Even though the ReportCompleted(...) call fails, it should result in an
   // FLRunnerResult with the most recent RetryWindow.
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1391,7 +1392,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
   // Even though the ReportCompleted(...) call fails, it should result in an
   // FLRunnerResult with the most recent RetryWindow. This is the new
   // behavior.
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1441,7 +1442,7 @@ TEST_F(FlRunnerTensorflowTaskTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1492,7 +1493,7 @@ TEST_F(FlRunnerTensorflowTaskTest, TfPlanLightweightComputationIdNull) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
   // Computation id should not be calculated for TF based tasks if
   // enable_computation_id is false.
@@ -1540,7 +1541,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SecaggPlan) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1597,7 +1598,7 @@ TEST_F(FlRunnerTensorflowTaskTest, SecaggPlanOnlySecaggOutputTensors) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1653,7 +1654,7 @@ TEST_F(FlRunnerTensorflowTaskTest, AbortPlan) {
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
 
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1706,7 +1707,7 @@ TEST_F(FlRunnerTensorflowTaskTest, ExampleIteratorError) {
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
 
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1757,7 +1758,7 @@ TEST_F(FlRunnerTensorflowTaskTest, ComputationInvalidArgument) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_EQ(result->contribution_result(), FLRunnerResult::FAIL);
 }
 
@@ -1787,7 +1788,7 @@ TEST_F(FlRunnerTensorflowTaskTest, MockCheckinInvalidPlan) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_EQ(result->contribution_result(), FLRunnerResult::FAIL);
 }
 
@@ -1824,7 +1825,7 @@ TEST_F(FlRunnerTensorflowTaskTest, TaskCompletionCallbackEnabledUploadFailed) {
   MockSuccessfulPlanExecution(/*has_checkpoint=*/true,
                               /*has_secagg_output=*/false);
 
-  ASSERT_OK(RunFederatedComputation(
+  ABSL_ASSERT_OK(RunFederatedComputation(
       &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
@@ -1848,7 +1849,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinFails) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1875,7 +1876,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinRejected) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1914,7 +1915,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinFails) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -1951,7 +1952,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinInvalidPlan) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->contribution_result(), FLRunnerResult::FAIL);
 }
 
@@ -1984,7 +1985,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinRejected) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   // Ensure fl_runner.cc used the most recent RetryWindow, after the final
   // failed checkin request.
   FLRunnerResult expected_result;
@@ -2048,7 +2049,7 @@ TEST_F(FlRunnerEligibilityEvalTest, EvalCheckinSucceedsRegularCheckinSucceeds) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -2115,7 +2116,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -2181,7 +2182,7 @@ TEST_F(FlRunnerEligibilityEvalWithCriteriaTest, ComputationIdSet) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -2264,7 +2265,7 @@ TEST_F(FlRunnerExampleQueryEligibilityEvalTest, UseExampleQueryResultFormat) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -2334,7 +2335,7 @@ TEST_F(FlRunnerExampleQueryTest, TaskSucceeds) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -2385,7 +2386,7 @@ TEST_F(FlRunnerExampleQueryTest, FederatedComputeWireFormat) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -2452,7 +2453,7 @@ TEST_F(FlRunnerExampleQueryTest, FCCheckpointAggregationEnabled) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -2483,7 +2484,7 @@ TEST_F(FlRunnerExampleQueryTest, LightweightTaskDoesNotCreateTempFiles) {
 
   absl::StatusOr<std::unique_ptr<cache::TempFiles>> temp_files =
       cache::TempFiles::Create(root_dir, &mock_log_manager_);
-  ASSERT_OK(temp_files);
+  ABSL_ASSERT_OK(temp_files);
 
   EXPECT_CALL(mock_federated_protocol_, MockCheckin(_, _))
       .WillOnce(Return(FederatedProtocol::TaskAssignment{
@@ -2516,7 +2517,7 @@ TEST_F(FlRunnerExampleQueryTest, LightweightTaskDoesNotCreateTempFiles) {
       &mock_flags_, &mock_federated_protocol_, &mock_fedselect_manager_,
       timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -2573,7 +2574,7 @@ TEST_F(FlRunnerExampleQueryTest, NoExampleQueryIORouter) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_EQ(result->contribution_result(), FLRunnerResult::FAIL);
 }
 
@@ -2680,7 +2681,7 @@ TEST_F(FlRunnerExampleQueryTest, ExampleQueryPlanLightweightComputation) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -2781,7 +2782,7 @@ TEST_F(FlRunnerExampleQueryTest, ConfidentialAggInSelectorContext) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
   EXPECT_TRUE(latest_selector_context_.computation_properties()
                   .federated()
@@ -2820,7 +2821,7 @@ TEST_F(FlRunnerExampleQueryTest, DirectDataUploadTaskSucceeds) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -2936,7 +2937,7 @@ TEST_F(FlRunnerExampleQueryTest, ExampleQueryWithEventTimeRange) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -3006,7 +3007,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, EmptyPopulationSpec) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -3179,7 +3180,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -3338,7 +3339,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -3430,7 +3431,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsTurnedAway) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -3514,7 +3515,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsIOError) {
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -3600,7 +3601,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -3686,7 +3687,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -3793,7 +3794,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -3907,7 +3908,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -4039,7 +4040,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -4217,7 +4218,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -4366,7 +4367,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -4521,7 +4522,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   // Call RunFederatedComputation, we don't check results in this test because
   // we have already set expectations above.
-  ASSERT_OK(RunFederatedComputation(
+  ABSL_ASSERT_OK(RunFederatedComputation(
       &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
@@ -4608,7 +4609,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   EXPECT_CALL(phase_logger, UpdateRetryWindowAndNetworkStats(_, _))
       .WillRepeatedly(DoAll(SaveArg<0>(&latest_opstats_retry_window_),
                             SaveArg<1>(&logged_network_stats_)));
-  ASSERT_OK(RunFederatedComputation(
+  ABSL_ASSERT_OK(RunFederatedComputation(
       &mock_task_env_, phase_logger, &mock_event_publisher_, &files_impl_,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
@@ -4710,7 +4711,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   EXPECT_CALL(phase_logger, UpdateRetryWindowAndNetworkStats(_, _))
       .WillRepeatedly(DoAll(SaveArg<0>(&latest_opstats_retry_window_),
                             SaveArg<1>(&logged_network_stats_)));
-  ASSERT_OK(RunFederatedComputation(
+  ABSL_ASSERT_OK(RunFederatedComputation(
       &mock_task_env_, phase_logger, &mock_event_publisher_, &files_impl_,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
@@ -4809,7 +4810,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
   EXPECT_CALL(phase_logger, UpdateRetryWindowAndNetworkStats(_, _))
       .WillRepeatedly(DoAll(SaveArg<0>(&latest_opstats_retry_window_),
                             SaveArg<1>(&logged_network_stats_)));
-  ASSERT_OK(RunFederatedComputation(
+  ABSL_ASSERT_OK(RunFederatedComputation(
       &mock_task_env_, phase_logger, &mock_event_publisher_, &files_impl_,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
@@ -4882,7 +4883,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -4952,7 +4953,7 @@ TEST_F(FlRunnerEligibilityEvalTest,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
       /*reference_time=*/absl::Now(), kSessionName, kPopulationName, clock_);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   FLRunnerResult expected_result;
   *expected_result.mutable_retry_info() = CreateRetryInfoFromRetryWindow(
       mock_federated_protocol_.GetLatestRetryWindow());
@@ -5105,7 +5106,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   // Call RunFederatedComputation, we don't check results in this test because
   // we have already set expectations above.
-  ASSERT_OK(RunFederatedComputation(
+  ABSL_ASSERT_OK(RunFederatedComputation(
       &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,
@@ -5254,7 +5255,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
 
   // Call RunFederatedComputation, we don't check results in this test because
   // we have already set expectations above.
-  ASSERT_OK(RunFederatedComputation(
+  ABSL_ASSERT_OK(RunFederatedComputation(
       &mock_task_env_, mock_phase_logger_, &mock_event_publisher_, &files_impl_,
       &mock_log_manager_, &mock_opstats_logger_, &mock_flags_,
       &mock_federated_protocol_, &mock_fedselect_manager_, timing_config_,

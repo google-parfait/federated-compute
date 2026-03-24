@@ -23,6 +23,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "fcp/client/attestation/log_attestation_records.h"
@@ -127,7 +128,7 @@ TEST(AttestationTransparencyVerifierTest, Success) {
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
   auto result = verifier.Verify({}, signed_endorsements, encryption_config);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->public_key, VariantWith<Key>(EqualsProto(public_key)));
   EXPECT_EQ(result->key_id, public_key.key_id());
   EXPECT_EQ(result->access_policy_sha256, "access policy hash");
@@ -163,7 +164,7 @@ TEST(AttestationTransparencyVerifierTest, SuccessWithSignatureChain) {
   AttestationTransparencyVerifier verifier(std::move(options),
                                            LogPrettyPrintedVerificationRecord);
   auto result = verifier.Verify({}, signed_endorsements, encryption_config);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->public_key, VariantWith<Key>(EqualsProto(public_key)));
   EXPECT_EQ(result->key_id, public_key.key_id());
   EXPECT_EQ(result->access_policy_sha256, "access policy hash");
@@ -486,7 +487,7 @@ TEST(AttestationTransparencyVerifierTest,
           confidentialcompute::AttestationVerificationRecord record) {
         verification_record = record;
       });
-  ASSERT_OK(verifier.Verify({}, signed_endorsements, encryption_config));
+  ABSL_ASSERT_OK(verifier.Verify({}, signed_endorsements, encryption_config));
 
   // Ensure that the verification record logger was called and provided the
   // relevant information.

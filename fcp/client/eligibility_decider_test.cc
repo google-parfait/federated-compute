@@ -27,6 +27,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
@@ -147,7 +148,7 @@ TEST_F(EligibilityDeciderTest, NoPoliciesEligibleForAllTasks) {
       GenOpstatsSequence(), clock_, {SetUpExampleIteratorFactory(0).get()},
       mock_eet_plan_runner_, &mock_flags_);
 
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), num_tasks);
 
   for (const auto& task_weight : eligibility_result->task_weights()) {
@@ -184,7 +185,7 @@ TEST_F(EligibilityDeciderTest, SworPolicyIsEligible) {
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   // Eligible according to swor.
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
@@ -227,7 +228,7 @@ TEST_F(EligibilityDeciderTest, SworPolicyIsNotEligible) {
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   // Ineligible according to swor.
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0);
@@ -263,7 +264,7 @@ TEST_F(EligibilityDeciderTest, GroupSworPolicyIsEligible) {
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   // Eligible according to group swor.
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
@@ -307,7 +308,7 @@ TEST_F(EligibilityDeciderTest, GroupSworPolicyIsNotEligible) {
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   // Ineligible according to swor.
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0);
@@ -363,7 +364,7 @@ TEST_F(EligibilityDeciderTest, IsNotEligibleIfIneligibleForAtLeastOnePolicy) {
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   // Ineligible according to swor.
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0);
@@ -392,7 +393,7 @@ TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyIsEligible) {
       spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
       {SetUpExampleIteratorFactory(5).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
 }
@@ -420,7 +421,7 @@ TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyIsNotEligible) {
       spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
       {SetUpExampleIteratorFactory(2).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
 }
@@ -453,7 +454,7 @@ TEST_F(EligibilityDeciderTest,
       spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
 }
@@ -493,7 +494,7 @@ TEST_F(EligibilityDeciderTest, DataAvailabilityPolicyComputationErrorNonfatal) {
   absl::StatusOr<TaskEligibilityInfo> eligibility_result = ComputeEligibility(
       spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
       {example_iterator_factory.get()}, mock_eet_plan_runner_, &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
 }
@@ -548,7 +549,7 @@ TEST_F(EligibilityDeciderTest, EligibleForAllPolicyTypes) {
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(5).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   TaskEligibilityInfo expected;
   expected.set_version(1);
   auto* tw = expected.add_task_weights();
@@ -621,7 +622,7 @@ TEST_F(EligibilityDeciderTest, TwoTasksOneEligibleForAllOneNot) {
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(5).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   TaskEligibilityInfo expected;
   expected.set_version(1);
   auto* tw = expected.add_task_weights();
@@ -683,7 +684,7 @@ TEST_F(EligibilityDeciderTest, TwoTasksOneUnimplementedPolicyNonfatal) {
       spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
       {SetUpExampleIteratorFactory(5).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
 
   TaskEligibilityInfo expected_output;
   expected_output.set_version(1);
@@ -728,7 +729,7 @@ TEST_F(EligibilityDeciderTest, TwoTasksOneUsingPolicyOneNot) {
       spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
       {SetUpExampleIteratorFactory(5).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
 
   // Task 1 uses no policies, so it should be eligible. Task 2 uses a data
   // availability policy needing at least 3 examples, and it has 5, so it should
@@ -768,7 +769,7 @@ TEST_F(EligibilityDeciderTest, TwoTasksNeitherUsePolicies) {
       spec, mock_log_manager_, mock_phase_logger_, GenOpstatsSequence(), clock_,
       {SetUpExampleIteratorFactory(5).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
 
   // Both tasks use no policies, so they should both be eligible.
   TaskEligibilityInfo expected_output;
@@ -814,7 +815,7 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyMinVersionTooHighIneligible) {
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
 }
@@ -856,7 +857,7 @@ TEST_F(EligibilityDeciderTest,
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 1);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
 }
@@ -917,7 +918,7 @@ TEST_F(EligibilityDeciderTest,
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 2);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
   ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 1.0f);
@@ -975,7 +976,7 @@ TEST_F(EligibilityDeciderTest,
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 2);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
   ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 0.0f);
@@ -1027,7 +1028,7 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyNoMinTrustworthinessPeriodEligible) {
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 2);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);
   ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 1.0f);
@@ -1077,7 +1078,7 @@ TEST_F(EligibilityDeciderTest,
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 2);
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 0.0f);
   ASSERT_EQ(eligibility_result->task_weights().at(1).weight(), 0.0f);
@@ -1131,7 +1132,7 @@ TEST_F(EligibilityDeciderTest, MinSepPolicyWithTrustworthinessCheckDisabled) {
       spec, mock_log_manager_, mock_phase_logger_, opstats_sequence, clock_,
       {SetUpExampleIteratorFactory(0).get()}, mock_eet_plan_runner_,
       &mock_flags_);
-  ASSERT_OK(eligibility_result);
+  ABSL_ASSERT_OK(eligibility_result);
   ASSERT_EQ(eligibility_result->task_weights_size(), 2);
   // Both tasks are eligible as the trustworthiness check is disabled.
   ASSERT_EQ(eligibility_result->task_weights().at(0).weight(), 1.0f);

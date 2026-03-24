@@ -23,6 +23,7 @@
 #include "gtest/gtest.h"
 #include "absl/log/check.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/string_view.h"
@@ -127,7 +128,7 @@ TEST(OakAttestationVerificationFfiTest, VerifyEndorsementSuccess) {
 
   auto s = VerifyEndorsement(absl::FromUnixMillis(kNowUtcMillis),
                              signed_endorsement, ref_value);
-  EXPECT_OK(s);
+  ABSL_EXPECT_OK(s);
 
   EndorsementDetails details = s.value();
   EXPECT_EQ(absl::BytesToHexString(details.subject_digest().sha2_256()),

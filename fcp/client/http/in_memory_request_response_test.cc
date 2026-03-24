@@ -28,6 +28,7 @@
 #include "gtest/gtest.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
@@ -132,7 +133,7 @@ TEST(InMemoryHttpRequestTest, ValidGetRequest) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create(expected_uri, HttpRequest::Method::kGet, {},
                                   "", /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   EXPECT_THAT((*request)->uri(), StrEq(expected_uri));
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kGet);
   // Because no request body is present, the Content-Length header shouldn't
@@ -147,7 +148,7 @@ TEST(InMemoryHttpRequestTest, ValidGetRequestWithHeaders) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, expected_headers,
                                   "", /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   EXPECT_THAT((*request)->extra_headers(), ContainerEq(expected_headers));
 }
 
@@ -156,7 +157,7 @@ TEST(InMemoryHttpRequestTest, ValidPostRequestWithoutBody) {
   absl::StatusOr<std::unique_ptr<HttpRequest>> request =
       InMemoryHttpRequest::Create(expected_uri, HttpRequest::Method::kPost, {},
                                   "", /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   EXPECT_THAT((*request)->uri(), StrEq(expected_uri));
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
   // Because no request body is present, the Content-Length header shouldn't
@@ -172,7 +173,7 @@ TEST(InMemoryHttpRequestTest, ValidPostRequestWithBody) {
       InMemoryHttpRequest::Create(expected_uri, HttpRequest::Method::kPost, {},
                                   expected_body,
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   EXPECT_THAT((*request)->uri(), StrEq(expected_uri));
   EXPECT_EQ((*request)->method(), HttpRequest::Method::kPost);
   EXPECT_THAT((*request)->extra_headers(),
@@ -196,7 +197,7 @@ TEST(InMemoryHttpRequestTest, ValidPostRequestWithBodyAndHeaders) {
                                   HttpRequest::Method::kPost, original_headers,
                                   expected_body,
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   EXPECT_THAT((*request)->extra_headers(), ContainerEq(expected_headers));
 }
@@ -207,14 +208,14 @@ TEST(InMemoryHttpRequestTest, ReadBodySimple) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kPost, {}, expected_body,
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   std::string actual_body;
   actual_body.resize(expected_body.size());
   // Read the body in one go (the "simple" case).
   auto read_result =
       (*request)->ReadBody(actual_body.data(), actual_body.size());
-  ASSERT_OK(read_result);
+  ABSL_ASSERT_OK(read_result);
   EXPECT_THAT(*read_result, actual_body.size());
   EXPECT_THAT(actual_body, StrEq(expected_body));
   // Expect the second read to indicate the end of the stream.
@@ -231,7 +232,7 @@ TEST(InMemoryHttpRequestTest, ReadBodyChunked) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kPost, {}, expected_body,
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   std::string actual_body;
   // Pre-size the buffer with 'X' characters. This will allow us to check
@@ -243,12 +244,12 @@ TEST(InMemoryHttpRequestTest, ReadBodyChunked) {
   // available.
   absl::StatusOr<int64_t> read_result =
       (*request)->ReadBody(actual_body.data(), 3);
-  ASSERT_OK(read_result);
+  ABSL_ASSERT_OK(read_result);
   EXPECT_THAT(*read_result, 3);
   EXPECT_THAT(actual_body, StrEq("123XXXXX"));
 
   read_result = (*request)->ReadBody(actual_body.data() + 3, 3);
-  ASSERT_OK(read_result);
+  ABSL_ASSERT_OK(read_result);
   EXPECT_THAT(*read_result, 3);
   EXPECT_THAT(actual_body, StrEq("123456XX"));
 
@@ -257,7 +258,7 @@ TEST(InMemoryHttpRequestTest, ReadBodyChunked) {
   // more bytes than it has available, which should ensure that no writes will
   // occur beyond actual_body.data()'s buffer size (which is only 8 bytes long).
   read_result = (*request)->ReadBody(actual_body.data() + 6, 3);
-  ASSERT_OK(read_result);
+  ABSL_ASSERT_OK(read_result);
   EXPECT_THAT(*read_result, 2);
   EXPECT_THAT(actual_body, StrEq(expected_body));
 
@@ -273,7 +274,7 @@ TEST(InMemoryHttpRequestTest, RequestWithCompressedBody) {
                                   HttpRequest::Method::kPost, {},
                                   uncompressed_body,
                                   /*use_compression=*/true);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   auto content_encoding_header =
       FindHeader((*request)->extra_headers(), kContentEncodingHdr);
   ASSERT_THAT(content_encoding_header, Optional(StrEq(kGzipEncodingHdrValue)));
@@ -290,14 +291,14 @@ TEST(InMemoryHttpRequestTest, RequestWithCompressedBody) {
   // Read the body in one go (the "simple" case).
   auto read_result =
       (*request)->ReadBody(actual_body.data(), actual_body.size());
-  ASSERT_OK(read_result);
+  ABSL_ASSERT_OK(read_result);
   EXPECT_THAT(*read_result, actual_body.size());
 
   // Expect the second read to indicate the end of the stream.
   EXPECT_THAT((*request)->ReadBody(nullptr, 1), IsCode(OUT_OF_RANGE));
 
   auto recovered_body = UncompressWithGzip(actual_body);
-  ASSERT_OK(recovered_body);
+  ABSL_ASSERT_OK(recovered_body);
   EXPECT_EQ(*recovered_body, uncompressed_body);
 }
 
@@ -306,7 +307,7 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseFailsBeforeHeaders) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   InMemoryHttpRequestCallback callback;
   callback.OnResponseError(**request, absl::UnimplementedError("foobar"));
@@ -321,12 +322,12 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseFailsAfterHeaders) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   auto fake_response = FakeHttpResponse(kHttpOk, {});
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
   callback.OnResponseBodyError(**request, fake_response,
                                absl::UnimplementedError("foobar"));
 
@@ -340,13 +341,14 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseFailsAfterPartialBody) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   auto fake_response = FakeHttpResponse(kHttpOk, {});
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, "response_"));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(
+      callback.OnResponseBody(**request, fake_response, "response_"));
   callback.OnResponseBodyError(**request, fake_response,
                                absl::UnimplementedError("foobar"));
 
@@ -361,16 +363,16 @@ TEST(InMemoryHttpRequestCallbackTest,
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   auto fake_response = FakeHttpResponse(kHttpOk, {{"Content-Length", "5"}});
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
   // Return a partial response (only 4 characters instead of the expected 5
   // indicated by the Content-Length header).
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, "12"));
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, "34"));
+  ABSL_ASSERT_OK(callback.OnResponseBody(**request, fake_response, "12"));
+  ABSL_ASSERT_OK(callback.OnResponseBody(**request, fake_response, "34"));
   callback.OnResponseCompleted(**request, fake_response);
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
@@ -385,16 +387,16 @@ TEST(InMemoryHttpRequestCallbackTest,
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   auto fake_response = FakeHttpResponse(kHttpOk, {{"Content-Length", "5"}});
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
   // Return a more response data than expected (6 characters instead of the
   // expected 5 indicated by the Content-Length header).
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, "12"));
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, "34"));
+  ABSL_ASSERT_OK(callback.OnResponseBody(**request, fake_response, "12"));
+  ABSL_ASSERT_OK(callback.OnResponseBody(**request, fake_response, "34"));
   absl::Status response_body_result =
       callback.OnResponseBody(**request, fake_response, "56");
   EXPECT_THAT(response_body_result, IsCode(OUT_OF_RANGE));
@@ -407,7 +409,7 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNegative) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   // Set the Content-Length to an invalid negative value.
   auto fake_response = FakeHttpResponse(kHttpOk, {{"Content-Length", "-1"}});
@@ -425,7 +427,7 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNonInteger) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   // Set the Content-Length to an invalid non-integer, non-ASCII value.
   auto fake_response =
@@ -444,7 +446,7 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentEncodingHeader) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   // Add a Content-Encoding header, which implementations should never provide
   // to us, unless we advertised an Accept-Encoding header in the request.
@@ -463,7 +465,7 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithTransferEncodingHeader) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   // Add a Transfer-Encoding header, which implementations should never provide
   // to us.
@@ -483,7 +485,7 @@ TEST(InMemoryHttpRequestCallbackTest, OkResponseWithoutContentLength) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   // Note that the fake response does not contain a Content-Length header. The
   // InMemoryHttpRequestCallback should be able to handle this (accumulating
@@ -493,13 +495,14 @@ TEST(InMemoryHttpRequestCallbackTest, OkResponseWithoutContentLength) {
   const std::string expected_body = "response_body";
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
   // We return the response body in one go (the "simple" case).
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, expected_body));
+  ABSL_ASSERT_OK(
+      callback.OnResponseBody(**request, fake_response, expected_body));
   callback.OnResponseCompleted(**request, fake_response);
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  ASSERT_OK(actual_response);
+  ABSL_ASSERT_OK(actual_response);
   EXPECT_THAT(*actual_response, FieldsAre(expected_code, IsEmpty(), IsEmpty(),
                                           StrEq(expected_body)));
 }
@@ -509,7 +512,7 @@ TEST(InMemoryHttpRequestCallbackTest, OkResponseWithContentLength) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   int expected_code = kHttpOk;
   const std::string expected_body = "response_body";
@@ -518,12 +521,13 @@ TEST(InMemoryHttpRequestCallbackTest, OkResponseWithContentLength) {
       {{"Content-Length", std::to_string(expected_body.size())}});
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, expected_body));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(
+      callback.OnResponseBody(**request, fake_response, expected_body));
   callback.OnResponseCompleted(**request, fake_response);
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  ASSERT_OK(actual_response);
+  ABSL_ASSERT_OK(actual_response);
   EXPECT_THAT(*actual_response, FieldsAre(expected_code, IsEmpty(), IsEmpty(),
                                           StrEq(expected_body)));
 }
@@ -533,7 +537,7 @@ TEST(InMemoryHttpRequestCallbackTest, OkResponseChunkedBody) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   // Note that the fake response does not contain a Content-Length header. The
   // InMemoryHttpRequestCallback should be able to handle this (accumulating
@@ -541,17 +545,17 @@ TEST(InMemoryHttpRequestCallbackTest, OkResponseChunkedBody) {
   auto fake_response = FakeHttpResponse(kHttpOk, {});
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
   // This test returns the body in chunks of 3 bytes at a time (rather than
   // all at once, like previous test). To test some edge cases, we ensure that
   // the request body's length is not evenly dividable by 3.
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, "123"));
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, "456"));
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, "78"));
+  ABSL_ASSERT_OK(callback.OnResponseBody(**request, fake_response, "123"));
+  ABSL_ASSERT_OK(callback.OnResponseBody(**request, fake_response, "456"));
+  ABSL_ASSERT_OK(callback.OnResponseBody(**request, fake_response, "78"));
   callback.OnResponseCompleted(**request, fake_response);
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  ASSERT_OK(actual_response);
+  ABSL_ASSERT_OK(actual_response);
   EXPECT_THAT(actual_response->body, StrEq("12345678"));
 }
 
@@ -561,18 +565,18 @@ TEST(InMemoryHttpRequestCallbackTest,
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   int expected_code = kHttpOk;
   auto fake_response = FakeHttpResponse(expected_code, {});
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, ""));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(callback.OnResponseBody(**request, fake_response, ""));
   callback.OnResponseCompleted(**request, fake_response);
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  ASSERT_OK(actual_response);
+  ABSL_ASSERT_OK(actual_response);
   EXPECT_THAT(*actual_response,
               FieldsAre(expected_code, IsEmpty(), IsEmpty(), IsEmpty()));
 }
@@ -583,19 +587,19 @@ TEST(InMemoryHttpRequestCallbackTest,
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   int expected_code = kHttpOk;
   auto fake_response =
       FakeHttpResponse(expected_code, {{"Content-Length", "0"}});
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, ""));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(callback.OnResponseBody(**request, fake_response, ""));
   callback.OnResponseCompleted(**request, fake_response);
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  ASSERT_OK(actual_response);
+  ABSL_ASSERT_OK(actual_response);
   EXPECT_THAT(*actual_response,
               FieldsAre(expected_code, IsEmpty(), IsEmpty(), IsEmpty()));
 }
@@ -608,7 +612,7 @@ TEST(InMemoryHttpRequestCallbackTest,
           "https://valid.com", HttpRequest::Method::kGet,
           {{"Accept-Encoding", expected_content_encoding}}, "",
           /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   // Note that the fake response contains a Content-Encoding header, which
   // should be allowed because the request contained an Accept-Encoding header.
@@ -619,13 +623,14 @@ TEST(InMemoryHttpRequestCallbackTest,
   const std::string expected_body = "response_body";
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
   // We return the response body in one go (the "simple" case).
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, expected_body));
+  ABSL_ASSERT_OK(
+      callback.OnResponseBody(**request, fake_response, expected_body));
   callback.OnResponseCompleted(**request, fake_response);
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  ASSERT_OK(actual_response);
+  ABSL_ASSERT_OK(actual_response);
   EXPECT_THAT(*actual_response,
               FieldsAre(expected_code, StrEq(expected_content_encoding),
                         IsEmpty(), StrEq(expected_body)));
@@ -636,15 +641,16 @@ TEST(InMemoryHttpRequestCallbackTest, NotFoundResponse) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   // Return an HTTP error response.
   auto fake_response = FakeHttpResponse(kHttpNotFound, {});
   const std::string expected_body = "response_body";
 
   InMemoryHttpRequestCallback callback;
-  ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
-  ASSERT_OK(callback.OnResponseBody(**request, fake_response, expected_body));
+  ABSL_ASSERT_OK(callback.OnResponseStarted(**request, fake_response));
+  ABSL_ASSERT_OK(
+      callback.OnResponseBody(**request, fake_response, expected_body));
   callback.OnResponseCompleted(**request, fake_response);
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
@@ -697,7 +703,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryOk) {
           "https://valid.com", HttpRequest::Method::kPost,
           {{"Some-Request-Header", "foo"}}, expected_request_body,
           /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   int expected_response_code = kHttpOk;
   std::string expected_response_body = "response_body";
@@ -719,7 +725,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryOk) {
       &bytes_received, &bytes_sent, /*clock=*/nullptr, /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, FieldsAre(expected_response_code, IsEmpty(), IsEmpty(),
                                  StrEq(expected_response_body)));
 
@@ -733,7 +739,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryNotFound) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   int expected_response_code = kHttpNotFound;
   std::string expected_response_body = "response_body";
@@ -756,7 +762,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryWithRetryUnavailableThenOk) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   int unavailable_expected_response_code = kHttpServiceUnavailable;
   std::string unavailable_expected_response_body = "response_body1";
@@ -799,7 +805,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryWithRetryUnavailableForever) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   int expected_response_code = kHttpServiceUnavailable;
   std::string expected_response_body = "response_body";
@@ -822,7 +828,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryEarlyError) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kPost, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(
@@ -857,7 +863,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryCancellation) {
       InMemoryHttpRequest::Create("https://valid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
 
   absl::Notification request_issued;
   // We expect one calls to the cancellation listener.
@@ -914,7 +920,7 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsInMemoryOk) {
           "https://valid.com", HttpRequest::Method::kPost,
           {{"Some-Request-Header", "foo"}}, expected_request_body,
           /*use_compression=*/false);
-  ASSERT_OK(request);
+  ABSL_ASSERT_OK(request);
   std::string another_expected_request_body = "request_body_2";
   absl::StatusOr<std::unique_ptr<HttpRequest>> another_request =
       InMemoryHttpRequest::Create("https://valid.com",
@@ -922,7 +928,7 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsInMemoryOk) {
                                   {{"Some-Other-Request-Header", "foo2"}},
                                   another_expected_request_body,
                                   /*use_compression=*/false);
-  ASSERT_OK(another_request);
+  ABSL_ASSERT_OK(another_request);
 
   std::string expected_response_body = "response_body";
   EXPECT_CALL(mock_http_client_,
@@ -955,15 +961,15 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsInMemoryOk) {
           &bytes_received, &bytes_sent, /*clock=*/nullptr, /*bit_gen=*/nullptr,
           /*retry_max_attempts=*/0,
           /*retry_delay_ms=*/0);
-  ASSERT_OK(results);
+  ABSL_ASSERT_OK(results);
   ASSERT_EQ(results->size(), 2);
 
   auto first_response = (*results)[0];
-  ASSERT_OK(first_response);
+  ABSL_ASSERT_OK(first_response);
   EXPECT_THAT(*first_response, FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
                                          StrEq(expected_response_body)));
   auto second_response = (*results)[1];
-  ASSERT_OK(second_response);
+  ABSL_ASSERT_OK(second_response);
   EXPECT_THAT(*second_response,
               FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
                         StrEq(another_expected_response_body)));
@@ -982,14 +988,14 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailedOneSuccess) {
           "https://valid.com", HttpRequest::Method::kPost,
           {{"Some-Request-Header", "foo"}}, success_request_body,
           /*use_compression=*/false);
-  ASSERT_OK(success_request);
+  ABSL_ASSERT_OK(success_request);
   std::string failure_request_body = "failure_request_body";
   absl::StatusOr<std::unique_ptr<HttpRequest>> failure_request =
       InMemoryHttpRequest::Create(
           "https://valid.com", HttpRequest::Method::kPost,
           {{"Some-Other-Request-Header", "foo2"}}, failure_request_body,
           /*use_compression=*/false);
-  ASSERT_OK(failure_request);
+  ABSL_ASSERT_OK(failure_request);
 
   int ok_response_code = kHttpOk;
   std::string success_response_body = "response_body";
@@ -1023,10 +1029,10 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailedOneSuccess) {
           &bytes_received, &bytes_sent, /*clock=*/nullptr, /*bit_gen=*/nullptr,
           /*retry_max_attempts=*/0,
           /*retry_delay_ms=*/0);
-  ASSERT_OK(results);
+  ABSL_ASSERT_OK(results);
   ASSERT_EQ(results->size(), 2);
   auto first_response = (*results)[0];
-  ASSERT_OK(first_response);
+  ABSL_ASSERT_OK(first_response);
   EXPECT_THAT(*first_response, FieldsAre(ok_response_code, IsEmpty(), IsEmpty(),
                                          StrEq(success_response_body)));
 
@@ -1047,14 +1053,14 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailThenRetryBothSuccess) {
           "https://valid.com", HttpRequest::Method::kPost,
           {{"Some-Request-Header", "foo"}}, success_request_body,
           /*use_compression=*/false);
-  ASSERT_OK(success_request);
+  ABSL_ASSERT_OK(success_request);
   std::string failure_request_body = "failure_request_body";
   absl::StatusOr<std::unique_ptr<HttpRequest>> failure_request =
       InMemoryHttpRequest::Create(
           "https://valid2.com", HttpRequest::Method::kPost,
           {{"Some-Other-Request-Header", "foo2"}}, failure_request_body,
           /*use_compression=*/false);
-  ASSERT_OK(failure_request);
+  ABSL_ASSERT_OK(failure_request);
 
   int ok_response_code = kHttpOk;
   std::string success_response_body = "response_body";
@@ -1100,14 +1106,14 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailThenRetryBothSuccess) {
           &bytes_received, &bytes_sent, /*clock=*/Clock::RealClock(), &bit_gen_,
           /*retry_max_attempts=*/1,
           /*retry_delay_ms=*/50);
-  ASSERT_OK(results);
+  ABSL_ASSERT_OK(results);
   ASSERT_EQ(results->size(), 2);
   auto first_response = (*results)[0];
-  ASSERT_OK(first_response);
+  ABSL_ASSERT_OK(first_response);
   EXPECT_THAT(*first_response, FieldsAre(ok_response_code, IsEmpty(), IsEmpty(),
                                          StrEq(success_response_body)));
 
-  ASSERT_OK(results->at(1));
+  ABSL_ASSERT_OK(results->at(1));
   EXPECT_THAT(*results->at(1), FieldsAre(kHttpOk, IsEmpty(), IsEmpty(),
                                          StrEq(success_response_body)));
 
@@ -1127,7 +1133,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyInputVector) {
       /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, IsEmpty());
 }
 
@@ -1142,9 +1148,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryEmptyUriAndInline) {
       /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0],
               FieldsAre(kHttpOk, IsEmpty(), kOctetStream, IsEmpty()));
 }
@@ -1212,9 +1218,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryAllUris) {
       &bytes_received, &bytes_sent,
       /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code1, IsEmpty(), IsEmpty(),
                         StrEq(expected_response_body1)));
@@ -1222,7 +1228,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryAllUris) {
   EXPECT_THAT((*result)[1].status().message(), HasSubstr("404"));
   EXPECT_THAT((*result)[2], IsCode(UNAVAILABLE));
   EXPECT_THAT((*result)[2].status().message(), HasSubstr("503"));
-  ASSERT_OK((*result)[3]);
+  ABSL_ASSERT_OK((*result)[3]);
   EXPECT_THAT(*(*result)[3],
               FieldsAre(expected_response_code4, IsEmpty(), IsEmpty(),
                         StrEq(expected_response_body4)));
@@ -1267,18 +1273,18 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemorySomeInlineData) {
       &bytes_sent,
       /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
   EXPECT_THAT((*result)[0], IsCode(UNAVAILABLE));
   EXPECT_THAT((*result)[0].status().message(), HasSubstr("503"));
-  ASSERT_OK((*result)[1]);
+  ABSL_ASSERT_OK((*result)[1]);
   EXPECT_THAT(*(*result)[1], FieldsAre(kHttpOk, IsEmpty(), kOctetStream,
                                        StrEq(expected_response_body2)));
-  ASSERT_OK((*result)[2]);
+  ABSL_ASSERT_OK((*result)[2]);
   EXPECT_THAT(*(*result)[2],
               FieldsAre(expected_response_code3, IsEmpty(), IsEmpty(),
                         StrEq(expected_response_body3)));
-  ASSERT_OK((*result)[3]);
+  ABSL_ASSERT_OK((*result)[3]);
   EXPECT_THAT(*(*result)[3], FieldsAre(kHttpOk, IsEmpty(), kOctetStream,
                                        StrEq(expected_response_body4)));
 
@@ -1305,12 +1311,12 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryOnlyInlineData) {
       /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0], FieldsAre(kHttpOk, IsEmpty(), kOctetStream,
                                        StrEq(expected_response_body1)));
-  ASSERT_OK((*result)[1]);
+  ABSL_ASSERT_OK((*result)[1]);
   EXPECT_THAT(*(*result)[1], FieldsAre(kHttpOk, IsEmpty(), kOctetStream,
                                        StrEq(expected_response_body2)));
 
@@ -1384,7 +1390,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedResources) {
   std::string content_type = "bytes+gzip";
   std::string expected_response_body = "response_body: AAAAAAAAAAAAAAAAAAAAA";
   auto compressed_response_body = CompressWithGzip(expected_response_body);
-  ASSERT_OK(compressed_response_body);
+  ABSL_ASSERT_OK(compressed_response_body);
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(
                   FieldsAre(uri, HttpRequest::Method::kGet, HeaderList{}, "")))
@@ -1405,9 +1411,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCompressedResources) {
       /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code, IsEmpty(), StrEq(content_type),
                         StrEq(expected_response_body)));
@@ -1449,7 +1455,7 @@ TEST_F(PerformRequestsTest,
       /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
   // Fetching will succeed
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
   // ...but our responses will have failed to decode.
   EXPECT_THAT((*result)[0], IsCode(INTERNAL));
@@ -1470,10 +1476,10 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCachedResourceOk) {
   auto resource_cache = cache::FileBackedResourceCache::Create(
       root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
       kMaxCacheSizeBytes);
-  ASSERT_OK(resource_cache);
-  ASSERT_OK((*resource_cache)
-                ->Put(cache_id, cached_resource,
-                      MetadataForUncompressedResource(), max_age));
+  ABSL_ASSERT_OK(resource_cache);
+  ABSL_ASSERT_OK((*resource_cache)
+                     ->Put(cache_id, cached_resource,
+                           MetadataForUncompressedResource(), max_age));
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
@@ -1485,9 +1491,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCachedResourceOk) {
       &bytes_received, &bytes_sent, resource_cache->get(), /*clock=*/nullptr,
       /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0], FieldsAre(expected_response_code, IsEmpty(),
                                        kOctetStream, StrEq(cached_resource)));
 
@@ -1509,10 +1515,10 @@ TEST_F(PerformRequestsTest,
   auto resource_cache = cache::FileBackedResourceCache::Create(
       root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
       kMaxCacheSizeBytes);
-  ASSERT_OK(resource_cache);
-  ASSERT_OK((*resource_cache)
-                ->Put(cache_id, compressed_cached_resource,
-                      MetadataForCompressedResource(), max_age));
+  ABSL_ASSERT_OK(resource_cache);
+  ABSL_ASSERT_OK((*resource_cache)
+                     ->Put(cache_id, compressed_cached_resource,
+                           MetadataForCompressedResource(), max_age));
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
@@ -1524,9 +1530,9 @@ TEST_F(PerformRequestsTest,
       &bytes_received, &bytes_sent, resource_cache->get(), /*clock=*/nullptr,
       /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0], FieldsAre(expected_response_code, IsEmpty(),
                                        kOctetStream, StrEq(cached_resource)));
 
@@ -1554,7 +1560,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryNotCachedButThenPutInCache) {
   auto resource_cache = cache::FileBackedResourceCache::Create(
       root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
       kMaxCacheSizeBytes);
-  ASSERT_OK(resource_cache);
+  ABSL_ASSERT_OK(resource_cache);
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
@@ -1566,16 +1572,16 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryNotCachedButThenPutInCache) {
       &bytes_received, &bytes_sent, resource_cache->get(), /*clock=*/nullptr,
       /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code, IsEmpty(), content_type,
                         StrEq(expected_response_body)));
 
   EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   auto stored_resource = (*resource_cache)->Get(cache_id, std::nullopt);
-  ASSERT_OK(stored_resource);
+  ABSL_ASSERT_OK(stored_resource);
   EXPECT_THAT(*stored_resource,
               FieldsAre(StrEq(expected_response_body),
                         EqualsProto(MetadataForUncompressedResource())));
@@ -1603,7 +1609,7 @@ TEST_F(PerformRequestsTest,
   auto resource_cache = cache::FileBackedResourceCache::Create(
       root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
       kMaxCacheSizeBytes);
-  ASSERT_OK(resource_cache);
+  ABSL_ASSERT_OK(resource_cache);
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
@@ -1615,16 +1621,16 @@ TEST_F(PerformRequestsTest,
       &bytes_received, &bytes_sent, resource_cache->get(), /*clock=*/nullptr,
       /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code, IsEmpty(), content_type,
                         StrEq(expected_response_body)));
 
   EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   auto stored_resource = (*resource_cache)->Get(cache_id, std::nullopt);
-  ASSERT_OK(stored_resource);
+  ABSL_ASSERT_OK(stored_resource);
   EXPECT_THAT(*stored_resource,
               FieldsAre(StrEq(compressed_response_body),
                         EqualsProto(MetadataForCompressedResource())));
@@ -1650,7 +1656,7 @@ TEST_F(PerformRequestsTest,
   auto resource_cache = cache::FileBackedResourceCache::Create(
       root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
       kMaxCacheSizeBytes);
-  ASSERT_OK(resource_cache);
+  ABSL_ASSERT_OK(resource_cache);
 
   int64_t bytes_received = 0;
   int64_t bytes_sent = 0;
@@ -1662,15 +1668,15 @@ TEST_F(PerformRequestsTest,
       &bytes_received, &bytes_sent, resource_cache->get(), /*clock=*/nullptr,
       /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code, IsEmpty(), content_type,
                         StrEq(expected_response_body)));
   EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   auto stored_resource = (*resource_cache)->Get(cache_id, std::nullopt);
-  ASSERT_OK(stored_resource);
+  ABSL_ASSERT_OK(stored_resource);
   EXPECT_THAT(*stored_resource,
               FieldsAre(StrEq(expected_response_body),
                         EqualsProto(MetadataForUncompressedResource())));
@@ -1709,9 +1715,9 @@ TEST_F(PerformRequestsTest,
       &bytes_received, &bytes_sent, &resource_cache, /*clock=*/nullptr,
       /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code, IsEmpty(), content_type,
                         StrEq(expected_response_body)));
@@ -1752,9 +1758,9 @@ TEST_F(PerformRequestsTest,
       &bytes_received, &bytes_sent, &resource_cache, /*clock=*/nullptr,
       /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
 
-  ASSERT_OK((*result)[0]);
+  ABSL_ASSERT_OK((*result)[0]);
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code, IsEmpty(), content_type,
                         StrEq(expected_response_body)));

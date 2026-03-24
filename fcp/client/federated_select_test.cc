@@ -26,6 +26,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "fcp/base/compression.h"
@@ -250,16 +251,16 @@ TEST_F(HttpFederatedSelectManagerTest,
           /*keys=*/{2, 1}));
 
   // The iterator creation should have succeeded.
-  ASSERT_OK(iterator1);
+  ABSL_ASSERT_OK(iterator1);
 
   // Reading the data for each of the slices should now succeed.
   absl::StatusOr<std::string> first_slice = (*iterator1)->Next();
-  ASSERT_OK(first_slice);
+  ABSL_ASSERT_OK(first_slice);
   ASSERT_TRUE(FileExists(*first_slice));
   EXPECT_THAT(ReadFile(*first_slice), expected_key2_data);
 
   absl::StatusOr<std::string> second_slice = (*iterator1)->Next();
-  ASSERT_OK(second_slice);
+  ABSL_ASSERT_OK(second_slice);
   ASSERT_TRUE(FileExists(*second_slice));
   EXPECT_THAT(ReadFile(*second_slice), expected_key1_data);
 
@@ -293,11 +294,11 @@ TEST_F(HttpFederatedSelectManagerTest,
           CreateExampleSelector(/*served_at_id=*/"id/Y", /*keys=*/{99}));
 
   // The iterator creation should have succeeded.
-  ASSERT_OK(iterator2);
+  ABSL_ASSERT_OK(iterator2);
 
   // Reading the data for the slices should now succeed.
   absl::StatusOr<std::string> third_slice = (*iterator2)->Next();
-  ASSERT_OK(third_slice);
+  ABSL_ASSERT_OK(third_slice);
   ASSERT_TRUE(FileExists(*third_slice));
   EXPECT_THAT(ReadFile(*third_slice), expected_key99_data);
 
@@ -337,12 +338,12 @@ TEST_F(HttpFederatedSelectManagerTest, SuccessfullyFetchCompressedSlice) {
           /*served_at_id=*/"id-X", /*keys=*/{1}));
 
   // The iterator creation should have succeeded.
-  ASSERT_OK(iterator);
+  ABSL_ASSERT_OK(iterator);
 
   // Reading the data for the slice should now succeed and return the expected
   // (uncompressed) data.
   absl::StatusOr<std::string> slice = (*iterator)->Next();
-  ASSERT_OK(slice);
+  ABSL_ASSERT_OK(slice);
   ASSERT_TRUE(FileExists(*slice));
   EXPECT_THAT(ReadFile(*slice), expected_key1_data);
 }
@@ -375,11 +376,11 @@ TEST_F(HttpFederatedSelectManagerTest,
           /*served_at_id=*/"id-X", /*keys=*/{1}));
 
   // The iterator creation should have succeeded.
-  ASSERT_OK(iterator);
+  ABSL_ASSERT_OK(iterator);
 
   // Reading the data should now succeed.
   absl::StatusOr<std::string> slice = (*iterator)->Next();
-  ASSERT_OK(slice);
+  ABSL_ASSERT_OK(slice);
   ASSERT_TRUE(FileExists(*slice));
   EXPECT_THAT(ReadFile(*slice), expected_key1_data);
 

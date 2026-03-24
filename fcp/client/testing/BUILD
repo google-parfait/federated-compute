@@ -50,6 +50,7 @@ cc_test(
         ":utils",
         "//fcp/protos:plan_cc_proto",
         "//fcp/testing",
+        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],

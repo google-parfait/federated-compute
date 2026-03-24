@@ -27,6 +27,7 @@
 #include "gtest/gtest.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
@@ -92,7 +93,7 @@ TEST(HttpSecAggProtocolDelegateTest, GetModulus) {
   secure_aggregands[tensor_key] = secure_aggregand_execution_info;
   HttpSecAggProtocolDelegate delegate(secure_aggregands, &holder);
   auto modulus = delegate.GetModulus(tensor_key);
-  ASSERT_OK(modulus);
+  ABSL_ASSERT_OK(modulus);
   ASSERT_EQ(*modulus, 12345);
 }
 
@@ -117,7 +118,7 @@ TEST(HttpSecAggProtocolDelegateTest, ReceiveMessageOkResponse) {
   holder = server_response;
 
   auto server_message = delegate.ReceiveServerMessage();
-  ASSERT_OK(server_message);
+  ABSL_ASSERT_OK(server_message);
   ASSERT_THAT(*server_message, EqualsProto(server_response));
   ASSERT_EQ(delegate.last_received_message_size(),
             server_response.ByteSizeLong());
@@ -278,7 +279,7 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendR0AdvertiseKeys) {
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), complete_operation.SerializeAsString())));
   send_to_server->Send(&server_message);
-  ASSERT_OK(server_response_holder_);
+  ABSL_ASSERT_OK(server_response_holder_);
 
   secagg::ServerToClientWrapperMessage expected_message;
   *expected_message.mutable_share_keys_request() = share_keys_request;
@@ -374,7 +375,7 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendR1ShareKeys) {
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), complete_operation.SerializeAsString())));
   send_to_server->Send(&server_message);
-  ASSERT_OK(server_response_holder_);
+  ABSL_ASSERT_OK(server_response_holder_);
 
   secagg::ServerToClientWrapperMessage expected_message;
   *expected_message.mutable_masked_input_request() =
@@ -478,7 +479,7 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendR2SubmitResultNoCheckpoint) {
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), complete_operation.SerializeAsString())));
   send_to_server->Send(&server_message);
-  ASSERT_OK(server_response_holder_);
+  ABSL_ASSERT_OK(server_response_holder_);
 
   secagg::ServerToClientWrapperMessage expected_message;
   *expected_message.mutable_unmasking_request() = unmasking_request;
@@ -531,7 +532,7 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendR2SubmitResultWithCheckpoint) {
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), complete_operation.SerializeAsString())));
   send_to_server->Send(&server_message);
-  ASSERT_OK(server_response_holder_);
+  ABSL_ASSERT_OK(server_response_holder_);
 
   secagg::ServerToClientWrapperMessage expected_message;
   *expected_message.mutable_unmasking_request() = unmasking_request;
@@ -707,7 +708,7 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendR3Unmask) {
                                         UnmaskResponse().SerializeAsString())));
   send_to_server->Send(&server_message);
   auto response = server_response_holder_;
-  ASSERT_OK(response);
+  ABSL_ASSERT_OK(response);
   EXPECT_THAT(*response, EqualsProto(secagg::ServerToClientWrapperMessage()));
 }
 
@@ -739,7 +740,7 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendAbortWithoutInterruption) {
 
   // Send the request, and verify that sending it succeeded.
   send_to_server->Send(&server_message);
-  ASSERT_OK(server_response_holder_);
+  ABSL_ASSERT_OK(server_response_holder_);
   secagg::ServerToClientWrapperMessage expected_response;
   expected_response.mutable_abort();
   EXPECT_THAT(*server_response_holder_, EqualsProto(expected_response));

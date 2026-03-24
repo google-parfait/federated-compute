@@ -23,6 +23,7 @@
 #include "gtest/gtest.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
@@ -39,7 +40,7 @@ using ::testing::Optional;
 using ::testing::StrEq;
 
 TEST(ConvertHttpCodeToStatusTest, ConvertsKnownCodesCorrectly) {
-  EXPECT_OK(ConvertHttpCodeToStatus(kHttpOk));
+  ABSL_EXPECT_OK(ConvertHttpCodeToStatus(kHttpOk));
   EXPECT_THAT(ConvertHttpCodeToStatus(kHttpBadRequest),
               IsCode(INVALID_ARGUMENT));
   EXPECT_THAT(ConvertHttpCodeToStatus(kHttpForbidden),
@@ -61,9 +62,9 @@ TEST(ConvertHttpCodeToStatusTest, ConvertsKnownCodesCorrectly) {
 }
 
 TEST(ConvertHttpCodeToStatusTest, ConvertsUnknown200CodesToOk) {
-  EXPECT_OK(ConvertHttpCodeToStatus(201));
-  EXPECT_OK(ConvertHttpCodeToStatus(210));
-  EXPECT_OK(ConvertHttpCodeToStatus(299));
+  ABSL_EXPECT_OK(ConvertHttpCodeToStatus(201));
+  ABSL_EXPECT_OK(ConvertHttpCodeToStatus(210));
+  ABSL_EXPECT_OK(ConvertHttpCodeToStatus(299));
 }
 
 TEST(ConvertHttpCodeToStatusTest, ConvertsUnknown400CodesToFailedPrecondition) {
@@ -223,31 +224,31 @@ TEST(FindHeaderTest, ReturnsFirstMatch) {
 TEST(JoinBaseUriWithSuffixTest, ReturnsJoinedUri) {
   // No trailing slash in base URI.
   auto result = JoinBaseUriWithSuffix("https://foo", "/bar");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq("https://foo/bar"));
 
   // Trailing slash in base URI.
   result = JoinBaseUriWithSuffix("https://foo/", "/bar");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq("https://foo/bar"));
 
   // Additional URI components are correctly merged.
   result = JoinBaseUriWithSuffix("https://foo:123", "/bar/baz");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq("https://foo:123/bar/baz"));
 
   result = JoinBaseUriWithSuffix("https://foo:123/", "/bar/baz");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq("https://foo:123/bar/baz"));
 
   // Empty suffixes should be allowed.
   result = JoinBaseUriWithSuffix("https://foo", "");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq("https://foo/"));
 
   // Trailing slash in base URI.
   result = JoinBaseUriWithSuffix("https://foo/", "");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq("https://foo/"));
 }
 
@@ -263,45 +264,45 @@ TEST(EncodeUriTest, UnencodedCharsShouldRemainUnencoded) {
   std::string unencoded_single_path_segment_chars =
       "-_.~0123456789abcxyzABCXYZ";
   auto result = EncodeUriSinglePathSegment(unencoded_single_path_segment_chars);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq(unencoded_single_path_segment_chars));
 
   std::string unencoded_multi_path_segment_chars =
       "-_.~/01234567899abcxyzABCXYZ";
   result = EncodeUriMultiplePathSegments(unencoded_multi_path_segment_chars);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq(unencoded_multi_path_segment_chars));
 }
 
 TEST(EncodeUriTest, OtherCharsShouldBeEncoded) {
   auto result = EncodeUriSinglePathSegment("#?+%/");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq("%23%3F%2B%25%2F"));
 
   // For the "multiple path segments" version the slash should remain unencoded.
   result = EncodeUriMultiplePathSegments("#?+%/");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq("%23%3F%2B%25/"));
 
   // Non-encodable characters before/in between/after the encodable characters
   // should remain unencoded.
   result = EncodeUriSinglePathSegment("abc#?123+%/XYZ");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq("abc%23%3F123%2B%25%2FXYZ"));
 
   result = EncodeUriMultiplePathSegments("abc#?123+%/XYZ");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq("abc%23%3F123%2B%25/XYZ"));
 }
 
 TEST(EncodeUriTest, EmptyStringShouldReturnEmptyString) {
   auto result = EncodeUriSinglePathSegment("");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq(""));
 
   // For the "multiple path segments" version the slash should remain unencoded.
   result = EncodeUriMultiplePathSegments("");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, StrEq(""));
 }
 
@@ -316,7 +317,7 @@ TEST(EncodeUriTest, NonAsciiStringShouldReturnError) {
 
 TEST(CreateByteStreamUriTest, HappyCase) {
   auto result = CreateByteStreamUploadUriSuffix("my/resource");
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(*result, "/upload/v1/media/my/resource");
 }
 

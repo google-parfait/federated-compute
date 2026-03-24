@@ -230,7 +230,7 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinRejection) {
   auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction());
 
-  ASSERT_OK(eligibility_checkin_result);
+  ABSL_ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(*eligibility_checkin_result,
               VariantWith<FederatedProtocol::Rejection>(_));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -255,7 +255,7 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinDisabled) {
   auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction());
 
-  ASSERT_OK(eligibility_checkin_result);
+  ABSL_ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(*eligibility_checkin_result,
               VariantWith<FederatedProtocol::EligibilityEvalDisabled>(_));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -301,7 +301,7 @@ TEST_F(HttpFederatedProtocolTest, TestEligibilityEvalCheckinEnabled) {
   auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction());
 
-  ASSERT_OK(eligibility_checkin_result);
+  ABSL_ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(
       *eligibility_checkin_result,
       VariantWith<FederatedProtocol::EligibilityEvalTask>(FieldsAre(
@@ -381,7 +381,7 @@ TEST_F(HttpFederatedProtocolTest,
   auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction());
 
-  ASSERT_OK(eligibility_checkin_result);
+  ABSL_ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(
       *eligibility_checkin_result,
       VariantWith<FederatedProtocol::EligibilityEvalTask>(FieldsAre(
@@ -484,7 +484,7 @@ TEST_F(HttpFederatedProtocolTest,
   auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction());
 
-  ASSERT_OK(eligibility_checkin_result);
+  ABSL_ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(
       *eligibility_checkin_result,
       VariantWith<FederatedProtocol::EligibilityEvalDisabled>(FieldsAre(
@@ -549,7 +549,7 @@ TEST_F(HttpFederatedProtocolTest,
   auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction());
 
-  ASSERT_OK(eligibility_checkin_result);
+  ABSL_ASSERT_OK(eligibility_checkin_result);
   // Given that the flag is on, we expect EligibilityEvalTask to be returned
   // even though there is no TensorFlow-based eligibility eval task configured,
   // because the population eligibility spec has eligibility policies
@@ -565,7 +565,7 @@ TEST_F(HttpFederatedProtocolTest,
        TestEligibilityEvalCheckinEnabledWithCompression) {
   std::string expected_plan = kPlan;
   absl::StatusOr<std::string> compressed_plan = CompressWithGzip(expected_plan);
-  ASSERT_OK(compressed_plan);
+  ABSL_ASSERT_OK(compressed_plan);
   Resource plan_resource;
   plan_resource.mutable_inline_resource()->set_data(*compressed_plan);
   plan_resource.mutable_inline_resource()->set_compression_format(
@@ -593,7 +593,7 @@ TEST_F(HttpFederatedProtocolTest,
   auto eligibility_checkin_result = federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction());
 
-  ASSERT_OK(eligibility_checkin_result);
+  ABSL_ASSERT_OK(eligibility_checkin_result);
   EXPECT_THAT(
       *eligibility_checkin_result,
       VariantWith<FederatedProtocol::EligibilityEvalTask>(FieldsAre(
@@ -705,7 +705,7 @@ TEST_F(HttpFederatedProtocolTest,
 }
 
 TEST_F(HttpFederatedProtocolTest, TestReportEligibilityEvalTaskResult) {
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -748,7 +748,7 @@ TEST_F(HttpFederatedProtocolTest,
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), eval_task_response.SerializeAsString())));
 
-  ASSERT_OK(federated_protocol_->EligibilityEvalCheckin(
+  ABSL_ASSERT_OK(federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction()));
 
   const google::internal::federatedml::v2::RetryWindow& actual_retry_window =
@@ -783,7 +783,7 @@ TEST_F(HttpFederatedProtocolTest, TestInvalidMaxRetryDelayValueSanitization) {
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), eval_task_response.SerializeAsString())));
 
-  ASSERT_OK(federated_protocol_->EligibilityEvalCheckin(
+  ABSL_ASSERT_OK(federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction()));
 
   const google::internal::federatedml::v2::RetryWindow& actual_retry_window =
@@ -841,7 +841,7 @@ TEST_F(HttpFederatedProtocolDeathTest,
           200, HeaderList(),
           GetFakeRejectedEligibilityEvalTaskResponse().SerializeAsString())));
 
-  ASSERT_OK(federated_protocol_->EligibilityEvalCheckin(
+  ABSL_ASSERT_OK(federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction()));
 
   // A Checkin(...) request should now fail, because Checkin(...) should only
@@ -858,7 +858,7 @@ TEST_F(HttpFederatedProtocolDeathTest,
 
 TEST_F(HttpFederatedProtocolDeathTest,
        TestCheckinWithEligibilityInfoAfterEligibilityEvalCheckinDisabled) {
-  ASSERT_OK(
+  ABSL_ASSERT_OK(
       RunSuccessfulEligibilityEvalCheckin(/*eligibility_eval_enabled=*/false));
 
   // A Checkin(...) request with a TaskEligibilityInfo argument should now fail,
@@ -875,7 +875,7 @@ TEST_F(HttpFederatedProtocolDeathTest,
 }
 
 TEST_F(HttpFederatedProtocolDeathTest, TestCheckinWithMissingEligibilityInfo) {
-  ASSERT_OK(
+  ABSL_ASSERT_OK(
       RunSuccessfulEligibilityEvalCheckin(/*eligibility_eval_enabled=*/true));
 
   // A Checkin(...) request with a missing TaskEligibilityInfo should now fail,
@@ -931,7 +931,7 @@ TEST_F(HttpFederatedProtocolDeathTest,
 // error, it is handled correctly
 TEST_F(HttpFederatedProtocolTest, TestCheckinFailsTransientError) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -967,7 +967,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsTransientError) {
 // error, it is handled correctly.
 TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromHttp) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -1007,7 +1007,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromHttp) {
 // an Operation proto with a permanent error, that it is handled correctly.
 TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromOperation) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -1052,7 +1052,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromOperation) {
 // protocol request in Checkin.
 TEST_F(HttpFederatedProtocolTest, TestCheckinInterrupted) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -1110,7 +1110,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterrupted) {
 TEST_F(HttpFederatedProtocolTest,
        TestCheckinInterruptedDuringLongRunningOperation) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -1189,7 +1189,7 @@ TEST_F(HttpFederatedProtocolTest,
 // operation, and the issued cancellation request timed out.
 TEST_F(HttpFederatedProtocolTest, TestCheckinInterruptedCancellationTimeout) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -1280,7 +1280,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterruptedCancellationTimeout) {
 // handled correctly.
 TEST_F(HttpFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -1313,7 +1313,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
       expected_eligibility_info, mock_task_received_callback_.AsStdFunction(),
       std::nullopt);
 
-  ASSERT_OK(checkin_result.status());
+  ABSL_ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
@@ -1324,7 +1324,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinRejectionWithTaskEligibilityInfo) {
 TEST_F(HttpFederatedProtocolTest,
        TestCheckinRejectionWithoutTaskEligibilityInfo) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(
+  ABSL_ASSERT_OK(
       RunSuccessfulEligibilityEvalCheckin(/*eligibility_eval_enabled=*/false));
 
   EXPECT_CALL(
@@ -1350,7 +1350,7 @@ TEST_F(HttpFederatedProtocolTest,
   auto checkin_result = federated_protocol_->Checkin(
       std::nullopt, mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
-  ASSERT_OK(checkin_result.status());
+  ABSL_ASSERT_OK(checkin_result.status());
   EXPECT_THAT(*checkin_result, VariantWith<FederatedProtocol::Rejection>(_));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
@@ -1358,7 +1358,7 @@ TEST_F(HttpFederatedProtocolTest,
 // Tests whether a successful task assignment response is handled correctly.
 TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -1423,7 +1423,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
       expected_eligibility_info, mock_task_received_callback_.AsStdFunction(),
       std::nullopt);
 
-  ASSERT_OK(checkin_result.status());
+  ABSL_ASSERT_OK(checkin_result.status());
   EXPECT_THAT(
       *checkin_result,
       VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
@@ -1439,9 +1439,9 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssigned) {
 
 TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedWithTaskIdentifier) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   auto checkin_result = RunSuccessfulCheckin();
-  ASSERT_OK(checkin_result);
+  ABSL_ASSERT_OK(checkin_result);
   EXPECT_THAT(*checkin_result,
               VariantWith<FederatedProtocol::TaskAssignment>(
                   FieldsAre(_, _, _, _, _, _, _, "task_default")));
@@ -1450,9 +1450,9 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedWithTaskIdentifier) {
 TEST_F(HttpFederatedProtocolTest,
        TestMultiTaskAssignmentCalledAfterCheckinTaskAssigned) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true));
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
   // A PerformMultipleTaskAssignments(...) request should now fail, because
   // PerformMultipleTaskAssignments(...) should only be called before a
   // CheckIn(...) request.
@@ -1471,7 +1471,7 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
 
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation=*/true));
   std::string serialized_access_policy = "the access policy";
@@ -1483,16 +1483,16 @@ TEST_F(HttpFederatedProtocolTest,
       /*enable_confidential_aggregation=*/true,
       /*enable_attestation_transparency_verifier=*/false,
       /*confidential_data_access_policy=*/access_policy_resource);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
   absl::Cord expected_access_policy(serialized_access_policy);
   auto task_assignment_1 = result->task_assignments[kMultiTaskId_1];
-  ASSERT_OK(task_assignment_1);
+  ABSL_ASSERT_OK(task_assignment_1);
   EXPECT_EQ(task_assignment_1->confidential_agg_info.value().data_access_policy,
             expected_access_policy);
 
   auto task_assignment_2 = result->task_assignments[kMultiTaskId_2];
-  ASSERT_OK(task_assignment_2);
+  ABSL_ASSERT_OK(task_assignment_2);
   EXPECT_EQ(task_assignment_2->confidential_agg_info.value().data_access_policy,
             expected_access_policy);
 }
@@ -1503,7 +1503,7 @@ TEST_F(
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
 
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation=*/true));
   std::string serialized_access_policy = "the access policy";
@@ -1515,17 +1515,17 @@ TEST_F(
       /*enable_confidential_aggregation=*/true,
       /*enable_attestation_transparency_verifier=*/false,
       /*confidential_data_access_policy=*/access_policy_resource);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
   absl::Cord expected_access_policy(serialized_access_policy);
   auto task_assignment_1 = result->task_assignments[kMultiTaskId_1];
-  ASSERT_OK(task_assignment_1);
+  ABSL_ASSERT_OK(task_assignment_1);
   EXPECT_EQ(task_assignment_1->confidential_agg_info.value().data_access_policy,
             expected_access_policy);
   EXPECT_EQ(task_assignment_1->task_identifier, "task_0");
 
   auto task_assignment_2 = result->task_assignments[kMultiTaskId_2];
-  ASSERT_OK(task_assignment_2);
+  ABSL_ASSERT_OK(task_assignment_2);
   EXPECT_EQ(task_assignment_2->confidential_agg_info.value().data_access_policy,
             expected_access_policy);
   EXPECT_EQ(task_assignment_2->task_identifier, "task_1");
@@ -1538,7 +1538,7 @@ TEST_F(
 TEST_F(HttpFederatedProtocolTest,
        TestCheckinTaskAssignedAfterOperationPolling) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -1605,7 +1605,7 @@ TEST_F(HttpFederatedProtocolTest,
       GetFakeTaskEligibilityInfo(),
       mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
-  ASSERT_OK(checkin_result.status());
+  ABSL_ASSERT_OK(checkin_result.status());
   EXPECT_THAT(
       *checkin_result,
       VariantWith<FederatedProtocol::TaskAssignment>(FieldsAre(
@@ -1622,7 +1622,7 @@ TEST_F(HttpFederatedProtocolTest,
 // correctly returned from the Checkin(...) method.
 TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedPlanDataFetchFailed) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -1683,7 +1683,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedPlanDataFetchFailed) {
 TEST_F(HttpFederatedProtocolTest,
        TestCheckinTaskAssignedCheckpointDataFetchFailed) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
       "eligibilityevaltasks/"
@@ -1743,7 +1743,7 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest,
        TestPerformMultipleTaskAssignmentsNoTaskAvailable) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
@@ -1776,7 +1776,7 @@ TEST_F(HttpFederatedProtocolTest,
       federated_protocol_->PerformMultipleTaskAssignments(
           task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
           std::nullopt);
-  EXPECT_OK(multiTaskAssignmentResult);
+  ABSL_EXPECT_OK(multiTaskAssignmentResult);
   // The Checkin call is expected to return the rejected retry window from
   // the response to the first eligibility eval request.
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -1784,7 +1784,7 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsFailed) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
@@ -1831,7 +1831,7 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsFailed) {
 TEST_F(HttpFederatedProtocolTest,
        TestPerformMultipleTaskAssignmentsFailedPermanentError) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
@@ -1876,7 +1876,7 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
@@ -1945,7 +1945,7 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
       federated_protocol_->PerformMultipleTaskAssignments(
           task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
           std::nullopt);
-  ASSERT_OK(multiple_task_assignment_result);
+  ABSL_ASSERT_OK(multiple_task_assignment_result);
   EXPECT_THAT(
       multiple_task_assignment_result->task_assignments,
       UnorderedElementsAre(
@@ -1972,10 +1972,10 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsAccepted) {
 
 TEST_F(HttpFederatedProtocolTest,
        TestMultipleTaskAssignmentsCreateTaskIdentifier) {
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true));
   auto multiple_task_assignment_result = RunSuccessfulMultipleTaskAssignments();
-  ASSERT_OK(multiple_task_assignment_result);
+  ABSL_ASSERT_OK(multiple_task_assignment_result);
   auto task_assignments = multiple_task_assignment_result->task_assignments;
   EXPECT_EQ(task_assignments.size(), 2);
   EXPECT_EQ(task_assignments[kMultiTaskId_1]->task_identifier, "task_0");
@@ -1985,7 +1985,7 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest,
        TestPerformMultipleTaskAssignmentsPayloadRetrievalFailed) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
@@ -2055,7 +2055,7 @@ TEST_F(HttpFederatedProtocolTest,
   // PerformMultipleTaskAssignments RPC succeeded. For the task assignments
   // inside the PerformMultipleTaskAssignmentsResponse, we expect one successful
   // result, one failure result.
-  ASSERT_OK(multiple_task_assignment_result);
+  ABSL_ASSERT_OK(multiple_task_assignment_result);
   EXPECT_THAT(
       multiple_task_assignment_result->task_assignments,
       UnorderedElementsAre(
@@ -2075,7 +2075,7 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest,
        TestPerformMultipleTaskAssignmentsPartialFailure) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true));
   std::string report_eet_request_uri =
       "https://initial.uri/v1/populations/TEST%2FPOPULATION/"
@@ -2131,7 +2131,7 @@ TEST_F(HttpFederatedProtocolTest,
   // PerformMultipleTaskAssignments RPC succeeded. For the task assignments
   // inside the PerformMultipleTaskAssignmentsResponse, we expect one successful
   // result, one failure result.
-  ASSERT_OK(multiple_task_assignment_result);
+  ABSL_ASSERT_OK(multiple_task_assignment_result);
   EXPECT_THAT(
       multiple_task_assignment_result->task_assignments,
       UnorderedElementsAre(
@@ -2150,9 +2150,9 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSimpleAggSuccess) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -2186,9 +2186,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSimpleAggSuccess) {
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaSimpleAggSuccessWithFCWireFormat) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
   // Enables enable_lightweight_client_report_wire_format flag.
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillRepeatedly(Return(true));
@@ -2227,9 +2227,9 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedWithLightweightWireFormatSupportDisabled) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
   // Disables enable_lightweight_client_report_wire_format flag.
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillRepeatedly(Return(false));
@@ -2259,9 +2259,9 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest,
        TestReportWithTfCheckpointAndFcWireFormatFlagEnabled) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
   // Enables enable_lightweight_client_report_wire_format flag.
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillRepeatedly(Return(true));
@@ -2297,9 +2297,9 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaSimpleAggWithoutClientToken) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -2349,11 +2349,11 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/serialized_access_policy));
 
@@ -2430,7 +2430,7 @@ TEST_F(HttpFederatedProtocolTest,
     payload_header =
         fcp::confidential_compute::DecodeAndConsumeClientPayloadHeader(
             uploaded_data_view);
-    ASSERT_OK(payload_header);
+    ABSL_ASSERT_OK(payload_header);
     // The uploaded_data_view now contains just the ciphertext.
     ciphertext = uploaded_data_view;
   }
@@ -2454,13 +2454,13 @@ TEST_F(HttpFederatedProtocolTest,
                         payload_header->encrypted_symmetric_key,
                         payload_header->serialized_blob_header,
                         payload_header->encapsulated_public_key, "key-id");
-  ASSERT_OK(decrypted_uploaded_data);
+  ABSL_ASSERT_OK(decrypted_uploaded_data);
 
   // The ciphertext contains compressed data, so we must decompress it before
   // comparing it with the expected checkpoint.
   auto decompressed_uploaded_data =
       UncompressWithGzip(*decrypted_uploaded_data);
-  ASSERT_OK(decompressed_uploaded_data);
+  ABSL_ASSERT_OK(decompressed_uploaded_data);
   EXPECT_EQ(*decompressed_uploaded_data, checkpoint_str);
 }
 
@@ -2472,11 +2472,11 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/serialized_access_policy));
 
@@ -2576,7 +2576,7 @@ TEST_F(HttpFederatedProtocolTest,
     payload_header =
         fcp::confidential_compute::DecodeAndConsumeClientPayloadHeader(
             uploaded_data_view);
-    ASSERT_OK(payload_header);
+    ABSL_ASSERT_OK(payload_header);
     // The uploaded_data_view now contains just the ciphertext.
     ciphertext = uploaded_data_view;
   }
@@ -2601,13 +2601,13 @@ TEST_F(HttpFederatedProtocolTest,
                         payload_header->encrypted_symmetric_key,
                         payload_header->serialized_blob_header,
                         payload_header->encapsulated_public_key, "key-id");
-  ASSERT_OK(decrypted_uploaded_data);
+  ABSL_ASSERT_OK(decrypted_uploaded_data);
 
   // The ciphertext contains compressed data, so we must decompress it before
   // comparing it with the expected checkpoint.
   auto decompressed_uploaded_data =
       UncompressWithGzip(*decrypted_uploaded_data);
-  ASSERT_OK(decompressed_uploaded_data);
+  ABSL_ASSERT_OK(decompressed_uploaded_data);
   EXPECT_EQ(*decompressed_uploaded_data, checkpoint_str);
 }
 TEST_F(HttpFederatedProtocolTest,
@@ -2615,7 +2615,7 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
@@ -2623,7 +2623,7 @@ TEST_F(HttpFederatedProtocolTest,
       GetFakeSignedEndorsements();
   std::string serialized_signed_endorsements =
       signed_endorsements.SerializeAsString();
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/serialized_access_policy,
       /*willow_agg_info=*/std::nullopt,
@@ -2703,7 +2703,7 @@ TEST_F(HttpFederatedProtocolTest,
     payload_header =
         fcp::confidential_compute::DecodeAndConsumeClientPayloadHeader(
             uploaded_data_view);
-    ASSERT_OK(payload_header);
+    ABSL_ASSERT_OK(payload_header);
     // The uploaded_data_view now contains just the ciphertext.
     ciphertext = uploaded_data_view;
   }
@@ -2727,13 +2727,13 @@ TEST_F(HttpFederatedProtocolTest,
                         payload_header->encrypted_symmetric_key,
                         payload_header->serialized_blob_header,
                         payload_header->encapsulated_public_key, "key-id");
-  ASSERT_OK(decrypted_uploaded_data);
+  ABSL_ASSERT_OK(decrypted_uploaded_data);
 
   // The ciphertext contains compressed data, so we must decompress it before
   // comparing it with the expected checkpoint.
   auto decompressed_uploaded_data =
       UncompressWithGzip(*decrypted_uploaded_data);
-  ASSERT_OK(decompressed_uploaded_data);
+  ABSL_ASSERT_OK(decompressed_uploaded_data);
   EXPECT_EQ(*decompressed_uploaded_data, checkpoint_str);
 }
 
@@ -2742,11 +2742,11 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/serialized_access_policy));
 
@@ -2812,11 +2812,11 @@ TEST_F(HttpFederatedProtocolTest,
       .WillRepeatedly(Return(true));
 
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/serialized_access_policy));
 
@@ -2899,7 +2899,7 @@ TEST_F(HttpFederatedProtocolTest,
     payload_header =
         fcp::confidential_compute::DecodeAndConsumeClientPayloadHeader(
             uploaded_data_view);
-    ASSERT_OK(payload_header);
+    ABSL_ASSERT_OK(payload_header);
     // The uploaded_data_view now contains just the ciphertext.
     ciphertext = uploaded_data_view;
   }
@@ -2925,13 +2925,13 @@ TEST_F(HttpFederatedProtocolTest,
                         payload_header->encrypted_symmetric_key,
                         payload_header->serialized_blob_header,
                         payload_header->encapsulated_public_key, "key-id");
-  ASSERT_OK(decrypted_uploaded_data);
+  ABSL_ASSERT_OK(decrypted_uploaded_data);
 
   // The ciphertext contains compressed data, so we must decompress it before
   // comparing it with the expected checkpoint.
   auto decompressed_uploaded_data =
       UncompressWithGzip(*decrypted_uploaded_data);
-  ASSERT_OK(decompressed_uploaded_data);
+  ABSL_ASSERT_OK(decompressed_uploaded_data);
   EXPECT_EQ(*decompressed_uploaded_data, expected_checkpoint_str);
 }
 
@@ -2945,11 +2945,11 @@ TEST_F(HttpFederatedProtocolTest,
       .WillRepeatedly(Return(true));
 
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/serialized_access_policy));
 
@@ -3070,11 +3070,11 @@ TEST_F(HttpFederatedProtocolTest,
       .WillRepeatedly(Return(true));
 
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/serialized_access_policy));
 
@@ -3167,11 +3167,11 @@ TEST_F(HttpFederatedProtocolTest,
       .WillRepeatedly(Return(true));
 
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/serialized_access_policy));
 
@@ -3212,11 +3212,11 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_flags_, enable_lightweight_client_report_wire_format())
       .WillRepeatedly(Return(true));
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation*/ true));
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/serialized_access_policy));
 
@@ -3314,7 +3314,7 @@ TEST_F(HttpFederatedProtocolTest,
     payload_header =
         fcp::confidential_compute::DecodeAndConsumeClientPayloadHeader(
             uploaded_data_view);
-    ASSERT_OK(payload_header);
+    ABSL_ASSERT_OK(payload_header);
     // The uploaded_data_view now contains just the ciphertext.
     ciphertext = uploaded_data_view;
     EXPECT_THAT(payload_header->serialized_blob_header, IsEmpty());
@@ -3351,7 +3351,7 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_flags_, enable_attestation_transparency_verifier)
       .WillRepeatedly(Return(true));
 
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation=*/true));
   confidentialcompute::SignedEndorsements signed_endorsements;
@@ -3367,16 +3367,16 @@ TEST_F(HttpFederatedProtocolTest,
       /*enable_attestation_transparency_verifier=*/true,
       /*confidential_data_access_policy=*/Resource::default_instance(),
       /*signed_endorsements=*/signed_endorsements_resource);
-  ASSERT_OK(result);
+  ABSL_ASSERT_OK(result);
   EXPECT_THAT(result->task_assignments, testing::SizeIs(2));
   auto task_assignment_1 = result->task_assignments[kMultiTaskId_1];
-  ASSERT_OK(task_assignment_1);
+  ABSL_ASSERT_OK(task_assignment_1);
   EXPECT_EQ(
       task_assignment_1->confidential_agg_info.value().signed_endorsements,
       serialized_signed_endorsements);
 
   auto task_assignment_2 = result->task_assignments[kMultiTaskId_2];
-  ASSERT_OK(task_assignment_2);
+  ABSL_ASSERT_OK(task_assignment_2);
   EXPECT_EQ(
       task_assignment_1->confidential_agg_info.value().signed_endorsements,
       serialized_signed_endorsements);
@@ -3385,9 +3385,9 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedViaSecureAgg) {
   absl::Duration plan_duration = absl::Minutes(5);
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   StartSecureAggregationResponse start_secure_aggregation_response;
   start_secure_aggregation_response.set_client_token(kClientToken);
@@ -3489,9 +3489,9 @@ TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaSecureAggWithoutClientToken) {
   absl::Duration plan_duration = absl::Minutes(5);
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   StartSecureAggregationResponse start_secure_aggregation_response;
   // Don't set client_token.
@@ -3580,9 +3580,9 @@ TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedViaSecureAggReportTaskResultFailed) {
   absl::Duration plan_duration = absl::Minutes(5);
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   StartSecureAggregationResponse start_secure_aggregation_response;
   start_secure_aggregation_response.set_client_token(kClientToken);
@@ -3669,9 +3669,9 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedStartSecAggFailed) {
   absl::Duration plan_duration = absl::Minutes(5);
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
@@ -3705,9 +3705,9 @@ TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedStartSecAggFailedImmediately) {
   absl::Duration plan_duration = absl::Minutes(5);
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
   ExpectSuccessfulReportTaskResultRequest(
       "https://taskassignment.uri/v1/populations/TEST%2FPOPULATION/"
       "taskassignments/CLIENT_SESSION_ID:reportresult?%24alt=proto",
@@ -3735,9 +3735,9 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -3783,9 +3783,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedReportTaskResultFailed) {
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedStartAggregationFailedImmediately) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -3818,9 +3818,9 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedStartAggregationFailedDuringPolling) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -3863,9 +3863,9 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -3899,9 +3899,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadFailed) {
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadAbortedByServer) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -3938,9 +3938,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadAbortedByServer) {
 
 TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadInterrupted) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -4001,9 +4001,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportCompletedUploadInterrupted) {
 TEST_F(HttpFederatedProtocolTest,
        TestReportCompletedSubmitAggregationResultFailed) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -4047,9 +4047,9 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
   absl::Duration plan_duration = absl::Minutes(5);
   ReportTaskResultResponse response;
   EXPECT_CALL(mock_http_client_,
@@ -4064,7 +4064,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {
       .WillOnce(Return(
           FakeHttpResponse(200, HeaderList(), response.SerializeAsString())));
 
-  ASSERT_OK(federated_protocol_->ReportNotCompleted(
+  ABSL_ASSERT_OK(federated_protocol_->ReportNotCompleted(
       engine::PhaseOutcome::ERROR, plan_duration, std::nullopt));
 
   ExpectAcceptedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -4072,9 +4072,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedSuccess) {
 
 TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedError) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
   ReportTaskResultResponse response;
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -4094,9 +4094,9 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedError) {
 
 TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin());
   // Issue a regular checkin.
-  ASSERT_OK(RunSuccessfulCheckin());
+  ABSL_ASSERT_OK(RunSuccessfulCheckin());
   ReportTaskResultResponse response;
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
@@ -4116,10 +4116,10 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
 
 TEST_F(HttpFederatedProtocolTest, TestFullProtocol) {
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true));
   // Issue a regular checkin
-  ASSERT_OK(RunSuccessfulMultipleTaskAssignments());
+  ABSL_ASSERT_OK(RunSuccessfulMultipleTaskAssignments());
 
   // Upload the result from the first task.
   std::string checkpoint_str_1(32, 'X');
@@ -4141,7 +4141,8 @@ TEST_F(HttpFederatedProtocolTest, TestFullProtocol) {
 
   // Run regular checkin, note we won't report eligibility eval result again
   // since we have done that during PerformMultipleTaskAssignments.
-  ASSERT_OK(RunSuccessfulCheckin(/*report_eligibility_eval_result=*/false));
+  ABSL_ASSERT_OK(
+      RunSuccessfulCheckin(/*report_eligibility_eval_result=*/false));
 
   // Upload the result from the task returned by the regular checkin.
   std::string checkpoint_str_3(32, 'Z');
@@ -4190,7 +4191,7 @@ TEST_F(HttpFederatedProtocolTest,
       .WillOnce(Return(FakeHttpResponse(
           200, HeaderList(), eval_task_response.SerializeAsString())));
 
-  ASSERT_OK(federated_protocol_->EligibilityEvalCheckin(
+  ABSL_ASSERT_OK(federated_protocol_->EligibilityEvalCheckin(
       mock_eet_received_callback_.AsStdFunction()));
 
   // Now issue a regular checkin and make sure the field is set there too.
@@ -4235,17 +4236,17 @@ TEST_F(HttpFederatedProtocolTest,
   ExpectSuccessfulReportEligibilityEvalTaskResultRequest(report_eet_request_uri,
                                                          absl::OkStatus());
 
-  ASSERT_OK(federated_protocol_->Checkin(
+  ABSL_ASSERT_OK(federated_protocol_->Checkin(
       expected_eligibility_info, mock_task_received_callback_.AsStdFunction(),
       std::nullopt));
 }
 TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingSimpleAgg) {
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, false,
       /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ASSERT_OK(
+  ABSL_ASSERT_OK(
       RunSuccessfulCheckin(true,
                            /*confidential_data_access_policy=*/std::nullopt,
                            /*willow_agg_info=*/std::nullopt,
@@ -4282,10 +4283,10 @@ TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingSimpleAgg) {
 
 TEST_F(HttpFederatedProtocolTest,
        TestRelativePathForwardingSimpleAggMixedRelativeAndAbsolute) {
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
-  ASSERT_OK(
+  ABSL_ASSERT_OK(
       RunSuccessfulCheckin(true,
                            /*confidential_data_access_policy=*/std::nullopt,
                            /*willow_agg_info=*/std::nullopt,
@@ -4325,11 +4326,11 @@ TEST_F(HttpFederatedProtocolTest,
 
 TEST_F(HttpFederatedProtocolTest,
        TestRelativePathForwardingRelativeDataUploadForwardingInfo) {
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ASSERT_OK(
+  ABSL_ASSERT_OK(
       RunSuccessfulCheckin(true,
                            /*confidential_data_access_policy=*/std::nullopt,
                            /*willow_agg_info=*/std::nullopt,
@@ -4373,15 +4374,15 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
 
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, /*enable_confidential_aggregation=*/true,
       /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
-                                 /*willow_agg_info=*/std::nullopt,
-                                 /*set_relative_uri=*/true));
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
+                                      /*willow_agg_info=*/std::nullopt,
+                                      /*set_relative_uri=*/true));
 
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -4443,15 +4444,15 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
 
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, /*enable_confidential_aggregation=*/true,
       /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
-                                 /*willow_agg_info=*/std::nullopt,
-                                 /*set_relative_uri=*/true));
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
+                                      /*willow_agg_info=*/std::nullopt,
+                                      /*set_relative_uri=*/true));
 
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -4516,15 +4517,15 @@ TEST_F(HttpFederatedProtocolTest,
   EXPECT_CALL(mock_flags_, enable_confidential_aggregation)
       .WillRepeatedly(Return(true));
 
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, /*enable_confidential_aggregation=*/true,
       /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
   std::string serialized_access_policy = "the access policy";
-  ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
-                                 /*willow_agg_info=*/std::nullopt,
-                                 /*set_relative_uri=*/true));
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(true, serialized_access_policy,
+                                      /*willow_agg_info=*/std::nullopt,
+                                      /*set_relative_uri=*/true));
 
   // Create a fake checkpoint with 32 'X'.
   std::string checkpoint_str(32, 'X');
@@ -4585,11 +4586,11 @@ TEST_F(HttpFederatedProtocolTest,
 TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingSecAgg) {
   absl::Duration plan_duration = absl::Minutes(5);
 
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ASSERT_OK(
+  ABSL_ASSERT_OK(
       RunSuccessfulCheckin(true,
                            /*confidential_data_access_policy=*/std::nullopt,
                            /*willow_agg_info=*/std::nullopt,
@@ -4691,11 +4692,11 @@ TEST_F(HttpFederatedProtocolTest,
        TestRelativePathForwardingSecAggRelativeSecAggMixedRelativeandAbsolute) {
   absl::Duration plan_duration = absl::Minutes(5);
 
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       true, /*confidential_data_access_policy=*/std::nullopt,
       /*willow_agg_info=*/std::nullopt,
       /*set_relative_uri=*/true));
@@ -4794,13 +4795,13 @@ TEST_F(HttpFederatedProtocolTest,
 }
 
 TEST_F(HttpFederatedProtocolTest, TestRelativePathForwardingNoTrailingSlash) {
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       true, false, /*enable_willow_secure_aggregation=*/false,
       /*set_relative_uri=*/true));
 
-  ASSERT_OK(RunSuccessfulCheckin(true, std::nullopt,
-                                 /*willow_input_spec=*/std::nullopt,
-                                 /*set_relative_uri=*/true));
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(true, std::nullopt,
+                                      /*willow_input_spec=*/std::nullopt,
+                                      /*set_relative_uri=*/true));
 
   std::string checkpoint_str;
   const size_t kTFCheckpointSize = 32;
@@ -4840,7 +4841,7 @@ TEST_F(HttpFederatedProtocolTest,
       .WillRepeatedly(Return(true));
 
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation=*/false,
       /*enable_willow_secure_aggregation=*/true));
@@ -4901,7 +4902,7 @@ TEST_F(HttpFederatedProtocolTest, TestWillowEncryptorReceivesCorrectArguments) {
       .WillRepeatedly(Return(true));
 
   // Issue an eligibility eval checkin first.
-  ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulEligibilityEvalCheckin(
       /*eligibility_eval_enabled=*/true,
       /*enable_confidential_aggregation=*/true,
       /*enable_willow_secure_aggregation=*/true));
@@ -4921,7 +4922,7 @@ TEST_F(HttpFederatedProtocolTest, TestWillowEncryptorReceivesCorrectArguments) {
       .max_flattened_domain_size = 1000000,
       .max_number_of_clients = fake_willow_max_number_of_clients};
 
-  ASSERT_OK(RunSuccessfulCheckin(
+  ABSL_ASSERT_OK(RunSuccessfulCheckin(
       /*report_eligibility_eval_result*/ true,
       /*confidential_data_access_policy=*/std::nullopt,
       /*willow_agg_info=*/fake_willow_agg_info,

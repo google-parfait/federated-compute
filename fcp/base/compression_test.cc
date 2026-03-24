@@ -18,17 +18,17 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "fcp/testing/testing.h"
+#include "absl/status/status_matchers.h"
 
 namespace fcp::base {
 namespace {
 
 TEST(CompressionTest, CompressDecompressEmptyString) {
   auto compressed = CompressWithGzip("");
-  ASSERT_OK(compressed);
+  ABSL_ASSERT_OK(compressed);
 
   auto uncompressed = UncompressWithGzip(*compressed);
-  ASSERT_OK(uncompressed);
+  ABSL_ASSERT_OK(uncompressed);
 
   EXPECT_EQ(*uncompressed, "");
 }
@@ -36,10 +36,10 @@ TEST(CompressionTest, CompressDecompressEmptyString) {
 TEST(CompressionTest, CompressDecompressNonEmptyString) {
   auto data = "foobar";
   auto compressed = CompressWithGzip(data);
-  ASSERT_OK(compressed);
+  ABSL_ASSERT_OK(compressed);
 
   auto uncompressed = UncompressWithGzip(*compressed);
-  ASSERT_OK(uncompressed);
+  ABSL_ASSERT_OK(uncompressed);
 
   EXPECT_EQ(*uncompressed, data);
 }
