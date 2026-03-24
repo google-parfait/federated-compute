@@ -48,7 +48,7 @@ void AddReduce(
   }
   // Finally add to the sum of all inputs
   {
-    absl::MutexLock lock(mu);
+    absl::MutexLock lock(*mu);
     sum_of_maps.Add(partial_sum);
   }
 }
@@ -89,7 +89,7 @@ AsyncToken AesSecAggServerProtocolImpl::SetupMaskedInputCollection() {
 
 std::vector<std::unique_ptr<SecAggVectorMap>>
 AesSecAggServerProtocolImpl::TakeMaskedInputQueue() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   return std::move(masked_input_queue_);
 }
 
@@ -134,7 +134,7 @@ Status AesSecAggServerProtocolImpl::HandleMaskedInputCollectionResponse(
     // eventually.
     size_t is_queue_empty;
     {
-      absl::MutexLock lock(&mutex_);
+      absl::MutexLock lock(mutex_);
       is_queue_empty = masked_input_queue_.empty();
       masked_input_queue_.emplace_back(std::move(checked_masked_vectors));
     }
