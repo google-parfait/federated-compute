@@ -26,6 +26,7 @@ from federated_language.proto import data_type_pb2
 
 from google.protobuf import any_pb2
 from fcp.confidentialcompute.python import constants
+from fcp.confidentialcompute.python import external_service_handle
 from fcp.confidentialcompute.python import program_input_provider
 from fcp.protos.confidentialcompute import file_info_pb2
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
@@ -49,7 +50,10 @@ class MinSepDataSourceIterator(
   def __init__(
       self,
       min_sep: int,
-      input_provider: program_input_provider.ProgramInputProvider,
+      input_provider: (
+          program_input_provider.ProgramInputProvider
+          | external_service_handle.ExternalServiceHandle
+      ),
       computation_type: computation_pb2.Type,
       key_name: str = constants.OUTPUT_TENSOR_NAME,
       use_data_pointers: bool = False,
@@ -239,7 +243,10 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
   def __init__(
       self,
       min_sep: int,
-      input_provider: program_input_provider.ProgramInputProvider,
+      input_provider: (
+          program_input_provider.ProgramInputProvider
+          | external_service_handle.ExternalServiceHandle
+      ),
       computation_type: computation_pb2.Type = computation_pb2.Type(
           federated=computation_pb2.FederatedType(
               placement=computation_pb2.PlacementSpec(

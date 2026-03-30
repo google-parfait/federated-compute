@@ -22,10 +22,20 @@ from federated_language.proto import array_pb2
 from federated_language.proto import computation_pb2
 from federated_language.proto import data_type_pb2
 
+from fcp.confidentialcompute.python import external_service_handle
 from fcp.confidentialcompute.python import min_sep_data_source
-from fcp.confidentialcompute.python import program_input_provider
 from fcp.protos.confidentialcompute import file_info_pb2
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
+
+
+class _TestExternalServiceHandle(external_service_handle.ExternalServiceHandle):
+  """Concrete ExternalServiceHandle for testing."""
+
+  def release_unencrypted(self, value: bytes, key: bytes) -> None:
+    pass
+
+  def release_encrypted(self, value: bytes, key: bytes) -> None:
+    pass
 
 
 _MIN_SEP = 10
@@ -42,7 +52,8 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
   def test_init_raises_value_error_with_client_ids_empty(self):
     client_ids = []
 
-    input_provider = program_input_provider.ProgramInputProvider(
+    input_provider = _TestExternalServiceHandle(
+        '',
         client_ids,
         _TEST_CLIENT_DATA_DIRECTORY,
         {},
@@ -62,7 +73,8 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
   def test_init_raises_value_error_with_invalid_min_sep(self):
     min_sep = 0
 
-    input_provider = program_input_provider.ProgramInputProvider(
+    input_provider = _TestExternalServiceHandle(
+        '',
         _CLIENT_IDS,
         _TEST_CLIENT_DATA_DIRECTORY,
         {},
@@ -104,7 +116,8 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     num_clients = 100
     client_ids = [str(i) for i in range(num_clients)]
 
-    input_provider = program_input_provider.ProgramInputProvider(
+    input_provider = _TestExternalServiceHandle(
+        '',
         client_ids,
         _TEST_CLIENT_DATA_DIRECTORY,
         {},
@@ -143,7 +156,8 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
     mock_resolve_fn = mock.Mock()
     mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
-    input_provider = program_input_provider.ProgramInputProvider(
+    input_provider = _TestExternalServiceHandle(
+        '',
         client_ids,
         _TEST_CLIENT_DATA_DIRECTORY,
         {},
@@ -225,7 +239,8 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
     mock_resolve_fn = mock.Mock()
     mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
-    input_provider = program_input_provider.ProgramInputProvider(
+    input_provider = _TestExternalServiceHandle(
+        '',
         client_ids,
         _TEST_CLIENT_DATA_DIRECTORY,
         {},
@@ -272,7 +287,8 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
     mock_resolve_fn = mock.Mock()
     mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
-    input_provider = program_input_provider.ProgramInputProvider(
+    input_provider = _TestExternalServiceHandle(
+        '',
         client_ids,
         _TEST_CLIENT_DATA_DIRECTORY,
         {},
@@ -308,8 +324,8 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 class MinSepDataSourceTest(absltest.TestCase):
 
   def test_init_succeeds(self):
-    input_provider = program_input_provider.ProgramInputProvider(
-        _CLIENT_IDS, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
+    input_provider = _TestExternalServiceHandle(
+        '', _CLIENT_IDS, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
     )
     min_sep = min_sep_data_source.MinSepDataSource(
         _MIN_SEP,
@@ -323,8 +339,8 @@ class MinSepDataSourceTest(absltest.TestCase):
 
   def test_init_raises_value_error_with_client_ids_empty(self):
     client_ids = []
-    input_provider = program_input_provider.ProgramInputProvider(
-        client_ids, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
+    input_provider = _TestExternalServiceHandle(
+        '', client_ids, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
     )
 
     with self.assertRaisesRegex(
@@ -339,8 +355,8 @@ class MinSepDataSourceTest(absltest.TestCase):
 
   def test_init_raises_value_error_with_invalid_min_sep(self):
     min_sep = 0
-    input_provider = program_input_provider.ProgramInputProvider(
-        _CLIENT_IDS, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
+    input_provider = _TestExternalServiceHandle(
+        '', _CLIENT_IDS, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
     )
 
     with self.assertRaisesRegex(

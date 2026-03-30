@@ -45,6 +45,19 @@ py_library(
     name = "external_service_handle",
     srcs = ["external_service_handle.py"],
     visibility = ["//visibility:public"],
+    deps = [
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
+    ],
+)
+
+py_test(
+    name = "external_service_handle_test",
+    srcs = ["external_service_handle_test.py"],
+    deps = [
+        ":external_service_handle",
+        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
+        "@pypi//absl_py",
+    ],
 )
 
 py_test(
@@ -67,6 +80,7 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         ":constants",
+        ":external_service_handle",
         ":program_input_provider",
         "//fcp/protos/confidentialcompute:file_info_py_pb2",
         "@com_google_protobuf//:protobuf_python",
@@ -83,8 +97,8 @@ py_test(
     name = "min_sep_data_source_test",
     srcs = ["min_sep_data_source_test.py"],
     deps = [
+        ":external_service_handle",
         ":min_sep_data_source",
-        ":program_input_provider",
         "//fcp/protos/confidentialcompute:file_info_py_pb2",
         "@federated_language//federated_language/proto:array_py_pb2",
         "@federated_language//federated_language/proto:computation_py_pb2",
