@@ -292,7 +292,7 @@ FlRunnerTestBase::FlRunnerTestBase() {
   // boolean field.
   EXPECT_CALL(mock_task_env_, TrainingConditionsSatisfied())
       .WillRepeatedly(
-          Invoke([this]() { return training_conditions_satisfied_.load(); }));
+          [this]() { return training_conditions_satisfied_.load(); });
 
   mock_federated_select_iterator_factory_ =
       new NiceMock<MockFederatedSelectExampleIteratorFactory>();
