@@ -53,19 +53,20 @@ class EcdhKeyAgreement {
   // Returns a new EcdhKeyAgreement object containing a keypair randomly
   // generated using OpenSSL's randomness. Only fails if OpenSSL has an internal
   // error.
-  static StatusOr<std::unique_ptr<EcdhKeyAgreement>> CreateFromRandomKeys();
+  static absl::StatusOr<std::unique_ptr<EcdhKeyAgreement>>
+  CreateFromRandomKeys();
 
   // Returns a new EcdhKeyAgreement object containing the supplied private key,
   // and no public key. This object can still be used to do ECDH with other
   // public keys.
   // Fails if the supplied private key is invalid.
-  static StatusOr<std::unique_ptr<EcdhKeyAgreement>> CreateFromPrivateKey(
+  static absl::StatusOr<std::unique_ptr<EcdhKeyAgreement>> CreateFromPrivateKey(
       const EcdhPrivateKey& private_key);
 
   // Returns a new EcdhKeyAgreement object containing the supplied
   // private/public keypair.
   // Fails if the supplied keypair is invalid.
-  static StatusOr<std::unique_ptr<EcdhKeyAgreement>> CreateFromKeypair(
+  static absl::StatusOr<std::unique_ptr<EcdhKeyAgreement>> CreateFromKeypair(
       const EcdhPrivateKey& private_key, const EcdhPublicKey& public_key);
 
   // Returns a representation of the private key stored in this object.
@@ -84,7 +85,8 @@ class EcdhKeyAgreement {
   //
   // If the other_key is not a valid public key, instead returns an error status
   // with code INVALID_ARGUMENT.
-  StatusOr<AesKey> ComputeSharedSecret(const EcdhPublicKey& other_key) const;
+  absl::StatusOr<AesKey> ComputeSharedSecret(
+      const EcdhPublicKey& other_key) const;
 
   // DO NOT USE THESE CONSTRUCTORS.
   // Instead, one of the CreateFrom* factory methods below.

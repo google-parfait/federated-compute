@@ -43,7 +43,7 @@ class AesKey : public Key {
   // Create a key by reconstructing it from key shares. Length depends on the
   // key shares, and may not be 32 bytes. Threshold is the threshold used when
   // the secret was shared, i.e. the minimum number of clients to reconstruct.
-  static StatusOr<AesKey> CreateFromShares(
+  static absl::StatusOr<AesKey> CreateFromShares(
       const std::vector<ShamirShare>& shares, int threshold);
 };
 }  // namespace secagg

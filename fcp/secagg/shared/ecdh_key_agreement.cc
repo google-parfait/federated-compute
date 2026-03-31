@@ -36,7 +36,7 @@ EcdhKeyAgreement::EcdhKeyAgreement() : key_(nullptr, EC_KEY_free) {}
 
 EcdhKeyAgreement::EcdhKeyAgreement(EC_KEY* key) : key_(key, EC_KEY_free) {}
 
-StatusOr<std::unique_ptr<EcdhKeyAgreement>>
+absl::StatusOr<std::unique_ptr<EcdhKeyAgreement>>
 EcdhKeyAgreement::CreateFromRandomKeys() {
   EC_KEY* key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
   EC_KEY_generate_key(key);
@@ -47,7 +47,7 @@ EcdhKeyAgreement::CreateFromRandomKeys() {
   }
 }
 
-StatusOr<std::unique_ptr<EcdhKeyAgreement>>
+absl::StatusOr<std::unique_ptr<EcdhKeyAgreement>>
 EcdhKeyAgreement::CreateFromPrivateKey(const EcdhPrivateKey& private_key) {
   if (private_key.size() != EcdhPrivateKey::kSize) {
     return FCP_STATUS(INVALID_ARGUMENT)
@@ -65,8 +65,9 @@ EcdhKeyAgreement::CreateFromPrivateKey(const EcdhPrivateKey& private_key) {
   return std::make_unique<EcdhKeyAgreement>(key);
 }
 
-StatusOr<std::unique_ptr<EcdhKeyAgreement>> EcdhKeyAgreement::CreateFromKeypair(
-    const EcdhPrivateKey& private_key, const EcdhPublicKey& public_key) {
+absl::StatusOr<std::unique_ptr<EcdhKeyAgreement>>
+EcdhKeyAgreement::CreateFromKeypair(const EcdhPrivateKey& private_key,
+                                    const EcdhPublicKey& public_key) {
   if (public_key.size() != EcdhPublicKey::kSize &&
       public_key.size() != EcdhPublicKey::kUncompressedSize) {
     return FCP_STATUS(INVALID_ARGUMENT)
@@ -127,7 +128,7 @@ EcdhPublicKey EcdhKeyAgreement::PublicKey() const {
   return EcdhPublicKey(public_key);
 }
 
-StatusOr<AesKey> EcdhKeyAgreement::ComputeSharedSecret(
+absl::StatusOr<AesKey> EcdhKeyAgreement::ComputeSharedSecret(
     const EcdhPublicKey& other_key) const {
   if (other_key.size() != EcdhPublicKey::kSize &&
       other_key.size() != EcdhPublicKey::kUncompressedSize) {

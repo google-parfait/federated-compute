@@ -41,7 +41,7 @@ TEST(AesGcmEncryptionTest, EncryptionThenDecryptionWorks) {
   std::string test_str = "This is a test. Should work on arbitrary strings.";
 
   std::string ciphertext = aes.Encrypt(key, test_str);
-  StatusOr<std::string> plaintext = aes.Decrypt(key, ciphertext);
+  absl::StatusOr<std::string> plaintext = aes.Decrypt(key, ciphertext);
   ASSERT_TRUE(plaintext.ok());
   EXPECT_THAT(plaintext.value(), Eq(test_str));
 }
@@ -55,8 +55,8 @@ TEST(AesGcmEncryptionTest, MultipleOperationsWithSameObjectWork) {
 
   std::string ciphertext1 = aes.Encrypt(key1, test_str1);
   std::string ciphertext2 = aes.Encrypt(key2, test_str2);
-  StatusOr<std::string> plaintext1 = aes.Decrypt(key1, ciphertext1);
-  StatusOr<std::string> plaintext2 = aes.Decrypt(key2, ciphertext2);
+  absl::StatusOr<std::string> plaintext1 = aes.Decrypt(key1, ciphertext1);
+  absl::StatusOr<std::string> plaintext2 = aes.Decrypt(key2, ciphertext2);
   ASSERT_TRUE(plaintext1.ok());
   EXPECT_THAT(plaintext1.value(), Eq(test_str1));
   ASSERT_TRUE(plaintext2.ok());
@@ -72,8 +72,8 @@ TEST(AesGcmEncryptionTest, EncryptionsWithDifferentKeysAreDifferent) {
   std::string ciphertext1 = aes.Encrypt(key1, test_str);
   std::string ciphertext2 = aes.Encrypt(key2, test_str);
   EXPECT_THAT(ciphertext1, Ne(ciphertext2));
-  StatusOr<std::string> plaintext1 = aes.Decrypt(key1, ciphertext1);
-  StatusOr<std::string> plaintext2 = aes.Decrypt(key2, ciphertext2);
+  absl::StatusOr<std::string> plaintext1 = aes.Decrypt(key1, ciphertext1);
+  absl::StatusOr<std::string> plaintext2 = aes.Decrypt(key2, ciphertext2);
   ASSERT_TRUE(plaintext1.ok());
   EXPECT_THAT(plaintext1.value(), Eq(test_str));
   ASSERT_TRUE(plaintext2.ok());
@@ -87,7 +87,7 @@ TEST(AesGcmEncryptionTest, VerificationFailsOnBadTag) {
 
   std::string ciphertext = aes.Encrypt(key, test_str);
   ciphertext[ciphertext.size() - 1] = 'X';
-  StatusOr<std::string> plaintext = aes.Decrypt(key, ciphertext);
+  absl::StatusOr<std::string> plaintext = aes.Decrypt(key, ciphertext);
   EXPECT_THAT(plaintext.ok(), Eq(false));
 }
 
@@ -102,7 +102,7 @@ TEST(AesGcmEncryptionTest, VerificationFailsOnBadCiphertext) {
     for (int j = 0; j < 8; j++) {
       ciphertext[i] ^= (1 << j);
 
-      StatusOr<std::string> plaintext = aes.Decrypt(key, ciphertext);
+      absl::StatusOr<std::string> plaintext = aes.Decrypt(key, ciphertext);
       EXPECT_THAT(plaintext.ok(), Eq(false));
 
       // reset the ciphertext
@@ -118,7 +118,7 @@ TEST(AesGcmEncryptionTest, VerificationFailsOnWrongKey) {
   std::string test_str = "This is a test. Should work on arbitrary strings.";
 
   std::string ciphertext = aes.Encrypt(key, test_str);
-  StatusOr<std::string> plaintext = aes.Decrypt(key2, ciphertext);
+  absl::StatusOr<std::string> plaintext = aes.Decrypt(key2, ciphertext);
   EXPECT_THAT(plaintext.ok(), Eq(false));
 }
 

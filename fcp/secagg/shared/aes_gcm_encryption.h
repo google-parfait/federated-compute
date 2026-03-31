@@ -40,8 +40,8 @@ class AesGcmEncryption {
   // Decrypts the plaintext with the given key, using AES-256-GCM. Expects the
   // IV to be prepended to the ciphertext, and the tag to be appended. If the
   // tag does not authenticate, returns a DATA_LOSS error status.
-  StatusOr<std::string> Decrypt(const AesKey& key,
-                                const std::string& ciphertext);
+  absl::StatusOr<std::string> Decrypt(const AesKey& key,
+                                      const std::string& ciphertext);
 };
 
 }  // namespace secagg

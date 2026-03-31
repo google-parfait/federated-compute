@@ -28,7 +28,7 @@ AesKey::AesKey(const uint8_t* data, int key_size) : Key(data, key_size) {
   FCP_CHECK((key_size > 0 && key_size <= 17) || (key_size == 32));
 }
 
-StatusOr<AesKey> AesKey::CreateFromShares(
+absl::StatusOr<AesKey> AesKey::CreateFromShares(
     const std::vector<ShamirShare>& shares, int threshold) {
   ShamirSecretSharing reconstructor;
   // TODO(team): Once Java support is removed, assume 32 byte keys.

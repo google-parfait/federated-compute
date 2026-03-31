@@ -59,8 +59,8 @@ std::string AesGcmEncryption::Encrypt(const AesKey& key,
   return std::string(ciphertext_buffer.begin(), ciphertext_buffer.end());
 }
 
-StatusOr<std::string> AesGcmEncryption::Decrypt(const AesKey& key,
-                                                const std::string& ciphertext) {
+absl::StatusOr<std::string> AesGcmEncryption::Decrypt(
+    const AesKey& key, const std::string& ciphertext) {
   FCP_CHECK(key.size() != 0) << "Decrypt called with blank key.";
   FCP_CHECK(key.size() == AesKey::kSize)
       << "Decrypt called with key of " << key.size()
