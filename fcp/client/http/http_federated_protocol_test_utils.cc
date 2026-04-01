@@ -266,9 +266,6 @@ TaskAssignment CreateTaskAssignment(
     task_assignment.mutable_willow_aggregation_info()
         ->set_max_number_of_clients(willow_agg_info->max_number_of_clients);
     task_assignment.mutable_willow_aggregation_info()
-        ->set_max_flattened_domain_size(
-            willow_agg_info->max_flattened_domain_size);
-    task_assignment.mutable_willow_aggregation_info()
         ->mutable_input_spec()
         ->mutable_inline_resource()
         ->set_data(willow_agg_info->input_spec);
@@ -886,8 +883,7 @@ void HttpFederatedProtocolTest::
   // Check the uploaded data to verify that the encryptor received the correct
   // arguments
   std::string expected_uploaded_data = absl::StrFormat(
-      "%v%v%v%v%v", willow_agg_info.input_spec,
-      willow_agg_info.max_flattened_domain_size,
+      "%v%v%v%v", willow_agg_info.input_spec,
       willow_agg_info.max_number_of_clients, public_key, checkpoint_string);
   EXPECT_EQ(uploaded_data, expected_uploaded_data);
 }

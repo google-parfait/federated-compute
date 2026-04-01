@@ -918,8 +918,6 @@ HttpFederatedProtocol::HandleTaskAssignmentInnerResponse(
     // initialized willow_agg_info.
     default_task_info_.willow_agg_info = FederatedProtocol::WillowAggInfo{
         .input_spec = task_resources->willow_input_spec,
-        .max_flattened_domain_size =
-            result.willow_agg_info->max_flattened_domain_size,
         .max_number_of_clients = result.willow_agg_info->max_number_of_clients,
     };
   }
@@ -957,8 +955,6 @@ FederatedProtocol::TaskAssignment HttpFederatedProtocol::CreateTaskAssignment(
     // Create the WillowAggInfo struct and get the number of clients
     // immediately. The input spec will be populated after it's been fetched.
     result.willow_agg_info = WillowAggInfo{
-        .max_flattened_domain_size = task_assignment.willow_aggregation_info()
-                                         .max_flattened_domain_size(),
         .max_number_of_clients =
             task_assignment.willow_aggregation_info().max_number_of_clients()};
   }
@@ -1241,8 +1237,6 @@ HttpFederatedProtocol::HandleMultipleTaskAssignmentsInnerResponse(
         task_info_map_[task_assignment.task_identifier].willow_agg_info =
             FederatedProtocol::WillowAggInfo{
                 .input_spec = task_assignment.willow_agg_info->input_spec,
-                .max_flattened_domain_size =
-                    task_assignment.willow_agg_info->max_flattened_domain_size,
                 .max_number_of_clients =
                     task_assignment.willow_agg_info->max_number_of_clients,
             };

@@ -4865,7 +4865,6 @@ TEST_F(HttpFederatedProtocolTest,
           FederatedProtocol::WillowAggInfo{
               .input_spec = absl::Cord(
                   fake_willow_input_spec_resource.inline_resource().data()),
-              .max_flattened_domain_size = 1000000,
               .max_number_of_clients = 0});
   EXPECT_CALL(
       mock_http_client_,
@@ -4919,7 +4918,6 @@ TEST_F(HttpFederatedProtocolTest, TestWillowEncryptorReceivesCorrectArguments) {
 
   FederatedProtocol::WillowAggInfo fake_willow_agg_info = {
       .input_spec = absl::Cord(fake_willow_input_spec),
-      .max_flattened_domain_size = 1000000,
       .max_number_of_clients = fake_willow_max_number_of_clients};
 
   ABSL_ASSERT_OK(RunSuccessfulCheckin(

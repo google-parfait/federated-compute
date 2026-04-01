@@ -136,7 +136,7 @@ WillowPayloadEncryptorImpl::EncryptAndSerializePayload(
   FCP_ASSIGN_OR_RETURN(
       std::unique_ptr<secure_aggregation::willow::Codec> encoder,
       secure_aggregation::willow::CodecFactory::CreateExplicitCodec(
-          input_spec_proto, willow_agg_info.max_flattened_domain_size));
+          input_spec_proto));
 
   FCP_ASSIGN_OR_RETURN(secure_aggregation::willow::EncodedData encoded_data,
                        encoder->Encode(group_by_data, metric_data));

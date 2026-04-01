@@ -64,8 +64,7 @@ class TestingFakeWillowPayloadEncryptor : public WillowPayloadEncryptor {
   absl::StatusOr<std::string> EncryptAndSerializePayload(
       const FederatedProtocol::WillowAggInfo& willow_agg_info,
       absl::string_view key, absl::string_view inner_payload) override {
-    return absl::StrFormat("%v%v%v%v%v", willow_agg_info.input_spec,
-                           willow_agg_info.max_flattened_domain_size,
+    return absl::StrFormat("%v%v%v%v", willow_agg_info.input_spec,
                            willow_agg_info.max_number_of_clients, key,
                            inner_payload);
   }

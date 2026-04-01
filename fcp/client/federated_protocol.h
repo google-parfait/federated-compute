@@ -225,9 +225,6 @@ class FederatedProtocol {
     // The serialized `secure_aggregation.willow.InputSpec` proto that will be
     // used to encode the client's contribution.
     absl::Cord input_spec;
-    // The maximum size of the Cartesian product of input spec domains. This is
-    // used by the Willow library in conjunction with the input_spec.
-    int64_t max_flattened_domain_size;
     // The maximum number of clients that can participate in the aggregation.
     // This is used by the Willow library to compute the right cryptographic
     // parameters.
