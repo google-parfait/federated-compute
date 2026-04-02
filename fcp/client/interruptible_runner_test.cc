@@ -72,14 +72,14 @@ TEST(InterruptibleRunnerTest, TestNormalNoAbortCheck) {
       getDiagnosticsConfig());
   absl::Status status = interruptibleRunner.Run(
       []() { return absl::OkStatus(); }, abort_function);
-  EXPECT_THAT(status, IsCode(OK));
+  EXPECT_THAT(status, absl_testing::StatusIs(OK));
   EXPECT_EQ(should_abort_calls, 1);
   EXPECT_EQ(abort_function_calls, 0);
 
   // Test that the Status returned by the runnable is returned as is.
   status = interruptibleRunner.Run([]() { return absl::DataLossError(""); },
                                    abort_function);
-  EXPECT_THAT(status, IsCode(DATA_LOSS));
+  EXPECT_THAT(status, absl_testing::StatusIs(DATA_LOSS));
 }
 
 // Tests the case where should_abort prevents us from even kicking off the run.
@@ -108,7 +108,7 @@ TEST(InterruptibleRunnerTest, TestNormalAbortBeforeRun) {
         return absl::OkStatus();
       },
       abort_function);
-  EXPECT_THAT(status, IsCode(CANCELLED));
+  EXPECT_THAT(status, absl_testing::StatusIs(CANCELLED));
   EXPECT_EQ(abort_function_calls, 0);
   EXPECT_EQ(runnable_calls, 0);
 }
@@ -149,13 +149,13 @@ TEST(InterruptibleRunnerTest, TestNormalWithAbortCheckButNoAbort) {
         return absl::OkStatus();
       },
       abort_function);
-  EXPECT_THAT(status, IsCode(OK));
+  EXPECT_THAT(status, absl_testing::StatusIs(OK));
   EXPECT_GE(should_abort_calls, 2);
   EXPECT_EQ(abort_function_calls, 0);
 
   status = interruptibleRunner.Run([]() { return absl::DataLossError(""); },
                                    abort_function);
-  EXPECT_THAT(status, IsCode(DATA_LOSS));
+  EXPECT_THAT(status, absl_testing::StatusIs(DATA_LOSS));
 }
 
 // Tests the case where the runnable gets aborted and behaves nicely (aborts
@@ -197,7 +197,7 @@ TEST(InterruptibleRunnerTest, TestAbortInGracePeriod) {
         return absl::OkStatus();
       },
       abort_function);
-  EXPECT_THAT(status, IsCode(CANCELLED));
+  EXPECT_THAT(status, absl_testing::StatusIs(CANCELLED));
   EXPECT_EQ(should_abort_calls, 2);
   EXPECT_EQ(abort_function_calls, 1);
 }
@@ -249,7 +249,7 @@ TEST(InterruptibleRunnerTest, TestAbortInExtendedGracePeriod) {
       },
       abort_function);
 
-  EXPECT_THAT(status, IsCode(CANCELLED));
+  EXPECT_THAT(status, absl_testing::StatusIs(CANCELLED));
   EXPECT_EQ(should_abort_calls, 2);
   EXPECT_EQ(abort_function_calls, 1);
 }
