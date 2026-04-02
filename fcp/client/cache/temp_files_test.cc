@@ -62,12 +62,13 @@ class TempFilesTest : public testing::Test {
 };
 
 TEST_F(TempFilesTest, FailToCreateParentDirectory) {
-  ASSERT_THAT(TempFiles::Create("/proc/0", &log_manager_), IsCode(INTERNAL));
+  ASSERT_THAT(TempFiles::Create("/proc/0", &log_manager_),
+              absl_testing::StatusIs(INTERNAL));
 }
 
 TEST_F(TempFilesTest, InvalidRelativePath) {
   ASSERT_THAT(TempFiles::Create("relative/cache", &log_manager_),
-              IsCode(INVALID_ARGUMENT));
+              absl_testing::StatusIs(INVALID_ARGUMENT));
 }
 
 TEST_F(TempFilesTest, SuccessfulInitialization) {

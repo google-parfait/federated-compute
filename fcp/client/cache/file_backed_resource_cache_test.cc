@@ -101,7 +101,7 @@ TEST_F(FileBackedResourceCacheTest, FailToCreateParentDirectoryInBaseDir) {
   ASSERT_THAT(
       FileBackedResourceCache::Create("/proc/0", root_cache_dir_, &log_manager_,
                                       &clock_, kMaxCacheSizeBytes),
-      IsCode(INTERNAL));
+      absl_testing::StatusIs(INTERNAL));
 }
 
 TEST_F(FileBackedResourceCacheTest, FailToCreateParentDirectoryInCacheDir) {
@@ -110,7 +110,7 @@ TEST_F(FileBackedResourceCacheTest, FailToCreateParentDirectoryInCacheDir) {
   ASSERT_THAT(
       FileBackedResourceCache::Create(root_files_dir_, "/proc/0", &log_manager_,
                                       &clock_, kMaxCacheSizeBytes),
-      IsCode(INTERNAL));
+      absl_testing::StatusIs(INTERNAL));
 }
 
 TEST_F(FileBackedResourceCacheTest, InvalidBaseDirRelativePath) {
@@ -119,7 +119,7 @@ TEST_F(FileBackedResourceCacheTest, InvalidBaseDirRelativePath) {
   ASSERT_THAT(FileBackedResourceCache::Create("relative/base", root_cache_dir_,
                                               &log_manager_, &clock_,
                                               kMaxCacheSizeBytes),
-              IsCode(INVALID_ARGUMENT));
+              absl_testing::StatusIs(INVALID_ARGUMENT));
 }
 
 TEST_F(FileBackedResourceCacheTest, InvalidCacheDirRelativePath) {
@@ -129,7 +129,7 @@ TEST_F(FileBackedResourceCacheTest, InvalidCacheDirRelativePath) {
   ASSERT_THAT(FileBackedResourceCache::Create(root_files_dir_, "relative/cache",
                                               &log_manager_, &clock_,
                                               kMaxCacheSizeBytes),
-              IsCode(INVALID_ARGUMENT));
+              absl_testing::StatusIs(INVALID_ARGUMENT));
 }
 
 TEST_F(FileBackedResourceCacheTest, SuccessfulInitialization) {
@@ -191,7 +191,7 @@ TEST_F(FileBackedResourceCacheTest, CacheTooBigFileReturnsResourceExhausted) {
   ABSL_ASSERT_OK(resource_cache);
   ASSERT_THAT(
       (*resource_cache)->Put(kKey1, Resource1(), Metadata(), absl::Hours(1)),
-      IsCode(RESOURCE_EXHAUSTED));
+      absl_testing::StatusIs(RESOURCE_EXHAUSTED));
 }
 
 TEST_F(FileBackedResourceCacheTest,
@@ -220,7 +220,7 @@ TEST_F(FileBackedResourceCacheTest,
     auto resource_cache = FileBackedResourceCache::Create(
         root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
         kMaxCacheSizeBytes);
-    ASSERT_THAT(resource_cache, IsCode(INTERNAL));
+    ASSERT_THAT(resource_cache, absl_testing::StatusIs(INTERNAL));
   }
 
   // Failing to read the manifest should have deleted it.
@@ -240,7 +240,8 @@ TEST_F(FileBackedResourceCacheTest,
     // cache dir.
     ASSERT_EQ(NumFilesInDir(cache_dir_), 0);
     EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
-    ASSERT_THAT((*resource_cache)->Get(kKey1, std::nullopt), IsCode(NOT_FOUND));
+    ASSERT_THAT((*resource_cache)->Get(kKey1, std::nullopt),
+                absl_testing::StatusIs(NOT_FOUND));
   }
 }
 
@@ -270,7 +271,7 @@ TEST_F(FileBackedResourceCacheTest,
     auto resource_cache = FileBackedResourceCache::Create(
         root_files_dir_, root_cache_dir_, &log_manager_, &clock_,
         kMaxCacheSizeBytes);
-    ASSERT_THAT(resource_cache, IsCode(INTERNAL));
+    ASSERT_THAT(resource_cache, absl_testing::StatusIs(INTERNAL));
   }
 
   // Failing to read the manifest should have deleted it.
@@ -340,7 +341,7 @@ TEST_F(FileBackedResourceCacheTest, CacheFileThenExpire) {
     EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
     absl::StatusOr<FileBackedResourceCache::ResourceAndMetadata>
         cached_resource = (*resource_cache)->Get(kKey1, std::nullopt);
-    ASSERT_THAT(cached_resource, IsCode(NOT_FOUND));
+    ASSERT_THAT(cached_resource, absl_testing::StatusIs(NOT_FOUND));
   }
 }
 
@@ -367,7 +368,7 @@ TEST_F(FileBackedResourceCacheTest, PutTwoFilesThenOneExpires) {
     EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
     absl::StatusOr<FileBackedResourceCache::ResourceAndMetadata>
         cached_resource1 = (*resource_cache)->Get(kKey1, std::nullopt);
-    ASSERT_THAT(cached_resource1, IsCode(NOT_FOUND));
+    ASSERT_THAT(cached_resource1, absl_testing::StatusIs(NOT_FOUND));
 
     EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
     absl::StatusOr<FileBackedResourceCache::ResourceAndMetadata>
@@ -445,7 +446,8 @@ TEST_F(FileBackedResourceCacheTest, CacheExceedsMaxCacheSize) {
   EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   ABSL_ASSERT_OK((*resource_cache)->Get(kKey2, std::nullopt));
   EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
-  ASSERT_THAT((*resource_cache)->Get(kKey1, std::nullopt), IsCode(NOT_FOUND));
+  ASSERT_THAT((*resource_cache)->Get(kKey1, std::nullopt),
+              absl_testing::StatusIs(NOT_FOUND));
 }
 
 TEST_F(FileBackedResourceCacheTest,
@@ -475,7 +477,8 @@ TEST_F(FileBackedResourceCacheTest,
   EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   ABSL_ASSERT_OK((*resource_cache)->Get(kKey3, std::nullopt));
   EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
-  ASSERT_THAT((*resource_cache)->Get(kKey2, std::nullopt), IsCode(NOT_FOUND));
+  ASSERT_THAT((*resource_cache)->Get(kKey2, std::nullopt),
+              absl_testing::StatusIs(NOT_FOUND));
   EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_HIT));
   ABSL_ASSERT_OK((*resource_cache)->Get(kKey1, std::nullopt));
 }
@@ -505,7 +508,7 @@ TEST_F(FileBackedResourceCacheTest, FileInCacheDirButNotInManifest) {
     EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
     absl::StatusOr<FileBackedResourceCache::ResourceAndMetadata>
         cached_resource = (*resource_cache)->Get(kKey1, std::nullopt);
-    ASSERT_THAT(cached_resource, IsCode(NOT_FOUND));
+    ASSERT_THAT(cached_resource, absl_testing::StatusIs(NOT_FOUND));
     // The cache dir should also be empty, because we reinitialized the cache
     // and there was an untracked file in it.
     ASSERT_EQ(NumFilesInDir(cache_dir_), 0);
@@ -537,7 +540,7 @@ TEST_F(FileBackedResourceCacheTest, FileInManifestButRootCacheDirDeleted) {
     EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
     absl::StatusOr<FileBackedResourceCache::ResourceAndMetadata>
         cached_resource = (*resource_cache)->Get(kKey1, std::nullopt);
-    ASSERT_THAT(cached_resource, IsCode(NOT_FOUND));
+    ASSERT_THAT(cached_resource, absl_testing::StatusIs(NOT_FOUND));
   }
 }
 
@@ -565,7 +568,7 @@ TEST_F(FileBackedResourceCacheTest, FileInManifestButNotInCacheDir) {
     EXPECT_CALL(log_manager_, LogDiag(DebugDiagCode::RESOURCE_CACHE_MISS));
     absl::StatusOr<FileBackedResourceCache::ResourceAndMetadata>
         cached_resource = (*resource_cache)->Get(kKey1, std::nullopt);
-    ASSERT_THAT(cached_resource, IsCode(NOT_FOUND));
+    ASSERT_THAT(cached_resource, absl_testing::StatusIs(NOT_FOUND));
   }
 }
 
