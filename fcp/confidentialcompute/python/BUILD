@@ -130,6 +130,7 @@ py_test(
 py_library(
     name = "accounting",
     srcs = ["accounting.py"],
+    visibility = ["//visibility:public"],
     deps = ["@pypi//numpy"],
 )
 
