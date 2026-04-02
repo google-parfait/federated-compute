@@ -128,13 +128,13 @@ TEST(ProtocolRequestCreatorTest, TestInvalidForwardingInfo) {
   ForwardingInfo forwarding_info;
   EXPECT_THAT(ProtocolRequestCreator::Create(kApiKey, forwarding_info,
                                              /*use_compression=*/false),
-              IsCode(INVALID_ARGUMENT));
+              absl_testing::StatusIs(INVALID_ARGUMENT));
 
   (*forwarding_info.mutable_extra_request_headers())["x-header1"] =
       "header-value1";
   EXPECT_THAT(ProtocolRequestCreator::Create(kApiKey, forwarding_info,
                                              /*use_compression=*/false),
-              IsCode(INVALID_ARGUMENT));
+              absl_testing::StatusIs(INVALID_ARGUMENT));
 }
 
 TEST(ProtocolRequestCreatorTest, CreateProtocolRequestInvalidSuffix) {
@@ -145,7 +145,7 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequestInvalidSuffix) {
       creator.CreateProtocolRequest(uri_suffix, QueryParams(),
                                     HttpRequest::Method::kPost, "request_body",
                                     /*is_protobuf_encoded=*/false),
-      IsCode(absl::StatusCode::kInvalidArgument));
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
@@ -424,7 +424,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationInvalidOperationName) {
       protocol_request_helper_.PollOperationResponseUntilDone(
           CreatePendingOperation("invalid_operation_name"),
           initial_request_creator_, interruptible_runner_);
-  EXPECT_THAT(result.status(), IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(result.status(), absl_testing::StatusIs(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("invalid name"));
 }
 
@@ -803,7 +803,7 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
   ABSL_ASSERT_OK(response_1);
   VerifyInMemoryHttpResponse(*response_1, 200, "", "response1");
   auto response_2 = (*result)[1];
-  ASSERT_THAT(response_2, IsCode(absl::StatusCode::kNotFound));
+  ASSERT_THAT(response_2, absl_testing::StatusIs(absl::StatusCode::kNotFound));
 }
 }  // anonymous namespace
 }  // namespace http

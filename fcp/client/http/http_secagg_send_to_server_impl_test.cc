@@ -105,7 +105,7 @@ TEST(HttpSecAggProtocolDelegateTest, GetModulusKeyNotFound) {
   secure_aggregands["tensor_1"] = secure_aggregand_execution_info;
   HttpSecAggProtocolDelegate delegate(secure_aggregands, &holder);
   ASSERT_THAT(delegate.GetModulus("do_not_exist"),
-              IsCode(absl::StatusCode::kInternal));
+              absl_testing::StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST(HttpSecAggProtocolDelegateTest, ReceiveMessageOkResponse) {
@@ -131,7 +131,7 @@ TEST(HttpSecAggProtocolDelegateTest, ReceiveMessageErrorResponse) {
   holder = absl::InternalError("Something is broken.");
 
   ASSERT_THAT(delegate.ReceiveServerMessage(),
-              IsCode(absl::StatusCode::kInternal));
+              absl_testing::StatusIs(absl::StatusCode::kInternal));
   ASSERT_EQ(delegate.last_received_message_size(), 0);
 }
 
@@ -307,7 +307,8 @@ TEST_F(HttpSecAggSendToServerImplTest,
           HttpRequest::Method::kPost, _, expected_request.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(503, HeaderList(), "")));
   send_to_server->Send(&server_message);
-  EXPECT_THAT(server_response_holder_, IsCode(absl::StatusCode::kUnavailable));
+  EXPECT_THAT(server_response_holder_,
+              absl_testing::StatusIs(absl::StatusCode::kUnavailable));
 }
 
 TEST_F(HttpSecAggSendToServerImplTest, TestSendR0AdvertiseKeysFailed) {
@@ -334,7 +335,8 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendR0AdvertiseKeysFailed) {
                                "Something's wrong")
               .SerializeAsString())));
   send_to_server->Send(&server_message);
-  EXPECT_THAT(server_response_holder_, IsCode(absl::StatusCode::kInternal));
+  EXPECT_THAT(server_response_holder_,
+              absl_testing::StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST_F(HttpSecAggSendToServerImplTest, TestSendR1ShareKeys) {
@@ -403,7 +405,8 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendR1ShareKeysFailedImmediatedly) {
           HttpRequest::Method::kPost, _, expected_request.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(503, HeaderList(), "")));
   send_to_server->Send(&server_message);
-  EXPECT_THAT(server_response_holder_, IsCode(absl::StatusCode::kUnavailable));
+  EXPECT_THAT(server_response_holder_,
+              absl_testing::StatusIs(absl::StatusCode::kUnavailable));
 }
 
 TEST_F(HttpSecAggSendToServerImplTest, TestSendR1ShareKeysFailed) {
@@ -430,7 +433,8 @@ TEST_F(HttpSecAggSendToServerImplTest, TestSendR1ShareKeysFailed) {
                                "Something's wrong")
               .SerializeAsString())));
   send_to_server->Send(&server_message);
-  EXPECT_THAT(server_response_holder_, IsCode(absl::StatusCode::kInternal));
+  EXPECT_THAT(server_response_holder_,
+              absl_testing::StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST_F(HttpSecAggSendToServerImplTest, TestSendR2SubmitResultNoCheckpoint) {
@@ -571,7 +575,8 @@ TEST_F(HttpSecAggSendToServerImplTest,
       .WillOnce(Return(FakeHttpResponse(200, HeaderList(), "")));
 
   send_to_server->Send(&server_message);
-  EXPECT_THAT(server_response_holder_, IsCode(absl::StatusCode::kUnavailable));
+  EXPECT_THAT(server_response_holder_,
+              absl_testing::StatusIs(absl::StatusCode::kUnavailable));
 }
 
 TEST_F(HttpSecAggSendToServerImplTest,
@@ -620,7 +625,8 @@ TEST_F(HttpSecAggSendToServerImplTest,
           HttpRequest::Method::kPost, _, expected_request.SerializeAsString())))
       .WillOnce(Return(FakeHttpResponse(503, HeaderList(), "")));
   send_to_server->Send(&server_message);
-  EXPECT_THAT(server_response_holder_, IsCode(absl::StatusCode::kUnavailable));
+  EXPECT_THAT(server_response_holder_,
+              absl_testing::StatusIs(absl::StatusCode::kUnavailable));
 }
 
 TEST_F(HttpSecAggSendToServerImplTest,
@@ -682,7 +688,8 @@ TEST_F(HttpSecAggSendToServerImplTest,
                                "Something's wroing.")
               .SerializeAsString())));
   send_to_server->Send(&server_message);
-  EXPECT_THAT(server_response_holder_, IsCode(absl::StatusCode::kInternal));
+  EXPECT_THAT(server_response_holder_,
+              absl_testing::StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST_F(HttpSecAggSendToServerImplTest, TestSendR3Unmask) {
@@ -767,7 +774,8 @@ TEST_F(HttpSecAggSendToServerImplTest,
 
   // Send the request, and verify that sending it failed.
   send_to_server->Send(&server_message);
-  EXPECT_THAT(server_response_holder_, IsCode(absl::StatusCode::kCancelled));
+  EXPECT_THAT(server_response_holder_,
+              absl_testing::StatusIs(absl::StatusCode::kCancelled));
 }
 
 }  // anonymous namespace

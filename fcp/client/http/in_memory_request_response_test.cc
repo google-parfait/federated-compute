@@ -104,7 +104,7 @@ TEST(InMemoryHttpRequestTest, NonHttpsUriFails) {
       InMemoryHttpRequest::Create("http://invalid.com",
                                   HttpRequest::Method::kGet, {}, "",
                                   /*use_compression=*/false);
-  EXPECT_THAT(request.status(), IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(request.status(), absl_testing::StatusIs(INVALID_ARGUMENT));
 }
 
 TEST(InMemoryHttpRequestTest, GetWithRequestBodyFails) {
@@ -112,7 +112,7 @@ TEST(InMemoryHttpRequestTest, GetWithRequestBodyFails) {
       InMemoryHttpRequest::Create(
           "https://valid.com", HttpRequest::Method::kGet, {},
           "non_empty_request_body", /*use_compression=*/false);
-  EXPECT_THAT(request.status(), IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(request.status(), absl_testing::StatusIs(INVALID_ARGUMENT));
 }
 
 // Ensures that providing a Content-Length header results in an error (since it
@@ -125,7 +125,7 @@ TEST(InMemoryHttpRequestTest, ContentLengthHeaderFails) {
           "https://valid.com", HttpRequest::Method::kPost,
           {{"Content-length", "1234"}}, "non_empty_request_body",
           /*use_compression=*/false);
-  EXPECT_THAT(request.status(), IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(request.status(), absl_testing::StatusIs(INVALID_ARGUMENT));
 }
 
 TEST(InMemoryHttpRequestTest, ValidGetRequest) {
@@ -219,7 +219,8 @@ TEST(InMemoryHttpRequestTest, ReadBodySimple) {
   EXPECT_THAT(*read_result, actual_body.size());
   EXPECT_THAT(actual_body, StrEq(expected_body));
   // Expect the second read to indicate the end of the stream.
-  EXPECT_THAT((*request)->ReadBody(nullptr, 1), IsCode(OUT_OF_RANGE));
+  EXPECT_THAT((*request)->ReadBody(nullptr, 1),
+              absl_testing::StatusIs(OUT_OF_RANGE));
 }
 
 TEST(InMemoryHttpRequestTest, ReadBodyChunked) {
@@ -263,7 +264,8 @@ TEST(InMemoryHttpRequestTest, ReadBodyChunked) {
   EXPECT_THAT(actual_body, StrEq(expected_body));
 
   // Expect the last read to indicate the end of the stream.
-  EXPECT_THAT((*request)->ReadBody(nullptr, 1), IsCode(OUT_OF_RANGE));
+  EXPECT_THAT((*request)->ReadBody(nullptr, 1),
+              absl_testing::StatusIs(OUT_OF_RANGE));
 }
 
 TEST(InMemoryHttpRequestTest, RequestWithCompressedBody) {
@@ -295,7 +297,8 @@ TEST(InMemoryHttpRequestTest, RequestWithCompressedBody) {
   EXPECT_THAT(*read_result, actual_body.size());
 
   // Expect the second read to indicate the end of the stream.
-  EXPECT_THAT((*request)->ReadBody(nullptr, 1), IsCode(OUT_OF_RANGE));
+  EXPECT_THAT((*request)->ReadBody(nullptr, 1),
+              absl_testing::StatusIs(OUT_OF_RANGE));
 
   auto recovered_body = UncompressWithGzip(actual_body);
   ABSL_ASSERT_OK(recovered_body);
@@ -313,7 +316,7 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseFailsBeforeHeaders) {
   callback.OnResponseError(**request, absl::UnimplementedError("foobar"));
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  EXPECT_THAT(actual_response, IsCode(UNIMPLEMENTED));
+  EXPECT_THAT(actual_response, absl_testing::StatusIs(UNIMPLEMENTED));
   EXPECT_THAT(actual_response.status().message(), HasSubstr("foobar"));
 }
 
@@ -332,7 +335,7 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseFailsAfterHeaders) {
                                absl::UnimplementedError("foobar"));
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  EXPECT_THAT(actual_response, IsCode(UNIMPLEMENTED));
+  EXPECT_THAT(actual_response, absl_testing::StatusIs(UNIMPLEMENTED));
   EXPECT_THAT(actual_response.status().message(), HasSubstr("foobar"));
 }
 
@@ -353,7 +356,7 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseFailsAfterPartialBody) {
                                absl::UnimplementedError("foobar"));
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  EXPECT_THAT(actual_response, IsCode(UNIMPLEMENTED));
+  EXPECT_THAT(actual_response, absl_testing::StatusIs(UNIMPLEMENTED));
   EXPECT_THAT(actual_response.status().message(), HasSubstr("foobar"));
 }
 
@@ -376,7 +379,7 @@ TEST(InMemoryHttpRequestCallbackTest,
   callback.OnResponseCompleted(**request, fake_response);
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  EXPECT_THAT(actual_response, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(actual_response, absl_testing::StatusIs(INVALID_ARGUMENT));
   EXPECT_THAT(actual_response.status().message(),
               HasSubstr("Too little response body data received"));
 }
@@ -399,7 +402,7 @@ TEST(InMemoryHttpRequestCallbackTest,
   ABSL_ASSERT_OK(callback.OnResponseBody(**request, fake_response, "34"));
   absl::Status response_body_result =
       callback.OnResponseBody(**request, fake_response, "56");
-  EXPECT_THAT(response_body_result, IsCode(OUT_OF_RANGE));
+  EXPECT_THAT(response_body_result, absl_testing::StatusIs(OUT_OF_RANGE));
   EXPECT_THAT(response_body_result.message(),
               HasSubstr("Too much response body data received"));
 }
@@ -417,7 +420,7 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNegative) {
   InMemoryHttpRequestCallback callback;
   absl::Status response_started_result =
       callback.OnResponseStarted(**request, fake_response);
-  EXPECT_THAT(response_started_result, IsCode(OUT_OF_RANGE));
+  EXPECT_THAT(response_started_result, absl_testing::StatusIs(OUT_OF_RANGE));
   EXPECT_THAT(response_started_result.message(),
               HasSubstr("Invalid Content-Length response header"));
 }
@@ -436,7 +439,8 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentLengthNonInteger) {
   InMemoryHttpRequestCallback callback;
   absl::Status response_started_result =
       callback.OnResponseStarted(**request, fake_response);
-  EXPECT_THAT(response_started_result, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(response_started_result,
+              absl_testing::StatusIs(INVALID_ARGUMENT));
   EXPECT_THAT(response_started_result.message(),
               HasSubstr("Could not parse Content-Length response header"));
 }
@@ -455,7 +459,8 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithContentEncodingHeader) {
   InMemoryHttpRequestCallback callback;
   absl::Status response_started_result =
       callback.OnResponseStarted(**request, fake_response);
-  EXPECT_THAT(response_started_result, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(response_started_result,
+              absl_testing::StatusIs(INVALID_ARGUMENT));
   EXPECT_THAT(response_started_result.message(),
               HasSubstr("Unexpected header: Content-Encoding"));
 }
@@ -475,7 +480,8 @@ TEST(InMemoryHttpRequestCallbackTest, ResponseWithTransferEncodingHeader) {
   InMemoryHttpRequestCallback callback;
   absl::Status response_started_result =
       callback.OnResponseStarted(**request, fake_response);
-  EXPECT_THAT(response_started_result, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(response_started_result,
+              absl_testing::StatusIs(INVALID_ARGUMENT));
   EXPECT_THAT(response_started_result.message(),
               HasSubstr("Unexpected header: Transfer-Encoding"));
 }
@@ -654,7 +660,7 @@ TEST(InMemoryHttpRequestCallbackTest, NotFoundResponse) {
   callback.OnResponseCompleted(**request, fake_response);
 
   absl::StatusOr<InMemoryHttpResponse> actual_response = callback.Response();
-  EXPECT_THAT(actual_response, IsCode(NOT_FOUND));
+  EXPECT_THAT(actual_response, absl_testing::StatusIs(NOT_FOUND));
   EXPECT_THAT(actual_response.status().message(), HasSubstr("404"));
 }
 
@@ -753,7 +759,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryNotFound) {
       mock_http_client_, interruptible_runner_, *std::move(request), nullptr,
       nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr, /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
-  EXPECT_THAT(result, IsCode(NOT_FOUND));
+  EXPECT_THAT(result, absl_testing::StatusIs(NOT_FOUND));
   EXPECT_THAT(result.status().message(), HasSubstr("404"));
 }
 
@@ -797,7 +803,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryWithRetryUnavailableThenOk) {
       nullptr, /*clock=*/Clock::RealClock(), &bit_gen_,
       /*retry_max_attempts=*/2,
       /*retry_delay_ms=*/50);
-  EXPECT_THAT(result, IsCode(OK));
+  EXPECT_THAT(result, absl_testing::StatusIs(OK));
 }
 
 TEST_F(PerformRequestsTest, PerformRequestInMemoryWithRetryUnavailableForever) {
@@ -820,7 +826,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryWithRetryUnavailableForever) {
       nullptr, /*clock=*/Clock::RealClock(), &bit_gen_,
       /*retry_max_attempts=*/2,
       /*retry_delay_ms=*/50);
-  EXPECT_THAT(result, IsCode(UNAVAILABLE));
+  EXPECT_THAT(result, absl_testing::StatusIs(UNAVAILABLE));
 }
 
 TEST_F(PerformRequestsTest, PerformRequestInMemoryEarlyError) {
@@ -845,7 +851,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryEarlyError) {
       &bytes_received, &bytes_sent, /*clock=*/nullptr, /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
-  EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(result, absl_testing::StatusIs(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("PerformRequests failed"));
 
   // We know that MockHttpClient will have updated the 'sent' network stat
@@ -903,7 +909,7 @@ TEST_F(PerformRequestsTest, PerformRequestInMemoryCancellation) {
       /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
 
-  EXPECT_THAT(result, IsCode(CANCELLED));
+  EXPECT_THAT(result, absl_testing::StatusIs(CANCELLED));
   EXPECT_THAT(result.status().message(),
               HasSubstr("cancelled after graceful wait"));
 
@@ -1036,7 +1042,7 @@ TEST_F(PerformRequestsTest, PerformTwoRequestsWithOneFailedOneSuccess) {
   EXPECT_THAT(*first_response, FieldsAre(ok_response_code, IsEmpty(), IsEmpty(),
                                          StrEq(success_response_body)));
 
-  EXPECT_THAT(results->at(1), IsCode(NOT_FOUND));
+  EXPECT_THAT(results->at(1), absl_testing::StatusIs(NOT_FOUND));
   EXPECT_THAT(results->at(1).status().message(), HasSubstr("404"));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
@@ -1168,7 +1174,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryInvalidUri) {
       /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
-  EXPECT_THAT(result, IsCode(INVALID_ARGUMENT));
+  EXPECT_THAT(result, absl_testing::StatusIs(INVALID_ARGUMENT));
   EXPECT_THAT(result.status().message(), HasSubstr("Non-HTTPS"));
 }
 
@@ -1224,9 +1230,9 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryAllUris) {
   EXPECT_THAT(*(*result)[0],
               FieldsAre(expected_response_code1, IsEmpty(), IsEmpty(),
                         StrEq(expected_response_body1)));
-  EXPECT_THAT((*result)[1], IsCode(NOT_FOUND));
+  EXPECT_THAT((*result)[1], absl_testing::StatusIs(NOT_FOUND));
   EXPECT_THAT((*result)[1].status().message(), HasSubstr("404"));
-  EXPECT_THAT((*result)[2], IsCode(UNAVAILABLE));
+  EXPECT_THAT((*result)[2], absl_testing::StatusIs(UNAVAILABLE));
   EXPECT_THAT((*result)[2].status().message(), HasSubstr("503"));
   ABSL_ASSERT_OK((*result)[3]);
   EXPECT_THAT(*(*result)[3],
@@ -1275,7 +1281,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemorySomeInlineData) {
       /*retry_max_attempts=*/0, /*retry_delay_ms=*/0);
   ABSL_ASSERT_OK(result);
 
-  EXPECT_THAT((*result)[0], IsCode(UNAVAILABLE));
+  EXPECT_THAT((*result)[0], absl_testing::StatusIs(UNAVAILABLE));
   EXPECT_THAT((*result)[0].status().message(), HasSubstr("503"));
   ABSL_ASSERT_OK((*result)[1]);
   EXPECT_THAT(*(*result)[1], FieldsAre(kHttpOk, IsEmpty(), kOctetStream,
@@ -1372,7 +1378,7 @@ TEST_F(PerformRequestsTest, FetchResourcesInMemoryCancellation) {
       /*resource_cache=*/nullptr, /*clock=*/nullptr, /*bit_gen=*/nullptr,
       /*retry_max_attempts=*/0,
       /*retry_delay_ms=*/0);
-  EXPECT_THAT(result, IsCode(CANCELLED));
+  EXPECT_THAT(result, absl_testing::StatusIs(CANCELLED));
   EXPECT_THAT(result.status().message(),
               HasSubstr("cancelled after graceful wait"));
 
@@ -1458,8 +1464,8 @@ TEST_F(PerformRequestsTest,
   ABSL_ASSERT_OK(result);
 
   // ...but our responses will have failed to decode.
-  EXPECT_THAT((*result)[0], IsCode(INTERNAL));
-  EXPECT_THAT((*result)[1], IsCode(INTERNAL));
+  EXPECT_THAT((*result)[0], absl_testing::StatusIs(INTERNAL));
+  EXPECT_THAT((*result)[1], absl_testing::StatusIs(INTERNAL));
 
   EXPECT_THAT(bytes_sent, Ne(bytes_received));
   EXPECT_THAT(bytes_sent, Ge(0));
