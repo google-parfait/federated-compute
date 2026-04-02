@@ -51,7 +51,7 @@
 namespace fcp::client::attestation {
 using ::fcp::confidential_compute::EcdsaP256R1SignatureVerifier;
 using ::fcp::confidential_compute::OkpCwt;
-using ::fcp::confidentialcompute::DataAccessPolicy;
+using ::fcp::confidentialcompute::AuthorizedLogicalPipelinePolicies;
 using ::google::internal::federatedcompute::v1::ConfidentialEncryptionConfig;
 using ::oak::attestation::v1::AttestationResults;
 using ::oak::attestation::v1::EndorsementDetails;
@@ -109,9 +109,10 @@ OakRustAttestationVerifier::Verify(
   }
 
   // Ensure that the provided data access policy parses correctly.
-  DataAccessPolicy parsed_access_policy;
+  AuthorizedLogicalPipelinePolicies parsed_access_policy;
   if (!parsed_access_policy.ParseFromString(access_policy)) {
-    return absl::FailedPreconditionError("DataAccessPolicy failed to parse.");
+    return absl::FailedPreconditionError(
+        "AuthorizedLogicalPipelinePolicies failed to parse.");
   }
 
   // Next, validate whether the provided access policy is allowlisted.

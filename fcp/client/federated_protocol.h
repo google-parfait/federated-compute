@@ -212,8 +212,9 @@ class FederatedProtocol {
   // Metadata about the confidential aggregation method with which the task's
   // result will be processed.
   struct ConfidentialAggInfo {
-    // The serialized `fcp.confidentialcompute.DataAccessPolicy` proto that will
-    // apply to the client's contribution to this task.
+    // The serialized
+    // `fcp.confidentialcompute.AuthorizedLogicalPipelinePolicies` proto that
+    // will apply to the client's contribution to this task.
     absl::Cord data_access_policy;
     // The serialized `fcp.confidentialcompute.SignedEndorsements` proto that
     // will be used to verify the data access policy above.

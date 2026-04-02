@@ -107,12 +107,13 @@ TEST(OakRustAttestationTest,
   ReferenceValues reference_values = GetKnownValidReferenceValues();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "foo" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "foo" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   // This verifier will only accept attestation evidence matching the reference
   // values defined above, and will only accept the given access policy.
@@ -139,8 +140,8 @@ TEST(OakRustAttestationTest, KnownValidEncryptionConfigAndMismatchingPolicy) {
   ReferenceValues reference_values = GetKnownValidReferenceValues();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy disallowed_access_policy =
-      PARSE_TEXT_PROTO(R"pb(
+  confidentialcompute::AuthorizedLogicalPipelinePolicies
+      disallowed_access_policy = PARSE_TEXT_PROTO(R"pb(
         transforms {
           src: 0
           application { tag: "bar" }
@@ -171,12 +172,13 @@ TEST(OakRustAttestationTest,
   ReferenceValues reference_values = GetKnownValidReferenceValues();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "foo" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "foo" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   // This verifier will not accept any inputs, since the policy allowlist is
   // empty.
@@ -237,12 +239,13 @@ TEST(OakRustAttestationTest, KnownEncryptionConfigAndMismatchingRvs) {
       GetKnownValidReferenceValues();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "bar" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "bar" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   // This verifier will not accept the encryption config provided, due to the
   // mismatching digest.
@@ -267,12 +270,13 @@ TEST(OakRustAttestationTest, KnownEncryptionConfigAndEmptyReferencevalues) {
       GetKnownValidEncryptionConfig();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "bar" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "bar" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   // This verifier will not accept the encryption config provided, due to the
   // reference values being invalid (an empty, uninitialized proto).
@@ -302,12 +306,13 @@ TEST(OakRustAttestationTest,
       GetKnownValidReferenceValues();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "foo" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "foo" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   // This verifier will only accept attestation evidence matching the reference
   // values defined above, and will only accept the given access policy.
@@ -343,12 +348,13 @@ TEST(OakRustAttestationTest,
         ->mutable_sha2_256())[0] += 1;
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "foo" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "foo" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   // This verifier will only accept attestation evidence matching the reference
   // values defined above, and will only accept the given access policy.
@@ -373,12 +379,13 @@ TEST(OakRustAttestationTest,
   ReferenceValues reference_values = GetKnownValidReferenceValues();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "foo" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "foo" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   // This verifier will not accept any inputs when using SignedEndorsements,
   // since there are no EndorsementReferenceValues for the access policy.
@@ -404,12 +411,13 @@ TEST(OakRustAttestationTest, MultipleSignedEndorsementsFails) {
   ReferenceValues reference_values = GetKnownValidReferenceValues();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "foo" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "foo" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   // This verifier will not accept any inputs when using SignedEndorsements,
   // since there are no EndorsementReferenceValues for the access policy.
@@ -437,12 +445,13 @@ TEST(OakRustAttestationTest,
   ReferenceValues reference_values = GetKnownValidReferenceValues();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "foo" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "foo" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   confidentialcompute::AccessPolicyEndorsementOptions endorsement_options =
       GetFakeAccessPolicyEndorsementOptions(2);
@@ -469,12 +478,13 @@ TEST(OakRustAttestationTest, HasSignedEndorsementButNoEndorsementInside) {
   ReferenceValues reference_values = GetKnownValidReferenceValues();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "foo" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "foo" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   // This verifier will not accept any inputs when using SignedEndorsements,
   // since there are no EndorsementReferenceValues for the access policy.
@@ -510,12 +520,13 @@ TEST(OakRustAttestationTest,
   encryption_config.set_public_key(parsed_key->Encode().value());
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "bar" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "bar" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
   OakRustAttestationVerifier verifier(
       GetKnownValidReferenceValues(),
@@ -541,12 +552,13 @@ TEST(OakRustAttestationTest,
       GetKnownValidEncryptionConfig();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "bar" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "bar" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
 
   // Add an access_policy_sha256 claim that matches the access policy.
@@ -586,12 +598,13 @@ TEST(OakRustAttestationTest,
   ReferenceValues reference_values = GetKnownValidReferenceValues();
 
   // Create a valid access policy proto with some non-default content.
-  confidentialcompute::DataAccessPolicy access_policy = PARSE_TEXT_PROTO(R"pb(
-    transforms {
-      src: 0
-      application { tag: "foo" }
-    }
-  )pb");
+  confidentialcompute::AuthorizedLogicalPipelinePolicies access_policy =
+      PARSE_TEXT_PROTO(R"pb(
+        transforms {
+          src: 0
+          application { tag: "foo" }
+        }
+      )pb");
   auto access_policy_bytes = access_policy.SerializeAsString();
 
   confidentialcompute::AttestationVerificationRecord verification_record;

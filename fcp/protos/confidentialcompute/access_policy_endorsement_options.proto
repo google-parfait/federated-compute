@@ -10,7 +10,7 @@ option java_multiple_files = true;
 
 message AccessPolicyEndorsementOptions {
   // Configuration for verifying a transparency log entries for
-  // `DataAccessPolicy` messages.
+  // `AuthorizedLogicalPipelinePolicies` messages.
   //
   // This field will eventually be replaced by `kms_verifying_keys`,
   // `access_policy_verifying_keys`, and `transparency_log_options`. Which set
@@ -36,8 +36,8 @@ message AccessPolicyEndorsementOptions {
   // This field only applies when using the Attestation Transparency Service.
   repeated Key kms_verifying_keys = 2;
 
-  // In order to be accepted, a DataAccessPolicy must be signed by one of these
-  // keys.
+  // In order to be accepted, a AuthorizedLogicalPipelinePolicies must be signed
+  // by one of these keys.
   //
   // This field only applies when using the Attestation Transparency Service.
   repeated Key access_policy_verifying_keys = 3;
