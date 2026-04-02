@@ -22,16 +22,18 @@ import "fcp/protos/confidentialcompute/confidential_transform.proto";
 // API for the TEE to read and write data.
 // Note that the requests are from the TEE and the responses are to the TEE.
 service DataReadWrite {
-  // Read data from a URI.
+  // Read data from storage.
   rpc Read(ReadRequest) returns (stream ReadResponse) {}
   // Write data out from the TEE.
   rpc Write(stream WriteRequest) returns (WriteResponse) {}
 }
 
-// Request to read data from a URI.
+// Request to read data.
 message ReadRequest {
-  // Data URI to be resolved.
+  // The filepath to resolve.
   string uri = 1;
+  // The blob id to resolve.
+  string blob_id = 3;
 
   reserved 2;
 }
