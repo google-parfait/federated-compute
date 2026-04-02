@@ -95,9 +95,9 @@ message SignedPayload {
       // https://federatedcompute-pa.googleapis.com/data/transparency/sha2-256:{b16_hash}.
       bytes endorsed_evidence_sha256 = 7;
 
-      // The SHA-256 hash of the payload's AuthorizedLogicalPipelinePolicies.
-      // This header is not applicable to all payload types. The full access
-      // policy can be retrieved from
+      // The SHA-256 hash of the payload's DataAccessPolicy. This header is not
+      // applicable to all payload types. The full access policy can be
+      // retrieved from
       // https://federatedcompute-pa.googleapis.com/data/transparency/sha2-256:{b16_hash}.
       bytes access_policy_sha256 = 8;
     }

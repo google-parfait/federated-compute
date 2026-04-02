@@ -220,7 +220,7 @@ message LogicalPipelineState {
 
 message RegisterPipelineInvocationRequest {
   // The name of the logical pipeline. This should match one of the map keys in
-  // `AuthorizedLogicalPipelinePolicies.pipelines`.
+  // `DataAccessPolicy.pipelines`.
   string logical_pipeline_name = 1;
 
   // The serialized PipelineVariantPolicy message describing the pipeline being
@@ -235,8 +235,8 @@ message RegisterPipelineInvocationRequest {
   // The keyset(s) used to encrypt client uploads.
   repeated uint64 keyset_ids = 4;
 
-  // The serialized AuthorizedLogicalPipelinePolicies messages for data that
-  // will be accessed by the pipeline.
+  // The serialized DataAccessPolicy messages for data that will be accessed by
+  // the pipeline.
   repeated bytes authorized_logical_pipeline_policies = 5 [ctype = CORD];
 
   // Whether the response should include metadata about the keys to which the

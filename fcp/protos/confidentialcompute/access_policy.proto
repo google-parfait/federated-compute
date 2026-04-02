@@ -43,7 +43,9 @@ option java_multiple_files = true;
 // policies, but are deprecated. All new policies will use
 // `PipelineVariantPolicy` and `PipelineVariantPolicy.Transform` instead.
 //
-message AuthorizedLogicalPipelinePolicies {
+// TODO: b/390344558 - rename DataAccessPolicy to
+// AuthorizedLogicalPipelinePolicies.
+message DataAccessPolicy {
   // A list of all transforms that are allowed on this data and its derivatives.
   repeated Transform transforms = 1 [deprecated = true];
 
@@ -86,17 +88,18 @@ message AuthorizedLogicalPipelinePolicies {
   map<string, LogicalPipelinePolicy> pipelines = 3;
 }
 
-// A copy of AuthorizedLogicalPipelinePolicies that contains the
-// PipelineVariantPolicy messages as bytes. This message is useful for
-// extracting serialized PipelineVariantPolicy messages without deserializing
-// and re-serializing them, which can result in different representations
-// because proto serialization is not canonical:
+// A copy of DataAccessPolicy that contains the PipelineVariantPolicy messages
+// as bytes. This message is useful for extracting serialized
+// PipelineVariantPolicy messages without deserializing and re-serializing them,
+// which can result in different representations because proto serialization is
+// not canonical:
 // https://protobuf.dev/programming-guides/serialization-not-canonical/.
 //
-// This message should contain the subset of AuthorizedLogicalPipelinePolicies
-// fields needed to extract the serialized PipelineVariantPolicy messages; all
-// tags must match.
-message AuthorizedLogicalPipelinePoliciesWithSerializedVariants {
+// This message should contain the subset of DataAccessPolicy fields needed to
+// extract the serialized PipelineVariantPolicy messages; all tags must match.
+// TODO: b/390344558 - rename DataAccessPolicyWithSerializedVariants to
+// AuthorizedLogicalPipelinePoliciesWithSerializedVariants.
+message DataAccessPolicyWithSerializedVariants {
   message LogicalPipelinePolicy {
     repeated bytes instances = 1 [ctype = CORD];
   }

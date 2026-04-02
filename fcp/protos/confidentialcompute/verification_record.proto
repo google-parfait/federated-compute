@@ -42,7 +42,7 @@ message AttestationVerificationRecord {
   // server-provided
   // `TaskAssignment.ConfidentialAggregationInfo.data_access_policy` field in
   // the `TaskAssignments` protocol.
-  AuthorizedLogicalPipelinePolicies data_access_policy = 3;
+  DataAccessPolicy data_access_policy = 3;
 
   // The upload encryption key that was verified. This corresponds to the
   // server-provided `ConfidentialEncryptionConfig.encryption_key` field in the

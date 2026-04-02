@@ -230,8 +230,8 @@ message TaskAssignment {
   }
 
   message ConfidentialAggregationInfo {
-    // The `fcp.confidentialcompute.AuthorizedLogicalPipelinePolicies` that will
-    // apply to client contributions.
+    // The `fcp.confidentialcompute.DataAccessPolicy` that will apply to client
+    // contributions.
     Resource data_access_policy = 1;
 
     // the serialized fcp.confidentialcompute.SignedEndorsements that authorize

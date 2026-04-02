@@ -395,8 +395,7 @@ class HttpFederatedProtocol : public fcp::client::FederatedProtocol {
   // conditionally available.
   struct FetchedTaskResources {
     PlanAndCheckpointPayloads plan_and_checkpoint_payloads;
-    // The serialized
-    // `fcp.confidentialcompute.AuthorizedLogicalPipelinePolicies` proto, if the
+    // The serialized `fcp.confidentialcompute.DataAccessPolicy` proto, if the
     // task has one, or an empty Cord if the task did not have one.
     absl::Cord confidential_data_access_policy;
     // The serialized `fcp.confidentialcompute.SignedEndorsements` proto, if

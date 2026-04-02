@@ -41,11 +41,10 @@ message SignedEndorsements {
 
   // Configuration for the pipeline(s) that will be permitted to process
   // uploaded data. This message can hold both server-side information (e.g.
-  // AuthorizedLogicalPipelinePolicies digest) as well as any client-side
-  // configuration. Larger payloads that are not needed by the client (e.g.
-  // AuthorizedLogicalPipelinePolicies) will generally be specified by digest;
-  // each such field will specify where the full artifact can be downloaded
-  // from.
+  // DataAccessPolicy digest) as well as any client-side configuration. Larger
+  // payloads that are not needed by the client (e.g. DataAccessPolicy) will
+  // generally be specified by digest; each such field will specify where the
+  // full artifact can be downloaded from.
   message PipelineConfiguration {
     // The SHA-256 hash of the access policy which governs this pipeline. The
     // full access policy can be retrieved from
