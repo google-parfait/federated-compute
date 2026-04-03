@@ -93,7 +93,7 @@ AesSecAggServerProtocolImpl::TakeMaskedInputQueue() {
   return std::move(masked_input_queue_);
 }
 
-Status AesSecAggServerProtocolImpl::HandleMaskedInputCollectionResponse(
+absl::Status AesSecAggServerProtocolImpl::HandleMaskedInputCollectionResponse(
     std::unique_ptr<MaskedInputCollectionResponse> masked_input_response) {
   FCP_CHECK(masked_input_response);
   // Make sure the received vectors match the specification.
@@ -170,7 +170,7 @@ void AesSecAggServerProtocolImpl::FinalizeMaskedInputCollection() {
 
 AsyncToken AesSecAggServerProtocolImpl::StartPrng(
     const PrngWorkItems& work_items,
-    std::function<void(Status)> done_callback) {
+    std::function<void(absl::Status)> done_callback) {
   FCP_CHECK(done_callback);
   FCP_CHECK(masked_input_);
   auto generators =

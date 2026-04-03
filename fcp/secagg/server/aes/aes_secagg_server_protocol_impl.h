@@ -68,7 +68,8 @@ class AesSecAggServerProtocolImpl
     return input_vector_specs_;
   }
 
-  Status InitializeShareKeysRequest(ShareKeysRequest* request) const override {
+  absl::Status InitializeShareKeysRequest(
+      ShareKeysRequest* request) const override {
     return ::absl::OkStatus();
   }
 
@@ -86,12 +87,13 @@ class AesSecAggServerProtocolImpl
 
   void FinalizeMaskedInputCollection() override;
 
-  Status HandleMaskedInputCollectionResponse(
+  absl::Status HandleMaskedInputCollectionResponse(
       std::unique_ptr<MaskedInputCollectionResponse> masked_input_response)
       override;
 
-  AsyncToken StartPrng(const PrngWorkItems& work_items,
-                       std::function<void(Status)> done_callback) override;
+  AsyncToken StartPrng(
+      const PrngWorkItems& work_items,
+      std::function<void(absl::Status)> done_callback) override;
 
  private:
   std::unique_ptr<SecAggUnpackedVectorMap> masked_input_;
