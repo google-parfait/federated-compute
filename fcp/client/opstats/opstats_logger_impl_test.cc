@@ -81,7 +81,7 @@ class OpStatsLoggerImplTest : public testing::Test {
                            /*execution_index=*/0, /*epoch_index=*/0,
                            engine::DataSourceType::DATASET, /*value=*/0));
     EXPECT_THAT((*db)->Transform([](OpStatsSequence& data) { data.Clear(); }),
-                IsOk());
+                absl_testing::IsOk());
   }
 
   // Checks that the expected and actual protos are equivalent, ignoring the
@@ -211,8 +211,8 @@ TEST_F(OpStatsLoggerImplTest, NewRunAfterCorruption) {
     protostore::FileStorage file_storage;
     std::unique_ptr<protostore::OutputStream> ostream =
         file_storage.OpenForWrite(db_path).value();
-    EXPECT_THAT(ostream->Append("not a proto"), IsOk());
-    EXPECT_THAT(ostream->Close(), IsOk());
+    EXPECT_THAT(ostream->Append("not a proto"), absl_testing::IsOk());
+    EXPECT_THAT(ostream->Close(), absl_testing::IsOk());
   }
 
   EXPECT_CALL(mock_log_manager_, LogDiag(ProdDiagCode::OPSTATS_READ_FAILED));
@@ -1244,7 +1244,7 @@ class CreateOpstatsTest : public testing::Test {
                   mock_log_manager_, mock_flags_.opstats_db_size_limit_bytes())
                   .value();
     EXPECT_THAT(db->Transform([](OpStatsSequence& data) { data.Clear(); }),
-                IsOk());
+                absl_testing::IsOk());
   }
 
   std::string base_dir_;
