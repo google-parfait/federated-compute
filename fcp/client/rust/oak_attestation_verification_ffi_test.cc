@@ -83,7 +83,7 @@ std::string ConvertPemToRaw(absl::string_view public_key_pem) {
 TEST(OakAttestationVerificationFfiTest, VerifyEndorsementFailure) {
   // Error message is: "no endorsement in signed endorsement", as expected.
   EXPECT_THAT(VerifyEndorsement(absl::UniversalEpoch(), {}, {}),
-              IsCode(absl::StatusCode::kFailedPrecondition));
+              absl_testing::StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(OakAttestationVerificationFfiTest, VerifyEndorsementSuccess) {
