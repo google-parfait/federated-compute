@@ -191,8 +191,8 @@ absl::StatusOr<std::string> ComputeDiff(absl::string_view baseline_file,
   return diff_result;
 }
 
-StatusOr<std::string> VerifyAgainstBaseline(absl::string_view baseline_file,
-                                            absl::string_view content) {
+absl::StatusOr<std::string> VerifyAgainstBaseline(
+    absl::string_view baseline_file, absl::string_view content) {
   auto status_or_diff_result = ComputeDiff(baseline_file, content);
   if (!status_or_diff_result.ok()) {
     return status_or_diff_result;

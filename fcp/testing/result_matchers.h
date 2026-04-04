@@ -111,14 +111,14 @@ std::string HasValueMatcher<MatcherType>::Impl<ValueType>::FormatDescription(
 
 // Expect a particular status for testing failure modes of protocols.
 // Prefer ExpectOk (defined in result.h) for OK status.
-template <fcp::StatusCode Code>
+template <absl::StatusCode Code>
 struct ExpectStatus : public ExpectBase {
   using ExpectBase::ExpectBase;
   constexpr explicit ExpectStatus(
       SourceLocation loc = SourceLocation::current())
       : ExpectBase(loc) {}
 
-  Result<Unit> operator()(const Status& s) const {
+  Result<Unit> operator()(const absl::Status& s) const {
     if (s.code() == Code) {
       return Unit{};
     } else {

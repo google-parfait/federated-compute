@@ -60,12 +60,12 @@ std::string TemporaryTestFile(absl::string_view suffix);
  *
  * The baseline file name must be provided relative to the project root.
  */
-StatusOr<std::string> VerifyAgainstBaseline(absl::string_view baseline_file,
-                                            absl::string_view content);
+absl::StatusOr<std::string> VerifyAgainstBaseline(
+    absl::string_view baseline_file, absl::string_view content);
 
 [[deprecated(
     "use absl_testing::StatusIs instead")]] ABSL_REFACTOR_INLINE inline auto
-IsCode(StatusCode code) {
+IsCode(absl::StatusCode code) {
   return absl_testing::StatusIs(code);
 }
 

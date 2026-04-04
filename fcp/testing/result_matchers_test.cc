@@ -51,7 +51,7 @@ TEST(ExpectTest, ExpectIsError) {
 
 TEST(ExpectTest, ExpectStatus) {
   TestTracingRecorder recorder;
-  EXPECT_THAT(Result<Status>(FCP_STATUS(INVALID_ARGUMENT))
+  EXPECT_THAT(Result<absl::Status>(FCP_STATUS(INVALID_ARGUMENT))
                   .Then(ExpectStatus<INVALID_ARGUMENT>()),
               HasValue(Unit{}));
 }
@@ -59,9 +59,9 @@ TEST(ExpectTest, ExpectStatus) {
 TEST(ExpectTest, ExpectStatusReturnsError) {
   TestTracingRecorder recorder;
   recorder.ExpectError<ResultExpectStatusError>();
-  EXPECT_THAT(
-      Result<Status>(FCP_STATUS(OK)).Then(ExpectStatus<INVALID_ARGUMENT>()),
-      IsError());
+  EXPECT_THAT(Result<absl::Status>(FCP_STATUS(OK))
+                  .Then(ExpectStatus<INVALID_ARGUMENT>()),
+              IsError());
 }
 
 }  // namespace fcp
