@@ -69,7 +69,7 @@ std::vector<ShamirShare> ShamirSecretSharing::Share(
   return shares;
 }
 
-StatusOr<std::string> ShamirSecretSharing::Reconstruct(
+absl::StatusOr<std::string> ShamirSecretSharing::Reconstruct(
     int threshold, const std::vector<ShamirShare>& shares, int secret_length) {
   FCP_CHECK(threshold > 1) << "threshold must be at least 2";
   FCP_CHECK(secret_length > 0) << "secret_length must be positive";
