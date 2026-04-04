@@ -23,7 +23,7 @@
 namespace fcp {
 namespace secagg {
 
-StatusOr<std::unique_ptr<HypergeometricDistribution>>
+absl::StatusOr<std::unique_ptr<HypergeometricDistribution>>
 HypergeometricDistribution::Create(int total, int marked, int sampled) {
   if (total < 0) {
     return FCP_STATUS(FAILED_PRECONDITION)

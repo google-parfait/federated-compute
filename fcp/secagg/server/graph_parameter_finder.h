@@ -38,14 +38,15 @@ struct HararyGraphParameters {
 // probability less that 2**(-[kCorrectnessParameter]), assuming
 // [number_of_clients_] participants and the threat model (adversarial rate,
 // dropout rate, and adversary class) defined in [threat_model].
-StatusOr<HararyGraphParameters> ComputeHararyGraphParameters(
+absl::StatusOr<HararyGraphParameters> ComputeHararyGraphParameters(
     int number_of_clients, SecureAggregationRequirements threat_model);
 
 // Check if the provided threshold [threshold] results in a secure protocol with
 // [number_of_clients] clients and the parameters and adversary specified in
 // [threat_model]
-Status CheckFullGraphParameters(int number_of_clients, int threshold,
-                                SecureAggregationRequirements threat_model);
+absl::Status CheckFullGraphParameters(
+    int number_of_clients, int threshold,
+    SecureAggregationRequirements threat_model);
 
 }  // namespace secagg
 }  // namespace fcp

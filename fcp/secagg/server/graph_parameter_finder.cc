@@ -32,7 +32,7 @@ class HararyGraphParameterFinder {
  public:
   // Checks that parameters have valid values and returns an instance of the
   // class
-  static StatusOr<std::unique_ptr<HararyGraphParameterFinder>> Create(
+  static absl::StatusOr<std::unique_ptr<HararyGraphParameterFinder>> Create(
       int number_of_clients, double adversarial_rate, double dropout_rate,
       AdversaryClass adversary_class) {
     if (number_of_clients <= 0) {
@@ -99,7 +99,7 @@ class HararyGraphParameterFinder {
   // that 2**(-[kCorrectnessParameter]), assuming [number_of_clients_]
   // participants and a fraction of [adversarial_rate_] (resp. [dropout_rate_])
   // adversarial clients (resp. dropouts).
-  StatusOr<HararyGraphParameters> ComputeDegreeAndThreshold() {
+  absl::StatusOr<HararyGraphParameters> ComputeDegreeAndThreshold() {
     for (int number_of_neighbors = 2;
          number_of_neighbors < number_of_clients_ - 1;
          number_of_neighbors += 2) {
@@ -248,7 +248,7 @@ class HararyGraphParameterFinder {
         adversary_class_(adversary_class) {}
 };
 
-StatusOr<HararyGraphParameters> ComputeHararyGraphParameters(
+absl::StatusOr<HararyGraphParameters> ComputeHararyGraphParameters(
     int number_of_clients, SecureAggregationRequirements threat_model) {
   FCP_ASSIGN_OR_RETURN(
       auto pf, HararyGraphParameterFinder::Create(
@@ -258,8 +258,9 @@ StatusOr<HararyGraphParameters> ComputeHararyGraphParameters(
   return pf->ComputeDegreeAndThreshold();
 }
 
-Status CheckFullGraphParameters(int number_of_clients, int threshold,
-                                SecureAggregationRequirements threat_model) {
+absl::Status CheckFullGraphParameters(
+    int number_of_clients, int threshold,
+    SecureAggregationRequirements threat_model) {
   if (number_of_clients <= 0) {
     return FCP_STATUS(FAILED_PRECONDITION)
            << "The number of clients should greater than zero. Value "
