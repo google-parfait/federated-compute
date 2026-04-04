@@ -52,12 +52,12 @@ class ReentrancyGuardTest : public testing::Test {
 };
 
 TEST_F(ReentrancyGuardTest, SequentialCallsSucceed) {
-  ASSERT_THAT(SimpleMethod(), IsOk());
-  ASSERT_THAT(SimpleMethod(), IsOk());
+  ASSERT_THAT(SimpleMethod(), absl_testing::IsOk());
+  ASSERT_THAT(SimpleMethod(), absl_testing::IsOk());
 }
 
 TEST_F(ReentrancyGuardTest, ReentrantCallsFail) {
-  ASSERT_THAT(ReentrantMethod(), IsCode(FAILED_PRECONDITION));
+  ASSERT_THAT(ReentrantMethod(), absl_testing::StatusIs(FAILED_PRECONDITION));
 }
 
 TEST_F(ReentrancyGuardTest, ConcurrentCallsFail) {
@@ -67,7 +67,7 @@ TEST_F(ReentrancyGuardTest, ConcurrentCallsFail) {
   auto pool = fcp::CreateThreadPoolScheduler(1);
   pool->Schedule([&] {
     ASSERT_THAT(LongRunningMethod(&long_running_method_entered, &resume),
-                IsOk());
+                absl_testing::IsOk());
   });
 
   // This signals that LongRunningMethod() has been entered and waits there
@@ -75,7 +75,7 @@ TEST_F(ReentrancyGuardTest, ConcurrentCallsFail) {
   long_running_method_entered.WaitForNotification();
 
   // Make a concurrent call, which is expected to fail.
-  ASSERT_THAT(SimpleMethod(), IsCode(FAILED_PRECONDITION));
+  ASSERT_THAT(SimpleMethod(), absl_testing::StatusIs(FAILED_PRECONDITION));
 
   // Resume LongRunningMethod() and wait for the thread to finish.
   resume.Notify();
