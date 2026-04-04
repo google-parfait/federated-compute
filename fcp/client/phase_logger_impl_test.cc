@@ -831,7 +831,7 @@ TEST_P(PhaseLoggerImplTest, LogResultUploadStartedOpStatsDbCommitFails) {
       .WillOnce(Return(absl::InternalError("")));
 
   ASSERT_THAT(phase_logger_->LogResultUploadStarted(),
-              IsCode(absl::StatusCode::kInternal));
+              absl_testing::StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST_P(PhaseLoggerImplTest, LogResultUploadIOError) {
@@ -945,7 +945,7 @@ TEST_P(PhaseLoggerImplTest, LogFailureUploadStartedOpstatsDbCommitFails) {
   EXPECT_CALL(mock_opstats_logger_, CommitToStorage())
       .WillOnce(Return(absl::InternalError("")));
   ASSERT_THAT(phase_logger_->LogFailureUploadStarted(),
-              IsCode(absl::StatusCode::kInternal));
+              absl_testing::StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST_P(PhaseLoggerImplTest, LogFailureUploadIOError) {
