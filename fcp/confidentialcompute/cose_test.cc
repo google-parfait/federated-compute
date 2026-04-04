@@ -88,11 +88,12 @@ TEST(OkpKeyTest, DecodeFull) {
 }
 
 TEST(OkpKeyTest, DecodeInvalid) {
-  EXPECT_THAT(OkpKey::Decode(""), IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(OkpKey::Decode(""),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpKey::Decode("\xa5"),  // map with 5 items
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpKey::Decode("\xa0 extra"),  // map with 0 items + " extra"
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(Ec2KeyTest, EncodeEmpty) {
@@ -152,11 +153,12 @@ TEST(Ec2KeyTest, DecodeFull) {
 }
 
 TEST(Ec2KeyTest, DecodeInvalid) {
-  EXPECT_THAT(Ec2Key::Decode(""), IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(Ec2Key::Decode(""),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(Ec2Key::Decode("\xa5"),  // map with 5 items
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(Ec2Key::Decode("\xa0 extra"),  // map with 0 items + " extra"
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 using SymmetricKeyEncodeTest = testing::TestWithParam<bool>;
@@ -187,11 +189,11 @@ TEST_P(SymmetricKeyEncodeTest, EncodeFull) {
 
 TEST_P(SymmetricKeyEncodeTest, EncodeAlgorithm) {
   // Multi-byte positive values are only supported when using libcppbor.
-  EXPECT_THAT(SymmetricKey{.algorithm = 24}.Encode(GetParam()),
-              GetParam()
-                  ? static_cast<testing::Matcher<absl::StatusOr<std::string>>>(
-                        IsCode(absl::StatusCode::kUnimplemented))
-                  : IsOkAndHolds("\xa2\x01\x04\x03\x18\x18"));
+  EXPECT_THAT(
+      SymmetricKey{.algorithm = 24}.Encode(GetParam()),
+      GetParam() ? static_cast<testing::Matcher<absl::StatusOr<std::string>>>(
+                       absl_testing::StatusIs(absl::StatusCode::kUnimplemented))
+                 : IsOkAndHolds("\xa2\x01\x04\x03\x18\x18"));
 
   // Inline unsigned ints are supported (0..23).
   EXPECT_THAT(SymmetricKey{.algorithm = 23}.Encode(GetParam()),
@@ -230,7 +232,7 @@ TEST_P(SymmetricKeyEncodeTest, EncodeAlgorithm) {
       SymmetricKey{.algorithm = -4294967297}.Encode(GetParam()),
       GetParam()
           ? static_cast<testing::Matcher<absl::StatusOr<std::string>>>(
-                IsCode(absl::StatusCode::kUnimplemented))
+                absl_testing::StatusIs(absl::StatusCode::kUnimplemented))
           : IsOkAndHolds(absl::string_view(
                 "\xa2\x01\x04\x03\x3b\x00\x00\x00\x01\x00\x00\x00\x00", 13)));
 }
@@ -245,7 +247,7 @@ TEST_P(SymmetricKeyEncodeTest, EncodeK) {
       SymmetricKey{.k = std::string(24, 'x')}.Encode(GetParam()),
       GetParam()
           ? static_cast<testing::Matcher<absl::StatusOr<std::string>>>(
-                IsCode(absl::StatusCode::kUnimplemented))
+                absl_testing::StatusIs(absl::StatusCode::kUnimplemented))
           : IsOkAndHolds("\xa2\x01\x04\x20\x58\x18xxxxxxxxxxxxxxxxxxxxxxxx"));
 }
 
@@ -268,11 +270,11 @@ TEST(SymmetricKeyTest, DecodeFull) {
 
 TEST(SymmetricKeyTest, DecodeInvalid) {
   EXPECT_THAT(SymmetricKey::Decode(""),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(SymmetricKey::Decode("\xa3"),  // map with 5 items
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(SymmetricKey::Decode("\xa0 xtra"),  // map with 0 items + " xtra"
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(OkpCwtTest, BuildSigStructureForSigningEmpty) {
@@ -367,42 +369,42 @@ TEST(OkpCwtTest, GetSigStructureForVerifyingMatchesStructureForSigning) {
 
 TEST(OkpCwtTest, GetSigStructureForVerifyingInvalid) {
   EXPECT_THAT(OkpCwt::GetSigStructureForVerifying("", ""),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::GetSigStructureForVerifying("\xa3",  // map with 3 items
                                                   ""),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::GetSigStructureForVerifying(
                   "\xa0 extra",  // map with 0 items + " extra"
                   ""),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 
   // Even if the CBOR is valid, the top-level structure must be a 4-element
   // array.
   EXPECT_THAT(
       OkpCwt::GetSigStructureForVerifying("\xa0", ""),  // map with 0 items
-      IsCode(absl::StatusCode::kInvalidArgument));
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(
       OkpCwt::GetSigStructureForVerifying("\x80", ""),  // array with 0 items
-      IsCode(absl::StatusCode::kInvalidArgument));
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::GetSigStructureForVerifying(
                   "\x83\x41\xa0\xa0\x41\xa0",  // array with 3 items
                   ""),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::GetSigStructureForVerifying(
                   "\x85\x41\xa0\xa0\x41\xa0\x40\x40",  // array with 5 items
                   ""),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 
   // The map entry types must be bstr, *, bstr, *.
   // "\x84\x41\xa0\xa0\x41\xa0\x40" is valid.
   EXPECT_THAT(OkpCwt::GetSigStructureForVerifying(
                   "\x84\xa0\xa0\x41\xa0\x40",  // 1st not bstr
                   ""),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::GetSigStructureForVerifying(
                   "\x84\x41\xa0\xa0\xa0\x40",  // 3rd not bstr
                   ""),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(OkpCwtTest, GetSigStructureForVerifyingReferenceExample) {
@@ -526,34 +528,35 @@ TEST(OkpCwtTest, DecodeFull) {
 }
 
 TEST(OkpCwtTest, DecodeInvalid) {
-  EXPECT_THAT(OkpCwt::Decode(""), IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(OkpCwt::Decode(""),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::Decode("\xa3"),  // map with 5 items
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::Decode("\xa0 extra"),  // map with 0 items + " extra"
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 
   // Even if the CBOR is valid, the top-level structure must be a 4-element
   // array.
   EXPECT_THAT(OkpCwt::Decode("\xa0"),  // map with 0 items
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::Decode("\x80"),  // array with 0 items
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::Decode("\x83\x41\xa0\xa0\x41\xa0"),  // array with 3 items
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(
       OkpCwt::Decode("\x85\x41\xa0\xa0\x41\xa0\x40\x40"),  // array with 5 items
-      IsCode(absl::StatusCode::kInvalidArgument));
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 
   // The map entry types must be bstr, map, bstr, bstr.
   // "\x84\x41\xa0\xa0\x41\xa0\x40" is valid.
   EXPECT_THAT(OkpCwt::Decode("\x84\xa0\xa0\x41\xa0\x40"),  // 1st not bstr
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::Decode("\x84\x41\xa0\x40\x41\xa0\x40"),  // 2nd not map
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::Decode("\x84\x41\xa0\xa0\xa0\x40"),  // 3rd not bstr
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(OkpCwt::Decode("\x84\x41\xa0\xa0\x41\xa0\xa0"),  // 4th not bstr
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(OkpCwtTest, DecodeCoseSign1ReferenceExample) {
@@ -739,39 +742,39 @@ TEST(ReleaseTokenTest, DecodeNullSrcState) {
 
 TEST(ReleaseTokenTest, DecodeInvalidCoseSign1) {
   EXPECT_THAT(ReleaseToken::Decode(""),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode("\xa3"),  // map with 3 items
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(
       ReleaseToken::Decode("\xa0 extra"),  // map with 0 items + " extra"
-      IsCode(absl::StatusCode::kInvalidArgument));
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 
   // Even if the CBOR is valid, the top-level structure must be a 4-element
   // array.
   EXPECT_THAT(ReleaseToken::Decode("\xa0"),  // map with 0 items
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode("\x80"),  // array with 0 items
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(
       ReleaseToken::Decode("\x83\x41\xa0\xa0\x41\xa0"),  // array with 3 items
-      IsCode(absl::StatusCode::kInvalidArgument));
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode(  // array with 5 items
                   "\x85\x41\xa0\xa0\x41\xa0\x40\x40"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 
   // The COSE_Sign1 array entry types must be bstr, map, bstr, bstr.
   // "\x84\x41\xa0\xa0\x45\x83\x41\xa0\xa0\x40\x40" is valid.
   EXPECT_THAT(ReleaseToken::Decode(  // 1st not bstr
                   "\x84\xa0\xa0\x45\x83\x41\xa0\xa0\x40\x40"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode(  // 2nd not map
                   "\x84\x41\xa0\x40\x45\x83\x41\xa0\xa0\x40\x40"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode("\x84\x41\xa0\xa0\xa0\x40"),  // 3rd not bstr
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode(  // 4th not bstr
                   "\x84\x41\xa0\xa0\x45\x83\x41\xa0\xa0\x40\xa0"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(ReleaseTokenTest, DecodeInvalidCoseEncrypt0) {
@@ -779,40 +782,40 @@ TEST(ReleaseTokenTest, DecodeInvalidCoseEncrypt0) {
   // "\x84\x41\xa0\xa0\x4N<COSE_Encrypt0>\x40" is valid.
 
   EXPECT_THAT(ReleaseToken::Decode("\x84\x41\xa0\xa0\x40\x40"),  // empty string
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(
       ReleaseToken::Decode("\x84\x41\xa0\xa0\x41\xa3\x40"),  // map with 3 items
-      IsCode(absl::StatusCode::kInvalidArgument));
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode(  // map with 0 items + " extra"
                   "\x84\x41\xa0\xa0\x47\xa0 extra\x40"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 
   // Even if the CBOR is valid, the top-level structure must be a 4-element
   // array.
   EXPECT_THAT(
       ReleaseToken::Decode("\x84\x41\xa0\xa0\x41\xa0\x40"),  // map with 0 items
-      IsCode(absl::StatusCode::kInvalidArgument));
+      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode(  // array with 0 items
                   "\x84\x41\xa0\xa0\x41\x80\x40"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode(  // array with 2 items
                   "\x84\x41\xa0\xa0\x44\x82\x41\xa0\xa0\x40"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode(  // array with 4 items
                   "\x84\x41\xa0\xa0\x46\x84\x41\xa0\xa0\x40\x40\x40"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 
   // The COSE_Encrypt0 array entry types must be bstr, map, bstr.
   // "\x84\x41\xa0\xa0\x45\x83\x41\xa0\xa0\x40\x40" is valid.
   EXPECT_THAT(ReleaseToken::Decode(  // 1st not bstr
                   "\x84\x41\xa0\xa0\x44\x83\xa0\xa0\x40\x40"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode(  // 2nd not map
                   "\x84\x41\xa0\xa0\x45\x83\x41\xa0\x40\x40\x40"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ReleaseToken::Decode(  // 3rd not bstr
                   "\x84\x41\xa0\xa0\x45\x83\x41\xa0\xa0\xa0\x40"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(ReleaseTokenTest, BuildEncStructureForEncrypting) {

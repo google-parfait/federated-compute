@@ -20,14 +20,14 @@ TEST(CryptoTestUtilTest, GenerateHpkeKeyPair) {
 
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       MessageEncryptor().Encrypt("plaintext", public_key, "associated data");
-  ASSERT_THAT(encrypt_result, IsOk());
+  ASSERT_THAT(encrypt_result, absl_testing::IsOk());
 
   MessageDecryptor decryptor(std::vector<absl::string_view>{private_key});
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, "associated data",
       encrypt_result->encrypted_symmetric_key, "associated data",
       encrypt_result->encapped_key, "key-id");
-  ASSERT_THAT(decrypt_result, IsOk());
+  ASSERT_THAT(decrypt_result, absl_testing::IsOk());
   EXPECT_EQ(*decrypt_result, "plaintext");
 }
 

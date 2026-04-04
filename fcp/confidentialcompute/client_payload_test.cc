@@ -77,7 +77,7 @@ TEST(ClientPayloadTest, EncodeDecodeCorruptedDataFails) {
 
   absl::string_view encoded_view(encoded);
   ASSERT_THAT(DecodeAndConsumeClientPayloadHeader(encoded_view),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 }  // namespace confidential_compute
