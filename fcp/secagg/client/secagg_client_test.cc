@@ -116,7 +116,7 @@ TEST(SecAggClientTest, ReceiveMessageReturnValuesAreCorrect) {
   ClientToServerWrapperMessage round_0_client_message;
   EXPECT_CALL(*sender, Send(_))
       .WillOnce(::testing::SaveArgPointee<0>(&round_0_client_message));
-  EXPECT_THAT(client.Start(), IsOk());
+  EXPECT_THAT(client.Start(), absl_testing::IsOk());
 
   ServerToClientWrapperMessage round_1_message;
   EcdhPregeneratedTestKeys ecdh_keys;
