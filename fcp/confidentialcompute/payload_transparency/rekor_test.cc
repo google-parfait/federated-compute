@@ -433,7 +433,8 @@ TEST(VerifyRekorLogEntryTest, UnsupportedLogEntryKind) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("unsupported log entry kind"));
 }
 
@@ -462,7 +463,8 @@ TEST(VerifyRekorLogEntryTest, MissingDataHash) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("log entry is missing data hash"));
 }
 
@@ -490,7 +492,8 @@ TEST(VerifyRekorLogEntryTest, InvalidDataHashEncoding) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(),
               HasSubstr("data hash is not a valid base16 string"));
 }
@@ -519,7 +522,8 @@ TEST(VerifyRekorLogEntryTest, MissmatchedDataHash) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(),
               HasSubstr("log entry data hash does not match payload"));
 }
@@ -549,7 +553,8 @@ TEST(VerifyRekorLogEntryTest, MissingSignature) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("log entry is missing signature"));
 }
 
@@ -578,7 +583,8 @@ TEST(VerifyRekorLogEntryTest, InvalidSignatureEncoding) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(),
               HasSubstr("signature is not a valid base64 string"));
 }
@@ -609,7 +615,8 @@ TEST(VerifyRekorLogEntryTest, MissmatchedSignature) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("log entry signature is invalid"));
 }
 
@@ -634,7 +641,8 @@ TEST(VerifyRekorLogEntryTest, LeafIndexTooLarge) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("leaf index larger than tree size"));
 
   // VerifyRekorLogEntry should also fail the log index is even larger.
@@ -668,7 +676,8 @@ TEST(VerifyRekorLogEntryTest, WrongNumberOfHashes) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("unexpected number of hashes"));
 
   // VerifyRekorLogEntry should also fail if there are too few hashes.
@@ -702,7 +711,8 @@ TEST(VerifyRekorLogEntryTest, MissmatchedCheckpointSignature) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("checkpoint signature is invalid"));
 }
 
@@ -727,7 +737,8 @@ TEST(VerifyRekorLogEntryTest, NoMatchingRekorKey) {
 
   absl::Status status = VerifyRekorLogEntry(
       log_entry, {&verifying_key}, {&rekor_key}, BuildSignedData("leaf 10"));
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("checkpoint signature is invalid"));
 }
 

@@ -121,7 +121,8 @@ TEST(VerifySignedPayloadTest, NoSignatures) {
 
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {}, {}, absl::Now());
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
               HasSubstr("signature verification failed: []"));
 }
@@ -209,7 +210,8 @@ TEST(VerifySignedPayloadTest, NoMatchingVerifyingKeys) {
   auto [signer2, verifying_key2] = CreateSignerAndVerifyingKey();
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {&verifying_key2}, {}, absl::Now());
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
               HasSubstr("signature verification failed"));
 }
@@ -229,7 +231,8 @@ TEST(VerifySignedPayloadTest, InvalidHeaders) {
 
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {&verifying_key}, {}, absl::Now());
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
               HasSubstr("failed to parse signature headers"));
 }
@@ -255,7 +258,8 @@ TEST(VerifySignedPayloadTest, InvalidVerifyingKey) {
 
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {&verifying_key2}, {}, absl::Now());
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
               HasSubstr("failed to parse verifying key"));
 }
@@ -275,7 +279,8 @@ TEST(VerifySignedPayloadTest, UnsupportedSignatureOneof) {
 
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {&verifying_key}, {}, absl::Now());
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
               HasSubstr("unsupported Signature.signature"));
 }
@@ -292,7 +297,8 @@ TEST(VerifySignedPayloadTest, UnsupportedSignatureVerifier) {
 
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {&verifying_key}, {}, absl::Now());
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
               HasSubstr("unsupported Signature.verifier"));
 }
@@ -335,7 +341,8 @@ TEST(VerifySignedPayloadTest, SignatureNotYetValid) {
 
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {&verifying_key}, {}, now);
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
               HasSubstr("not_before is in the future"));
 
@@ -346,7 +353,8 @@ TEST(VerifySignedPayloadTest, SignatureNotYetValid) {
   AddSignature(signed_payload, headers, signer)
       .set_verifying_key_id(verifying_key.key_id());
   result = VerifySignedPayload(signed_payload, {&verifying_key}, {}, now);
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
               HasSubstr("issued_at is in the future"));
 }
@@ -367,7 +375,8 @@ TEST(VerifySignedPayloadTest, SignatureExpired) {
 
   absl::StatusOr<VerifySignedPayloadResult> result =
       VerifySignedPayload(signed_payload, {&verifying_key}, {}, now);
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(), HasSubstr("not_after is in the past"));
 }
 
@@ -389,7 +398,8 @@ TEST(VerifySignedPayloadTest, MissingTransparencyLogEntry) {
 
   absl::StatusOr<VerifySignedPayloadResult> result = VerifySignedPayload(
       signed_payload, {&verifying_key}, transparency_log_options, absl::Now());
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
               HasSubstr("Signature does not have a transparency log entry"));
 }
@@ -462,7 +472,8 @@ TEST(VerifySignedPayloadTest, NonLeafRekorLogEntry) {
   transparency_log_options.set_require_transparency_log_entry(true);
   result = VerifySignedPayload(signed_payload, {&verifying_key2},
                                transparency_log_options, absl::Now());
-  EXPECT_THAT(result, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(result,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(),
               HasSubstr("Signature does not have a transparency log entry"));
 }
@@ -491,7 +502,7 @@ TEST(VerifySignedPayloadTest, InvalidRekorLogEntry) {
   *transparency_log_options.add_rekor_verifying_keys() = rekor_verifying_key;
   EXPECT_THAT(VerifySignedPayload(signed_payload, {&verifying_key},
                                   transparency_log_options, absl::Now()),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(PayloadTransparencyTest, GetSignedPayloadSigStructureEmitter) {

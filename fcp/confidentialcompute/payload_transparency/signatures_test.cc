@@ -98,7 +98,8 @@ TEST(VerifySignatureTest, NoKeys) {
                       [](absl::FunctionRef<void(absl::string_view)> emitter) {
                         emitter("data");
                       });
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("no matching signing keys"));
 }
 
@@ -166,7 +167,8 @@ TEST(VerifySignatureTest, InvalidSignature) {
                       [](absl::FunctionRef<void(absl::string_view)> emitter) {
                         emitter("data");
                       });
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("invalid signature"));
 
   status =
@@ -174,7 +176,8 @@ TEST(VerifySignatureTest, InvalidSignature) {
                       [](absl::FunctionRef<void(absl::string_view)> emitter) {
                         emitter("data");
                       });
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("invalid signature"));
 }
 
@@ -190,7 +193,8 @@ TEST(VerifySignatureTest, InvalidAlgorithm) {
                       [](absl::FunctionRef<void(absl::string_view)> emitter) {
                         emitter("data");
                       });
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("unsupported key algorithm"));
 }
 
@@ -206,7 +210,8 @@ TEST(VerifySignatureTest, InvalidPurpose) {
                       [](absl::FunctionRef<void(absl::string_view)> emitter) {
                         emitter("data");
                       });
-  EXPECT_THAT(status, IsCode(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(status,
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(status.message(), HasSubstr("key is not a verifying key"));
 }
 
