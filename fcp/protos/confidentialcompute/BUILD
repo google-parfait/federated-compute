@@ -269,6 +269,19 @@ cc_proto_library(
     deps = [":nn_histogram_config_proto"],
 )
 
+proto_library(
+    name = "sql_data_ingress_config_proto",
+    srcs = ["sql_data_ingress_config.proto"],
+    deps = [
+        ":sql_query_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "sql_data_ingress_config_cc_proto",
+    deps = [":sql_data_ingress_config_proto"],
+)
+
 # --------------------------------------------------------------------
 # signed_endorsements.proto
 
