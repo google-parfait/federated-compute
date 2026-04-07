@@ -35,7 +35,7 @@ class SecAggClientAliveBaseState : public SecAggClientState {
  public:
   ~SecAggClientAliveBaseState() override = default;
 
-  StatusOr<std::unique_ptr<SecAggClientState> > Abort(
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> Abort(
       const std::string& reason) override;
 
  protected:

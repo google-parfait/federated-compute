@@ -54,7 +54,7 @@ class SecAggClientR3UnmaskingState : public SecAggClientAliveBaseState {
 
   ~SecAggClientR3UnmaskingState() override;
 
-  StatusOr<std::unique_ptr<SecAggClientState> > HandleMessage(
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> HandleMessage(
       const ServerToClientWrapperMessage& message) override;
 
   // Returns the name of this state, "R3_UNMASKING".

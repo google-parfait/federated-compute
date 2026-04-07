@@ -102,14 +102,14 @@ class SecAggClient {
   // Initiates the protocol by computing its first message and sending it to
   // the server. This method should only be called once. The output will be OK
   // unless it is called more than once.
-  virtual Status Start();
+  virtual absl::Status Start();
 
   // Makes this client abort the protocol and sends a message to notify the
   // server. All the state is erased. A new instance of SecAggClient will have
   // to be created to restart the protocol.
   //
   // The status will be OK unless the protocol was already completed or aborted.
-  Status Abort();
+  absl::Status Abort();
 
   // Makes this client abort the protocol and sends a message to notify the
   // server. All the state is erased. A new instance of SecAggClient will have
@@ -118,7 +118,7 @@ class SecAggClient {
   // The specified reason for aborting will be sent to the server and logged.
   //
   // The status will be OK unless the protocol was already completed or aborted.
-  Status Abort(const std::string& reason);
+  absl::Status Abort(const std::string& reason);
 
   // Sets the input of this client for this protocol session. This method should
   // only be called once.
@@ -127,7 +127,7 @@ class SecAggClient {
   // this will return INVALID_ARGUMENT. If SetInput has already been called or
   // if the client is in an aborted or completed state, this will return
   // FAILED_PRECONDITION. Otherwise returns OK.
-  Status SetInput(std::unique_ptr<SecAggVectorMap> input_map);
+  absl::Status SetInput(std::unique_ptr<SecAggVectorMap> input_map);
 
   // Returns a string uniquely describing the current state of the client's FSM.
   ABSL_MUST_USE_RESULT std::string State() const;
@@ -142,7 +142,7 @@ class SecAggClient {
   // Returns a string describing the reason that the client aborted.
   // If the client has not actually aborted, returns an error Status with code
   // PRECONDITION_FAILED.
-  ABSL_MUST_USE_RESULT StatusOr<std::string> ErrorMessage() const;
+  ABSL_MUST_USE_RESULT absl::StatusOr<std::string> ErrorMessage() const;
 
   // Used to process an incoming message from the server. This method uses the
   // SendToServerInterface passed to the constructor to send the response
@@ -152,7 +152,8 @@ class SecAggClient {
   // client is now in a terminal state. The output will be a failure status if
   // the client did not process the message because it was in a terminal state,
   // or because the message was the wrong type.
-  StatusOr<bool> ReceiveMessage(const ServerToClientWrapperMessage& incoming);
+  absl::StatusOr<bool> ReceiveMessage(
+      const ServerToClientWrapperMessage& incoming);
 
  private:
   mutable absl::Mutex mu_;

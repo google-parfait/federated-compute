@@ -182,7 +182,7 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
   expected_message.mutable_abort()->set_diagnostic_info(error_string);
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.Abort("Abort reason");
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -216,7 +216,7 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(false);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -251,7 +251,7 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(true);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("COMPLETED"));
@@ -296,7 +296,7 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.SetInput(std::move(input_map));
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("R3_UNMASKING"));
@@ -331,7 +331,7 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -365,7 +365,7 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -401,7 +401,7 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -436,7 +436,7 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -472,7 +472,7 @@ TEST(SecAggClientR2MaskedInputCollWaitingForInputStateTest,
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }

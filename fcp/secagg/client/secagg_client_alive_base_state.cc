@@ -37,8 +37,8 @@ SecAggClientAliveBaseState::SecAggClientAliveBaseState(
                         state),
       async_abort_(async_abort) {}
 
-StatusOr<std::unique_ptr<SecAggClientState> > SecAggClientAliveBaseState::Abort(
-    const std::string& reason) {
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
+SecAggClientAliveBaseState::Abort(const std::string& reason) {
   return AbortAndNotifyServer("Abort upon external request for reason <" +
                               reason + ">.");
 }

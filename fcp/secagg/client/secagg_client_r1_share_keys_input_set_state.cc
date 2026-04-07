@@ -59,7 +59,7 @@ SecAggClientR1ShareKeysInputSetState::SecAggClientR1ShareKeysInputSetState(
       prng_key_agreement_(std::move(prng_key_agreement)),
       prng_factory_(std::move(prng_factory)) {}
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR1ShareKeysInputSetState::HandleMessage(
     const ServerToClientWrapperMessage& message) {
   // Handle abort messages or share keys requests only.

@@ -58,9 +58,9 @@ class SecAggClientR0AdvertiseKeysInputSetState
 
   ~SecAggClientR0AdvertiseKeysInputSetState() override;
 
-  StatusOr<std::unique_ptr<SecAggClientState> > Start() override;
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> Start() override;
 
-  StatusOr<std::unique_ptr<SecAggClientState> > HandleMessage(
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> HandleMessage(
       const ServerToClientWrapperMessage& message) override;
 
   // Returns the name of this state, "R0_ADVERTISE_KEYS_INPUT_SET".

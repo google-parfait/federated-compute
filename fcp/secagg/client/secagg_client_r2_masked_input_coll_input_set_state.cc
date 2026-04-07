@@ -83,7 +83,7 @@ SecAggClientR2MaskedInputCollInputSetState::
 SecAggClientR2MaskedInputCollInputSetState::
     ~SecAggClientR2MaskedInputCollInputSetState() = default;
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR2MaskedInputCollInputSetState::HandleMessage(
     const ServerToClientWrapperMessage& message) {
   // Handle abort messages or masked input requests only.

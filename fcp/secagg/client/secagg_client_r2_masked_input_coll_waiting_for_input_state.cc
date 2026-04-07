@@ -73,7 +73,7 @@ SecAggClientR2MaskedInputCollWaitingForInputState::
 SecAggClientR2MaskedInputCollWaitingForInputState::
     ~SecAggClientR2MaskedInputCollWaitingForInputState() = default;
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR2MaskedInputCollWaitingForInputState::HandleMessage(
     const ServerToClientWrapperMessage& message) {
   // Handle abort messages only.
@@ -92,7 +92,7 @@ SecAggClientR2MaskedInputCollWaitingForInputState::HandleMessage(
   }
 }
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR2MaskedInputCollWaitingForInputState::SetInput(
     std::unique_ptr<SecAggVectorMap> input_map) {
   // Only need to do 3 things: Validate input, send message to server, and

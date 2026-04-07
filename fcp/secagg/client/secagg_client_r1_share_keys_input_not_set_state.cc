@@ -67,7 +67,7 @@ SecAggClientR1ShareKeysInputNotSetState::
 SecAggClientR1ShareKeysInputNotSetState::
     ~SecAggClientR1ShareKeysInputNotSetState() = default;
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR1ShareKeysInputNotSetState::HandleMessage(
     const ServerToClientWrapperMessage& message) {
   // Handle abort messages or share keys requests only.
@@ -129,7 +129,7 @@ SecAggClientR1ShareKeysInputNotSetState::HandleMessage(
       std::move(session_id), std::move(prng_factory_), async_abort_)};
 }
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR1ShareKeysInputNotSetState::SetInput(
     std::unique_ptr<SecAggVectorMap> input_map) {
   if (!ValidateInput(*input_map, *input_vector_specs_)) {

@@ -129,7 +129,7 @@ TEST(SecAggClientR3UnmaskingStateTest,
       std::make_unique<std::vector<ShamirShare> >(4),
       std::unique_ptr<SendToServerInterface>(sender),
       std::unique_ptr<StateTransitionListenerInterface>(transition_listener));
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r3_state.Abort("Abort reason");
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), StrEq("ABORTED"));
@@ -157,7 +157,7 @@ TEST(SecAggClientR3UnmaskingStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(false);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r3_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), StrEq("ABORTED"));
@@ -186,7 +186,7 @@ TEST(SecAggClientR3UnmaskingStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(true);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r3_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), StrEq("COMPLETED"));
@@ -221,7 +221,7 @@ TEST(SecAggClientR3UnmaskingStateTest,
 
   ServerToClientWrapperMessage request;
   request.mutable_unmasking_request();
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r3_state.HandleMessage(request);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), StrEq("COMPLETED"));
@@ -270,7 +270,7 @@ TEST(SecAggClientR3UnmaskingStateTest,
   ServerToClientWrapperMessage request;
   // TODO(team): 6 -> 5 below, once backwards compatibility not needed.
   request.mutable_unmasking_request()->add_dead_3_client_ids(6);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r3_state.HandleMessage(request);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), StrEq("COMPLETED"));
@@ -312,7 +312,7 @@ TEST(SecAggClientR3UnmaskingStateTest,
   request.mutable_unmasking_request()->add_dead_3_client_ids(5);
   // TODO(team): 6 -> 5 below, once backwards compatibility not needed.
   request.mutable_unmasking_request()->add_dead_3_client_ids(6);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r3_state.HandleMessage(request);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), StrEq("ABORTED"));
@@ -350,7 +350,7 @@ TEST(SecAggClientR3UnmaskingStateTest,
   ServerToClientWrapperMessage request;
   // TODO(team): 2 -> 1 below, once backwards compatibility not needed.
   request.mutable_unmasking_request()->add_dead_3_client_ids(2);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r3_state.HandleMessage(request);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), StrEq("ABORTED"));
@@ -388,7 +388,7 @@ TEST(SecAggClientR3UnmaskingStateTest,
   ServerToClientWrapperMessage request;
   // TODO(team): 7 -> 6 below, once backwards compatibility not needed.
   request.mutable_unmasking_request()->add_dead_3_client_ids(7);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r3_state.HandleMessage(request);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), StrEq("ABORTED"));
@@ -429,7 +429,7 @@ TEST(SecAggClientR3UnmaskingStateTest,
   ServerToClientWrapperMessage request;
   // TODO(team): 4 -> 3 below, once backwards compatibility not needed.
   request.mutable_unmasking_request()->add_dead_3_client_ids(4);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r3_state.HandleMessage(request);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), StrEq("ABORTED"));
@@ -468,7 +468,7 @@ TEST(SecAggClientR3UnmaskingStateTest,
   // TODO(team): 6 -> 5 below, once backwards compatibility not needed.
   request.mutable_unmasking_request()->add_dead_3_client_ids(6);
   request.mutable_unmasking_request()->add_dead_3_client_ids(6);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r3_state.HandleMessage(request);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), StrEq("ABORTED"));

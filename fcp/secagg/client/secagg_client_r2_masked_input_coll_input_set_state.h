@@ -66,7 +66,7 @@ class SecAggClientR2MaskedInputCollInputSetState
 
   ~SecAggClientR2MaskedInputCollInputSetState() override;
 
-  StatusOr<std::unique_ptr<SecAggClientState> > HandleMessage(
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> HandleMessage(
       const ServerToClientWrapperMessage& message) override;
 
   // Returns the name of this state, "R2_MASKED_INPUT_COLL_INPUT_SET".

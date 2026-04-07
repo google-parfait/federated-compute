@@ -41,7 +41,7 @@ class SecAggClientState {
   // Initiates the protocol by computing its first message and sending it to the
   // server. If called in a valid state, returns the new State. Otherwise,
   // returns an error Status with code PRECONDITION_FAILED.
-  virtual StatusOr<std::unique_ptr<SecAggClientState> > Start();
+  virtual absl::StatusOr<std::unique_ptr<SecAggClientState>> Start();
 
   // Handles the received message in a way consistent with the current state.
   // If called from a state expecting a message, returns the new State. If the
@@ -49,7 +49,7 @@ class SecAggClientState {
   // be a SecAggClientAbortState.
   // If the state was not expecting a message of this type at all, returns an
   // error Status with code PRECONDITION_FAILED.
-  virtual StatusOr<std::unique_ptr<SecAggClientState> > HandleMessage(
+  virtual absl::StatusOr<std::unique_ptr<SecAggClientState>> HandleMessage(
       const ServerToClientWrapperMessage& message);
 
   // Sets the input of this client for this protocol session. If successful,
@@ -57,13 +57,13 @@ class SecAggClientState {
   // returns an error Status with code INVALID_ARGUMENT.
   // If the client's state was not ready for an input to be set, returns an
   // error Status with code PRECONDITION_FAILED.
-  virtual StatusOr<std::unique_ptr<SecAggClientState> > SetInput(
+  virtual absl::StatusOr<std::unique_ptr<SecAggClientState>> SetInput(
       std::unique_ptr<SecAggVectorMap> input_map);
 
   // Aborts the protocol for the specified reason. Returns the new state. If the
   // protocol was already aborted or completed, instead returns an error Status
   // with code PRECONDITION_FAILED.
-  virtual StatusOr<std::unique_ptr<SecAggClientState> > Abort(
+  virtual absl::StatusOr<std::unique_ptr<SecAggClientState>> Abort(
       const std::string& reason);
 
   // Returns true if the current state is Abort, false else.
@@ -74,7 +74,7 @@ class SecAggClientState {
 
   // Returns the error message, if the current state is an abort state. If not,
   // returns an error Status with code PRECONDITION_FAILED.
-  ABSL_MUST_USE_RESULT virtual StatusOr<std::string> ErrorMessage() const;
+  ABSL_MUST_USE_RESULT virtual absl::StatusOr<std::string> ErrorMessage() const;
 
   // Returns the name of the current state, as a string.
   ABSL_MUST_USE_RESULT virtual std::string StateName() const = 0;

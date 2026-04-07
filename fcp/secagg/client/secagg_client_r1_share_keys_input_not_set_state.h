@@ -60,10 +60,10 @@ class SecAggClientR1ShareKeysInputNotSetState
 
   ~SecAggClientR1ShareKeysInputNotSetState() override;
 
-  StatusOr<std::unique_ptr<SecAggClientState> > HandleMessage(
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> HandleMessage(
       const ServerToClientWrapperMessage& message) override;
 
-  StatusOr<std::unique_ptr<SecAggClientState> > SetInput(
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> SetInput(
       std::unique_ptr<SecAggVectorMap> input_map) override;
 
   // Returns the name of this state, "R1_SHARE_KEYS_INPUT_NOT_SET".

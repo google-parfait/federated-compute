@@ -59,7 +59,7 @@ SecAggClient::SecAggClient(
           std::move(prng), std::move(sender), std::move(transition_listener),
           std::move(prng_factory), &async_abort_)) {}
 
-Status SecAggClient::Start() {
+absl::Status SecAggClient::Start() {
   absl::WriterMutexLock _(mu_);
   auto state_or_error = state_->Start();
   if (state_or_error.ok()) {
@@ -68,9 +68,9 @@ Status SecAggClient::Start() {
   return state_or_error.status();
 }
 
-Status SecAggClient::Abort() { return Abort("unknown reason"); }
+absl::Status SecAggClient::Abort() { return Abort("unknown reason"); }
 
-Status SecAggClient::Abort(const std::string& reason) {
+absl::Status SecAggClient::Abort(const std::string& reason) {
   async_abort_.Abort(reason);
   absl::WriterMutexLock _(mu_);
   if (state_->IsAborted() || state_->IsCompletedSuccessfully())
@@ -83,7 +83,8 @@ Status SecAggClient::Abort(const std::string& reason) {
   return state_or_error.status();
 }
 
-Status SecAggClient::SetInput(std::unique_ptr<SecAggVectorMap> input_map) {
+absl::Status SecAggClient::SetInput(
+    std::unique_ptr<SecAggVectorMap> input_map) {
   absl::WriterMutexLock _(mu_);
   auto state_or_error = state_->SetInput(std::move(input_map));
   if (state_or_error.ok()) {
@@ -92,7 +93,7 @@ Status SecAggClient::SetInput(std::unique_ptr<SecAggVectorMap> input_map) {
   return state_or_error.status();
 }
 
-StatusOr<bool> SecAggClient::ReceiveMessage(
+absl::StatusOr<bool> SecAggClient::ReceiveMessage(
     const ServerToClientWrapperMessage& incoming) {
   absl::WriterMutexLock _(mu_);
   auto state_or_error = state_->HandleMessage(incoming);
@@ -105,7 +106,7 @@ StatusOr<bool> SecAggClient::ReceiveMessage(
   }
 }
 
-StatusOr<std::string> SecAggClient::ErrorMessage() const {
+absl::StatusOr<std::string> SecAggClient::ErrorMessage() const {
   absl::ReaderMutexLock _(mu_);
   return state_->ErrorMessage();
 }

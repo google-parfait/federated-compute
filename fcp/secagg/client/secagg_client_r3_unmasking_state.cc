@@ -62,7 +62,7 @@ SecAggClientR3UnmaskingState::SecAggClientR3UnmaskingState(
 
 SecAggClientR3UnmaskingState::~SecAggClientR3UnmaskingState() = default;
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR3UnmaskingState::HandleMessage(
     const ServerToClientWrapperMessage& message) {
   // Handle abort messages or unmasking requests only.

@@ -108,7 +108,8 @@ TEST(SecaggClientR0AdvertiseKeysInputNotSetStateTest,
 
   EXPECT_CALL(*sender, Send(IsValidAdvertiseKeysMessage())).Times(1);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state = r0_state.Start();
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
+      r0_state.Start();
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(),
               Eq("R1_SHARE_KEYS_INPUT_NOT_SET"));
@@ -133,7 +134,7 @@ TEST(SecaggClientR0AdvertiseKeysInputNotSetStateTest,
   input_map->emplace("test", SecAggVector({5, 8, 22, 30}, 32));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.SetInput(std::move(input_map));
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(),
@@ -162,7 +163,7 @@ TEST(SecaggClientR0AdvertiseKeysInputNotSetStateTest,
       std::make_pair("test", SecAggVector({5, 8, 22, 30, 7}, 32)));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -188,7 +189,7 @@ TEST(SecaggClientR0AdvertiseKeysInputNotSetStateTest,
   input_map->emplace("test", SecAggVector({5, 8, 22, 30}, 64));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -215,7 +216,7 @@ TEST(SecaggClientR0AdvertiseKeysInputNotSetStateTest,
       std::make_pair("incorret", SecAggVector({5, 8, 22, 30}, 32)));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -242,7 +243,7 @@ TEST(SecaggClientR0AdvertiseKeysInputNotSetStateTest,
   input_map->emplace("test2", SecAggVector({4, 7, 21, 29}, 32));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -270,7 +271,7 @@ TEST(SecaggClientR0AdvertiseKeysInputNotSetStateTest,
   // Missing second vector.
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -316,7 +317,7 @@ TEST(SecaggClientR0AdvertiseKeysInputNotSetStateTest,
   expected_message.mutable_abort()->set_diagnostic_info(error_string);
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.Abort("Abort reason");
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -343,7 +344,7 @@ TEST(SecaggClientR0AdvertiseKeysInputNotSetStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(false);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -371,7 +372,7 @@ TEST(SecaggClientR0AdvertiseKeysInputNotSetStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(true);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("COMPLETED"));

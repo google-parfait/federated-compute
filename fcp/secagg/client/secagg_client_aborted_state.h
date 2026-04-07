@@ -43,7 +43,7 @@ class SecAggClientAbortedState : public SecAggClientState {
   bool IsAborted() const override;
 
   // Returns the error message with which the client aborted.
-  StatusOr<std::string> ErrorMessage() const override;
+  absl::StatusOr<std::string> ErrorMessage() const override;
 
   // Returns the name of this state, "ABORTED".
   std::string StateName() const override;

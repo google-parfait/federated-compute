@@ -65,10 +65,10 @@ class SecAggClientR2MaskedInputCollWaitingForInputState
 
   // This state handles only abort/early success messages. All others raise an
   // error status.
-  StatusOr<std::unique_ptr<SecAggClientState> > HandleMessage(
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> HandleMessage(
       const ServerToClientWrapperMessage& message) override;
 
-  StatusOr<std::unique_ptr<SecAggClientState> > SetInput(
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> SetInput(
       std::unique_ptr<SecAggVectorMap> input_map) override;
 
   // Returns the name of this state, "R2_MASKED_INPUT_COLL_WAITING_FOR_INPUT".

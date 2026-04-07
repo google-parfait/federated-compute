@@ -253,7 +253,7 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
   expected_message.mutable_abort()->set_diagnostic_info(error_string);
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.Abort("Abort reason");
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -293,7 +293,7 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(false);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -334,7 +334,7 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(true);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("COMPLETED"));
@@ -429,7 +429,7 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
 
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.HandleMessage(message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("R3_UNMASKING"));
@@ -523,7 +523,7 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
 
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.HandleMessage(message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("R3_UNMASKING"));
@@ -600,7 +600,7 @@ TEST(SecAggClientR2MaskedInputCollInputSetStateTest,
   expected_message.mutable_abort()->set_diagnostic_info(error_string);
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r2_state.HandleMessage(message);
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));

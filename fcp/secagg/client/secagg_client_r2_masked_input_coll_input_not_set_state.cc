@@ -83,7 +83,7 @@ SecAggClientR2MaskedInputCollInputNotSetState::
 SecAggClientR2MaskedInputCollInputNotSetState::
     ~SecAggClientR2MaskedInputCollInputNotSetState() = default;
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR2MaskedInputCollInputNotSetState::HandleMessage(
     const ServerToClientWrapperMessage& message) {
   // Handle abort messages or masked input requests only.
@@ -128,7 +128,7 @@ SecAggClientR2MaskedInputCollInputNotSetState::HandleMessage(
       std::move(transition_listener_), async_abort_)};
 }
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR2MaskedInputCollInputNotSetState::SetInput(
     std::unique_ptr<SecAggVectorMap> input_map) {
   if (!ValidateInput(*input_map, *input_vector_specs_)) {

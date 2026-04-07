@@ -117,7 +117,8 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
 
   EXPECT_CALL(*sender, Send(IsValidAdvertiseKeysMessage())).Times(1);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state = r0_state.Start();
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
+      r0_state.Start();
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("R1_SHARE_KEYS_INPUT_SET"));
 }
@@ -193,7 +194,7 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
   expected_message.mutable_abort()->set_diagnostic_info(error_string);
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.Abort("Abort reason");
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -223,7 +224,7 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(false);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -254,7 +255,7 @@ TEST(SecaggClientR0AdvertiseKeysInputSetStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(true);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r0_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("COMPLETED"));

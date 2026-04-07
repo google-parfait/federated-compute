@@ -68,10 +68,10 @@ class SecAggClientR2MaskedInputCollInputNotSetState
 
   ~SecAggClientR2MaskedInputCollInputNotSetState() override;
 
-  StatusOr<std::unique_ptr<SecAggClientState> > HandleMessage(
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> HandleMessage(
       const ServerToClientWrapperMessage& message) override;
 
-  StatusOr<std::unique_ptr<SecAggClientState> > SetInput(
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> SetInput(
       std::unique_ptr<SecAggVectorMap> input_map) override;
 
   // Returns the name of this state, "R2_MASKED_INPUT_COLL_INPUT_NOT_SET".

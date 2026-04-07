@@ -63,7 +63,7 @@ SecAggClientR0AdvertiseKeysInputNotSetState::
 SecAggClientR0AdvertiseKeysInputNotSetState::
     ~SecAggClientR0AdvertiseKeysInputNotSetState() = default;
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR0AdvertiseKeysInputNotSetState::Start() {
   auto enc_key_agreement = EcdhKeyAgreement::CreateFromRandomKeys().value();
   auto prng_key_agreement = EcdhKeyAgreement::CreateFromRandomKeys().value();
@@ -82,7 +82,7 @@ SecAggClientR0AdvertiseKeysInputNotSetState::Start() {
       std::move(transition_listener_), std::move(prng_factory_), async_abort_)};
 }
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR0AdvertiseKeysInputNotSetState::HandleMessage(
     const ServerToClientWrapperMessage& message) {
   // Handle abort messages only.
@@ -101,7 +101,7 @@ SecAggClientR0AdvertiseKeysInputNotSetState::HandleMessage(
   }
 }
 
-StatusOr<std::unique_ptr<SecAggClientState> >
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR0AdvertiseKeysInputNotSetState::SetInput(
     std::unique_ptr<SecAggVectorMap> input_map) {
   if (!ValidateInput(*input_map, *input_vector_specs_)) {

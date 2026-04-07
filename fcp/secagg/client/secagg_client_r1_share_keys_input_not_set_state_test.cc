@@ -133,7 +133,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   input_map->insert(std::make_pair("test", SecAggVector({5, 8, 22, 30}, 32)));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.SetInput(std::move(input_map));
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("R1_SHARE_KEYS_INPUT_SET"));
@@ -163,7 +163,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::make_pair("test", SecAggVector({5, 8, 22, 30, 7}, 32)));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -191,7 +191,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   input_map->insert(std::make_pair("test", SecAggVector({5, 8, 22, 30}, 64)));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -220,7 +220,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
       std::make_pair("incorret", SecAggVector({5, 8, 22, 30}, 32)));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -249,7 +249,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   input_map->insert(std::make_pair("test2", SecAggVector({4, 7, 21, 29}, 32)));
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -279,7 +279,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   // Missing second vector.
 
   EXPECT_CALL(*sender, Send(::testing::_)).Times(0);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.SetInput(std::move(input_map));
   EXPECT_THAT(new_state.ok(), Eq(false));
 }
@@ -329,7 +329,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   expected_message.mutable_abort()->set_diagnostic_info(error_string);
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.Abort("Abort reason");
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -358,7 +358,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(false);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -388,7 +388,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   ServerToClientWrapperMessage abort_message;
   abort_message.mutable_abort()->set_early_success(true);
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(abort_message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(), Eq("COMPLETED"));
@@ -500,7 +500,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 
   message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(message.share_keys_request()).data);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(),
@@ -640,7 +640,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 
   message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(message.share_keys_request()).data);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(message);
   ASSERT_TRUE(new_state.ok());
   EXPECT_THAT(new_state.value()->StateName(),
@@ -692,7 +692,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 
   message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(message.share_keys_request()).data);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(message);
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -744,7 +744,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 
   message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(message.share_keys_request()).data);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(message);
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -796,7 +796,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 
   message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(message.share_keys_request()).data);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(message);
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -843,7 +843,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   expected_message.mutable_abort()->set_diagnostic_info(error_string);
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(message);
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -889,7 +889,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
   expected_message.mutable_abort()->set_diagnostic_info(error_string);
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(message);
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -941,7 +941,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 
   message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(message.share_keys_request()).data);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(message);
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));
@@ -993,7 +993,7 @@ TEST(SecAggClientR1ShareKeysInputNotSetStateTest,
 
   message.mutable_share_keys_request()->set_session_id(
       ComputeSessionId(message.share_keys_request()).data);
-  StatusOr<std::unique_ptr<SecAggClientState> > new_state =
+  absl::StatusOr<std::unique_ptr<SecAggClientState>> new_state =
       r1_state.HandleMessage(message);
   ASSERT_THAT(new_state.ok(), Eq(true));
   EXPECT_THAT(new_state.value()->StateName(), Eq("ABORTED"));

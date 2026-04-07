@@ -46,14 +46,14 @@ SecAggClientState::SecAggClientState(
   transition_listener_->Transition(state_);
 }
 
-StatusOr<std::unique_ptr<SecAggClientState> > SecAggClientState::Start() {
+absl::StatusOr<std::unique_ptr<SecAggClientState>> SecAggClientState::Start() {
   return FCP_STATUS(FAILED_PRECONDITION)
          << "An illegal start transition was attempted from state "
          << StateName();
 }
 
-StatusOr<std::unique_ptr<SecAggClientState> > SecAggClientState::HandleMessage(
-    const ServerToClientWrapperMessage& message) {
+absl::StatusOr<std::unique_ptr<SecAggClientState>>
+SecAggClientState::HandleMessage(const ServerToClientWrapperMessage& message) {
   if (message.message_content_case() ==
       ServerToClientWrapperMessage::MESSAGE_CONTENT_NOT_SET) {
     return FCP_STATUS(FAILED_PRECONDITION)
@@ -67,14 +67,14 @@ StatusOr<std::unique_ptr<SecAggClientState> > SecAggClientState::HandleMessage(
   }
 }
 
-StatusOr<std::unique_ptr<SecAggClientState> > SecAggClientState::SetInput(
+absl::StatusOr<std::unique_ptr<SecAggClientState>> SecAggClientState::SetInput(
     std::unique_ptr<SecAggVectorMap> input_map) {
   return FCP_STATUS(FAILED_PRECONDITION)
          << "An illegal input transition was attempted from state "
          << StateName();
 }
 
-StatusOr<std::unique_ptr<SecAggClientState> > SecAggClientState::Abort(
+absl::StatusOr<std::unique_ptr<SecAggClientState>> SecAggClientState::Abort(
     const std::string& reason) {
   return FCP_STATUS(FAILED_PRECONDITION)
          << "The client was already in terminal state " << StateName()
@@ -85,7 +85,7 @@ bool SecAggClientState::IsAborted() const { return false; }
 
 bool SecAggClientState::IsCompletedSuccessfully() const { return false; }
 
-StatusOr<std::string> SecAggClientState::ErrorMessage() const {
+absl::StatusOr<std::string> SecAggClientState::ErrorMessage() const {
   return FCP_STATUS(FAILED_PRECONDITION)
          << "Error message requested, but client is in state " << StateName();
 }
