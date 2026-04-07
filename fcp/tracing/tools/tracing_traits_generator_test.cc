@@ -58,8 +58,8 @@ void DoTest() {
       GetTestDataPath(ConcatPath(kBaselineDir, source_file));
 
   // Read fsb source file derived from the test name:
-  StatusOr<std::string> source_s = ReadFileToString(source_path);
-  ASSERT_THAT(source_s, IsOk()) << "Can't read " << source_path;
+  absl::StatusOr<std::string> source_s = ReadFileToString(source_path);
+  ASSERT_THAT(source_s, absl_testing::IsOk()) << "Can't read " << source_path;
   std::string source = source_s.value();
 
   std::string out_file =
