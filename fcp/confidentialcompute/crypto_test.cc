@@ -24,7 +24,7 @@
 #include "google/protobuf/struct.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/log/check.h"
+#include "absl/log/absl_check.h"
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
@@ -53,13 +53,14 @@ using ::testing::Optional;
 // movable in older versions of BoringSSL.
 void GenerateKeyPair(const EVP_HPKE_KEM& kem, std::string& public_key,
                      bssl::ScopedEVP_HPKE_KEY& private_key) {
-  CHECK_EQ(EVP_HPKE_KEY_generate(private_key.get(), &kem), 1);
+  ABSL_CHECK_EQ(EVP_HPKE_KEY_generate(private_key.get(), &kem), 1);
   size_t public_key_len;
   public_key.resize(EVP_HPKE_MAX_PUBLIC_KEY_LENGTH, '\0');
-  CHECK_EQ(EVP_HPKE_KEY_public_key(
-               private_key.get(), reinterpret_cast<uint8_t*>(public_key.data()),
-               &public_key_len, public_key.size()),
-           1);
+  ABSL_CHECK_EQ(
+      EVP_HPKE_KEY_public_key(private_key.get(),
+                              reinterpret_cast<uint8_t*>(public_key.data()),
+                              &public_key_len, public_key.size()),
+      1);
   public_key.resize(public_key_len);
 }
 

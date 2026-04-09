@@ -23,7 +23,7 @@
 #include "google/protobuf/timestamp.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/log/check.h"
+#include "absl/log/absl_check.h"
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
@@ -92,7 +92,7 @@ SignedPayload::Signature& AddRekorLogEntry(
       [&to_sign](absl::string_view part) { absl::StrAppend(&to_sign, part); });
   absl::StatusOr<std::string> asn1_signature =
       ConvertP1363SignatureToAsn1(signer.Sign(to_sign));
-  CHECK_OK(asn1_signature);
+  ABSL_CHECK_OK(asn1_signature);
 
   auto* rekor = signature->mutable_log_entry()->mutable_rekor();
   rekor->set_body(absl::Substitute(

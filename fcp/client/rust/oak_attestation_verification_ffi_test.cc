@@ -21,7 +21,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/log/check.h"
+#include "absl/log/absl_check.h"
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "absl/strings/ascii.h"
@@ -66,7 +66,7 @@ std::string GetFileContents(absl::string_view filename) {
   std::filesystem::path full_path =
       std::filesystem::path(testing::SrcDir()) / kTestDataDir / filename;
   std::string contents;
-  CHECK(LoadFileAsString(full_path, &contents));
+  ABSL_CHECK(LoadFileAsString(full_path, &contents));
   return contents;
 }
 
@@ -76,7 +76,7 @@ std::string ConvertPemToRaw(absl::string_view public_key_pem) {
   stripped = absl::StripSuffix(stripped, kPemFooter);
 
   std::string decoded;
-  CHECK(absl::Base64Unescape(stripped, &decoded));
+  ABSL_CHECK(absl::Base64Unescape(stripped, &decoded));
   return decoded;
 }
 

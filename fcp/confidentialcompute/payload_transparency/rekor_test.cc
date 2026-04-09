@@ -26,7 +26,7 @@
 #include "gtest/gtest.h"
 #include "absl/container/fixed_array.h"
 #include "absl/functional/function_ref.h"
-#include "absl/log/check.h"
+#include "absl/log/absl_check.h"
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "absl/strings/escaping.h"
@@ -200,7 +200,7 @@ Key GetEvenVerifyingKey() {
   Key key;
   key.set_algorithm(Key::ECDSA_P256);
   key.set_purpose(Key::VERIFY);
-  CHECK(absl::HexStringToBytes(
+  ABSL_CHECK(absl::HexStringToBytes(
       "04f3ffb9edf621b9a0bc57eb8c14ef64753077dcd499e6afc76cc59c304cbfd1d7171725"
       "a76a37ff270ffe03da64b54b17b7e8ba67ec8cc58f23b9ab478423b7a4",
       key.mutable_key_material()));
@@ -213,7 +213,7 @@ Key GetOddVerifyingKey() {
   Key key;
   key.set_algorithm(Key::ECDSA_P256);
   key.set_purpose(Key::VERIFY);
-  CHECK(absl::HexStringToBytes(
+  ABSL_CHECK(absl::HexStringToBytes(
       "04657221481c50da35d183c1a4f4b47d6dfe85de8d9aebf5206fe34a5951b1c0abf578eb"
       "cfeb732235a49903af55df8c6491a26556697446cd6e2df2f55c39bf1e",
       key.mutable_key_material()));

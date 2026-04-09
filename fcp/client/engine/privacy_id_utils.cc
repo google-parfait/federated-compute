@@ -16,7 +16,6 @@
 #include "fcp/client/engine/privacy_id_utils.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -24,7 +23,6 @@
 
 #include "google/type/datetime.pb.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
