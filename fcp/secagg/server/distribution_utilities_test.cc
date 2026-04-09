@@ -70,7 +70,7 @@ TEST_P(HypergeometricPMF, ReturnsPrecomputedValues) {
                 << " sampled = " << test_params.sampled << ".";
   auto p = HypergeometricDistribution::Create(
       test_params.total, test_params.marked, test_params.sampled);
-  ASSERT_THAT(p, IsOk());
+  ASSERT_THAT(p, absl_testing::IsOk());
   double result = p.value()->PMF(test_params.x);
   double relative_error =
       abs(result - test_params.probability) / (test_params.probability + 1e-30);
@@ -102,7 +102,7 @@ TEST_P(HypergeometricCDF, ReturnsPrecomputedValues) {
                 << " sampled = " << test_params.sampled << ".";
   auto p = HypergeometricDistribution::Create(
       test_params.total, test_params.marked, test_params.sampled);
-  ASSERT_THAT(p, IsOk());
+  ASSERT_THAT(p, absl_testing::IsOk());
   double result = p.value()->CDF(test_params.x);
   double relative_error =
       abs(result - test_params.probability) / (test_params.probability + 1e-30);
@@ -134,7 +134,7 @@ TEST_P(HypergeometricQuantile, ReturnsPrecomputedValues) {
                 << " sampled = " << test_params.sampled << ".";
   auto p = HypergeometricDistribution::Create(
       test_params.total, test_params.marked, test_params.sampled);
-  ASSERT_THAT(p, IsOk());
+  ASSERT_THAT(p, absl_testing::IsOk());
   double result_lower = p.value()->FindQuantile(test_params.probability);
   EXPECT_GE(result_lower, test_params.lower);
   EXPECT_LE(result_lower, test_params.lower + 1);
