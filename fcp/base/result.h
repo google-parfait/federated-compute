@@ -240,8 +240,8 @@ class ExpectBase {
 
  protected:
   Error TraceExpectError(const char* expectation) const;
-  Error TraceUnexpectedStatus(fcp::StatusCode expected_code,
-                              const fcp::Status& actual) const;
+  Error TraceUnexpectedStatus(absl::StatusCode expected_code,
+                              const absl::Status& actual) const;
 
  private:
   SourceLocation loc_;
@@ -378,7 +378,7 @@ struct ExpectOk : public ExpectBase {
     }
   }
 
-  Result<Unit> operator()(const Status& s) const {
+  Result<Unit> operator()(const absl::Status& s) const {
     if (s.code() == fcp::OK) {
       return Unit{};
     } else {

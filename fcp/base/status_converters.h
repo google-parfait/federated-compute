@@ -27,22 +27,22 @@ namespace base {
 /**
  * Converts a grpc::StatusCode to an StatusCode.
  */
-StatusCode FromGrpcStatusCode(grpc::StatusCode code);
+absl::StatusCode FromGrpcStatusCode(grpc::StatusCode code);
 
 /**
  * Converts grpc::Status to an fcp::Status.
  */
-Status FromGrpcStatus(grpc::Status status);
+absl::Status FromGrpcStatus(grpc::Status status);
 
 /**
  * Converts an StatusCode to a grpc::StatusCode.
  */
-grpc::StatusCode ToGrpcStatusCode(StatusCode code);
+grpc::StatusCode ToGrpcStatusCode(absl::StatusCode code);
 
 /**
  * Converts fcp::Status to grpc::Status.
  */
-grpc::Status ToGrpcStatus(Status status);
+grpc::Status ToGrpcStatus(absl::Status status);
 
 }  // namespace base
 }  // namespace fcp

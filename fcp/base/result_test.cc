@@ -264,29 +264,31 @@ TEST(ResultTest, ExpectOneOf) {
 
 TEST(ResultTest, ExpectOk) {
   TestTracingRecorder recorder;
-  EXPECT_THAT(Result<Status>(FCP_STATUS(OK)).Then(ExpectOk()),
+  EXPECT_THAT(Result<absl::Status>(FCP_STATUS(OK)).Then(ExpectOk()),
               HasValue(Unit{}));
 }
 
 TEST(ResultTest, ExpectOkReturnsError) {
   TestTracingRecorder recorder;
   recorder.ExpectError<ResultExpectStatusError>();
-  EXPECT_THAT(Result<Status>(FCP_STATUS(INVALID_ARGUMENT)).Then(ExpectOk()),
-              IsError());
+  EXPECT_THAT(
+      Result<absl::Status>(FCP_STATUS(INVALID_ARGUMENT)).Then(ExpectOk()),
+      IsError());
 }
 
 TEST(ResultTest, ExpectOkStatusOr) {
   TestTracingRecorder recorder;
-  EXPECT_THAT(Result<StatusOr<Unit>>(StatusOr<Unit>(Unit{})).Then(ExpectOk()),
+  EXPECT_THAT(Result<absl::StatusOr<Unit>>(absl::StatusOr<Unit>(Unit{}))
+                  .Then(ExpectOk()),
               HasValue(Unit{}));
 }
 
 TEST(ResultTest, ExpectOkStatusOrReturnsError) {
   TestTracingRecorder recorder;
   recorder.ExpectError<ResultExpectStatusError>();
-  EXPECT_THAT(
-      Result<StatusOr<Unit>>(FCP_STATUS(INVALID_ARGUMENT)).Then(ExpectOk()),
-      IsError());
+  EXPECT_THAT(Result<absl::StatusOr<Unit>>(FCP_STATUS(INVALID_ARGUMENT))
+                  .Then(ExpectOk()),
+              IsError());
   EXPECT_THAT(
       recorder.FindAllEvents<ResultExpectStatusError>(),
       ElementsAre(IsEvent<ResultExpectStatusError>(
@@ -296,9 +298,9 @@ TEST(ResultTest, ExpectOkStatusOrReturnsError) {
 TEST(ResultTest, TraceFailedPrecondition) {
   TestTracingRecorder recorder;
   recorder.ExpectError<ResultExpectStatusError>();
-  EXPECT_THAT(
-      Result<StatusOr<Unit>>(FCP_STATUS(FAILED_PRECONDITION)).Then(ExpectOk()),
-      IsError());
+  EXPECT_THAT(Result<absl::StatusOr<Unit>>(FCP_STATUS(FAILED_PRECONDITION))
+                  .Then(ExpectOk()),
+              IsError());
   EXPECT_THAT(
       recorder.FindAllEvents<ResultExpectStatusError>(),
       ElementsAre(IsEvent<ResultExpectStatusError>(

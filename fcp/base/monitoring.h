@@ -153,77 +153,77 @@ using StatusOr
 [[deprecated(
     "Use absl::StatusCode::kOk "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto OK =
-    StatusCode::kOk;
+    absl::StatusCode::kOk;
 [[deprecated(
     "Use absl::StatusCode::kCancelled "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto CANCELLED =
-    StatusCode::kCancelled;
+    absl::StatusCode::kCancelled;
 [[deprecated(
     "Use absl::StatusCode::kUnknown "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNKNOWN =
-    StatusCode::kUnknown;
+    absl::StatusCode::kUnknown;
 [[deprecated(
     "Use absl::StatusCode::kInvalidArgument "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto INVALID_ARGUMENT =
-    StatusCode::kInvalidArgument;
+    absl::StatusCode::kInvalidArgument;
 [[deprecated(
     "Use absl::StatusCode::kDeadlineExceeded "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto DEADLINE_EXCEEDED =
-    StatusCode::kDeadlineExceeded;
+    absl::StatusCode::kDeadlineExceeded;
 [[deprecated(
     "Use absl::StatusCode::kNotFound "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto NOT_FOUND =
-    StatusCode::kNotFound;
+    absl::StatusCode::kNotFound;
 [[deprecated(
     "Use absl::StatusCode::kAlreadyExists "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto ALREADY_EXISTS =
-    StatusCode::kAlreadyExists;
+    absl::StatusCode::kAlreadyExists;
 [[deprecated(
     "Use absl::StatusCode::kPermissionDenied "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto PERMISSION_DENIED =
-    StatusCode::kPermissionDenied;
+    absl::StatusCode::kPermissionDenied;
 [[deprecated(
     "Use absl::StatusCode::kResourceExhausted "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto RESOURCE_EXHAUSTED =
-    StatusCode::kResourceExhausted;
+    absl::StatusCode::kResourceExhausted;
 [[deprecated(
     "Use absl::StatusCode::kFailedPrecondition "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto
-    FAILED_PRECONDITION = StatusCode::kFailedPrecondition;
+    FAILED_PRECONDITION = absl::StatusCode::kFailedPrecondition;
 [[deprecated(
     "Use absl::StatusCode::kAborted "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto ABORTED =
-    StatusCode::kAborted;
+    absl::StatusCode::kAborted;
 [[deprecated(
     "Use absl::StatusCode::kOutOfRange "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto OUT_OF_RANGE =
-    StatusCode::kOutOfRange;
+    absl::StatusCode::kOutOfRange;
 [[deprecated(
     "Use absl::StatusCode::kUnimplemented "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNIMPLEMENTED =
-    StatusCode::kUnimplemented;
+    absl::StatusCode::kUnimplemented;
 [[deprecated(
     "Use absl::StatusCode::kInternal "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto INTERNAL =
-    StatusCode::kInternal;
+    absl::StatusCode::kInternal;
 [[deprecated(
     "Use absl::StatusCode::kUnavailable "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNAVAILABLE =
-    StatusCode::kUnavailable;
+    absl::StatusCode::kUnavailable;
 [[deprecated(
     "Use absl::StatusCode::kDataLoss "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto DATA_LOSS =
-    StatusCode::kDataLoss;
+    absl::StatusCode::kDataLoss;
 [[deprecated(
     "Use absl::StatusCode::kUnauthenticated "
     "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNAUTHENTICATED =
-    StatusCode::kUnauthenticated;
+    absl::StatusCode::kUnauthenticated;
 
 namespace internal {
 /** Functions to assist with FCP_RETURN_IF_ERROR() */
-inline Status AsStatus(const Status& status) { return status; }
+inline absl::Status AsStatus(const absl::Status& status) { return status; }
 template <typename T>
-inline Status AsStatus(const StatusOr<T>& status_or) {
+inline absl::Status AsStatus(const StatusOr<T>& status_or) {
   return status_or.status();
 }
 }  // namespace internal
@@ -287,7 +287,7 @@ namespace internal {
 class ABSL_MUST_USE_RESULT StatusBuilder {
  public:
   /** Construct a StatusBuilder from status code. */
-  StatusBuilder(StatusCode code, const char* file, int line);
+  StatusBuilder(absl::StatusCode code, const char* file, int line);
 
   /**
    * Copy constructor for status builder. Most of the time not needed because of
@@ -298,7 +298,7 @@ class ABSL_MUST_USE_RESULT StatusBuilder {
   inline bool ok() const { return code_ == OK; }
 
   /** Returns the code of the constructed status. */
-  inline StatusCode code() const { return code_; }
+  inline absl::StatusCode code() const { return code_; }
 
   /** Stream into status message of this builder. */
   template <typename T>
@@ -308,23 +308,23 @@ class ABSL_MUST_USE_RESULT StatusBuilder {
   }
 
   /** Implicit conversion to Status. */
-  operator Status();  // NOLINT
+  operator absl::Status();  // NOLINT
 
   /** Implicit conversion to StatusOr. */
   template <typename T>
   inline operator StatusOr<T>() {  // NOLINT
-    return StatusOr<T>(static_cast<Status>(*this));
+    return StatusOr<T>(static_cast<absl::Status>(*this));
   }
 
  private:
   const char* const file_;
   const int line_;
-  const StatusCode code_;
+  const absl::StatusCode code_;
 
   std::ostringstream message_;
 };
 
-inline StatusBuilder MakeStatusBuilder(StatusCode code, const char* file,
+inline StatusBuilder MakeStatusBuilder(absl::StatusCode code, const char* file,
                                        int line) {
   return StatusBuilder(code, file, line);
 }

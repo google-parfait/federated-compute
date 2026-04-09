@@ -28,7 +28,7 @@ namespace base {
   case StatusCode::absl_name:                    \
     return grpc::StatusCode::grpc_name;
 
-StatusCode FromGrpcStatusCode(grpc::StatusCode code) {
+absl::StatusCode FromGrpcStatusCode(grpc::StatusCode code) {
   switch (code) {
     MAP_FROM_GRPC_STATUS(OK, kOk)
     MAP_FROM_GRPC_STATUS(CANCELLED, kCancelled)
@@ -48,16 +48,16 @@ StatusCode FromGrpcStatusCode(grpc::StatusCode code) {
     MAP_FROM_GRPC_STATUS(UNAVAILABLE, kUnavailable)
     MAP_FROM_GRPC_STATUS(DATA_LOSS, kDataLoss)
     default:
-      return StatusCode::kUnknown;
+      return absl::StatusCode::kUnknown;
   }
 }
 
-Status FromGrpcStatus(grpc::Status status) {
-  return Status(FromGrpcStatusCode(status.error_code()),
-                status.error_message());
+absl::Status FromGrpcStatus(grpc::Status status) {
+  return absl::Status(FromGrpcStatusCode(status.error_code()),
+                      status.error_message());
 }
 
-grpc::StatusCode ToGrpcStatusCode(StatusCode code) {
+grpc::StatusCode ToGrpcStatusCode(absl::StatusCode code) {
   switch (code) {
     MAP_TO_GRPC_STATUS(kOk, OK)
     MAP_TO_GRPC_STATUS(kCancelled, CANCELLED)
@@ -81,7 +81,7 @@ grpc::StatusCode ToGrpcStatusCode(StatusCode code) {
   }
 }
 
-grpc::Status ToGrpcStatus(Status status) {
+grpc::Status ToGrpcStatus(absl::Status status) {
   grpc::StatusCode code = ToGrpcStatusCode(status.code());
   if (code != grpc::StatusCode::OK) {
     return grpc::Status(code, std::string(status.message()));

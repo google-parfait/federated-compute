@@ -25,7 +25,7 @@ namespace fcp {
 
 namespace internal {
 
-StatusBuilder::StatusBuilder(StatusCode code, const char* file, int line)
+StatusBuilder::StatusBuilder(absl::StatusCode code, const char* file, int line)
     : file_(file), line_(line), code_(code), message_() {}
 
 StatusBuilder::StatusBuilder(StatusBuilder const& other)
@@ -34,14 +34,14 @@ StatusBuilder::StatusBuilder(StatusBuilder const& other)
       code_(other.code_),
       message_(other.message_.str()) {}
 
-StatusBuilder::operator Status() {
+StatusBuilder::operator absl::Status() {
   auto message_str = message_.str();
   if (code_ != OK) {
     std::ostringstream status_message;
     status_message << "(at " << BaseName(file_) << ":" << line_ << message_str;
     message_str = status_message.str();
   }
-  return Status(code_, message_str);
+  return absl::Status(code_, message_str);
 }
 
 }  // namespace internal

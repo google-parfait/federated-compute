@@ -25,47 +25,47 @@ Error ExpectBase::TraceExpectError(const char* expectation) const {
                                        loc_.line());
 }
 
-static TracingStatusCode ConvertToTracingStatus(fcp::StatusCode code) {
+static TracingStatusCode ConvertToTracingStatus(absl::StatusCode code) {
   switch (code) {
-    case fcp::StatusCode::kOk:
+    case absl::StatusCode::kOk:
       return TracingStatusCode_Ok;
-    case fcp::StatusCode::kCancelled:
+    case absl::StatusCode::kCancelled:
       return TracingStatusCode_Cancelled;
-    case fcp::StatusCode::kInvalidArgument:
+    case absl::StatusCode::kInvalidArgument:
       return TracingStatusCode_InvalidArgument;
-    case fcp::StatusCode::kDeadlineExceeded:
+    case absl::StatusCode::kDeadlineExceeded:
       return TracingStatusCode_DeadlineExceeded;
-    case fcp::StatusCode::kNotFound:
+    case absl::StatusCode::kNotFound:
       return TracingStatusCode_NotFound;
-    case fcp::StatusCode::kAlreadyExists:
+    case absl::StatusCode::kAlreadyExists:
       return TracingStatusCode_AlreadyExists;
-    case fcp::StatusCode::kPermissionDenied:
+    case absl::StatusCode::kPermissionDenied:
       return TracingStatusCode_PermissionDenied;
-    case fcp::StatusCode::kResourceExhausted:
+    case absl::StatusCode::kResourceExhausted:
       return TracingStatusCode_ResourceExhausted;
-    case fcp::StatusCode::kFailedPrecondition:
+    case absl::StatusCode::kFailedPrecondition:
       return TracingStatusCode_FailedPrecondition;
-    case fcp::StatusCode::kAborted:
+    case absl::StatusCode::kAborted:
       return TracingStatusCode_Aborted;
-    case fcp::StatusCode::kOutOfRange:
+    case absl::StatusCode::kOutOfRange:
       return TracingStatusCode_OutOfRange;
-    case fcp::StatusCode::kUnimplemented:
+    case absl::StatusCode::kUnimplemented:
       return TracingStatusCode_Unimplemented;
-    case fcp::StatusCode::kInternal:
+    case absl::StatusCode::kInternal:
       return TracingStatusCode_Internal;
-    case fcp::StatusCode::kUnavailable:
+    case absl::StatusCode::kUnavailable:
       return TracingStatusCode_Unavailable;
-    case fcp::StatusCode::kDataLoss:
+    case absl::StatusCode::kDataLoss:
       return TracingStatusCode_DataLoss;
-    case fcp::StatusCode::kUnauthenticated:
+    case absl::StatusCode::kUnauthenticated:
       return TracingStatusCode_Unauthenticated;
     default:
       return TracingStatusCode_Unknown;
   }
 }
 
-Error ExpectBase::TraceUnexpectedStatus(fcp::StatusCode expected_code,
-                                        const fcp::Status& actual) const {
+Error ExpectBase::TraceUnexpectedStatus(absl::StatusCode expected_code,
+                                        const absl::Status& actual) const {
   return TraceError<ResultExpectStatusError>(
       ConvertToTracingStatus(expected_code),
       ConvertToTracingStatus(actual.code()), actual.message(), loc_.file_name(),

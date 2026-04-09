@@ -39,7 +39,7 @@ namespace fcp {
  */
 class ReentrancyGuard {
  public:
-  Status Check(std::atomic<bool>* in_use) {
+  absl::Status Check(std::atomic<bool>* in_use) {
     FCP_CHECK(in_use != nullptr);
     bool expected_value = false;
     if (!in_use->compare_exchange_strong(expected_value, true)) {
