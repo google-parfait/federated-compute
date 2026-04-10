@@ -207,11 +207,6 @@ class Flags {
   // compute uploads.
   virtual bool enable_blob_header_in_http_headers() const { return false; }
 
-  // If true, the attestation measurement will be moved to just before the
-  // startTaskAssignment call.
-  virtual bool move_device_attestation_to_start_task_assignment() const {
-    return false;
-  }
   // If true, enables the generation of a privacy ID for each record in a
   // computation's results. This ID is generated using the record's timestamp.
   // Records with timestamps falling into the same time window will share the

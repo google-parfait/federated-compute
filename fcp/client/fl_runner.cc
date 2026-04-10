@@ -1912,11 +1912,9 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
   }
 
   std::optional<std::string> attestation_measurement = std::nullopt;
-  if (flags->move_device_attestation_to_start_task_assignment()) {
-    FCP_ASSIGN_OR_RETURN(attestation_measurement,
-                         env_deps->GetAttestationMeasurement(
-                             eligibility_eval_result->content_binding));
-  }
+  FCP_ASSIGN_OR_RETURN(attestation_measurement,
+                       env_deps->GetAttestationMeasurement(
+                           eligibility_eval_result->content_binding));
 
   size_t expected_num_tasks = 0;
   std::vector<std::string> successful_task_names;
