@@ -34,7 +34,6 @@
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto_test_util.h"
 #include "fcp/protos/confidentialcompute/key.pb.h"
-#include "fcp/testing/testing.h"
 #include "openssl/base.h"
 #include "openssl/hpke.h"
 
@@ -42,6 +41,8 @@ namespace fcp {
 namespace confidential_compute {
 namespace {
 
+using ::absl_testing::IsOkAndHolds;
+using ::absl_testing::StatusIs;
 using ::fcp::confidentialcompute::Key;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
@@ -706,7 +707,6 @@ TEST(CryptoTest, DecryptWithInvalidAlgorithmFails) {
           intermediary_key.get(), kdf, aead,
           encrypt_result->encrypted_symmetric_key, encrypt_result->encapped_key,
           message_associated_data);
-  ABSL_ASSERT_OK(symmetric_key);
 
   absl::StatusOr<SymmetricKey> decoded_symmetric_key =
       SymmetricKey::Decode(*symmetric_key);
@@ -1143,6 +1143,37 @@ TEST(EcdsaP256R1SignatureVerifierTest, VerifyReferenceExample) {
       EcdsaP256R1SignatureVerifier::Create(public_key);
   ABSL_ASSERT_OK(verifier);
   ABSL_ASSERT_OK(verifier->Verify(data, signature));
+}
+
+TEST(ConvertAsn1SignatureToP1363Test, ValidSignature) {
+  EXPECT_THAT(
+      ConvertAsn1SignatureToP1363(
+          absl::HexStringToBytes("3045022043675a6d2f2c2dfab5ab0497030ac63bafb9b"
+                                 "9c6f09bcae8265e49543e8888cd022100dc0234539a1f"
+                                 "54fee3cb0781255c1c8c07c5d769095a3d1bd08d1ab57"
+                                 "185b582"),
+          /*order_len=*/32),
+      IsOkAndHolds(absl::HexStringToBytes(
+          "43675a6d2f2c2dfab5ab0497030ac63bafb9b9c6f09bcae8265e49543e8888cddc02"
+          "34539a1f54fee3cb0781255c1c8c07c5d769095a3d1bd08d1ab57185b582")));
+}
+
+TEST(ConvertAsn1SignatureToP1363Test, OrderTooSmall) {
+  EXPECT_THAT(
+      ConvertAsn1SignatureToP1363(
+          absl::HexStringToBytes("3045022043675a6d2f2c2dfab5ab0497030ac63bafb9b"
+                                 "9c6f09bcae8265e49543e8888cd022100dc0234539a1f"
+                                 "54fee3cb0781255c1c8c07c5d769095a3d1bd08d1ab57"
+                                 "185b582"),
+          /*order_len=*/8),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Failed to convert ASN.1 signature to P1363")));
+}
+
+TEST(ConvertAsn1SignatureToP1363Test, InvalidSignature) {
+  EXPECT_THAT(ConvertAsn1SignatureToP1363("invalid", /*order_len=*/32),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Failed to parse ASN.1 signature")));
 }
 
 TEST(ConvertP1363SignatureToAsn1Test, ValidSignature) {

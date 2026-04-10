@@ -163,7 +163,6 @@ cc_test(
         ":crypto_test_util",
         "//fcp/base",
         "//fcp/protos/confidentialcompute:key_cc_proto",
-        "//fcp/testing",
         "@boringssl//:crypto",
         "@com_google_absl//absl/log:absl_check",
         "@com_google_absl//absl/status",

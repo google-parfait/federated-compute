@@ -495,6 +495,29 @@ absl::Status EcdsaP256R1SignatureVerifier::Verify(
   return absl::OkStatus();
 }
 
+absl::StatusOr<std::string> ConvertAsn1SignatureToP1363(
+    absl::string_view asn1_signature, size_t order_len) {
+  bssl::UniquePtr<ECDSA_SIG> sig(ECDSA_SIG_from_bytes(
+      reinterpret_cast<const uint8_t*>(asn1_signature.data()),
+      asn1_signature.size()));
+  if (sig == nullptr) {
+    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
+           << "Failed to parse ASN.1 signature: "
+           << ERR_reason_error_string(ERR_get_error());
+  }
+
+  std::string p1363_signature(2 * order_len, '\0');
+  if (BN_bn2bin_padded(reinterpret_cast<uint8_t*>(&p1363_signature[0]),
+                       order_len, sig->r) != 1 ||
+      BN_bn2bin_padded(reinterpret_cast<uint8_t*>(&p1363_signature[order_len]),
+                       order_len, sig->s) != 1) {
+    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
+           << "Failed to convert ASN.1 signature to P1363: "
+           << ERR_reason_error_string(ERR_get_error());
+  }
+  return p1363_signature;
+}
+
 absl::StatusOr<std::string> ConvertP1363SignatureToAsn1(
     absl::string_view p1363_signature) {
   // IEEE P1363 signatures are the concatenation of the signature's uncompressed

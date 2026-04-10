@@ -272,6 +272,11 @@ class EcdsaP256R1SignatureVerifier {
   bssl::UniquePtr<EC_KEY> public_key_;
 };
 
+// Converts an ASN.1 signature to P1363 format (i.e. RFC 8152 section 8.1).
+// `order_len` is the length of the curve order in bytes (i.e. 32 for P-256)
+absl::StatusOr<std::string> ConvertAsn1SignatureToP1363(
+    absl::string_view asn1_signature, size_t order_len);
+
 // Converts a P1363 signature (i.e. RFC 8152 section 8.1) to ASN.1 format.
 absl::StatusOr<std::string> ConvertP1363SignatureToAsn1(
     absl::string_view signature);
