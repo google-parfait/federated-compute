@@ -52,19 +52,27 @@ message ReadResponse {
 
 // Request to write data out from the TEE. This can be used to release data.
 message WriteRequest {
-  // Release Token signed by the TEE's application signing key, sent with the
-  // first WriteRequest for a blob. This is provided to untrusted space so it
-  // can use it to request KMS to release the final unencrypted results.
-  bytes release_token = 4;
-  // A key that should be used to construct the file path when writing the
-  // data, sent with the first WriteRequest for a blob.
-  string key = 5;
   // Metadata about the blob being written out by the TEE, sent with the
   // first WriteRequest for a blob.
   BlobMetadata first_request_metadata = 1;
+  // A key that should be used to construct the file path when writing the
+  // data, sent with the first WriteRequest for a blob.
+  string key = 5;
+  // Optional. A release token should be provided if and only if the intent is
+  // to perform an unencrypted release of the data. The release token should be
+  // signed by the TEE's application signing key and sent with the first
+  // WriteRequest for a blob. Untrusted space will use it to communicate with
+  // KMS to obtain the key material needed to obtain the final unencrypted
+  // results.
+  optional bytes release_token = 4;
+  // Optional. If set, the signature of the data being written out by the TEE,
+  // sent with the first WriteRequest for a blob. Typically this is used for
+  // intermediate results whose provenance needs to be verified by a future TEE,
+  // but final unencrypted results may also be signed, if desired.
+  optional bytes signature = 6;
   // Indicates that this is the final WriteRequest for a given blob.
   bool commit = 2;
-  // A chunk of data to be written out by the TEE.
+  // A chunk of data being written out by the TEE.
   bytes data = 3 [ctype = CORD];
 }
 
@@ -74,4 +82,16 @@ message WriteResponse {
   string file_uri = 2;
 
   reserved 1;
+}
+
+// Message format for storing intermediate results received via WriteRequest.
+message IntermediateResult {
+  // Metadata that can be used at a later time within a TEE to decrypt the data.
+  BlobMetadata metadata = 1;
+  // The encrypted data.
+  bytes data = 2 [ctype = CORD];
+  // The generating TEE's signature for the data.
+  bytes signature = 3;
+  // The generating TEE's signing key endorsement.
+  bytes signing_key_endorsement = 4;
 }
