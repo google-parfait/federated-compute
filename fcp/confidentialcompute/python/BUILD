@@ -130,15 +130,23 @@ py_test(
 py_library(
     name = "accounting",
     srcs = ["accounting.py"],
+    tags = ["manual"],
     visibility = ["//visibility:public"],
-    deps = ["@pypi//numpy"],
+    deps = [
+        "@pypi//jax_privacy",
+        "@pypi//numpy",
+    ],
 )
 
 py_test(
     name = "accounting_test",
     srcs = ["accounting_test.py"],
+    tags = ["manual"],
     deps = [
         ":accounting",
         "@pypi//absl_py",
+        "@pypi//jax",
+        "@pypi//jax_privacy",
+        "@pypi//numpy",
     ],
 )

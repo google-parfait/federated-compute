@@ -1,7 +1,9 @@
 """Accounting utilities specific to min_sep_data_source."""
 
 import collections
+import math
 
+from jax_privacy.matrix_factorization import buffered_toeplitz
 import numpy as np
 
 
@@ -46,3 +48,82 @@ def min_sep_data_source_zcdp(
     # dropping remainder.
     nodes = [nodes[2 * i] + nodes[2 * i + 1] for i in range(len(nodes) // 2)]
   return max(squared_sensitivities) / (2 * noise_multiplier**2)
+
+
+def _minsep_sensitivity_squared(
+    coefficients: np.ndarray,
+    min_separation: int,
+    max_participations: int | None = None,
+) -> float:
+  """Calculates the sensitivity squared for BLT mechanism.
+
+  This is from Theorem 2 of https://arxiv.org/pdf/2405.13763.
+
+  Args:
+    coefficients: The coefficients of the BLT matrix.
+    min_separation: The minimum separation between participations.
+    max_participations: The maximum number of participations allowed.
+
+  Returns:
+    The sensitivity squared.
+
+  Raises:
+    ValueError: If coefficients is not a 1D array.
+  """
+  if coefficients.ndim != 1:
+    raise ValueError(
+        f'coefficients.shape={coefficients.shape!r} must be a 1D array'
+    )
+  n = coefficients.shape[0]
+
+  if max_participations is None:
+    k = math.ceil(n / min_separation)
+  else:
+    k = min(max_participations, math.ceil(n / min_separation))
+  padding = (min_separation - n) % min_separation
+  coefficients = np.pad(coefficients, (0, n - coefficients.size + padding))
+  vector = coefficients.reshape(-1, min_separation).cumsum(axis=0).flatten()
+  vector[min_separation * k :] = (
+      vector[min_separation * k :] - vector[: -min_separation * k]
+  )
+  return float(vector[:n] @ vector[:n])
+
+
+def zcdp_for_blt(
+    matrix: buffered_toeplitz.BufferedToeplitz,
+    total_steps: int,
+    noise_multiplier: float,
+    min_separation: int,
+    max_participations: int | None = None,
+) -> float:
+  """Computes the zCDP for BLT.
+
+  Args:
+    matrix: The BLT matrix.
+    total_steps: The total number of steps in training.
+    noise_multiplier: The noise multiplier used in training.
+    min_separation: The minimum separation between participations.
+    max_participations: The maximum number of participations allowed. If None,
+      the maximum number of participations will be determined by the minimum
+      separation and total steps.
+
+  Returns:
+    The zCDP parameter for DP-FTRL using BLT.
+
+  Raises:
+    ValueError: If any of the total_steps, min_separation, max_participations,
+      or noise_multiplier are not positive.
+  """
+  if noise_multiplier <= 0:
+    raise ValueError('noise_multiplier must be positive.')
+  if total_steps <= 0:
+    raise ValueError('total_steps must be positive.')
+  if min_separation <= 0:
+    raise ValueError('min_separation must be positive.')
+  if max_participations is not None and max_participations <= 0:
+    raise ValueError('max_participations must be positive.')
+  coefficients = np.array(matrix.toeplitz_coefs(total_steps))
+  squared_sensitivity = _minsep_sensitivity_squared(
+      coefficients, min_separation, max_participations
+  )
+  return squared_sensitivity / (2 * noise_multiplier**2)
