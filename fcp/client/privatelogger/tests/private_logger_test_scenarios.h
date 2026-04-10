@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef FCP_CLIENT_PRIVATELOGGER_TESTS_TEST_SCENARIOS_H_
-#define FCP_CLIENT_PRIVATELOGGER_TESTS_TEST_SCENARIOS_H_
+#ifndef FCP_CLIENT_PRIVATELOGGER_TESTS_PRIVATE_LOGGER_TEST_SCENARIOS_H_
+#define FCP_CLIENT_PRIVATELOGGER_TESTS_PRIVATE_LOGGER_TEST_SCENARIOS_H_
 
 #include <concepts>
 #include <string>
@@ -41,4 +41,4 @@ class PrivateLoggerTestSetup {
 
 }  // namespace fcp::client::privatelogger
 
-#endif  // FCP_CLIENT_PRIVATELOGGER_TESTS_TEST_SCENARIOS_H_
+#endif  // FCP_CLIENT_PRIVATELOGGER_TESTS_PRIVATE_LOGGER_TEST_SCENARIOS_H_

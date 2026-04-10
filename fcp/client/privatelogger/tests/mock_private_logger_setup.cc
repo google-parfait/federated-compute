@@ -20,7 +20,7 @@
 #include "gmock/gmock.h"
 #include "absl/status/status.h"
 #include "fcp/client/privatelogger/tests/private_logger_mocks.h"
-#include "fcp/client/privatelogger/tests/test_scenarios.h"
+#include "fcp/client/privatelogger/tests/private_logger_test_scenarios.h"
 
 namespace fcp::client::privatelogger {
 

@@ -20,7 +20,7 @@
 #include "absl/status/status_matchers.h"
 #include "fcp/client/privatelogger/tests/mock_private_logger_setup.h"
 #include "fcp/client/privatelogger/tests/private_logger_mocks.h"
-#include "fcp/client/privatelogger/tests/test_scenarios.h"
+#include "fcp/client/privatelogger/tests/private_logger_test_scenarios.h"
 #include "fcp/client/selector_context.pb.h"
 
 namespace fcp::client::privatelogger {
