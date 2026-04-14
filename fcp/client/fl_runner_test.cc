@@ -1157,7 +1157,7 @@ TEST_F(FlRunnerHttpInvalidEntryUriTest, HttpProtocolWithInvalidEntryUri) {
                   &mock_log_manager_, &mock_flags_, "http://invalid", "api_key",
                   "test_cert_path", kSessionName, kPopulationName,
                   "retry_token", "client_version", "attestation_measurement"),
-              IsCode(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(FlRunnerTensorflowTaskTest, MockCheckinFails) {
@@ -3503,7 +3503,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest, MultipleTaskAssignmentsIOError) {
     EXPECT_CALL(mock_phase_logger_, LogMultipleTaskAssignmentsStarted());
     EXPECT_CALL(mock_phase_logger_,
                 LogMultipleTaskAssignmentsIOError(
-                    IsCode(absl::StatusCode::kInternal),
+                    absl_testing::StatusIs(absl::StatusCode::kInternal),
                     MockFederatedProtocol::
                         kMultipleTaskAssignmentsPlanUriReceivedNetworkStats,
                     _, _));
@@ -3589,7 +3589,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
     EXPECT_CALL(mock_phase_logger_, LogMultipleTaskAssignmentsStarted());
     EXPECT_CALL(mock_phase_logger_,
                 LogMultipleTaskAssignmentsServerAborted(
-                    IsCode(absl::StatusCode::kAborted),
+                    absl_testing::StatusIs(absl::StatusCode::kAborted),
                     MockFederatedProtocol::
                         kMultipleTaskAssignmentsPlanUriReceivedNetworkStats,
                     _, _));
@@ -3675,7 +3675,7 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
     EXPECT_CALL(mock_phase_logger_, LogMultipleTaskAssignmentsStarted());
     EXPECT_CALL(mock_phase_logger_,
                 LogMultipleTaskAssignmentsClientInterrupted(
-                    IsCode(absl::StatusCode::kCancelled),
+                    absl_testing::StatusIs(absl::StatusCode::kCancelled),
                     MockFederatedProtocol::
                         kMultipleTaskAssignmentsPlanUriReceivedNetworkStats,
                     _, _));
@@ -3774,12 +3774,14 @@ TEST_F(FlRunnerMultipleTaskAssignmentsTest,
                     _));
     EXPECT_CALL(mock_phase_logger_,
                 SetModelIdentifier(kRequires5ExamplesTaskName));
-    EXPECT_CALL(mock_phase_logger_, LogMultipleTaskAssignmentsPayloadIOError(
-                                        IsCode(absl::StatusCode::kInternal)));
+    EXPECT_CALL(mock_phase_logger_,
+                LogMultipleTaskAssignmentsPayloadIOError(
+                    absl_testing::StatusIs(absl::StatusCode::kInternal)));
     EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
     EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(kSwor24HourTaskName));
-    EXPECT_CALL(mock_phase_logger_, LogMultipleTaskAssignmentsPayloadIOError(
-                                        IsCode(absl::StatusCode::kInternal)));
+    EXPECT_CALL(mock_phase_logger_,
+                LogMultipleTaskAssignmentsPayloadIOError(
+                    absl_testing::StatusIs(absl::StatusCode::kInternal)));
     EXPECT_CALL(mock_phase_logger_, SetModelIdentifier(""));
     EXPECT_CALL(mock_phase_logger_,
                 LogMultipleTaskAssignmentsPartialCompleted(
