@@ -27,19 +27,19 @@ namespace {
 
 class ReentrancyGuardTest : public testing::Test {
  protected:
-  Status SimpleMethod() {
+  absl::Status SimpleMethod() {
     ReentrancyGuard guard;
     return guard.Check(&in_use_);
   }
 
-  Status ReentrantMethod() {
+  absl::Status ReentrantMethod() {
     ReentrancyGuard guard;
     FCP_RETURN_IF_ERROR((guard.Check(&in_use_)));
     return ReentrantMethod();
   }
 
-  Status LongRunningMethod(absl::Notification* method_entered,
-                           absl::Notification* resume) {
+  absl::Status LongRunningMethod(absl::Notification* method_entered,
+                                 absl::Notification* resume) {
     ReentrancyGuard guard;
     FCP_RETURN_IF_ERROR((guard.Check(&in_use_)));
     method_entered->Notify();
