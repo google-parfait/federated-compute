@@ -162,7 +162,7 @@ class MinSepDataSourceIterator(
           f'Requested {k}, eligible {len(eligible_ids)}.'
       )
 
-    selected_ids = random.sample(eligible_ids, min(len(eligible_ids), k))
+    selected_ids = random.sample(eligible_ids, k)
     self._round_index += 1
 
     selected_values = []
