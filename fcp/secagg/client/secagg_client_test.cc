@@ -85,7 +85,7 @@ TEST(SecAggClientTest, StartCausesStateTransition) {
 
   // Message correctness is checked in the tests for the Round 0 classes.
   EXPECT_CALL(*sender, Send(::testing::_));
-  Status result = client.Start();
+  absl::Status result = client.Start();
 
   EXPECT_THAT(result.code(), Eq(OK));
   EXPECT_THAT(client.IsAborted(), Eq(false));
@@ -136,7 +136,7 @@ TEST(SecAggClientTest, ReceiveMessageReturnValuesAreCorrect) {
   EXPECT_CALL(*sender, Send(_));
 
   // A valid message from the server should return true if it can continue.
-  StatusOr<bool> result = client.ReceiveMessage(round_1_message);
+  absl::StatusOr<bool> result = client.ReceiveMessage(round_1_message);
   ASSERT_THAT(result.ok(), Eq(true));
   EXPECT_THAT(result.value(), Eq(true));
 
@@ -174,7 +174,7 @@ TEST(SecAggClientTest, AbortMovesToCorrectStateAndSendsMessageToServer) {
   expected_message.mutable_abort()->set_diagnostic_info(error_string);
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  Status result = client.Abort("Abort reason");
+  absl::Status result = client.Abort("Abort reason");
   EXPECT_THAT(result.code(), Eq(OK));
   EXPECT_THAT(client.State(), Eq("ABORTED"));
   EXPECT_THAT(client.ErrorMessage().value(), Eq(error_string));
@@ -203,7 +203,7 @@ TEST(SecAggClientTest,
   expected_message.mutable_abort()->set_diagnostic_info(error_string);
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
-  Status result = client.Abort();
+  absl::Status result = client.Abort();
   EXPECT_THAT(result.code(), Eq(OK));
   EXPECT_THAT(client.State(), Eq("ABORTED"));
   EXPECT_THAT(client.ErrorMessage().value(), Eq(error_string));
@@ -247,7 +247,7 @@ TEST(SecAggClientTest, SetInputChangesStateOnlyOnce) {
   auto input_map = std::make_unique<SecAggVectorMap>();
   input_map->emplace("test", SecAggVector({5, 8, 22, 30}, 32));
 
-  Status result = client.SetInput(std::move(input_map));
+  absl::Status result = client.SetInput(std::move(input_map));
   EXPECT_THAT(result.code(), Eq(OK));
 
   auto input_map2 = std::make_unique<SecAggVectorMap>();
