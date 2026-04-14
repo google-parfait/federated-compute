@@ -218,7 +218,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
       state.Abort("test abort reason", SecAggServerOutcome::EXTERNAL_REQUEST);
 
   ASSERT_THAT(next_state->State(), Eq(SecAggServerStateKind::ABORTED));
-  ASSERT_THAT(next_state->ErrorMessage(), IsOk());
+  ASSERT_THAT(next_state->ErrorMessage(), absl_testing::IsOk());
   EXPECT_THAT(next_state->ErrorMessage().value(), Eq("test abort reason"));
   EXPECT_THAT(tracing_recorder.FindAllEvents<BroadcastMessageSent>(),
               ElementsAre(IsEvent<BroadcastMessageSent>(
@@ -267,7 +267,8 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
       encoded_vector.set_encoded_vector(masked_vector.GetAsPackedBytes());
       (*client_message->mutable_masked_input_response()
             ->mutable_vectors())["foobar"] = encoded_vector;
-      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)),
+                  absl_testing::IsOk());
       if (GetParam().enable_async_r2) {
         EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
       } else {
@@ -291,7 +292,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R3_UNMASKING));
   EXPECT_THAT(
@@ -357,7 +358,8 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
       encoded_vector.set_encoded_vector(masked_vector.GetAsPackedBytes());
       (*client_message->mutable_masked_input_response()
             ->mutable_vectors())["foobar"] = encoded_vector;
-      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)),
+                  absl_testing::IsOk());
       if (GetParam().enable_async_r2) {
         EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
       } else {
@@ -386,7 +388,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
   EXPECT_CALL(*sender, Send(3, EqualsProto(abort_message))).Times(1);
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R3_UNMASKING));
   EXPECT_THAT(
@@ -435,7 +437,8 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
   encoded_vector.set_encoded_vector("not a real masked input vector - invalid");
   (*invalid_message->mutable_masked_input_response()
         ->mutable_vectors())["foobar"] = encoded_vector;
-  ASSERT_THAT(state.HandleMessage(0, std::move(invalid_message)), IsOk());
+  ASSERT_THAT(state.HandleMessage(0, std::move(invalid_message)),
+              absl_testing::IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
   for (int i = 1; i < 5; ++i) {
     EXPECT_THAT(state.NeedsToAbort(), IsFalse());
@@ -462,7 +465,8 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
       encoded_vector.set_encoded_vector(masked_vector.GetAsPackedBytes());
       (*client_message->mutable_masked_input_response()
             ->mutable_vectors())["foobar"] = encoded_vector;
-      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)),
+                  absl_testing::IsOk());
       if (GetParam().enable_async_r2) {
         EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
       } else {
@@ -477,7 +481,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R3_UNMASKING));
   EXPECT_THAT(
@@ -529,7 +533,8 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
       encoded_vector.set_encoded_vector(masked_vector.GetAsPackedBytes());
       (*client_message->mutable_masked_input_response()
             ->mutable_vectors())["foobar"] = encoded_vector;
-      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)),
+                  absl_testing::IsOk());
       if (GetParam().enable_async_r2) {
         EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
       } else {
@@ -545,7 +550,8 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
 
   auto abort_message = std::make_unique<ClientToServerWrapperMessage>();
   abort_message->mutable_abort()->set_diagnostic_info("Aborting for test");
-  ASSERT_THAT(state.HandleMessage(2, std::move(abort_message)), IsOk());
+  ASSERT_THAT(state.HandleMessage(2, std::move(abort_message)),
+              absl_testing::IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
   EXPECT_THAT(state.NeedsToAbort(), IsFalse());
   EXPECT_THAT(state.NumberOfAliveClients(), Eq(3));
@@ -567,7 +573,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R3_UNMASKING));
   EXPECT_THAT(
@@ -607,7 +613,8 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
       // Have client abort
       auto abort_message = std::make_unique<ClientToServerWrapperMessage>();
       abort_message->mutable_abort()->set_diagnostic_info("Aborting for test");
-      ASSERT_THAT(state.HandleMessage(i, std::move(abort_message)), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, std::move(abort_message)),
+                  absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 1));
     }
   }
@@ -623,9 +630,9 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest,
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(), Eq(SecAggServerStateKind::ABORTED));
-  ASSERT_THAT(next_state.value()->ErrorMessage(), IsOk());
+  ASSERT_THAT(next_state.value()->ErrorMessage(), absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->ErrorMessage().value(),
               Eq("Too many clients aborted."));
   EXPECT_THAT(tracing_recorder.FindAllEvents<BroadcastMessageSent>(),
@@ -679,7 +686,8 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest, MetricsRecordsMessageSizes) {
           MessageReceivedSizes(Eq(ClientToServerWrapperMessage::
                                       MessageContentCase::kMaskedInputResponse),
                                Eq(true), Eq(client_message->ByteSizeLong())));
-      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)),
+                  absl_testing::IsOk());
       if (GetParam().enable_async_r2) {
         EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
       } else {
@@ -701,7 +709,8 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest, MetricsRecordsMessageSizes) {
                   Eq(false), Eq(abort_message->ByteSizeLong())));
 
   size_t abort_message_size = abort_message->ByteSizeLong();
-  ASSERT_THAT(state.HandleMessage(2, std::move(abort_message)), IsOk());
+  ASSERT_THAT(state.HandleMessage(2, std::move(abort_message)),
+              absl_testing::IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
   EXPECT_THAT(state.NeedsToAbort(), IsFalse());
   EXPECT_THAT(state.NumberOfAliveClients(), Eq(3));
@@ -732,7 +741,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest, MetricsRecordsMessageSizes) {
       .Times(3);
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R3_UNMASKING));
   EXPECT_THAT(
@@ -879,7 +888,8 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest, MetricsAreRecorded) {
       encoded_vector.set_encoded_vector(masked_vector.GetAsPackedBytes());
       (*client_message->mutable_masked_input_response()
             ->mutable_vectors())["foobar"] = encoded_vector;
-      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, std::move(client_message)),
+                  absl_testing::IsOk());
       if (GetParam().enable_async_r2) {
         EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
       } else {
@@ -915,7 +925,7 @@ TEST_P(SecaggServerR2MaskedInputCollStateTest, MetricsAreRecorded) {
           Eq(SecAggServerStateKind::R2_MASKED_INPUT_COLLECTION), Eq(3)));
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R3_UNMASKING));
 }

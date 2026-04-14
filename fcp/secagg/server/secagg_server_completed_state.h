@@ -49,7 +49,7 @@ class SecAggServerCompletedState : public SecAggServerState {
 
   bool IsNumberOfIncludedInputsCommitted() const override;
 
-  StatusOr<std::unique_ptr<SecAggVectorMap> > Result() override;
+  absl::StatusOr<std::unique_ptr<SecAggVectorMap>> Result() override;
 };
 }  // namespace secagg
 }  // namespace fcp

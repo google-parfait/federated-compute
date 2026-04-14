@@ -316,7 +316,7 @@ TEST(SecaggServerPrngRunningStateTest,
                   Eq(abort_message.ByteSizeLong())));
   EXPECT_CALL(*metrics, ClientsDropped(_, _)).Times(0);
 
-  EXPECT_THAT(state.HandleMessage(0, client_message), IsOk());
+  EXPECT_THAT(state.HandleMessage(0, client_message), absl_testing::IsOk());
   EXPECT_THAT(state.NumberOfClientsFailedAfterSendingMaskedInput(), Eq(0));
   ASSERT_THAT(state.AbortedClientIds().contains(0), Eq(true));
   EXPECT_THAT(tracing_recorder.FindAllEvents<IndividualMessageSent>(),
@@ -370,7 +370,7 @@ TEST(SecaggServerPrngRunningStateTest,
   EXPECT_CALL(*metrics, ClientsDropped(_, _)).Times(0);
   EXPECT_CALL(*sender, Send(Eq(0), _)).Times(0);
 
-  EXPECT_THAT(state.HandleMessage(0, client_message), IsOk());
+  EXPECT_THAT(state.HandleMessage(0, client_message), absl_testing::IsOk());
   EXPECT_THAT(state.NumberOfClientsFailedAfterSendingMaskedInput(), Eq(0));
   ASSERT_THAT(state.AbortedClientIds().contains(0), Eq(true));
   EXPECT_THAT(tracing_recorder.FindAllEvents<ClientMessageReceived>(),

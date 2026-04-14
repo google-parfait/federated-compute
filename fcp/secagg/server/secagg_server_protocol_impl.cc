@@ -79,7 +79,7 @@ std::unique_ptr<SecAggVectorMap> SecAggServerProtocolImpl::TakeResult() {
 // Round 0 methods
 // -----------------------------------------------------------------------------
 
-Status SecAggServerProtocolImpl::HandleAdvertiseKeys(
+absl::Status SecAggServerProtocolImpl::HandleAdvertiseKeys(
     uint32_t client_id, const AdvertiseKeys& advertise_keys) {
   const auto& pair_of_public_keys = advertise_keys.pair_of_public_keys();
   if ((pair_of_public_keys.enc_pk().size() != EcdhPublicKey::kSize &&
@@ -146,7 +146,7 @@ void SecAggServerProtocolImpl::ClearPairsOfPublicKeys() {
 // Round 1 methods
 // -----------------------------------------------------------------------------
 
-Status SecAggServerProtocolImpl::HandleShareKeysResponse(
+absl::Status SecAggServerProtocolImpl::HandleShareKeysResponse(
     uint32_t client_id, const ShareKeysResponse& share_keys_response) {
   // Verify that the message has the expected fields set before accepting it.
   if (share_keys_response.encrypted_key_shares().size() !=
@@ -252,7 +252,7 @@ void SecAggServerProtocolImpl::SetUpShamirSharesTables() {
   }
 }
 
-Status SecAggServerProtocolImpl::HandleUnmaskingResponse(
+absl::Status SecAggServerProtocolImpl::HandleUnmaskingResponse(
     uint32_t client_id, const UnmaskingResponse& unmasking_response) {
   FCP_CHECK(pairwise_shamir_share_table_ != nullptr &&
             self_shamir_share_table_ != nullptr)
@@ -310,7 +310,7 @@ Status SecAggServerProtocolImpl::HandleUnmaskingResponse(
 // PRNG computation methods
 // -----------------------------------------------------------------------------
 
-StatusOr<SecAggServerProtocolImpl::ShamirReconstructionResult>
+absl::StatusOr<SecAggServerProtocolImpl::ShamirReconstructionResult>
 SecAggServerProtocolImpl::HandleShamirReconstruction() {
   FCP_CHECK(pairwise_shamir_share_table_ != nullptr &&
             self_shamir_share_table_ != nullptr)
@@ -348,7 +348,7 @@ SecAggServerProtocolImpl::HandleShamirReconstruction() {
   return std::move(result);
 }
 
-StatusOr<SecAggServerProtocolImpl::PrngWorkItems>
+absl::StatusOr<SecAggServerProtocolImpl::PrngWorkItems>
 SecAggServerProtocolImpl::InitializePrng(
     const ShamirReconstructionResult& shamir_reconstruction_result) const {
   PrngWorkItems work_items;

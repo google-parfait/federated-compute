@@ -44,13 +44,13 @@ SecAggServerR2MaskedInputCollState::SecAggServerR2MaskedInputCollState(
 SecAggServerR2MaskedInputCollState::~SecAggServerR2MaskedInputCollState() =
     default;
 
-Status SecAggServerR2MaskedInputCollState::HandleMessage(
+absl::Status SecAggServerR2MaskedInputCollState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {
   return FCP_STATUS(FAILED_PRECONDITION)
          << "Call to deprecated HandleMessage method.";
 }
 
-Status SecAggServerR2MaskedInputCollState::HandleMessage(
+absl::Status SecAggServerR2MaskedInputCollState::HandleMessage(
     uint32_t client_id, std::unique_ptr<ClientToServerWrapperMessage> message) {
   if (message->has_abort()) {
     MessageReceived(*message, false);
@@ -77,7 +77,7 @@ Status SecAggServerR2MaskedInputCollState::HandleMessage(
   }
   MessageReceived(*message, true);
 
-  Status check_and_accumulate_status =
+  absl::Status check_and_accumulate_status =
       impl()->HandleMaskedInputCollectionResponse(
           std::make_unique<MaskedInputCollectionResponse>(
               std::move(*message->mutable_masked_input_response())));
@@ -135,7 +135,7 @@ void SecAggServerR2MaskedInputCollState::HandleAbort() {
   }
 }
 
-StatusOr<std::unique_ptr<SecAggServerState>>
+absl::StatusOr<std::unique_ptr<SecAggServerState>>
 SecAggServerR2MaskedInputCollState::ProceedToNextRound() {
   if (!ReadyForNextRound()) {
     return FCP_STATUS(UNAVAILABLE);

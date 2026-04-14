@@ -157,7 +157,7 @@ TEST(SecaggServerR1ShareKeysStateTest,
       state.Abort("test abort reason", SecAggServerOutcome::EXTERNAL_REQUEST);
 
   ASSERT_THAT(next_state->State(), Eq(SecAggServerStateKind::ABORTED));
-  ASSERT_THAT(next_state->ErrorMessage(), IsOk());
+  ASSERT_THAT(next_state->ErrorMessage(), absl_testing::IsOk());
   EXPECT_THAT(next_state->ErrorMessage().value(), Eq("test abort reason"));
   EXPECT_THAT(tracing_recorder.FindAllEvents<BroadcastMessageSent>(),
               ElementsAre(IsEvent<BroadcastMessageSent>(
@@ -206,7 +206,7 @@ TEST(SecaggServerR1ShareKeysStateTest,
                   absl::StrCat("encrypted key shares from ", i, " to ", j));
         }
       }
-      ASSERT_THAT(state.HandleMessage(i, client_message), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, client_message), absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
@@ -228,7 +228,7 @@ TEST(SecaggServerR1ShareKeysStateTest,
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R2_MASKED_INPUT_COLLECTION));
   EXPECT_THAT(
@@ -283,7 +283,7 @@ TEST(SecaggServerR1ShareKeysStateTest,
                   absl::StrCat("encrypted key shares from ", i, " to ", j));
         }
       }
-      ASSERT_THAT(state.HandleMessage(i, client_message), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, client_message), absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
@@ -306,7 +306,7 @@ TEST(SecaggServerR1ShareKeysStateTest,
   EXPECT_CALL(*sender, Send(Eq(3), _)).Times(0);
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R2_MASKED_INPUT_COLLECTION));
   EXPECT_THAT(
@@ -360,14 +360,14 @@ TEST(SecaggServerR1ShareKeysStateTest,
                   absl::StrCat("encrypted key shares from ", i, " to ", j));
         }
       }
-      ASSERT_THAT(state.HandleMessage(i, client_message), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, client_message), absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
 
   ClientToServerWrapperMessage abort_message;
   abort_message.mutable_abort()->set_diagnostic_info("aborting for test");
-  ASSERT_THAT(state.HandleMessage(2, abort_message), IsOk());
+  ASSERT_THAT(state.HandleMessage(2, abort_message), absl_testing::IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
 
   std::vector<ServerToClientWrapperMessage> server_messages(4);
@@ -392,7 +392,7 @@ TEST(SecaggServerR1ShareKeysStateTest,
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R2_MASKED_INPUT_COLLECTION));
   EXPECT_THAT(
@@ -446,7 +446,7 @@ TEST(SecaggServerR1ShareKeysStateTest,
       "encrypted key shares from 0 to 2");
   bad_message.mutable_share_keys_response()->add_encrypted_key_shares(
       "encrypted key shares from 0 to 3");
-  ASSERT_THAT(state.HandleMessage(0, bad_message), IsOk());
+  ASSERT_THAT(state.HandleMessage(0, bad_message), absl_testing::IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
 
   for (int i = 1; i < 5; ++i) {
@@ -476,13 +476,13 @@ TEST(SecaggServerR1ShareKeysStateTest,
                   absl::StrCat("encrypted key shares from ", i, " to ", j));
         }
       }
-      ASSERT_THAT(state.HandleMessage(i, client_message), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, client_message), absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 3));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R2_MASKED_INPUT_COLLECTION));
   EXPECT_THAT(
@@ -520,7 +520,7 @@ TEST(SecaggServerR1ShareKeysStateTest, StateAbortsIfTooManyClientsAbort) {
       // Have client abort
       ClientToServerWrapperMessage abort_message;
       abort_message.mutable_abort()->set_diagnostic_info("Aborting for test");
-      ASSERT_THAT(state.HandleMessage(i, abort_message), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, abort_message), absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 1));
     }
   }
@@ -536,9 +536,9 @@ TEST(SecaggServerR1ShareKeysStateTest, StateAbortsIfTooManyClientsAbort) {
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(), Eq(SecAggServerStateKind::ABORTED));
-  ASSERT_THAT(next_state.value()->ErrorMessage(), IsOk());
+  ASSERT_THAT(next_state.value()->ErrorMessage(), absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->ErrorMessage().value(),
               Eq("Too many clients aborted."));
   EXPECT_THAT(tracing_recorder.FindAllEvents<BroadcastMessageSent>(),
@@ -594,7 +594,7 @@ TEST(SecaggServerR1ShareKeysStateTest, MetricsRecordsMessageSizes) {
                                 Eq(ClientToServerWrapperMessage::
                                        MessageContentCase::kShareKeysResponse),
                                 Eq(true), Eq(client_message.ByteSizeLong())));
-      ASSERT_THAT(state.HandleMessage(i, client_message), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, client_message), absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
       EXPECT_THAT(tracing_recorder.root()[i],
                   IsEvent<ClientMessageReceived>(
@@ -625,7 +625,7 @@ TEST(SecaggServerR1ShareKeysStateTest, MetricsRecordsMessageSizes) {
       .Times(4);
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R2_MASKED_INPUT_COLLECTION));
   EXPECT_THAT(
@@ -793,7 +793,7 @@ TEST(SecaggServerR1ShareKeysStateTest, MetricsAreRecorded) {
                   absl::StrCat("encrypted key shares from ", i, " to ", j));
         }
       }
-      ASSERT_THAT(state.HandleMessage(i, client_message), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, client_message), absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
@@ -819,7 +819,7 @@ TEST(SecaggServerR1ShareKeysStateTest, MetricsAreRecorded) {
                             Eq(SecAggServerStateKind::R1_SHARE_KEYS), Eq(4)));
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R2_MASKED_INPUT_COLLECTION));
 }

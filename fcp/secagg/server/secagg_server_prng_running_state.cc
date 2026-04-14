@@ -43,7 +43,7 @@ SecAggServerPrngRunningState::SecAggServerPrngRunningState(
 
 SecAggServerPrngRunningState::~SecAggServerPrngRunningState() = default;
 
-Status SecAggServerPrngRunningState::HandleMessage(
+absl::Status SecAggServerPrngRunningState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {
   MessageReceived(message, false);  // Messages are always unexpected here.
   if (message.has_abort()) {
@@ -62,7 +62,7 @@ void SecAggServerPrngRunningState::HandleAbort() {
   }
 }
 
-StatusOr<SecAggServerProtocolImpl::PrngWorkItems>
+absl::StatusOr<SecAggServerProtocolImpl::PrngWorkItems>
 SecAggServerPrngRunningState::Initialize() {
   // Shamir reconstruction part of PRNG
   absl::Time reconstruction_start = absl::Now();
@@ -93,8 +93,9 @@ void SecAggServerPrngRunningState::EnterState() {
   // Scheduling workitems to run.
   prng_started_time_ = absl::Now();
 
-  async_token_ = impl()->StartPrng(
-      work_items, [this](Status status) { this->PrngRunnerFinished(status); });
+  async_token_ = impl()->StartPrng(work_items, [this](absl::Status status) {
+    this->PrngRunnerFinished(status);
+  });
 }
 
 bool SecAggServerPrngRunningState::SetAsyncCallback(
@@ -111,7 +112,8 @@ bool SecAggServerPrngRunningState::SetAsyncCallback(
   return true;
 }
 
-void SecAggServerPrngRunningState::PrngRunnerFinished(Status final_status) {
+void SecAggServerPrngRunningState::PrngRunnerFinished(
+    absl::Status final_status) {
   auto elapsed_millis =
       absl::ToInt64Milliseconds(absl::Now() - prng_started_time_);
   if (metrics()) {
@@ -137,7 +139,7 @@ void SecAggServerPrngRunningState::HandleAbortClient(
                     ClientStatus::DEAD_AFTER_UNMASKING_RESPONSE_RECEIVED);
 }
 
-StatusOr<std::unique_ptr<SecAggServerState>>
+absl::StatusOr<std::unique_ptr<SecAggServerState>>
 SecAggServerPrngRunningState::ProceedToNextRound() {
   // Block if StartPrng is still being called. That done to ensure that
   // StartPrng doesn't use *this* object after it has been destroyed by

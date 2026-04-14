@@ -60,7 +60,7 @@ SecAggServer::SecAggServer(std::unique_ptr<SecAggServerProtocolImpl> impl) {
       span_.Ref(), TracingState(state_->State()));
 }
 
-StatusOr<std::unique_ptr<SecAggServer>> SecAggServer::Create(
+absl::StatusOr<std::unique_ptr<SecAggServer>> SecAggServer::Create(
     int minimum_number_of_clients_to_proceed, int total_number_of_clients,
     const std::vector<InputVectorSpecification>& input_vector_specs,
     SendToClientsInterface* sender,
@@ -102,8 +102,7 @@ StatusOr<std::unique_ptr<SecAggServer>> SecAggServer::Create(
       // CURIOUS_SERVER in subgraph-secagg executions.
       // This experiment was introduced as part of go/subgraph-secagg-rollout
       // and is temporary (see b/191179307).
-      StatusOr<fcp::secagg::HararyGraphParameters>
-          computed_params_status_or_value;
+      absl::StatusOr<HararyGraphParameters> computed_params_status_or_value;
       if (experiments->IsEnabled(kSubgraphSecAggCuriousServerExperiment)) {
         SecureAggregationRequirements alternate_threat_model = threat_model;
         alternate_threat_model.set_adversary_class(
@@ -174,7 +173,7 @@ StatusOr<std::unique_ptr<SecAggServer>> SecAggServer::Create(
           server_variant, std::move(experiments))));
 }
 
-Status SecAggServer::Abort() {
+absl::Status SecAggServer::Abort() {
   const std::string reason = "Abort upon external request.";
   TracingSpan<AbortSecAggServer> span(state_span_->Ref(), reason);
   FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
@@ -182,8 +181,8 @@ Status SecAggServer::Abort() {
   return FCP_STATUS(OK);
 }
 
-Status SecAggServer::Abort(const std::string& reason,
-                           SecAggServerOutcome outcome) {
+absl::Status SecAggServer::Abort(const std::string& reason,
+                                 SecAggServerOutcome outcome) {
   const std::string formatted_reason =
       absl::StrCat("Abort upon external request for reason <", reason, ">.");
   TracingSpan<AbortSecAggServer> span(state_span_->Ref(), formatted_reason);
@@ -197,7 +196,8 @@ std::string MakeClientAbortMessage(ClientAbortReason reason) {
                       ClientAbortReason_Name(reason), ">.");
 }
 
-Status SecAggServer::AbortClient(uint32_t client_id, ClientAbortReason reason) {
+absl::Status SecAggServer::AbortClient(uint32_t client_id,
+                                       ClientAbortReason reason) {
   TracingSpan<AbortSecAggClient> span(
       state_span_->Ref(), client_id,
       ClientAbortReason_descriptor()->FindValueByNumber(reason)->name());
@@ -230,10 +230,10 @@ Status SecAggServer::AbortClient(uint32_t client_id, ClientAbortReason reason) {
   return FCP_STATUS(OK);
 }
 
-Status SecAggServer::ProceedToNextRound() {
+absl::Status SecAggServer::ProceedToNextRound() {
   TracingSpan<ProceedToNextSecAggRound> span(state_span_->Ref());
   FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
-  StatusOr<std::unique_ptr<SecAggServerState>> status_or_next_state =
+  absl::StatusOr<std::unique_ptr<SecAggServerState>> status_or_next_state =
       state_->ProceedToNextRound();
   if (status_or_next_state.ok()) {
     TransitionState(std::move(status_or_next_state.value()));
@@ -241,7 +241,7 @@ Status SecAggServer::ProceedToNextRound() {
   return status_or_next_state.status();
 }
 
-StatusOr<bool> SecAggServer::ReceiveMessage(
+absl::StatusOr<bool> SecAggServer::ReceiveMessage(
     uint32_t client_id, std::unique_ptr<ClientToServerWrapperMessage> message) {
   TracingSpan<ReceiveSecAggMessage> span(state_span_->Ref(), client_id);
   FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
@@ -269,7 +269,7 @@ absl::flat_hash_set<uint32_t> SecAggServer::AbortedClientIds() const {
   return state_->AbortedClientIds();
 }
 
-StatusOr<std::string> SecAggServer::ErrorMessage() const {
+absl::StatusOr<std::string> SecAggServer::ErrorMessage() const {
   return state_->ErrorMessage();
 }
 
@@ -283,7 +283,7 @@ bool SecAggServer::IsNumberOfIncludedInputsCommitted() const {
   return state_->IsNumberOfIncludedInputsCommitted();
 }
 
-StatusOr<int> SecAggServer::MinimumMessagesNeededForNextRound() const {
+absl::StatusOr<int> SecAggServer::MinimumMessagesNeededForNextRound() const {
   FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   return state_->MinimumMessagesNeededForNextRound();
 }
@@ -312,22 +312,22 @@ int SecAggServer::NumberOfPendingClients() const {
   return state_->NumberOfPendingClients();
 }
 
-StatusOr<int> SecAggServer::NumberOfClientsReadyForNextRound() const {
+absl::StatusOr<int> SecAggServer::NumberOfClientsReadyForNextRound() const {
   FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   return state_->NumberOfClientsReadyForNextRound();
 }
 
-StatusOr<int> SecAggServer::NumberOfMessagesReceivedInThisRound() const {
+absl::StatusOr<int> SecAggServer::NumberOfMessagesReceivedInThisRound() const {
   FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   return state_->NumberOfMessagesReceivedInThisRound();
 }
 
-StatusOr<bool> SecAggServer::ReadyForNextRound() const {
+absl::StatusOr<bool> SecAggServer::ReadyForNextRound() const {
   FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   return state_->ReadyForNextRound();
 }
 
-StatusOr<std::unique_ptr<SecAggVectorMap>> SecAggServer::Result() {
+absl::StatusOr<std::unique_ptr<SecAggVectorMap>> SecAggServer::Result() {
   return state_->Result();
 }
 
@@ -341,7 +341,7 @@ int SecAggServer::MinimumSurvivingNeighborsForReconstruction() const {
 
 SecAggServerStateKind SecAggServer::State() const { return state_->State(); }
 
-Status SecAggServer::ValidateClientId(uint32_t client_id) const {
+absl::Status SecAggServer::ValidateClientId(uint32_t client_id) const {
   if (client_id >= state_->total_number_of_clients()) {
     return FCP_STATUS(FAILED_PRECONDITION)
            << "Client Id " << client_id
@@ -351,7 +351,7 @@ Status SecAggServer::ValidateClientId(uint32_t client_id) const {
   return FCP_STATUS(OK);
 }
 
-Status SecAggServer::ErrorIfAbortedOrCompleted() const {
+absl::Status SecAggServer::ErrorIfAbortedOrCompleted() const {
   if (state_->IsAborted()) {
     return FCP_STATUS(FAILED_PRECONDITION)
            << "The server has already aborted. The request cannot be "

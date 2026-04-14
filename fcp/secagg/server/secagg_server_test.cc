@@ -200,7 +200,7 @@ TEST(SecaggServerTest, AbortCausesStateTransitionAndMessageToBeSent) {
   for (int i = 0; i < 1000; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(abort_message))).Times(1);
   }
-  Status result = server->Abort();
+  absl::Status result = server->Abort();
 
   EXPECT_THAT(result.code(), Eq(OK));
   EXPECT_THAT(server->IsAborted(), Eq(true));
@@ -233,7 +233,7 @@ TEST(SecaggServerTest, AbortWithReasonCausesStateTransitionAndMessageToBeSent) {
   for (int i = 0; i < 1000; ++i) {
     EXPECT_CALL(*sender, Send(i, EqualsProto(abort_message))).Times(1);
   }
-  Status result =
+  absl::Status result =
       server->Abort("Test reason.", SecAggServerOutcome::EXTERNAL_REQUEST);
 
   EXPECT_THAT(result.code(), Eq(OK));
@@ -266,7 +266,8 @@ TEST(SecaggServerTest, AbortClientNotCheckedIn) {
       .Times(0);
   // Client is not notified
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
-  Status result = server->AbortClient(2, ClientAbortReason::NOT_CHECKED_IN);
+  absl::Status result =
+      server->AbortClient(2, ClientAbortReason::NOT_CHECKED_IN);
 
   EXPECT_THAT(result.code(), Eq(OK));
   EXPECT_THAT(server->AbortedClientIds().contains(2), Eq(true));
@@ -289,7 +290,8 @@ TEST(SecaggServerTest, AbortClientWhenConnectionDropped) {
                              Eq(ClientDropReason::CONNECTION_CLOSED)));
   // Client is not notified
   EXPECT_CALL(*sender, Send(_, _)).Times(0);
-  Status result = server->AbortClient(2, ClientAbortReason::CONNECTION_DROPPED);
+  absl::Status result =
+      server->AbortClient(2, ClientAbortReason::CONNECTION_DROPPED);
 
   EXPECT_THAT(result.code(), Eq(OK));
   EXPECT_THAT(server->AbortedClientIds().contains(2), Eq(true));
@@ -318,7 +320,8 @@ TEST(SecaggServerTest, AbortClientWhenInvalidMessageSent) {
       *metrics,
       ClientsDropped(Eq(ClientStatus::DEAD_BEFORE_SENDING_ANYTHING),
                      Eq(ClientDropReason::SERVER_PROTOCOL_ABORT_CLIENT)));
-  Status result = server->AbortClient(2, ClientAbortReason::INVALID_MESSAGE);
+  absl::Status result =
+      server->AbortClient(2, ClientAbortReason::INVALID_MESSAGE);
 
   EXPECT_THAT(result.code(), Eq(OK));
   EXPECT_THAT(server->AbortedClientIds().contains(2), Eq(true));
@@ -336,7 +339,8 @@ TEST(SecaggServerTest, ReceiveMessageCausesServerToAbortIfTooManyClientsAbort) {
   TestTracingRecorder tracing_recorder;
   auto sender = std::make_unique<MockSendToClientsInterface>();
   auto server = CreateServer(sender.get());
-  StatusOr<int> clients_needed = server->MinimumMessagesNeededForNextRound();
+  absl::StatusOr<int> clients_needed =
+      server->MinimumMessagesNeededForNextRound();
   ASSERT_THAT(clients_needed.ok(), Eq(true));
   int maximum_number_of_aborts =
       server->NumberOfAliveClients() - clients_needed.value();
@@ -348,7 +352,7 @@ TEST(SecaggServerTest, ReceiveMessageCausesServerToAbortIfTooManyClientsAbort) {
   // protocol to abort.
   std::vector<Matcher<const TestTracingRecorder::SpanOrEvent&>> matchers;
   for (int i = 0; i < maximum_number_of_aborts; ++i) {
-    StatusOr<bool> result = server->ReceiveMessage(
+    absl::StatusOr<bool> result = server->ReceiveMessage(
         i,
         std::make_unique<ClientToServerWrapperMessage>(client_abort_message));
     matchers.push_back(IsSpan<ReceiveSecAggMessage>(i));
@@ -364,7 +368,7 @@ TEST(SecaggServerTest, ReceiveMessageCausesServerToAbortIfTooManyClientsAbort) {
   // Receiving `maximum_number_of_aborts` aborts means the protocol is ready to
   // proceed to the aborted state, which is indicated by ReceiveMessage
   // returning true.
-  StatusOr<bool> result = server->ReceiveMessage(
+  absl::StatusOr<bool> result = server->ReceiveMessage(
       maximum_number_of_aborts,
       std::make_unique<ClientToServerWrapperMessage>(client_abort_message));
   matchers.push_back(IsSpan<ReceiveSecAggMessage>(maximum_number_of_aborts));
@@ -373,7 +377,7 @@ TEST(SecaggServerTest, ReceiveMessageCausesServerToAbortIfTooManyClientsAbort) {
   // However the server is not aborted until ProceedToNextRound is called.
   EXPECT_THAT(server->IsAborted(), Eq(false));
 
-  EXPECT_THAT(server->ProceedToNextRound(), IsOk());
+  EXPECT_THAT(server->ProceedToNextRound(), absl_testing::IsOk());
   matchers.push_back(IsSpan<ProceedToNextSecAggRound>());
   EXPECT_THAT(server->IsAborted(), Eq(true));
   EXPECT_THAT(server->State(), Eq(SecAggServerStateKind::ABORTED));
@@ -391,18 +395,20 @@ TEST(SecaggServerTest, VerifyErrorsInAbortedState) {
   TestTracingRecorder tracing_recorder;
   auto sender = std::make_unique<MockSendToClientsInterface>();
   auto server = CreateServer(sender.get());
-  EXPECT_THAT(server->Abort(), IsOk());
+  EXPECT_THAT(server->Abort(), absl_testing::IsOk());
 
   EXPECT_THAT(
       server->ReceiveMessage(1, std::make_unique<ClientToServerWrapperMessage>(
                                     ClientToServerWrapperMessage{})),
-      IsCode(FAILED_PRECONDITION));
-  EXPECT_THAT(server->ProceedToNextRound(), IsCode(FAILED_PRECONDITION));
+      absl_testing::StatusIs(FAILED_PRECONDITION));
+  EXPECT_THAT(server->ProceedToNextRound(),
+              absl_testing::StatusIs(FAILED_PRECONDITION));
   EXPECT_THAT(server->MinimumMessagesNeededForNextRound(),
-              IsCode(FAILED_PRECONDITION));
+              absl_testing::StatusIs(FAILED_PRECONDITION));
   EXPECT_THAT(server->NumberOfMessagesReceivedInThisRound(),
-              IsCode(FAILED_PRECONDITION));
-  EXPECT_THAT(server->ReadyForNextRound(), IsCode(FAILED_PRECONDITION));
+              absl_testing::StatusIs(FAILED_PRECONDITION));
+  EXPECT_THAT(server->ReadyForNextRound(),
+              absl_testing::StatusIs(FAILED_PRECONDITION));
 }
 
 }  // namespace

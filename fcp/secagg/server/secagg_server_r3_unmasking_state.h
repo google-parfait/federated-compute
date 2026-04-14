@@ -44,8 +44,8 @@ class SecAggServerR3UnmaskingState : public SecAggServerState {
   ~SecAggServerR3UnmaskingState() override;
 
   // Handles an unmasking response or abort message from a client.
-  Status HandleMessage(uint32_t client_id,
-                       const ClientToServerWrapperMessage& message) override;
+  absl::Status HandleMessage(
+      uint32_t client_id, const ClientToServerWrapperMessage& message) override;
 
   bool IsNumberOfIncludedInputsCommitted() const override;
 
@@ -55,7 +55,8 @@ class SecAggServerR3UnmaskingState : public SecAggServerState {
 
   int NumberOfPendingClients() const override;
 
-  StatusOr<std::unique_ptr<SecAggServerState> > ProceedToNextRound() override;
+  absl::StatusOr<std::unique_ptr<SecAggServerState>> ProceedToNextRound()
+      override;
 
   // This will return true only after minimum_number_of_clients_to_proceed
   // messages have been received.

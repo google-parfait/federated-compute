@@ -50,14 +50,15 @@ class SecAggServerPrngRunningState final : public SecAggServerState {
 
   // Handles abort message from a client. Any other type of message is
   // unexpected and results in the client being aborted.
-  Status HandleMessage(uint32_t client_id,
-                       const ClientToServerWrapperMessage& message) override;
+  absl::Status HandleMessage(
+      uint32_t client_id, const ClientToServerWrapperMessage& message) override;
 
   bool IsNumberOfIncludedInputsCommitted() const override;
 
   int NumberOfIncludedInputs() const override;
 
-  StatusOr<std::unique_ptr<SecAggServerState> > ProceedToNextRound() override;
+  absl::StatusOr<std::unique_ptr<SecAggServerState>> ProceedToNextRound()
+      override;
 
   bool ReadyForNextRound() const override;
 
@@ -70,15 +71,15 @@ class SecAggServerPrngRunningState final : public SecAggServerState {
                          ClientDropReason reason_code) override;
 
   // Called to perform the initial synchronous part of PRNG state.
-  StatusOr<SecAggServerProtocolImpl::PrngWorkItems> Initialize();
+  absl::StatusOr<SecAggServerProtocolImpl::PrngWorkItems> Initialize();
 
   // This is called when all computations are finished.
   // final_status indicates whether PRNG computation has finished successfully.
-  void PrngRunnerFinished(Status final_status);
+  void PrngRunnerFinished(absl::Status final_status);
 
   // The status is assigned when the state completes either successfully or
   // unsuccessfully.
-  std::optional<Status> completion_status_ ABSL_GUARDED_BY(mutex_);
+  std::optional<absl::Status> completion_status_ ABSL_GUARDED_BY(mutex_);
 
   absl::Time prng_started_time_;
   AsyncToken async_token_;

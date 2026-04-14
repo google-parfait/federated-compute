@@ -40,7 +40,7 @@ SecAggServerR1ShareKeysState::SecAggServerR1ShareKeysState(
 
 SecAggServerR1ShareKeysState::~SecAggServerR1ShareKeysState() = default;
 
-Status SecAggServerR1ShareKeysState::HandleMessage(
+absl::Status SecAggServerR1ShareKeysState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {
   if (message.has_abort()) {
     MessageReceived(message, false);
@@ -67,7 +67,7 @@ Status SecAggServerR1ShareKeysState::HandleMessage(
   }
   MessageReceived(message, true);
 
-  Status status =
+  absl::Status status =
       impl()->HandleShareKeysResponse(client_id, message.share_keys_response());
   if (!status.ok()) {
     AbortClient(client_id, std::string(status.message()),
@@ -110,7 +110,7 @@ void SecAggServerR1ShareKeysState::HandleAbortClient(
   }
 }
 
-StatusOr<std::unique_ptr<SecAggServerState>>
+absl::StatusOr<std::unique_ptr<SecAggServerState>>
 SecAggServerR1ShareKeysState::ProceedToNextRound() {
   if (!ReadyForNextRound()) {
     return FCP_STATUS(UNAVAILABLE);

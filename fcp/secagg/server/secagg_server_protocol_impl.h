@@ -221,8 +221,8 @@ class SecAggServerProtocolImpl {
   // ---------------------------------------------------------------------------
 
   // Sets the public key pairs for a client.
-  Status HandleAdvertiseKeys(uint32_t client_id,
-                             const AdvertiseKeys& advertise_keys);
+  absl::Status HandleAdvertiseKeys(uint32_t client_id,
+                                   const AdvertiseKeys& advertise_keys);
 
   // Erases public key pairs for a client.
   void ErasePublicKeysForClient(uint32_t client_id);
@@ -232,7 +232,7 @@ class SecAggServerProtocolImpl {
 
   // This method allows a protocol implementation to populate fields that are
   // common to the ShareKeysRequest sent to all clients.
-  virtual Status InitializeShareKeysRequest(
+  virtual absl::Status InitializeShareKeysRequest(
       ShareKeysRequest* request) const = 0;
 
   // Prepares ShareKeysRequest message to send to the client.
@@ -253,8 +253,8 @@ class SecAggServerProtocolImpl {
   // ---------------------------------------------------------------------------
 
   // Sets the encrypted shares received from a client.
-  Status HandleShareKeysResponse(uint32_t client_id,
-                                 const ShareKeysResponse& share_keys_response);
+  absl::Status HandleShareKeysResponse(
+      uint32_t client_id, const ShareKeysResponse& share_keys_response);
 
   // Erases the encrypted shares for a client.
   void EraseShareKeysForClient(uint32_t client_id);
@@ -285,7 +285,7 @@ class SecAggServerProtocolImpl {
 
   // Check that an encrypted vector received by the user is valid, and add it to
   // the sum of encrypted vectors.
-  virtual Status HandleMaskedInputCollectionResponse(
+  virtual absl::Status HandleMaskedInputCollectionResponse(
       std::unique_ptr<MaskedInputCollectionResponse> masked_input_response) = 0;
 
   // ---------------------------------------------------------------------------
@@ -298,8 +298,8 @@ class SecAggServerProtocolImpl {
 
   // Populates Shamir shares tables with the data from UnmaskingResponse.
   // Returning an error status means that the unmasking response was invalid.
-  Status HandleUnmaskingResponse(uint32_t client_id,
-                                 const UnmaskingResponse& unmasking_response);
+  absl::Status HandleUnmaskingResponse(
+      uint32_t client_id, const UnmaskingResponse& unmasking_response);
 
   // ---------------------------------------------------------------------------
   // PRNG computation methods
@@ -314,7 +314,8 @@ class SecAggServerProtocolImpl {
 
   // Performs reconstruction secret sharing keys reconstruction step of
   // the PRNG stage of the protocol.
-  StatusOr<ShamirReconstructionResult> HandleShamirReconstruction();
+  absl::StatusOr<SecAggServerProtocolImpl::ShamirReconstructionResult>
+  HandleShamirReconstruction();
 
   struct PrngWorkItems {
     std::vector<AesKey> prng_keys_to_add;
@@ -322,15 +323,16 @@ class SecAggServerProtocolImpl {
   };
 
   // Initializes PRNG work items.
-  StatusOr<PrngWorkItems> InitializePrng(
+  absl::StatusOr<SecAggServerProtocolImpl::PrngWorkItems> InitializePrng(
       const ShamirReconstructionResult& shamir_reconstruction_result) const;
 
   // Tells the PRNG stage of the protocol to start running asynchronously by
   // executing PRNG work items.
   // The returned cancellation token can be used to abort the asynchronous
   // execution.
-  virtual AsyncToken StartPrng(const PrngWorkItems& work_items,
-                               std::function<void(Status)> done_callback) = 0;
+  virtual AsyncToken StartPrng(
+      const PrngWorkItems& work_items,
+      std::function<void(absl::Status)> done_callback) = 0;
 
  private:
   std::unique_ptr<SecretSharingGraph> secret_sharing_graph_;

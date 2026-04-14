@@ -45,7 +45,7 @@ class SecAggServerAbortedState : public SecAggServerState {
   bool IsAborted() const override;
 
   // Returns an error message explaining why the server aborted.
-  StatusOr<std::string> ErrorMessage() const override;
+  absl::StatusOr<std::string> ErrorMessage() const override;
 
   bool IsNumberOfIncludedInputsCommitted() const override;
 

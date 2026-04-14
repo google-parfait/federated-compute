@@ -41,8 +41,8 @@ class SecAggServerR0AdvertiseKeysState : public SecAggServerState {
   ~SecAggServerR0AdvertiseKeysState() override;
 
   // Handles an advertise keys response or abort message from a client.
-  Status HandleMessage(uint32_t client_id,
-                       const ClientToServerWrapperMessage& message) override;
+  absl::Status HandleMessage(
+      uint32_t client_id, const ClientToServerWrapperMessage& message) override;
 
   bool IsNumberOfIncludedInputsCommitted() const override;
 
@@ -50,7 +50,8 @@ class SecAggServerR0AdvertiseKeysState : public SecAggServerState {
 
   int NumberOfPendingClients() const override;
 
-  StatusOr<std::unique_ptr<SecAggServerState> > ProceedToNextRound() override;
+  absl::StatusOr<std::unique_ptr<SecAggServerState>> ProceedToNextRound()
+      override;
 
   // This will return true only after minimum_number_of_clients_to_proceed
   // clients have sent messages (and not subsequently aborted).

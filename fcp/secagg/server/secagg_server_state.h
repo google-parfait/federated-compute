@@ -75,10 +75,10 @@ class SecAggServerState {
   // Returns a FAILED_PRECONDITION status if the server is in a state from which
   // it does not expect to receive any messages. In that case no reply will be
   // sent.
-  virtual Status HandleMessage(uint32_t client_id,
-                               const ClientToServerWrapperMessage& message);
+  virtual absl::Status HandleMessage(
+      uint32_t client_id, const ClientToServerWrapperMessage& message);
   // Analog of the above method, bu giving ownership of the message.
-  virtual Status HandleMessage(
+  virtual absl::Status HandleMessage(
       uint32_t client_id,
       std::unique_ptr<ClientToServerWrapperMessage> message);
 
@@ -95,7 +95,8 @@ class SecAggServerState {
   // state is no longer valid and the new state must be considered the current
   // state. If it returns a non-OK status, this method does not change the
   // underlying state.
-  virtual StatusOr<std::unique_ptr<SecAggServerState>> ProceedToNextRound();
+  virtual absl::StatusOr<std::unique_ptr<SecAggServerState>>
+  ProceedToNextRound();
 
   // Returns true if the client state is considered to be "dead" e.g. aborted or
   // disconnected; otherwise returns false.
@@ -126,7 +127,7 @@ class SecAggServerState {
   // Returns an error message explaining why the server aborted, if the current
   // state is an abort state. If not returns an error Status with code
   // FAILED_PRECONDITION.
-  virtual StatusOr<std::string> ErrorMessage() const;
+  virtual absl::StatusOr<std::string> ErrorMessage() const;
 
   // Returns an enum specifying the current state.
   SecAggServerStateKind State() const;
@@ -228,7 +229,7 @@ class SecAggServerState {
   // Transfers ownership of the result of the protocol to the caller. Requires
   // the server to be in a completed state; returns UNAVAILABLE otherwise.
   // Can be called only once; any consecutive calls result in an error.
-  virtual StatusOr<std::unique_ptr<SecAggVectorMap>> Result();
+  virtual absl::StatusOr<std::unique_ptr<SecAggVectorMap>> Result();
 
   virtual ~SecAggServerState();
 

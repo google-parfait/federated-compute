@@ -41,7 +41,7 @@ SecAggServerR3UnmaskingState::SecAggServerR3UnmaskingState(
 
 SecAggServerR3UnmaskingState::~SecAggServerR3UnmaskingState() = default;
 
-Status SecAggServerR3UnmaskingState::HandleMessage(
+absl::Status SecAggServerR3UnmaskingState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {
   if (message.has_abort()) {
     MessageReceived(message, false);
@@ -70,7 +70,7 @@ Status SecAggServerR3UnmaskingState::HandleMessage(
   }
   MessageReceived(message, true);
 
-  Status status =
+  absl::Status status =
       impl()->HandleUnmaskingResponse(client_id, message.unmasking_response());
   if (!status.ok()) {
     AbortClient(client_id, std::string(status.message()),
@@ -128,7 +128,7 @@ bool SecAggServerR3UnmaskingState::ReadyForNextRound() const {
          (needs_to_abort_);
 }
 
-StatusOr<std::unique_ptr<SecAggServerState> >
+absl::StatusOr<std::unique_ptr<SecAggServerState>>
 SecAggServerR3UnmaskingState::ProceedToNextRound() {
   if (!ReadyForNextRound()) {
     return FCP_STATUS(UNAVAILABLE);

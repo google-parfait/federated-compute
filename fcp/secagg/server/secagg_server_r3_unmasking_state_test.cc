@@ -176,7 +176,7 @@ TEST(SecaggServerR3UnmaskingStateTest,
       state.Abort("test abort reason", SecAggServerOutcome::EXTERNAL_REQUEST);
 
   ASSERT_THAT(next_state->State(), Eq(SecAggServerStateKind::ABORTED));
-  ASSERT_THAT(next_state->ErrorMessage(), IsOk());
+  ASSERT_THAT(next_state->ErrorMessage(), absl_testing::IsOk());
   EXPECT_THAT(next_state->ErrorMessage().value(), Eq("test abort reason"));
   EXPECT_THAT(tracing_recorder.FindAllEvents<BroadcastMessageSent>(),
               ElementsAre(IsEvent<BroadcastMessageSent>(
@@ -227,13 +227,14 @@ TEST(SecaggServerR3UnmaskingStateTest,
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 4) {
-      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]),
+                  absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::PRNG_RUNNING));
   EXPECT_THAT(
@@ -299,13 +300,14 @@ TEST(SecaggServerR3UnmaskingStateTest,
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 3) {
-      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]),
+                  absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::PRNG_RUNNING));
   EXPECT_THAT(
@@ -352,7 +354,8 @@ TEST(SecaggServerR3UnmaskingStateTest, StateProceedsCorrectlyWithOneFailure) {
   EXPECT_CALL(*sender, Send(0, EqualsProto(abort_message))).Times(1);
   EXPECT_CALL(*sender, Send(Ne(0), _)).Times(0);
 
-  EXPECT_THAT(state.HandleMessage(0, unmasking_responses[0]), IsOk());
+  EXPECT_THAT(state.HandleMessage(0, unmasking_responses[0]),
+              absl_testing::IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
   EXPECT_THAT(state.NumberOfClientsFailedAfterSendingMaskedInput(), Eq(1));
   EXPECT_THAT(state.AbortedClientIds().contains(0), IsTrue());
@@ -372,13 +375,14 @@ TEST(SecaggServerR3UnmaskingStateTest, StateProceedsCorrectlyWithOneFailure) {
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 4) {
-      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]),
+                  absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 3));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::PRNG_RUNNING));
   EXPECT_THAT(
@@ -437,13 +441,14 @@ TEST(SecaggServerR3UnmaskingStateTest,
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 3) {
-      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]),
+                  absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::PRNG_RUNNING));
   EXPECT_THAT(
@@ -503,13 +508,14 @@ TEST(SecaggServerR3UnmaskingStateTest,
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 3) {
-      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]),
+                  absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::PRNG_RUNNING));
   EXPECT_THAT(
@@ -567,14 +573,15 @@ TEST(SecaggServerR3UnmaskingStateTest,
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 4) {
-      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]),
+                  absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
   // These should not change anything.
-  EXPECT_THAT(state.HandleMessage(0, abort_message), IsOk());
+  EXPECT_THAT(state.HandleMessage(0, abort_message), absl_testing::IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
-  EXPECT_THAT(state.HandleMessage(1, abort_message), IsOk());
+  EXPECT_THAT(state.HandleMessage(1, abort_message), absl_testing::IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
   EXPECT_THAT(state.NumberOfAliveClients(), Eq(4));
   EXPECT_THAT(state.NumberOfClientsReadyForNextRound(), Eq(4));
@@ -582,7 +589,7 @@ TEST(SecaggServerR3UnmaskingStateTest,
   EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::PRNG_RUNNING));
   EXPECT_THAT(
@@ -629,19 +636,21 @@ TEST(SecaggServerR3UnmaskingStateTest, StateAbortsIfTooManyClientsAbort) {
   ClientToServerWrapperMessage client_abort_message;
   client_abort_message.mutable_abort();
 
-  ASSERT_THAT(state.HandleMessage(0, client_abort_message), IsOk());
+  ASSERT_THAT(state.HandleMessage(0, client_abort_message),
+              absl_testing::IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
   EXPECT_THAT(state.NeedsToAbort(), IsFalse());
   EXPECT_THAT(state.ReadyForNextRound(), IsFalse());
-  ASSERT_THAT(state.HandleMessage(1, client_abort_message), IsOk());
+  ASSERT_THAT(state.HandleMessage(1, client_abort_message),
+              absl_testing::IsOk());
   EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
   EXPECT_THAT(state.NeedsToAbort(), IsTrue());
   EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(), Eq(SecAggServerStateKind::ABORTED));
-  EXPECT_THAT(next_state.value()->ErrorMessage(), IsOk());
+  EXPECT_THAT(next_state.value()->ErrorMessage(), absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->ErrorMessage().value(),
               Eq("Too many clients aborted."));
   EXPECT_THAT(tracing_recorder.FindAllEvents<BroadcastMessageSent>(),
@@ -707,7 +716,8 @@ TEST(SecaggServerR3UnmaskingStateTest, MetricsRecordsMessageSizes) {
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 3) {
-      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]),
+                  absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
       EXPECT_THAT(
           tracing_recorder.root()[i],
@@ -718,7 +728,7 @@ TEST(SecaggServerR3UnmaskingStateTest, MetricsRecordsMessageSizes) {
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::PRNG_RUNNING));
   EXPECT_THAT(
@@ -904,13 +914,14 @@ TEST(SecaggServerR3UnmaskingStateTest, MetricsAreRecorded) {
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 3) {
-      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]), IsOk());
+      ASSERT_THAT(state.HandleMessage(i, unmasking_responses[i]),
+                  absl_testing::IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, IsOk());
+  ASSERT_THAT(next_state, absl_testing::IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::PRNG_RUNNING));
 }

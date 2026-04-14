@@ -108,7 +108,7 @@ class SecAggServer {
   // smaller than ceil(total_number_of_clients *(1. -
   // threat_model.estimated_dropout_rate())), the protocol defaults to the
   // latter value.
-  static StatusOr<std::unique_ptr<SecAggServer>> Create(
+  static absl::StatusOr<std::unique_ptr<SecAggServer>> Create(
       int minimum_number_of_clients_to_proceed, int total_number_of_clients,
       const std::vector<InputVectorSpecification>& input_vector_specs,
       SendToClientsInterface* sender,
@@ -131,13 +131,13 @@ class SecAggServer {
   // assumed.
   //
   // The status will be OK unless the protocol was already completed or aborted.
-  Status Abort();
-  Status Abort(const std::string& reason, SecAggServerOutcome outcome);
+  absl::Status Abort();
+  absl::Status Abort(const std::string& reason, SecAggServerOutcome outcome);
 
   // Abort the specified client for the given reason.
   //
   // If the server is in a terminal state, returns a FAILED_PRECONDITION status.
-  Status AbortClient(uint32_t client_id, ClientAbortReason reason);
+  absl::Status AbortClient(uint32_t client_id, ClientAbortReason reason);
 
   // Proceeds to the next round, doing necessary computation and sending
   // messages to clients as appropriate.
@@ -156,7 +156,7 @@ class SecAggServer {
   //
   // Returns OK as long as the server has actually executed the transition to
   // the next state.
-  Status ProceedToNextRound();
+  absl::Status ProceedToNextRound();
 
   // Processes a message that has been received from a client with the given
   // client_id.
@@ -179,7 +179,7 @@ class SecAggServer {
   // Returns an ABORTED status to signify that the server has aborted after
   // receiving this message. (This will cause all surviving clients to be
   // notified as well.)
-  StatusOr<bool> ReceiveMessage(
+  absl::StatusOr<bool> ReceiveMessage(
       uint32_t client_id,
       std::unique_ptr<ClientToServerWrapperMessage> message);
   // Sets up a callback to be invoked when any background asynchronous work
@@ -203,7 +203,7 @@ class SecAggServer {
   // Returns a string describing the reason that the protocol was aborted.
   // If the protocol has not actually been aborted, returns an error Status
   // with code PRECONDITION_FAILED.
-  StatusOr<std::string> ErrorMessage() const;
+  absl::StatusOr<std::string> ErrorMessage() const;
 
   // Returns true if the protocol has been aborted, false else.
   bool IsAborted() const;
@@ -226,7 +226,7 @@ class SecAggServer {
   // Client failures can cause this value to increase.
   //
   // Calling this in a terminal state results in an error.
-  StatusOr<int> MinimumMessagesNeededForNextRound() const;
+  absl::StatusOr<int> MinimumMessagesNeededForNextRound() const;
 
   // Indicates the total number of clients that the server expects to receive
   // a response from in this round (i.e. the ones that have not aborted). In
@@ -274,14 +274,14 @@ class SecAggServer {
   // even within a round. Client failures can cause this value to decrease.
   //
   // Calling this in a terminal state results in an error.
-  StatusOr<int> NumberOfClientsReadyForNextRound() const;
+  absl::StatusOr<int> NumberOfClientsReadyForNextRound() const;
 
   // Returns the number of valid messages received by clients this round.
   // Unlike NumberOfClientsReadyForNextRound, this number is monotonically
   // increasing until ProceedToNextRound is called, or the server aborts.
   //
   // Calling this in a terminal state results in an error.
-  StatusOr<int> NumberOfMessagesReceivedInThisRound() const;
+  absl::StatusOr<int> NumberOfMessagesReceivedInThisRound() const;
 
   // Returns a boolean indicating if the server has received enough messages
   // from clients (who have not subsequently aborted) to proceed to the next
@@ -291,12 +291,12 @@ class SecAggServer {
   // current round until ProceedToNextRound is called.
   //
   // Calling this in a terminal state results in an error.
-  StatusOr<bool> ReadyForNextRound() const;
+  absl::StatusOr<bool> ReadyForNextRound() const;
 
   // Transfers ownership of the result of the protocol to the caller. Requires
   // the server to be in a completed state; returns UNAVAILABLE otherwise.
   // Can be called only once; any consequitive calls result in an error.
-  StatusOr<std::unique_ptr<SecAggVectorMap>> Result();
+  absl::StatusOr<std::unique_ptr<SecAggVectorMap>> Result();
 
   // Returns the number of neighbors of each client.
   int NumberOfNeighbors() const;
@@ -320,10 +320,10 @@ class SecAggServer {
   void TransitionState(std::unique_ptr<SecAggServerState> new_state);
 
   // Validates if the client_id is within the expected bounds.
-  Status ValidateClientId(uint32_t client_id) const;
+  absl::Status ValidateClientId(uint32_t client_id) const;
 
   // Returns an error if the server is in Aborted or Completed state.
-  Status ErrorIfAbortedOrCompleted() const;
+  absl::Status ErrorIfAbortedOrCompleted() const;
 
   // The internal state object, containing details about the server's current
   // state.

@@ -40,7 +40,7 @@ SecAggServerR0AdvertiseKeysState::SecAggServerR0AdvertiseKeysState(
 
 SecAggServerR0AdvertiseKeysState::~SecAggServerR0AdvertiseKeysState() = default;
 
-Status SecAggServerR0AdvertiseKeysState::HandleMessage(
+absl::Status SecAggServerR0AdvertiseKeysState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {
   if (message.has_abort()) {
     MessageReceived(message, false);
@@ -67,7 +67,7 @@ Status SecAggServerR0AdvertiseKeysState::HandleMessage(
   }
   MessageReceived(message, true);
 
-  Status status =
+  absl::Status status =
       impl()->HandleAdvertiseKeys(client_id, message.advertise_keys());
   if (!status.ok()) {
     AbortClient(client_id, std::string(status.message()),
@@ -112,7 +112,7 @@ void SecAggServerR0AdvertiseKeysState::HandleAbortClient(
   }
 }
 
-StatusOr<std::unique_ptr<SecAggServerState>>
+absl::StatusOr<std::unique_ptr<SecAggServerState>>
 SecAggServerR0AdvertiseKeysState::ProceedToNextRound() {
   if (!ReadyForNextRound()) {
     return FCP_STATUS(UNAVAILABLE);

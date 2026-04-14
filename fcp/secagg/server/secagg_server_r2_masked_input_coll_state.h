@@ -57,13 +57,14 @@ class SecAggServerR2MaskedInputCollState : public SecAggServerState {
   bool ReadyForNextRound() const override;
 
   // Handles a masked input response or abort message from a client.
-  Status HandleMessage(uint32_t client_id,
-                       const ClientToServerWrapperMessage& message) override;
-  Status HandleMessage(
+  absl::Status HandleMessage(
+      uint32_t client_id, const ClientToServerWrapperMessage& message) override;
+  absl::Status HandleMessage(
       uint32_t client_id,
       std::unique_ptr<ClientToServerWrapperMessage> message) override;
 
-  StatusOr<std::unique_ptr<SecAggServerState> > ProceedToNextRound() override;
+  absl::StatusOr<std::unique_ptr<SecAggServerState>> ProceedToNextRound()
+      override;
 
   bool SetAsyncCallback(std::function<void()> async_callback) override;
 

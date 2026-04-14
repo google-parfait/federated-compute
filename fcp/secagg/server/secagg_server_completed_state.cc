@@ -56,7 +56,7 @@ bool SecAggServerCompletedState::IsNumberOfIncludedInputsCommitted() const {
   return true;
 }
 
-StatusOr<std::unique_ptr<SecAggVectorMap> >
+absl::StatusOr<std::unique_ptr<SecAggVectorMap>>
 SecAggServerCompletedState::Result() {
   auto result = impl()->TakeResult();
   if (!result) {

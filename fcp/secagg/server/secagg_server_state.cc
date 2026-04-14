@@ -94,7 +94,7 @@ int SecAggServerState::NumberOfIncludedInputs() const { return 0; }
 int SecAggServerState::MinimumMessagesNeededForNextRound() const { return 0; }
 bool SecAggServerState::ReadyForNextRound() const { return false; }
 
-Status SecAggServerState::HandleMessage(
+absl::Status SecAggServerState::HandleMessage(
     uint32_t client_id, const ClientToServerWrapperMessage& message) {
   MessageReceived(message, false);
   if (message.message_content_case() ==
@@ -110,12 +110,12 @@ Status SecAggServerState::HandleMessage(
   }
 }
 
-Status SecAggServerState::HandleMessage(
+absl::Status SecAggServerState::HandleMessage(
     uint32_t client_id, std::unique_ptr<ClientToServerWrapperMessage> message) {
   return HandleMessage(client_id, *message);
 }
 
-StatusOr<std::unique_ptr<SecAggServerState>>
+absl::StatusOr<std::unique_ptr<SecAggServerState>>
 SecAggServerState::ProceedToNextRound() {
   return FCP_STATUS(FAILED_PRECONDITION)
          << "The server cannot proceed to next round from state "
@@ -194,7 +194,7 @@ std::unique_ptr<SecAggServerState> SecAggServerState::Abort(
   return AbortState(reason, outcome);
 }
 
-StatusOr<std::string> SecAggServerState::ErrorMessage() const {
+absl::StatusOr<std::string> SecAggServerState::ErrorMessage() const {
   return FCP_STATUS(FAILED_PRECONDITION)
          << "Error message requested, but server is in state " << StateName();
 }
@@ -244,7 +244,7 @@ bool SecAggServerState::SetAsyncCallback(std::function<void()> async_callback) {
   return false;
 }
 
-StatusOr<std::unique_ptr<SecAggVectorMap>> SecAggServerState::Result() {
+absl::StatusOr<std::unique_ptr<SecAggVectorMap>> SecAggServerState::Result() {
   return FCP_STATUS(UNAVAILABLE)
          << "Result requested, but server is in state " << StateName();
 }

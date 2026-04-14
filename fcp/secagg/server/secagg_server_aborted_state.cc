@@ -39,7 +39,7 @@ SecAggServerAbortedState::~SecAggServerAbortedState() = default;
 
 bool SecAggServerAbortedState::IsAborted() const { return true; }
 
-StatusOr<std::string> SecAggServerAbortedState::ErrorMessage() const {
+absl::StatusOr<std::string> SecAggServerAbortedState::ErrorMessage() const {
   return error_message_;
 }
 
