@@ -18,6 +18,7 @@ package fcp.confidentialcompute;
 
 import "google/protobuf/any.proto";
 import "fcp/protos/confidentialcompute/access_policy.proto";
+import "fcp/protos/confidentialcompute/confidential_transform.proto";
 import "fcp/protos/confidentialcompute/private_inference.proto";
 import "fcp/protos/confidentialcompute/private_logger_uploads_config.proto";
 import "tensorflow_federated/cc/core/impl/aggregation/protocol/configuration.proto";
@@ -34,6 +35,18 @@ message FedSqlContainerInitializeConfiguration {
   PrivateLoggerUploadsConfig private_logger_uploads_config = 10;
 
   reserved 2, 3, 4, 5, 7, 8, 9;
+}
+
+// Configuration optionally passed to a FedSQL session as a part of the
+// `ConfigureRequest`. This configuration can be used to pass an encrypted blob
+// to the TEE during session initialization.
+message FedSqlContainerSessionConfiguration {
+  // Arbitrary configuration such as SQL query to run in the session.
+  google.protobuf.Any configuration = 1;
+  // Side input metadata for a potentially encrypted data.
+  BlobMetadata side_input_metadata = 2;
+  // Potentially encrypted side input data.
+  bytes side_input_data = 3 [ctype = CORD];
 }
 
 // TODO: b/452043727 - Consider removing the `AggCore` prefix from this enum.
