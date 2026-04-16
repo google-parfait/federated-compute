@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Sequence
 import os
 import time
 from unittest import mock
@@ -28,16 +29,6 @@ from fcp.protos.confidentialcompute import file_info_pb2
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
 
 
-class _TestExternalServiceHandle(external_service_handle.ExternalServiceHandle):
-  """Concrete ExternalServiceHandle for testing."""
-
-  def release_unencrypted(self, value: bytes, key: bytes) -> None:
-    pass
-
-  def release_encrypted(self, value: bytes, key: bytes) -> None:
-    pass
-
-
 _MIN_SEP = 10
 _CLIENT_IDS = ['a', 'b', 'c']
 _TEST_CLIENT_DATA_DIRECTORY = 'test_dir'
@@ -47,39 +38,71 @@ _COMPUTATION_TYPE = computation_pb2.Type(
 )
 
 
+def _mock_resolve_uri_to_tensor(uri: str, key: str) -> tensor_pb2.TensorProto:
+  """Spec for mock_resolve_uri_to_tensor_fn."""
+  del uri, key  # Unused
+  return tensor_pb2.TensorProto()
+
+
+def _mock_release_unencrypted(value: bytes, key: str) -> None:
+  """Spec for mock_release_unencrypted_fn."""
+  del value, key  # Unused
+
+
+def _mock_save_recovery_info(
+    recovery_info: bytes,
+    recovery_key: str,
+    value_key_pairs: Sequence[tuple[bytes, str]],
+) -> None:
+  """Spec for mock_save_recovery_info_fn."""
+  del recovery_info, recovery_key, value_key_pairs  # Unused
+
+
+def _mock_restore_recovery_info(key: str) -> bytes:
+  """Spec for mock_restore_recovery_info_fn."""
+  del key  # Unused
+  return b''
+
+
+def _create_external_handle(
+    client_ids: Sequence[str] | None = None,
+    client_data_directory: str = _TEST_CLIENT_DATA_DIRECTORY,
+    resolve_uri_to_tensor_fn=None,
+) -> external_service_handle.ExternalServiceHandle:
+  """Creates an ExternalServiceHandle with default mock functions."""
+  return external_service_handle.ExternalServiceHandle(
+      '',
+      client_ids if client_ids is not None else _CLIENT_IDS,
+      client_data_directory,
+      {},
+      resolve_uri_to_tensor_fn=resolve_uri_to_tensor_fn
+      or mock.create_autospec(_mock_resolve_uri_to_tensor),
+      release_unencrypted_fn=mock.create_autospec(_mock_release_unencrypted),
+      save_recovery_info_fn=mock.create_autospec(_mock_save_recovery_info),
+      restore_recovery_info_fn=mock.create_autospec(
+          _mock_restore_recovery_info
+      ),
+  )
+
+
 class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
   def test_init_raises_value_error_with_client_ids_empty(self):
-    client_ids = []
-
-    input_provider = _TestExternalServiceHandle(
-        '',
-        client_ids,
-        _TEST_CLIENT_DATA_DIRECTORY,
-        {},
-        mock.Mock(),
-    )
+    external_handle = _create_external_handle(client_ids=[])
 
     with self.assertRaisesRegex(
         ValueError, 'Expected `client_ids` to not be empty.'
     ):
       min_sep_data_source.MinSepDataSourceIterator(
           _MIN_SEP,
-          input_provider,
+          external_handle,
           _COMPUTATION_TYPE,
           _KEY_NAME,
       )
 
   def test_init_raises_value_error_with_invalid_min_sep(self):
     min_sep = 0
-
-    input_provider = _TestExternalServiceHandle(
-        '',
-        _CLIENT_IDS,
-        _TEST_CLIENT_DATA_DIRECTORY,
-        {},
-        mock.Mock(),
-    )
+    external_handle = _create_external_handle()
 
     with self.assertRaisesRegex(
         ValueError,
@@ -87,7 +110,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     ):
       min_sep_data_source.MinSepDataSourceIterator(
           min_sep,
-          input_provider,
+          external_handle,
           _COMPUTATION_TYPE,
           _KEY_NAME,
       )
@@ -113,20 +136,15 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
       ),
   )
   def test_select_raises_value_error_with_k(self, k, expected_error_message):
-    num_clients = 100
-    client_ids = [str(i) for i in range(num_clients)]
-
-    input_provider = _TestExternalServiceHandle(
-        '',
-        client_ids,
-        _TEST_CLIENT_DATA_DIRECTORY,
-        {},
-        mock.Mock(),
+    # Set the client ids to have 100 clients. The number of eligible
+    # clients per round will be 100 / _MIN_SEP = 10 since _MIN_SEP is 10.
+    external_handle = _create_external_handle(
+        client_ids=[str(i) for i in range(100)]
     )
 
     iterator = min_sep_data_source.MinSepDataSourceIterator(
         _MIN_SEP,
-        input_provider,
+        external_handle,
         _COMPUTATION_TYPE,
         _KEY_NAME,
     )
@@ -154,21 +172,19 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
           shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
       )
 
-    mock_resolve_fn = mock.Mock()
-    mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
-    input_provider = _TestExternalServiceHandle(
-        '',
-        client_ids,
-        _TEST_CLIENT_DATA_DIRECTORY,
-        {},
-        mock_resolve_fn,
+    external_handle = _create_external_handle(
+        client_ids=client_ids,
+        resolve_uri_to_tensor_fn=mock.create_autospec(
+            mock_resolve_uri_to_tensor_fn,
+            side_effect=mock_resolve_uri_to_tensor_fn,
+        ),
     )
 
     # Create an iterator that will have 100 eligible clients per round.
     # (1000 clients that are eligible to participate every 10th round)
     iterator = min_sep_data_source.MinSepDataSourceIterator(
         _MIN_SEP,
-        input_provider,
+        external_handle,
         _COMPUTATION_TYPE,
         _KEY_NAME,
         use_data_pointers=use_data_pointers,
@@ -223,11 +239,10 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
   def test_select_parallelizes_resolve_uri_to_tensor(self):
     num_clients = 200
-    client_ids = [str(i) for i in range(num_clients)]
     k = 10
     sleep_seconds = 5
 
-    def mock_resolve_uri_to_tensor_fn(uri: str, key: str):
+    def slow_resolve_uri_to_tensor_fn(uri: str, key: str):
       del key
       # Delay the resolution of each URI to simulate some work being done.
       time.sleep(sleep_seconds)
@@ -237,19 +252,18 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
           shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
       )
 
-    mock_resolve_fn = mock.Mock()
-    mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
-    input_provider = _TestExternalServiceHandle(
-        '',
-        client_ids,
-        _TEST_CLIENT_DATA_DIRECTORY,
-        {},
-        mock_resolve_fn,
+    mock_resolve_uri_to_tensor_fn = mock.create_autospec(
+        _mock_resolve_uri_to_tensor,
+        side_effect=slow_resolve_uri_to_tensor_fn,
+    )
+    external_handle = _create_external_handle(
+        client_ids=[str(i) for i in range(num_clients)],
+        resolve_uri_to_tensor_fn=mock_resolve_uri_to_tensor_fn,
     )
 
     iterator = min_sep_data_source.MinSepDataSourceIterator(
         _MIN_SEP,
-        input_provider,
+        external_handle,
         _COMPUTATION_TYPE,
         _KEY_NAME,
         use_data_pointers=False,
@@ -263,13 +277,12 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     end_time = time.time()
     self.assertLess(end_time - start_time, sleep_seconds + 1)
     self.assertLen(data_for_round, k)
-    self.assertEqual(mock_resolve_fn.call_count, k)
+    self.assertEqual(mock_resolve_uri_to_tensor_fn.call_count, k)
 
   def test_select_skips_bad_decrypt_errors(self):
-    client_ids = ['0', '1']
     k = 2
 
-    def mock_resolve_uri_to_tensor_fn(
+    def failing_resolve_uri_to_tensor_fn(
         uri: str, key: str
     ) -> tensor_pb2.TensorProto:
       """A mock function for resolving a URI to a tensor."""
@@ -285,19 +298,14 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
           shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
       )
 
-    mock_resolve_fn = mock.Mock()
-    mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
-    input_provider = _TestExternalServiceHandle(
-        '',
-        client_ids,
-        _TEST_CLIENT_DATA_DIRECTORY,
-        {},
-        mock_resolve_fn,
+    external_handle = _create_external_handle(
+        client_ids=['0', '1'],
+        resolve_uri_to_tensor_fn=failing_resolve_uri_to_tensor_fn,
     )
 
     iterator = min_sep_data_source.MinSepDataSourceIterator(
         min_sep=1,
-        input_provider=input_provider,
+        input_provider=external_handle,
         computation_type=_COMPUTATION_TYPE,
         key_name=_KEY_NAME,
         use_data_pointers=False,
@@ -324,40 +332,33 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 class MinSepDataSourceTest(absltest.TestCase):
 
   def test_init_succeeds(self):
-    input_provider = _TestExternalServiceHandle(
-        '', _CLIENT_IDS, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
-    )
-    min_sep = min_sep_data_source.MinSepDataSource(
+    external_handle = _create_external_handle()
+    data_source = min_sep_data_source.MinSepDataSource(
         _MIN_SEP,
-        input_provider,
+        external_handle,
         _COMPUTATION_TYPE,
         _KEY_NAME,
     )
     self.assertIsInstance(
-        min_sep.iterator(), min_sep_data_source.MinSepDataSourceIterator
+        data_source.iterator(), min_sep_data_source.MinSepDataSourceIterator
     )
 
   def test_init_raises_value_error_with_client_ids_empty(self):
-    client_ids = []
-    input_provider = _TestExternalServiceHandle(
-        '', client_ids, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
-    )
+    external_handle = _create_external_handle(client_ids=[])
 
     with self.assertRaisesRegex(
         ValueError, 'Expected `input_provider.client_ids` to not be empty.'
     ):
       min_sep_data_source.MinSepDataSource(
           _MIN_SEP,
-          input_provider,
+          external_handle,
           _COMPUTATION_TYPE,
           _KEY_NAME,
       )
 
   def test_init_raises_value_error_with_invalid_min_sep(self):
     min_sep = 0
-    input_provider = _TestExternalServiceHandle(
-        '', _CLIENT_IDS, _TEST_CLIENT_DATA_DIRECTORY, {}, mock.Mock()
-    )
+    external_handle = _create_external_handle()
 
     with self.assertRaisesRegex(
         ValueError,
@@ -365,7 +366,7 @@ class MinSepDataSourceTest(absltest.TestCase):
     ):
       min_sep_data_source.MinSepDataSource(
           min_sep,
-          input_provider,
+          external_handle,
           _COMPUTATION_TYPE,
           _KEY_NAME,
       )
