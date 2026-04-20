@@ -18,6 +18,7 @@ package fcp.confidentialcompute;
 
 import "google/protobuf/any.proto";
 import "fcp/protos/confidentialcompute/access_policy.proto";
+import "fcp/protos/confidentialcompute/confidential_transform.proto";
 import "fcp/protos/confidentialcompute/private_inference.proto";
 import "fcp/protos/confidentialcompute/private_logger_uploads_config.proto";
 import "tensorflow_federated/cc/core/impl/aggregation/protocol/configuration.proto";
@@ -33,7 +34,20 @@ message FedSqlContainerInitializeConfiguration {
   // Configuration for processing PrivateLogger uploads.
   PrivateLoggerUploadsConfig private_logger_uploads_config = 10;
 
+  // Configuration for possibly encrypted auto-tuning parameters.
+  FedSqlContainerAutoTuningConfig auto_tuning_config = 11;
+
   reserved 2, 3, 4, 5, 7, 8, 9;
+}
+
+// Configuration for serialized and possibly encrypted auto-tuning parameters.
+// This parametes are passed in the form of Federate Compute checkpoint that
+// contains individual auto-tuning parameters as scalar tensors.
+message FedSqlContainerAutoTuningConfig {
+  // Contains encryption and encoding metadata for the auto-tuning parameters.
+  BlobMetadata auto_tuning_metadata = 1;
+  // The blob containing serialized and possibly encrypted auto-tuning data.
+  bytes auto_tuning_data = 2 [ctype = CORD];
 }
 
 // TODO: b/452043727 - Consider removing the `AggCore` prefix from this enum.

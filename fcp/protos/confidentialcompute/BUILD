@@ -206,6 +206,7 @@ proto_library(
     srcs = ["fed_sql_container_config.proto"],
     deps = [
         ":access_policy_proto",
+        ":confidential_transform_proto",
         ":private_inference_proto",
         ":private_logger_uploads_config_proto",
         "@com_google_protobuf//:any_proto",
