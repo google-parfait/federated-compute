@@ -50,7 +50,7 @@ message FedSqlContainerAutoTuningConfig {
   bytes auto_tuning_data = 2 [ctype = CORD];
 }
 
-// TODO: b/452043727 - Consider removing the `AggCore` prefix from this enum.
+// TODO: b/505099049 - Streamline the naming of these aggregation types.
 enum AggCoreAggregationType {
   AGGREGATION_TYPE_UNSPECIFIED = 0;
   // Accumulates the results in memory which are applied during `Commit`.
@@ -81,7 +81,7 @@ message FedSqlContainerCommitConfiguration {
   Range range = 1;
 }
 
-// TODO: b/452043727 - Consider removing the `AggCore` prefix from this enum.
+// TODO: b/505099049 - Streamline the naming of these finalization types.
 enum AggCoreFinalizationType {
   FINALIZATION_TYPE_UNSPECIFIED = 0;
   // Return noised results from the checkpoint aggregator.
@@ -89,7 +89,8 @@ enum AggCoreFinalizationType {
   // Return the serialized internal state of the checkpoint aggregator.
   FINALIZATION_TYPE_SERIALIZE = 2;
   // The below enums are used when output partitioning is enabled.
-  // Return the partitioned internal state of the checkpoint aggregator.
+  // Return the partitioned internal state of the checkpoint aggregator
+  // bundled with the budget tracking state.
   FINALIZATION_TYPE_PARTITION = 3;
   // Returns the noised results for the partitioned checkpoint aggregator.
   FINALIZATION_TYPE_REPORT_PARTITION = 4;
@@ -98,6 +99,9 @@ enum AggCoreFinalizationType {
   // Returns the final private state generating a release token that can be
   // passed to KMS for releasing the results.
   FINALIZATION_TYPE_REPORT_PRIVATE_STATE = 6;
+  // Returns the result of aggregation (e.g. with autotuning parameters)
+  // bundled with the budget tracking state.
+  FINALIZATION_TYPE_REPORT_AUTOTUNING_PARAMS = 7;
 }
 
 // Configures how a result should be output by the trusted AggCore container.
