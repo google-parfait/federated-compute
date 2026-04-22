@@ -43,7 +43,7 @@ def _mock_save_recovery_info(
   del recovery_info, recovery_key, value_key_pairs  # Unused
 
 
-def _mock_restore_recovery_info(key: str) -> bytes:
+def _mock_restore_recovery_info(key: str) -> bytes | None:
   del key  # Unused
   return b''
 

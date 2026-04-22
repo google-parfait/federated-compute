@@ -41,7 +41,7 @@ class ExternalServiceHandle(abc.ABC):
       save_recovery_info_fn: Callable[
           [bytes, str, Sequence[tuple[bytes, str]]], None
       ],
-      restore_recovery_info_fn: Callable[[str], bytes],
+      restore_recovery_info_fn: Callable[[str], bytes | None],
   ):
     """Initializes an `ExternalServiceHandle`.
 
@@ -138,13 +138,14 @@ class ExternalServiceHandle(abc.ABC):
     """
     self._save_recovery_info_fn(recovery_info, recovery_key, value_key_pairs)
 
-  def restore_recovery_info(self, key: str) -> bytes:
+  def restore_recovery_info(self, key: str) -> bytes | None:
     """Restores recovery information.
 
     Args:
       key: The filename to restore the recovery information from.
 
     Returns:
-      The restored recovery information.
+      The restored recovery information, or None if recovery information cannot
+      be found for the given key.
     """
     return self._restore_recovery_info_fn(key)
