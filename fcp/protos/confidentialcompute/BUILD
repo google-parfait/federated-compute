@@ -484,6 +484,11 @@ cc_proto_library(
     deps = [":program_executor_tee_proto"],
 )
 
+py_proto_library(
+    name = "program_executor_tee_py_pb2",
+    deps = [":program_executor_tee_proto"],
+)
+
 proto_library(
     name = "data_upload_config_proto",
     srcs = ["data_upload_config.proto"],
