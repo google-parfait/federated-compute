@@ -84,23 +84,6 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "upload_outcome",
-    hdrs = ["upload_outcome.h"],
-    copts = ["-std=c++20"],
-)
-
-cc_library(
-    name = "private_logger_connector",
-    hdrs = ["private_logger_connector.h"],
-    copts = ["-std=c++20"],
-    deps = [
-        ":data_provider",
-        ":upload_outcome",
-        "@com_google_absl//absl/status:statusor",
-    ],
-)
-
 cc_test(
     name = "private_logger_test",
     srcs = ["private_logger_test.cc"],
@@ -137,22 +120,6 @@ cc_test(
         "//fcp/client/privatelogger/tests:mock_task_contribution_tracker_setup",
         "//fcp/client/privatelogger/tests:task_contribution_tracker_mocks",
         "//fcp/client/privatelogger/tests:task_contribution_tracker_test_scenarios",
-        "@com_google_absl//absl/status:status_matchers",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_test(
-    name = "private_logger_connector_test",
-    srcs = ["private_logger_connector_test.cc"],
-    copts = ["-std=c++20"],
-    deps = [
-        ":upload_outcome",
-        "//fcp/client/privatelogger/tests:data_provider_mocks",
-        "//fcp/client/privatelogger/tests:mock_private_logger_connector_setup",
-        "//fcp/client/privatelogger/tests:private_logger_connector_mocks",
-        "//fcp/client/privatelogger/tests:private_logger_connector_test_scenarios",
-        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:status_matchers",
         "@com_google_googletest//:gtest_main",
     ],
