@@ -223,7 +223,7 @@ namespace internal {
 /** Functions to assist with FCP_RETURN_IF_ERROR() */
 inline absl::Status AsStatus(const absl::Status& status) { return status; }
 template <typename T>
-inline absl::Status AsStatus(const StatusOr<T>& status_or) {
+inline absl::Status AsStatus(const absl::StatusOr<T>& status_or) {
   return status_or.status();
 }
 }  // namespace internal
@@ -295,7 +295,7 @@ class ABSL_MUST_USE_RESULT StatusBuilder {
   StatusBuilder(StatusBuilder const& other);
 
   /** Return true if the constructed status will be OK. */
-  inline bool ok() const { return code_ == OK; }
+  inline bool ok() const { return code_ == absl::StatusCode::kOk; }
 
   /** Returns the code of the constructed status. */
   inline absl::StatusCode code() const { return code_; }
@@ -312,8 +312,8 @@ class ABSL_MUST_USE_RESULT StatusBuilder {
 
   /** Implicit conversion to StatusOr. */
   template <typename T>
-  inline operator StatusOr<T>() {  // NOLINT
-    return StatusOr<T>(static_cast<absl::Status>(*this));
+  inline operator absl::StatusOr<T>() {  // NOLINT
+    return absl::StatusOr<T>(static_cast<absl::Status>(*this));
   }
 
  private:
