@@ -223,4 +223,31 @@ GetSignedPayloadSigStructureEmitter(absl::string_view headers,
       };
 }
 
+absl::StatusOr<std::pair<absl::string_view, absl::string_view>>
+ParseSignedPayloadSigStructure(absl::string_view sig_structure) {
+  std::vector<absl::string_view> parts;
+  parts.reserve(3);
+
+  google::protobuf::io::CodedInputStream stream(
+      reinterpret_cast<const uint8_t*>(sig_structure.data()),
+      static_cast<int>(sig_structure.size()));
+  while (!stream.ExpectAtEnd()) {
+    uint64_t size;
+    if (!stream.ReadVarint64(&size)) {
+      return absl::InvalidArgumentError("failed to read component length");
+    }
+    parts.push_back(sig_structure.substr(stream.CurrentPosition(), size));
+    if (!stream.Skip(static_cast<int>(size))) {
+      return absl::InvalidArgumentError("component truncated");
+    }
+  }
+  if (parts.size() != 3) {
+    return absl::InvalidArgumentError("unexpected number of components");
+  }
+  if (parts[0] != "SignedPayload") {
+    return absl::InvalidArgumentError("invalid context string");
+  }
+  return std::make_pair(parts[1], parts[2]);
+}
+
 }  // namespace fcp::confidential_compute::payload_transparency

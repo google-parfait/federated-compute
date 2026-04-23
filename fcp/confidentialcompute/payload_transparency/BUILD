@@ -35,6 +35,7 @@ cc_library(
         "//fcp/protos/confidentialcompute:access_policy_endorsement_options_cc_proto",
         "//fcp/protos/confidentialcompute:key_cc_proto",
         "//fcp/protos/confidentialcompute:payload_transparency_cc_proto",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status",

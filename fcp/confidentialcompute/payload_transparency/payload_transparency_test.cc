@@ -43,11 +43,14 @@
 namespace fcp::confidential_compute::payload_transparency {
 namespace {
 
+using ::absl_testing::IsOkAndHolds;
+using ::absl_testing::StatusIs;
 using ::fcp::confidentialcompute::AccessPolicyEndorsementOptions;
 using ::fcp::confidentialcompute::Key;
 using ::fcp::confidentialcompute::SignedPayload;
 using ::testing::ElementsAre;
 using ::testing::HasSubstr;
+using ::testing::Pair;
 
 // Returns a new EcdsaP256R1Signer and its corresponding verifying Key.
 std::tuple<EcdsaP256R1Signer, Key> CreateSignerAndVerifyingKey() {
@@ -510,6 +513,38 @@ TEST(PayloadTransparencyTest, GetSignedPayloadSigStructureEmitter) {
   GetSignedPayloadSigStructureEmitter("hdrs", "payload")(
       [&to_sign](absl::string_view part) { absl::StrAppend(&to_sign, part); });
   EXPECT_EQ(to_sign, "\15SignedPayload\4hdrs\7payload");
+}
+
+TEST(PayloadTransparencyTest, ParseSignedPayloadSigStructure) {
+  EXPECT_THAT(ParseSignedPayloadSigStructure("\15SignedPayload\4hdrs\7payload"),
+              IsOkAndHolds(Pair("hdrs", "payload")));
+}
+
+TEST(PayloadTransparencyTest, ParseInvalidSignedPayloadSigStructure) {
+  EXPECT_THAT(ParseSignedPayloadSigStructure(""),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("unexpected number of components")));
+  EXPECT_THAT(ParseSignedPayloadSigStructure("\1x"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("unexpected number of components")));
+  EXPECT_THAT(ParseSignedPayloadSigStructure("\1x\1x"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("unexpected number of components")));
+  EXPECT_THAT(ParseSignedPayloadSigStructure("\1x\1x\1x\1x"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("unexpected number of components")));
+
+  EXPECT_THAT(ParseSignedPayloadSigStructure("\x80"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("failed to read component length")));
+
+  EXPECT_THAT(ParseSignedPayloadSigStructure("\2x"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("component truncated")));
+
+  EXPECT_THAT(ParseSignedPayloadSigStructure("\14OtherContext\4hdrs\7payload"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("invalid context string")));
 }
 
 }  // namespace

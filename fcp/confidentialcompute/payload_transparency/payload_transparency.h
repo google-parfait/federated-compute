@@ -20,8 +20,10 @@
 #define FCP_CONFIDENTIALCOMPUTE_PAYLOAD_TRANSPARENCY_PAYLOAD_TRANSPARENCY_H_
 
 #include <functional>
+#include <utility>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -71,6 +73,12 @@ absl::StatusOr<VerifySignedPayloadResult> VerifySignedPayload(
 std::function<void(absl::FunctionRef<void(absl::string_view)>)>
 GetSignedPayloadSigStructureEmitter(absl::string_view headers,
                                     absl::string_view payload);
+
+// Parses the return value of GetSignedPayloadSigStructureEmitter back into the
+// headers and payload. The values are returned in that order.
+absl::StatusOr<std::pair<absl::string_view, absl::string_view>>
+ParseSignedPayloadSigStructure(
+    absl::string_view sig_structure ABSL_ATTRIBUTE_LIFETIME_BOUND);
 }  // namespace fcp::confidential_compute::payload_transparency
 
 #endif  // FCP_CONFIDENTIALCOMPUTE_PAYLOAD_TRANSPARENCY_PAYLOAD_TRANSPARENCY_H_
