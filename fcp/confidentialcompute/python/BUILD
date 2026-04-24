@@ -81,7 +81,6 @@ py_library(
     deps = [
         ":constants",
         ":external_service_handle",
-        ":program_input_provider",
         "//fcp/protos/confidentialcompute:file_info_py_pb2",
         "//fcp/protos/confidentialcompute:min_sep_data_source_py_pb2",
         "@com_google_protobuf//:protobuf_python",
@@ -106,25 +105,6 @@ py_test(
         "@federated_language//federated_language/proto:array_py_pb2",
         "@federated_language//federated_language/proto:computation_py_pb2",
         "@federated_language//federated_language/proto:data_type_py_pb2",
-        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
-        "@pypi//absl_py",
-    ],
-)
-
-py_library(
-    name = "program_input_provider",
-    srcs = ["program_input_provider.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
-    ],
-)
-
-py_test(
-    name = "program_input_provider_test",
-    srcs = ["program_input_provider_test.py"],
-    deps = [
-        ":program_input_provider",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
         "@pypi//absl_py",
     ],

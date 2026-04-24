@@ -13,6 +13,7 @@
 # limitations under the License.
 """Utilities for representing data sources with min-sep round participation."""
 
+from collections.abc import Sequence
 import concurrent.futures
 import hashlib
 import os
@@ -30,7 +31,6 @@ import numpy as np
 from google.protobuf import any_pb2
 from fcp.confidentialcompute.python import constants
 from fcp.confidentialcompute.python import external_service_handle
-from fcp.confidentialcompute.python import program_input_provider
 from fcp.protos.confidentialcompute import file_info_pb2
 from fcp.protos.confidentialcompute import min_sep_data_source_pb2
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
@@ -41,7 +41,7 @@ _RESOLVE_URI_ERROR_MESSAGE_SUBSTRING = 'Failed to fetch Tensor'
 
 def assign_client_ids_to_rounds(
     key: jax.Array,
-    client_ids: list[str],
+    client_ids: Sequence[str],
     min_sep: int,
 ) -> list[list[str]]:
   """Assigns client ids to `min_sep` rounds randomly.
@@ -91,10 +91,7 @@ class MinSepDataSourceIterator(
   def __init__(
       self,
       min_sep: int,
-      input_provider: (
-          program_input_provider.ProgramInputProvider
-          | external_service_handle.ExternalServiceHandle
-      ),
+      external_handle: external_service_handle.ExternalServiceHandle,
       computation_type: computation_pb2.Type,
       key_name: str = constants.OUTPUT_TENSOR_NAME,
       use_data_pointers: bool = False,
@@ -106,8 +103,8 @@ class MinSepDataSourceIterator(
       min_sep: The minimum difference between the round indices of two
         consecutive participations for the same client. Must be a positive
         integer.
-      input_provider: The program input provider that provides the client ids
-        and client data directory.
+      external_handle: The external service handle that facilitates interactions
+        between this program and untrusted space.
       computation_type: The type of data represented by this data source.
       key_name: The name of the key to use when creating pointers to the
         underlying data. This should match the tensor name used when creating
@@ -127,11 +124,11 @@ class MinSepDataSourceIterator(
           f'{min_sep}.'
       )
 
-    if not input_provider.client_ids:
+    if not external_handle.client_ids:
       raise ValueError('Expected `client_ids` to not be empty.')
 
     self._min_sep = min_sep
-    self._input_provider = input_provider
+    self._external_handle = external_handle
     self._computation_type = computation_type
     self._key_name = key_name
     self._use_data_pointers = use_data_pointers
@@ -145,21 +142,18 @@ class MinSepDataSourceIterator(
     # validation upon recovery.
     self._client_id_round_assignments = assign_client_ids_to_rounds(
         self._shuffling_prng_key,
-        input_provider.client_ids,
+        external_handle.client_ids,
         self._min_sep,
     )
     self._client_ids_hash = hashlib.sha256(
-        ','.join(input_provider.client_ids).encode()
+        ','.join(external_handle.client_ids).encode()
     ).digest()
 
   @classmethod
   def restore(
       cls,
       buffer: bytes,
-      input_provider: (
-          program_input_provider.ProgramInputProvider
-          | external_service_handle.ExternalServiceHandle
-      ),
+      external_handle: external_service_handle.ExternalServiceHandle,
   ) -> 'MinSepDataSourceIterator':
     """Deserializes the object from bytes."""
     state = min_sep_data_source_pb2.MinSepDataSourceState()
@@ -167,7 +161,7 @@ class MinSepDataSourceIterator(
 
     # Validate client IDs hash.
     current_hash = hashlib.sha256(
-        ','.join(input_provider.client_ids).encode()
+        ','.join(external_handle.client_ids).encode()
     ).digest()
     if current_hash != state.client_ids_hash:
       raise ValueError(
@@ -177,7 +171,7 @@ class MinSepDataSourceIterator(
     # Initialize with saved configuration.
     instance = cls(
         min_sep=state.min_sep,
-        input_provider=input_provider,
+        external_handle=external_handle,
         computation_type=computation_pb2.Type.FromString(
             state.computation_type_bytes
         ),
@@ -195,7 +189,7 @@ class MinSepDataSourceIterator(
     # Re-compute round assignments using the restored shuffling key.
     instance._client_id_round_assignments = assign_client_ids_to_rounds(
         instance._shuffling_prng_key,
-        input_provider.client_ids,
+        external_handle.client_ids,
         instance._min_sep,
     )
 
@@ -221,7 +215,7 @@ class MinSepDataSourceIterator(
   @classmethod
   def from_bytes(cls, buffer: bytes) -> 'MinSepDataSourceIterator':
     """Not supported. Use `restore` instead."""
-    raise NotImplementedError('Use restore(buffer, input_provider) instead.')
+    raise NotImplementedError('Use restore(buffer, external_handle) instead.')
 
   def to_bytes(self) -> bytes:
     """Not supported. Use `save` instead."""
@@ -290,7 +284,7 @@ class MinSepDataSourceIterator(
         any_proto.Pack(
             file_info_pb2.FileInfo(
                 uri=os.path.join(
-                    self._input_provider.client_data_directory, client_id
+                    self._external_handle.client_data_directory, client_id
                 ),
                 key=self._key_name,
             )
@@ -309,10 +303,10 @@ class MinSepDataSourceIterator(
       future_to_uri = {}
       for client_id in selected_ids:
         uri = os.path.join(
-            self._input_provider.client_data_directory, client_id
+            self._external_handle.client_data_directory, client_id
         )
         future = executor.submit(
-            self._input_provider.resolve_uri_to_tensor,
+            self._external_handle.resolve_uri_to_tensor,
             uri,
             self._key_name,
         )
@@ -361,10 +355,7 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
   def __init__(
       self,
       min_sep: int,
-      input_provider: (
-          program_input_provider.ProgramInputProvider
-          | external_service_handle.ExternalServiceHandle
-      ),
+      external_handle: external_service_handle.ExternalServiceHandle,
       computation_type: computation_pb2.Type = computation_pb2.Type(
           federated=computation_pb2.FederatedType(
               placement=computation_pb2.PlacementSpec(
@@ -388,8 +379,8 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
     Args:
       min_sep: The number of rounds that must elapse between successive
         participations for the same client. Must be a positive integer.
-      input_provider: The program input provider that provides the client ids
-        and client data directory.
+      external_handle: The external service handle that facilitates interactions
+        between this program and untrusted space.
       computation_type: The type of data represented by this data source.
       key_name: The name of the key to use when creating pointers to the
         underlying data. This should match the tensor name used when creating
@@ -407,11 +398,11 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
           f'{min_sep}.'
       )
 
-    if not input_provider.client_ids:
-      raise ValueError('Expected `input_provider.client_ids` to not be empty.')
+    if not external_handle.client_ids:
+      raise ValueError('Expected `external_handle.client_ids` to not be empty.')
 
     self._min_sep = min_sep
-    self._input_provider = input_provider
+    self._external_handle = external_handle
     self._computation_type = computation_type
     self._key_name = key_name
     self._use_data_pointers = use_data_pointers
@@ -426,7 +417,7 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
   def iterator(self) -> MinSepDataSourceIterator:
     return MinSepDataSourceIterator(
         self._min_sep,
-        self._input_provider,
+        self._external_handle,
         self._computation_type,
         self._key_name,
         self._use_data_pointers,

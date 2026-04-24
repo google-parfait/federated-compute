@@ -274,7 +274,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
     iterator = min_sep_data_source.MinSepDataSourceIterator(
         min_sep=1,
-        input_provider=external_handle,
+        external_handle=external_handle,
         computation_type=_COMPUTATION_TYPE,
         key_name=_KEY_NAME,
         use_data_pointers=False,
@@ -369,7 +369,7 @@ class MinSepDataSourceTest(absltest.TestCase):
     external_handle = _create_external_handle(client_ids=client_ids)
 
     with self.assertRaisesRegex(
-        ValueError, 'Expected `input_provider.client_ids` to not be empty.'
+        ValueError, 'Expected `external_handle.client_ids` to not be empty.'
     ):
       min_sep_data_source.MinSepDataSource(
           _MIN_SEP,
