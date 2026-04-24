@@ -57,16 +57,6 @@ cc_test(
     ],
 )
 
-cc_library(
-    name = "task_contribution_tracker",
-    hdrs = ["task_contribution_tracker.h"],
-    copts = ["-std=c++20"],
-    deps = [
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-    ],
-)
-
 cc_test(
     name = "private_logger_test",
     srcs = ["private_logger_test.cc"],
@@ -75,20 +65,7 @@ cc_test(
         "//fcp/client:selector_context_cc_proto",
         "//fcp/client/privatelogger/tests:mock_private_logger_setup",
         "//fcp/client/privatelogger/tests:private_logger_mocks",
-        "//fcp/client/privatelogger/tests:private_logger_test_scenarios",
-        "@com_google_absl//absl/status:status_matchers",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_test(
-    name = "task_contribution_tracker_test",
-    srcs = ["task_contribution_tracker_test.cc"],
-    copts = ["-std=c++20"],
-    deps = [
-        "//fcp/client/privatelogger/tests:mock_task_contribution_tracker_setup",
-        "//fcp/client/privatelogger/tests:task_contribution_tracker_mocks",
-        "//fcp/client/privatelogger/tests:task_contribution_tracker_test_scenarios",
+        "//fcp/client/privatelogger/tests:test_scenarios",
         "@com_google_absl//absl/status:status_matchers",
         "@com_google_googletest//:gtest_main",
     ],

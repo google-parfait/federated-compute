@@ -47,8 +47,8 @@ cc_library(
 )
 
 cc_library(
-    name = "private_logger_test_scenarios",
-    hdrs = ["private_logger_test_scenarios.h"],
+    name = "test_scenarios",
+    hdrs = ["test_scenarios.h"],
     copts = ["-std=c++20"],
     deps = [
         "//fcp/client/privatelogger:private_logger",
@@ -90,45 +90,7 @@ cc_library(
     copts = ["-std=c++20"],
     deps = [
         ":private_logger_mocks",
-        ":private_logger_test_scenarios",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/functional:any_invocable",
-        "@com_google_absl//absl/status",
-        "@com_google_googletest//:gtest_for_library",
-    ],
-)
-
-cc_library(
-    name = "task_contribution_tracker_mocks",
-    testonly = True,
-    hdrs = ["task_contribution_tracker_mocks.h"],
-    copts = ["-std=c++20"],
-    deps = [
-        "//fcp/client/privatelogger:task_contribution_tracker",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_googletest//:gtest_for_library",
-    ],
-)
-
-cc_library(
-    name = "task_contribution_tracker_test_scenarios",
-    hdrs = ["task_contribution_tracker_test_scenarios.h"],
-    copts = ["-std=c++20"],
-    deps = [
-        "//fcp/client/privatelogger:task_contribution_tracker",
-    ],
-)
-
-cc_library(
-    name = "mock_task_contribution_tracker_setup",
-    testonly = True,
-    srcs = ["mock_task_contribution_tracker_setup.cc"],
-    hdrs = ["mock_task_contribution_tracker_setup.h"],
-    copts = ["-std=c++20"],
-    deps = [
-        ":task_contribution_tracker_mocks",
-        ":task_contribution_tracker_test_scenarios",
+        ":test_scenarios",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/status",
