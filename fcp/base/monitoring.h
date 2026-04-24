@@ -115,10 +115,10 @@ namespace fcp {
  * Check that the expression generating a status code is OK, otherwise die.
  * Any additional messages can be streamed into the invocation.
  */
-#define FCP_CHECK_STATUS(status)                                     \
-  for (auto __check_status = (status);                               \
-       __check_status.code() != ::fcp::StatusCode::kOk;)             \
-  FCP_LOG_IF(FATAL, __check_status.code() != ::fcp::StatusCode::kOk) \
+#define FCP_CHECK_STATUS(status)                                      \
+  for (auto __check_status = (status);                                \
+       __check_status.code() != ::absl::StatusCode::kOk;)             \
+  FCP_LOG_IF(FATAL, __check_status.code() != ::absl::StatusCode::kOk) \
       << "status not OK: " << __check_status
 
 // Status and StatusOr
