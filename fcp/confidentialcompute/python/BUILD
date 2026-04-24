@@ -83,6 +83,7 @@ py_library(
         ":external_service_handle",
         ":program_input_provider",
         "//fcp/protos/confidentialcompute:file_info_py_pb2",
+        "//fcp/protos/confidentialcompute:min_sep_data_source_py_pb2",
         "@com_google_protobuf//:protobuf_python",
         "@federated_language//federated_language",
         "@federated_language//federated_language/proto:array_py_pb2",
@@ -90,6 +91,8 @@ py_library(
         "@federated_language//federated_language/proto:data_type_py_pb2",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/core:tensor_py_pb2",
         "@pypi//absl_py",
+        "@pypi//jax",
+        "@pypi//numpy",
     ],
 )
 

@@ -1,0 +1,46 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fcp.confidentialcompute;
+
+option java_multiple_files = true;
+option java_package = "com.google.intelligence.fcp.confidentialcompute";
+option java_outer_classname = "MinSepDataSourceProto";
+
+// The state of a `MinSepDataSourceIterator`.
+message MinSepDataSourceState {
+  // The hash of the client IDs provided to the data source. Used to validate
+  // that the client IDs have not changed since the last time the state was
+  // saved.
+  bytes client_ids_hash = 1;
+  // The PRNG key used to shuffle the client IDs.
+  bytes shuffling_prng_key = 2;
+  // The PRNG key used to select the client IDs.
+  bytes selection_prng_key = 3;
+  // The current round index.
+  int32 round_index = 4;
+  // The minimum difference between the round indices of two consecutive
+  // participations for the same client.
+  int32 min_sep = 5;
+  // The serialized `computation_pb2.Type` of the data returned by the data
+  // source.
+  bytes computation_type_bytes = 6;
+  // The name of the key to use when creating pointers to the underlying data.
+  string key_name = 7;
+  // Whether the data source returns TFF value data pointers or returns resolved
+  // TFF value literals.
+  bool use_data_pointers = 8;
+}

@@ -14,8 +14,9 @@
 """Utilities for representing data sources with min-sep round participation."""
 
 import concurrent.futures
+import hashlib
 import os
-import random
+import time
 from typing import Optional
 
 from absl import logging
@@ -23,16 +24,56 @@ import federated_language
 from federated_language.proto import array_pb2
 from federated_language.proto import computation_pb2
 from federated_language.proto import data_type_pb2
+import jax
+import numpy as np
 
 from google.protobuf import any_pb2
 from fcp.confidentialcompute.python import constants
 from fcp.confidentialcompute.python import external_service_handle
 from fcp.confidentialcompute.python import program_input_provider
 from fcp.protos.confidentialcompute import file_info_pb2
+from fcp.protos.confidentialcompute import min_sep_data_source_pb2
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
 
 
 _RESOLVE_URI_ERROR_MESSAGE_SUBSTRING = 'Failed to fetch Tensor'
+
+
+def assign_client_ids_to_rounds(
+    key: jax.Array,
+    client_ids: list[str],
+    min_sep: int,
+) -> list[list[str]]:
+  """Assigns client ids to `min_sep` rounds randomly.
+
+  We are currently optimizing for privacy without amplification, so we first
+  shuffle the client ids and then assign them to groups of equal size. If we
+  later decide to optimize for privacy with amplification (which will
+  require further obfuscation of which clients are participating in a round)
+  then we should assign each client independently to a random group such
+  that the groups may not have equal size.
+
+  A client id will be eligible for participation in round `i` if it is
+  assigned to the `i % min_sep`th entry in the returned list.
+
+  In order for this function to be deterministic, the same key and the same
+  client ids (in the same order) must be provided.
+
+  Args:
+    key: The key to use for shuffling.
+    client_ids: The list of client ids to assign to rounds.
+    min_sep: The minimum difference between the round indices of two consecutive
+      participations for the same client. Must be a positive integer.
+
+  Returns:
+    A list of lists of client ids, where the outer list has length `min_sep`
+    and the inner lists contain the client ids assigned to each round.
+  """
+  shuffled_client_indices = jax.random.permutation(key, len(client_ids))
+  client_id_round_assignments = [[] for _ in range(min_sep)]
+  for i, client_index in enumerate(shuffled_client_indices):
+    client_id_round_assignments[i % min_sep].append(client_ids[client_index])
+  return client_id_round_assignments
 
 
 class MinSepDataSourceIterator(
@@ -57,12 +98,14 @@ class MinSepDataSourceIterator(
       computation_type: computation_pb2.Type,
       key_name: str = constants.OUTPUT_TENSOR_NAME,
       use_data_pointers: bool = False,
+      key: Optional[jax.Array] = None,
   ):
     """Returns an initialized `tff.program.MinSepDataSourceIterator`.
 
     Args:
-      min_sep: The number of rounds that must elapse between successive
-        participations for the same client. Must be a positive integer.
+      min_sep: The minimum difference between the round indices of two
+        consecutive participations for the same client. Must be a positive
+        integer.
       input_provider: The program input provider that provides the client ids
         and client data directory.
       computation_type: The type of data represented by this data source.
@@ -71,6 +114,8 @@ class MinSepDataSourceIterator(
         the federated checkpoint for the uploaded client data.
       use_data_pointers: Whether to return TFF value data pointers or return
         resolved TFF value literals.
+      key: The key to use for shuffling and selection. If None, a new key will
+        be created based on the current time.
 
     Raises:
       ValueError: If `client_ids` is empty or if `min_sep` is not a positive
@@ -85,41 +130,102 @@ class MinSepDataSourceIterator(
     if not input_provider.client_ids:
       raise ValueError('Expected `client_ids` to not be empty.')
 
-    # The client ids are randomly assigned to `min_sep` rounds.
-    #
-    # We are currently optimizing for privacy without amplification, so we first
-    # shuffle the client ids and then assign them to groups of equal size. If we
-    # later decide to optimize for privacy with amplification (which will
-    # require further obfuscation of which clients are participating in a round)
-    # then we should assign each client independently to a random group such
-    # that the groups may not have equal size.
-    #
-    # A client id will be eligible for participation in round `i` if it is
-    # assigned to the `i % min_sep`th entry in `_client_id_round_assignments`.
-    self._client_id_round_assignments = [[] for _ in range(min_sep)]
-    random.shuffle(input_provider.client_ids)
-    for i, client_id in enumerate(input_provider.client_ids):
-      self._client_id_round_assignments[i % min_sep].append(client_id)
-
     self._min_sep = min_sep
     self._input_provider = input_provider
     self._computation_type = computation_type
     self._key_name = key_name
     self._use_data_pointers = use_data_pointers
     self._round_index = 0
+    # If no key is provided, create a new key based on the current time.
+    if key is None:
+      key = jax.random.key(int(time.time() * 1e6))
+    self._shuffling_prng_key, self._selection_prng_key = jax.random.split(key)
+
+    # Assign client ids to rounds and compute hash of client ids list for
+    # validation upon recovery.
+    self._client_id_round_assignments = assign_client_ids_to_rounds(
+        self._shuffling_prng_key,
+        input_provider.client_ids,
+        self._min_sep,
+    )
+    self._client_ids_hash = hashlib.sha256(
+        ','.join(input_provider.client_ids).encode()
+    ).digest()
+
+  @classmethod
+  def restore(
+      cls,
+      buffer: bytes,
+      input_provider: (
+          program_input_provider.ProgramInputProvider
+          | external_service_handle.ExternalServiceHandle
+      ),
+  ) -> 'MinSepDataSourceIterator':
+    """Deserializes the object from bytes."""
+    state = min_sep_data_source_pb2.MinSepDataSourceState()
+    state.ParseFromString(buffer)
+
+    # Validate client IDs hash.
+    current_hash = hashlib.sha256(
+        ','.join(input_provider.client_ids).encode()
+    ).digest()
+    if current_hash != state.client_ids_hash:
+      raise ValueError(
+          'Client IDs in input provider do not match recovered state.'
+      )
+
+    # Initialize with saved configuration.
+    instance = cls(
+        min_sep=state.min_sep,
+        input_provider=input_provider,
+        computation_type=computation_pb2.Type.FromString(
+            state.computation_type_bytes
+        ),
+        key_name=state.key_name,
+        use_data_pointers=state.use_data_pointers,
+    )
+
+    # Restore state.
+    instance._round_index = state.round_index
+    shuffling_arr = np.frombuffer(state.shuffling_prng_key, dtype=np.uint32)
+    selection_arr = np.frombuffer(state.selection_prng_key, dtype=np.uint32)
+    instance._shuffling_prng_key = jax.random.wrap_key_data(shuffling_arr)
+    instance._selection_prng_key = jax.random.wrap_key_data(selection_arr)
+
+    # Re-compute round assignments using the restored shuffling key.
+    instance._client_id_round_assignments = assign_client_ids_to_rounds(
+        instance._shuffling_prng_key,
+        input_provider.client_ids,
+        instance._min_sep,
+    )
+
+    return instance
+
+  def save(self) -> bytes:
+    """Serializes the object to bytes."""
+    state = min_sep_data_source_pb2.MinSepDataSourceState()
+    state.min_sep = self._min_sep
+    state.computation_type_bytes = self._computation_type.SerializeToString()
+    state.key_name = self._key_name
+    state.use_data_pointers = self._use_data_pointers
+    state.round_index = self._round_index
+    state.shuffling_prng_key = jax.random.key_data(
+        self._shuffling_prng_key
+    ).tobytes()
+    state.selection_prng_key = jax.random.key_data(
+        self._selection_prng_key
+    ).tobytes()
+    state.client_ids_hash = self._client_ids_hash
+    return state.SerializeToString()
 
   @classmethod
   def from_bytes(cls, buffer: bytes) -> 'MinSepDataSourceIterator':
-    """Deserializes the object from bytes."""
-    # TODO: b/420969188 - Add deserialization support if fault tolerance is
-    # needed.
-    raise NotImplementedError()
+    """Not supported. Use `restore` instead."""
+    raise NotImplementedError('Use restore(buffer, input_provider) instead.')
 
   def to_bytes(self) -> bytes:
-    """Serializes the object to bytes."""
-    # TODO: b/420969188 - Add serialization support if fault tolerance is
-    # needed.
-    raise NotImplementedError()
+    """Not supported. Use `save` instead."""
+    raise NotImplementedError('Use save() instead.')
 
   @property
   def federated_type(self) -> federated_language.FederatedType:
@@ -162,7 +268,19 @@ class MinSepDataSourceIterator(
           f'Requested {k}, eligible {len(eligible_ids)}.'
       )
 
-    selected_ids = random.sample(eligible_ids, k)
+    # Split the selection key to use for this round.
+    self._selection_prng_key, subkey = jax.random.split(
+        self._selection_prng_key
+    )
+
+    # Sample client ids without replacement using JAX.
+    selected_indices = jax.random.choice(
+        subkey,
+        len(eligible_ids),
+        shape=(k,),
+        replace=False,
+    )
+    selected_ids = [eligible_ids[int(i)] for i in selected_indices]
     self._round_index += 1
 
     selected_values = []

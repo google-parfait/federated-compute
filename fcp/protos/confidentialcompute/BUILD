@@ -229,6 +229,16 @@ py_proto_library(
     deps = [":file_info_proto"],
 )
 
+proto_library(
+    name = "min_sep_data_source_proto",
+    srcs = ["min_sep_data_source.proto"],
+)
+
+py_proto_library(
+    name = "min_sep_data_source_py_pb2",
+    deps = [":min_sep_data_source_proto"],
+)
+
 cc_proto_library(
     name = "file_info_cc_proto",
     deps = [":file_info_proto"],

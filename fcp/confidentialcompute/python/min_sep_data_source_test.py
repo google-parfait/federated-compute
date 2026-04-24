@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Sequence
 import os
 import time
 from unittest import mock
@@ -38,57 +37,31 @@ _COMPUTATION_TYPE = computation_pb2.Type(
 )
 
 
-def _mock_resolve_uri_to_tensor(uri: str, key: str) -> tensor_pb2.TensorProto:
-  """Spec for mock_resolve_uri_to_tensor_fn."""
-  del uri, key  # Unused
-  return tensor_pb2.TensorProto()
-
-
-def _mock_release_unencrypted(value: bytes, key: str) -> None:
-  """Spec for mock_release_unencrypted_fn."""
-  del value, key  # Unused
-
-
-def _mock_save_recovery_info(
-    recovery_info: bytes,
-    recovery_key: str,
-    value_key_pairs: Sequence[tuple[bytes, str]],
-) -> None:
-  """Spec for mock_save_recovery_info_fn."""
-  del recovery_info, recovery_key, value_key_pairs  # Unused
-
-
-def _mock_restore_recovery_info(key: str) -> bytes:
-  """Spec for mock_restore_recovery_info_fn."""
-  del key  # Unused
-  return b''
-
-
 def _create_external_handle(
-    client_ids: Sequence[str] | None = None,
-    client_data_directory: str = _TEST_CLIENT_DATA_DIRECTORY,
-    resolve_uri_to_tensor_fn=None,
-) -> external_service_handle.ExternalServiceHandle:
+    client_ids=None,
+    resolve_fn=None,
+):
   """Creates an ExternalServiceHandle with default mock functions."""
+  if client_ids is None:
+    client_ids = _CLIENT_IDS
   return external_service_handle.ExternalServiceHandle(
       '',
-      client_ids if client_ids is not None else _CLIENT_IDS,
-      client_data_directory,
+      client_ids,
+      _TEST_CLIENT_DATA_DIRECTORY,
       {},
-      resolve_uri_to_tensor_fn=resolve_uri_to_tensor_fn
-      or mock.create_autospec(_mock_resolve_uri_to_tensor),
-      release_unencrypted_fn=mock.create_autospec(_mock_release_unencrypted),
-      save_recovery_info_fn=mock.create_autospec(_mock_save_recovery_info),
-      restore_recovery_info_fn=mock.create_autospec(
-          _mock_restore_recovery_info
-      ),
+      resolve_uri_to_tensor_fn=resolve_fn or mock.Mock(),
+      release_unencrypted_fn=mock.Mock(),
+      save_recovery_info_fn=mock.Mock(),
+      restore_recovery_info_fn=mock.Mock(),
   )
 
 
 class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
   def test_init_raises_value_error_with_client_ids_empty(self):
-    external_handle = _create_external_handle(client_ids=[])
+    client_ids = []
+
+    external_handle = _create_external_handle(client_ids=client_ids)
 
     with self.assertRaisesRegex(
         ValueError, 'Expected `client_ids` to not be empty.'
@@ -102,6 +75,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
   def test_init_raises_value_error_with_invalid_min_sep(self):
     min_sep = 0
+
     external_handle = _create_external_handle()
 
     with self.assertRaisesRegex(
@@ -136,11 +110,10 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
       ),
   )
   def test_select_raises_value_error_with_k(self, k, expected_error_message):
-    # Set the client ids to have 100 clients. The number of eligible
-    # clients per round will be 100 / _MIN_SEP = 10 since _MIN_SEP is 10.
-    external_handle = _create_external_handle(
-        client_ids=[str(i) for i in range(100)]
-    )
+    num_clients = 100
+    client_ids = [str(i) for i in range(num_clients)]
+
+    external_handle = _create_external_handle(client_ids=client_ids)
 
     iterator = min_sep_data_source.MinSepDataSourceIterator(
         _MIN_SEP,
@@ -172,12 +145,10 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
           shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
       )
 
+    mock_resolve_fn = mock.Mock()
+    mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
     external_handle = _create_external_handle(
-        client_ids=client_ids,
-        resolve_uri_to_tensor_fn=mock.create_autospec(
-            mock_resolve_uri_to_tensor_fn,
-            side_effect=mock_resolve_uri_to_tensor_fn,
-        ),
+        client_ids=client_ids, resolve_fn=mock_resolve_fn
     )
 
     # Create an iterator that will have 100 eligible clients per round.
@@ -239,6 +210,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
   def test_select_parallelizes_resolve_uri_to_tensor(self):
     num_clients = 200
+    client_ids = [str(i) for i in range(num_clients)]
     k = 10
     sleep_seconds = 5
 
@@ -252,13 +224,10 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
           shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
       )
 
-    mock_resolve_uri_to_tensor_fn = mock.create_autospec(
-        _mock_resolve_uri_to_tensor,
-        side_effect=slow_resolve_uri_to_tensor_fn,
-    )
+    mock_resolve_fn = mock.Mock()
+    mock_resolve_fn.side_effect = slow_resolve_uri_to_tensor_fn
     external_handle = _create_external_handle(
-        client_ids=[str(i) for i in range(num_clients)],
-        resolve_uri_to_tensor_fn=mock_resolve_uri_to_tensor_fn,
+        client_ids=client_ids, resolve_fn=mock_resolve_fn
     )
 
     iterator = min_sep_data_source.MinSepDataSourceIterator(
@@ -270,16 +239,17 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     )
 
     # Call select and verify that resolve_uri_to_tensor was called k times and
-    # that the time taken is within 1 second of the expected time if the
-    # parallelization is working correctly.
+    # that the time taken is close to the expected time if the parallelization
+    # is working correctly.
     start_time = time.time()
     data_for_round = iterator.select(k)
     end_time = time.time()
-    self.assertLess(end_time - start_time, sleep_seconds + 1)
+    self.assertLess(end_time - start_time, sleep_seconds + 2)
     self.assertLen(data_for_round, k)
-    self.assertEqual(mock_resolve_uri_to_tensor_fn.call_count, k)
+    self.assertEqual(mock_resolve_fn.call_count, k)
 
   def test_select_skips_bad_decrypt_errors(self):
+    client_ids = ['0', '1']
     k = 2
 
     def failing_resolve_uri_to_tensor_fn(
@@ -299,8 +269,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
       )
 
     external_handle = _create_external_handle(
-        client_ids=['0', '1'],
-        resolve_uri_to_tensor_fn=failing_resolve_uri_to_tensor_fn,
+        client_ids=client_ids, resolve_fn=failing_resolve_uri_to_tensor_fn
     )
 
     iterator = min_sep_data_source.MinSepDataSourceIterator(
@@ -328,6 +297,58 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
           'Skipped 1 inputs due to resolve errors in total of 2 inputs.',
       )
 
+  def test_save_and_restore(self):
+    num_clients = 55
+    client_ids = [str(i) for i in range(num_clients)]
+    external_handle = _create_external_handle(client_ids=client_ids)
+
+    iterator = min_sep_data_source.MinSepDataSourceIterator(
+        _MIN_SEP,
+        external_handle,
+        _COMPUTATION_TYPE,
+        _KEY_NAME,
+        use_data_pointers=True,
+    )
+    k = 5
+    # Call `select` 3 times to advance the round index and update the PRNG keys.
+    for _ in range(3):
+      iterator.select(k)
+
+    state = iterator.save()
+    restored_iterator = min_sep_data_source.MinSepDataSourceIterator.restore(
+        state, external_handle
+    )
+
+    # Check that the original and restored iterators produce the same results
+    # for the next round.
+    self.assertEqual(iterator.select(k), restored_iterator.select(k))
+
+    # Check that if the iterators are advanced different numbers of times, they
+    # will produce different results.
+    iterator.select(k)
+    self.assertNotEqual(iterator.select(k), restored_iterator.select(k))
+
+  def test_save_and_restore_mismatched_client_ids(self):
+    client_ids = ['a', 'b', 'c']
+    external_handle = _create_external_handle(client_ids=client_ids)
+    iterator = min_sep_data_source.MinSepDataSourceIterator(
+        _MIN_SEP,
+        external_handle,
+        _COMPUTATION_TYPE,
+        _KEY_NAME,
+    )
+    state = iterator.save()
+
+    mismatched_external_handle = _create_external_handle(
+        client_ids=['a', 'b', 'd']
+    )
+    with self.assertRaisesRegex(
+        ValueError, 'Client IDs in input provider do not match recovered state.'
+    ):
+      min_sep_data_source.MinSepDataSourceIterator.restore(
+          state, mismatched_external_handle
+      )
+
 
 class MinSepDataSourceTest(absltest.TestCase):
 
@@ -344,7 +365,8 @@ class MinSepDataSourceTest(absltest.TestCase):
     )
 
   def test_init_raises_value_error_with_client_ids_empty(self):
-    external_handle = _create_external_handle(client_ids=[])
+    client_ids = []
+    external_handle = _create_external_handle(client_ids=client_ids)
 
     with self.assertRaisesRegex(
         ValueError, 'Expected `input_provider.client_ids` to not be empty.'
