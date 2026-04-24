@@ -19,6 +19,7 @@
 #include <sstream>
 #include <string>
 
+#include "absl/status/status.h"
 #include "fcp/base/base_name.h"
 
 namespace fcp {
@@ -36,7 +37,7 @@ StatusBuilder::StatusBuilder(StatusBuilder const& other)
 
 StatusBuilder::operator absl::Status() {
   auto message_str = message_.str();
-  if (code_ != OK) {
+  if (code_ != absl::StatusCode::kOk) {
     std::ostringstream status_message;
     status_message << "(at " << BaseName(file_) << ":" << line_ << message_str;
     message_str = status_message.str();

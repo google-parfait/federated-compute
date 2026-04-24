@@ -19,7 +19,7 @@
 
 #include <memory>
 
-#include "fcp/base/monitoring.h"
+#include "absl/status/statusor.h"
 
 namespace fcp {
 namespace secagg {
@@ -28,10 +28,10 @@ namespace secagg {
 // the object. Allows to query certain distribution functions.
 class HypergeometricDistribution {
  public:
-  static StatusOr<std::unique_ptr<HypergeometricDistribution>> Create(
+  static absl::StatusOr<std::unique_ptr<HypergeometricDistribution>> Create(
       int total, int marked, int sampled);
 
-  // Evaluates the probability mass funciton of the random variable at x.
+  // Evaluates the probability mass function of the random variable at x.
   double PMF(double x);
 
   // Evaluates the cumulative distribution function of the random variable at x.

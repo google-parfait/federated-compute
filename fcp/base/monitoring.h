@@ -238,12 +238,12 @@ inline absl::Status AsStatus(const absl::StatusOr<T>& status_or) {
  *       return FCP_STATUS(OK);
  *     }
  */
-#define FCP_RETURN_IF_ERROR(expr)                             \
-  do {                                                        \
-    ::fcp::Status __status = ::fcp::internal::AsStatus(expr); \
-    if (__status.code() != ::fcp::StatusCode::kOk) {          \
-      return (__status);                                      \
-    }                                                         \
+#define FCP_RETURN_IF_ERROR(expr)                              \
+  do {                                                         \
+    ::absl::Status __status = ::fcp::internal::AsStatus(expr); \
+    if (__status.code() != ::absl::StatusCode::kOk) {          \
+      return (__status);                                       \
+    }                                                          \
   } while (false)
 
 /**

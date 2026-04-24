@@ -21,6 +21,8 @@
 #include <type_traits>
 #include <variant>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "fcp/base/error.h"
 #include "fcp/base/meta.h"
 #include "fcp/base/source_location.h"
@@ -370,19 +372,19 @@ struct ExpectOk : public ExpectBase {
       : ExpectBase(loc) {}
 
   template <typename T>
-  constexpr Result<T> operator()(StatusOr<T> s) const {
+  constexpr Result<T> operator()(absl::StatusOr<T> s) const {
     if (s.ok()) {
       return std::move(s).value();
     } else {
-      return TraceUnexpectedStatus(fcp::OK, s.status());
+      return TraceUnexpectedStatus(absl::StatusCode::kOk, s.status());
     }
   }
 
   Result<Unit> operator()(const absl::Status& s) const {
-    if (s.code() == fcp::OK) {
+    if (s.code() == absl::StatusCode::kOk) {
       return Unit{};
     } else {
-      return TraceUnexpectedStatus(fcp::OK, s);
+      return TraceUnexpectedStatus(absl::StatusCode::kOk, s);
     }
   }
 };

@@ -323,6 +323,8 @@ cc_library(
         ":source_location",
         ":tracing_schema",
         "//fcp/tracing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 

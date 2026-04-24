@@ -213,7 +213,11 @@ cc_library(
     hdrs = [
         "distribution_utilities.h",
     ],
-    deps = ["//fcp/base"],
+    deps = [
+        "//fcp/base",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
 )
 
 cc_test(
