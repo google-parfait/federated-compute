@@ -39,11 +39,20 @@ from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
 _RESOLVE_URI_ERROR_MESSAGE_SUBSTRING = 'Failed to fetch Tensor'
 
 
+def _compute_client_ids_hash(client_ids: Sequence[bytes | str]) -> bytes:
+  """Computes a SHA-256 hash of a list of client IDs."""
+  return hashlib.sha256(
+      b','.join(
+          cid.encode() if isinstance(cid, str) else cid for cid in client_ids
+      )
+  ).digest()
+
+
 def assign_client_ids_to_rounds(
     key: jax.Array,
-    client_ids: Sequence[str],
+    client_ids: Sequence[bytes | str],
     min_sep: int,
-) -> list[list[str]]:
+) -> list[list[bytes | str]]:
   """Assigns client ids to `min_sep` rounds randomly.
 
   We are currently optimizing for privacy without amplification, so we first
@@ -145,9 +154,7 @@ class MinSepDataSourceIterator(
         external_handle.client_ids,
         self._min_sep,
     )
-    self._client_ids_hash = hashlib.sha256(
-        ','.join(external_handle.client_ids).encode()
-    ).digest()
+    self._client_ids_hash = _compute_client_ids_hash(external_handle.client_ids)
 
   @classmethod
   def restore(
@@ -160,9 +167,7 @@ class MinSepDataSourceIterator(
     state.ParseFromString(buffer)
 
     # Validate client IDs hash.
-    current_hash = hashlib.sha256(
-        ','.join(external_handle.client_ids).encode()
-    ).digest()
+    current_hash = _compute_client_ids_hash(external_handle.client_ids)
     if current_hash != state.client_ids_hash:
       raise ValueError(
           'Client IDs in input provider do not match recovered state.'
@@ -281,14 +286,31 @@ class MinSepDataSourceIterator(
     if self._use_data_pointers:
       for client_id in selected_ids:
         any_proto = any_pb2.Any()
-        any_proto.Pack(
-            file_info_pb2.FileInfo(
-                uri=os.path.join(
-                    self._external_handle.client_data_directory, client_id
-                ),
-                key=self._key_name,
+        # TODO: b/487997314 - Remove this branch once the migration to spanner
+        # is complete.
+        if self._external_handle.client_data_directory:
+          if not isinstance(client_id, str):
+            raise TypeError(
+                'Expected client_id to be a string when '
+                f'client_data_directory is set, found {type(client_id)}.'
             )
-        )
+          file_info = file_info_pb2.FileInfo(
+              uri=os.path.join(
+                  self._external_handle.client_data_directory, client_id
+              ),
+              key=self._key_name,
+          )
+        else:
+          if not isinstance(client_id, bytes):
+            raise TypeError(
+                'Expected client_id to be bytes when client_data_directory '
+                f'is not set, found {type(client_id)}.'
+            )
+          file_info = file_info_pb2.FileInfo(
+              blob_id=client_id,
+              key=self._key_name,
+          )
+        any_proto.Pack(file_info)
         selected_values.append(
             computation_pb2.Computation(
                 type=self._computation_type,
@@ -302,9 +324,24 @@ class MinSepDataSourceIterator(
     ) as executor:
       future_to_uri = {}
       for client_id in selected_ids:
-        uri = os.path.join(
-            self._external_handle.client_data_directory, client_id
-        )
+        # TODO: b/487997314 - Remove this branch once the migration to spanner
+        # is complete.
+        if self._external_handle.client_data_directory:
+          if not isinstance(client_id, str):
+            raise TypeError(
+                'Expected client_id to be a string when '
+                f'client_data_directory is set, found {type(client_id)}.'
+            )
+          uri = os.path.join(
+              self._external_handle.client_data_directory, client_id
+          )
+        else:
+          if not isinstance(client_id, bytes):
+            raise TypeError(
+                'Expected client_id to be bytes when client_data_directory '
+                f'is not set, found {type(client_id)}.'
+            )
+          uri = client_id
         future = executor.submit(
             self._external_handle.resolve_uri_to_tensor,
             uri,

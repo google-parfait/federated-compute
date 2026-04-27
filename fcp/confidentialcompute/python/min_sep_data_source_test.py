@@ -29,8 +29,7 @@ from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
 
 
 _MIN_SEP = 10
-_CLIENT_IDS = ['a', 'b', 'c']
-_TEST_CLIENT_DATA_DIRECTORY = 'test_dir'
+_CLIENT_IDS = [b'a', b'b', b'c']
 _KEY_NAME = 'key_name'
 _COMPUTATION_TYPE = computation_pb2.Type(
     tensor=computation_pb2.TensorType(dtype=data_type_pb2.DataType.DT_INT32)
@@ -39,16 +38,17 @@ _COMPUTATION_TYPE = computation_pb2.Type(
 
 def _create_external_handle(
     client_ids=None,
+    client_data_directory='',
     resolve_fn=None,
 ):
   """Creates an ExternalServiceHandle with default mock functions."""
   if client_ids is None:
     client_ids = _CLIENT_IDS
   return external_service_handle.ExternalServiceHandle(
-      '',
-      client_ids,
-      _TEST_CLIENT_DATA_DIRECTORY,
-      {},
+      outgoing_server_address='',
+      client_ids=client_ids,
+      client_data_directory=client_data_directory,
+      config_id_to_filename={},
       resolve_uri_to_tensor_fn=resolve_fn or mock.Mock(),
       release_unencrypted_fn=mock.Mock(),
       save_recovery_info_fn=mock.Mock(),
@@ -111,7 +111,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
   )
   def test_select_raises_value_error_with_k(self, k, expected_error_message):
     num_clients = 100
-    client_ids = [str(i) for i in range(num_clients)]
+    client_ids = [str(i).encode() for i in range(num_clients)]
 
     external_handle = _create_external_handle(client_ids=client_ids)
 
@@ -125,6 +125,8 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     with self.assertRaisesRegex(ValueError, expected_error_message):
       iterator.select(k)
 
+  # TODO: b/497752916 - Update this test once we have completed the migration to
+  # spanner.
   @parameterized.named_parameters(
       ('with_data_pointers', True),
       ('with_resolved_values', False),
@@ -148,7 +150,9 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     mock_resolve_fn = mock.Mock()
     mock_resolve_fn.side_effect = mock_resolve_uri_to_tensor_fn
     external_handle = _create_external_handle(
-        client_ids=client_ids, resolve_fn=mock_resolve_fn
+        client_ids=client_ids,
+        client_data_directory='test_dir',
+        resolve_fn=mock_resolve_fn,
     )
 
     # Create an iterator that will have 100 eligible clients per round.
@@ -189,7 +193,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
           self.assertEqual(value.dtype, data_type_pb2.DataType.DT_STRING)
           uri = value.content.decode()
 
-        self.assertEqual(os.path.dirname(uri), _TEST_CLIENT_DATA_DIRECTORY)
+        self.assertEqual(os.path.dirname(uri), 'test_dir')
         client_id = os.path.basename(uri)
         client_id_to_round_indices.setdefault(client_id, []).append(round_index)
 
@@ -227,7 +231,9 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     mock_resolve_fn = mock.Mock()
     mock_resolve_fn.side_effect = slow_resolve_uri_to_tensor_fn
     external_handle = _create_external_handle(
-        client_ids=client_ids, resolve_fn=mock_resolve_fn
+        client_ids=client_ids,
+        client_data_directory='test_dir',
+        resolve_fn=mock_resolve_fn,
     )
 
     iterator = min_sep_data_source.MinSepDataSourceIterator(
@@ -253,27 +259,28 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     self.assertEqual(mock_resolve_fn.call_count, k)
 
   def test_select_skips_bad_decrypt_errors(self):
-    client_ids = ['0', '1']
+    client_ids = [b'0', b'1']
     k = 2
 
     def failing_resolve_uri_to_tensor_fn(
-        uri: str, key: str
+        uri: bytes, key: str
     ) -> tensor_pb2.TensorProto:
       """A mock function for resolving a URI to a tensor."""
       del key
-      client_id = os.path.basename(uri)
-      if client_id == '0':
+      if uri == b'0':
         raise RuntimeError(
             'Failed to fetch Tensor: Failed to unwrap symmetric key'
         )
       return tensor_pb2.TensorProto(
           dtype=tensor_pb2.DataType.DT_STRING,
-          content=uri.encode(),
+          content=uri,
           shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
       )
 
     external_handle = _create_external_handle(
-        client_ids=client_ids, resolve_fn=failing_resolve_uri_to_tensor_fn
+        client_ids=client_ids,
+        client_data_directory='',
+        resolve_fn=failing_resolve_uri_to_tensor_fn,
     )
 
     iterator = min_sep_data_source.MinSepDataSourceIterator(
@@ -293,7 +300,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
       self.assertLen(logs.output, 2)
       self.assertRegex(
           logs.output[0],
-          'Skipping URI: test_dir/0 due to resolve error: Failed to fetch'
+          "Skipping URI: b'0' due to resolve error: Failed to fetch"
           ' Tensor: Failed to unwrap symmetric key',
       )
       self.assertRegex(
@@ -303,7 +310,7 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
 
   def test_save_and_restore(self):
     num_clients = 55
-    client_ids = [str(i) for i in range(num_clients)]
+    client_ids = [str(i).encode() for i in range(num_clients)]
     external_handle = _create_external_handle(client_ids=client_ids)
 
     iterator = min_sep_data_source.MinSepDataSourceIterator(

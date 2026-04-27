@@ -29,14 +29,18 @@ class ExternalServiceHandle(abc.ABC):
   outgoing server address.
   """
 
+  # TODO: b/487997314 - Set the client_ids type to Sequence[bytes] once we have
+  # completed the migration to spanner.
   def __init__(
       self,
       outgoing_server_address: str,
-      client_ids: Sequence[str],
+      client_ids: Sequence[bytes | str],
       client_data_directory: str,
       config_id_to_filename: Mapping[str, str],
       *,
-      resolve_uri_to_tensor_fn: Callable[[str, str], tensor_pb2.TensorProto],
+      resolve_uri_to_tensor_fn: Callable[
+          [bytes | str, str], tensor_pb2.TensorProto
+      ],
       release_unencrypted_fn: Callable[[bytes, str], None],
       save_recovery_info_fn: Callable[
           [bytes, str, Sequence[tuple[bytes, str]]], None
@@ -48,8 +52,10 @@ class ExternalServiceHandle(abc.ABC):
     Args:
       outgoing_server_address: The address at which external services can be
         reached.
-      client_ids: A list of strings representing the clients from this data
-        source.
+      client_ids: A list representing the clients from this data source. If
+        client_data_directory is empty, these client ids are blob ids of blobs
+        stored in Spanner. If client_data_directory is nonempty, these client
+        ids are base filenames of blobs stored in Blobstore.
       client_data_directory: The directory containing the client data.
       config_id_to_filename: A dictionary mapping config ids to the paths of the
         files containing information for that id.
@@ -80,7 +86,7 @@ class ExternalServiceHandle(abc.ABC):
     return self._outgoing_server_address
 
   @property
-  def client_ids(self) -> Sequence[str]:
+  def client_ids(self) -> Sequence[bytes | str]:
     """Returns the list of client ids."""
     return self._client_ids
 
@@ -98,14 +104,18 @@ class ExternalServiceHandle(abc.ABC):
       )
     return self._config_id_to_filename[config_id]
 
-  def resolve_uri_to_tensor(self, uri: str, key: str) -> tensor_pb2.TensorProto:
+  # TODO: b/497752916 - Rename this to resolve_blob_id_to_tensor once the
+  # migration to spanner is complete.
+  def resolve_uri_to_tensor(
+      self, uri: bytes | str, key: str
+  ) -> tensor_pb2.TensorProto:
     """Resolves a pointer to a tensor.
 
     The tensor is assumed to be stored at a given key within a FcCheckpoint
-    located at a given URI.
+    located at a given URI or blob id.
 
     Args:
-      uri: The URI at which the FcCheckpoint is located.
+      uri: The URI or blob id at which the FcCheckpoint is located.
       key: The key at which to find the tensor within the FcCheckpoint.
 
     Returns:

@@ -33,7 +33,7 @@ message ReadRequest {
   // The filepath to resolve.
   string uri = 1;
   // The blob id to resolve.
-  string blob_id = 3;
+  bytes blob_id = 3;
 
   reserved 2;
 }

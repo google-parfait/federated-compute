@@ -19,14 +19,19 @@ package fcp.confidentialcompute;
 import "proto/attestation/reference_value.proto";
 
 // Initialization config for a program executor TEE container.
-// Next ID: 9
+// Next ID: 10
 message ProgramExecutorTeeInitializeConfig {
+  // TODO: b/487997314 - Remove the two blobstore-specific fields once the
+  // migration to spanner is complete.
   // A path to the client data directory.
-  string client_data_dir = 1;
+  string client_data_dir = 1 [deprecated = true];
   // A list of client IDs in the data directory. The concatenation of the
   // `client_data_dir` and a `client_id` is the full path to a client file. This
   // needs to be sent because the TEE cannot list the files in the path.
-  repeated string client_ids = 2;
+  repeated string client_ids = 2 [deprecated = true];
+
+  // A list of client blob IDs.
+  repeated bytes blob_ids = 9;
   // The federated program to execute.
   bytes program = 3;
   // Deprecated. Use outgoing_server_address instead.

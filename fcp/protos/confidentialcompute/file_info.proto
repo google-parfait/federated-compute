@@ -18,10 +18,13 @@ package fcp.confidentialcompute;
 
 // Information about a value stored in a filesystem.
 message FileInfo {
-  // The file path that contains the value.
-  string uri = 1;
+  // The complete file path that contains the value.
+  string uri = 1 [deprecated = true];
 
-  // The key of the value located at the URI.
+  // The blob id of the blob that contains the value.
+  bytes blob_id = 4;
+
+  // The key of the value located at the source.
   string key = 2;
 
   // Whether the value is a client uploaded file or not.
