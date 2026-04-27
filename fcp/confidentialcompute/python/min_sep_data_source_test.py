@@ -244,7 +244,11 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     start_time = time.time()
     data_for_round = iterator.select(k)
     end_time = time.time()
-    self.assertLess(end_time - start_time, sleep_seconds + 2)
+    # Without parallelization, the test would be expected to take at least
+    # k * sleep_seconds = 50 seconds. We give a buffer of 10 seconds to account
+    # for jax overhead.
+    buffer = 10
+    self.assertLess(end_time - start_time, sleep_seconds + buffer)
     self.assertLen(data_for_round, k)
     self.assertEqual(mock_resolve_fn.call_count, k)
 
