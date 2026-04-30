@@ -91,6 +91,10 @@ service AttestationTransparencyService {
   // close successfully. Since (by definition) this RPC will only work between
   // servers running the same code, the semantics of the requests and responses
   // are intentionally left unspecified and may change without notice.
+  //
+  // To conform with best-practices of having the client close a bidirectional
+  // streaming RPC first, the server will send an empty SessionRequest to signal
+  // that all messages have been sent.
   rpc LoadSigningKey(stream oak.session.v1.SessionResponse)
       returns (stream oak.session.v1.SessionRequest) {}
 
