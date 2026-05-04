@@ -284,6 +284,7 @@ proto_library(
     name = "sql_data_ingress_config_proto",
     srcs = ["sql_data_ingress_config.proto"],
     deps = [
+        ":private_logger_uploads_config_proto",
         ":sql_query_proto",
     ],
 )

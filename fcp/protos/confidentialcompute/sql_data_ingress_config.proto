@@ -16,6 +16,7 @@ syntax = "proto3";  // Our OSS build does not support editions.
 
 package fcp.confidentialcompute;
 
+import "fcp/protos/confidentialcompute/private_logger_uploads_config.proto";
 import "fcp/protos/confidentialcompute/sql_query.proto";
 
 option java_multiple_files = true;
@@ -26,4 +27,7 @@ option java_outer_classname = "SqlDataIngressConfigProto";
 message SqlDataIngressContainerInitializeConfiguration {
   // The SQL query to execute on the data.
   SqlQuery sql_query = 1;
+
+  // Configuration for processing PrivateLogger uploads.
+  PrivateLoggerUploadsConfig private_logger_uploads_config = 2;
 }
