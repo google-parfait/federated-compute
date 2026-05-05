@@ -87,6 +87,11 @@ cc_proto_library(
     deps = [":key_proto"],
 )
 
+java_proto_library(
+    name = "key_java_proto",
+    deps = [":key_proto"],
+)
+
 py_proto_library(
     name = "key_py_pb2",
     deps = [":key_proto"],
