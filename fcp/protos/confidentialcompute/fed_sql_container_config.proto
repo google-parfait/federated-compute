@@ -125,9 +125,14 @@ message FedSqlContainerPartitionedOutputConfiguration {
   uint64 partition_index = 1;
 }
 
-// The symmetric keys used to encrypt each output partition.
-message FedSqlContainerPartitionKeys {
+// The finalized state for a partitioned output.
+// This includes the symmetric keys used to decrypt each output partition and
+// optional released auto-tuning parameters, if any were provided in the
+// encrypted form in the first place.
+message FedSqlContainerPartitionedOutputFinalizedState {
   repeated PartitionKey keys = 1;
+
+  bytes auto_tuning_data = 2 [ctype = CORD];
 
   message PartitionKey {
     uint64 partition_index = 1;
