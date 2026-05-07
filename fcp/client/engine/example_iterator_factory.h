@@ -59,7 +59,7 @@ class ExampleIteratorFactory {
 
   virtual SelectorContext GetSelectorContext() const {
     return SelectorContext::default_instance();
-  };
+  }
 
   // Whether stats should be generated and logged into the OpStats database for
   // iterators created by this factory.
@@ -144,7 +144,7 @@ class FunctionalExampleIteratorFactory : public ExampleIteratorFactory {
 
   SelectorContext GetSelectorContext() const override {
     return selector_context_;
-  };
+  }
 
  private:
   std::function<bool(const google::internal::federated::plan::ExampleSelector&)>
