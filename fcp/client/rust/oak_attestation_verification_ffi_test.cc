@@ -31,13 +31,13 @@
 #include "absl/time/time.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/testing/testing.h"
+#include "third_party/gloop/util/time/protoutil.h"
 #include "proto/attestation/endorsement.pb.h"
 #include "proto/attestation/evidence.pb.h"
 #include "proto/attestation/reference_value.pb.h"
 #include "proto/attestation/verification.pb.h"
 #include "proto/digest.pb.h"
 #include "proto/validity.pb.h"
-#include "util/time/protoutil.h"
 
 namespace fcp::client::rust::oak_attestation_verification_ffi {
 namespace {
