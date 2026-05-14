@@ -21,13 +21,14 @@ from fcp.confidentialcompute.python import external_service_handle
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
 
 
-_CLIENT_IDS = ['a', 'b', 'c']
-_TEST_CLIENT_DATA_DIRECTORY = 'test_dir'
+_BLOB_IDS = (b'a', b'b', b'c')
 _TEST_OUTGOING_SERVER_ADDRESS = 'test_address'
 
 
-def _mock_resolve_uri_to_tensor(uri: str, key: str) -> tensor_pb2.TensorProto:
-  del uri, key  # Unused
+def _mock_resolve_blob_id_to_tensor(
+    blob_id: bytes, key: str
+) -> tensor_pb2.TensorProto:
+  del blob_id, key  # Unused
   return tensor_pb2.TensorProto()
 
 
@@ -50,10 +51,9 @@ def _mock_restore_recovery_info(key: str) -> bytes | None:
 
 def _create_external_handle(
     outgoing_server_address: str = _TEST_OUTGOING_SERVER_ADDRESS,
-    client_ids: Sequence[str] | None = None,
-    client_data_directory: str = _TEST_CLIENT_DATA_DIRECTORY,
+    blob_ids: Sequence[bytes] | None = None,
     config_id_to_filename: Mapping[str, str] | None = None,
-    resolve_uri_to_tensor_fn=None,
+    resolve_blob_id_to_tensor_fn=None,
     release_unencrypted_fn=None,
     save_recovery_info_fn=None,
     restore_recovery_info_fn=None,
@@ -61,11 +61,10 @@ def _create_external_handle(
   """Creates an ExternalServiceHandle with default mock functions."""
   return external_service_handle.ExternalServiceHandle(
       outgoing_server_address,
-      client_ids if client_ids is not None else _CLIENT_IDS,
-      client_data_directory,
+      blob_ids if blob_ids is not None else _BLOB_IDS,
       config_id_to_filename if config_id_to_filename is not None else {},
-      resolve_uri_to_tensor_fn=resolve_uri_to_tensor_fn
-      or mock.create_autospec(_mock_resolve_uri_to_tensor),
+      resolve_blob_id_to_tensor_fn=resolve_blob_id_to_tensor_fn
+      or mock.create_autospec(_mock_resolve_blob_id_to_tensor),
       release_unencrypted_fn=release_unencrypted_fn
       or mock.create_autospec(_mock_release_unencrypted),
       save_recovery_info_fn=save_recovery_info_fn
@@ -81,20 +80,15 @@ class ExternalServiceHandleTest(absltest.TestCase):
     self.assertEqual(
         external_handle.outgoing_server_address, _TEST_OUTGOING_SERVER_ADDRESS
     )
-    self.assertEqual(external_handle.client_ids, _CLIENT_IDS)
-    self.assertEqual(
-        external_handle.client_data_directory, _TEST_CLIENT_DATA_DIRECTORY
-    )
+    self.assertEqual(external_handle.client_ids, _BLOB_IDS)
+    self.assertEqual(external_handle.blob_ids, _BLOB_IDS)
 
   def test_init_with_only_outgoing_server_address(self):
-    external_handle = _create_external_handle(
-        client_ids=[], client_data_directory=''
-    )
+    external_handle = _create_external_handle(blob_ids=[])
     self.assertEqual(
         external_handle.outgoing_server_address, _TEST_OUTGOING_SERVER_ADDRESS
     )
     self.assertEqual(external_handle.client_ids, [])
-    self.assertEqual(external_handle.client_data_directory, '')
 
   def test_get_filename_for_config_id(self):
     external_handle = _create_external_handle(
@@ -110,19 +104,19 @@ class ExternalServiceHandleTest(absltest.TestCase):
     ):
       external_handle.get_filename_for_config_id('my_id')
 
-  def test_resolve_uri_to_tensor(self):
+  def test_resolve_blob_id_to_tensor(self):
     external_handle = _create_external_handle()
-    external_handle._resolve_uri_to_tensor_fn.return_value = (
+    external_handle._resolve_blob_id_to_tensor_fn.return_value = (
         tensor_pb2.TensorProto(
             dtype=tensor_pb2.DataType.DT_STRING,
             content=b'test_tensor_content',
         )
     )
-    tensor = external_handle.resolve_uri_to_tensor('uri', 'key')
+    tensor = external_handle.resolve_blob_id_to_tensor(b'blob_id', 'key')
     self.assertEqual(tensor.dtype, tensor_pb2.DataType.DT_STRING)
     self.assertEqual(tensor.content, b'test_tensor_content')
-    external_handle._resolve_uri_to_tensor_fn.assert_called_once_with(
-        'uri', 'key'
+    external_handle._resolve_blob_id_to_tensor_fn.assert_called_once_with(
+        b'blob_id', 'key'
     )
 
   def test_release_unencrypted(self):

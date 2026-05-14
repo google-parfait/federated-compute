@@ -29,17 +29,14 @@ class ExternalServiceHandle(abc.ABC):
   outgoing server address.
   """
 
-  # TODO: b/487997314 - Set the client_ids type to Sequence[bytes] once we have
-  # completed the migration to spanner.
   def __init__(
       self,
       outgoing_server_address: str,
-      client_ids: Sequence[bytes | str],
-      client_data_directory: str,
+      blob_ids: Sequence[bytes],
       config_id_to_filename: Mapping[str, str],
       *,
-      resolve_uri_to_tensor_fn: Callable[
-          [bytes | str, str], tensor_pb2.TensorProto
+      resolve_blob_id_to_tensor_fn: Callable[
+          [bytes, str], tensor_pb2.TensorProto
       ],
       release_unencrypted_fn: Callable[[bytes, str], None],
       save_recovery_info_fn: Callable[
@@ -52,15 +49,13 @@ class ExternalServiceHandle(abc.ABC):
     Args:
       outgoing_server_address: The address at which external services can be
         reached.
-      client_ids: A list representing the clients from this data source. If
-        client_data_directory is empty, these client ids are blob ids of blobs
-        stored in Spanner. If client_data_directory is nonempty, these client
-        ids are base filenames of blobs stored in Blobstore.
-      client_data_directory: The directory containing the client data.
+      blob_ids: A list of blob ids representing the clients from this data
+        source.
       config_id_to_filename: A dictionary mapping config ids to the paths of the
         files containing information for that id.
-      resolve_uri_to_tensor_fn: A function that resolves pointers to data.
-        Expects two args (the uri and the key) and returns the resolved tensor.
+      resolve_blob_id_to_tensor_fn: A function that resolves pointers to data.
+        Expects two args (the blob id and the key) and returns the resolved
+        tensor.
       release_unencrypted_fn: A function that releases unencrypted values to the
         external service. Expects two args (the data and the key).
       save_recovery_info_fn: A function that saves recovery information. Expects
@@ -70,12 +65,11 @@ class ExternalServiceHandle(abc.ABC):
         Expects one arg (the key) and returns the recovery info.
     """
     self._outgoing_server_address = outgoing_server_address
-    self._client_ids = client_ids if client_ids is not None else []
-    self._client_data_directory = client_data_directory
+    self._blob_ids = blob_ids
     self._config_id_to_filename = (
         config_id_to_filename if config_id_to_filename is not None else {}
     )
-    self._resolve_uri_to_tensor_fn = resolve_uri_to_tensor_fn
+    self._resolve_blob_id_to_tensor_fn = resolve_blob_id_to_tensor_fn
     self._release_unencrypted_fn = release_unencrypted_fn
     self._save_recovery_info_fn = save_recovery_info_fn
     self._restore_recovery_info_fn = restore_recovery_info_fn
@@ -86,14 +80,16 @@ class ExternalServiceHandle(abc.ABC):
     return self._outgoing_server_address
 
   @property
-  def client_ids(self) -> Sequence[bytes | str]:
-    """Returns the list of client ids."""
-    return self._client_ids
+  def blob_ids(self) -> Sequence[bytes]:
+    """Returns the list of blob ids."""
+    return self._blob_ids
 
+  # TODO: b/487997314 - Remove this property once programs are no longer using
+  # it.
   @property
-  def client_data_directory(self) -> str:
-    """Returns the directory containing the client data."""
-    return self._client_data_directory
+  def client_ids(self) -> Sequence[bytes]:
+    """Returns the list of client ids."""
+    return self._blob_ids
 
   def get_filename_for_config_id(self, config_id: str) -> str:
     """Returns the filename for the given config id."""
@@ -104,24 +100,22 @@ class ExternalServiceHandle(abc.ABC):
       )
     return self._config_id_to_filename[config_id]
 
-  # TODO: b/497752916 - Rename this to resolve_blob_id_to_tensor once the
-  # migration to spanner is complete.
-  def resolve_uri_to_tensor(
-      self, uri: bytes | str, key: str
+  def resolve_blob_id_to_tensor(
+      self, blob_id: bytes, key: str
   ) -> tensor_pb2.TensorProto:
     """Resolves a pointer to a tensor.
 
     The tensor is assumed to be stored at a given key within a FcCheckpoint
-    located at a given URI or blob id.
+    located at a given blob id.
 
     Args:
-      uri: The URI or blob id at which the FcCheckpoint is located.
+      blob_id: The blob id at which the FcCheckpoint is located.
       key: The key at which to find the tensor within the FcCheckpoint.
 
     Returns:
       The resolved tensor.
     """
-    return self._resolve_uri_to_tensor_fn(uri, key)
+    return self._resolve_blob_id_to_tensor_fn(blob_id, key)
 
   def release_unencrypted(self, value: bytes, key: str) -> None:
     """Releases an unencrypted value.

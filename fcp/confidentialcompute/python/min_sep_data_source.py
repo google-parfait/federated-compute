@@ -36,53 +36,49 @@ from fcp.protos.confidentialcompute import min_sep_data_source_pb2
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
 
 
-_RESOLVE_URI_ERROR_MESSAGE_SUBSTRING = 'Failed to fetch Tensor'
+_RESOLVE_BLOB_ID_ERROR_MESSAGE_SUBSTRING = 'Failed to fetch Tensor'
 
 
-def _compute_client_ids_hash(client_ids: Sequence[bytes | str]) -> bytes:
-  """Computes a SHA-256 hash of a list of client IDs."""
-  return hashlib.sha256(
-      b','.join(
-          cid.encode() if isinstance(cid, str) else cid for cid in client_ids
-      )
-  ).digest()
+def _compute_blob_ids_hash(blob_ids: Sequence[bytes]) -> bytes:
+  """Computes a SHA-256 hash of a list of blob ids."""
+  return hashlib.sha256(b','.join(blob_ids)).digest()
 
 
-def assign_client_ids_to_rounds(
+def assign_blob_ids_to_rounds(
     key: jax.Array,
-    client_ids: Sequence[bytes | str],
+    blob_ids: Sequence[bytes],
     min_sep: int,
-) -> list[list[bytes | str]]:
-  """Assigns client ids to `min_sep` rounds randomly.
+) -> list[list[bytes]]:
+  """Assigns blob ids to `min_sep` rounds randomly.
 
   We are currently optimizing for privacy without amplification, so we first
-  shuffle the client ids and then assign them to groups of equal size. If we
+  shuffle the blob ids and then assign them to groups of equal size. If we
   later decide to optimize for privacy with amplification (which will
   require further obfuscation of which clients are participating in a round)
   then we should assign each client independently to a random group such
   that the groups may not have equal size.
 
-  A client id will be eligible for participation in round `i` if it is
+  A blob id will be eligible for participation in round `i` if it is
   assigned to the `i % min_sep`th entry in the returned list.
 
   In order for this function to be deterministic, the same key and the same
-  client ids (in the same order) must be provided.
+  blob ids (in the same order) must be provided.
 
   Args:
     key: The key to use for shuffling.
-    client_ids: The list of client ids to assign to rounds.
+    blob_ids: The list of blob ids to assign to rounds.
     min_sep: The minimum difference between the round indices of two consecutive
       participations for the same client. Must be a positive integer.
 
   Returns:
-    A list of lists of client ids, where the outer list has length `min_sep`
-    and the inner lists contain the client ids assigned to each round.
+    A list of lists of blob ids, where the outer list has length `min_sep`
+    and the inner lists contain the blob ids assigned to each round.
   """
-  shuffled_client_indices = jax.random.permutation(key, len(client_ids))
-  client_id_round_assignments = [[] for _ in range(min_sep)]
-  for i, client_index in enumerate(shuffled_client_indices):
-    client_id_round_assignments[i % min_sep].append(client_ids[client_index])
-  return client_id_round_assignments
+  shuffled_blob_indices = jax.random.permutation(key, len(blob_ids))
+  blob_id_round_assignments = [[] for _ in range(min_sep)]
+  for i, blob_index in enumerate(shuffled_blob_indices):
+    blob_id_round_assignments[i % min_sep].append(blob_ids[blob_index])
+  return blob_id_round_assignments
 
 
 class MinSepDataSourceIterator(
@@ -90,7 +86,7 @@ class MinSepDataSourceIterator(
 ):
   """A `FederatedDataSourceIterator` providing min-sep round participation.
 
-  Clients, which are represented by client ids, are eligible for participation
+  Clients, which are represented by blob ids, are eligible for participation
   in rounds that are exactly `min_sep` rounds apart. The round indices for which
   a client is eligible are computed randomly at initialization time, and when
   `select` is called, the requested number of clients are randomly selected from
@@ -124,7 +120,7 @@ class MinSepDataSourceIterator(
         be created based on the current time.
 
     Raises:
-      ValueError: If `client_ids` is empty or if `min_sep` is not a positive
+      ValueError: If `blob_ids` is empty or if `min_sep` is not a positive
         integer.
     """
     if min_sep <= 0:
@@ -133,8 +129,8 @@ class MinSepDataSourceIterator(
           f'{min_sep}.'
       )
 
-    if not external_handle.client_ids:
-      raise ValueError('Expected `client_ids` to not be empty.')
+    if not external_handle.blob_ids:
+      raise ValueError('Expected `blob_ids` to not be empty.')
 
     self._min_sep = min_sep
     self._external_handle = external_handle
@@ -147,14 +143,14 @@ class MinSepDataSourceIterator(
       key = jax.random.key(int(time.time() * 1e6))
     self._shuffling_prng_key, self._selection_prng_key = jax.random.split(key)
 
-    # Assign client ids to rounds and compute hash of client ids list for
+    # Assign blob ids to rounds and compute hash of blob ids list for
     # validation upon recovery.
-    self._client_id_round_assignments = assign_client_ids_to_rounds(
+    self._blob_id_round_assignments = assign_blob_ids_to_rounds(
         self._shuffling_prng_key,
-        external_handle.client_ids,
+        external_handle.blob_ids,
         self._min_sep,
     )
-    self._client_ids_hash = _compute_client_ids_hash(external_handle.client_ids)
+    self._blob_ids_hash = _compute_blob_ids_hash(external_handle.blob_ids)
 
   @classmethod
   def restore(
@@ -166,11 +162,11 @@ class MinSepDataSourceIterator(
     state = min_sep_data_source_pb2.MinSepDataSourceState()
     state.ParseFromString(buffer)
 
-    # Validate client IDs hash.
-    current_hash = _compute_client_ids_hash(external_handle.client_ids)
-    if current_hash != state.client_ids_hash:
+    # Validate blob ids hash.
+    current_hash = _compute_blob_ids_hash(external_handle.blob_ids)
+    if current_hash != state.blob_ids_hash:
       raise ValueError(
-          'Client IDs in input provider do not match recovered state.'
+          'Blob ids in input provider do not match recovered state.'
       )
 
     # Initialize with saved configuration.
@@ -192,9 +188,9 @@ class MinSepDataSourceIterator(
     instance._selection_prng_key = jax.random.wrap_key_data(selection_arr)
 
     # Re-compute round assignments using the restored shuffling key.
-    instance._client_id_round_assignments = assign_client_ids_to_rounds(
+    instance._blob_id_round_assignments = assign_blob_ids_to_rounds(
         instance._shuffling_prng_key,
-        external_handle.client_ids,
+        external_handle.blob_ids,
         instance._min_sep,
     )
 
@@ -214,7 +210,7 @@ class MinSepDataSourceIterator(
     state.selection_prng_key = jax.random.key_data(
         self._selection_prng_key
     ).tobytes()
-    state.client_ids_hash = self._client_ids_hash
+    state.blob_ids_hash = self._blob_ids_hash
     return state.SerializeToString()
 
   @classmethod
@@ -240,7 +236,7 @@ class MinSepDataSourceIterator(
     Args:
       k: A number of elements to select. Must be a positive integer. If greater
         than the number of eligible clients for this round (which will be either
-        len(client_ids) // min_sep or this value+1), select will fail.
+        len(blob_ids) // min_sep or this value+1), select will fail.
 
     Returns:
       A list of `federated_language` `Computation` protos that each contain a
@@ -251,8 +247,8 @@ class MinSepDataSourceIterator(
       ValueError: If `k` is not a positive integer or there are fewer than `k`
       eligible clients.
     """
-    # Obtain the eligible client ids for the current round.
-    eligible_ids = self._client_id_round_assignments[
+    # Obtain the eligible blob ids for the current round.
+    eligible_ids = self._blob_id_round_assignments[
         self._round_index % self._min_sep
     ]
 
@@ -272,7 +268,7 @@ class MinSepDataSourceIterator(
         self._selection_prng_key
     )
 
-    # Sample client ids without replacement using JAX.
+    # Sample blob ids without replacement using JAX.
     selected_indices = jax.random.choice(
         subkey,
         len(eligible_ids),
@@ -284,32 +280,12 @@ class MinSepDataSourceIterator(
 
     selected_values = []
     if self._use_data_pointers:
-      for client_id in selected_ids:
+      for blob_id in selected_ids:
+        file_info = file_info_pb2.FileInfo(
+            blob_id=blob_id,
+            key=self._key_name,
+        )
         any_proto = any_pb2.Any()
-        # TODO: b/487997314 - Remove this branch once the migration to spanner
-        # is complete.
-        if self._external_handle.client_data_directory:
-          if not isinstance(client_id, str):
-            raise TypeError(
-                'Expected client_id to be a string when '
-                f'client_data_directory is set, found {type(client_id)}.'
-            )
-          file_info = file_info_pb2.FileInfo(
-              uri=os.path.join(
-                  self._external_handle.client_data_directory, client_id
-              ),
-              key=self._key_name,
-          )
-        else:
-          if not isinstance(client_id, bytes):
-            raise TypeError(
-                'Expected client_id to be bytes when client_data_directory '
-                f'is not set, found {type(client_id)}.'
-            )
-          file_info = file_info_pb2.FileInfo(
-              blob_id=client_id,
-              key=self._key_name,
-          )
         any_proto.Pack(file_info)
         selected_values.append(
             computation_pb2.Computation(
@@ -322,37 +298,19 @@ class MinSepDataSourceIterator(
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=os.cpu_count() * 4
     ) as executor:
-      future_to_uri = {}
-      for client_id in selected_ids:
-        # TODO: b/487997314 - Remove this branch once the migration to spanner
-        # is complete.
-        if self._external_handle.client_data_directory:
-          if not isinstance(client_id, str):
-            raise TypeError(
-                'Expected client_id to be a string when '
-                f'client_data_directory is set, found {type(client_id)}.'
-            )
-          uri = os.path.join(
-              self._external_handle.client_data_directory, client_id
-          )
-        else:
-          if not isinstance(client_id, bytes):
-            raise TypeError(
-                'Expected client_id to be bytes when client_data_directory '
-                f'is not set, found {type(client_id)}.'
-            )
-          uri = client_id
+      future_to_blob_id = {}
+      for blob_id in selected_ids:
         future = executor.submit(
-            self._external_handle.resolve_uri_to_tensor,
-            uri,
+            self._external_handle.resolve_blob_id_to_tensor,
+            blob_id,
             self._key_name,
         )
-        future_to_uri[future] = uri
+        future_to_blob_id[future] = blob_id
 
       # Wait for all futures to complete. The order in which the results are
       # added does not matter.
       failure_count = 0
-      for future in concurrent.futures.as_completed(future_to_uri):
+      for future in concurrent.futures.as_completed(future_to_blob_id):
         try:
           tensor = future.result()
           selected_values.append(
@@ -367,10 +325,10 @@ class MinSepDataSourceIterator(
               )
           )
         except RuntimeError as e:
-          if _RESOLVE_URI_ERROR_MESSAGE_SUBSTRING in str(e):
+          if _RESOLVE_BLOB_ID_ERROR_MESSAGE_SUBSTRING in str(e):
             logging.warning(
-                'Skipping URI: %s due to resolve error: %s',
-                future_to_uri[future],
+                'Skipping blob id: %s due to resolve error: %s',
+                future_to_blob_id[future],
                 e,
             )
             failure_count += 1
@@ -426,7 +384,7 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
         resolved TFF value literals.
 
     Raises:
-      ValueError: If `client_ids` is empty or if `min_sep` is not a positive
+      ValueError: If `blob_ids` is empty or if `min_sep` is not a positive
         integer.
     """
     if min_sep <= 0:
@@ -435,8 +393,8 @@ class MinSepDataSource(federated_language.program.FederatedDataSource):
           f'{min_sep}.'
       )
 
-    if not external_handle.client_ids:
-      raise ValueError('Expected `external_handle.client_ids` to not be empty.')
+    if not external_handle.blob_ids:
+      raise ValueError('Expected `external_handle.blob_ids` to not be empty.')
 
     self._min_sep = min_sep
     self._external_handle = external_handle
