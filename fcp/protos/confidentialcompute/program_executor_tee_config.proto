@@ -21,32 +21,28 @@ import "proto/attestation/reference_value.proto";
 // Initialization config for a program executor TEE container.
 // Next ID: 10
 message ProgramExecutorTeeInitializeConfig {
-  // TODO: b/487997314 - Remove the two blobstore-specific fields once the
-  // migration to spanner is complete.
-  // A path to the client data directory.
-  string client_data_dir = 1 [deprecated = true];
-  // A list of client IDs in the data directory. The concatenation of the
-  // `client_data_dir` and a `client_id` is the full path to a client file. This
-  // needs to be sent because the TEE cannot list the files in the path.
-  repeated string client_ids = 2 [deprecated = true];
-
   // A list of client blob IDs.
   repeated bytes blob_ids = 9;
+
   // The federated program to execute.
   bytes program = 3;
-  // Deprecated. Use outgoing_server_address instead.
-  int32 outgoing_server_port = 4 [deprecated = true];
+
   // Worker bns addresses representing workers that are available to use for
   // distributed execution of the program. If empty, the program will execute
   // entirely within the program executor TEE.
   repeated string worker_bns_addresses = 5;
+
   // The ID of the attester for establishing a secure channel with workers.
   string attester_id = 6;
+
   // The reference values for the program executor TEE to set the noise session
   // config.
   oak.attestation.v1.ReferenceValues reference_values = 8;
+
   // The address of the untrusted server to handle requests from the TEE.
   string outgoing_server_address = 7;
+
+  reserved 1, 2, 4;
 }
 
 // Config constraints for the program executor TEE container that must be
@@ -54,6 +50,7 @@ message ProgramExecutorTeeInitializeConfig {
 message ProgramExecutorTeeConfigConstraints {
   // The program that the container must be configured to execute.
   bytes program = 1;
+
   // The worker reference values that the container must be configured to use
   // when setting up noise protocol sessions with workers.
   bytes worker_reference_values = 2;

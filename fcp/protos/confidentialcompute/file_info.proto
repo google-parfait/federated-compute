@@ -18,9 +18,6 @@ package fcp.confidentialcompute;
 
 // Information about a value stored in a filesystem.
 message FileInfo {
-  // The complete file path that contains the value.
-  string uri = 1 [deprecated = true];
-
   // The blob id of the blob that contains the value.
   bytes blob_id = 4;
 
@@ -29,4 +26,6 @@ message FileInfo {
 
   // Whether the value is a client uploaded file or not.
   bool client_upload = 3;
+
+  reserved 1;
 }
