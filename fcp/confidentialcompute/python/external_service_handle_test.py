@@ -80,7 +80,6 @@ class ExternalServiceHandleTest(absltest.TestCase):
     self.assertEqual(
         external_handle.outgoing_server_address, _TEST_OUTGOING_SERVER_ADDRESS
     )
-    self.assertEqual(external_handle.client_ids, _BLOB_IDS)
     self.assertEqual(external_handle.blob_ids, _BLOB_IDS)
 
   def test_init_with_only_outgoing_server_address(self):
@@ -88,7 +87,7 @@ class ExternalServiceHandleTest(absltest.TestCase):
     self.assertEqual(
         external_handle.outgoing_server_address, _TEST_OUTGOING_SERVER_ADDRESS
     )
-    self.assertEqual(external_handle.client_ids, [])
+    self.assertEqual(external_handle.blob_ids, [])
 
   def test_get_filename_for_config_id(self):
     external_handle = _create_external_handle(

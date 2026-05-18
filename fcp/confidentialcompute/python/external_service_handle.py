@@ -84,13 +84,6 @@ class ExternalServiceHandle(abc.ABC):
     """Returns the list of blob ids."""
     return self._blob_ids
 
-  # TODO: b/487997314 - Remove this property once programs are no longer using
-  # it.
-  @property
-  def client_ids(self) -> Sequence[bytes]:
-    """Returns the list of client ids."""
-    return self._blob_ids
-
   def get_filename_for_config_id(self, config_id: str) -> str:
     """Returns the filename for the given config id."""
     if config_id not in self._config_id_to_filename:
