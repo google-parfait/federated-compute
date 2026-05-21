@@ -17,6 +17,7 @@ syntax = "proto3";
 package fcp.confidentialcompute;
 
 import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
 import "fcp/protos/confidentialcompute/access_policy.proto";
 import "fcp/protos/confidentialcompute/confidential_transform.proto";
 import "fcp/protos/confidentialcompute/private_inference.proto";
@@ -79,6 +80,14 @@ message FedSqlContainerCommitConfiguration {
   }
   // The range of blobs to commit.
   Range range = 1;
+
+  // The start and end time of the aggregation window for the blobs in the
+  // range. This is used for time-based budget tracking. Any blobs outside
+  // of this range will be dropped. The event times for each blob must be
+  // present in the encrypted blob payload which will be checked against this
+  // time window.
+  google.protobuf.Timestamp start_time = 2;
+  google.protobuf.Timestamp end_time = 3;
 }
 
 // TODO: b/505099049 - Streamline the naming of these finalization types.

@@ -215,6 +215,7 @@ proto_library(
         ":private_inference_proto",
         ":private_logger_uploads_config_proto",
         "@com_google_protobuf//:any_proto",
+        "@com_google_protobuf//:timestamp_proto",
         "@org_tensorflow_federated//tensorflow_federated/cc/core/impl/aggregation/protocol:configuration_proto",
     ],
 )
