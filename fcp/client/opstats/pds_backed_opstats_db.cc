@@ -55,7 +55,10 @@ namespace {
 
 using ::google::protobuf::util::TimeUtil;
 
-ABSL_CONST_INIT absl::Mutex file_lock_mutex(absl::kConstInit);
+absl::Mutex& GetFileLockMutex() {
+  static absl::Mutex* file_lock_mutex = new absl::Mutex();
+  return *file_lock_mutex;
+}
 
 absl::flat_hash_set<std::string>* GetFilesInUseSet() {
   // Create the heap allocated static set only once, never call d'tor.
@@ -67,7 +70,7 @@ absl::flat_hash_set<std::string>* GetFilesInUseSet() {
 
 absl::StatusOr<int> AcquireFileLock(const std::string& db_path,
                                     LogManager& log_manager) {
-  absl::WriterMutexLock lock(file_lock_mutex);
+  absl::WriterMutexLock lock(GetFileLockMutex());
   // If the underlying file is already in the hash set, it means another
   // instance of OpStatsDb is using it, and we'll return an error.
   absl::flat_hash_set<std::string>* files_in_use = GetFilesInUseSet();
@@ -101,7 +104,7 @@ absl::StatusOr<int> AcquireFileLock(const std::string& db_path,
 }
 
 void ReleaseFileLock(const std::string& db_path, int fd) {
-  absl::WriterMutexLock lock(file_lock_mutex);
+  absl::WriterMutexLock lock(GetFileLockMutex());
   GetFilesInUseSet()->erase(db_path);
   FCP_CHECK(fd >= 0);
   // File lock is released when the descriptor is closed.
