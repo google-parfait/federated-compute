@@ -81,7 +81,7 @@ class Accumulator : public AsyncWorker,
         accumulator_func_(accumulator_func),
         clock_(clock) {}
 
-  inline static std::function<void()> GetParallelScheduleFunc(
+  static std::function<void()> GetParallelScheduleFunc(
       std::shared_ptr<Accumulator<T>> accumulator,
       std::function<std::unique_ptr<T>()> generator) {
     return [accumulator, generator] {
@@ -196,7 +196,7 @@ class Accumulator : public AsyncWorker,
 
   // Updates the active and remaining task counts, and returns the callback to
   // be executed, or nullptr if there's pending async work.
-  inline std::function<void()> UpdateCountsAndGetCallback() {
+  std::function<void()> UpdateCountsAndGetCallback() {
     absl::MutexLock lock(mutex_);
     if (--active_count_ == 0 && is_cancelled_) {
       inactive_cv_.SignalAll();
@@ -262,11 +262,11 @@ class Accumulator : public AsyncWorker,
 
   std::atomic<bool>* in_sequential_call() { return &in_sequential_call_; }
 
-  void inline RunParallel(std::function<void()> function) {
+  void RunParallel(std::function<void()> function) {
     parallel_scheduler_->Schedule(function);
   }
 
-  void inline RunSequential(std::function<void()> function) {
+  void RunSequential(std::function<void()> function) {
     sequential_scheduler_->Schedule(function);
   }
 
@@ -324,7 +324,7 @@ class SecAggScheduler {
   virtual ~SecAggScheduler() = default;
 
   // Schedule a callback to be invoked on the sequential scheduler.
-  inline void ScheduleCallback(std::function<void()> callback) {
+  void ScheduleCallback(std::function<void()> callback) {
     RunSequential(callback);
   }
 

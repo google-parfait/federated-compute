@@ -83,34 +83,32 @@ class SecAggServerProtocolImpl {
   virtual ServerVariant server_variant() const = 0;
 
   // Returns the graph that represents the cohort of clients.
-  inline const SecretSharingGraph* secret_sharing_graph() const {
+  const SecretSharingGraph* secret_sharing_graph() const {
     return secret_sharing_graph_.get();
   }
 
   // Returns the minimum threshold number of clients that need to send valid
   // responses in order for the protocol to proceed from one round to the next.
-  inline int minimum_number_of_clients_to_proceed() const {
+  int minimum_number_of_clients_to_proceed() const {
     return minimum_number_of_clients_to_proceed_;
   }
 
   // Returns the callback interface for recording metrics.
-  inline SecAggServerMetricsListener* metrics() const { return metrics_.get(); }
+  SecAggServerMetricsListener* metrics() const { return metrics_.get(); }
 
   // Returns a reference to an instance of a subclass of AesPrngFactory.
-  inline AesPrngFactory* prng_factory() const { return prng_factory_.get(); }
+  AesPrngFactory* prng_factory() const { return prng_factory_.get(); }
 
   // Returns the callback interface for sending protocol buffer messages to the
   // client.
-  inline SendToClientsInterface* sender() const { return sender_; }
+  SendToClientsInterface* sender() const { return sender_; }
 
   // Returns the scheduler for scheduling parallel computation tasks and
   // callbacks.
-  inline SecAggScheduler* scheduler() const { return scheduler_.get(); }
+  SecAggScheduler* scheduler() const { return scheduler_.get(); }
 
   // Returns the experiments
-  inline ExperimentsInterface* experiments() const {
-    return experiments_.get();
-  }
+  ExperimentsInterface* experiments() const { return experiments_.get(); }
 
   // Getting or setting the protocol result.
   //
@@ -120,50 +118,47 @@ class SecAggServerProtocolImpl {
   std::unique_ptr<SecAggVectorMap> TakeResult();
 
   // Gets the client status.
-  inline const ClientStatus& client_status(uint32_t client_id) const {
+  const ClientStatus& client_status(uint32_t client_id) const {
     return client_statuses_.at(client_id);
   }
 
   // Sets the client status.
-  inline void set_client_status(uint32_t client_id, ClientStatus status) {
+  void set_client_status(uint32_t client_id, ClientStatus status) {
     client_statuses_[client_id] = status;
   }
 
   // Gets the number of clients that the protocol starts with.
-  inline size_t total_number_of_clients() const {
-    return total_number_of_clients_;
-  }
+  size_t total_number_of_clients() const { return total_number_of_clients_; }
 
   // Returns the number of neighbors of each client.
-  inline int number_of_neighbors() const {
+  int number_of_neighbors() const {
     return secret_sharing_graph()->GetDegree();
   }
 
   // Returns the minimum number of neighbors of a client that must not drop-out
   // for that client's contribution to be included in the sum. This corresponds
   // to the threshold in the shamir secret sharing of self and pairwise masks.
-  inline int minimum_surviving_neighbors_for_reconstruction() const {
+  int minimum_surviving_neighbors_for_reconstruction() const {
     return secret_sharing_graph()->GetThreshold();
   }
 
   // Returns client_id's ith neighbor.
   // This function assumes that 0 <= i < number_of_neighbors() and will throw a
   // runtime error if that's not the case
-  inline int GetNeighbor(int client_id, int i) const {
+  int GetNeighbor(int client_id, int i) const {
     return secret_sharing_graph()->GetNeighbor(client_id, i);
   }
 
   // Returns the index of client_id_2 in the list of neighbors of client_id_1,
   // if present
-  inline std::optional<int> GetNeighborIndex(int client_id_1,
-                                             int client_id_2) const {
+  std::optional<int> GetNeighborIndex(int client_id_1, int client_id_2) const {
     return secret_sharing_graph()->GetNeighborIndex(client_id_1, client_id_2);
   }
 
   // Returns the index of client_id_2 in the list of neighbors of client_id_1
   // This function assumes that client_id_1 and client_id_2 are neighbors, and
   // will throw a runtime error if that's not the case
-  inline int GetNeighborIndexOrDie(int client_id_1, int client_id_2) const {
+  int GetNeighborIndexOrDie(int client_id_1, int client_id_2) const {
     auto index =
         secret_sharing_graph()->GetNeighborIndex(client_id_1, client_id_2);
     FCP_CHECK(index.has_value());
@@ -172,26 +167,26 @@ class SecAggServerProtocolImpl {
 
   // Returns true if clients client_id_1 and client_id_1 are neighbors, else
   // false.
-  inline bool AreNeighbors(int client_id_1, int client_id_2) const {
+  bool AreNeighbors(int client_id_1, int client_id_2) const {
     return secret_sharing_graph()->AreNeighbors(client_id_1, client_id_2);
   }
 
   // Returns true if client_id_1 is an outgoing neighbor of client_id_2, else
   // false.
-  inline bool IsOutgoingNeighbor(int client_id_1, int client_id_2) const {
+  bool IsOutgoingNeighbor(int client_id_1, int client_id_2) const {
     return secret_sharing_graph()->IsOutgoingNeighbor(client_id_1, client_id_2);
   }
 
-  inline void SetPairwisePublicKeys(uint32_t client_id,
-                                    const EcdhPublicKey& pairwise_key) {
+  void SetPairwisePublicKeys(uint32_t client_id,
+                             const EcdhPublicKey& pairwise_key) {
     pairwise_public_keys_[client_id] = pairwise_key;
   }
 
-  inline const EcdhPublicKey& pairwise_public_keys(uint32_t client_id) const {
+  const EcdhPublicKey& pairwise_public_keys(uint32_t client_id) const {
     return pairwise_public_keys_[client_id];
   }
 
-  inline const SessionId& session_id() const {
+  const SessionId& session_id() const {
     FCP_CHECK(session_id_ != nullptr);
     return *session_id_;
   }

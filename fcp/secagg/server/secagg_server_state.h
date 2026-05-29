@@ -40,26 +40,23 @@ class SecAggServerState {
  public:
   // Returns the number of clients selected to be in the cohort for this
   // instance of Secure Aggregation.
-  inline size_t total_number_of_clients() const {
+  size_t total_number_of_clients() const {
     return impl_->total_number_of_clients();
   }
 
   // Returns the number of neighbors of each client.
-  inline int number_of_neighbors() const {
-    return impl_->number_of_neighbors();
-  }
+  int number_of_neighbors() const { return impl_->number_of_neighbors(); }
 
   // Returns the minimum number of neighbors of a client that must not drop-out
   // for that client's contribution to be included in the sum. This corresponds
   // to the threshold in the shamir secret sharing of self and pairwise masks.
-  inline int minimum_surviving_neighbors_for_reconstruction() const {
+  int minimum_surviving_neighbors_for_reconstruction() const {
     return impl_->minimum_surviving_neighbors_for_reconstruction();
   }
 
   // Returns the index of client_id_2 in the list of neighbors of client_id_1,
   // if present
-  inline std::optional<int> GetNeighborIndex(int client_id_1,
-                                             int client_id_2) const {
+  std::optional<int> GetNeighborIndex(int client_id_1, int client_id_2) const {
     return impl_->GetNeighborIndex(client_id_1, client_id_2);
   }
 
@@ -202,7 +199,7 @@ class SecAggServerState {
 
   // Returns the minimum threshold number of clients that need to send valid
   // responses in order for the protocol to proceed from one round to the next.
-  inline int minimum_number_of_clients_to_proceed() const {
+  int minimum_number_of_clients_to_proceed() const {
     return impl_->minimum_number_of_clients_to_proceed();
   }
 
@@ -244,19 +241,17 @@ class SecAggServerState {
   SecAggServerProtocolImpl* impl() { return impl_.get(); }
 
   // Returns the callback interface for recording metrics.
-  inline SecAggServerMetricsListener* metrics() const {
-    return impl_->metrics();
-  }
+  SecAggServerMetricsListener* metrics() const { return impl_->metrics(); }
 
   // Returns the callback interface for sending protocol buffer messages to the
   // client.
-  inline SendToClientsInterface* sender() const { return impl_->sender(); }
+  SendToClientsInterface* sender() const { return impl_->sender(); }
 
-  inline const ClientStatus& client_status(uint32_t client_id) const {
+  const ClientStatus& client_status(uint32_t client_id) const {
     return impl_->client_status(client_id);
   }
 
-  inline void set_client_status(uint32_t client_id, ClientStatus status) {
+  void set_client_status(uint32_t client_id, ClientStatus status) {
     impl_->set_client_status(client_id, status);
   }
 
