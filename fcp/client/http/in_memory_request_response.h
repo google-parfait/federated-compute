@@ -63,10 +63,10 @@ class InMemoryHttpRequest : public HttpRequest {
       absl::string_view uri, Method method, HeaderList extra_headers,
       std::string body, bool use_compression);
 
-  absl::string_view uri() const override { return uri_; };
-  Method method() const override { return method_; };
+  absl::string_view uri() const override { return uri_; }
+  Method method() const override { return method_; }
   const HeaderList& extra_headers() const override { return headers_; }
-  bool HasBody() const override { return !body_.empty(); };
+  bool HasBody() const override { return !body_.empty(); }
 
   absl::StatusOr<int64_t> ReadBody(char* buffer, int64_t requested) override;
 
@@ -247,8 +247,8 @@ FetchResourcesInMemory(HttpClient& http_client,
                        absl::BitGen* bit_gen, int32_t retry_max_attempts,
                        int32_t retry_delay_ms);
 
-};  // namespace http
-};  // namespace client
-};  // namespace fcp
+}  // namespace http
+}  // namespace client
+}  // namespace fcp
 
 #endif  // FCP_CLIENT_HTTP_IN_MEMORY_REQUEST_RESPONSE_H_
