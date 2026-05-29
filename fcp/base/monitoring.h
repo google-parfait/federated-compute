@@ -295,10 +295,10 @@ class ABSL_MUST_USE_RESULT StatusBuilder {
   StatusBuilder(StatusBuilder const& other);
 
   /** Return true if the constructed status will be OK. */
-  inline bool ok() const { return code_ == absl::StatusCode::kOk; }
+  bool ok() const { return code_ == absl::StatusCode::kOk; }
 
   /** Returns the code of the constructed status. */
-  inline absl::StatusCode code() const { return code_; }
+  absl::StatusCode code() const { return code_; }
 
   /** Stream into status message of this builder. */
   template <typename T>
