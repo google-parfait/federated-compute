@@ -63,8 +63,7 @@ class AesSecAggServerProtocolImpl
 
   // Returns one InputVectorSpecification for each input vector which the
   // protocol will aggregate.
-  inline const std::vector<InputVectorSpecification>& input_vector_specs()
-      const {
+  const std::vector<InputVectorSpecification>& input_vector_specs() const {
     return input_vector_specs_;
   }
 
