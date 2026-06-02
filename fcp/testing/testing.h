@@ -24,10 +24,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/base/macros.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
-#include "fcp/base/monitoring.h"
 #include "google/protobuf/util/message_differencer.h"
 
 #include "fcp/testing/parse_text_proto.h"
@@ -62,18 +59,6 @@ std::string TemporaryTestFile(absl::string_view suffix);
  */
 absl::StatusOr<std::string> VerifyAgainstBaseline(
     absl::string_view baseline_file, absl::string_view content);
-
-[[deprecated(
-    "use absl_testing::StatusIs instead")]] ABSL_REFACTOR_INLINE inline auto
-IsCode(absl::StatusCode code) {
-  return absl_testing::StatusIs(code);
-}
-
-[[deprecated(
-    "Use absl_testing::IsOk instead")]] ABSL_REFACTOR_INLINE inline auto
-IsOk() {
-  return absl_testing::IsOk();
-}
 
 template <typename T>
 class ProtoMatcherImpl : public ::testing::MatcherInterface<T> {

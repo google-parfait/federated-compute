@@ -21,6 +21,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/status/status.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/secagg_server_r1_share_keys_state.h"
 
@@ -46,7 +47,7 @@ absl::Status SecAggServerR0AdvertiseKeysState::HandleMessage(
     MessageReceived(message, false);
     AbortClient(client_id, "", ClientDropReason::SENT_ABORT_MESSAGE,
                 /*notify=*/false);
-    return FCP_STATUS(OK);
+    return absl::OkStatus();
   }
   // If the client has aborted or sent a message already, ignore its messages.
   if (client_status(client_id) != ClientStatus::READY_TO_START) {
@@ -56,14 +57,14 @@ absl::Status SecAggServerR0AdvertiseKeysState::HandleMessage(
         "Not expecting an AdvertiseKeys message from this client - either the "
         "client already aborted or one such message was already received.",
         ClientDropReason::ADVERTISE_KEYS_UNEXPECTED);
-    return FCP_STATUS(OK);
+    return absl::OkStatus();
   }
   if (!message.has_advertise_keys()) {
     MessageReceived(message, false);
     AbortClient(client_id,
                 "Message type received is different from what was expected.",
                 ClientDropReason::UNEXPECTED_MESSAGE_TYPE);
-    return FCP_STATUS(OK);
+    return absl::OkStatus();
   }
   MessageReceived(message, true);
 
@@ -72,14 +73,14 @@ absl::Status SecAggServerR0AdvertiseKeysState::HandleMessage(
   if (!status.ok()) {
     AbortClient(client_id, std::string(status.message()),
                 ClientDropReason::INVALID_PUBLIC_KEY);
-    return FCP_STATUS(OK);
+    return absl::OkStatus();
   }
 
   set_client_status(client_id, ClientStatus::ADVERTISE_KEYS_RECEIVED);
   number_of_clients_ready_for_next_round_++;
   number_of_messages_received_in_this_round_++;
 
-  return FCP_STATUS(OK);
+  return absl::OkStatus();
 }
 
 bool SecAggServerR0AdvertiseKeysState::IsNumberOfIncludedInputsCommitted()
@@ -115,7 +116,7 @@ void SecAggServerR0AdvertiseKeysState::HandleAbortClient(
 absl::StatusOr<std::unique_ptr<SecAggServerState>>
 SecAggServerR0AdvertiseKeysState::ProceedToNextRound() {
   if (!ReadyForNextRound()) {
-    return FCP_STATUS(UNAVAILABLE);
+    return FCP_STATUS(absl::StatusCode::kUnavailable);
   }
   if (needs_to_abort_) {
     std::string error_string = "Too many clients aborted.";

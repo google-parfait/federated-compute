@@ -44,7 +44,6 @@
 #include "absl/time/time.h"
 #include "fcp/base/compression.h"
 #include "fcp/base/digest.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/attestation/attestation_verifier.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/engine/engine.pb.h"
@@ -76,6 +75,7 @@ namespace fcp::client::http::internal {
 namespace {
 
 using ::absl_testing::IsOkAndHolds;
+using ::absl_testing::StatusIs;
 
 using HttpFederatedProtocolDeathTest = HttpFederatedProtocolTest;
 
@@ -129,7 +129,7 @@ TEST_F(HttpFederatedProtocolTest,
       mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(),
-              absl_testing::StatusIs(UNAVAILABLE));
+              StatusIs(absl::StatusCode::kUnavailable));
   EXPECT_THAT(eligibility_checkin_result.status().message(),
               HasSubstr("protocol request failed"));
   // The original 503 HTTP response code should be included in the message as
@@ -156,7 +156,7 @@ TEST_F(HttpFederatedProtocolTest,
       mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(),
-              absl_testing::StatusIs(NOT_FOUND));
+              StatusIs(absl::StatusCode::kNotFound));
   EXPECT_THAT(eligibility_checkin_result.status().message(),
               HasSubstr("protocol request failed"));
   // The original 404 HTTP response code should be included in the message as
@@ -208,7 +208,7 @@ TEST_F(HttpFederatedProtocolTest,
       mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(),
-              absl_testing::StatusIs(CANCELLED));
+              StatusIs(absl::StatusCode::kCancelled));
   // No RetryWindows were received from the server, so we expect to get a
   // RetryWindow generated based on the transient errors retry delay flag.
   ExpectTransientErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -437,7 +437,7 @@ TEST_F(HttpFederatedProtocolTest,
       mock_eet_received_callback_.AsStdFunction());
 
   ASSERT_THAT(eligibility_checkin_result,
-              absl_testing::StatusIs(INVALID_ARGUMENT));
+              StatusIs(absl::StatusCode::kInvalidArgument));
   ExpectPermanentErrorRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -648,7 +648,7 @@ TEST_F(HttpFederatedProtocolTest,
   // The 404 error for the resource request should be reflected in the return
   // value.
   EXPECT_THAT(eligibility_checkin_result.status(),
-              absl_testing::StatusIs(NOT_FOUND));
+              StatusIs(absl::StatusCode::kNotFound));
   EXPECT_THAT(eligibility_checkin_result.status().message(),
               HasSubstr("plan fetch failed"));
   // The original 404 HTTP response code should be included in the message as
@@ -698,7 +698,7 @@ TEST_F(HttpFederatedProtocolTest,
   // The 503 error for the resource request should be reflected in the return
   // value.
   EXPECT_THAT(eligibility_checkin_result.status(),
-              absl_testing::StatusIs(UNAVAILABLE));
+              StatusIs(absl::StatusCode::kUnavailable));
   EXPECT_THAT(eligibility_checkin_result.status().message(),
               HasSubstr("checkpoint fetch failed"));
   // The original 503 HTTP response code should be included in the message as
@@ -822,7 +822,7 @@ TEST_F(HttpFederatedProtocolDeathTest,
       mock_eet_received_callback_.AsStdFunction());
 
   EXPECT_THAT(eligibility_checkin_result.status(),
-              absl_testing::StatusIs(UNAVAILABLE));
+              StatusIs(absl::StatusCode::kUnavailable));
 
   // A Checkin(...) request should now fail, because Checkin(...) should only
   // be a called after a successful EligibilityEvalCheckin(...) request.
@@ -961,7 +961,8 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsTransientError) {
       GetFakeTaskEligibilityInfo(),
       mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
-  EXPECT_THAT(checkin_result.status(), absl_testing::StatusIs(UNAVAILABLE));
+  EXPECT_THAT(checkin_result.status(),
+              StatusIs(absl::StatusCode::kUnavailable));
   // The original 503 HTTP response code should be included in the message as
   // well.
   EXPECT_THAT(checkin_result.status().message(), HasSubstr("503"));
@@ -997,7 +998,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromHttp) {
       GetFakeTaskEligibilityInfo(),
       mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
-  EXPECT_THAT(checkin_result.status(), absl_testing::StatusIs(NOT_FOUND));
+  EXPECT_THAT(checkin_result.status(), StatusIs(absl::StatusCode::kNotFound));
   // The original 503 HTTP response code should be included in the message as
   // well.
   EXPECT_THAT(checkin_result.status().message(), HasSubstr("404"));
@@ -1041,7 +1042,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinFailsPermanentErrorFromOperation) {
       GetFakeTaskEligibilityInfo(),
       mock_task_received_callback_.AsStdFunction(), std::nullopt);
 
-  EXPECT_THAT(checkin_result.status(), absl_testing::StatusIs(NOT_FOUND));
+  EXPECT_THAT(checkin_result.status(), StatusIs(absl::StatusCode::kNotFound));
   EXPECT_THAT(checkin_result.status().message(),
               HasSubstr("Operation my_operation contained error"));
   // The original error message should be included in the message as well.
@@ -1106,7 +1107,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterrupted) {
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
       mock_task_received_callback_.AsStdFunction(), std::nullopt);
-  EXPECT_THAT(checkin_result.status(), absl_testing::StatusIs(CANCELLED));
+  EXPECT_THAT(checkin_result.status(), StatusIs(absl::StatusCode::kCancelled));
   // RetryWindows were already received from the server during the eligibility
   // eval checkin, so we expect to get a 'rejected' retry window.
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -1186,7 +1187,7 @@ TEST_F(HttpFederatedProtocolTest,
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
       mock_task_received_callback_.AsStdFunction(), std::nullopt);
-  EXPECT_THAT(checkin_result.status(), absl_testing::StatusIs(CANCELLED));
+  EXPECT_THAT(checkin_result.status(), StatusIs(absl::StatusCode::kCancelled));
   // RetryWindows were already received from the server during the eligibility
   // eval checkin, so we expect to get a 'rejected' retry window.
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -1277,7 +1278,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinInterruptedCancellationTimeout) {
   auto checkin_result = federated_protocol_->Checkin(
       GetFakeTaskEligibilityInfo(),
       mock_task_received_callback_.AsStdFunction(), std::nullopt);
-  EXPECT_THAT(checkin_result.status(), absl_testing::StatusIs(CANCELLED));
+  EXPECT_THAT(checkin_result.status(), StatusIs(absl::StatusCode::kCancelled));
   // RetryWindows were already received from the server during the eligibility
   // eval checkin, so we expect to get a 'rejected' retry window.
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
@@ -1676,7 +1677,7 @@ TEST_F(HttpFederatedProtocolTest, TestCheckinTaskAssignedPlanDataFetchFailed) {
 
   // The 404 error for the resource request should be reflected in the return
   // value.
-  EXPECT_THAT(checkin_result.status(), absl_testing::StatusIs(NOT_FOUND));
+  EXPECT_THAT(checkin_result.status(), StatusIs(absl::StatusCode::kNotFound));
   EXPECT_THAT(checkin_result.status().message(),
               HasSubstr("plan fetch failed"));
   EXPECT_THAT(checkin_result.status().message(), HasSubstr("404"));
@@ -1738,7 +1739,8 @@ TEST_F(HttpFederatedProtocolTest,
 
   // The 503 error for the resource request should be reflected in the return
   // value.
-  EXPECT_THAT(checkin_result.status(), absl_testing::StatusIs(UNAVAILABLE));
+  EXPECT_THAT(checkin_result.status(),
+              StatusIs(absl::StatusCode::kUnavailable));
   EXPECT_THAT(checkin_result.status().message(),
               HasSubstr("checkpoint fetch failed"));
   EXPECT_THAT(checkin_result.status().message(), HasSubstr("503"));
@@ -1823,7 +1825,7 @@ TEST_F(HttpFederatedProtocolTest, TestPerformMultipleTaskAssignmentsFailed) {
           task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
           std::nullopt);
   EXPECT_THAT(multi_task_assignment_result,
-              absl_testing::StatusIs(absl::StatusCode::kUnavailable));
+              StatusIs(absl::StatusCode::kUnavailable));
   EXPECT_THAT(multi_task_assignment_result.status().message(),
               HasSubstr("protocol request failed"));
   // The original 500 HTTP response code should be included in the message as
@@ -1870,7 +1872,7 @@ TEST_F(HttpFederatedProtocolTest,
           task_names, mock_multiple_tasks_received_callback_.AsStdFunction(),
           std::nullopt);
   EXPECT_THAT(multi_task_assignment_result,
-              absl_testing::StatusIs(absl::StatusCode::kNotFound));
+              StatusIs(absl::StatusCode::kNotFound));
   EXPECT_THAT(multi_task_assignment_result.status().message(),
               HasSubstr("protocol request failed"));
   // The original 404 HTTP response code should be included in the message as
@@ -2075,8 +2077,7 @@ TEST_F(HttpFederatedProtocolTest,
                   Optional(FieldsAre(
                       _, Eq(kMinimumClientsInServerVisibleAggregate))),
                   Eq(std::nullopt), Eq(std::nullopt), kMultiTaskId_1, _))),
-          Pair(kMultiTaskId_2,
-               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument))));
+          Pair(kMultiTaskId_2, StatusIs(absl::StatusCode::kInvalidArgument))));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -2152,8 +2153,7 @@ TEST_F(HttpFederatedProtocolTest,
                   Optional(FieldsAre(
                       _, Eq(kMinimumClientsInServerVisibleAggregate))),
                   Eq(std::nullopt), Eq(std::nullopt), kMultiTaskId_1, _))),
-          Pair(kMultiTaskId_2,
-               absl_testing::StatusIs(absl::StatusCode::kInvalidArgument))));
+          Pair(kMultiTaskId_2, StatusIs(absl::StatusCode::kInvalidArgument))));
   ExpectRejectedRetryWindow(federated_protocol_->GetLatestRetryWindow());
 }
 
@@ -3163,7 +3163,7 @@ TEST_F(HttpFederatedProtocolTest,
   ReportResult report_result = federated_protocol_->ReportCompleted(
       std::move(results), plan_duration, std::nullopt);
   EXPECT_EQ(report_result.outcome, ReportOutcome::kPartialSuccess);
-  EXPECT_THAT(report_result.status, absl_testing::StatusIs(UNAVAILABLE));
+  EXPECT_THAT(report_result.status, StatusIs(absl::StatusCode::kUnavailable));
 }
 
 TEST_F(HttpFederatedProtocolTest,
@@ -3207,7 +3207,7 @@ TEST_F(HttpFederatedProtocolTest,
   ReportResult report_result = federated_protocol_->ReportCompleted(
       std::move(results), plan_duration, std::nullopt);
   EXPECT_EQ(report_result.outcome, ReportOutcome::kFailure);
-  EXPECT_THAT(report_result.status, absl_testing::StatusIs(UNAVAILABLE));
+  EXPECT_THAT(report_result.status, StatusIs(absl::StatusCode::kUnavailable));
   EXPECT_THAT(report_result.status.message(), HasSubstr("All uploads failed"));
 }
 
@@ -4094,7 +4094,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedError) {
 
   absl::Status status = federated_protocol_->ReportNotCompleted(
       engine::PhaseOutcome::ERROR, absl::Minutes(5), std::nullopt);
-  EXPECT_THAT(status, absl_testing::StatusIs(UNAVAILABLE));
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kUnavailable));
   EXPECT_THAT(
       status.message(),
       AllOf(HasSubstr("ReportTaskResult request failed:"), HasSubstr("503")));
@@ -4116,7 +4116,7 @@ TEST_F(HttpFederatedProtocolTest, TestReportNotCompletedPermanentError) {
 
   absl::Status status = federated_protocol_->ReportNotCompleted(
       engine::PhaseOutcome::ERROR, absl::Minutes(5), std::nullopt);
-  EXPECT_THAT(status, absl_testing::StatusIs(NOT_FOUND));
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kNotFound));
   EXPECT_THAT(
       status.message(),
       AllOf(HasSubstr("ReportTaskResult request failed:"), HasSubstr("404")));
@@ -4895,7 +4895,7 @@ TEST_F(HttpFederatedProtocolTest,
       expected_eligibility_info, mock_task_received_callback_.AsStdFunction(),
       std::nullopt);
   EXPECT_THAT(checkin_result.status(),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(
       checkin_result.status().message(),
       HasSubstr(

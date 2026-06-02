@@ -22,6 +22,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/secagg_server_completed_state.h"
@@ -53,7 +54,7 @@ absl::Status SecAggServerPrngRunningState::HandleMessage(
     AbortClient(client_id, "Non-abort message sent during PrngUnmasking step.",
                 ClientDropReason::UNEXPECTED_MESSAGE_TYPE);
   }
-  return FCP_STATUS(OK);
+  return absl::OkStatus();
 }
 
 void SecAggServerPrngRunningState::HandleAbort() {
@@ -147,7 +148,7 @@ SecAggServerPrngRunningState::ProceedToNextRound() {
   absl::MutexLock lock(mutex_);
 
   if (!completion_status_.has_value()) {
-    return FCP_STATUS(UNAVAILABLE);
+    return FCP_STATUS(absl::StatusCode::kUnavailable);
   }
 
   // Don't send any messages; every client either got an "early success"

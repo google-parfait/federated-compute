@@ -30,7 +30,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/string_view.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/confidentialcompute/cose.h"
 #include "fcp/confidentialcompute/crypto_test_util.h"
 #include "fcp/protos/confidentialcompute/key.pb.h"
@@ -290,7 +289,7 @@ TEST(CryptoTest, EncryptWithInvalidPublicKeyFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, "invalid public key", associated_data);
-  ASSERT_THAT(encrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  ASSERT_THAT(encrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, EncryptWithInvalidCwtFails) {
@@ -300,7 +299,7 @@ TEST(CryptoTest, EncryptWithInvalidCwtFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, std::string(50, 'x'), associated_data);
-  EXPECT_THAT(encrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(encrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, EncryptWithMissingCwtPublicKeyFails) {
@@ -313,7 +312,7 @@ TEST(CryptoTest, EncryptWithMissingCwtPublicKeyFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *cwt_bytes, associated_data);
-  EXPECT_THAT(encrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(encrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, EncryptWithInvalidCwtAlgorithmFails) {
@@ -329,7 +328,7 @@ TEST(CryptoTest, EncryptWithInvalidCwtAlgorithmFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *cwt_bytes, associated_data);
-  EXPECT_THAT(encrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(encrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, EncryptWithInvalidProtoAlgorithmFails) {
@@ -347,7 +346,7 @@ TEST(CryptoTest, EncryptWithInvalidProtoAlgorithmFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, key, associated_data);
-  EXPECT_THAT(encrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(encrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, EncryptWithIncorrectCwtKeyOpFails) {
@@ -363,7 +362,7 @@ TEST(CryptoTest, EncryptWithIncorrectCwtKeyOpFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *cwt_bytes, associated_data);
-  EXPECT_THAT(encrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(encrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, EncryptWithIncorrectProtoKeyPurposeFails) {
@@ -381,7 +380,7 @@ TEST(CryptoTest, EncryptWithIncorrectProtoKeyPurposeFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, key, associated_data);
-  EXPECT_THAT(encrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(encrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, EncryptWithoutCwtKeyOpsSucceeds) {
@@ -431,7 +430,7 @@ TEST(CryptoTest, EncryptWithInvalidCwtCurveFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *cwt_bytes, associated_data);
-  EXPECT_THAT(encrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(encrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, EncryptWithInvalidCwtPublicKeyFails) {
@@ -452,7 +451,7 @@ TEST(CryptoTest, EncryptWithInvalidCwtPublicKeyFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, *cwt_bytes, associated_data);
-  EXPECT_THAT(encrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(encrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, EncryptWithInvalidProtoKeyMaterialFails) {
@@ -468,7 +467,7 @@ TEST(CryptoTest, EncryptWithInvalidProtoKeyMaterialFails) {
   MessageEncryptor encryptor;
   absl::StatusOr<EncryptMessageResult> encrypt_result =
       encryptor.Encrypt(message, key, associated_data);
-  EXPECT_THAT(encrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(encrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, EncryptTwiceWithSameKeyUsesDifferentSymmetricKey) {
@@ -551,7 +550,7 @@ TEST(CryptoTest, DecryptWithWrongKeyFails) {
       encrypt_result->ciphertext, message_associated_data,
       encrypt_result->encrypted_symmetric_key, message_associated_data,
       encrypt_result->encapped_key, "key-id");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, DecryptWithWrongCiphertextAssociatedDataFails) {
@@ -570,7 +569,7 @@ TEST(CryptoTest, DecryptWithWrongCiphertextAssociatedDataFails) {
       encrypt_result->ciphertext, "wrong ciphertext associated data",
       encrypt_result->encrypted_symmetric_key, associated_data,
       encrypt_result->encapped_key, "key-id");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, DecryptWithWrongSymmetricKeyAssociatedDataFails) {
@@ -590,7 +589,7 @@ TEST(CryptoTest, DecryptWithWrongSymmetricKeyAssociatedDataFails) {
                         encrypt_result->encrypted_symmetric_key,
                         "wrong symmetric key associated data",
                         encrypt_result->encapped_key, "key-id");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, DecryptWithWrongEncappedKeyFails) {
@@ -610,7 +609,7 @@ TEST(CryptoTest, DecryptWithWrongEncappedKeyFails) {
                         encrypt_result->encrypted_symmetric_key,
                         "wrong symmetric key associated data",
                         encrypt_result->encapped_key, "key-id");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, DecryptWithInvalidCiphertextFails) {
@@ -629,7 +628,7 @@ TEST(CryptoTest, DecryptWithInvalidCiphertextFails) {
       "invalid ciphertext", associated_data,
       encrypt_result->encrypted_symmetric_key, associated_data,
       encrypt_result->encapped_key, "key-id");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, DecryptWithInvalidSymmetricKeyFails) {
@@ -647,7 +646,7 @@ TEST(CryptoTest, DecryptWithInvalidSymmetricKeyFails) {
   absl::StatusOr<std::string> decrypt_result = decryptor.Decrypt(
       encrypt_result->ciphertext, associated_data, "invalid symmetric key",
       associated_data, encrypt_result->encapped_key, "key-id");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, DecryptWithInvalidEncappedKeyFails) {
@@ -666,7 +665,7 @@ TEST(CryptoTest, DecryptWithInvalidEncappedKeyFails) {
       decryptor.Decrypt(encrypt_result->ciphertext, associated_data,
                         encrypt_result->encrypted_symmetric_key,
                         associated_data, "invalid encapped key", "key-id");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, DecryptWithInvalidAlgorithmFails) {
@@ -730,7 +729,7 @@ TEST(CryptoTest, DecryptWithInvalidAlgorithmFails) {
                         rewrapped_symmetric_key_result->encrypted_symmetric_key,
                         symmetric_key_associated_data,
                         rewrapped_symmetric_key_result->encapped_key, "key-id");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, DecryptWithIncorrectKeyOpFails) {
@@ -794,7 +793,7 @@ TEST(CryptoTest, DecryptWithIncorrectKeyOpFails) {
                         rewrapped_symmetric_key_result->encrypted_symmetric_key,
                         symmetric_key_associated_data,
                         rewrapped_symmetric_key_result->encapped_key, "key-id");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, DecryptWithoutKeyOpsSucceeds) {
@@ -876,7 +875,7 @@ TEST(CryptoTest, DecryptWithWrongKeyIdFails) {
       encrypt_result->ciphertext, associated_data,
       encrypt_result->encrypted_symmetric_key, associated_data,
       encrypt_result->encapped_key, "other-id");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(FAILED_PRECONDITION));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(CryptoTest, DecryptReleasedResult) {
@@ -940,7 +939,7 @@ TEST(CryptoTest, DecryptReleasedFailsWithInvalidSymmetricKey) {
   absl::StatusOr<std::string> decrypt_result =
       MessageDecryptor({}).DecryptReleasedResult(encrypt_result->ciphertext,
                                                  associated_data, "invalid");
-  EXPECT_THAT(decrypt_result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(decrypt_result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CryptoTest, UnwrapReleaseToken) {
@@ -985,7 +984,7 @@ TEST(CryptoTest, UnwrapReleaseTokenWithNoKeyId) {
   absl::StatusOr<UnwrappedReleaseToken> unwrapped_release_token =
       MessageDecryptor({}).UnwrapReleaseToken(*serialized_token);
   EXPECT_THAT(unwrapped_release_token,
-              absl_testing::StatusIs(INVALID_ARGUMENT));
+              StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(unwrapped_release_token.status().message(),
               HasSubstr("Release token has no encryption key ID"));
 }
@@ -1005,7 +1004,7 @@ TEST(CryptoTest, UnwrapReleaseTokenWithNoEncappedKey) {
   absl::StatusOr<UnwrappedReleaseToken> unwrapped_release_token =
       MessageDecryptor({}).UnwrapReleaseToken(*serialized_token);
   EXPECT_THAT(unwrapped_release_token,
-              absl_testing::StatusIs(INVALID_ARGUMENT));
+              StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(unwrapped_release_token.status().message(),
               HasSubstr("Release token has no encapped key"));
 }
@@ -1014,7 +1013,7 @@ TEST(EcdsaP256R1SignatureVerifierTest, VerifierWithInvalidPublicKeyFails) {
   // Verify a real signature with a bogus public key, which should fail.
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
       EcdsaP256R1SignatureVerifier::Create("not a valid public key");
-  EXPECT_THAT(verifier, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(verifier, StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(verifier.status().message(),
               HasSubstr("Failed to initialize public key"));
 }
@@ -1023,7 +1022,7 @@ TEST(EcdsaP256R1SignatureVerifierTest, VerifierWithEmptyPublicKeyFails) {
   // Attempt to create a verifier with an empty public key, which should fail.
   absl::StatusOr<EcdsaP256R1SignatureVerifier> verifier =
       EcdsaP256R1SignatureVerifier::Create(/*public_key=*/"");
-  EXPECT_THAT(verifier, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(verifier, StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(verifier.status().message(),
               HasSubstr("Failed to initialize public key"));
 }
@@ -1073,7 +1072,7 @@ TEST(EcdsaP256R1SignatureVerifierTest, InvalidSignatureFailsVerification) {
       EcdsaP256R1SignatureVerifier::Create(signer.GetPublicKey());
   ABSL_ASSERT_OK(verifier);
   auto result = verifier->Verify(data_to_sign, "not a valid signature");
-  EXPECT_THAT(result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(result, StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.message(), HasSubstr("Invalid signature"));
 }
 
@@ -1088,7 +1087,7 @@ TEST(EcdsaP256R1SignatureVerifierTest, EmptySignatureFailsVerification) {
       EcdsaP256R1SignatureVerifier::Create(signer.GetPublicKey());
   ABSL_ASSERT_OK(verifier);
   auto result = verifier->Verify(data_to_sign, "");
-  EXPECT_THAT(result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(result, StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.message(), HasSubstr("Invalid signature"));
 }
 
@@ -1108,7 +1107,7 @@ TEST(EcdsaP256R1SignatureVerifierTest, MismatchingPublicKeyFailsVerification) {
       EcdsaP256R1SignatureVerifier::Create(second_signer.GetPublicKey());
   ABSL_ASSERT_OK(verifier);
   auto result = verifier->Verify(data_to_sign, signature);
-  EXPECT_THAT(result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(result, StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.message(), HasSubstr("Invalid signature"));
 }
 
@@ -1120,7 +1119,7 @@ TEST(EcdsaP256R1SignatureVerifierTest,
       EcdsaP256R1SignatureVerifier::Create(signer.GetPublicKey());
   ABSL_ASSERT_OK(verifier);
   auto result = verifier->Verify("", "");
-  EXPECT_THAT(result, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(result, StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 // Tests that the signature verifier can successfully verify a known example of
@@ -1193,7 +1192,7 @@ TEST(ConvertP1363SignatureToAsn1Test, InvalidSignature) {
   // Odd-length signatures should fail.
   absl::StatusOr<std::string> asn1_signature =
       ConvertP1363SignatureToAsn1("odd");
-  EXPECT_THAT(asn1_signature, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(asn1_signature, StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(asn1_signature.status().message(),
               HasSubstr("P1363 signature does not have even length"));
 }

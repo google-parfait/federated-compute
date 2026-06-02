@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <string>
 
+#include "absl/status/status.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/shared/aes_key.h"
 #include "fcp/secagg/shared/prng.h"
@@ -66,7 +67,8 @@ absl::StatusOr<std::string> AesGcmEncryption::Decrypt(
       << "Decrypt called with key of " << key.size()
       << " bytes, but 32 bytes are required.";
   if (ciphertext.size() < kIvSize + kTagSize) {
-    return FCP_STATUS(DATA_LOSS) << "Ciphertext is too short.";
+    return FCP_STATUS(absl::StatusCode::kDataLoss)
+           << "Ciphertext is too short.";
   }
   size_t len;
   std::vector<uint8_t> plaintext_buffer;
@@ -83,7 +85,8 @@ absl::StatusOr<std::string> AesGcmEncryption::Decrypt(
           reinterpret_cast<const uint8_t*>(ciphertext.data()), kIvSize,
           reinterpret_cast<const uint8_t*>(ciphertext.data() + kIvSize),
           ciphertext.size() - kIvSize, nullptr, 0) != 1) {
-    return FCP_STATUS(DATA_LOSS) << "Verification of ciphertext failed.";
+    return FCP_STATUS(absl::StatusCode::kDataLoss)
+           << "Verification of ciphertext failed.";
   }
   return std::string(plaintext_buffer.begin(), plaintext_buffer.end());
 }

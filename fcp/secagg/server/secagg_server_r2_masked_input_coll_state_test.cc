@@ -25,6 +25,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/container/node_hash_set.h"
+#include "absl/status/status_matchers.h"
 #include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/aes/aes_secagg_server_protocol_impl.h"

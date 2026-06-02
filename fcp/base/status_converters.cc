@@ -16,16 +16,17 @@
 #include "fcp/base/status_converters.h"
 
 #include "grpcpp/support/status.h"
+#include "absl/status/status.h"
 
 namespace fcp {
 namespace base {
 
 #define MAP_FROM_GRPC_STATUS(grpc_name, absl_name) \
   case grpc::StatusCode::grpc_name:                \
-    return StatusCode::absl_name;
+    return absl::StatusCode::absl_name;
 
 #define MAP_TO_GRPC_STATUS(absl_name, grpc_name) \
-  case StatusCode::absl_name:                    \
+  case absl::StatusCode::absl_name:              \
     return grpc::StatusCode::grpc_name;
 
 absl::StatusCode FromGrpcStatusCode(grpc::StatusCode code) {

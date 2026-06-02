@@ -65,7 +65,6 @@
 namespace fcp::client::http::internal {
 
 using ::fcp::EqualsProto;
-using ::fcp::IsCode;
 using ::fcp::client::ReportOutcome;
 using ::fcp::client::ReportResult;
 using ::fcp::client::http::FakeHttpResponse;

@@ -25,6 +25,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/container/node_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/aes/aes_secagg_server_protocol_impl.h"
@@ -178,7 +179,7 @@ absl::Status SecAggServer::Abort() {
   TracingSpan<AbortSecAggServer> span(state_span_->Ref(), reason);
   FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   TransitionState(state_->Abort(reason, SecAggServerOutcome::EXTERNAL_REQUEST));
-  return FCP_STATUS(OK);
+  return absl::OkStatus();
 }
 
 absl::Status SecAggServer::Abort(const std::string& reason,
@@ -188,7 +189,7 @@ absl::Status SecAggServer::Abort(const std::string& reason,
   TracingSpan<AbortSecAggServer> span(state_span_->Ref(), formatted_reason);
   FCP_RETURN_IF_ERROR(ErrorIfAbortedOrCompleted());
   TransitionState(state_->Abort(formatted_reason, outcome));
-  return FCP_STATUS(OK);
+  return absl::OkStatus();
 }
 
 std::string MakeClientAbortMessage(ClientAbortReason reason) {
@@ -227,7 +228,7 @@ absl::Status SecAggServer::AbortClient(uint32_t client_id,
 
   state_->AbortClient(client_id, message, client_drop_reason, notify_client,
                       log_metrics);
-  return FCP_STATUS(OK);
+  return absl::OkStatus();
 }
 
 absl::Status SecAggServer::ProceedToNextRound() {
@@ -343,26 +344,26 @@ SecAggServerStateKind SecAggServer::State() const { return state_->State(); }
 
 absl::Status SecAggServer::ValidateClientId(uint32_t client_id) const {
   if (client_id >= state_->total_number_of_clients()) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "Client Id " << client_id
            << " is outside of the expected bounds - 0 to "
            << state_->total_number_of_clients();
   }
-  return FCP_STATUS(OK);
+  return absl::OkStatus();
 }
 
 absl::Status SecAggServer::ErrorIfAbortedOrCompleted() const {
   if (state_->IsAborted()) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "The server has already aborted. The request cannot be "
               "satisfied.";
   }
   if (state_->IsCompletedSuccessfully()) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "The server has already completed the protocol. "
            << "Call getOutput() to retrieve the output.";
   }
-  return FCP_STATUS(OK);
+  return absl::OkStatus();
 }
 
 }  // namespace secagg

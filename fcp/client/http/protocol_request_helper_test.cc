@@ -32,7 +32,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "fcp/base/clock.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/base/time_util.h"
 #include "fcp/base/wall_clock_stopwatch.h"
 #include "fcp/client/diag_codes.pb.h"
@@ -50,6 +49,7 @@ namespace client {
 namespace http {
 namespace {
 
+using ::absl_testing::StatusIs;
 using ::google::internal::federatedcompute::v1::AdvertiseKeysMetadata;
 using ::google::internal::federatedcompute::v1::ForwardingInfo;
 using ::google::internal::federatedcompute::v1::ShareKeysMetadata;
@@ -128,13 +128,13 @@ TEST(ProtocolRequestCreatorTest, TestInvalidForwardingInfo) {
   ForwardingInfo forwarding_info;
   EXPECT_THAT(ProtocolRequestCreator::Create(kApiKey, forwarding_info,
                                              /*use_compression=*/false),
-              absl_testing::StatusIs(INVALID_ARGUMENT));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 
   (*forwarding_info.mutable_extra_request_headers())["x-header1"] =
       "header-value1";
   EXPECT_THAT(ProtocolRequestCreator::Create(kApiKey, forwarding_info,
                                              /*use_compression=*/false),
-              absl_testing::StatusIs(INVALID_ARGUMENT));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(ProtocolRequestCreatorTest, CreateProtocolRequestInvalidSuffix) {
@@ -145,7 +145,7 @@ TEST(ProtocolRequestCreatorTest, CreateProtocolRequestInvalidSuffix) {
       creator.CreateProtocolRequest(uri_suffix, QueryParams(),
                                     HttpRequest::Method::kPost, "request_body",
                                     /*is_protobuf_encoded=*/false),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(ProtocolRequestCreatorTest, CreateProtocolRequest) {
@@ -424,7 +424,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationInvalidOperationName) {
       protocol_request_helper_.PollOperationResponseUntilDone(
           CreatePendingOperation("invalid_operation_name"),
           initial_request_creator_, interruptible_runner_);
-  EXPECT_THAT(result.status(), absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(result.status(), StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(result.status().message(), HasSubstr("invalid name"));
 }
 
@@ -440,7 +440,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseImmediateSuccess) {
 TEST_F(ProtocolRequestHelperTest,
        TestPollOperationResponseImmediateOperationError) {
   Operation expected_response =
-      CreateErrorOperation(ALREADY_EXISTS, "some error");
+      CreateErrorOperation(absl::StatusCode::kAlreadyExists, "some error");
   absl::StatusOr<Operation> result =
       protocol_request_helper_.PollOperationResponseUntilDone(
           expected_response, initial_request_creator_, interruptible_runner_);
@@ -487,7 +487,7 @@ TEST_F(ProtocolRequestHelperTest, TestPollOperationResponseErrorAfterPolling) {
   // Then, after letting the operation get polled twice more, eventually
   // return a fake error.
   Operation expected_response =
-      CreateErrorOperation(ALREADY_EXISTS, "some error");
+      CreateErrorOperation(absl::StatusCode::kAlreadyExists, "some error");
   EXPECT_CALL(mock_http_client_,
               PerformSingleRequest(SimpleHttpRequestMatcher(
                   // Note that the '#' character is encoded as "%23".
@@ -803,7 +803,7 @@ TEST_F(ProtocolRequestHelperTest, PerformMultipleRequestsPartialFail) {
   ABSL_ASSERT_OK(response_1);
   VerifyInMemoryHttpResponse(*response_1, 200, "", "response1");
   auto response_2 = (*result)[1];
-  ASSERT_THAT(response_2, absl_testing::StatusIs(absl::StatusCode::kNotFound));
+  ASSERT_THAT(response_2, StatusIs(absl::StatusCode::kNotFound));
 }
 }  // anonymous namespace
 }  // namespace http

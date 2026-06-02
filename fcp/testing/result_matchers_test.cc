@@ -16,11 +16,14 @@
 
 #include "fcp/testing/result_matchers.h"
 
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status.h"
 #include "fcp/base/error.h"
+#include "fcp/base/meta.h"
+#include "fcp/base/monitoring.h"
 #include "fcp/base/result.h"
 #include "fcp/base/tracing_schema.h"
-#include "fcp/testing/testing.h"
 #include "fcp/testing/tracing.h"
 #include "fcp/tracing/test_tracing_recorder.h"
 
@@ -51,16 +54,17 @@ TEST(ExpectTest, ExpectIsError) {
 
 TEST(ExpectTest, ExpectStatus) {
   TestTracingRecorder recorder;
-  EXPECT_THAT(Result<absl::Status>(FCP_STATUS(INVALID_ARGUMENT))
-                  .Then(ExpectStatus<INVALID_ARGUMENT>()),
-              HasValue(Unit{}));
+  EXPECT_THAT(
+      Result<absl::Status>(FCP_STATUS(absl::StatusCode::kInvalidArgument))
+          .Then(ExpectStatus<absl::StatusCode::kInvalidArgument>()),
+      HasValue(Unit{}));
 }
 
 TEST(ExpectTest, ExpectStatusReturnsError) {
   TestTracingRecorder recorder;
   recorder.ExpectError<ResultExpectStatusError>();
-  EXPECT_THAT(Result<absl::Status>(FCP_STATUS(OK))
-                  .Then(ExpectStatus<INVALID_ARGUMENT>()),
+  EXPECT_THAT(Result<absl::Status>(absl::OkStatus())
+                  .Then(ExpectStatus<absl::StatusCode::kInvalidArgument>()),
               IsError());
 }
 

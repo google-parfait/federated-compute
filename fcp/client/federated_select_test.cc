@@ -41,13 +41,12 @@
 #include "fcp/client/stats.h"
 #include "fcp/client/test_helpers.h"
 #include "fcp/protos/plan.pb.h"
-#include "fcp/testing/testing.h"
 
 namespace fcp::client {
 namespace {
 
+using ::absl_testing::StatusIs;
 using ::fcp::CompressWithGzip;
-using ::fcp::IsCode;
 using ::fcp::client::ExampleIterator;
 using ::fcp::client::engine::ExampleIteratorFactory;
 using ::fcp::client::http::FakeHttpResponse;
@@ -159,7 +158,7 @@ TEST_F(HttpFederatedSelectManagerTest,
 
   EXPECT_FALSE(iterator_factory->CanHandle(selector));
   EXPECT_THAT(iterator_factory->CreateExampleIterator(selector),
-              absl_testing::StatusIs(INVALID_ARGUMENT));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(HttpFederatedSelectManagerTest, IteratorFactoryShouldNotCollectStats) {
@@ -190,7 +189,7 @@ TEST_F(HttpFederatedSelectManagerTest,
       iterator_factory->CreateExampleIterator(selector);
 
   // The iterator creation should have failed, since the URI template was empty.
-  EXPECT_THAT(iterator, absl_testing::StatusIs(INVALID_ARGUMENT));
+  EXPECT_THAT(iterator, StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(iterator.status().message(), HasSubstr("disabled"));
   // Even though creating an iterator should fail since the feature is disabled,
   // the iterator factory should still handle all internal:/federated_select
@@ -265,7 +264,7 @@ TEST_F(HttpFederatedSelectManagerTest,
   EXPECT_THAT(ReadFile(*second_slice), expected_key1_data);
 
   // We should now have reached the end of the first iterator.
-  EXPECT_THAT((*iterator1)->Next(), absl_testing::StatusIs(OUT_OF_RANGE));
+  EXPECT_THAT((*iterator1)->Next(), StatusIs(absl::StatusCode::kOutOfRange));
 
   // Closing the iterator should not fail/crash.
   (*iterator1)->Close();
@@ -385,7 +384,7 @@ TEST_F(HttpFederatedSelectManagerTest,
   EXPECT_THAT(ReadFile(*slice), expected_key1_data);
 
   // We should now have reached the end of the first iterator.
-  EXPECT_THAT((*iterator)->Next(), absl_testing::StatusIs(OUT_OF_RANGE));
+  EXPECT_THAT((*iterator)->Next(), StatusIs(absl::StatusCode::kOutOfRange));
 
   // Closing the iterator should not fail/crash.
   (*iterator)->Close();
@@ -436,7 +435,7 @@ TEST_F(HttpFederatedSelectManagerTest, ErrorDuringFetch) {
   // The error code should be UNAVAILABLE and the error message should include
   // the original NOT_FOUND error code that HTTP's 404 maps to, as well as the
   // URI template to aid debugging.
-  EXPECT_THAT(iterator, absl_testing::StatusIs(UNAVAILABLE));
+  EXPECT_THAT(iterator, StatusIs(absl::StatusCode::kUnavailable));
   EXPECT_THAT(iterator.status().message(), HasSubstr("fetch request failed"));
   EXPECT_THAT(iterator.status().message(), HasSubstr(uri_template));
   EXPECT_THAT(iterator.status().message(), HasSubstr("NOT_FOUND"));

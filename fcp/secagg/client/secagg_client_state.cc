@@ -16,9 +16,12 @@
 
 #include "fcp/secagg/client/secagg_client_state.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/state_transition_listener_interface.h"
 #include "fcp/secagg/shared/input_vector_specification.h"
@@ -47,7 +50,7 @@ SecAggClientState::SecAggClientState(
 }
 
 absl::StatusOr<std::unique_ptr<SecAggClientState>> SecAggClientState::Start() {
-  return FCP_STATUS(FAILED_PRECONDITION)
+  return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
          << "An illegal start transition was attempted from state "
          << StateName();
 }
@@ -56,11 +59,11 @@ absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientState::HandleMessage(const ServerToClientWrapperMessage& message) {
   if (message.message_content_case() ==
       ServerToClientWrapperMessage::MESSAGE_CONTENT_NOT_SET) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "Client received a message of unknown type but was in state "
            << StateName();
   } else {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "Client received a message of type "
            << message.message_content_case() << " but was in state "
            << StateName();
@@ -69,14 +72,14 @@ SecAggClientState::HandleMessage(const ServerToClientWrapperMessage& message) {
 
 absl::StatusOr<std::unique_ptr<SecAggClientState>> SecAggClientState::SetInput(
     std::unique_ptr<SecAggVectorMap> input_map) {
-  return FCP_STATUS(FAILED_PRECONDITION)
+  return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
          << "An illegal input transition was attempted from state "
          << StateName();
 }
 
 absl::StatusOr<std::unique_ptr<SecAggClientState>> SecAggClientState::Abort(
     const std::string& reason) {
-  return FCP_STATUS(FAILED_PRECONDITION)
+  return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
          << "The client was already in terminal state " << StateName()
          << " but received an abort with message: " << reason;
 }
@@ -86,7 +89,7 @@ bool SecAggClientState::IsAborted() const { return false; }
 bool SecAggClientState::IsCompletedSuccessfully() const { return false; }
 
 absl::StatusOr<std::string> SecAggClientState::ErrorMessage() const {
-  return FCP_STATUS(FAILED_PRECONDITION)
+  return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
          << "Error message requested, but client is in state " << StateName();
 }
 

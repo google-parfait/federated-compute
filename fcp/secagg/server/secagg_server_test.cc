@@ -25,7 +25,8 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "fcp/base/monitoring.h"
+#include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "fcp/secagg/server/secagg_server_enums.pb.h"
 #include "fcp/secagg/server/secagg_server_state.h"
 #include "fcp/secagg/server/tracing_schema.h"
@@ -43,6 +44,8 @@ namespace fcp {
 namespace secagg {
 namespace {
 
+using ::absl_testing::IsOk;
+using ::absl_testing::StatusIs;
 using ::testing::_;
 using ::testing::Eq;
 
@@ -166,7 +169,7 @@ TEST(SecaggServerTest, AbortClientWithInvalidIdThrowsError) {
 
   EXPECT_THAT(
       server->AbortClient(1001, ClientAbortReason::CONNECTION_DROPPED).code(),
-      Eq(FAILED_PRECONDITION));
+      Eq(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(SecaggServerTest, ReceiveMessageWithInvalidIdThrowsError) {
@@ -182,7 +185,7 @@ TEST(SecaggServerTest, ReceiveMessageWithInvalidIdThrowsError) {
                                      client_abort_message))
           .status()
           .code(),
-      Eq(FAILED_PRECONDITION));
+      Eq(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(SecaggServerTest, AbortCausesStateTransitionAndMessageToBeSent) {
@@ -202,7 +205,7 @@ TEST(SecaggServerTest, AbortCausesStateTransitionAndMessageToBeSent) {
   }
   absl::Status result = server->Abort();
 
-  EXPECT_THAT(result.code(), Eq(OK));
+  EXPECT_THAT(result, IsOk());
   EXPECT_THAT(server->IsAborted(), Eq(true));
   EXPECT_THAT(server->State(), Eq(SecAggServerStateKind::ABORTED));
   ASSERT_THAT(server->ErrorMessage().ok(), Eq(true));
@@ -236,7 +239,7 @@ TEST(SecaggServerTest, AbortWithReasonCausesStateTransitionAndMessageToBeSent) {
   absl::Status result =
       server->Abort("Test reason.", SecAggServerOutcome::EXTERNAL_REQUEST);
 
-  EXPECT_THAT(result.code(), Eq(OK));
+  EXPECT_THAT(result, IsOk());
   EXPECT_THAT(server->IsAborted(), Eq(true));
   EXPECT_THAT(server->State(), Eq(SecAggServerStateKind::ABORTED));
   ASSERT_THAT(server->ErrorMessage().ok(), Eq(true));
@@ -269,7 +272,7 @@ TEST(SecaggServerTest, AbortClientNotCheckedIn) {
   absl::Status result =
       server->AbortClient(2, ClientAbortReason::NOT_CHECKED_IN);
 
-  EXPECT_THAT(result.code(), Eq(OK));
+  EXPECT_THAT(result, IsOk());
   EXPECT_THAT(server->AbortedClientIds().contains(2), Eq(true));
   EXPECT_THAT(
       tracing_recorder.root(),
@@ -293,7 +296,7 @@ TEST(SecaggServerTest, AbortClientWhenConnectionDropped) {
   absl::Status result =
       server->AbortClient(2, ClientAbortReason::CONNECTION_DROPPED);
 
-  EXPECT_THAT(result.code(), Eq(OK));
+  EXPECT_THAT(result, IsOk());
   EXPECT_THAT(server->AbortedClientIds().contains(2), Eq(true));
   EXPECT_THAT(
       tracing_recorder.root(),
@@ -323,7 +326,7 @@ TEST(SecaggServerTest, AbortClientWhenInvalidMessageSent) {
   absl::Status result =
       server->AbortClient(2, ClientAbortReason::INVALID_MESSAGE);
 
-  EXPECT_THAT(result.code(), Eq(OK));
+  EXPECT_THAT(result, IsOk());
   EXPECT_THAT(server->AbortedClientIds().contains(2), Eq(true));
   EXPECT_THAT(
       tracing_recorder.root(),
@@ -377,7 +380,7 @@ TEST(SecaggServerTest, ReceiveMessageCausesServerToAbortIfTooManyClientsAbort) {
   // However the server is not aborted until ProceedToNextRound is called.
   EXPECT_THAT(server->IsAborted(), Eq(false));
 
-  EXPECT_THAT(server->ProceedToNextRound(), absl_testing::IsOk());
+  EXPECT_THAT(server->ProceedToNextRound(), IsOk());
   matchers.push_back(IsSpan<ProceedToNextSecAggRound>());
   EXPECT_THAT(server->IsAborted(), Eq(true));
   EXPECT_THAT(server->State(), Eq(SecAggServerStateKind::ABORTED));
@@ -395,20 +398,20 @@ TEST(SecaggServerTest, VerifyErrorsInAbortedState) {
   TestTracingRecorder tracing_recorder;
   auto sender = std::make_unique<MockSendToClientsInterface>();
   auto server = CreateServer(sender.get());
-  EXPECT_THAT(server->Abort(), absl_testing::IsOk());
+  EXPECT_THAT(server->Abort(), IsOk());
 
   EXPECT_THAT(
       server->ReceiveMessage(1, std::make_unique<ClientToServerWrapperMessage>(
                                     ClientToServerWrapperMessage{})),
-      absl_testing::StatusIs(FAILED_PRECONDITION));
+      StatusIs(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(server->ProceedToNextRound(),
-              absl_testing::StatusIs(FAILED_PRECONDITION));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(server->MinimumMessagesNeededForNextRound(),
-              absl_testing::StatusIs(FAILED_PRECONDITION));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(server->NumberOfMessagesReceivedInThisRound(),
-              absl_testing::StatusIs(FAILED_PRECONDITION));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(server->ReadyForNextRound(),
-              absl_testing::StatusIs(FAILED_PRECONDITION));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 }  // namespace

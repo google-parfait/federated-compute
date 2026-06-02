@@ -16,9 +16,10 @@
 
 #include "fcp/testing/testing.h"
 
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/flags/flag.h"
-#include "fcp/base/monitoring.h"
+#include "absl/status/status_matchers.h"
 #include "fcp/base/platform.h"
 #include "fcp/testing/test_messages.pb.h"
 
@@ -28,6 +29,7 @@ namespace fcp {
 
 namespace {
 
+using ::absl_testing::IsOk;
 using ::testing::Not;
 
 TEST(TestingTest, TestName) { ASSERT_EQ(TestName(), "TestName"); }
@@ -39,7 +41,7 @@ TEST(TestingTest, TestDataPath) {
 
 TEST(TestingTest, TemporaryTestFile) {
   auto path = TemporaryTestFile(".dat");
-  ASSERT_EQ(WriteStringToFile(path, "test").code(), OK);
+  ASSERT_THAT(WriteStringToFile(path, "test"), IsOk());
   ASSERT_EQ(ReadFileToString(path).value(), "test");
 }
 

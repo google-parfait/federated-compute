@@ -26,6 +26,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/base/log_severity.h"
+#include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "absl/strings/str_format.h"
 #include "fcp/base/base_name.h"
@@ -97,14 +98,15 @@ TEST_F(MonitoringTest, CheckFails) {
 }
 
 TEST_F(MonitoringTest, StatusBuilder) {
-  ASSERT_FALSE(FCP_STATUS(ABORTED).ok());
-  ASSERT_EQ(FCP_STATUS(ABORTED).code(), ABORTED);
+  ASSERT_FALSE(FCP_STATUS(absl::StatusCode::kAborted).ok());
+  ASSERT_EQ(FCP_STATUS(absl::StatusCode::kAborted).code(),
+            absl::StatusCode::kAborted);
 }
 
 TEST_F(MonitoringTest, FcpReturnIfError) {
   ASSERT_THAT(
       []() -> absl::StatusOr<int> {
-        absl::Status fail_status = FCP_STATUS(ABORTED);
+        absl::Status fail_status = FCP_STATUS(absl::StatusCode::kAborted);
         FCP_RETURN_IF_ERROR(fail_status);
         return 0;
       }(),
@@ -118,7 +120,8 @@ TEST_F(MonitoringTest, FcpReturnIfError) {
 
   ASSERT_THAT(
       []() -> absl::StatusOr<int> {
-        absl::StatusOr<int> fail_statusor = FCP_STATUS(ABORTED);
+        absl::StatusOr<int> fail_statusor =
+            FCP_STATUS(absl::StatusCode::kAborted);
         FCP_RETURN_IF_ERROR(fail_statusor);
         return 0;
       }(),

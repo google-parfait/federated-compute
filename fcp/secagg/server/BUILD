@@ -143,6 +143,7 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/container:node_hash_set",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
@@ -204,6 +205,7 @@ cc_library(
         ":distribution_utilities",
         ":server_cc_proto",
         "//fcp/base",
+        "@com_google_absl//absl/status",
     ],
 )
 
@@ -226,7 +228,7 @@ cc_test(
     deps = [
         ":distribution_utilities",
         "//fcp/base",
-        "//fcp/testing",
+        "@com_google_absl//absl/status:status_matchers",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -242,7 +244,6 @@ cc_test(
         ":server",
         ":server_cc_proto",
         ":tracing_schema",
-        "//fcp/base",
         "//fcp/secagg/shared",
         "//fcp/secagg/shared:cc_proto",
         "//fcp/secagg/testing:common_mocks",
@@ -250,6 +251,8 @@ cc_test(
         "//fcp/secagg/testing/server:server_mocks",
         "//fcp/testing",
         "//fcp/tracing:test_tracing_recorder",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_matchers",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -291,6 +294,7 @@ cc_test(
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/container:node_hash_set",
+        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],

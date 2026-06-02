@@ -16,11 +16,12 @@
 #include <regex>  // NOLINT
 #include <string>
 
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/flags/flag.h"
+#include "absl/status/status_matchers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/base/platform.h"
 #include "fcp/testing/testing.h"
 
@@ -31,6 +32,8 @@ ABSL_FLAG(std::string, tracing_traits_generator_path, "",
 
 namespace fcp {
 namespace {
+
+using ::absl_testing::IsOk;
 
 const char* kBaselineDir = "fcp/tracing/tools/testdata";
 
@@ -59,7 +62,7 @@ void DoTest() {
 
   // Read fsb source file derived from the test name:
   absl::StatusOr<std::string> source_s = ReadFileToString(source_path);
-  ASSERT_THAT(source_s, absl_testing::IsOk()) << "Can't read " << source_path;
+  ASSERT_THAT(source_s, IsOk()) << "Can't read " << source_path;
   std::string source = source_s.value();
 
   std::string out_file =

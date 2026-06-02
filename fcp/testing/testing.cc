@@ -170,7 +170,7 @@ absl::StatusOr<std::string> ComputeDiff(absl::string_view baseline_file,
         absl::StrCat("diff -u ", baseline_file_str, " ", provided_file),
         &std_out, &std_err);
     std::remove(provided_file.c_str());
-    if (status.code() != OK) {
+    if (!status.ok()) {
       if (!std_err.empty()) {
         // Indicates a failure in diff execution itself.
         return absl::InternalError(absl::StrCat("command failed: ", std_err));

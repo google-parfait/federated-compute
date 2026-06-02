@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "absl/container/node_hash_map.h"
+#include "absl/status/status.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/secagg_client_aborted_state.h"
 #include "fcp/secagg/client/secagg_client_completed_state.h"
@@ -105,7 +106,7 @@ absl::StatusOr<std::unique_ptr<SecAggClientState>>
 SecAggClientR0AdvertiseKeysInputNotSetState::SetInput(
     std::unique_ptr<SecAggVectorMap> input_map) {
   if (!ValidateInput(*input_map, *input_vector_specs_)) {
-    return FCP_STATUS(INVALID_ARGUMENT)
+    return FCP_STATUS(absl::StatusCode::kInvalidArgument)
            << "The input to SetInput does not match the "
               "InputVectorSpecification.";
   }

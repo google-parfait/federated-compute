@@ -161,7 +161,6 @@ cc_test(
         ":cose",
         ":crypto",
         ":crypto_test_util",
-        "//fcp/base",
         "//fcp/protos/confidentialcompute:key_cc_proto",
         "@boringssl//:crypto",
         "@com_google_absl//absl/log:absl_check",
@@ -197,7 +196,7 @@ cc_test(
     deps = [
         ":crypto",
         ":crypto_test_util",
-        "//fcp/testing",
+        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",

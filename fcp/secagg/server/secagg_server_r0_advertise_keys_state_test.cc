@@ -21,6 +21,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status_matchers.h"
 #include "fcp/secagg/server/aes/aes_secagg_server_protocol_impl.h"
 #include "fcp/secagg/server/secagg_server_enums.pb.h"
 #include "fcp/secagg/server/secagg_server_state.h"
@@ -40,6 +41,7 @@ namespace fcp {
 namespace secagg {
 namespace {
 
+using ::absl_testing::IsOk;
 using ::testing::_;
 using ::testing::Eq;
 using ::testing::Ge;
@@ -125,7 +127,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
       state.Abort("test abort reason", SecAggServerOutcome::EXTERNAL_REQUEST);
 
   ASSERT_THAT(next_state->State(), Eq(SecAggServerStateKind::ABORTED));
-  ASSERT_THAT(next_state->ErrorMessage(), absl_testing::IsOk());
+  ASSERT_THAT(next_state->ErrorMessage(), IsOk());
   EXPECT_THAT(next_state->ErrorMessage().value(), Eq("test abort reason"));
   EXPECT_THAT(tracing_recorder.FindAllEvents<BroadcastMessageSent>(),
               ElementsAre(IsEvent<BroadcastMessageSent>(
@@ -185,14 +187,13 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 4) {
-      ASSERT_THAT(state.HandleMessage(i, client_messages[i]),
-                  absl_testing::IsOk());
+      ASSERT_THAT(state.HandleMessage(i, client_messages[i]), IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, absl_testing::IsOk());
+  ASSERT_THAT(next_state, IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R1_SHARE_KEYS));
   EXPECT_THAT(
@@ -286,8 +287,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
       EXPECT_THAT(state.MinimumMessagesNeededForNextRound(), Eq(0));
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
-    ASSERT_THAT(state.HandleMessage(i, client_messages[i]),
-                absl_testing::IsOk());
+    ASSERT_THAT(state.HandleMessage(i, client_messages[i]), IsOk());
     EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
   }
   EXPECT_THAT(state.MinimumMessagesNeededForNextRound(), Eq(0));
@@ -299,7 +299,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
   EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, absl_testing::IsOk());
+  ASSERT_THAT(next_state, IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R1_SHARE_KEYS));
   EXPECT_THAT(
@@ -373,14 +373,13 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 3) {
-      ASSERT_THAT(state.HandleMessage(i, client_messages[i]),
-                  absl_testing::IsOk());
+      ASSERT_THAT(state.HandleMessage(i, client_messages[i]), IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, absl_testing::IsOk());
+  ASSERT_THAT(next_state, IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R1_SHARE_KEYS));
   EXPECT_THAT(
@@ -415,7 +414,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
       // Have client abort
       ClientToServerWrapperMessage abort_message;
       abort_message.mutable_abort()->set_diagnostic_info("Aborting for test");
-      ASSERT_THAT(state.HandleMessage(i, abort_message), absl_testing::IsOk());
+      ASSERT_THAT(state.HandleMessage(i, abort_message), IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 1));
     }
   }
@@ -431,9 +430,9 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, absl_testing::IsOk());
+  ASSERT_THAT(next_state, IsOk());
   EXPECT_THAT(next_state.value()->State(), Eq(SecAggServerStateKind::ABORTED));
-  ASSERT_THAT(next_state.value()->ErrorMessage(), absl_testing::IsOk());
+  ASSERT_THAT(next_state.value()->ErrorMessage(), IsOk());
   EXPECT_THAT(next_state.value()->ErrorMessage().value(),
               Eq("Too many clients aborted."));
   EXPECT_THAT(tracing_recorder.FindAllEvents<BroadcastMessageSent>(),
@@ -494,14 +493,13 @@ TEST(SecaggServerR0AdvertiseKeysStateTest,
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 4) {
-      ASSERT_THAT(state.HandleMessage(i, client_messages[i]),
-                  absl_testing::IsOk());
+      ASSERT_THAT(state.HandleMessage(i, client_messages[i]), IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, absl_testing::IsOk());
+  ASSERT_THAT(next_state, IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R1_SHARE_KEYS));
   EXPECT_THAT(
@@ -618,8 +616,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest, MetricsRecordsMessageSizes) {
       EXPECT_THAT(state.MinimumMessagesNeededForNextRound(), Eq(0));
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
-    ASSERT_THAT(state.HandleMessage(i, client_messages[i]),
-                absl_testing::IsOk());
+    ASSERT_THAT(state.HandleMessage(i, client_messages[i]), IsOk());
     EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     EXPECT_THAT(tracing_recorder.root()[i],
                 IsEvent<ClientMessageReceived>(
@@ -635,7 +632,7 @@ TEST(SecaggServerR0AdvertiseKeysStateTest, MetricsRecordsMessageSizes) {
   EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, absl_testing::IsOk());
+  ASSERT_THAT(next_state, IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R1_SHARE_KEYS));
   EXPECT_THAT(
@@ -786,14 +783,13 @@ TEST(SecaggServerR0AdvertiseKeysStateTest, MetricsAreRecorded) {
       EXPECT_THAT(state.ReadyForNextRound(), IsTrue());
     }
     if (i < 4) {
-      ASSERT_THAT(state.HandleMessage(i, client_messages[i]),
-                  absl_testing::IsOk());
+      ASSERT_THAT(state.HandleMessage(i, client_messages[i]), IsOk());
       EXPECT_THAT(state.ReadyForNextRound(), Eq(i >= 2));
     }
   }
 
   auto next_state = state.ProceedToNextRound();
-  ASSERT_THAT(next_state, absl_testing::IsOk());
+  ASSERT_THAT(next_state, IsOk());
   EXPECT_THAT(next_state.value()->State(),
               Eq(SecAggServerStateKind::R1_SHARE_KEYS));
   EXPECT_THAT(

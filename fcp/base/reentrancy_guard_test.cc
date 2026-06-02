@@ -16,14 +16,19 @@
 
 #include <atomic>
 
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/synchronization/notification.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/scheduler.h"
-#include "fcp/testing/testing.h"
 
 namespace fcp {
 namespace {
+
+using ::absl_testing::IsOk;
+using ::absl_testing::StatusIs;
 
 class ReentrancyGuardTest : public testing::Test {
  protected:
@@ -44,7 +49,7 @@ class ReentrancyGuardTest : public testing::Test {
     FCP_RETURN_IF_ERROR((guard.Check(&in_use_)));
     method_entered->Notify();
     resume->WaitForNotification();
-    return FCP_STATUS(OK);
+    return absl::OkStatus();
   }
 
  private:
@@ -52,12 +57,13 @@ class ReentrancyGuardTest : public testing::Test {
 };
 
 TEST_F(ReentrancyGuardTest, SequentialCallsSucceed) {
-  ASSERT_THAT(SimpleMethod(), absl_testing::IsOk());
-  ASSERT_THAT(SimpleMethod(), absl_testing::IsOk());
+  ASSERT_THAT(SimpleMethod(), IsOk());
+  ASSERT_THAT(SimpleMethod(), IsOk());
 }
 
 TEST_F(ReentrancyGuardTest, ReentrantCallsFail) {
-  ASSERT_THAT(ReentrantMethod(), absl_testing::StatusIs(FAILED_PRECONDITION));
+  ASSERT_THAT(ReentrantMethod(),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST_F(ReentrancyGuardTest, ConcurrentCallsFail) {
@@ -67,7 +73,7 @@ TEST_F(ReentrancyGuardTest, ConcurrentCallsFail) {
   auto pool = fcp::CreateThreadPoolScheduler(1);
   pool->Schedule([&] {
     ASSERT_THAT(LongRunningMethod(&long_running_method_entered, &resume),
-                absl_testing::IsOk());
+                IsOk());
   });
 
   // This signals that LongRunningMethod() has been entered and waits there
@@ -75,7 +81,7 @@ TEST_F(ReentrancyGuardTest, ConcurrentCallsFail) {
   long_running_method_entered.WaitForNotification();
 
   // Make a concurrent call, which is expected to fail.
-  ASSERT_THAT(SimpleMethod(), absl_testing::StatusIs(FAILED_PRECONDITION));
+  ASSERT_THAT(SimpleMethod(), StatusIs(absl::StatusCode::kFailedPrecondition));
 
   // Resume LongRunningMethod() and wait for the thread to finish.
   resume.Notify();

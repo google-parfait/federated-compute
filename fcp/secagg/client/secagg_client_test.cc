@@ -23,7 +23,8 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "fcp/base/monitoring.h"
+#include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "fcp/secagg/client/send_to_server_interface.h"
 #include "fcp/secagg/client/state_transition_listener_interface.h"
 #include "fcp/secagg/shared/aes_ctr_prng_factory.h"
@@ -45,6 +46,7 @@ namespace fcp {
 namespace secagg {
 namespace {
 
+using ::absl_testing::IsOk;
 using ::testing::_;
 using ::testing::Eq;
 using ::testing::Pointee;
@@ -87,7 +89,7 @@ TEST(SecAggClientTest, StartCausesStateTransition) {
   EXPECT_CALL(*sender, Send(::testing::_));
   absl::Status result = client.Start();
 
-  EXPECT_THAT(result.code(), Eq(OK));
+  EXPECT_THAT(result, IsOk());
   EXPECT_THAT(client.IsAborted(), Eq(false));
   EXPECT_THAT(client.IsCompletedSuccessfully(), Eq(false));
   EXPECT_THAT(client.State(), Eq("R1_SHARE_KEYS_INPUT_NOT_SET"));
@@ -116,7 +118,7 @@ TEST(SecAggClientTest, ReceiveMessageReturnValuesAreCorrect) {
   ClientToServerWrapperMessage round_0_client_message;
   EXPECT_CALL(*sender, Send(_))
       .WillOnce(::testing::SaveArgPointee<0>(&round_0_client_message));
-  EXPECT_THAT(client.Start(), absl_testing::IsOk());
+  EXPECT_THAT(client.Start(), IsOk());
 
   ServerToClientWrapperMessage round_1_message;
   EcdhPregeneratedTestKeys ecdh_keys;
@@ -175,7 +177,7 @@ TEST(SecAggClientTest, AbortMovesToCorrectStateAndSendsMessageToServer) {
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
   absl::Status result = client.Abort("Abort reason");
-  EXPECT_THAT(result.code(), Eq(OK));
+  EXPECT_THAT(result, IsOk());
   EXPECT_THAT(client.State(), Eq("ABORTED"));
   EXPECT_THAT(client.ErrorMessage().value(), Eq(error_string));
 }
@@ -204,7 +206,7 @@ TEST(SecAggClientTest,
   EXPECT_CALL(*sender, Send(Pointee(EqualsProto(expected_message))));
 
   absl::Status result = client.Abort();
-  EXPECT_THAT(result.code(), Eq(OK));
+  EXPECT_THAT(result, IsOk());
   EXPECT_THAT(client.State(), Eq("ABORTED"));
   EXPECT_THAT(client.ErrorMessage().value(), Eq(error_string));
 }
@@ -248,12 +250,12 @@ TEST(SecAggClientTest, SetInputChangesStateOnlyOnce) {
   input_map->emplace("test", SecAggVector({5, 8, 22, 30}, 32));
 
   absl::Status result = client.SetInput(std::move(input_map));
-  EXPECT_THAT(result.code(), Eq(OK));
+  EXPECT_THAT(result, IsOk());
 
   auto input_map2 = std::make_unique<SecAggVectorMap>();
   input_map2->emplace("test", SecAggVector({5, 8, 22, 30}, 32));
   result = client.SetInput(std::move(input_map));
-  EXPECT_THAT(result.code(), Eq(FAILED_PRECONDITION));
+  EXPECT_THAT(result.code(), Eq(absl::StatusCode::kFailedPrecondition));
   EXPECT_THAT(client.State(), Eq("R0_ADVERTISE_KEYS_INPUT_SET"));
 }
 

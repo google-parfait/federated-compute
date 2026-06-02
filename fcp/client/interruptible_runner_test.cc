@@ -20,17 +20,18 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "absl/status/status_matchers.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "absl/time/time.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/test_helpers.h"
-#include "fcp/testing/testing.h"
 
 namespace fcp {
 namespace client {
 namespace {
 
+using ::absl_testing::IsOk;
+using ::absl_testing::StatusIs;
 using ::fcp::client::ProdDiagCode::BACKGROUND_TRAINING_INTERRUPT_TF_EXECUTION;
 using ::fcp::client::ProdDiagCode::
     BACKGROUND_TRAINING_INTERRUPT_TF_EXECUTION_TIMED_OUT;
@@ -72,14 +73,14 @@ TEST(InterruptibleRunnerTest, TestNormalNoAbortCheck) {
       getDiagnosticsConfig());
   absl::Status status = interruptibleRunner.Run(
       []() { return absl::OkStatus(); }, abort_function);
-  EXPECT_THAT(status, absl_testing::StatusIs(OK));
+  EXPECT_THAT(status, IsOk());
   EXPECT_EQ(should_abort_calls, 1);
   EXPECT_EQ(abort_function_calls, 0);
 
   // Test that the Status returned by the runnable is returned as is.
   status = interruptibleRunner.Run([]() { return absl::DataLossError(""); },
                                    abort_function);
-  EXPECT_THAT(status, absl_testing::StatusIs(DATA_LOSS));
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kDataLoss));
 }
 
 // Tests the case where should_abort prevents us from even kicking off the run.
@@ -108,7 +109,7 @@ TEST(InterruptibleRunnerTest, TestNormalAbortBeforeRun) {
         return absl::OkStatus();
       },
       abort_function);
-  EXPECT_THAT(status, absl_testing::StatusIs(CANCELLED));
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kCancelled));
   EXPECT_EQ(abort_function_calls, 0);
   EXPECT_EQ(runnable_calls, 0);
 }
@@ -149,13 +150,13 @@ TEST(InterruptibleRunnerTest, TestNormalWithAbortCheckButNoAbort) {
         return absl::OkStatus();
       },
       abort_function);
-  EXPECT_THAT(status, absl_testing::StatusIs(OK));
+  EXPECT_THAT(status, IsOk());
   EXPECT_GE(should_abort_calls, 2);
   EXPECT_EQ(abort_function_calls, 0);
 
   status = interruptibleRunner.Run([]() { return absl::DataLossError(""); },
                                    abort_function);
-  EXPECT_THAT(status, absl_testing::StatusIs(DATA_LOSS));
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kDataLoss));
 }
 
 // Tests the case where the runnable gets aborted and behaves nicely (aborts
@@ -197,7 +198,7 @@ TEST(InterruptibleRunnerTest, TestAbortInGracePeriod) {
         return absl::OkStatus();
       },
       abort_function);
-  EXPECT_THAT(status, absl_testing::StatusIs(CANCELLED));
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kCancelled));
   EXPECT_EQ(should_abort_calls, 2);
   EXPECT_EQ(abort_function_calls, 1);
 }
@@ -249,7 +250,7 @@ TEST(InterruptibleRunnerTest, TestAbortInExtendedGracePeriod) {
       },
       abort_function);
 
-  EXPECT_THAT(status, absl_testing::StatusIs(CANCELLED));
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kCancelled));
   EXPECT_EQ(should_abort_calls, 2);
   EXPECT_EQ(abort_function_calls, 1);
 }

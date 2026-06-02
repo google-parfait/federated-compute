@@ -22,18 +22,18 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/client/diag_codes.pb.h"
 #include "fcp/client/test_helpers.h"
-#include "fcp/testing/testing.h"
 
 namespace fcp {
 namespace client {
 namespace cache {
 namespace {
+
+using ::absl_testing::StatusIs;
 
 int CountFilesInDir(const std::filesystem::path& dir) {
   int num_files = 0;
@@ -63,12 +63,12 @@ class TempFilesTest : public testing::Test {
 
 TEST_F(TempFilesTest, FailToCreateParentDirectory) {
   ASSERT_THAT(TempFiles::Create("/proc/0", &log_manager_),
-              absl_testing::StatusIs(INTERNAL));
+              StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST_F(TempFilesTest, InvalidRelativePath) {
   ASSERT_THAT(TempFiles::Create("relative/cache", &log_manager_),
-              absl_testing::StatusIs(INVALID_ARGUMENT));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(TempFilesTest, SuccessfulInitialization) {

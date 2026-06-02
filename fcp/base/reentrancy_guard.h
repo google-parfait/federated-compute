@@ -19,6 +19,7 @@
 
 #include <atomic>
 
+#include "absl/status/status.h"
 #include "fcp/base/monitoring.h"
 
 namespace fcp {
@@ -43,12 +44,12 @@ class ReentrancyGuard {
     FCP_CHECK(in_use != nullptr);
     bool expected_value = false;
     if (!in_use->compare_exchange_strong(expected_value, true)) {
-      return FCP_STATUS(FAILED_PRECONDITION)
+      return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
              << "Concurrent method calls detected";
     }
 
     in_use_ = in_use;
-    return FCP_STATUS(OK);
+    return absl::OkStatus();
   }
 
   ~ReentrancyGuard() {

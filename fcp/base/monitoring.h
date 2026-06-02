@@ -19,7 +19,6 @@
 #include <sstream>
 
 #include "absl/base/attributes.h"
-#include "absl/base/macros.h"
 #include "absl/base/optimization.h"
 #include "absl/log/absl_log.h"
 #include "absl/status/status.h"
@@ -140,85 +139,6 @@ namespace fcp {
 #define FCP_STATUS(code) \
   ::fcp::internal::MakeStatusBuilder(code, __FILE__, __LINE__)
 
-using Status [[deprecated("Use absl::Status instead")]] ABSL_REFACTOR_INLINE =
-    absl::Status;
-using StatusCode
-    [[deprecated("Use absl::StatusCode "
-                 "instead")]] ABSL_REFACTOR_INLINE = absl::StatusCode;
-template <typename T>
-using StatusOr
-    [[deprecated("Use absl::StatusOr "
-                 "instead")]] ABSL_REFACTOR_INLINE = absl::StatusOr<T>;
-
-[[deprecated(
-    "Use absl::StatusCode::kOk "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto OK =
-    absl::StatusCode::kOk;
-[[deprecated(
-    "Use absl::StatusCode::kCancelled "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto CANCELLED =
-    absl::StatusCode::kCancelled;
-[[deprecated(
-    "Use absl::StatusCode::kUnknown "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNKNOWN =
-    absl::StatusCode::kUnknown;
-[[deprecated(
-    "Use absl::StatusCode::kInvalidArgument "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto INVALID_ARGUMENT =
-    absl::StatusCode::kInvalidArgument;
-[[deprecated(
-    "Use absl::StatusCode::kDeadlineExceeded "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto DEADLINE_EXCEEDED =
-    absl::StatusCode::kDeadlineExceeded;
-[[deprecated(
-    "Use absl::StatusCode::kNotFound "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto NOT_FOUND =
-    absl::StatusCode::kNotFound;
-[[deprecated(
-    "Use absl::StatusCode::kAlreadyExists "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto ALREADY_EXISTS =
-    absl::StatusCode::kAlreadyExists;
-[[deprecated(
-    "Use absl::StatusCode::kPermissionDenied "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto PERMISSION_DENIED =
-    absl::StatusCode::kPermissionDenied;
-[[deprecated(
-    "Use absl::StatusCode::kResourceExhausted "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto RESOURCE_EXHAUSTED =
-    absl::StatusCode::kResourceExhausted;
-[[deprecated(
-    "Use absl::StatusCode::kFailedPrecondition "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto
-    FAILED_PRECONDITION = absl::StatusCode::kFailedPrecondition;
-[[deprecated(
-    "Use absl::StatusCode::kAborted "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto ABORTED =
-    absl::StatusCode::kAborted;
-[[deprecated(
-    "Use absl::StatusCode::kOutOfRange "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto OUT_OF_RANGE =
-    absl::StatusCode::kOutOfRange;
-[[deprecated(
-    "Use absl::StatusCode::kUnimplemented "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNIMPLEMENTED =
-    absl::StatusCode::kUnimplemented;
-[[deprecated(
-    "Use absl::StatusCode::kInternal "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto INTERNAL =
-    absl::StatusCode::kInternal;
-[[deprecated(
-    "Use absl::StatusCode::kUnavailable "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNAVAILABLE =
-    absl::StatusCode::kUnavailable;
-[[deprecated(
-    "Use absl::StatusCode::kDataLoss "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto DATA_LOSS =
-    absl::StatusCode::kDataLoss;
-[[deprecated(
-    "Use absl::StatusCode::kUnauthenticated "
-    "instead")]] ABSL_REFACTOR_INLINE inline constexpr auto UNAUTHENTICATED =
-    absl::StatusCode::kUnauthenticated;
-
 namespace internal {
 /** Functions to assist with FCP_RETURN_IF_ERROR() */
 inline absl::Status AsStatus(const absl::Status& status) { return status; }
@@ -235,7 +155,7 @@ inline absl::Status AsStatus(const absl::StatusOr<T>& status_or) {
  *     Status DoSomething() {
  *       FCP_RETURN_IF_ERROR(Step1());
  *       FCP_RETURN_IF_ERROR(Step2ReturningStatusOr().status());
- *       return FCP_STATUS(OK);
+ *       return absl::OkStatus();
  *     }
  */
 #define FCP_RETURN_IF_ERROR(expr)                              \

@@ -178,7 +178,6 @@ cc_test(
     deps = [
         ":opstats_db",
         ":pds_backed_opstats_db",
-        "//fcp/base",
         "//fcp/client:diag_codes_cc_proto",
         "//fcp/client:histogram_counters_cc_proto",
         "//fcp/client:test_helpers",

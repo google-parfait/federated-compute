@@ -17,9 +17,9 @@
 #include "fcp/base/platform.h"
 
 #include "gtest/gtest.h"
+#include "absl/status/status.h"
 #include "absl/strings/cord.h"
 #include "fcp/base/base_name.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/testing/testing.h"
 
 namespace fcp {
@@ -47,7 +47,7 @@ TEST(PlatformTest, StripTrailingPathSeparator) {
 
 TEST(PlatformTest, ReadWriteString) {
   auto file = TemporaryTestFile(".dat");
-  ASSERT_EQ(WriteStringToFile(file, "Ein Text").code(), OK);
+  ASSERT_EQ(WriteStringToFile(file, "Ein Text").code(), absl::StatusCode::kOk);
   auto status_or_string = ReadFileToString(file);
   ASSERT_TRUE(status_or_string.ok()) << status_or_string.status();
   ASSERT_EQ(status_or_string.value(), "Ein Text");
@@ -58,7 +58,7 @@ TEST(PlatformTest, ReadWriteCord) {
   // Make cord with two chunks.
   absl::Cord content("Ein");
   content.Append(" Text");
-  ASSERT_EQ(WriteCordToFile(file, content).code(), OK);
+  ASSERT_EQ(WriteCordToFile(file, content).code(), absl::StatusCode::kOk);
   auto status_or_cord = ReadFileToCord(file);
   ASSERT_TRUE(status_or_cord.ok()) << status_or_cord.status();
   ASSERT_EQ(status_or_cord.value(), "Ein Text");
@@ -78,7 +78,7 @@ TEST(PlatformTest, BaseName) {
 
 TEST(PlatformTest, FileExists) {
   auto file = TemporaryTestFile(".dat");
-  ASSERT_EQ(WriteStringToFile(file, "Ein Text").code(), OK);
+  ASSERT_EQ(WriteStringToFile(file, "Ein Text").code(), absl::StatusCode::kOk);
   ASSERT_TRUE(FileExists(file));
 }
 

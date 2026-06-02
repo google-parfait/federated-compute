@@ -67,10 +67,8 @@ cc_library(
     deps = [
         ":parse_text_proto",
         "//fcp/base",
-        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_for_library",
         "@com_google_protobuf//:differencer",
@@ -99,12 +97,14 @@ cc_test(
     copts = FCP_COPTS,
     deps = [
         ":result_matchers",
-        ":testing",
         ":tracing",
+        "//fcp/base",
         "//fcp/base:error",
+        "//fcp/base:meta",
         "//fcp/base:result",
         "//fcp/base:tracing_schema",
         "//fcp/tracing:test_tracing_recorder",
+        "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -121,6 +121,7 @@ cc_test(
         ":testing",
         "//fcp/base",
         "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/status:status_matchers",
         "@com_google_googletest//:gtest_main",
     ],
 )

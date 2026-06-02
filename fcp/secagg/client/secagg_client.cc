@@ -22,8 +22,8 @@
 #include <utility>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
-#include "fcp/base/monitoring.h"
 #include "fcp/secagg/client/secagg_client_r0_advertise_keys_input_not_set_state.h"
 #include "fcp/secagg/client/secagg_client_state.h"
 #include "fcp/secagg/client/send_to_server_interface.h"
@@ -74,7 +74,7 @@ absl::Status SecAggClient::Abort(const std::string& reason) {
   async_abort_.Abort(reason);
   absl::WriterMutexLock _(mu_);
   if (state_->IsAborted() || state_->IsCompletedSuccessfully())
-    return FCP_STATUS(OK);
+    return absl::OkStatus();
 
   auto state_or_error = state_->Abort(reason);
   if (state_or_error.ok()) {

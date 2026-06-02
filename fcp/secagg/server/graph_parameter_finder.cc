@@ -21,6 +21,7 @@
 #include <memory>
 #include <optional>
 
+#include "absl/status/status.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/secagg/server/distribution_utilities.h"
 #include "fcp/secagg/server/secagg_server_enums.pb.h"
@@ -36,13 +37,13 @@ class HararyGraphParameterFinder {
       int number_of_clients, double adversarial_rate, double dropout_rate,
       AdversaryClass adversary_class) {
     if (number_of_clients <= 0) {
-      return FCP_STATUS(FAILED_PRECONDITION)
+      return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
              << "The number of clients should greater than zero. Value "
                 "provided = "
              << number_of_clients;
     }
     if (number_of_clients > kMaxNumberOfClients) {
-      return FCP_STATUS(FAILED_PRECONDITION)
+      return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
              << "The valid number of clients is upper bounded by 1M. There is "
                 "no "
                 "fundamental reason for that, and this "
@@ -50,12 +51,12 @@ class HararyGraphParameterFinder {
                 "corresponding tests.";
     }
     if (adversarial_rate < 0 || adversarial_rate >= 1) {
-      return FCP_STATUS(FAILED_PRECONDITION)
+      return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
              << "The adversarial rate should be in [0,1). Value provided = "
              << adversarial_rate;
     }
     if (dropout_rate < 0 || dropout_rate >= 1) {
-      return FCP_STATUS(FAILED_PRECONDITION)
+      return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
              << "The dropout rate should be in [0,1). Value provided = "
              << dropout_rate;
     }
@@ -66,7 +67,7 @@ class HararyGraphParameterFinder {
            "supported "
            "adversary classes.";
     if (adversary_class == AdversaryClass::NONE && adversarial_rate > 0) {
-      return FCP_STATUS(FAILED_PRECONDITION)
+      return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
              << "The no-adversary setting expects that adversarial_rate = 0. "
                 "Value provided = "
              << adversarial_rate;
@@ -74,7 +75,7 @@ class HararyGraphParameterFinder {
     if ((adversary_class == AdversaryClass::CURIOUS_SERVER ||
          adversary_class == AdversaryClass::NONE) &&
         adversarial_rate + dropout_rate > .9) {
-      return FCP_STATUS(FAILED_PRECONDITION)
+      return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
              << "In the semi-honest and no-adversary settings, "
                 "adversarial_rate + dropout_rate "
                 "<= 0.9 must hold for the instance to be feasible. Values "
@@ -83,7 +84,7 @@ class HararyGraphParameterFinder {
     }
     if (adversary_class == AdversaryClass::SEMI_MALICIOUS_SERVER &&
         adversarial_rate + 2 * dropout_rate > .9) {
-      return FCP_STATUS(FAILED_PRECONDITION)
+      return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
              << "In the semi-malicious setting, adversarial_rate + "
                 "2*dropout_rate <= 0.9 must hold for the instance to be "
                 "feasible. Values provided = "
@@ -110,7 +111,7 @@ class HararyGraphParameterFinder {
         return params;
       }
     }
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "Parameters consistent with the provided aggregation "
               "requirements were not found. Unless the number of clients is "
               "small (<500) and adversarial rate plus dropout rate are large "
@@ -262,26 +263,26 @@ absl::Status CheckFullGraphParameters(
     int number_of_clients, int threshold,
     SecureAggregationRequirements threat_model) {
   if (number_of_clients <= 0) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "The number of clients should greater than zero. Value "
               "provided = "
            << number_of_clients;
   }
   if (threshold <= 1 || threshold > number_of_clients) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "The threshold should be > 1 and <= number_of_clients. Value "
               "provided = "
            << threshold;
   }
   if (threat_model.adversarial_client_rate() < 0 ||
       threat_model.adversarial_client_rate() >= 1) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "The adversarial rate should be in [0,1). Value provided = "
            << threat_model.adversarial_client_rate();
   }
   if (threat_model.estimated_dropout_rate() < 0 ||
       threat_model.estimated_dropout_rate() >= 1) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "The dropout rate should be in [0,1). Value provided = "
            << threat_model.estimated_dropout_rate();
   }
@@ -294,7 +295,7 @@ absl::Status CheckFullGraphParameters(
          "adversary classes.";
   if (threshold < std::ceil((1 - threat_model.estimated_dropout_rate()) *
                             number_of_clients)) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "The threshold should be at least ceil(1 - dropout_rate * "
               "number_of_clients). Values provided are "
            << threshold << ", "
@@ -304,7 +305,7 @@ absl::Status CheckFullGraphParameters(
   if (threat_model.adversary_class() == AdversaryClass::CURIOUS_SERVER &&
       threshold <= std::ceil(threat_model.adversarial_client_rate() *
                              number_of_clients)) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "In the full-graph variant and CURIOUS_SERVER threat model, the "
               "threshold should be at least ceil(adversarial_client_rate * "
               "number_of_clients). Values provided are "
@@ -317,7 +318,7 @@ absl::Status CheckFullGraphParameters(
                                      threat_model.adversarial_client_rate() *
                                          number_of_clients) /
                                     2)) {
-    return FCP_STATUS(FAILED_PRECONDITION)
+    return FCP_STATUS(absl::StatusCode::kFailedPrecondition)
            << "In the full-graph variant and SEMI_MALICIOUS_SERVER threat "
               "model, the threshold should be at least "
               "ceil((total_number_of_clients "
@@ -329,7 +330,7 @@ absl::Status CheckFullGraphParameters(
                          number_of_clients) /
                    2);
   }
-  return FCP_STATUS(OK);
+  return absl::OkStatus();
 }
 
 }  // namespace secagg

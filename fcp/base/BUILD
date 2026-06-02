@@ -117,7 +117,10 @@ cc_library(
         "reentrancy_guard.h",
     ],
     copts = FCP_COPTS,
-    deps = [":base"],
+    deps = [
+        ":base",
+        "@com_google_absl//absl/status",
+    ],
 )
 
 cc_test(
@@ -130,7 +133,8 @@ cc_test(
         ":base",
         ":reentrancy_guard",
         ":scheduler",
-        "//fcp/testing",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/synchronization",
         "@com_google_googletest//:gtest_main",
     ],
@@ -212,6 +216,7 @@ cc_test(
     deps = [
         ":base",
         "@com_google_absl//absl/base:log_severity",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_googletest//:gtest_main",
@@ -228,6 +233,7 @@ cc_test(
     deps = [
         ":base",
         "//fcp/testing",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:cord",
         "@com_google_googletest//:gtest_main",
     ],
@@ -347,13 +353,15 @@ cc_test(
     ],
     copts = FCP_COPTS,
     deps = [
+        ":base",
         ":result",
         ":tracing_schema",
         ":unique_value",
-        "//fcp/testing",
         "//fcp/testing:result_matchers",
         "//fcp/testing:tracing",
         "//fcp/tracing:test_tracing_recorder",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],
 )
