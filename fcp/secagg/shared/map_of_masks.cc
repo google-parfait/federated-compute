@@ -139,7 +139,7 @@ class PrngBuffer {
     FillBuffer();
   }
 
-  inline uint64_t NextMask() {
+  uint64_t NextMask() {
     if (buffer_ptr_ == buffer_end_) {
       FillBuffer();
     }
@@ -153,9 +153,9 @@ class PrngBuffer {
   }
 
  private:
-  inline int buffer_size() { return static_cast<int>(buffer_.size()); }
+  int buffer_size() { return static_cast<int>(buffer_.size()); }
 
-  inline void FillBuffer() {
+  void FillBuffer() {
     buffer_ptr_ = buffer_.data();
     FCP_CHECK(prng_->RandBuffer(buffer_.data(), buffer_size()) ==
               buffer_size());
@@ -170,19 +170,19 @@ class PrngBuffer {
 };
 
 struct AddModAdapter {
-  inline static uint64_t AddModImpl(uint64_t a, uint64_t b, uint64_t z) {
+  static uint64_t AddModImpl(uint64_t a, uint64_t b, uint64_t z) {
     return AddMod(a, b, z);
   }
-  inline static uint64_t SubtractModImpl(uint64_t a, uint64_t b, uint64_t z) {
+  static uint64_t SubtractModImpl(uint64_t a, uint64_t b, uint64_t z) {
     return SubtractMod(a, b, z);
   }
 };
 
 struct AddModOptAdapter {
-  inline static uint64_t AddModImpl(uint64_t a, uint64_t b, uint64_t z) {
+  static uint64_t AddModImpl(uint64_t a, uint64_t b, uint64_t z) {
     return AddModOpt(a, b, z);
   }
-  inline static uint64_t SubtractModImpl(uint64_t a, uint64_t b, uint64_t z) {
+  static uint64_t SubtractModImpl(uint64_t a, uint64_t b, uint64_t z) {
     return SubtractModOpt(a, b, z);
   }
 };

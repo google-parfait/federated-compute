@@ -35,15 +35,15 @@ class Key {
   Key(const uint8_t* data, int size)
       : data_(reinterpret_cast<const char*>(data), size) {}
 
-  inline const uint8_t* data() const {
+  const uint8_t* data() const {
     return reinterpret_cast<const uint8_t*>(data_.c_str());
   }
 
-  inline int size() const { return data_.size(); }
+  int size() const { return data_.size(); }
 
-  inline std::string AsString() const { return data_; }
+  std::string AsString() const { return data_; }
 
-  friend inline bool operator==(const Key& lhs, const Key& rhs) {
+  friend bool operator==(const Key& lhs, const Key& rhs) {
     return lhs.data_ == rhs.data_;
   }
 
