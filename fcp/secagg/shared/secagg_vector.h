@@ -86,7 +86,7 @@ class SecAggVector {
   }
 
   // Calculates bitwith for the specified modulus.
-  inline static int GetBitWidth(uint64_t modulus) {
+  static int GetBitWidth(uint64_t modulus) {
     return static_cast<int>(absl::bit_width(modulus - 1ULL));
   }
 
@@ -122,8 +122,7 @@ class SecAggVector {
     return std::move(packed_bytes_);
   }
 
-  inline friend bool operator==(const SecAggVector& lhs,
-                                const SecAggVector& rhs) {
+  friend bool operator==(const SecAggVector& lhs, const SecAggVector& rhs) {
     return lhs.packed_bytes_ == rhs.packed_bytes_;
   }
 
@@ -184,7 +183,7 @@ class SecAggVector {
   bool branchless_codec_;
 
   // Moves this object's value to the target one and resets this object's state.
-  inline void MoveTo(SecAggVector* target) {
+  void MoveTo(SecAggVector* target) {
     target->modulus_ = modulus_;
     target->bit_width_ = bit_width_;
     target->num_elements_ = num_elements_;

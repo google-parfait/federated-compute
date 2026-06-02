@@ -61,8 +61,8 @@ class ShamirSecretSharing {
                                  const std::string& to_share);
 
   // Convenience method to share a key instead of an arbitrary string.
-  inline std::vector<ShamirShare> Share(int threshold, int num_shares,
-                                        const Key& to_share) {
+  std::vector<ShamirShare> Share(int threshold, int num_shares,
+                                 const Key& to_share) {
     return Share(threshold, num_shares, to_share.AsString());
   }
 
