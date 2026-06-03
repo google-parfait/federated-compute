@@ -9,16 +9,19 @@ from fcp.confidentialcompute.python import accounting
 # Required by jnp.float64.
 jax.config.update('jax_enable_x64', True)
 
+# (noise_multiplier, total_steps, min_separation, zcdp)
+_TREE_NO_RESTART_TEST_CASES = (
+    (1.0, 4, 2, 4.0),
+    (2.0, 4, 2, 1.0),
+    (1.0, 5, 2, 4.5),
+    (1.0, 7, 2, 5.5),
+    (1.0, 7, 3, 4.5),
+)
+
 
 class AccountingTest(parameterized.TestCase):
 
-  @parameterized.parameters(
-      (1.0, 4, 2, 4.0),
-      (2.0, 4, 2, 1.0),
-      (1.0, 5, 2, 4.5),
-      (1.0, 7, 2, 5.5),
-      (1.0, 7, 3, 4.5),
-  )
+  @parameterized.parameters(*_TREE_NO_RESTART_TEST_CASES)
   def test_zcdp_simple(
       self, noise_multiplier, total_steps, min_separation, expected_zcdp
   ):
@@ -29,6 +32,25 @@ class AccountingTest(parameterized.TestCase):
         min_separation=min_separation,
     )
     self.assertEqual(zcdp, expected_zcdp)
+
+  @parameterized.parameters(*_TREE_NO_RESTART_TEST_CASES)
+  def test_min_sep_data_source_noise_multiplier(
+      self, expected_noise_multiplier, total_steps, min_separation, target_zcdp
+  ):
+    noise_multiplier = accounting.min_sep_data_source_noise_multiplier(
+        target_zcdp=target_zcdp,
+        total_steps=total_steps,
+        min_separation=min_separation,
+    )
+    self.assertAlmostEqual(noise_multiplier, expected_noise_multiplier)
+
+  def test_min_sep_data_source_noise_multiplier_invalid_inputs(self):
+    with self.assertRaisesRegex(ValueError, 'target_zcdp must be positive'):
+      accounting.min_sep_data_source_noise_multiplier(
+          target_zcdp=0.0,
+          total_steps=4,
+          min_separation=2,
+      )
 
   @parameterized.named_parameters(
       ('with_max_participations', 2),
@@ -57,6 +79,48 @@ class AccountingTest(parameterized.TestCase):
         max_participations=max_participations,
     )
     self.assertAlmostEqual(zcdp, 3.17226586, places=6)
+
+  @parameterized.named_parameters(
+      ('with_max_participations', 2),
+      ('no_max_participations', None),
+  )
+  def test_noise_multiplier_for_blt(self, max_participations):
+    blt = buffered_toeplitz.BufferedToeplitz.build(
+        buf_decay=[
+            0.9999999999921251,
+            0.9944453083640997,
+            0.8985923474607591,
+            0.4912001418098778,
+        ],
+        output_scale=[
+            0.0070314825502323835,
+            0.10613806907600574,
+            0.1898159060327625,
+            0.1966594748073734,
+        ],
+    )
+    target_zcdp = 3.17226586
+    noise_multiplier = accounting.noise_multiplier_for_blt(
+        blt,
+        total_steps=100,
+        target_zcdp=target_zcdp,
+        min_separation=50,
+        max_participations=max_participations,
+    )
+    self.assertAlmostEqual(noise_multiplier, 1.0, places=6)
+
+  def test_noise_multiplier_for_blt_invalid_inputs(self):
+    blt = buffered_toeplitz.BufferedToeplitz.build(
+        buf_decay=[1.0],
+        output_scale=[1.0],
+    )
+    with self.assertRaisesRegex(ValueError, 'target_zcdp must be positive'):
+      accounting.noise_multiplier_for_blt(
+          blt,
+          total_steps=100,
+          target_zcdp=0.0,
+          min_separation=50,
+      )
 
   @parameterized.parameters(
       dict(

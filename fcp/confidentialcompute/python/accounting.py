@@ -50,6 +50,33 @@ def min_sep_data_source_zcdp(
   return max(squared_sensitivities) / (2 * noise_multiplier**2)
 
 
+def min_sep_data_source_noise_multiplier(
+    target_zcdp: float,
+    total_steps: int,
+    min_separation: int,
+) -> float:
+  """Computes noise_multiplier for TreeNoRestart to achieve target zCDP.
+
+  Args:
+    target_zcdp: The target zCDP parameter.
+    total_steps: The total number of steps in training.
+    min_separation: The minimum separation between participations.
+
+  Returns:
+    The noise multiplier satisfying the target zCDP.
+  """
+  if target_zcdp <= 0:
+    raise ValueError('target_zcdp must be positive')
+  zcdp_at_noise_1 = min_sep_data_source_zcdp(
+      noise_multiplier=1.0,
+      total_steps=total_steps,
+      min_separation=min_separation,
+  )
+  # zCDP is proportional to 1 / noise_multiplier**2, i.e. noise_multiplier is
+  # proportional to 1 / sqrt(zCDP).
+  return math.sqrt(zcdp_at_noise_1 / target_zcdp)
+
+
 def _minsep_sensitivity_squared(
     coefficients: np.ndarray,
     min_separation: int,
@@ -127,3 +154,38 @@ def zcdp_for_blt(
       coefficients, min_separation, max_participations
   )
   return squared_sensitivity / (2 * noise_multiplier**2)
+
+
+def noise_multiplier_for_blt(
+    matrix: buffered_toeplitz.BufferedToeplitz,
+    total_steps: int,
+    target_zcdp: float,
+    min_separation: int,
+    max_participations: int | None = None,
+) -> float:
+  """Computes the noise multiplier for BLT to satisfy zCDP.
+
+  Args:
+    matrix: The BLT matrix.
+    total_steps: The total number of steps in training.
+    target_zcdp: The target zCDP parameter.
+    min_separation: The minimum separation between participations.
+    max_participations: The maximum number of participations allowed. If None,
+      the maximum number of participations will be determined by the minimum
+      separation and total steps.
+
+  Returns:
+    The noise multiplier satisfying the target zCDP.
+  """
+  if target_zcdp <= 0:
+    raise ValueError('target_zcdp must be positive.')
+  zcdp_at_noise_1 = zcdp_for_blt(
+      matrix=matrix,
+      total_steps=total_steps,
+      noise_multiplier=1.0,
+      min_separation=min_separation,
+      max_participations=max_participations,
+  )
+  # zCDP is proportional to 1 / noise_multiplier**2, i.e. noise_multiplier is
+  # proportional to 1 / sqrt(zCDP).
+  return math.sqrt(zcdp_at_noise_1 / target_zcdp)
