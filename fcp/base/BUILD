@@ -181,13 +181,14 @@ cc_library(
         "future.h",
     ],
     copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         ":base",
-        ":meta",
         ":scheduler",
         ":unique_value",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
     ],
 )
 
@@ -199,7 +200,7 @@ cc_test(
         ":base",
         ":future",
         ":meta",
-        "@com_google_absl//absl/base:core_headers",
+        ":unique_value",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
@@ -248,6 +249,7 @@ cc_library(
         "scheduler.h",
     ],
     copts = FCP_COPTS,
+    visibility = ["//visibility:public"],
     deps = [
         ":base",
         "@com_google_absl//absl/synchronization",

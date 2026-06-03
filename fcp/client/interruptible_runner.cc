@@ -33,13 +33,13 @@ absl::Status InterruptibleRunner::Run(std::function<absl::Status()> f,
   if (should_abort_()) {
     return absl::CancelledError("cancelled before posting callable");
   }
-  fcp::thread::Future<absl::Status> run_future =
-      fcp::thread::ScheduleFuture<absl::Status>(thread_pool_.get(), f);
+  fcp::Future<absl::Status> run_future =
+      fcp::ScheduleFuture<absl::Status>(thread_pool_.get(), f);
   return WaitUntilDone(std::move(run_future), abort_function);
 }
 
 absl::Status InterruptibleRunner::WaitUntilDone(
-    fcp::thread::Future<absl::Status>&& run_future,
+    fcp::Future<absl::Status>&& run_future,
     std::function<void()> abort_function) {
   // Wait until call is done, checking periodically whether we need to abort.
   while (true) {
@@ -58,9 +58,8 @@ absl::Status InterruptibleRunner::WaitUntilDone(
   }
 }
 
-absl::Status InterruptibleRunner::Abort(
-    fcp::thread::Future<absl::Status> run_future,
-    std::function<void()> abort_function) {
+absl::Status InterruptibleRunner::Abort(fcp::Future<absl::Status> run_future,
+                                        std::function<void()> abort_function) {
   FCP_LOG(WARNING) << "Aborting run.";
 
   // Attempt to abort the ongoing call.

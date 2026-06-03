@@ -38,22 +38,16 @@
 
 #include <memory>
 #include <optional>
-#include <tuple>
-#include <variant>
 
-#include "absl/base/macros.h"
+#include "absl/base/attributes.h"
 #include "absl/synchronization/notification.h"
-#include "fcp/base/meta.h"
+#include "absl/time/time.h"
 #include "fcp/base/monitoring.h"
 #include "fcp/base/move_to_lambda.h"
 #include "fcp/base/scheduler.h"
 #include "fcp/base/unique_value.h"
 
 namespace fcp {
-
-// Since fcp::Promise is already defined by the reactive streams library
-// (fcp/reactive/), we'll define fcp::thread::{Promise, Future}.
-namespace thread {
 
 // Forward declarations; see doc comments below
 template <typename T>
@@ -208,8 +202,8 @@ FuturePair<T> MakeFuture() {
  */
 template <typename T>
 Future<T> ScheduleFuture(Scheduler* scheduler, std::function<T()> func) {
-  thread::FuturePair<T> p = thread::MakeFuture<T>();
-  MoveToLambdaWrapper<thread::Promise<T>> promise_capture =
+  FuturePair<T> p = MakeFuture<T>();
+  MoveToLambdaWrapper<Promise<T>> promise_capture =
       MoveToLambda(std::move(p.promise));
   // Lambda is stateful (since the promise is consumed). This is okay, since
   // it should only be called once.
@@ -284,7 +278,6 @@ std::optional<T> FutureState<T>::Take() {
 
 }  // namespace future_internal
 
-}  // namespace thread
 }  // namespace fcp
 
 #endif  // FCP_BASE_FUTURE_H_

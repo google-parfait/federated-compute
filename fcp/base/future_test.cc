@@ -17,21 +17,22 @@
 #include "fcp/base/future.h"
 
 #include <functional>
-#include <memory>
+#include <optional>
 #include <thread>  // NOLINT(build/c++11)
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "absl/base/thread_annotations.h"
 #include "absl/synchronization/barrier.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "fcp/base/meta.h"
 #include "fcp/base/move_to_lambda.h"
+#include "fcp/base/unique_value.h"
 
 namespace fcp {
-namespace thread {
 
 using ::testing::Eq;
 
@@ -197,5 +198,4 @@ TEST(FutureTest, AbandonWhileProbablyWaiting) {
   RunThreadsWithFuture(std::move(promise_fn), std::move(future_fn));
 }
 
-}  // namespace thread
 }  // namespace fcp

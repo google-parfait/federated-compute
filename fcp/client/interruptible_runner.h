@@ -75,9 +75,9 @@ class InterruptibleRunner {
                    std::function<void()> abort_function);
 
  private:
-  absl::Status WaitUntilDone(fcp::thread::Future<absl::Status>&& run_future,
+  absl::Status WaitUntilDone(fcp::Future<absl::Status>&& run_future,
                              std::function<void()> abort_function);
-  absl::Status Abort(fcp::thread::Future<absl::Status> run_future,
+  absl::Status Abort(fcp::Future<absl::Status> run_future,
                      std::function<void()> abort_function);
 
   std::unique_ptr<Scheduler> thread_pool_;
