@@ -16,6 +16,7 @@
 from collections.abc import Sequence
 import concurrent.futures
 import hashlib
+import math
 import os
 import time
 from typing import Optional
@@ -34,9 +35,6 @@ from fcp.confidentialcompute.python import external_service_handle
 from fcp.protos.confidentialcompute import file_info_pb2
 from fcp.protos.confidentialcompute import min_sep_data_source_pb2
 from tensorflow_federated.cc.core.impl.aggregation.core import tensor_pb2
-
-
-_RESOLVE_BLOB_ID_ERROR_MESSAGE_SUBSTRING = 'Failed to fetch Tensor'
 
 
 def _compute_blob_ids_hash(blob_ids: Sequence[bytes]) -> bytes:
@@ -246,6 +244,7 @@ class MinSepDataSourceIterator(
     Raises:
       ValueError: If `k` is not a positive integer or there are fewer than `k`
       eligible clients.
+      RuntimeError: If too many blob ids fail to resolve to tensors.
     """
     # Obtain the eligible blob ids for the current round.
     eligible_ids = self._blob_id_round_assignments[
@@ -325,20 +324,22 @@ class MinSepDataSourceIterator(
               )
           )
         except RuntimeError as e:
-          if _RESOLVE_BLOB_ID_ERROR_MESSAGE_SUBSTRING in str(e):
-            logging.warning(
-                'Skipping blob id: %s due to resolve error: %s',
-                future_to_blob_id[future],
-                e,
-            )
-            failure_count += 1
-            continue
-          else:
-            raise
-    if failure_count > 0:
-      logging.warning(
-          'Skipped %d inputs due to resolve errors in total of %d inputs.',
-          failure_count,
+          logging.warning(
+              'Skipping blob id: %s due to resolve error: %s',
+              future_to_blob_id[future],
+              e,
+          )
+          failure_count += 1
+    if failure_count > math.ceil(0.1 * len(selected_ids)):
+      raise RuntimeError(
+          'More than 10% of blob ids failed to resolve. '
+          f'There were {failure_count} resolve errors across '
+          f'{len(selected_ids)} inputs.'
+      )
+    else:
+      logging.info(
+          'Resolved %d out of %d requested blob ids.',
+          len(selected_ids) - failure_count,
           len(selected_ids),
       )
     return selected_values

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from collections.abc import Sequence
-import os
 import time
 from unittest import mock
 
@@ -278,9 +277,9 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
     self.assertLen(data_for_round, k)
     self.assertEqual(mock_resolve_fn.call_count, k)
 
-  def test_select_skips_bad_decrypt_errors(self):
-    blob_ids = [b'0', b'1']
-    k = 2
+  def test_select_skips_bad_decrypt_errors_below_threshold(self):
+    blob_ids = [b'0', b'1', b'2']
+    k = 3
 
     def failing_resolve_blob_id_to_tensor_fn(
         blob_id: bytes, key: str
@@ -310,12 +309,9 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
         use_data_pointers=False,
     )
 
-    with self.assertLogs(level='WARNING') as logs:
+    with self.assertLogs(level='INFO') as logs:
       data_for_round = iterator.select(k)
-      self.assertLen(data_for_round, 1)
-      self.assertEqual(
-          os.path.basename(data_for_round[0].content.decode()), '1'
-      )
+      self.assertLen(data_for_round, 2)
       self.assertLen(logs.output, 2)
       self.assertRegex(
           logs.output[0],
@@ -324,7 +320,59 @@ class MinSepDataSourceIteratorTest(parameterized.TestCase):
       )
       self.assertRegex(
           logs.output[1],
-          'Skipped 1 inputs due to resolve errors in total of 2 inputs.',
+          'Resolved 2 out of 3 requested blob ids.',
+      )
+
+  def test_select_bad_decrypt_errors_above_threshold(self):
+    blob_ids = [b'0', b'1', b'2']
+    k = 3
+
+    def failing_resolve_blob_id_to_tensor_fn(
+        blob_id: bytes, key: str
+    ) -> tensor_pb2.TensorProto:
+      """A mock function for resolving a blob id to a tensor."""
+      del key
+      if blob_id == b'0' or blob_id == b'1':
+        raise RuntimeError(
+            'Failed to fetch Tensor: Failed to unwrap symmetric key'
+        )
+      return tensor_pb2.TensorProto(
+          dtype=tensor_pb2.DataType.DT_STRING,
+          content=blob_id,
+          shape=tensor_pb2.TensorShapeProto(dim_sizes=[1]),
+      )
+
+    external_handle = _create_external_handle(
+        blob_ids=blob_ids,
+        resolve_fn=failing_resolve_blob_id_to_tensor_fn,
+    )
+
+    iterator = min_sep_data_source.MinSepDataSourceIterator(
+        min_sep=1,
+        external_handle=external_handle,
+        computation_type=_COMPUTATION_TYPE,
+        key_name=_KEY_NAME,
+        use_data_pointers=False,
+    )
+
+    with self.assertLogs(level='WARNING') as logs:
+      with self.assertRaisesRegex(
+          RuntimeError,
+          'More than 10% of blob ids failed to resolve. There were 2 resolve'
+          ' errors across 3 inputs.',
+      ):
+        iterator.select(k)
+      self.assertLen(logs.output, 2)
+      logs_string = '\n'.join(logs.output)
+      self.assertRegex(
+          logs_string,
+          "Skipping blob id: b'0' due to resolve error: Failed to fetch"
+          ' Tensor: Failed to unwrap symmetric key',
+      )
+      self.assertRegex(
+          logs_string,
+          "Skipping blob id: b'1' due to resolve error: Failed to fetch"
+          ' Tensor: Failed to unwrap symmetric key',
       )
 
   def test_save_and_restore(self):
