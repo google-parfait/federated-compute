@@ -614,3 +614,16 @@ cc_proto_library(
     name = "private_logger_uploads_config_cc_proto",
     deps = [":private_logger_uploads_config_proto"],
 )
+
+proto_library(
+    name = "construct_user_session_proto",
+    srcs = ["construct_user_session.proto"],
+    deps = [
+        "@com_google_protobuf//:timestamp_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "construct_user_session_cc_proto",
+    deps = [":construct_user_session_proto"],
+)
