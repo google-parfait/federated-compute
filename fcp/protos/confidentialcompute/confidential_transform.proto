@@ -17,6 +17,7 @@ syntax = "proto3";
 package fcp.confidentialcompute;
 
 import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
 import "google/rpc/status.proto";
 import "proto/crypto/crypto.proto";
 
@@ -188,6 +189,16 @@ message ConfigureResponse {
   reserved 1, 2, 3;
 }
 
+// Metadata that isn't sensitive and can be visible to the untrusted side, but
+// should be made tamper-proof as part of the associated data.
+message AssociatedMetadata {
+  // The start of the session time window. Inclusive.
+  google.protobuf.Timestamp session_window_start = 1;
+
+  // The end of the session time window. Exclusive.
+  google.protobuf.Timestamp session_window_end = 2;
+}
+
 // Encodes metadata about a blob that is written to or read from the
 // TEE.
 message BlobMetadata {
@@ -244,6 +255,9 @@ message BlobMetadata {
     message KmsAssociatedData {
       // A serialized `fcp.confidentialcompute.BlobHeader`.
       bytes record_header = 1;
+
+      // A serialized `fcp.confidentialcompute.AssociatedMetadata`.
+      bytes associated_metadata = 2;
     }
 
     // The ID of the blob. This must match the ID in the blob's
