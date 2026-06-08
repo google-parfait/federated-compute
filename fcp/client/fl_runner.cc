@@ -1766,7 +1766,8 @@ absl::StatusOr<FLRunnerResult> RunFederatedComputation(
     absl::StatusOr<std::unique_ptr<cache::ResourceCache>>
         resource_cache_internal = cache::FileBackedResourceCache::Create(
             env_deps->GetBaseDir(), env_deps->GetCacheDir(), log_manager, clock,
-            flags->max_resource_cache_size_bytes());
+            flags->max_resource_cache_size_bytes(),
+            flags->sanitize_client_cache_id());
     if (!resource_cache_internal.ok()) {
       auto resource_init_failed_status = absl::Status(
           resource_cache_internal.status().code(),

@@ -235,6 +235,10 @@ class Flags {
   // return true, but then drop out if not enough data is returned during
   // execution.
   virtual bool drop_out_based_data_availability() const { return false; }
+
+  // If true, sanitize the client_cache_id when putting or getting resources
+  // from the file backed resource cache.
+  virtual bool sanitize_client_cache_id() const { return false; }
 };
 }  // namespace client
 }  // namespace fcp

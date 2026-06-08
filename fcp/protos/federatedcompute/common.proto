@@ -89,6 +89,7 @@ message Resource {
   // Stable identifier for this resource, used by the client cache
   // implementation. If this field is not set, the client should not attempt to
   // cache the resource referenced by `uri`. Not set for inline_resources.
+  //
   string client_cache_id = 4;
 
   // The maximum duration for how long the resource should be cached by the

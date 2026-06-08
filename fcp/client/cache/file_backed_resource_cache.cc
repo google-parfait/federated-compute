@@ -35,6 +35,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
@@ -102,7 +103,8 @@ absl::StatusOr<std::unique_ptr<FileBackedResourceCache>>
 FileBackedResourceCache::Create(absl::string_view base_dir,
                                 absl::string_view cache_dir,
                                 LogManager* log_manager, fcp::Clock* clock,
-                                int64_t max_cache_size_bytes) {
+                                int64_t max_cache_size_bytes,
+                                bool sanitize_client_cache_id) {
   // Create <cache root>/fcp.
   // Unfortunately NDK's flavor of std::filesystem::path does not support using
   // absl::string_view.
@@ -148,7 +150,8 @@ FileBackedResourceCache::Create(absl::string_view base_dir,
   std::unique_ptr<FileBackedResourceCache> resource_cache =
       absl::WrapUnique(new FileBackedResourceCache(
           std::move(pds), std::move(file_storage), cache_dir_path,
-          manifest_path, log_manager, clock, max_cache_size_bytes));
+          manifest_path, log_manager, clock, max_cache_size_bytes,
+          sanitize_client_cache_id));
   {
     absl::MutexLock lock(resource_cache->mutex_);
     FCP_RETURN_IF_ERROR(resource_cache->Initialize());
@@ -171,11 +174,14 @@ absl::Status FileBackedResourceCache::Put(absl::string_view cache_id,
   FCP_RETURN_IF_ERROR(CleanUp(resource.size(), manifest));
 
   std::string cache_id_str(cache_id);
-  std::filesystem::path cached_file_path = cache_dir_path_ / cache_id_str;
+  std::string file_name = sanitize_client_cache_id_
+                              ? absl::WebSafeBase64Escape(cache_id_str)
+                              : cache_id_str;
+  std::filesystem::path cached_file_path = cache_dir_path_ / file_name;
   absl::Time now = clock_.Now();
   absl::Time expiry = now + max_age;
   CachedResource cached_resource;
-  cached_resource.set_file_name(cache_id_str);
+  cached_resource.set_file_name(file_name);
   *cached_resource.mutable_metadata() = metadata;
   *cached_resource.mutable_expiry_time() =
       TimeUtil::ConvertAbslToProtoTimestamp(expiry);
@@ -222,11 +228,15 @@ FileBackedResourceCache::Get(absl::string_view cache_id,
   FCP_ASSIGN_OR_RETURN(CacheManifest manifest, ReadInternal());
 
   std::string cache_id_str(cache_id);
-  if (!manifest.cache().contains(cache_id_str)) {
+  auto it = manifest.cache().find(cache_id_str);
+  if (it == manifest.cache().end()) {
     return absl::NotFoundError(absl::StrCat(cache_id, " not found"));
   }
-  CachedResource cached_resource = manifest.cache().at(cache_id_str);
-  std::filesystem::path cached_file_path = cache_dir_path_ / cache_id_str;
+  CachedResource cached_resource = it->second;
+  // Using the file name is new behavior, so we guard its usage with the flag.
+  std::string file_name =
+      sanitize_client_cache_id_ ? cached_resource.file_name() : cache_id_str;
+  std::filesystem::path cached_file_path = cache_dir_path_ / file_name;
   google::protobuf::Any metadata = cached_resource.metadata();
   absl::Time now = clock_.Now();
   *cached_resource.mutable_last_accessed_time() =
