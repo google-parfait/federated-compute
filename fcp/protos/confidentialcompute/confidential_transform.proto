@@ -197,6 +197,10 @@ message AssociatedMetadata {
 
   // The end of the session time window. Exclusive.
   google.protobuf.Timestamp session_window_end = 2;
+
+  // The COSE "kid" property (RFC 9052) of the asymmetric key used to encrypt
+  // the symmetric key.
+  bytes key_id = 3;
 }
 
 // Encodes metadata about a blob that is written to or read from the
