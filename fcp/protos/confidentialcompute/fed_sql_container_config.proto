@@ -185,4 +185,7 @@ message FedSqlContainerConfigConstraints {
   // unpartitioned aggregation will be used i.e. all aggregates are
   // merged together in a single worker before release.
   optional uint64 max_output_partitions = 8;
+
+  // The minimum size of the aggregation window in minutes.
+  uint64 min_agg_window_minutes = 9;
 }
