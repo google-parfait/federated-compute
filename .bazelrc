@@ -41,6 +41,11 @@ build --javacopt="-verbose"
 # See https://github.com/bazelbuild/rules_python/issues/330.
 build --incompatible_default_to_explicit_init_py
 
+# Suppress an error when building abseil-cpp 20260526.0 with clang 14 or 15.
+# See https://github.com/abseil/abseil-cpp/issues/2073. This should be removed
+# when either abseil-cpp or clang is updated.
+build --per_file_copt=external/abseil-cpp./absl/strings/internal/stl_type_traits.h@-Wno-invalid-partial-specialization
+
 build:asan --compilation_mode=dbg
 build:asan --strip=never
 build:asan --copt=-fsanitize=address
