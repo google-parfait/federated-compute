@@ -26,6 +26,7 @@ message InferenceConfiguration {
   // Configuration of different models to be used for inference.
   oneof model_config {
     GemmaConfiguration gemma_config = 2;
+    PaicConfiguration paic_config = 5;
   }
   // Additional customer-facing arguments affecting inference at runtime.
   RuntimeConfig runtime_config = 3;
@@ -227,4 +228,10 @@ message LlamaCppInitializeConfiguration {
   // StreamInitializeRequest.write_configuration.first_request_metadata.configuration_id
   // for the model weight blob.
   string model_weight_configuration_id = 1;
+}
+
+message PaicConfiguration {
+  // The enum value corresponding to PcsPrivateInferenceFeatureName.
+  // This is used to know which feature to use when triggering paic.
+  int32 paic_feature_id = 1;
 }
